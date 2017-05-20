@@ -1,0 +1,25 @@
+#!/bin/sh
+
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
+
+~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat ./target/msxpi-dos_16k.rom > ./target/msxpi-dos.rom && cat ./target/msxpi-dos_16k.rom >> ./target/msxpi-dos.rom
+
+# MSX-DOS commands
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pdir.com.asm                  -o ./target/pdir.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/ploadrom.com.asm                  -o ./target/ploadrom.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/#.com.asm                  -o ./target/#.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pset.com.asm                  -o ./target/pset.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/psetdisk.com.asm                  -o ./target/psetdisk.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pcd.com.asm                  -o ./target/pcd.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pnewdisk.com.asm                  -o ./target/pnewdisk.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pwifi.com.asm                  -o ./target/pwifi.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pget.com.asm                  -o ./target/pget.com
+
+# Nextor File System driver
+[ -f ./Client/src/NFS.ASM ] && [ -f ~/Dev/bin/sjasm ] && ~/Dev/bin/sjasm -q -c ./Client/src/NFS.ASM ./target/nfs.com 
+
+cp ./target/*.com ~ronivon/Desktop/MSXPi/commands/
+
+# build distribution package
+[ -f ../../build-pkg.sh ] && ../../build-pkg.sh

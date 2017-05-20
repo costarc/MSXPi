@@ -1,0 +1,739 @@
+;|===========================================================================|
+;|                                                                           |
+;| MSXPi Interface                                                           |
+;|                                                                           |
+;| Version : 0.8.1                                                           |
+;|                                                                           |
+;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;|                                                                           |
+;| All rights reserved                                                       |
+;|                                                                           |
+;| Redistribution and use in source and compiled forms, with or without      |
+;| modification, are permitted under GPL license.                            |
+;|                                                                           |
+;|===========================================================================|
+;|                                                                           |
+;| This file is part of MSXPi Interface project.                             |
+;|                                                                           |
+;| MSX PI Interface is free software: you can redistribute it and/or modify  |
+;| it under the terms of the GNU General Public License as published by      |
+;| the Free Software Foundation, either version 3 of the License, or         |
+;| (at your option) any later version.                                       |
+;|                                                                           |
+;| MSX PI Interface is distributed in the hope that it will be useful,       |
+;| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
+;| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
+;| GNU General Public License for more details.                              |
+;|                                                                           |
+;| You should have received a copy of the GNU General Public License         |
+;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
+;|===========================================================================|
+;
+; MSXPi Driver v0.8.1 (2017,2018)
+
+TEXTTERMINATOR EQU 0
+BDOS           EQU 5
+BUSYretRIES    EQU 2
+CONTROL_PORT   EQU $06
+DATA_PORT      EQU $07
+RESET          EQU $FF
+
+STARTTRANSFER  EQU $A0
+SENDNEXT       EQU $A1
+ENDOFTRANSFER  EQU $A2
+READY          EQU $AA
+ABORT          EQU $AD
+BUSY           EQU $AE
+
+RC_SUCCESS     EQU $E0
+RC_CRCERROR    EQU $E2
+RC_OUTOFSYNC   EQU $E5
+
+CALBAS	EQU     0159H
+CHRGTR  EQU     04666H
+CHPUT   EQU     0A2H
+D.F34D	EQU     0F34DH
+
+; symbols which can be used from the kernel
+
+; errorcodes used by DSKIO, DSKCHG and GETDPB
+;
+; 0	write protect error
+; 2	not ready error
+; 4	data (crc) error
+; 6	seek error
+; 8	record not found error
+; 10	write fault error
+; 12	other error
+
+; errorcodes used by DSKFMT
+;
+; 0	write protect error
+; 2	not ready error
+; 4	data (crc) error
+; 6	seek error
+; 8	record not found error
+; 10	write fault error
+; 12	bad parameter
+; 14	insufficient memory
+; 16	other error
+
+MYSIZE		equ	1		; Size of environment
+SECLEN		equ	512		; Size of biggest sector
+
+; INIHRD
+;
+; Input:	None
+; Output:	None
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+; Remark: This i called twice. I distinguish the 1st and 2nd verifyig reggister A.
+; A = #40 in first call, and #80 in second all.
+INIHRD:
+        ld      a,$80
+        cp      h
+        ret     z
+        ld      hl,MSXPIVERSION
+        call    PRINT
+        ld      hl,PIWAITMSG
+        call    PRINT
+        call    PI_WAITBOOT
+		ret     c
+
+; Always initialize all disk drives
+; Actually, call INIHRD 4 times, but this version only implements 2 drives
+; This limitation is set in the Server App. Settig to more drives causes some MSX to hang.
+		xor 	a
+		call	DSKIO_SECTINFO
+		call	INIHRD_PI
+; Now check if user want a single drive (CTRL pressed)
+		call    CHECK_CTRL
+		ret     c
+
+; Initialize all drives
+		ld      a,1
+		call	DSKIO_SECTINFO
+		call	INIHRD_PI
+		ld      a,2
+		call	DSKIO_SECTINFO
+		call	INIHRD_PI
+        ld      a,3
+		call	DSKIO_SECTINFO
+		call	INIHRD_PI
+        ret
+
+INIHRDMSG: DB "INIHRD"	
+INIHRD_PI:
+		ld		de,INIHRDMSG
+		ld		bc,6
+		calL	SENDPICMD
+		ret
+
+;-----------------------
+; PI_WAITBOOT          |
+;-----------------------
+PI_WAITBOOT:
+        ld      b,10
+
+PI_WAITBOOT1:
+        ld      a,'.'
+        call    CHPUT
+        call    SYNCH
+        ret     nc
+        push    bc
+        call    CHECK_ESC
+        pop     bc
+        ret		c
+; Pi responded
+        djnz    PI_WAITBOOT1
+; Pi did not respond
+        scf
+        ret
+
+; DRIVES
+;
+; Input: 	F	Zx set if to return physical drives
+;			    Zx reset if to return at least 2 drives, if only one
+;			  physical drive it becomes a phantom drive
+; Output:	L	number of drives
+; Changed:	F,hl,IX,IY may be affected
+;
+; Remark:	DOS1 does not handle L=0 correctly. It hangs the computer upon boot if L = 0.
+; During boot this is called twice, with BC = FB21 and then BC = FB23.
+; This
+
+DRIVESMSG: DB  "DRIVES"
+DRIVES:
+    	push    af
+		push	bc
+		push    de
+		ld		de,DRIVESMSG
+		ld		bc,6
+		call	SENDPICMD
+		ld		a,SENDNEXT
+		call	PIEXCHANGEBYTE
+; Is it zero? MSXDOS1 dont like it.
+        ld      l,1
+        jr      c,DRIVES2
+		or		a
+		jr		nz,DRIVES1
+		ld		a,1
+DRIVES1:
+        ld      l,a
+DRIVES2:
+		pop		de
+		pop		bc
+		pop		af
+		ret
+
+; INIENV
+;
+; Input: 	None
+; Output:	None
+; Changed:	af,bc,de,hl,IX,IY may be affected
+;
+; Remark:	examples installs own interrupt handler, but this is NOT required.
+;		depends on the hardware if this is needed.
+
+INIENV:
+        ret
+
+;
+; DSKIO
+;
+; Input: 	A	Drivenumber
+;		F	Cx reset for read
+;			Cx set for write
+; 		B	number of sectors
+; 		C	Media descriptor
+;		de	logical sectornumber
+; 		hl	transfer address
+; Output:	F	Cx set for error
+;			Cx reset for ok
+;		A	if error, errorcode
+;		B	if error, remaining sectors
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+
+DOS_RSEC:   DB      "RDS",0
+DOS_WSEC:   DB      "WRS",0
+DSKIO:
+        jr		nc,DSKIO_READ
+
+DSKIO_WRITE:
+        cp      4
+        jp      nc,DSKIO_ERR1
+
+; save destination address and number of sectors to write
+        push    bc
+        push    hl
+        call    DSKIO_SECTINFO
+        jr      c,DSKIO_ERR
+        ld      de,DOS_WSEC
+        ld      bc,3
+        call    SENDPICMD
+        jr      c,DSKIO_ERR
+
+; source address to read sector data and number of sectors
+        pop     de
+        pop     bc
+
+; will write one sector at a time
+DSKIO_WRITE1:
+        push    bc
+        ld      bc,512
+        call    SECSENDDATA
+        pop     bc
+        jr      c,DSKIO_ERR1
+        djnz    DSKIO_WRITE1
+        or      a
+        ei
+        ret
+
+; ----------------
+; DSKIO_READ     |
+;-----------------
+DSKIO_READ:
+        cp      4
+        jr      nc,DSKIO_ERR1
+        di
+
+; save destination address only
+        push    bc
+        push    hl
+        call    DSKIO_SECTINFO
+        jr      c,DSKIO_ERR
+        ld      de,DOS_RSEC
+        ld      bc,3
+        call    SENDPICMD
+        jr      c,DSKIO_ERR
+        pop     de
+        call    SECRECVDATA
+        pop     bc
+        jr      c,DSKIO_ERR1
+        ei
+        ret
+
+
+DSKIO_ERR:
+        pop     hl
+        pop     bc
+DSKIO_ERR1:
+        ld      a,12
+        scf
+        ei
+        ret
+
+;-----------------------
+; DSKIO_SECTINFO       |
+;-----------------------
+DOS_SECINFO:    DB  "SCT",0
+
+DSKIO_SECTINFO:
+        push    af
+        push    bc
+        push    de
+        push    hl
+        LD      de,DOS_SECINFO
+        LD      bc,3
+        call    SENDPICMD
+        pop     hl
+        pop     de
+        pop     bc
+        jr		nc,DSKIO_SECTINFO1
+        pop     af
+        scf
+        ret
+
+DSKIO_SECTINFO1:
+; synchronize communication with MSX
+
+	ld		a,SENDNEXT
+	call	PIEXCHANGEBYTE
+	cp		SENDNEXT
+	jr		z,DSKIO_SECTINFO2
+	pop		af
+	scf
+	ret
+
+DSKIO_SECTINFO2:
+; send device number
+
+		pop     af
+        call    PIEXCHANGEBYTE
+
+; send number of sectors to read/write
+
+		ld      a,b
+        call    PIEXCHANGEBYTE
+
+; send media decriptor
+
+        ld      a,c
+        call    PIEXCHANGEBYTE
+
+; send logical sectornumber (initial sector number)
+
+		ld      a,e
+        call    PIEXCHANGEBYTE
+        ld      a,d
+        call    PIEXCHANGEBYTE
+        ret
+
+DSKIORDMSG:
+    DB      "DSKIO READ ERROR",13,10,0
+
+; DSKCHG
+;
+; Input: 	A	Drivenumber
+; 		B	0
+; 		C	Media descriptor
+; 		hl	pointer to DPB
+; Output:	F	Cx set for error
+;			Cx reset for ok
+;		A	if error, errorcode
+;		B	if no error, disk change status
+;			01 disk unchanged
+;			00 unknown
+;			FF disk changed
+; Changed:	af,bc,de,hl,IX,IY may be affected
+; Remark:	DOS1 kernel expects the DPB updated when disk change status is unknown or changed
+;		DOS2 kernel does not care if the DPB is updated or not
+DSKCHG:
+        ld		b,00
+        or		a
+        ret
+
+; Disk changed, must read sector and update DPB
+DSKCHGDPB:
+        ret
+
+; GETDPB
+;
+; Input: 	A	Drivenumber
+; 		B	first byte of FAT
+; 		C	Media descriptor
+; 		hl	pointer to DPB
+; Output:	[hl+1]
+;		..
+;		[hl+18]	updated
+; Changed:	af,bc,de,hl,IX,IY may be affected
+; GETDPB
+;
+; Input: 	A	Drivenumber
+; 		B	first byte of FAT
+; 		C	Media descriptor
+; 		hl	pointer to DPB
+; Output:	[hl+1]
+;		..
+;		[hl+18]	updated
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+GETDPB:
+        ret
+
+DpbTable:
+        db	0F8h		; Media F8
+		dw	512		; 80 Tracks
+		db	0Fh		; 9 sectors
+		db	04h		; 1 side
+		db	01h		; 3.5" 360 Kb
+		db	02h
+		dw	1
+		db	2
+		db	112
+		dw	12
+		dw	355
+		db	2
+		dw	5
+
+		db	0F9h		; Media F9
+		dw	512		; 80 Tracks
+		db	0Fh		; 9 sectors
+		db	04h		; 2 sides
+		db	01h		; 3.5" 720 Kb
+		db	02h
+		dw	1
+		db	2
+		db	112
+		dw	14
+		dw	714
+		db	3
+		dw	7
+
+DEFDPB	equ	DpbTable+18-1
+
+; CHOICE
+;
+; Input: 	None
+; Output:	hl	pointer to choice string, 0 if no choice
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+CHOICE:
+		ld		hl,0
+		ret
+
+; Choices not used by MSXPi driver
+ChoiceStr:	db	13,10
+		db	"1 - Choice A",13,10
+		db	"2 - Choice B",13,10
+        db	"3 - Choice C",13,10
+		db	13,10
+		db	0
+
+; DSKFMT
+;
+; Input: 	A	choicecode (1-9)
+;		D	drivenumber
+;		hl	begin of workarea
+;		bc	length of workarea
+; Output:	F	Cx set for error
+;			Cx reset for ok
+;		A	if error, errorcode
+; Changed:	af,bc,de,hl,IX,IY may be affected
+DSKFMTCMD:DB    "FMT",0
+DSKFMT:
+        push    de
+        push    af
+        ld      bc,3
+        ld      de,DSKFMTCMD
+        call    SENDPICMD
+        pop     af
+        call    PIEXCHANGEBYTE
+        pop     de
+        ld      a,d
+        call    PIEXCHANGEBYTE
+        ld      a,ENDOFTRANSFER
+        call    PIEXCHANGEBYTE
+        cp      ENDOFTRANSFER
+        ret     Z
+        scf
+        ld      a,10
+        ret
+
+; OEMSTATEMENT
+;
+; Input:	hl	basicpointer
+; Output:	F	Cx set if statement not recognized
+;			Cx reset if statement is recognized
+;		hl	basicpointer,	updated if recognized
+;					unchanged if not recognized
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+OEMSTA:
+		push    hl
+		ld      hl,STR_CALL_CMD
+CALL_CHECK:
+		ld      de,PROCNM
+CHECKCMD:
+        ld      a,(de)
+		cp      (hl)
+		jr		nz,CHECKNEXT
+		inc     de
+		inc     hl
+		or		a
+		jr		nz,CHECKCMD
+		ld		e,(hl)
+		inc     hl
+		ld		d,(hl)
+		call	MYCOMMAND
+		pop     hl
+        call	GETPREVCHAR
+		or		a
+		ret
+
+; Find entry address of next command to test
+CHECKNEXT:
+		ld		c,0FFH
+		xor		a
+		cpir
+		inc		hl
+		inc		hl
+        cp		(hl)
+		jr		nz,call_CHECK	;Check next command
+		pop		hl
+        scf
+		ret
+ 
+MYCOMMAND:
+		push	de
+		ret
+
+
+; MTOFF
+;
+; Input:	None
+; Output:	None
+; Changed:	af,bc,de,hl,IX,IY may be affected
+
+DSKSTP:
+MTOFF:
+		ret
+
+GETPREVCHAR:
+        dec     hl
+        ld      IX,CHRGTR
+        jp      CALBAS
+
+;================================================================
+; call Commands start here
+; ================================================================
+
+;-----------------------
+; call MSXPIVER        |
+;-----------------------
+MSXPIVER:
+        ld      hl,MSXPIVERSION
+        jp      PRINT
+
+;-----------------------
+; call MSXPISTATUS     |
+;-----------------------
+MSXPISTATUS:
+
+; check if Pi is responding
+        call    CHKPIRDY
+        ld      hl,PIOFFLINE
+
+; Pi App is not available, print error message
+        jr      c,PRINTSTATUSMSG
+
+; Pi App is online
+        ld      hl,PIONLINE
+
+PRINTSTATUSMSG:
+        jp      PRINT
+
+;-----------------------
+; call MSXPILOAD       |
+;-----------------------
+; Load the client to the memory address in the headers
+
+LOADCLIENTCMD: DB "ploadbin msxpi-client.bin",0
+MSXPILOAD:
+        ld      hl,MSXPILOADING
+        call    PRINT
+        ld      a,RESET
+        call    SENDIFCMD
+
+; Send command LOADROM to Pi
+        ld      bc,25
+        ld      de,LOADCLIENTCMD
+        call    SENDPICMD
+        jr		c,MSXPILOADERROR
+        call    LOADBINPROG
+        jp      c,MSXPILOADERROR
+        push    af
+        push    hl
+        call    GETSTDOUTNULL
+        pop     hl
+        pop     af
+        cp      ENDOFTRANSFER
+        ret     nz
+        jp      (hl)
+
+LOADERRMSG:     DB "Error loading file",13,10,0
+MSXPILOADERROR:
+        ld      hl,LOADERRMSG
+        jp      PRINT
+
+GETSTDOUTNULL:
+        ld      de,$0000
+        call    RECVDATABLOCK
+        ret
+
+;-----------------------
+; call GETPOINTERS      |
+;-----------------------
+; Return in hl the Entry address of th routine indexed in A
+; Input:
+;  A = Routine index
+; Output:
+;  A =  slot id for this ROM (to-do)
+;  hl = CAll address of the given routine
+; Modify: af,hl
+;
+GETPOINTERS:
+        push    de
+        ld      hl,BIOSENTRYADDR
+
+GETPOINTERS1:
+        or		a
+        jr		z,GETPOINTERSEXIT
+        dec		a
+        inc     hl
+        inc     hl
+        jr		GETPOINTERS1
+
+GETPOINTERSEXIT:
+        ld		e,(hl)
+        inc     hl
+        ld		h,(hl)
+        ld		l,e
+        pop     de
+        ret
+
+BIOSENTRYADDR:  EQU     $
+        DW      MSXPIVER
+        DW      MSXPISTATUS
+        DW      MSXPILOAD
+        DW      RECVDATABLOCK
+        DW      SENDDATABLOCK
+        DW      SECRECVDATA
+        DW      SECSENDDATA
+        DW      READDATASIZE
+        DW      SENDDATASIZE
+        DW      CHKPIRDY
+        DW      PIREADBYTE
+        DW      PIWRITEBYTE
+        DW      PIEXCHANGEBYTE
+        DW      SENDIFCMD
+        DW      SENDPICMD
+        DW      CHECKBUSY
+        DW      LOADBINPROG
+        DW      PRINT
+        DW      PRINTNLINE
+        DW      PRINTNUMBER
+        DW      PRINTDIGIT
+        DW      PRINTPISTDOUT
+
+;-----------------------------------------------------------------------------
+;
+; Read the keyboard matrix to see if ESC is pressed
+; Output: Cy = 1 if pressed, 0 otherwise
+
+CHECK_ESC:
+        ld		b,7
+        in		a,(0AAh)
+        and		11110000b
+        or		b
+        out		(0AAh),a
+        in		a,(0A9h)
+        scf
+        bit		2,a
+        ret		z
+        or		a
+        ret
+
+CHECK_CTRL:
+        ld		b,6
+        in		a,(0AAh)
+        and		11110000b
+        or		b
+        out		(0AAh),a
+        in		a,(0A9h)
+        scf
+        bit		1,a
+        ret		z
+        or		a
+        ret
+; ================================================================
+; Text messages used in the loader
+; ================================================================
+
+MSXPIVERSION:
+        DB      13,10,"MSXPi Hardware Interface v0.7",13,10
+        DB      "MSXPi ROM v0.8.1",13,10
+        DB      "(c) Ronivon Costa,2017",13,10,10
+        DB      "Commands available:",13,10
+        DB      "MSXPILOAD MSXPISTATUS MSXPIVER",13,10
+        DB      00
+
+MSXPILOADING:
+        DB      "Loading MSXPi Client",13,10,0
+
+PIOFFLINE:
+        DB      "Communication Error",13,10,0
+
+PIONLINE:
+        DB      "Rasperry PI is online",13,10,0
+
+PIWAITMSG:
+        DB      13,10,"Waiting Pi boot. ESC to skip",13,10,0
+
+; ================================================================
+; Table of Commands available/implemented
+; ================================================================
+
+STR_CALL_CMD:
+
+        DB      "MSXPIVER",0
+        DW      MSXPIVER
+
+        DB      "MSXPILOAD",0
+        DW      MSXPILOAD
+
+        DB      "MSXPISTATUS",0
+        DW      MSXPISTATUS
+
+        DB      "GETPOINTERS",0
+        DW      GETPOINTERS
+
+ENDOFCMDS:
+        DB      00
+
+INCLUDE include.asm
+INCLUDE msxpi_bios.asm
+INCLUDE basic_stdio.asm
+INCLUDE msxpi_io.asm
+
