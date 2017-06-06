@@ -8734,7 +8734,7 @@
  171:63801+10	7483  010600  			ld		bc,6
  172:63811+17	7486  CD1578  			call	SENDPICMD
  173:63828+7	7489  3EA1    			ld		a,SENDNEXT
- 174:63835+17	748B  CD567A  			call	PIEXCHANGEBYTE
+ 174:63835+17	748B  CD867A  			call	PIEXCHANGEBYTE
  175:				; Is it zero? MSXDOS1 dont like it.
  176:63852+7	748E  2E01    	        ld      l,1
  177:63859+7+5	7490  3806    	        jr      c,DRIVES2
@@ -8872,7 +8872,7 @@
  309:				; synchronize communication with MSX
  310:				
  311:64506+7	750F  3EA1    		ld		a,SENDNEXT
- 312:64513+17	7511  CD567A  		call	PIEXCHANGEBYTE
+ 312:64513+17	7511  CD867A  		call	PIEXCHANGEBYTE
  313:64530+7	7514  FEA1    		cp		SENDNEXT
  314:64537+7+5	7516  2803    		jr		z,DSKIO_SECTINFO2
  315:64544+10	7518  F1      		pop		af
@@ -8883,24 +8883,24 @@
  320:				; send device number
  321:				
  322:64568+10	751B  F1      			pop     af
- 323:64578+17	751C  CD567A  	        call    PIEXCHANGEBYTE
+ 323:64578+17	751C  CD867A  	        call    PIEXCHANGEBYTE
  324:				
  325:				; send number of sectors to read/write
  326:				
  327:64595+4	751F  78      			ld      a,b
- 328:64599+17	7520  CD567A  	        call    PIEXCHANGEBYTE
+ 328:64599+17	7520  CD867A  	        call    PIEXCHANGEBYTE
  329:				
  330:				; send media decriptor
  331:				
  332:64616+4	7523  79      	        ld      a,c
- 333:64620+17	7524  CD567A  	        call    PIEXCHANGEBYTE
+ 333:64620+17	7524  CD867A  	        call    PIEXCHANGEBYTE
  334:				
  335:				; send logical sectornumber (initial sector number)
  336:				
  337:64637+4	7527  7B      			ld      a,e
- 338:64641+17	7528  CD567A  	        call    PIEXCHANGEBYTE
+ 338:64641+17	7528  CD867A  	        call    PIEXCHANGEBYTE
  339:64658+4	752B  7A      	        ld      a,d
- 340:64662+17	752C  CD567A  	        call    PIEXCHANGEBYTE
+ 340:64662+17	752C  CD867A  	        call    PIEXCHANGEBYTE
  341:64679+10	752F  C9      	        ret
  342:				
  343:     -	7530          	DSKIORDMSG:
@@ -9035,12 +9035,12 @@
  459:64782+10	75A9  11A075  	        ld      de,DSKFMTCMD
  460:64792+17	75AC  CD1578  	        call    SENDPICMD
  461:64809+10	75AF  F1      	        pop     af
- 462:64819+17	75B0  CD567A  	        call    PIEXCHANGEBYTE
+ 462:64819+17	75B0  CD867A  	        call    PIEXCHANGEBYTE
  463:64836+10	75B3  D1      	        pop     de
  464:64846+4	75B4  7A      	        ld      a,d
- 465:64850+17	75B5  CD567A  	        call    PIEXCHANGEBYTE
+ 465:64850+17	75B5  CD867A  	        call    PIEXCHANGEBYTE
  466:64867+7	75B8  3EA2    	        ld      a,ENDOFTRANSFER
- 467:64874+17	75BA  CD567A  	        call    PIEXCHANGEBYTE
+ 467:64874+17	75BA  CD867A  	        call    PIEXCHANGEBYTE
  468:64891+7	75BD  FEA2    	        cp      ENDOFTRANSFER
  469:64898+5+6	75BF  C8      	        ret     Z
  470:64903+4	75C0  37      	        scf
@@ -9128,7 +9128,7 @@
  552:     -	75FE          	MSXPISTATUS:
  553:				
  554:				; check if Pi is responding
- 555:65235+17	75FE  CD2F7A  	        call    CHKPIRDY
+ 555:65235+17	75FE  CD3D7A  	        call    CHKPIRDY
  556:65252+10	7601  216877  	        ld      hl,PIOFFLINE
  557:				
  558:				; Pi App is not available, print error message
@@ -9230,10 +9230,10 @@
  643:     -	768D  9E78    	        DW      SECSENDDATA
  644:     -	768F  CA78    	        DW      READDATASIZE
  645:     -	7691  D778    	        DW      SENDDATASIZE
- 646:     -	7693  2F7A    	        DW      CHKPIRDY
- 647:     -	7695  407A    	        DW      PIREADBYTE
- 648:     -	7697  4E7A    	        DW      PIWRITEBYTE
- 649:     -	7699  567A    	        DW      PIEXCHANGEBYTE
+ 646:     -	7693  3D7A    	        DW      CHKPIRDY
+ 647:     -	7695  507A    	        DW      PIREADBYTE
+ 648:     -	7697  707A    	        DW      PIWRITEBYTE
+ 649:     -	7699  867A    	        DW      PIEXCHANGEBYTE
  650:     -	769B  2C7A    	        DW      SENDIFCMD
  651:     -	769D  1578    	        DW      SENDPICMD
  652:     -	769F  9579    	        DW      CHECKBUSY
@@ -9476,14 +9476,14 @@
   49:65822+11	77EC  D5      	            push    de
   50:65833+7	77ED  3EFF    	            ld      a,RESET
   51:65840+17	77EF  CD2C7A  	            call    SENDIFCMD
-  52:65857+17	77F2  CD2F7A  	            call    CHKPIRDY
+  52:65857+17	77F2  CD3D7A  	            call    CHKPIRDY
   53:65874+10	77F5  010300  	            ld      bc,3
   54:65884+10	77F8  111178  	            ld      de,CHKPICMD
   55:65894+17	77FB  CD1578  	            call    SENDPICMD
   56:65911+10	77FE  D1      	            pop     de
   57:65921+10	77FF  C1      	            pop     bc
   58:65931+5+6	7800  D8      	            ret     c
-  59:65936+17	7801  CD567A  	            call    PIEXCHANGEBYTE
+  59:65936+17	7801  CD867A  	            call    PIEXCHANGEBYTE
   60:65953+5+6	7804  D8      	            ret     c
   61:65958+7	7805  FEAA    	            cp      READY
   62:65965+5+6	7807  C8      	            ret     z
@@ -9539,7 +9539,7 @@
  112:     -	7824          	RECVDATABLOCK1:
  113:				; send info that msx is in transfer mode
  114:66105+7	7824  3EA1    	        ld      a,SENDNEXT
- 115:66112+17	7826  CD567A  	        call    PIEXCHANGEBYTE
+ 115:66112+17	7826  CD867A  	        call    PIEXCHANGEBYTE
  116:66129+7	7829  12      	        ld      (de),a
  117:66136+4	782A  AC      	        xor     h
  118:66140+4	782B  67      	        ld      h,a
@@ -9552,7 +9552,7 @@
  125:				; Now exchange CRC
  126:				
  127:66171+4	7832  7C      	        ld      a,h
- 128:66175+17	7833  CD567A  	        call    PIEXCHANGEBYTE
+ 128:66175+17	7833  CD867A  	        call    PIEXCHANGEBYTE
  129:				
  130:				; Compare CRC received with CRC calcualted
  131:				
@@ -9598,9 +9598,9 @@
  171:				
  172:				; MSX is synced with PI, then send size of block to transfer
  173:66300+4	7847  79      	        ld      a,c
- 174:66304+17	7848  CD4E7A  	        call    PIWRITEBYTE
+ 174:66304+17	7848  CD707A  	        call    PIWRITEBYTE
  175:66321+4	784B  78      	        ld      a,b
- 176:66325+17	784C  CD4E7A  	        call    PIWRITEBYTE
+ 176:66325+17	784C  CD707A  	        call    PIWRITEBYTE
  177:				
  178:				; clear H to calculate CRC using simple xor oepration
  179:66342+7	784F  2600    	        ld      h,0
@@ -9613,7 +9613,7 @@
  186:66371+4	7854  AC      	        xor     h
  187:66375+4	7855  67      	        ld      h,a
  188:66379+4	7856  7D      	        ld      a,l
- 189:66383+17	7857  CD4E7A  	        call    PIWRITEBYTE
+ 189:66383+17	7857  CD707A  	        call    PIWRITEBYTE
  190:66400+6	785A  13      	        inc     de
  191:66406+6	785B  0B      	        dec     bc
  192:66412+4	785C  78      	        ld      a,b
@@ -9624,7 +9624,7 @@
  197:				; Now exchange CRC
  198:				
  199:66427+4	7860  7C      	        ld      a,h
- 200:66431+17	7861  CD567A  	        call    PIEXCHANGEBYTE
+ 200:66431+17	7861  CD867A  	        call    PIEXCHANGEBYTE
  201:				
  202:				; Compare CRC received with CRC calcualted
  203:				
@@ -9767,18 +9767,18 @@
  340:				
  341:     -	78CA          	READDATASIZE:
  342:67062+7	78CA  3EA1    	        ld      a,SENDNEXT
- 343:67069+17	78CC  CD567A  	        call    PIEXCHANGEBYTE
+ 343:67069+17	78CC  CD867A  	        call    PIEXCHANGEBYTE
  344:67086+4	78CF  4F      	        ld      c,a
  345:67090+7	78D0  3EA1    	        ld      a,SENDNEXT
- 346:67097+17	78D2  CD567A  	        call    PIEXCHANGEBYTE
+ 346:67097+17	78D2  CD867A  	        call    PIEXCHANGEBYTE
  347:67114+4	78D5  47      	        ld      b,a
  348:67118+10	78D6  C9      	        ret
  349:				
  350:     -	78D7          	SENDDATASIZE:
  351:67128+4	78D7  79      	        ld      a,c
- 352:67132+17	78D8  CD567A  	        call    PIEXCHANGEBYTE
+ 352:67132+17	78D8  CD867A  	        call    PIEXCHANGEBYTE
  353:67149+4	78DB  78      	        ld      a,b
- 354:67153+17	78DC  CD567A  	        call    PIEXCHANGEBYTE
+ 354:67153+17	78DC  CD867A  	        call    PIEXCHANGEBYTE
  355:67170+10	78DF  C9      	        ret
  356:				
  357:				
@@ -9808,7 +9808,7 @@
  381:				
  382:				; Synch start of transfer
  383:67184+7	78E1  3EA0    	        ld      a,STARTTRANSFER
- 384:67191+17	78E3  CD567A  	        call    PIEXCHANGEBYTE
+ 384:67191+17	78E3  CD867A  	        call    PIEXCHANGEBYTE
  385:67208+5+6	78E6  D8      	        ret     c
  386:67213+7	78E7  FEA2    	        cp      ENDTRANSFER
  387:67220+5+6	78E9  C8      	        ret     z
@@ -9819,13 +9819,13 @@
  392:				
  393:				; now send block size
  394:67237+4	78ED  79      	        ld      a,c
- 395:67241+17	78EE  CD567A  	        call    PIEXCHANGEBYTE
+ 395:67241+17	78EE  CD867A  	        call    PIEXCHANGEBYTE
  396:67258+4	78F1  78      	        ld      a,b
- 397:67262+17	78F2  CD567A  	        call    PIEXCHANGEBYTE
+ 397:67262+17	78F2  CD867A  	        call    PIEXCHANGEBYTE
  398:				
  399:				; And received Pi info if there is still data or if data has ended
  400:67279+7	78F5  3EA1    	        ld      a,SENDNEXT
- 401:67286+17	78F7  CD567A  	        call    PIEXCHANGEBYTE
+ 401:67286+17	78F7  CD867A  	        call    PIEXCHANGEBYTE
  402:67303+7	78FA  FEA2    	        cp      ENDTRANSFER
  403:67310+5+6	78FC  C8      	        ret     z
  404:				
@@ -9855,7 +9855,7 @@
  428:67413+4	7913  6F      	        ld      l,a
  429:     -	7914          	READDLOOP2:
  430:67417+7	7914  3EA1    	        ld      a,SENDNEXT
- 431:67424+17	7916  CD567A  	        call    PIEXCHANGEBYTE
+ 431:67424+17	7916  CD867A  	        call    PIEXCHANGEBYTE
  432:67441+7	7919  12      	        ld      (de),a
  433:67448+4	791A  AC      	        xor     h
  434:67452+4	791B  67      	        ld      h,a
@@ -9866,7 +9866,7 @@
  439:67476+7+5	7920  20E0    	        jr      nz,READDLOOP
  440:				; now exchange CRC with Pi
  441:67483+4	7922  7C      	        ld      a,h
- 442:67487+17	7923  CD567A  	        call    PIEXCHANGEBYTE
+ 442:67487+17	7923  CD867A  	        call    PIEXCHANGEBYTE
  443:67504+4	7926  BC      	        cp      h
  444:67508+7	7927  3EE0    	        ld      a,RC_SUCCESS
  445:67515+5+6	7929  C8      	        ret     z
@@ -9879,7 +9879,7 @@
  452:				; Load a .bin program in BASIC environment
  453:     -	792D          	LOADBINPROG:
  454:67537+7	792D  3EA0    	        ld      a,STARTTRANSFER
- 455:67544+17	792F  CD567A  	        call    PIEXCHANGEBYTE
+ 455:67544+17	792F  CD867A  	        call    PIEXCHANGEBYTE
  456:67561+7	7932  FEA0    	        cp      STARTTRANSFER
  457:67568+4	7934  37      	        scf
  458:67572+4	7935  3F      	        ccf
@@ -9890,28 +9890,28 @@
  463:				
  464:				; Read file header and check if it is BASIC binary program
  465:67598+7	793A  3EA1    	        ld      a,SENDNEXT
- 466:67605+17	793C  CD567A  	       	call    PIEXCHANGEBYTE
+ 466:67605+17	793C  CD867A  	       	call    PIEXCHANGEBYTE
  467:				
  468:				; Read start address
  469:67622+7	793F  3EA1    	        ld      a,SENDNEXT
- 470:67629+17	7941  CD567A  	        call    PIEXCHANGEBYTE
+ 470:67629+17	7941  CD867A  	        call    PIEXCHANGEBYTE
  471:67646+4	7944  5F      	        ld      e,a
  472:67650+7	7945  3EA1    	        ld      a,SENDNEXT
- 473:67657+17	7947  CD567A  	        call    PIEXCHANGEBYTE
+ 473:67657+17	7947  CD867A  	        call    PIEXCHANGEBYTE
  474:67674+4	794A  57      	        ld      d,a
  475:				
  476:				; Discard END address
  477:67678+7	794B  3EA1    	        ld      a,SENDNEXT
- 478:67685+17	794D  CD567A  	        call    PIEXCHANGEBYTE
+ 478:67685+17	794D  CD867A  	        call    PIEXCHANGEBYTE
  479:67702+7	7950  3EA1    	        ld      a,SENDNEXT
- 480:67709+17	7952  CD567A  	        call    PIEXCHANGEBYTE
+ 480:67709+17	7952  CD867A  	        call    PIEXCHANGEBYTE
  481:				
  482:				; Read EXEC address
  483:67726+7	7955  3EA1    	        ld      a,SENDNEXT
- 484:67733+17	7957  CD567A  	        call    PIEXCHANGEBYTE
+ 484:67733+17	7957  CD867A  	        call    PIEXCHANGEBYTE
  485:67750+4	795A  6F      	        ld      l,a
  486:67754+7	795B  3EA1    	        ld      a,SENDNEXT
- 487:67761+17	795D  CD567A  	        call    PIEXCHANGEBYTE
+ 487:67761+17	795D  CD867A  	        call    PIEXCHANGEBYTE
  488:67778+4	7960  67      	        ld      h,a
  489:67782+11	7961  E5      	        push    hl
  490:67793+17	7962  CD6779  	        call    LOADBINBLOCKS
@@ -9949,7 +9949,7 @@
  522:68012+12	7987  18DE    	        jr      LOADBINBLOCKS
  523:     -	7989          	LOADBINEND:
  524:68024+7	7989  3EA2    	        ld      a,ENDTRANSFER
- 525:68031+17	798B  CD567A  	        call    PIEXCHANGEBYTE
+ 525:68031+17	798B  CD867A  	        call    PIEXCHANGEBYTE
  526:68048+7	798E  FEA2    	        cp      ENDTRANSFER
  527:68055+5+6	7990  C8      	        ret     z
  528:68060+7	7991  3EE5    	        ld      a,RC_OUTOFSYNC
@@ -9961,7 +9961,7 @@
  534:68092+7	7996  0602    	        ld      b,BUSYRETRIES
  535:     -	7998          	CHECKBUSY1:
  536:68099+7	7998  3EA1    	        ld      a,SENDNEXT
- 537:68106+17	799A  CD567A  	        call    PIEXCHANGEBYTE
+ 537:68106+17	799A  CD867A  	        call    PIEXCHANGEBYTE
  538:68123+7	799D  FEA1    	        cp      SENDNEXT
  539:68130+7+5	799F  280C    	        jr      z,CHECKBUSY3
  540:68137+7	79A1  FEAD    	        cp      ABORT
@@ -10044,14 +10044,14 @@
  617:     -	79FC          	PRINTPISTDOUT:
  618:68630+11	79FC  F5      	        push    af
  619:68641+7	79FD  3EA1    	        ld      a,SENDNEXT
- 620:68648+17	79FF  CD567A  	        call    PIEXCHANGEBYTE
+ 620:68648+17	79FF  CD867A  	        call    PIEXCHANGEBYTE
  621:68665+17	7A02  CDCA78  	        call    READDATASIZE
  622:68682+10	7A05  F1      	        pop     af
  623:68692+11	7A06  E5      	        push    hl
  624:68703+7	7A07  2600    	        ld      h,0
  625:     -	7A09          	PRINTPI1:
  626:68710+7	7A09  3EA1    	        ld      a,SENDNEXT
- 627:68717+17	7A0B  CD567A  	        call    PIEXCHANGEBYTE
+ 627:68717+17	7A0B  CD867A  	        call    PIEXCHANGEBYTE
  628:68734+4	7A0E  6F      	        ld      l,a
  629:68738+4	7A0F  AC      	        xor     h
  630:68742+4	7A10  67      	        ld      h,a
@@ -10067,7 +10067,7 @@
  640:68815+4	7A20  B1      	        or      c
  641:68819+7+5	7A21  20E6    	        jr      nz,PRINTPI1
  642:68826+4	7A23  7C      	        ld      a,h
- 643:68830+17	7A24  CD567A  	        call    PIEXCHANGEBYTE
+ 643:68830+17	7A24  CD867A  	        call    PIEXCHANGEBYTE
  644:68847+10	7A27  E1      	        pop     hl
  645:68857+10	7A28  C9      	        ret
 **** msxpi-driver.mac ****
@@ -10166,69 +10166,114 @@
   53:				; SENDIFCMD            |
   54:				;-----------------------
   55:     -	7A2C          	SENDIFCMD:
-  56:68877+11	7A2C  D306    	            out     (CONTROL_PORT),a       ; Send data, or command
-  57:68888+10	7A2E  C9      	            ret
-  58:				
-  59:				;-----------------------
-  60:				; CHKPIRDY             |
-  61:				;-----------------------
-  62:     -	7A2F          	CHKPIRDY:
-  63:68898+11	7A2F  C5      	            push    bc
-  64:68909+10	7A30  01FFFF  	            ld      bc,0ffffh
-  65:     -	7A33          	CHKPIRDY0:
-  66:68919+11	7A33  DB06    	            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
-  67:68930+4	7A35  B7      	            or	    a
-  68:68934+7+5	7A36  2806    	            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
-  69:				                                    ; for next command/byte
-  70:68941+6	7A38  0B      	            dec     bc              ; pi not ready, wait a little bit
-  71:68947+4	7A39  78      	            ld      a,b
-  72:68951+4	7A3A  B1      	            or      c
-  73:68955+7+5	7A3B  20F6    	            jr      nz,CHKPIRDY0
-  74:     -	7A3D          	CHKPIRDYNOTOK:
-  75:68962+4	7A3D  37      	            scf
-  76:     -	7A3E          	CHKPIRDYOK:
-  77:68966+10	7A3E  C1      	            pop     bc
-  78:68976+10	7A3F  C9      	            ret
-  79:				
-  80:				;-----------------------
-  81:				; PIREADBYTE           |
-  82:				;-----------------------
-  83:     -	7A40          	PIREADBYTE:
-  84:68986+17	7A40  CD2F7A  	            call    CHKPIRDY
-  85:69003+7+5	7A43  3806    	            jr      c,PIREADBYTE1
-  86:69010+4	7A45  AF      	            xor     a                   ; do not use xor to preserve c flag state
-  87:69014+11	7A46  D306    	            out     (CONTROL_PORT),a    ; send read command to the interface
-  88:69025+17	7A48  CD2F7A  	            call    CHKPIRDY            ;wait interface transfer data to pi and
-  89:				                                        ; pi app processing
-  90:				                                        ; no ret c is required here, because in a,(7) does not reset c flag
-  91:     -	7A4B          	PIREADBYTE1:
-  92:69042+11	7A4B  DB07    	            in      a,(DATA_PORT)       ; read byte
-  93:69053+10	7A4D  C9      	            ret                         ; return in a the byte received
-  94:				
-  95:				;-----------------------
-  96:				; PIWRITEBYTE          |
-  97:				;-----------------------
-  98:     -	7A4E          	PIWRITEBYTE:
-  99:69063+11	7A4E  F5      	            push    af
- 100:69074+17	7A4F  CD2F7A  	            call    CHKPIRDY
- 101:69091+10	7A52  F1      	            pop     af
- 102:69101+11	7A53  D307    	            out     (DATA_PORT),a       ; send data, or command
- 103:69112+10	7A55  C9      	            ret
- 104:				
- 105:				;-----------------------
- 106:				; PIEXCHANGEBYTE       |
- 107:				;-----------------------
- 108:     -	7A56          	PIEXCHANGEBYTE:
- 109:69122+17	7A56  CD4E7A  	            call    PIWRITEBYTE
- 110:69139+17	7A59  CD2F7A  	            call    CHKPIRDY
- 111:69156+11	7A5C  DB07    	            in      a,(DATA_PORT)       ; read byte
- 112:69167+10	7A5E  C9      	            ret
- 113:				
+  56:68877+11	7A2C  C5      	            PUSH    BC
+  57:68888+4	7A2D  47      				LD      B,A
+  58:68892+7	7A2E  E6F0    	            AND     $F0
+  59:68899+4	7A30  1F      	            RRA
+  60:68903+4	7A31  1F      	            RRA
+  61:68907+4	7A32  1F      	            RRA
+  62:68911+4	7A33  1F      	            RRA
+  63:68915+11	7A34  D308    	            OUT     (CONTROL_PORT2),A
+  64:68926+4	7A36  78      	            LD      A,B
+  65:68930+7	7A37  E60F    	            AND     $0F
+  66:68937+11	7A39  D306    	            OUT     (CONTROL_PORT),A       ; Send data, or command
+  67:68948+10	7A3B  C1      	            POP     BC
+  68:68958+10	7A3C  C9      	            RET
+  69:				
+  70:				;-----------------------
+  71:				; CHKPIRDY             |
+  72:				;-----------------------
+  73:     -	7A3D          	CHKPIRDY:
+  74:68968+11	7A3D  C5      	            PUSH    BC
+  75:68979+10	7A3E  01FFFF  	            LD      BC,0FFFFH
+  76:     -	7A41          	CHKPIRDY0:
+  77:68989+11	7A41  DB06    	            IN      A,(CONTROL_PORT); Verify SPIRDY register on the MSXInterface
+  78:69000+7	7A43  E60F    	            AND     $0F
+  79:69007+4	7A45  B7      	            OR	    A
+  80:69011+7+5	7A46  2806    	            JR      Z,CHKPIRDYOK    ; RDY signal is zero, Pi App FSM is ready
+  81:				                                    ; for next command/byte
+  82:69018+6	7A48  0B      	            DEC     BC              ; Pi not ready, wait a little bit
+  83:69024+4	7A49  78      	            LD      A,B
+  84:69028+4	7A4A  B1      	            OR      C
+  85:69032+7+5	7A4B  20F4    	            JR      NZ,CHKPIRDY0
+  86:     -	7A4D          	CHKPIRDYNOTOK:
+  87:69039+4	7A4D  37      	            SCF
+  88:     -	7A4E          	CHKPIRDYOK:
+  89:69043+10	7A4E  C1      	            POP     BC
+  90:69053+10	7A4F  C9      	            RET
+  91:				
+  92:				;-----------------------
+  93:				; PIREADBYTE           |
+  94:				;-----------------------
+  95:     -	7A50          	PIREADBYTE:
+  96:69063+11	7A50  C5      	            PUSH    BC
+  97:69074+17	7A51  CD3D7A  	            CALL    CHKPIRDY
+  98:69091+7+5	7A54  3808    	            JR      C,PIREADBYTE1
+  99:69098+4	7A56  AF      	            XOR     A                   ; do not use XOR to preserve C flag state
+ 100:69102+11	7A57  D308    	            OUT     (CONTROL_PORT2),A    ; Send READ command to the Interface
+ 101:69113+11	7A59  D306    	            OUT     (CONTROL_PORT),A    ; Send READ command to the Interface
+ 102:69124+17	7A5B  CD3D7A  	            CALL    CHKPIRDY            ;Wait Interface transfer data to PI and
+ 103:				                                        ; Pi App processing
+ 104:				                                        ; No RET C is required here, because IN A,(7) does not reset C flag
+ 105:     -	7A5E          	PIREADBYTE1:
+ 106:69141+11	7A5E  DB08    	            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+ 107:69152+8	7A60  CB27    	            SLA     A
+ 108:69160+8	7A62  CB27    	            SLA     A
+ 109:69168+8	7A64  CB27    	            SLA     A
+ 110:69176+8	7A66  CB27    	            SLA     A            ; four SLA to rotate for bits to the left,
+ 111:				                                 ; since this data is the LSB
+ 112:69184+4	7A68  47      	            LD      B,A          ; save LSB to later merge with MSB
+ 113:69188+11	7A69  DB07    	            IN      A,(DATA_PORT); read MSB part of the byte
+ 114:69199+7	7A6B  E60F    	            AND     $0F          ; clean left four bits because
+ 115:69206+4	7A6D  B0      	            OR      B            ; Merge LSB with MSB to get the actual byte received
+ 116:69210+10	7A6E  C1      	            POP     BC
+ 117:69220+10	7A6F  C9      	            RET                  ; Return in A the byte received
+ 118:				
+ 119:				;-----------------------
+ 120:				; PIWRITEBYTE          |
+ 121:				;-----------------------
+ 122:     -	7A70          	PIWRITEBYTE:
+ 123:69230+11	7A70  C5      	            PUSH    BC
+ 124:69241+11	7A71  F5      	            PUSH    AF
+ 125:69252+17	7A72  CD3D7A  	            CALL    CHKPIRDY
+ 126:69269+10	7A75  F1      	            POP     AF
+ 127:69279+4	7A76  47      	            LD      B,A
+ 128:69283+7	7A77  E6F0    	            AND     $F0
+ 129:69290+4	7A79  1F      	            RRA
+ 130:69294+4	7A7A  1F      	            RRA
+ 131:69298+4	7A7B  1F      	            RRA
+ 132:69302+4	7A7C  1F      	            RRA     
+ 133:69306+11	7A7D  D308    	            OUT     (CONTROL_PORT2),A
+ 134:69317+4	7A7F  78      	            LD      A,B
+ 135:69321+7	7A80  E60F    	            AND     $0F
+ 136:69328+11	7A82  D307    	            OUT     (DATA_PORT),A       ; Send data, or command
+ 137:69339+10	7A84  C1      	            POP     BC
+ 138:69349+10	7A85  C9      	            RET
+ 139:				
+ 140:				;-----------------------
+ 141:				; PIEXCHANGEBYTE       |
+ 142:				;-----------------------
+ 143:     -	7A86          	PIEXCHANGEBYTE:
+ 144:69359+11	7A86  C5      	            PUSH    BC
+ 145:69370+17	7A87  CD707A  	            CALL    PIWRITEBYTE
+ 146:69387+17	7A8A  CD3D7A  	            CALL    CHKPIRDY
+ 147:69404+11	7A8D  DB08    	            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+ 148:69415+8	7A8F  CB27    	            SLA     A
+ 149:69423+8	7A91  CB27    	            SLA     A
+ 150:69431+8	7A93  CB27    	            SLA     A
+ 151:69439+8	7A95  CB27    	            SLA     A            ; four SLA to rotate for bits to the left,
+ 152:				                                 ; since this data is the LSB
+ 153:69447+4	7A97  47      	            LD      B,A          ; save LSB to later merge with MSB
+ 154:69451+11	7A98  DB07    	            IN      A,(DATA_PORT); read MSB part of the byte
+ 155:69462+7	7A9A  E60F    	            AND     $0F          ; clean left four bits because
+ 156:69469+4	7A9C  B0      	            OR      B            ; Merge LSB with MSB to get the actual byte received
+ 157:69473+10	7A9D  C1      	            POP     BC
+ 158:69483+10	7A9E  C9      	            RET                  ; Return in A the byte received
 **** msxpi-driver.mac ****
  739:				
 **** ./ROM/src/MSX-DOS/msx-dos.mac ****
 8386:				
-8387:     -	7A5F .. 7FFF 00		DEFS	08000H-$,0
+8387:     -	7A9F .. 7FFF 00		DEFS	08000H-$,0
 8388:				
 8389:				
 8390:     -	8000          		end
@@ -11029,10 +11074,10 @@ checkcmd        75cb
 checknext       75e0     
 chget          =  9f     
 chkpicmd        7811     
-chkpirdy        7a2f     
-chkpirdy0       7a33     
-chkpirdynotok   7a3d     
-chkpirdyok      7a3e     
+chkpirdy        7a3d     
+chkpirdy0       7a41     
+chkpirdynotok   7a4d     
+chkpirdyok      7a4e     
 choice          756d     
 choicestr       7571     
 chput          =  a2     
@@ -11224,13 +11269,13 @@ outnl          =7328
 phydio         = 144     
 pi_waitboot     7462     
 pi_waitboot1    7464     
-piexchangebyte  7a56     
+piexchangebyte  7a86     
 pioffline       7768     
 pionline        777e     
-pireadbyte      7a40     
-pireadbyte1     7a4b     
+pireadbyte      7a50     
+pireadbyte1     7a5e     
 piwaitmsg       7796     
-piwritebyte     7a4e     
+piwritebyte     7a70     
 print           79af     
 print1          79c4     
 printalfa       79f1     
