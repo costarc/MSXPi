@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.7                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,109 +30,65 @@
 ;|===========================================================================|
 ;
 ; File history :
-; 0.1    : Initial version.
-TEXTTERMINATOR: EQU '$'
+; 0.7    : Replaced CHKPIRDY retries to $FFFF
+;          Removed the RESET when PI is not responding. This is now responsability
+;           of the calling function, which might opt to do something else.
+; 0.6c   : Initial version commited to git
+;
 
-        ORG     $0100
-
-LOADROMPROG:
-        LD      BC,8
-        LD      DE,LOADROMCMD
-        CALL    DOSSENDPICMD
-        JR      C,LOADPROGERR
-        CALL    LOADROM
-LOADROMPROG1:
-        PUSH    HL
-        PUSH    AF
-        CALL    PRINTPISTDOUT
-        POP     AF
-        POP     HL
-        CP      ENDTRANSFER
-        JP      NZ,0
-        PUSH    HL
-        LD      HL,0
-        LD      A,($FCC1)
-        CALL    ENASLT
-        POP     HL
-        JP      (HL)
+; Inlude file for other sources in the project
+;
+; ==================================================================
+; BASIC I/O FUNCTIONS STARTS HERE.
+; These are the lower level I/O routines available, and must match
+; the I/O functions implemented in the CPLD.
+; Other than using these functions you will have to create your
+; own commands, using OUT/IN directly to the I/O ports.
+; ==================================================================
 
 ;-----------------------
-; LOADROM              |
+; SENDIFCMD_B          |
 ;-----------------------
-LOADROM:
-; Will load the ROM directly on the destiantion page in $4000
-; Might be slower, but that is what we have so far...
-;Get number of bytes to transfer
-        LD      A,STARTTRANSFER
-        CALL    PIEXCHANGEBYTE
-        RET     C
-        CP      STARTTRANSFER
-        SCF
-        RET     NZ
-        LD      DE,$4000
-        CALL    READDATASIZE
-LOADROM0:
-        PUSH    BC
-        LD      A,GLOBALRETRIES
-LOADROMRETRY:
-; retries
-        PUSH    AF
-        CALL    RECVDATABLOCK
-        JR      NC,LOADROM1
-        POP     AF
-        DEC     A
-        JR      NZ,LOADROMRETRY
-        LD      A,ABORT
-        POP     BC
-        OR      A
-        RET
+SENDIFCMD_B:
+            OUT     (6),A       ; Send data, or command
+            RET
+;-----------------------
+; CHKPIRDY_B           |
+;-----------------------
+CHKPIRDY_B:
+            LD      BC,0FFFFH
+CHKPIRDY0_B:
+            IN      A,(6)           ; Verify SPIRDY register on the MSXInterface
+            OR	    A
+            RET     Z               ; RDY signal is zero, Pi App FSM is ready for next command/byte
+            DEC     BC              ; Pi not ready, wait a little bit
+            LD      A,B
+            OR      C
+            JR      NZ,CHKPIRDY0_B
+            SCF
+CHKPIRDYOK_B:
+            RET
 
-LOADROM1:
-        LD      A,'.'
-        CALL    PUTCHAR
-        POP     AF
-;Get rom address to write
-        POP     HL
+;-----------------------
+; READBYTE_B           |
+;-----------------------
+READBYTE_B:
+            XOR     A           ; do not use XOR to preserve C flag state
+            OUT     (6),A       ; Send READ command to the Interface
+            JR      READPIBYTE_B
 
-;DE now contain ROM address
-        SBC     HL,BC
-        JR      C,LOADROMEND
-        JR      Z,LOADROMEND
-        LD      B,H
-        LD      C,L
-        JR      LOADROM0
-
-; File load successfully.
-; Return C reseted, and A = filetype
-LOADROMEND:
-        LD      A,ENDTRANSFER
-        CALL    PIEXCHANGEBYTE
-        CP      ENDTRANSFER
-        SCF
-        RET     NZ
-        LD      HL,($4002)    ; ROM exec address
-        LD      A,ENDTRANSFER
-        OR      A             ;Reset C flag
-        RET
-
-LOADPROGERR:
-        LD      HL,LOADPROGERRMSG
-        CALL    PRINT
-        JP      0
-
-LOADROMCMD:
-        DB      "PLOADROM"
-
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
-
-LOADPROGERRMSG:
-        DB      "Error loading file",13,10,"$"
-
-INCLUDE "include.asm"
-INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
+;-----------------------
+; TRANSFBYTE_B         |
+;-----------------------
+TRANSFBYTE_B:
+            PUSH    AF
+            CALL    CHKPIRDY_B    ; registers A,BC and FLAGS are modified
+            POP     AF
+            OUT     (7),A       ; Send data, or command
+READPIBYTE_B:
+            CALL    CHKPIRDY_B      ;Wait Interface transfer data to PI and Pi App processing
+            IN      A,(7)       ; read byte
+            RET                 ; Return in A the byte received
 
 
 
