@@ -4,5 +4,5 @@
 *.swp
 *.bak
 .DS_Store
-software/zout/*
-software/target/*
+software/zout/**
+software/target/**

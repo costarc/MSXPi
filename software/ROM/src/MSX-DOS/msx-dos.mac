@@ -4266,7 +4266,10 @@ T570D:	defw	A40A7,A5445,A53A7,A546E,A5474,A5465,A5454,A5462
 	defw	A47D1,A56D0,A553C,A5552,A55DB,A55E6,A55FF,A46BA
 	defw	A4720
 
-A576F:	call	INIHRD			; initialize diskhardware
+A576F:
+    call    CHECK_ESC
+    ret     c
+    call	INIHRD			; initialize diskhardware
 	di
 	ld	a,(DEVICE)
 	and	a			; abort disksystem init ?
