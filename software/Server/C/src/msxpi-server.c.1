@@ -77,7 +77,7 @@
 #include <fcntl.h>
 
 #define version "0.8.1"
-#define build "20170612.00052"
+#define build "20170603.01"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -231,7 +231,6 @@ unsigned char appstate = st_init;
 unsigned char msxbyte;
 unsigned char msxbyterdy;
 unsigned char pibyte;
-int debug;
 
 //Tools for waiting for a new command
 pthread_mutex_t newComMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -352,13 +351,47 @@ unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     
 }
 
+// This is the function set in the interrupt for the CS signal.
+// When CS signal is asserted (by the MSX Interface) to start a transfer,
+// RDY signal is asserted LOW (Busy).
+// RDY should stay LOW until the current byte is processed by the statre machine.
+
+void func_st_cmd(int gpio, int level, uint32_t tick) {
+    if (level == 0) {
+        gpioWrite(rdy,LOW);
+        /*if (pibyte == SENDNEXT) {
+         SPI_MASTER_transfer_byte(SENDNEXT);
+         gpioWrite(rdy,HIGH);
+         } else*/
+        msxbyte = SPI_MASTER_transfer_byte(pibyte);
+        
+        pthread_mutex_lock(&newComMutex); //Lock to update status
+        msxbyterdy = 1;
+        pthread_cond_signal(&newComCond); //Signal waiting process
+        pthread_mutex_unlock(&newComMutex); //Release.
+        
+        //printf("Sent %x, Received %x\n",pibyte,msxbyte);
+        
+    }
+}
+
 int piexchangebyte(unsigned char mypibyte) {
-    int mymsxbyte;
+    time_t start_t, end_t;
+    double diff_t;
+    time(&start_t);
+    int rc = 0;
+    msxbyterdy = 0;
+    pibyte = mypibyte;
     gpioWrite(rdy,HIGH);
-    while (gpioRead(cs) == HIGH) { } ;
-    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte);
-    gpioWrite(rdy,LOW);
-    return mymsxbyte;
+    pthread_mutex_lock(&newComMutex);
+    while (msxbyterdy == 0 && rc==0) {
+        pthread_cond_wait(&newComCond, &newComMutex);
+        time(&end_t);
+        diff_t = difftime(end_t, start_t);
+        if (diff_t > BYTETRANSFTIMEOUT) rc = -1;
+    }
+    pthread_mutex_unlock(&newComMutex);
+    if (msxbyterdy==0) return -1; else return msxbyte;
 }
 
 /* senddatablock
@@ -412,7 +445,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
                 crc ^= mypibyte;
                 bytecounter++;
             } else {
-                printf("senddatablock:Error during transfer\n");
+                //printf("senddatablock:Error during transfer\n");
                 break;
             }
         }
@@ -520,17 +553,9 @@ int secsenddata(unsigned char *buf, int filesize) {
     transferStruct dataInfo;
     
     mymsxbyte = piexchangebyte(SENDNEXT);
-    //printf("secsenddata:Sent SENDNEXT, received:%x\n",mymsxbyte);
-    
-    if(mymsxbyte!=SENDNEXT) {
-        rc = RC_OUTOFSYNC;
-        printf("secsenddata:Exiting with rc:%x\n",rc);
-        return rc;
-    }
-    
+    printf("secsenddata:Sent SENDNEXT, received:%x\n",mymsxbyte);
+        
     piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
-    //printf("secsenddata:Sent filesize: %i\n",filesize);
-
     
     // now send 512 bytes at a time.
     blockindex = 0;
@@ -556,7 +581,7 @@ int secsenddata(unsigned char *buf, int filesize) {
         
     }
     
-    //printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
+    printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
     
     if(retries>GLOBALRETRIES) {
         printf("secsenddata:Transfer interrupted due to CRC error\n");
@@ -565,7 +590,7 @@ int secsenddata(unsigned char *buf, int filesize) {
         rc = dataInfo.rc;
     }
     
-    //printf("secsenddata:Exiting with rc:%x\n",rc);
+    printf("secsenddata:Exiting with rc:%x\n",rc);
     return rc;
 
 }
@@ -579,14 +604,14 @@ int secrecvdata(unsigned char *buf) {
     unsigned char bytem,bytel;
     
     mymsxbyte = piexchangebyte(SENDNEXT);
-    //printf("secrecvdata:Sent SENDNEXT, received:%x\n",mymsxbyte);
+    printf("secrecvdata:Sent SENDNEXT, received:%x\n",mymsxbyte);
     
     // Send totalfile size to transfer
     bytel = piexchangebyte(SENDNEXT);
     bytem = piexchangebyte(SENDNEXT);
     
     filesize = bytel + (bytem * 256);
-    //printf("secrecvdata:bytem:%x bytel:%x filesize:%i\n",bytem,bytel,filesize);
+    printf("secrecvdata:bytem:%x bytel:%x filesize:%i\n",bytem,bytel,filesize);
     
     // now read 512 bytes at a time.
     blockindex = 0;
@@ -597,7 +622,7 @@ int secrecvdata(unsigned char *buf) {
         while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
             rc = RC_UNDEFINED;
             dataInfo = recvdatablock(buf+blockindex);
-            //printf("secrecvdata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,dataInfo.datasize);
+            printf("secrecvdata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,dataInfo.datasize);
             rc = dataInfo.rc;
             retries++;
         }
@@ -608,11 +633,11 @@ int secrecvdata(unsigned char *buf) {
         blockindex += 512;
         
         if (filesize-blockindex>512) blocksize = 512; else blocksize = filesize-blockindex;
-        //printf("secrecvdata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
+        printf("secrecvdata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
         
     }
     
-    //printf("secrecvdata:Exiting loop with rc %x\n",rc);
+    printf("secrecvdata:Exiting loop with rc %x\n",rc);
     
     if(retries>GLOBALRETRIES) {
         printf("secrecvdata:Transfer interrupted due to CRC error\n");
@@ -621,7 +646,7 @@ int secrecvdata(unsigned char *buf) {
         rc = dataInfo.rc;
     }
     
-    //printf("secrecvdata:Exiting with rc %x\n",rc);
+    printf("secrecvdata:Exiting with rc %x\n",rc);
     return rc;
     
 }
@@ -978,7 +1003,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
     
     int rc = 1;
     
-    //printf("msxdos_secinfo: Starting\n");
+    printf("msxdos_secinfo: Starting\n");
     //while(rc) {
      // mymsxbyte = piexchangebyte(SENDNEXT);
      //   if (mymsxbyte==SENDNEXT || mymsxbyte<0) rc=false;
@@ -987,7 +1012,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
   mymsxbyte = piexchangebyte(SENDNEXT);
 
     if (mymsxbyte == SENDNEXT) {
-	    //printf("msxdos_secinfo: received SENDNEXT\n");
+	    printf("msxdos_secinfo: received SENDNEXT\n");
         sectorInfo->deviceNumber = piexchangebyte(SENDNEXT);
         sectorInfo->sectors = piexchangebyte(SENDNEXT);
         sectorInfo->logicUnitNumber = piexchangebyte(SENDNEXT);
@@ -996,7 +1021,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
         
         sectorInfo->initialSector = byte_lsb + 256 * byte_msb;
         
-        //printf("msxdos_secinfo:deviceNumber=%x logicUnitNumber=%x #sectors=%x sectorInfo->initialSector=%i\n",sectorInfo->deviceNumber,sectorInfo->logicUnitNumber,sectorInfo->sectors,sectorInfo->initialSector);
+        printf("msxdos_secinfo:deviceNumber=%x logicUnitNumber=%x #sectors=%x sectorInfo->initialSector=%i\n",sectorInfo->deviceNumber,sectorInfo->logicUnitNumber,sectorInfo->sectors,sectorInfo->initialSector);
         
         if (sectorInfo->deviceNumber == -1 || sectorInfo->sectors == -1 || sectorInfo->logicUnitNumber == -1 || byte_lsb == -1 || byte_msb == -1)
             rc = RC_FAILED;
@@ -1007,7 +1032,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
         rc = RC_OUTOFSYNC;
     }
     
-    //printf("msxdos_secinfo:exiting rc = %x\n",rc);
+    printf("msxdos_secinfo:exiting rc = %x\n",rc);
     return rc;
     
 }
@@ -1020,15 +1045,12 @@ int msxdos_readsector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo) 
     numsectors = sectorInfo->sectors;
     initsector = sectorInfo->initialSector;
     
-    debug = 0;
     // now tansfer sectors to MSX, 512 bytes at a time and perform sync betwen blocks
     //printf("msxdos_readsector:calling secsenddata\n");
-    //printf("msxdos_readsector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
+    printf("msxdos_readsector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
     rc = secsenddata(currentdrive+(initsector*512),numsectors*512);
  
-    debug = 0;
-    
-    //printf("msxdos_readsector:exiting rc = %x\n",rc);
+    printf("msxdos_readsector:exiting rc = %x\n",rc);
            
     return rc;
         
@@ -1041,7 +1063,7 @@ int msxdos_writesector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo)
         numsectors = sectorInfo->sectors;
         initsector = sectorInfo->initialSector;
     
-        //printf("msxdos_writesector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
+        printf("msxdos_writesector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
     
     
         index = 0;
@@ -1053,16 +1075,14 @@ int msxdos_writesector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo)
             index += 512;
             sectorcount--;
         }
-    
-        /*
+            
         if (rc==RC_SUCCESS) {
             printf("msxdos_writesector:Success transfering data sector\n");
         } else {
             printf("msxdos_writesector:Error transfering data sector\n");
         }
-         */
     
-        //printf("msxdos_writesector:exiting rc = %x\n",rc);
+        printf("msxdos_writesector:exiting rc = %x\n",rc);
         
         return rc;
 }
@@ -1842,12 +1862,12 @@ int main(int argc, char *argv[]){
     struct psettype psetvar[10];
     strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
     strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
-    strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpiboot.dsk");
-    strcpy(psetvar[3].var,"DRIVE2");strcpy(psetvar[3].value,"notused");
-    strcpy(psetvar[4].var,"DRIVE3");strcpy(psetvar[4].value,"notused");
-    strcpy(psetvar[5].var,"WIFISSID");strcpy(psetvar[5].value,"my wifi");
-    strcpy(psetvar[6].var,"WIFIPWD");strcpy(psetvar[6].value,"secret");
-    strcpy(psetvar[7].var,"DSKTMPL");strcpy(psetvar[7].value,"msxpi_720KB_template.dsk");
+    strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpitools.dsk");
+    strcpy(psetvar[3].var,"WIFISSID");strcpy(psetvar[3].value,"my wifi");
+    strcpy(psetvar[4].var,"WIFIPWD");strcpy(psetvar[4].value,"secret");
+    strcpy(psetvar[5].var,"DSKTMPL");strcpy(psetvar[5].value,"msxpi_720KB_template.dsk");
+    strcpy(psetvar[6].var,"free");strcpy(psetvar[6].value,"");
+    strcpy(psetvar[7].var,"free");strcpy(psetvar[7].value,"");
     strcpy(psetvar[8].var,"free");strcpy(psetvar[8].value,"");
     strcpy(psetvar[9].var,"free");strcpy(psetvar[9].value,"");
     
@@ -1885,14 +1905,19 @@ int main(int argc, char *argv[]){
     printf("GPIO Initialized\n");
     printf("Starting MSXPi Server Version %s Build %s\n",version,build);
 
+    //drive0.dskname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
     strcpy(drive0.dskname,psetvar[1].value);
     drive0.deviceNumber = 0;
     msxdos_inihrd(&drive0);
 
+    //drive1.dskname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
     strcpy(drive1.dskname,psetvar[2].value);
     drive1.deviceNumber = 1;
     msxdos_inihrd(&drive1);
+
+    //time(&start_t);
     
+    gpioSetISRFunc(cs, FALLING_EDGE, SPI_INT_TIME, func_st_cmd);
     while(appstate != st_shutdown){
         
         switch (appstate) {
@@ -1916,7 +1941,7 @@ int main(int argc, char *argv[]){
                 if(dataInfo.rc==RC_SUCCESS) {
                     //printf("st_recvcmd: received command: ");
                     *(msxcommand + dataInfo.datasize) = '\0';
-                    //printf("%s\n",msxcommand);
+                    printf("%s\n",msxcommand);
                     appstate = st_runcmd;
                 } else {
                     printf("st_recvcmd: error receiving data\n");
@@ -1974,9 +1999,7 @@ int main(int argc, char *argv[]){
 
                } else if(strcmp(msxcommand,"INIHRD")==0) {
                     printf("DOS_INIHRD\n");
-                    // limit number of drives to two.
-                    if(numdrives<2)
-                        numdrives++;
+                    numdrives++;
                     appstate = st_cmd;
                     break;
                 
@@ -2112,7 +2135,7 @@ int main(int argc, char *argv[]){
                             printf("calling INIHRD with %s\n",drive0.dskname);
                             msxdos_inihrd(&drive0);
                             strcpy(psetvar[1].value,drive0.dskname);
-                        } else if (currentdrive.deviceNumber == 1) {
+                        } else {
                             munmap(drive1.data,drive1.size);
                             strcpy(&drive1.dskname,&currentdrive.dskname);
                             printf("calling INIHRD with %s\n",drive1.dskname);
@@ -2154,7 +2177,7 @@ int main(int argc, char *argv[]){
                     
                     printf("PNEWDISK\n");
                     
-                    if (pnewdisk(msxcommand,psetvar[7].value)!=RC_SUCCESS)
+                    if (pnewdisk(msxcommand,psetvar[5].value)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");
                     
                     appstate = st_cmd;
@@ -2165,7 +2188,7 @@ int main(int argc, char *argv[]){
                     
                     printf("PWIFI\n");
                     
-                    if (pwifi(msxcommand,psetvar[5].value,psetvar[6].value)!=RC_SUCCESS)
+                    if (pwifi(msxcommand,psetvar[3].value,psetvar[4].value)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");
                     
                     appstate = st_cmd;

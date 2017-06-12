@@ -37,162 +37,145 @@ TEXTTERMINATOR: EQU '$'
         ORG     $0100
 
         LD      BC,4
-        LD      DE,PGETCMD
+        LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
 
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      SENDNEXT
-        JR      NZ,LOADPROGERR
-
-;        LD      A,SENDNEXT
-;        CALL    PIEXCHANGEBYTE
-;        LD      (RUNOPTION),A
-
-;        LD      A,SENDNEXT
-;        CALL    PIEXCHANGEBYTE
-;        LD      (SAVEOPTION),A
-
-;        LD      A,SENDNEXT
-;        CALL    PIEXCHANGEBYTE
-;        CP      SENDNEXT
-;        JR      NZ,LOADPROGERR
-
-
-;        LD      A,(SAVEOPTION)
-;        CP      1
-;        JR      NZ,LOADROMPROG
-; receive filename to save
-
-        CALL    INIFCB
-        LD      DE,FILEFCB+1
-        CALL    RECVDATABLOCK
-
-; debug
-;        ld      de,INIFCB+1
-;        ld      b,12
-dbgloop1:
-;        ld      a,(de)
-;        call    PUTCHAR
-;        inc     de
-;        djnz    dbgloop1
-; end debug
-
-; About to start trasnfer, then need to open the file to write
-;        CALL    OPENFILEW
-;        LD      HL,FILEERR1
-;        JR      C,PRINTERR
-
-LOADROMPROG:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      SENDNEXT
-        JR      NZ,LOADPROGERR
-
-LOADBLOCK:
-        ld      a,'O'
-        call    PUTCHAR
-
-; BLOCK SIZE TO USE
-        LD      BC,8192
-
-; BUFFER TO STORE DATA RECEIVED
-        LD      DE,BUF
-
-; SHOW PROGRESSION DOTS
-        LD      A,1
-
-; READ 1 BLOCK OF DATA AND STORE IN (DE)
-        CALL    DOWNLOADDATA
-        JR      C,PRINTPIERR
-
-; Or there was not more data and it finished successfuly ?
-        CP      ENDTRANSFER
-        JR      Z,CONSUMEDATA
 
         CP      RC_SUCCESS
-        JR      NZ,LOADPROGERR
+        JR      NZ,PGETEND
 
-USEDATABLOCK:
-; IMPLEMENT HERE THE CODE TO PROCESS THE BLOCK OF DATA RECEIVED
-        LD      A,"P"
-        CALL    PUTCHAR
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      (RUNOPTION),A
 
-; CRC status can also be verified here and retry can be implemented.
-; < more code here >
-; Read next nlock
-        JR      LOADBLOCK
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      (SAVEOPTION),A
 
-PRINTPIERR:
-        ld      a,'R'
-        call    PUTCHAR
-        LD      HL,PICOMMERR
-PRINTERR:
-        ld      a,'S'
-        call    PUTCHAR
-        CALL    PRINT
-        JP      0
+        LD      A,(SAVEOPTION)
+        CP      1
+        JR      NZ,PGETRECVFILE
 
-; Finished readig data
-; Print final Pi message to screen
-CONSUMEDATA:
+; receive filename to save
+        LD      DE,SAVFNAME
+        CALL    RECVDATABLOCK
+        CALL    INITSAVEFILE
 
-LOADPROGERR:
-        ld      a,'Q'
-        call    PUTCHAR
+PGETRECVFILE:
+; read 512 bytes at a time, and save to disk
+; look at loadrom.com.asm to understand the required headers
+;
+; get the total file size
+;->
+
+; read 512 bytes at a time - this is determined by the server routine
+; I recommend to use secrecvdata becuase it retransmits data
+; in case of crc errors.
+; but you can also try RECVDATABLOCK for a slightly faster transfer
+;
+
+        CALL    LOADROM
+
+        PUSH    HL
+        PUSH    AF
+        CALL    PRINTPISTDOUT
+        POP     AF
+        POP     HL
+        CP      ENDTRANSFER
+        JP      NZ,0
+        PUSH    HL
+        LD      HL,0
+        LD      A,($FCC1)
+        CALL    ENASLT
+        POP     HL
+        JP      (HL)
+
+INITSAVEFILE:
+        RET
+WRITEFILETODISK:
+        RET
+
+PGETEND:
         CALL    PRINTPISTDOUT
         JP      0
 
-PGETMVCMD:
-        LD      HL,PARMS
-        LD      DE,$81
-        LD      BC,16
-        LDIR
-        RET
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        CALL    PRINT
+        JP      0
 
-OPENFILEW:
-        LD      DE,FILEFCB
-        LD      C,$16
-        CALL    BDOS
-        OR      A
-        RET     Z
-; Error opening file
+;-----------------------
+; LOADROM              |
+;-----------------------
+LOADROM:
+; Will load the ROM directly on the destiantion page in $4000
+; Might be slower, but that is what we have so far...
+;Get number of bytes to transfer
+        LD      A,STARTTRANSFER
+        CALL    PIEXCHANGEBYTE
+        RET     C
+        CP      STARTTRANSFER
         SCF
+        RET     NZ
+        LD      DE,$4000
+        CALL    READDATASIZE
+LOADROM0:
+        PUSH    BC
+        LD      A,GLOBALRETRIES
+LOADROMRETRY:
+; retries
+        PUSH    AF
+        CALL    RECVDATABLOCK
+        JR      NC,LOADROM1
+        POP     AF
+        DEC     A
+        JR      NZ,LOADROMRETRY
+        LD      A,ABORT
+        POP     BC
+        OR      A
         RET
 
-INIFCB:
-        EX      AF,AF'
-        EXX
-        LD      HL,FILEFCB
-        LD      (HL),0
-        LD      DE,FILEFCB+1
-        LD      BC,$0023
-        LDIR
-        LD      HL,FILEFCB+1
-        LD      (HL),$20
-        LD      HL,FILEFCB+2
-        LD      BC,$000A
-        LDIR
-        EXX
-        EX AF,AF'
+LOADROM1:
+        LD      A,'.'
+        CALL    PUTCHAR
+        POP     AF
+;Get rom address to write
+        POP     HL
+
+;DE now contain ROM address
+        SBC     HL,BC
+        JR      C,LOADROMEND
+        JR      Z,LOADROMEND
+        LD      B,H
+        LD      C,L
+        JR      LOADROM0
+
+; File load successfully.
+; Return C reseted, and A = filetype
+LOADROMEND:
+        LD      A,ENDTRANSFER
+        CALL    PIEXCHANGEBYTE
+        CP      ENDTRANSFER
+        SCF
+        RET     NZ
+        LD      HL,($4002)    ; ROM exec address
+        LD      A,ENDTRANSFER
+        OR      A             ;Reset C flag
         RET
 
-PICOMMERR:  DB      "Communication Error",13,10,"$"
-LOADPROGERRMSG: DB  "Error download file from network",13,10,"$"
-FILEERR1:   DB      "Error opening disk file",13,10,"$"
+DIRCMD: DB      "PGET"
+
+PICOMMERR:
+        DB      "Communication Error",13,10,"$"
+RUNOPTION:  db  0
+SAVEOPTION: db  0
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-PGETCMD:     DB      "PGET"
-LOADDATACMD: DB      "LOADDATA"
-PARMS:       DB      " /tmp/pget.file",13
-RUNOPTION:   DB      0
-SAVEOPTION:  DB      0
-
-FILEFCB:     DS     40
-BUF:         EQU    $
-
+SAVFNAME:   equ $

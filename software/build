@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# add build id to msxpi-server.c
+/Users/ronivon/Dev/gitlab/add-build-id.sh
+
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
 
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
@@ -16,7 +19,12 @@
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pwifi.com.asm                  -o ./target/pwifi.com
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pget.com.asm                  -o ./target/pget.com
 
+# Nextor File System driver
+[ -f ./Client/src/NFS.ASM ] && [ -f ~/Dev/bin/sjasm ] && ~/Dev/bin/sjasm -q -c ./Client/src/NFS.ASM ./target/nfs.com 
+
 cp ./target/*.com ~ronivon/Desktop/MSXPi/commands/
 
 # build distribution package
-[ -f ../../build-pkg.sh ] && ../../build-pkg.sh
+if [[ $1 == "-f" ]];then
+    [ -f ~/Dev/gitlab/build-pkg.sh ] && ~/Dev/gitlab/build-pkg.sh
+fi
