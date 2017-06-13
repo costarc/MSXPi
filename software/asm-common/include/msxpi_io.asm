@@ -50,40 +50,67 @@
 ; SENDIFCMD            |
 ;-----------------------
 SENDIFCMD:
+<<<<<<< HEAD
             OUT     (6),A       ; Send data, or command
             RET
+=======
+            out     (CONTROL_PORT),a       ; Send data, or command
+            ret
+
+>>>>>>> upstream/dev
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            PUSH    BC
-            LD      BC,0FFFFH
+            push    bc
+            ld      bc,0ffffh
 CHKPIRDY0:
+<<<<<<< HEAD
             IN      A,(6)           ; Verify SPIRDY register on the MSXInterface
             OR	    A
             JR      Z,CHKPIRDYOK    ; RDY signal is zero, Pi App FSM is ready
+=======
+            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
+            or	    a
+            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
+>>>>>>> upstream/dev
                                     ; for next command/byte
-            DEC     BC              ; Pi not ready, wait a little bit
-            LD      A,B
-            OR      C
-            JR      NZ,CHKPIRDY0
+            dec     bc              ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
 CHKPIRDYNOTOK:
-            SCF
+            scf
 CHKPIRDYOK:
-            POP     BC
-            RET
+            pop     bc
+            ret
 
 ;-----------------------
 ; READBYTE             |
 ;-----------------------
+<<<<<<< HEAD
 READBYTE:
             XOR     A           ; do not use XOR to preserve C flag state
             OUT     (6),A       ; Send READ command to the Interface
             JR      READPIBYTE
+=======
+PIREADBYTE:
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                   ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT),a    ; send read command to the interface
+            call    CHKPIRDY            ;wait interface transfer data to pi and
+                                        ; pi app processing
+                                        ; no ret c is required here, because in a,(7) does not reset c flag
+PIREADBYTE1:
+            in      a,(DATA_PORT)       ; read byte
+            ret                         ; return in a the byte received
+>>>>>>> upstream/dev
 
 ;-----------------------
 ; TRANSFBYTE           |
 ;-----------------------
+<<<<<<< HEAD
 TRANSFBYTE:
             PUSH    AF
             CALL    CHKPIRDY    ; registers A,BC and FLAGS are modified
@@ -190,3 +217,21 @@ PRINTNUM1_:
             ADD     A,D
             CALL    CHPUT
             RET
+=======
+PIWRITEBYTE:
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT),a       ; send data, or command
+            ret
+
+;-----------------------
+; PIEXCHANGEBYTE       |
+;-----------------------
+PIEXCHANGEBYTE:
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT)       ; read byte
+            ret
+
+>>>>>>> upstream/dev

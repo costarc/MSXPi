@@ -1,13 +1,23 @@
 #!/bin/sh
-~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
-~/Dev/bin/z80asm -I ./asm-common/include                      ./ROM/src/msxpi-rom.asm                   -o ./target/msxpi-rom.rom
-~/Dev/bin/z80asm -I ./asm-common/include                      ./ROM/src/msxpi-rom_bin.asm               -o ./target/msxpi-rom.bin
 
-cat ./target/msxpi-rom.rom >./target/msxpi-rom_0.7_32k.rom
-cat ./target/msxpi-rom.rom>>./target/msxpi-rom_0.7_32k.rom
-scp Server/C/src/msxpi-server.c pi@192.168.1.16:msxpi/
-scp ./target/msxpi-rom.rom      pi@192.168.1.16:msxpi/
-scp ./target/msxpi-rom.bin      pi@192.168.1.16:msxpi/
-scp ./target/msxpi-client.bin   pi@192.168.1.16:msxpi/
-ssh pi@192.168.1.16 cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
+
+~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat ./target/msxpi-dos_16k.rom > ./target/msxpi-dos.rom && cat ./target/msxpi-dos_16k.rom >> ./target/msxpi-dos.rom
+
+# MSX-DOS commands
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pdir.com.asm                  -o ./target/pdir.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/ploadrom.com.asm                  -o ./target/ploadrom.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/#.com.asm                  -o ./target/#.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pset.com.asm                  -o ./target/pset.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/psetdisk.com.asm                  -o ./target/psetdisk.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pcd.com.asm                  -o ./target/pcd.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pnewdisk.com.asm                  -o ./target/pnewdisk.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pwifi.com.asm                  -o ./target/pwifi.com
+~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/pget.com.asm                  -o ./target/pget.com
+
+cp ./target/*.com ~ronivon/Desktop/MSXPi/commands/
+
+# build distribution package
+[ -f ../../build-pkg.sh ] && ../../build-pkg.sh
 

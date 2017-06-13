@@ -76,7 +76,9 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#define version     "0.8.1"
+#define version "0.8.1"
+#define build "20170603.01"
+
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
 #define HOMEPATH "/home/pi/msxpi"
@@ -551,7 +553,7 @@ int secsenddata(unsigned char *buf, int filesize) {
     transferStruct dataInfo;
     
     mymsxbyte = piexchangebyte(SENDNEXT);
-    //printf("secsenddata:Sent SENDNEXT, received:%i\n",mymsxbyte);
+    printf("secsenddata:Sent SENDNEXT, received:%x\n",mymsxbyte);
         
     piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
     
@@ -579,16 +581,16 @@ int secsenddata(unsigned char *buf, int filesize) {
         
     }
     
-    //printf("secsenddata:Exiting loop with rc %x\n",rc);
+    printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
     
     if(retries>GLOBALRETRIES) {
-        //printf("secsenddata:Transfer interrupted due to CRC error\n");
+        printf("secsenddata:Transfer interrupted due to CRC error\n");
         rc = RC_CRCERROR;
     } else {
         rc = dataInfo.rc;
-        //printf("secsenddata:Exiting with rc %x\n",rc);
     }
     
+    printf("secsenddata:Exiting with rc:%x\n",rc);
     return rc;
 
 }
@@ -1001,7 +1003,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
     
     int rc = 1;
     
-    //printf("msxdos_secinfo: syncing with MSX\n");
+    printf("msxdos_secinfo: Starting\n");
     //while(rc) {
      // mymsxbyte = piexchangebyte(SENDNEXT);
      //   if (mymsxbyte==SENDNEXT || mymsxbyte<0) rc=false;
@@ -1010,7 +1012,7 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
   mymsxbyte = piexchangebyte(SENDNEXT);
 
     if (mymsxbyte == SENDNEXT) {
-	//printf("msxdos_secinfo: received SENDNEXT\n");
+	    printf("msxdos_secinfo: received SENDNEXT\n");
         sectorInfo->deviceNumber = piexchangebyte(SENDNEXT);
         sectorInfo->sectors = piexchangebyte(SENDNEXT);
         sectorInfo->logicUnitNumber = piexchangebyte(SENDNEXT);
@@ -1019,18 +1021,18 @@ int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
         
         sectorInfo->initialSector = byte_lsb + 256 * byte_msb;
         
-        //printf("msxdos_secinfo:deviceNumber=%x logicUnitNumber=%x #sectors=%x sectorInfo->initialSector=%i\n",sectorInfo->deviceNumber,sectorInfo->logicUnitNumber,sectorInfo->sectors,sectorInfo->initialSector);
+        printf("msxdos_secinfo:deviceNumber=%x logicUnitNumber=%x #sectors=%x sectorInfo->initialSector=%i\n",sectorInfo->deviceNumber,sectorInfo->logicUnitNumber,sectorInfo->sectors,sectorInfo->initialSector);
         
         if (sectorInfo->deviceNumber == -1 || sectorInfo->sectors == -1 || sectorInfo->logicUnitNumber == -1 || byte_lsb == -1 || byte_msb == -1)
             rc = RC_FAILED;
         else
             rc = RC_SUCCESS;
     } else {
-        //printf("msxdos_secinfo:sync_transf error\n");
+        printf("msxdos_secinfo:sync_transf error\n");
         rc = RC_OUTOFSYNC;
     }
     
-    //printf("msxdos_secinfo:exiting rc = %x\n",rc);
+    printf("msxdos_secinfo:exiting rc = %x\n",rc);
     return rc;
     
 }
@@ -1045,9 +1047,10 @@ int msxdos_readsector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo) 
     
     // now tansfer sectors to MSX, 512 bytes at a time and perform sync betwen blocks
     //printf("msxdos_readsector:calling secsenddata\n");
+    printf("msxdos_readsector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
     rc = secsenddata(currentdrive+(initsector*512),numsectors*512);
  
-    //printf("msxdos_readsector:exiting rc = %x\n",rc);
+    printf("msxdos_readsector:exiting rc = %x\n",rc);
            
     return rc;
         
@@ -1059,7 +1062,10 @@ int msxdos_writesector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo)
     
         numsectors = sectorInfo->sectors;
         initsector = sectorInfo->initialSector;
-            
+    
+        printf("msxdos_writesector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
+    
+    
         index = 0;
         sectorcount = numsectors;
         // Read data from MSX
@@ -1167,7 +1173,7 @@ int * msxdos_inihrd(struct DiskImgInfo *driveInfo) {
     int rc,fp;
     struct   stat diskstat;
 
-    printf("msxdos_inihrd:Disk disk image name:%s\n",driveInfo->dskname);
+    printf("msxdos_inihrd:Initializing drive:%i\n",driveInfo->deviceNumber);
 
     driveInfo->rc = RC_FAILED;
 
@@ -1867,7 +1873,7 @@ int main(int argc, char *argv[]){
     
     // numdrives is hardocde here to assure MSX will always have only 2 drives allocated
     // more than 2 drives causes some MSX to hang
-    unsigned char numdrives = 2;
+    unsigned char numdrives = 0;
     unsigned char msxcommand[255];
 
     
@@ -1897,7 +1903,7 @@ int main(int argc, char *argv[]){
     gpioWrite(rdy,LOW);
     
     printf("GPIO Initialized\n");
-    printf("Starting MSXPi Server v%s\n",version);
+    printf("Starting MSXPi Server Version %s Build %s\n",version,build);
 
     //drive0.dskname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
     strcpy(drive0.dskname,psetvar[1].value);
@@ -1993,15 +1999,16 @@ int main(int argc, char *argv[]){
 
                } else if(strcmp(msxcommand,"INIHRD")==0) {
                     printf("DOS_INIHRD\n");
+                    numdrives++;
                     appstate = st_cmd;
                     break;
                 
                } else if(strcmp(msxcommand,"DRIVES")==0) {
                     printf("DOS_DRIVES\n");
 
-                   printf("Returning number of drives:%i\n",numdrives);
-                   piexchangebyte(numdrives);
-                    
+                    printf("Returning number of drives:%i\n",numdrives);
+                    piexchangebyte(numdrives);
+                    numdrives = 0;
                     appstate = st_cmd;
                     break;
    
