@@ -37,7 +37,7 @@
 ; 0.6c   : Initial version commited to git
 ;
  
-MODEL4b:    EQU     1
+MODEL4b:    EQU     0
 
 INLINBUF:   EQU     $F55E
 INLIN:      EQU     $00B1
