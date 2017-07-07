@@ -5,4 +5,6 @@
 *.bak
 .DS_Store
 software/zout/**
-software/target/**
+software/target/*.com
+software/target/*.bin
+software/target/*.rom
