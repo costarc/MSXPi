@@ -98,8 +98,11 @@ SENDPICMD:
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 RECVDATABLOCK:
-        call    CHECKBUSY
-        ret     c
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        scf
+        ret     nz
 
 ;Get number of bytes to transfer
         call    READDATASIZE
@@ -166,8 +169,11 @@ RECVDATABLOCK_CRCERROR:
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 SENDDATABLOCK:
-        call    CHECKBUSY
-        ret     c
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        scf
+        ret     nz
 
 ; MSX is synced with PI, then send size of block to transfer
         ld      a,c
@@ -234,8 +240,11 @@ SENDDATABLOCK_OFFSYNC:
 ;   Flag C set if error
 ; -------------------------------------------------------------
 SECRECVDATA:
-        call    CHECKBUSY
-        ret     c
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        scf
+        ret     nz
 
 ;Get number of bytes to transfer
         call    READDATASIZE

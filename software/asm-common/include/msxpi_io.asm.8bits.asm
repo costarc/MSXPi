@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.6d                                                            |
+;| Version : 0.8                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,95 +30,17 @@
 ;|===========================================================================|
 ;
 ; File history :
-; 0.6d   :   Changed header of ROM to: <size><exec address><rom binary>
-;            Size and exec address are two bytes long each.
-;            Size is inserted by the MSXPi Server App.
-; 0.6c   :   Initial version commited to git
+; 0.8    : Re-worked protocol as protocol-v2:
+;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
+;          Moved to here various routines from msxpi_api.asm
+; 0.7    : Replaced CHKPIRDY retries to $FFFF
+;          Removed the RESET when PI is not responding. This is now responsability
+;           of the calling function, which might opt to do something else.
+; 0.6c   : Initial version commited to git
 ;
 
-MSXLOADERADDR:  equ     $C000
-
-MODEL4b:        EQU     0
-
-CHPUT:          EQU     00A2H
-
-                ORG     MSXLOADERADDR
-
-        LD      A,2
-        CALL    TRANSFBYTE
-        JR      C,LOADERERR
-
-; Start reading data from Pi
-; First two bytes is the ROM size
-
-; Read MSB of ROM size and store in D
-
-        CALL    READBYTE
-        LD      E,A
-
-;       Read LSB of ROM size, and store in E
-        CALL    READBYTE
-        LD      D,A
-
-; Read MSB of ROM EXEC Address and store in H
-
-        CALL    READBYTE
-        LD      L,A
-
-;       Read LSB of ROM EXEC Address and store in L
-        CALL    READBYTE
-        LD      H,A
-
-;       Now have DE set to the number of bytes to transfer,
-;       And HL set to the execution address.
-
-        LD      (MSXPICLIADDR),HL
-
-;       This is the main loop to load the ROM
-
-LOADER:
-
-;       Read one byte
-
-        CALL    READBYTE
-        JR      C,LOADERERR
-
-;       Store in memory
-
-        LD      (HL),A
-        INC     HL
-        DEC     DE
-        LD      A,D
-        OR      E
-
-;       Verify if all bytes has been read, otherwise read one more
-
-        JR      NZ,LOADER
-;       Execute the ROM file that was just loaded
-
-        LD      HL,(MSXPICLIADDR)
-        JP      (HL)
-
-;       This routine will send READBYTE command (0) to port 6
-;       and waity until Pi respond with a Ready signal
-;       Then the MSX will read port 7, which contains the byte
-
-LOADERERR:
-        LD      HL,PIOFFLINESTR_B
-        CALL    PRINT_B
-        RET
-; ================================================================
-; Functions to support the commands
-; ================================================================
-
-PRINT_B:
-        LD	A,(HL)		;get a character to print
-        OR	A
-        RET	Z
-        CALL	CHPUT		;put a character
-        INC	HL
-        JR	PRINT_B
-
+; Inlude file for other sources in the project
+;
 ; ==================================================================
 ; BASIC I/O FUNCTIONS STARTS HERE.
 ; These are the lower level I/O routines available, and must match
@@ -127,21 +49,65 @@ PRINT_B:
 ; own commands, using OUT/IN directly to the I/O ports.
 ; ==================================================================
 
-IF MODEL4b
-    INCLUDE    "msxpi_io_4bits.asm"
-ELSE
-    INCLUDE    "msxpi_io.asm"
-ENDIF
+;-----------------------
+; SENDIFCMD            |
+;-----------------------
+SENDIFCMD:
+            out     (CONTROL_PORT),a       ; Send data, or command
+            ret
 
-; ================================================================
-; END of BASIC I/O FUNCTIONS
-; ================================================================
+;-----------------------
+; CHKPIRDY             |
+;-----------------------
+CHKPIRDY:
+            push    bc
+            ld      bc,0ffffh
+CHKPIRDY0:
+            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
+            or	    a
+            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
+                                    ; for next command/byte
+            dec     bc              ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+CHKPIRDYNOTOK:
+            scf
+CHKPIRDYOK:
+            pop     bc
+            ret
 
-PIOFFLINESTR_B:
+;-----------------------
+; PIREADBYTE           |
+;-----------------------
+PIREADBYTE:
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                   ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT),a    ; send read command to the interface
+            call    CHKPIRDY            ;wait interface transfer data to pi and
+                                        ; pi app processing
+                                        ; no ret c is required here, because in a,(7) does not reset c flag
+PIREADBYTE1:
+            in      a,(DATA_PORT)       ; read byte
+            ret                         ; return in a the byte received
 
-        DB      "Raspberry PI not responding",13,10
-        DB      "Verify if server App is running",13,10
-        DB      00
+;-----------------------
+; PIWRITEBYTE          |
+;-----------------------
+PIWRITEBYTE:
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT),a       ; send data, or command
+            ret
 
-MSXPICLIADDR:
-        DW      $0000
+;-----------------------
+; PIEXCHANGEBYTE       |
+;-----------------------
+PIEXCHANGEBYTE:
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT)       ; read byte
+            ret
+

@@ -3,7 +3,7 @@
  ;|                                                                           |
  ;| MSXPi Interface                                                           |
  ;|                                                                           |
- ;| Version : 0.7                                                             |
+ ;| Version : 0.8.1                                                           |
  ;|                                                                           |
  ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
  ;|                                                                           |
@@ -29,8 +29,12 @@
  ;| You should have received a copy of the GNU General Public License         |
  ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
  ;|===========================================================================|
- ; 
+ ;
  ; File history :
+ ; 0.8.1  : MSX-DOS working properly.
+ ; 0.8    : Rewritten with new protocol-v2
+ ;          New functions, new main loop, new framework for better reuse
+ ;          This version now includes MSX-DOS 1.03 driver
  ; 0.7    : Commands CD and MORE working for http, ftp, nfs, win, local files.
  ; 0.6d   : Added http suport to LOAD and FILES commands
  ; 0.6c   : Initial version commited to git
@@ -44,6 +48,7 @@
  http://abyz.co.uk/rpi/pigpio/download.html
  
  Steps:
+ sudo apt-get install libcurl4-nss-dev
  wget abyz.co.uk/rpi/pigpio/pigpio.tar
  tar xf pigpio.tar
  cd PIGPIO
@@ -51,9 +56,6 @@
  sudo make install
  
  To compile and run this program:
- cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt
-
- whenusing curl for http:
  cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
  
  */
@@ -65,51 +67,82 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <dirent.h>
-//#include <curl/curl.h>
+#include <sys/stat.h>
+#include <curl/curl.h>
 #include <assert.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdbool.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
-#define version "0.7.0.1"
+#define TZ (0)
+#define version "0.8.1"
+#define build "20170705.00060"
+
+#define V07SUPPORT
+#define DISKIMGPATH "/home/pi/msxpi/disks"
+#define HOMEPATH "/home/pi/msxpi"
 
 /* GPIO pin numbers used in this program */
+
 #define cs    21
 #define sclk  20
 #define mosi  16
 #define miso  12
 #define rdy   25
 
-#define SPI_SCLK_LOW_TIME 1
-#define SPI_SCLK_HIGH_TIME 2
+#define SPI_SCLK_LOW_TIME 0
+#define SPI_SCLK_HIGH_TIME 0
 #define HIGH 1
 #define LOW 0
+#define command 1
+#define binary  2
 
-#define SPI_INT_TIME            1000
+#define GLOBALRETRIES      5
+
+#define SPI_INT_TIME            3000
 #define PIWAITTIMEOUTOTHER      120      // seconds
 #define PIWAITTIMEOUTBIOS       60      // seconds
+#define SYNCTIMEOUT             5
+#define BYTETRANSFTIMEOUT       5
+#define SYNCTRANSFTIMEOUT       3
+
+#define RC_SUCCESS              0xE0
+#define RC_INVALIDCOMMAND       0xE1
+#define RC_CRCERROR             0xE2
+#define RC_TIMEOUT              0xE3
+#define RC_INVALIDDATASIZE      0xE4
+#define RC_OUTOFSYNC            0xE5
+#define RC_FILENOTFOUND         0xE6
+#define RC_FAILED               0xE7
+#define RC_INFORESPONSE         0xE8
+#define RC_WAIT                 0xE9
+#define RC_READY                0xEA
+#define RC_UNDEFINED            0xEF
 
 #define st_init                 0       // waiting loop, waiting for a command
-#define st_cmd                  1       // trasnfering data for a command
-#define st_load_getname         2       // transfering data required by a command
-#define st_load_quote           3      // transfering data required by a command
-#define st_file_read            4       // transfering data required by a command
-#define st_file_send            5       // transfering data required by a command
-#define st_send_ack             6
-#define st_load_senderr         7       //
-#define st_send_rsp             8       //
-#define st_recvfname            9
-#define st_shutdown             10
-#define st_recvparm             11
-// #define st_msxpiruncmd       12
-#define st_file_wget            13
-#define st_set_display          14
-#define st_send_text            15
-#define st_set_response         16
-#define st_send_response        17
+#define st_cmd                  1       // transfering data for a command
+#define st_recvdata             2
+#define st_senddata             4
+#define st_synch                5       // running a command received from MSX
+#define st_runcmd               6
+#define st_shutdown             99
 
+// commands
 #define CMDREAD         0x00
 #define LOADROM         0x01
 #define LOADCLIENT      0x02
+
+// from 0x03 to 0xF reserver
+// 0xAA - 0xAF : Control code
+#define STARTTRANSFER   0xA0
+#define SENDNEXT        0xA1
+#define ENDTRANSFER     0xA2
+#define READY           0xAA
+#define ABORT           0xAD
+#define WAIT            0xAE
+
 #define WIFICFG         0x1A
 #define CMDDIR          0x1D
 #define CMDPIFSM        0x33
@@ -123,9 +156,7 @@
 #define CMDPATHERR1     0x7E
 #define UNKERR          0x98
 #define FNOTFOUND       0x99
-#define CMDACK          0xA6
 #define PI_READY        0xAA
-#define PROCESSING      0xAE
 #define NOT_READY       0xAF
 #define RUNPICMD        0xCC
 #define CMDSETVAR       0xD1
@@ -139,13 +170,11 @@
 #define CMDLDFILE       0xF1
 #define CMDSVFILE       0xF5
 #define CMDRESET        0xFF
-
 #define RAW     0
 #define LDR     1
 #define CLT     2
 #define BIN     3
 #define ROM     4
-
 #define FSLOCAL     1
 #define FSUSB1      2
 #define FSUSB2      3
@@ -156,15 +185,61 @@
 #define FSFTP       8
 #define FSFTPS      9
 
+// MSX-DOS2 Error Codes
+#define __NOFIL     0xD7
+#define __DISK      0xFD
+#define __SUCCESS   0x00
 
-int filesize;
-int fileindex;
+typedef struct {
+    unsigned char rc;
+    int  datasize;
+} transferStruct;
+
+typedef struct {
+    unsigned char appstate;
+    unsigned char pibyte;
+    unsigned char msxbyte;
+    unsigned char datasize;
+    unsigned char data[32768];
+    unsigned char bytecounter;
+    unsigned char crc;
+    unsigned char rc;
+    char stdout[255];
+    char stderr[255];
+} MSXData;
+
+typedef struct {
+    unsigned char deviceNumber;
+    unsigned char mediaDescriptor;
+    unsigned char logicUnitNumber;
+    unsigned char sectors;
+    int           initialSector;
+} DOS_SectorStruct;
+
+struct DiskImgInfo {
+    int rc;
+    char dskname[65];
+    unsigned char *data;
+    unsigned char deviceNumber;
+    double size;
+};
+
+struct psettype {
+    char var[16];
+    char value[129];
+};
+
+struct curlMemStruct {
+    char *memory;
+    size_t size;
+};
+typedef struct curlMemStruct MemoryStruct;
+
 unsigned char appstate = st_init;
 unsigned char msxbyte;
 unsigned char msxbyterdy;
-unsigned char pibyte = NOT_READY;        // initial status is not ready for commands
-unsigned char msx_pi_so[65536];
-FILE *flog;
+unsigned char pibyte;
+int debug;
 
 //Tools for waiting for a new command
 pthread_mutex_t newComMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -173,6 +248,15 @@ pthread_cond_t newComCond  = PTHREAD_COND_INITIALIZER;
 void delay(unsigned int secs) {
     unsigned int retTime = time(0) + secs;   // Get finishing time.
     while (time(0) < retTime);               // Loop until it arrives.
+}
+
+char *replace(char *s,unsigned char c, unsigned char n) {
+    int i;
+    for(i=0;i<strlen(s);i++)
+        if(s[i]==c)
+            s[i] = n;
+    
+    return s;
 }
 
 char** str_split(char* a_str, const char a_delim) {
@@ -218,7 +302,7 @@ char** str_split(char* a_str, const char a_delim) {
             assert(idx < count);
             *(result + idx++) = strdup(token);
             token = strtok(0, delim);
-            printf("token,idx,count = %s,%i,%i\n",token,idx,count);
+            //printf("token,idx,count = %s,%i,%i\n",token,idx,count);
         }
         
         assert(idx == count - 1);
@@ -285,72 +369,1823 @@ unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     
 }
 
-// This is the function set in the interrupt for the CS signal.
-// When CS signal is asserted (by the MSX Interface) to start a transfer,
-// RDY signal is asserted LOW (Busy).
-// RDY should stay LOW until the current byte is processed by the statre machine.
-
-void func_st_cmd(int gpio, int level, uint32_t tick) {
-    if (level == 0) {
-        gpioWrite(rdy,LOW);
-        if (appstate == st_file_send) {
-            //printf("%x = %i\n",fileindex,msx_pi_so[fileindex]);
-            msxbyte = SPI_MASTER_transfer_byte(msx_pi_so[fileindex]);
-            fileindex++;
-        } else if (pibyte == PROCESSING) {
-                    SPI_MASTER_transfer_byte(PROCESSING);
-                    gpioWrite(rdy,HIGH);
-                } else
-                    msxbyte = SPI_MASTER_transfer_byte(pibyte);
-        
-        pthread_mutex_lock(&newComMutex); //Lock to update status
-	msxbyterdy = 1;
-	pthread_cond_signal(&newComCond); //Signal waiting process
-	pthread_mutex_unlock(&newComMutex); //Release.
-        
-        ///printf("Sent %x, Received %x\n",pibyte,msxbyte);
-        
-    }
+int piexchangebyte(unsigned char mypibyte) {
+    int mymsxbyte;
+    gpioWrite(rdy,HIGH);
+    while (gpioRead(cs) == HIGH) { } ;
+    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte);
+    gpioWrite(rdy,LOW);
+    return mymsxbyte;
 }
 
-int main(int argc, char *argv[])
-{
-    int startaddress,endaddress,execaddress;
+/* senddatablock
+ ---------------
+ 21/03/2017
+ 
+ Send a block of data to MSX. Read the data from a pointer passed to the function.
+ Do not retry if it fails (this should be implemented somewhere else).
+ Will inform the block size to MSX (two bytes) so it knows the size of transfer.
+ 
+ Logic sequence is:
+ 1. read MSX status (expect SENDNEXT)
+ 2. send lsb for block size
+ 3. send msb for block size
+ 4. read (lsb+256*msb) bytes from buffer and send to MSX
+ 5. exchange crc with msx
+ 6. end function and return status
+ 
+ Return code will contain the result of the oepration.
+ */
+transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize) {
     
-    FILE *fp;
-    FILE *fdir;
-    char** tokens;
+    transferStruct dataInfo;
     
-    struct dirent **fileListTemp;
-    unsigned char nextstate,nextbyte,lastcmd,FSTYPE,syncherrorcount,syncherrorcount2;
-    char buf_parm[255];
-    char msx_path1[255];
-    char msx_path2[255];
-    char temp_path1[255];
-    char temp_path2[255];
-    char temp_str[255];
-
-    char remotecommand[255];
-    char remoteuser[255];
-    char remotepass[255];
-    char wifissid[50];
-    char wifipass[50];
-    char remotetimeout[2] = "20";
-
+    int bytecounter = 0;
+    unsigned char mymsxbyte,mypibyte;
+    unsigned char crc = 0;
     
-    int idx, TRANSFTIMEOUT,noOfFiles,i;
+    //printf("senddatablock: starting\n");
+    mymsxbyte = piexchangebyte(SENDNEXT);
+    
+    if (mymsxbyte != SENDNEXT) {
+        //printf("senddatablock:Out of sync with MSX, waiting SENDNEXT, received %x\n",mymsxbyte);
+        dataInfo.rc = RC_OUTOFSYNC;
+    } else {
+        // send block size if requested by caller.
+        if (sendsize)
+            piexchangebyte(datasize % 256); piexchangebyte(datasize / 256);
+        
+        //printf("senddatablock:blocksize = %i\n",datasize);
+        
+        while(datasize>bytecounter && mymsxbyte>=0) {
+            //printf("senddatablock:waiting MSX request byte\n");
+            
+            mypibyte = *(buffer + bytecounter);
+            
+            mymsxbyte = piexchangebyte(mypibyte);
+            
+            if (mymsxbyte>=0) {
+                //printf("senddatablock:%i Sent %x %c Received:%x\n",bytecounter,mypibyte,mypibyte,mymsxbyte);
+                crc ^= mypibyte;
+                bytecounter++;
+            } else {
+                printf("senddatablock:Error during transfer\n");
+                break;
+            }
+        }
+        
+        if(mymsxbyte>=0) {
+            //printf("senddatablock:Sending CRC: %x\n",crc);
+            
+            mymsxbyte = piexchangebyte(crc);
+            
+            //printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
+            if (mymsxbyte == crc) {
+                //printf("mymsxbyte:CRC verified\n");
+                dataInfo.rc = RC_SUCCESS;
+            } else {
+                dataInfo.rc = RC_CRCERROR;
+                printf("senddatablock:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,dataInfo.rc);
+            }
+            
+        } else {
+            dataInfo.rc = RC_TIMEOUT;
+        }
+    }
+    
+    printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
+    return dataInfo;
+}
 
-    int bootdelaycnt = 10;            //After a boot,Pi will cycle in st_cmd before accepting commands
-    char hloadfname[50] = "/tmp/msxpifile1.tmp";
+/* recvdatablock
+ ---------------
+ Read a block of data from MSX and stores in the pointer passed to the function.
+ Do not retry if it fails (this should be implemented somewhere else).
+ Will read the block size from MSX (two bytes) to know size of transfer.
+ 
+ Logic sequence is:
+ 1. read MSX status (expect SENDNEXT)
+ 2. read lsb for block size
+ 3. read msb for block size
+ 4. read (lsb+256*msb) bytes from MSX and store in buffer
+ 5. exchange crc with msx
+ 6. end function and return status
+ 
+ Return code will contain the result of the oepration.
+ */
+
+transferStruct recvdatablock(unsigned char *buffer) {
+    transferStruct dataInfo;
+    
+    int bytecounter = 0;
+    unsigned char mymsxbyte;
+    unsigned char crc = 0;
+    
+    //printf("recvdatablock:starting\n");
+    mymsxbyte = piexchangebyte(SENDNEXT);
+    if (mymsxbyte != SENDNEXT) {
+        printf("recvdatablock:Out of sync with MSX, waiting SENDNEXT, received %x\n",mymsxbyte);
+        dataInfo.rc = RC_OUTOFSYNC;
+    } else {
+        // read block size
+        dataInfo.datasize = (unsigned char)piexchangebyte(SENDNEXT)+(256 * (unsigned char)piexchangebyte(SENDNEXT));
+        //printf("recvdatablock:blocksize = %i\n",dataInfo.datasize);
+        
+        while(dataInfo.datasize>bytecounter && mymsxbyte>=0) {
+            //printf("recvdatablock:waiting byte from MSX\n");
+            
+            mymsxbyte = piexchangebyte(SENDNEXT);
+            
+            if (mymsxbyte>=0) {
+                //printf("recvdatablock:Received byte:%x\n",mymsxbyte);
+                *(buffer + bytecounter) = mymsxbyte;
+                crc ^= mymsxbyte;
+                bytecounter++;
+            } else {
+                //printf("recvdatablock:Error during transfer\n");
+                break;
+            }
+        }
+        
+        if(mymsxbyte>=0) {
+            //printf("recvdatablock:Sending CRC: %x\n",crc);
+            
+            mymsxbyte = piexchangebyte(crc);
+            
+            //printf("recvdatablock:Received MSX CRC: %x\n",mymsxbyte);
+            if (mymsxbyte == crc) {
+                //printf("recvdatablock:CRC verified\n");
+                dataInfo.rc = RC_SUCCESS;
+            } else {
+                dataInfo.rc = RC_CRCERROR;
+                //printf("recvdatablock:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,dataInfo.rc);
+            }
+            
+        } else {
+            dataInfo.rc = RC_TIMEOUT;
+        }
+    }
+    
+    //printf("recvdatablock:exiting with rc = %x\n",dataInfo.rc);
+    return dataInfo;
+}
+
+int secsenddata(unsigned char *buf, int filesize) {
+    
+    int rc;
+    int blockindex,numsectors,initsector,mymsxbyte,blocksize,retries;
+    transferStruct dataInfo;
+    
+    mymsxbyte = piexchangebyte(SENDNEXT);
+    //printf("secsenddata:Sent SENDNEXT, received:%x\n",mymsxbyte);
+    
+    if(mymsxbyte!=SENDNEXT) {
+        rc = RC_OUTOFSYNC;
+        printf("secsenddata:Exiting with rc:%x\n",rc);
+        return rc;
+    }
+    
+    piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
+    //printf("secsenddata:Sent filesize: %i\n",filesize);
+    
+    
+    // now send 512 bytes at a time.
+    blockindex = 0;
+    if (filesize>512) blocksize = 512; else blocksize = filesize;
+    while(blockindex<filesize) {
+        retries=0;
+        rc = RC_UNDEFINED;
+        while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
+            rc = RC_UNDEFINED;
+            printf("secsenddata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,blocksize);
+            dataInfo = senddatablock(buf+blockindex,blocksize,true);
+            rc = dataInfo.rc;
+            retries++;
+        }
+        
+        // Transfer interrupted due to CRC error
+        if(retries>=GLOBALRETRIES) break;
+        
+        blockindex += 512;
+        
+        if (filesize-blockindex>512) blocksize = 512; else blocksize = filesize-blockindex;
+        //printf("secsenddata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
+        
+    }
+    
+    //printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
+    
+    if(retries>=GLOBALRETRIES) {
+        printf("secsenddata:Transfer interrupted due to CRC error\n");
+        rc = RC_CRCERROR;
+    } else {
+        rc = dataInfo.rc;
+    }
+    
+    //printf("secsenddata:Exiting with rc:%x\n",rc);
+    return rc;
+    
+}
+
+int secrecvdata(unsigned char *buf) {
+    
+    int rc;
+    int blockindex,numsectors,initsector,mymsxbyte,blocksize,retries;
+    transferStruct dataInfo;
+    int filesize;
+    unsigned char bytem,bytel;
+    
+    mymsxbyte = piexchangebyte(SENDNEXT);
+    //printf("secrecvdata:Sent SENDNEXT, received:%x\n",mymsxbyte);
+    
+    // Send totalfile size to transfer
+    bytel = piexchangebyte(SENDNEXT);
+    bytem = piexchangebyte(SENDNEXT);
+    
+    filesize = bytel + (bytem * 256);
+    //printf("secrecvdata:bytem:%x bytel:%x filesize:%i\n",bytem,bytel,filesize);
+    
+    // now read 512 bytes at a time.
+    blockindex = 0;
+    if (filesize>512) blocksize = 512; else blocksize = filesize;
+    while(blockindex<filesize) {
+        retries=0;
+        rc = RC_UNDEFINED;
+        while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
+            rc = RC_UNDEFINED;
+            dataInfo = recvdatablock(buf+blockindex);
+            //printf("secrecvdata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,dataInfo.datasize);
+            rc = dataInfo.rc;
+            retries++;
+        }
+        
+        // Transfer interrupted due to CRC error
+        if(retries>GLOBALRETRIES) break;
+        
+        blockindex += 512;
+        
+        if (filesize-blockindex>512) blocksize = 512; else blocksize = filesize-blockindex;
+        //printf("secrecvdata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
+        
+    }
+    
+    //printf("secrecvdata:Exiting loop with rc %x\n",rc);
+    
+    if(retries>GLOBALRETRIES) {
+        printf("secrecvdata:Transfer interrupted due to CRC error\n");
+        rc = RC_CRCERROR;
+    } else {
+        rc = dataInfo.rc;
+    }
+    
+    //printf("secrecvdata:Exiting with rc %x\n",rc);
+    return rc;
+    
+}
+
+int sync_transf(unsigned char mypibyte) {
     time_t start_t, end_t;
     double diff_t;
+    time(&start_t);
+    int rc = 0;
+    msxbyterdy = 0;
+    pibyte = mypibyte;
+    gpioWrite(rdy,HIGH);
+    pthread_mutex_lock(&newComMutex);
+    while (msxbyterdy == 0 && rc==0) {
+        pthread_cond_wait(&newComCond, &newComMutex);
+        time(&end_t);
+        diff_t = difftime(end_t, start_t);
+        if (diff_t > SYNCTRANSFTIMEOUT) rc = -1;
+    }
+    pthread_mutex_unlock(&newComMutex);
+    if (msxbyterdy==0) rc = -1; else rc = msxbyte;
+    return rc;
+}
 
-    appstate = st_init;
+
+int sync_client() {
+    int rc = -1;
+    
+    printf("sync_client:Syncing\n");
+    while(rc<0) {
+        rc = piexchangebyte(READY);
+        
+#ifdef V07SUPPORT
+        
+        if (rc == LOADCLIENT) {
+            LOADCLIENT_V07PROTOCOL();
+            rc = READY;
+        }
+        
+#endif
+        
+    }
+    
+    return rc;
+}
+
+int ptype(unsigned char *msxcommand) {
+    int rc;
+    FILE *fp;
+    int filesize;
+    unsigned char *buf;
+    unsigned char *fname;
+    transferStruct dataInfo;
+    
+    printf("ptype:starting %s\n",msxcommand);
+    
+    filesize = 22;
+    buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+    strcpy(buf,"Pi:Error opening file");
+    
+    if (strlen(msxcommand)>5) {
+        fname = (unsigned char *)malloc((sizeof(unsigned char) * strlen(msxcommand)) - 5);
+        strcpy(fname,msxcommand+6);
+        
+        printf("ptype:fname is %s\n",fname);
+
+        fp = fopen(fname,"rb");
+        if(fp) {
+            printf("ptype:file name to show is %s\n",fname);
+            fseek(fp, 0L, SEEK_END);
+            filesize = ftell(fp);        // file has 4 zeros at the end, we only need one
+            rewind(fp);
+            
+            buf = (unsigned char *)malloc((sizeof(unsigned char) * filesize) + 1);
+            fread(buf,filesize,1,fp);
+            fclose(fp);
+            
+            *(buf + filesize) = 0;
+        }
+        
+        free(fname);
+        
+    }
+    
+    printf("ptype:file size is %i\n",filesize);
+    dataInfo = senddatablock(buf,filesize+1,true);
+    free(buf);
+    rc = dataInfo.rc;
+    printf("ptype:exiting rc = %x\n",rc);
+    return rc;
+    
+}
+
+int runpicmd(unsigned char *msxcommand) {
+    int rc;
+    FILE *fp;
+    int filesize;
+    unsigned char *buf;
+    unsigned char *fname;
+    
+    printf("runpicmd:starting command >%s<+\n",msxcommand);
+    
+    fname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
+    sprintf(fname,"%s>/tmp/msxpi_out.txt 2>&1",msxcommand);
+    
+    printf("runpicmd:prepared output in command >%s<\n",fname);
+    
+    if(fp = popen(fname, "r")) {
+        fclose(fp);
+        filesize = 24;
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * 256 );
+        strcpy(buf,"ptype /tmp/msxpi_out.txt");
+        printf("ptype:Success running command %s\n",fname);
+        rc = RC_SUCCESS;
+    } else {
+        printf("ptype:Error running command %s\n",fname);
+        filesize = 22;
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * 256 );
+        strcpy(buf,"Pi:Error running command");
+        rc = RC_FILENOTFOUND;
+    }
+    
+    printf("runpicmd:call more to send output\n");
+    if (rc==RC_SUCCESS) {
+        piexchangebyte(RC_SUCCESS);
+        ptype(buf);
+    } else {
+        piexchangebyte(RC_FAILED);
+        senddatablock(buf,strlen(buf)+1,true);
+    }
+    
+    free(buf);
+    free(fname);
+    
+    printf("runpicmd:exiting rc = %x\n",rc);
+    return rc;
+    
+}
+
+int loadrom(unsigned char *msxcommand) {
+    int rc;
+    FILE *fp;
+    int filesize,index,blocksize,retries;
+    unsigned char *buf;
+    unsigned char *stdout;
+    unsigned char mymsxbyte;
+    transferStruct dataInfo;
+    char** tokens;
+    
+    printf("load:starting %s\n",msxcommand);
+    
+    tokens = str_split(msxcommand,' ');
+    printf("load:parsed command is %s %s\n",*(tokens),*(tokens + 1));
+    
+    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 65);
+    
+    dataInfo.rc = RC_UNDEFINED;
+    
+    fp = fopen(*(tokens + 1),"rb");
+    if (fp) {
+        fseek(fp, 0L, SEEK_END);
+        filesize = ftell(fp);
+        rewind(fp);
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+        fread(buf,filesize,1,fp);
+        fclose(fp);
+        
+        if ((*(buf)!='A') || (*(buf+1)!='B')) {
+            printf("loadrom:Not a .rom program. Aborting\n");
+            rc = RC_UNDEFINED;
+            strcpy(stdout,"Pi:Not a .rom file");
+            piexchangebyte(ABORT);
+        } else {
+            
+            piexchangebyte(STARTTRANSFER);
+            
+            // send to msx the total size of file
+            //printf("load:sending file size %i\n",filesize);
+            piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
+            
+            //printf("load:calling senddatablock\n");
+            
+            // now send 512 bytes at a time.
+            index = 0;
+            
+            if (filesize>512) blocksize = 512; else blocksize = filesize;
+            while(blocksize) {
+                retries=0;
+                dataInfo.rc = RC_UNDEFINED;
+                while(retries<GLOBALRETRIES && dataInfo.rc != RC_SUCCESS) {
+                    dataInfo.rc = RC_UNDEFINED;
+                    //printf("load:index = %i %04x blocksize = %i retries:%i rc:%x\n",index,index+0x4000,blocksize,retries,dataInfo.rc);
+                    dataInfo = senddatablock(buf+index,blocksize,true);
+                    retries++;
+                    rc = dataInfo.rc;
+                }
+                
+                // Transfer interrupted due to CRC error
+                if(retries>GLOBALRETRIES) break;
+                
+                index += blocksize;
+                if (filesize - index > 512) blocksize = 512; else blocksize = filesize - index;
+            }
+            
+            if(retries>=GLOBALRETRIES) {
+                //printf("load:Transfer interrupted due to CRC error\n");
+                rc = RC_CRCERROR;
+                strcpy(stdout,"Pi:CRC Error");
+                mymsxbyte = piexchangebyte(ABORT);
+            } else {
+                //printf("load:done\n");
+                
+                strcpy(stdout,"Pi:Ok");
+                mymsxbyte = piexchangebyte(ENDTRANSFER);
+                printf("load:Sent ENDTRANSFER, Received %x\n",mymsxbyte);
+            }
+        }
+        
+        free(buf);
+        
+    } else {
+        //printf("load:error opening file\n");
+        rc = RC_FILENOTFOUND;
+        mymsxbyte = piexchangebyte(ABORT);
+        strcpy(stdout,"Pi:Error opening file");
+    }
+    
+    printf("load:sending stdout %s\n",stdout);
+    dataInfo = senddatablock(stdout,strlen(stdout)+1,true);
+    
+    free(tokens);
+    free(stdout);
+    
+    printf("load:exiting rc = %x\n",rc);
+    return rc;
+    
+}
+
+int loadbin(unsigned char *msxcommand) {
+    int rc;
+    FILE *fp;
+    int filesize,index,blocksize,retries;
+    unsigned char *buf;
+    unsigned char *stdout;
+    unsigned char mymsxbyte;
+    char** tokens;
+    transferStruct dataInfo;
+    
+    //printf("loadbin:starting %s\n",msxcommand);
+    
+    tokens = str_split(msxcommand,' ');
+    printf("loadbin:parsed command is %s %s\n",*(tokens),*(tokens + 1));
+    
+    rc = RC_UNDEFINED;
+    
+    fp = fopen(*(tokens + 1),"rb");
+    if (fp) {
+        fseek(fp, 0L, SEEK_END);
+        filesize = ftell(fp);
+        rewind(fp);
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+        fread(buf,filesize,1,fp);
+        fclose(fp);
+        
+        index = 0;
+        
+        if (*(buf)!=0xFE) {
+            printf("loadbin:Not a .bin program. Aborting\n");
+            rc = RC_UNDEFINED;
+            stdout = (unsigned char *)malloc(sizeof(unsigned char) * 19);
+            strcpy(stdout,"Pi:Not a .bin file");
+            piexchangebyte(ABORT);
+        } else {
+            
+            piexchangebyte(STARTTRANSFER);
+            
+            // send to msx the total size of file
+            printf("load:sending file size %i\n",filesize - 7);
+            piexchangebyte((filesize - 7) % 256); piexchangebyte((filesize - 7) / 256);
+            
+            // send file header: 0xFE
+            piexchangebyte(*(buf+index));index++;
+            // program start address
+            piexchangebyte(*(buf+index));index++;
+            piexchangebyte(*(buf+index));index++;
+            
+            // program end address
+            piexchangebyte(*(buf+index));index++;
+            piexchangebyte(*(buf+index));index++;
+            
+            // program exec address
+            piexchangebyte(*(buf+index));index++;
+            piexchangebyte(*(buf+index));index++;
+            
+            printf("loadbin:Start address = %02x%02x Exec address = %02x%02x\n",*(buf+2),*(buf+1),*(buf+4),*(buf+3));
+            
+            printf("loadbin:calling senddatablock\n");
+            
+            // now send 512 bytes at a time.
+            
+            if (filesize>512) blocksize = 512; else blocksize = filesize;
+            while(blocksize) {
+                retries=0;
+                dataInfo.rc = RC_UNDEFINED;
+                while(retries<GLOBALRETRIES && dataInfo.rc != RC_SUCCESS) {
+                    dataInfo.rc = RC_UNDEFINED;
+                    dataInfo = senddatablock(buf+index,blocksize,true);
+                    printf("loadbin:index = %i blocksize = %i retries:%i rc:%x\n",index,blocksize,retries,dataInfo.rc);
+                    retries++;
+                    rc = dataInfo.rc;
+                }
+                
+                // Transfer interrupted due to CRC error
+                if(retries>GLOBALRETRIES) break;
+                
+                index += blocksize;
+                if (filesize - index > 512) blocksize = 512; else blocksize = filesize - index;
+            }
+            
+            printf("loadbin:(exited) index = %i blocksize = %i retries:%i rc:%x\n",index,blocksize,retries,dataInfo.rc);
+            mymsxbyte = piexchangebyte(ENDTRANSFER);
+            
+            if(retries>=GLOBALRETRIES || rc != RC_SUCCESS) {
+                printf("loadbin:Error during data transfer:%x\n",rc);
+                rc = RC_CRCERROR;
+                stdout = (unsigned char *)malloc(sizeof(unsigned char) * 13);
+                
+                strcpy(stdout,"Pi:CRC Error");
+            } else {
+                printf("load:done\n");
+                stdout = (unsigned char *)malloc(sizeof(unsigned char) * 15);
+                strcpy(stdout,"Pi:File loaded");
+            }
+            
+            mymsxbyte = piexchangebyte(ENDTRANSFER);
+            
+        }
+        
+        free(buf);
+        
+    } else {
+        printf("loadbin:error opening file\n");
+        rc = RC_FILENOTFOUND;
+        mymsxbyte = piexchangebyte(ABORT);
+        stdout = (unsigned char *)malloc(sizeof(unsigned char) * 22);
+        strcpy(stdout,"Pi:Error opening file");
+    }
+    
+   // if (rc!=RC_SUCCESS) {
+        printf("load:sending stdout: size=%i, %s\n",strlen(stdout)+1,stdout);
+        dataInfo = senddatablock(stdout,strlen(stdout)+1,true);
+    //}
+    
+    free(tokens);
+    free(stdout);
+    
+    printf("loadbin:exiting rc = %x\n",rc);
+    return rc;
+    
+}
+
+int msxdos_secinfo(DOS_SectorStruct *sectorInfo) {
+    unsigned char byte_lsb, byte_msb;
+    int mymsxbyte=0;
+    
+    int rc = 1;
+    
+    //printf("msxdos_secinfo: Starting\n");
+    //while(rc) {
+    // mymsxbyte = piexchangebyte(SENDNEXT);
+    //   if (mymsxbyte==SENDNEXT || mymsxbyte<0) rc=false;
+    //}
+    
+    mymsxbyte = piexchangebyte(SENDNEXT);
+    
+    if (mymsxbyte == SENDNEXT) {
+        //printf("msxdos_secinfo: received SENDNEXT\n");
+        sectorInfo->deviceNumber = piexchangebyte(SENDNEXT);
+        sectorInfo->sectors = piexchangebyte(SENDNEXT);
+        sectorInfo->logicUnitNumber = piexchangebyte(SENDNEXT);
+        byte_lsb = piexchangebyte(SENDNEXT);
+        byte_msb = piexchangebyte(SENDNEXT);
+        
+        sectorInfo->initialSector = byte_lsb + 256 * byte_msb;
+        
+        //printf("msxdos_secinfo:deviceNumber=%x logicUnitNumber=%x #sectors=%x sectorInfo->initialSector=%i\n",sectorInfo->deviceNumber,sectorInfo->logicUnitNumber,sectorInfo->sectors,sectorInfo->initialSector);
+        
+        if (sectorInfo->deviceNumber == -1 || sectorInfo->sectors == -1 || sectorInfo->logicUnitNumber == -1 || byte_lsb == -1 || byte_msb == -1)
+            rc = RC_FAILED;
+        else
+            rc = RC_SUCCESS;
+    } else {
+        printf("msxdos_secinfo:sync_transf error\n");
+        rc = RC_OUTOFSYNC;
+    }
+    
+    //printf("msxdos_secinfo:exiting rc = %x\n",rc);
+    return rc;
+    
+}
+
+
+int msxdos_readsector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo) {
+    
+    int rc,numsectors,initsector;
+    
+    numsectors = sectorInfo->sectors;
+    initsector = sectorInfo->initialSector;
+    
+    debug = 0;
+    // now tansfer sectors to MSX, 512 bytes at a time and perform sync betwen blocks
+    //printf("msxdos_readsector:calling secsenddata\n");
+    //printf("msxdos_readsector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
+    rc = secsenddata(currentdrive+(initsector*512),numsectors*512);
+    
+    debug = 0;
+    
+    //printf("msxdos_readsector:exiting rc = %x\n",rc);
+    
+    return rc;
+    
+}
+
+int msxdos_writesector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo) {
+    
+    int rc,sectorcount,numsectors,initsector,index;
+    
+    numsectors = sectorInfo->sectors;
+    initsector = sectorInfo->initialSector;
+    
+    printf("msxdos_writesector:Starting with #sectors:%i and initsector:%i\n",numsectors,initsector);
+    
+    
+    index = 0;
+    sectorcount = numsectors;
+    // Read data from MSX
+    while(sectorcount) {
+        rc = secrecvdata(currentdrive+index+(initsector*512));
+        if (rc!=RC_SUCCESS) break;
+        index += 512;
+        sectorcount--;
+    }
+    
+    
+     if (rc==RC_SUCCESS) {
+     printf("msxdos_writesector:Success transfering data sector\n");
+     } else {
+     printf("msxdos_writesector:Error transfering data sector\n");
+     }
+    
+    
+    printf("msxdos_writesector:exiting rc = %x\n",rc);
+    
+    return rc;
+}
+
+int pnewdisk(unsigned char * msxcommand, char *dsktemplate) {
+    char** tokens;
+    struct stat diskstat;
+    char *buf;
+    char *cpycmd;
+    int rc;
+    FILE *fp;
+    
+    printf("pnewdisk:starting %s\n",msxcommand);
+    
+    tokens = str_split(msxcommand,' ');
+    
+    buf = (unsigned char *)malloc(sizeof(unsigned char) * 40);
+    
+    rc = RC_FAILED;
+    
+    if (*(tokens + 1) != NULL) {
+        
+        cpycmd = (unsigned char *)malloc(sizeof(unsigned char) * 140);
+        
+        printf("pnewdisk:Creating new dsk file: %s\n",*(tokens + 1));
+        
+        
+        sprintf(cpycmd,"cp %s %s",dsktemplate,*(tokens + 1));
+        
+        if(fp = popen(cpycmd, "r")) {
+            fclose(fp);
+            
+            // check if file was created
+            if( access( *(tokens + 1), F_OK ) != -1 ) {
+                sprintf(cpycmd,"chown pi.pi %s",*(tokens + 1));
+                fp = popen(cpycmd, "r");
+                fclose(fp);
+                strcpy(buf,"Pi:Ok");
+                rc = RC_SUCCESS;
+            } else
+                strcpy(buf,"Pi:Error verifying disk");
+        } else
+            strcpy(buf,"Pi:Error creating disk");
+        
+        free(cpycmd);
+        
+    } else
+        strcpy(buf,"Pi:Error\nSyntax: pnewdisk <file>");
+    
+    senddatablock(buf,strlen(buf)+1,true);
+    
+    free(tokens);
+    free(buf);
+    printf("pnewdisk:Exiting with rc=%x\n",rc);
+    return rc;
+    
+}
+
+int msxdos_format(struct DiskImgInfo *driveInfo) {
+    FILE *fp;
+    int rc;
+    
+    char *cpycmd;
+    
+    cpycmd = (unsigned char *)malloc(sizeof(unsigned char) * 140);
+    
+    sprintf(cpycmd,"mkfs -t msdos -F 12 %s",driveInfo->dskname);
+    
+    printf("msxdos_format:Formating drive: %s\n",cpycmd);
+    
+    // run mkfs command using popen()"
+    if(fp = popen(cpycmd, "r")) {
+        fclose(fp);
+        piexchangebyte(ENDTRANSFER);
+        rc = RC_SUCCESS;
+    } else {
+        piexchangebyte(ABORT);
+        rc = RC_FAILED;
+    }
+    
+    free(cpycmd);
+    printf("msxdos_format:Exiting with rc=%x\n",rc);
+    return rc;
+}
+
+int * msxdos_inihrd(struct DiskImgInfo *driveInfo) {
+    
+    int rc,fp;
+    struct   stat diskstat;
+    
+    printf("msxdos_inihrd:Initializing drive:%i\n",driveInfo->deviceNumber);
+    
+    driveInfo->rc = RC_FAILED;
+    
+    if( access( driveInfo->dskname, F_OK ) != -1 ) {
+        printf("msxdos_inihrd:Mounting disk image 1:%s\n",driveInfo->dskname);
+        fp = open(driveInfo->dskname,O_RDWR);
+        
+        if (stat(driveInfo->dskname, &diskstat) == 0) {
+            driveInfo->size = diskstat.st_size;
+            if ((driveInfo->data = mmap((caddr_t)0, driveInfo->size, PROT_READ | PROT_WRITE, MAP_SHARED, fp, 0))  == (caddr_t) -1) {
+                printf("msxdos_inihrd:Disk image failed to mount\n");
+            } else {
+                printf("msxdos_inihrd:Disk mapped in ram with size %i Bytes\n",driveInfo->size);
+                driveInfo->rc = RC_SUCCESS;
+            }
+        } else {
+            printf("msxdos_inihrd:Error getting disk image size\n");
+        }
+    } else {
+        printf("msxdos_inihrd:Disk image not found\n");
+    }
+    
+    return driveInfo->rc;
+}
+
+/* LOADCLIENT_V07PROTOCOL
+ ------------------------
+ 21/03/2017
+ 
+ This function implemente the protocol for the load in ROM v0.7
+ it will allow using the existing ROM in the EPROM without chantes to load the Client.
+ */
+
+int LOADCLIENT_V07PROTOCOL(void) {
+    FILE *fp;
+    unsigned char *buf;
+    int counter = 7;
+    int rc;
+    
+    printf("LOADCLIENT_V07PROTOCOL:Sending msxpi-client.bin using protocol v0.7\n");
+    fp = fopen("/home/pi/msxpi/msxpi-client.bin","rb");
+    fseek(fp, 0L, SEEK_END);
+    int filesize = ftell(fp) - 7;
+    rewind(fp);
+    buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+    fread(buf,filesize,1,fp);
+    fclose(fp);
+    
+    piexchangebyte(filesize % 256);
+    piexchangebyte(filesize / 256);
+    piexchangebyte(*(buf+5));
+    piexchangebyte(*(buf+6));
+    
+    printf("Filesize = %i\n",filesize);
+    printf("Exec address =%02x%02x\n",*(buf+6),*(buf+5));
+    while(filesize>counter) {
+        //printf("cunter:%i  byte:%x\n",counter,*(buf+counter));
+        rc = piexchangebyte(*(buf+counter));
+        counter++;
+    }
+    printf("LOADCLIENT_V07PROTOCOL:terminated\n");
+    return rc;
+}
+
+struct DiskImgInfo psetdisk(unsigned char * msxcommand) {
+    struct DiskImgInfo diskimgdata;
+    char** tokens;
+    struct   stat diskstat;
+    char *buf;
+    
+    printf("psetdisk:starting %s\n",msxcommand);
+    
+    tokens = str_split(msxcommand,' ');
+    buf = (unsigned char *)malloc(sizeof(unsigned char) * 64);
+    
+    if ((*(tokens + 2) != NULL) && (*(tokens + 1) != NULL)) {
+        
+        diskimgdata.rc = RC_SUCCESS;
+        
+        if(strcmp(*(tokens + 1),"0")==0)
+            diskimgdata.deviceNumber = 0;
+        else if (strcmp(*(tokens + 1),"1")==0)
+            diskimgdata.deviceNumber = 1;
+        else
+            diskimgdata.rc = RC_FAILED;
+        
+        if (diskimgdata.rc != RC_FAILED) {
+            strcpy(diskimgdata.dskname,*(tokens + 2));
+            printf("psetdisk:Disk image is:%s\n",diskimgdata.dskname);
+            
+            if( access( diskimgdata.dskname, F_OK ) != -1 ) {
+                printf("psetdisk:Found disk image\n");
+                strcpy(buf,"Pi:OK");
+            } else {
+                printf("psetdisk:Disk image not found.\n");
+                diskimgdata.rc = RC_FAILED;
+                strcpy(buf,"Pi:Error\nDisk image not found");
+            }
+        } else {
+            printf("psetdisk:Invalid device\n");
+            diskimgdata.rc = RC_FAILED;
+            strcpy(buf,"Pi:Error\nInvalid device\nDevice must be 0 or 1");
+        }
+    } else {
+        printf("psetdisk:Invalid parameters\n");
+        diskimgdata.rc = RC_FAILED;
+        strcpy(buf,"Pi:Error\nSyntax: psetdisk <0|1> <file>");
+    }
+    
+    senddatablock(buf,strlen(buf)+1,true);
+    free(tokens);
+    free(buf);
+    
+    return diskimgdata;
+}
+
+int pset(struct psettype *psetvar, unsigned char *msxcommand) {
+    int rc;
+    unsigned char *buf;
+    char** tokens;
+    char *stdout;
+    int n;
+    bool found = false;
+    
+    printf("pset:starting %s\n",msxcommand);
+    
+    tokens = str_split(msxcommand,' ');
+    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 64);
+    strcpy(stdout,"Pi:Ok");
+    
+    rc = RC_FAILED;
+    
+    
+    if ((*(tokens + 1) == NULL)) {
+        printf("pset:missing parameters\n");
+        strcpy(stdout,"Pi:Error\nSyntax: pset display | <variable> <value>");
+    } else if ((*(tokens + 2) == NULL)) {
+        
+        //DISPLAY is requested?
+        if ((strncmp(*(tokens + 1),"display",1)==0) ||
+            (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
+            
+            printf("pcd:generating output for DISPLAY\n");
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*128) + 1);
+            strcpy(buf,"\n");
+            for(n=0;n<10;n++) {
+                strcat(buf,psetvar[n].var);
+                strcat(buf,"=");
+                strcat(buf,psetvar[n].value);
+                strcat(buf,"\n");
+            }
+            
+            rc = RC_INFORESPONSE;
+        } else {
+            printf("pset:missing parameters\n");
+            strcpy(stdout,"Pi:Error\nSyntax: pset <variable> <value>");
+        }
+    } else {
+        
+        printf("pset:setting %s to %s\n",*(tokens+1),*(tokens+2));
+        
+        for(n=0;n<10;n++) {
+            printf("psetvar[%i]=%s\n",n,psetvar[n].var);
+            if (strcmp(psetvar[n].var,*(tokens +1))==0) {
+                strcpy(psetvar[n].value,*(tokens +2));
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            for(n=0;n<10;n++) {
+                printf("psetvar[%i]=%s\n",n,psetvar[n].var);
+                if (strcmp(psetvar[n].var,"free")==0) {
+                    strcpy(psetvar[n].var,*(tokens +1));
+                    strcpy(psetvar[n].value,*(tokens +2));
+                    break;
+                }
+            }
+        }
+        if (n==10) {
+            rc = RC_FAILED;
+            printf("pset:All slots are taken\n");
+            strcpy(stdout,"Pi:Error\nAll slots are taken");
+        }
+    }
+    
+    if (rc == RC_INFORESPONSE) {
+        printf("pset:sending Display output\n");
+        senddatablock(buf,strlen(buf)+1,true);
+        free(buf);
+        rc = RC_SUCCESS;
+    } else {
+        printf("pset:sending stdout %s\n",stdout);
+        senddatablock(stdout,strlen(stdout)+1,true);
+    }
+    
+    free(stdout);
+    free(tokens);
+    return rc;
+}
+
+int pwifi(char * msxcommand, char *wifissid, char *wifipass) {
+    int rc;
+    char** tokens;
+    char *stdout;
+    char *buf;
+    int i;
+    FILE *fp;
+    
+    rc = RC_FAILED;
+    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+    tokens = str_split(msxcommand,' ');
+    
+    if ((*(tokens + 1) == NULL)) {
+        printf("pset:missing parameters\n");
+        strcpy(stdout,"Pi:Error\nSyntax: pwifi display | set");
+        piexchangebyte(RC_FAILED);
+        senddatablock(stdout,strlen(stdout)+1,true);
+    } else if ((strncmp(*(tokens + 1),"DISPLAY",1)==0) ||
+               (strncmp(*(tokens + 1),"display",1)==0)) {
+        
+        rc = runpicmd("ifconfig wlan0 | grep inet >/tmp/msxpi.tmp");
+        
+    } else if ((strncmp(*(tokens + 1),"SET",1)==0) ||
+               (strncmp(*(tokens + 1),"set",1)==0)) {
+        
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * 256);
+        fp = fopen("/etc/wpa_supplicant/wpa_supplicant.conf", "w+");
+        
+        strcpy(buf,"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n");
+        strcat(buf,"update_config=1\n");
+        strcat(buf,"network={\n");
+        strcat(buf,"\tssid=\"");
+        strcat(buf,wifissid);
+        strcat(buf,"\"\n");
+        strcat(buf,"\tpsk=\"");
+        strcat(buf,wifipass);
+        strcat(buf,"\"\n");
+        strcat(buf,"}\n");
+        
+        fprintf(fp,buf);
+        fclose(fp);
+        free(buf);
+        
+        rc = runpicmd("ifdown wlan0 && ifup wlan0");
+    } else {
+        printf("pset:Invalid parameters\n");
+        strcpy(stdout,"Pi:Error\nSyntax: pwifi display | set");
+        piexchangebyte(RC_FAILED);
+        senddatablock(stdout,strlen(stdout)+1,true);
+    }
+    
+    free(tokens);
+    free(stdout);
+    
+    printf("pwifi:Exiting with rc=%x\n",rc);
+    return rc;
+    
+}
+
+int pcd(struct psettype *psetvar,char * msxcommand) {
+    int rc;
+    struct stat diskstat;
+    char** tokens;
+    char *stdout;
+    char *buf;
+    int i;
+    
+    printf("pcd:aprsign command:%s\n",msxcommand);
+    tokens = str_split(msxcommand,' ');
+    
+    rc = RC_SUCCESS;
+    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 70);
+    
+    // Deals with absolute local filesystem PATHs
+    //if cd has no parameter (want to go home)
+    if (*(tokens + 1)==NULL) {
+        printf("pcd:going local home\n");
+        strcpy(psetvar[0].value,HOMEPATH);
+        sprintf(stdout,"Pi:%s",HOMEPATH);
+        
+        //DISPLAY is requested?
+    } else if ((strncmp(*(tokens + 1),"display",1)==0) ||
+               (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
+        
+        printf("pcd:generating output for DISPLAY\n");
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*128) + 1);
+        strcpy(buf,"\n");
+        for(i=0;i<10;i++) {
+            strcat(buf,psetvar[0].var);
+            strcat(buf,"=");
+            strcat(buf,psetvar[0].value);
+            strcat(buf,"\n");
+        }
+        
+        rc = RC_INFORESPONSE;
+        
+        //error if path is too long (> 128)
+    } else if (strlen(*(tokens + 1))>128) {
+        printf("pcd:path is too long\n");
+        strcpy(stdout,"Pi:Error: Path is too long");
+        rc = RC_FAILED;
+        
+        
+        //if start with "/<ANYTHING>"
+    } else if (strncmp(*(tokens + 1),"/",1)==0) {
+        printf("pcd:going local root /\n");
+        if( access( *(tokens + 1), F_OK ) != -1 ) {
+            strcpy(psetvar[0].value,*(tokens + 1));
+            sprintf(stdout,"Pi:OK\n%s",*(tokens + 1));
+        } else {
+            strcpy(stdout,"Pi:Error: Path does not exist");
+            rc = RC_FAILED;
+        }
+        
+        // Deals with absolute remote filesystems / URLs
+        /*
+         else if start with "http"
+         test PATH
+         if OK
+         pset(PATH)
+         cd PATH*/
+    } else if ((strncmp(*(tokens + 1),"http:",5)==0) ||
+               (strncmp(*(tokens + 1),"ftp:",4)==0) ||
+               (strncmp(*(tokens + 1),"smb:",4)==0) ||
+               (strncmp(*(tokens + 1),"nfs:",4)==0)) {
+        
+        printf("pcd:absolute remote path / URL\n");
+        strcpy(psetvar[0].value,*(tokens + 1));
+        
+        // is resulting path too long?
+    } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >128) {
+        printf("pcd:Resulting path is too long\n");
+        strcpy(stdout,"Pi:Error: Resulting path is too long");
+        rc = RC_FAILED;
+        
+        // is relative path
+        // is current PATH a remote PATH / URL?
+    } else if ((strncmp(psetvar[0].value,"http:",5)==0)||
+               (strncmp(psetvar[0].value,"ftp:",4)==0) ||
+               (strncmp(psetvar[0].value,"smb:",4)==0) ||
+               (strncmp(psetvar[0].value,"nfs:",4)==0)) {
+        
+        printf("pcd:append to relative remote path / URL\n");
+        strcat(psetvar[0].value,"/");
+        strcat(psetvar[0].value,*(tokens + 1));
+        
+        /* else is local
+         test PATH/<given path>
+         if OK
+         pset(PATH)
+         cd PATH
+         */
+    } else {
+        printf("pcd:append to relative path\n");
+        char *newpath = (unsigned char *)malloc(sizeof(unsigned char) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+2)));
+        strcpy(newpath,psetvar[0].value);
+        strcat(newpath,"/");
+        strcat(newpath,*(tokens + 1));
+        
+        if( access( newpath, F_OK ) != -1 ) {
+            strcpy(psetvar[0].value,newpath);
+        } else {
+            strcpy(stdout,"Pi:Error: Path does not exist");
+            rc = RC_FAILED;
+        }
+        
+        free(newpath);
+    }
+    
+    
+    if (rc == RC_INFORESPONSE) {
+        printf("pcd:sending Display output\n");
+        senddatablock(buf,strlen(buf)+1,true);
+        free(buf);
+    } else {
+        if (rc == RC_SUCCESS ) {
+            sprintf(stdout,"Pi:OK\n%s",psetvar[0].value);
+        }
+        printf("pcd:sending stdout\n");
+        senddatablock(stdout,strlen(stdout)+1,true);
+    }
+    
+    free(tokens);
+    free(stdout);
+    printf("pcd:Exiting with rc=%x\n",rc);
+    return rc;
+    
+}
+
+
+static size_t
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    size_t realsize = size * nmemb;
+    MemoryStruct *mem = (MemoryStruct *)userp;
+    
+    mem->memory = realloc(mem->memory, mem->size + realsize + 1);
+    if(mem->memory == NULL) {
+        /* out of memory! */
+        printf("not enough memory (realloc returned NULL)\n");
+        return 0;
+    }
+    
+    memcpy(&(mem->memory[mem->size]), contents, realsize);
+    mem->size += realsize;
+    mem->memory[mem->size] = 0;
+    
+    return realsize;
+}
+
+int loadfile_local(unsigned char *theurl,MemoryStruct *chunk) {
+    FILE *fd;
+    char *fname = malloc(sizeof(char) * strlen(theurl) - 7);
+    
+    strcpy(fname,theurl+7);
+    
+    printf("loadfile_local:Starting with url:%s\n",theurl);
+
+    //Open file
+    fd = fopen(fname, "rb");
+    if (!fd) {
+        fprintf(stderr, "Unable to open file %s", fname);
+        return RC_FAILED;
+    }
+    
+    //Get file length
+    fseek(fd, 0, SEEK_END);
+    chunk->size=ftell(fd);
+    fseek(fd, 0, SEEK_SET);
+    
+    printf("loadfile_local:File size is:%i\n",chunk->size);
+    
+    //Allocate memory
+    chunk->memory = (char *)realloc(chunk->memory,chunk->size + 1);
+    if (!chunk->memory) {
+        fprintf(stderr, "Memory error!");
+        fclose(fd);
+        return RC_FAILED;
+    }
+    
+    //Read file contents into buffer
+    fread(chunk->memory, chunk->size, 1, fd);
+    fclose(fd);
+    
+    printf("loadfile_local:Exiting with rc=RC_SUCCESS\n");
+    return RC_SUCCESS;
+    
+}
+
+int loadfile_remote(unsigned char *theurl,MemoryStruct *chunk) {
+    
+    int rc = RC_FAILED;
+    CURL *curl_handle;
+    CURLcode res;
+    long curl_code = 0;
+    
+    printf("loadfile_remote:Starting\n");
+    curl_global_init(CURL_GLOBAL_ALL);
+    
+    curl_handle = curl_easy_init();
+    
+    // parse the protocol
+    
+    curl_easy_setopt(curl_handle, CURLOPT_URL, theurl);
+    
+    curl_easy_setopt(curl_handle, CURLOPT_URL, theurl);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)chunk);
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+    
+    res = curl_easy_perform(curl_handle);
+    curl_easy_getinfo (curl_handle, CURLINFO_RESPONSE_CODE, &curl_code);
+    printf("loadfile_remote:loadfile_remote error code:%lu\n",curl_code);
+    
+    if(curl_code==200||curl_code==226)
+        rc = RC_SUCCESS;
+    else
+        rc = curl_code;
+    
+    curl_easy_cleanup(curl_handle);
+    curl_global_cleanup();
+    
+    printf("loadfile_remote:Exiting with rc=%i\n",rc);
+    
+    return rc;
+}
+
+int uploaddata(unsigned char *data, size_t totalsize, int index) {
+    int rc,crc,bytecounter,myblocksize,msxblocksize;
+    unsigned char mypibyte,mymsxbyte;
+    
+    printf("uploaddata: Sending STARTTRANSFER\n");
+    
+    mymsxbyte=piexchangebyte(STARTTRANSFER);
+    if (mymsxbyte != STARTTRANSFER) {
+        printf("uploaddata: Received %x\n",mymsxbyte);
+        return RC_OUTOFSYNC;
+    }
+    
+    printf("uploaddata:blocksize - ");
+    // read blocksize, MAXIMUM 65535 KB
+    msxblocksize = piexchangebyte(SENDNEXT) + 256 * piexchangebyte(SENDNEXT);
+    myblocksize = msxblocksize;
+    
+    //Now verify if has finished transfering data
+    if (index*msxblocksize >= totalsize) {
+        piexchangebyte(ENDTRANSFER);
+        return ENDTRANSFER;
+    }
+    
+    piexchangebyte(SENDNEXT);
+    
+    printf("recv:%i ",msxblocksize);
+    // send back to msx the block size, or the actual file size if blocksize > totalsize
+    if (totalsize <= index*msxblocksize+msxblocksize)
+        myblocksize = totalsize - (index*msxblocksize);
+    
+    printf("sent:%i\n",myblocksize);
+    
+    printf("uploaddata:totalsize is %i, this block is %i, block end is %i\n",totalsize,index*msxblocksize,index*msxblocksize+myblocksize);
+    
+    piexchangebyte(myblocksize % 256); piexchangebyte(myblocksize / 256);
+    
+    crc = 0;
+    bytecounter = 0;
+    
+    printf("uploaddata: Loop to send block\n");
+    while(bytecounter<myblocksize) {
+        mypibyte = *(data + (index*myblocksize) + bytecounter);
+        piexchangebyte(mypibyte);
+        crc ^= mypibyte;
+        bytecounter++;
+    }
+    
+    
+    // exchange crc
+    mymsxbyte=piexchangebyte(crc);
+    if (mymsxbyte == crc)
+        rc = RC_SUCCESS;
+    else
+        rc = RC_CRCERROR;
+    
+    printf("uploaddata:local crc: %x / remote crc:%x\n",crc,mymsxbyte);
+    
+    printf("uploaddata:exiting rc = %x\n",rc);
+    
+    return rc;
+    
+}
+
+int pcopy(unsigned char * msxcommand,MemoryStruct *chunkptr) {
+    char** tokens;
+    char *stdout;
+    unsigned char *theurl;
+    int rc,fidpos,transftype;
+    transferStruct dataInfo;
+    
+    tokens = str_split(msxcommand,' ');
+    
+    stdout = malloc(sizeof(char) * 50);
+    
+    fidpos = 1; // token position for source file name
+
+    // verify if all required parameters are present
+    printf("fidpos %i\n",fidpos);
+    if ((*(tokens + fidpos) == NULL) ||
+        (*(tokens + fidpos + 1)) == NULL) {
+        printf("pcopy:missing parameters\n");
+        piexchangebyte(RC_FAILED);
+        strcpy(stdout,"Pi:Error\nSyntax: pget <source url> <target file>\n");
+        printf("%i\n",strlen(stdout));
+        senddatablock(stdout,strlen(stdout)+1,true);
+        free(stdout);
+        return RC_FAILED;
+    }
+    
+    // SYNC TO SEND FILENAME
+    if (piexchangebyte(SENDNEXT) != SENDNEXT) {
+        return RC_OUTOFSYNC;
+    }
+    
+    // send file name
+    printf("pcopy:Sending filename: %s\n",*(tokens + fidpos + 1));
+    //if (saveoption)
+    dataInfo = senddatablock(*(tokens + fidpos + 1),strlen(*(tokens + fidpos + 1))+1,true);
+
+    printf("pcopy:returned from senddatablock sendname ");
+    if (dataInfo.rc != RC_SUCCESS) {
+        printf("with FAILURE\n");
+        free(tokens);
+        free(stdout);
+        return dataInfo.rc;
+    }
+    
+    printf("with SUCCESS\n");
+
+    theurl = (unsigned char *)malloc(sizeof(unsigned char) * strlen(*(tokens + fidpos))+1);
+    //chunk.memory = malloc(1);
+    //chunk.size = 0;
+    
+    printf("pcopy:Reading file into memory\n");
+    
+    // send WAIT to MSX
+    piexchangebyte(RC_WAIT);
+    
+    strcpy(theurl,*(tokens + fidpos));
+    
+    transftype = 0;
+    if ((strncmp(theurl,"FILE://",7)==0) || (strncmp(theurl,"file://",7)==0))
+        rc = loadfile_local(theurl,chunkptr);
+    else if (strncmp(*(tokens + fidpos + 1),"FILE://",7)==0) {
+        transftype = 1;
+        //rc = loadfile_frommsx(theurl,chunkptr);
+    } else
+        rc = loadfile_remote(theurl,chunkptr);
+    
+    printf("Buffer size:%i\n",chunkptr->size);
+    //printf("Buffer data:%s\n",chunkptr->memory);
+    
+    printf("pcopy:returned from getfile ");
+    if (rc != RC_SUCCESS) {
+        printf("with FAILURE\n");
+        piexchangebyte(RC_FAILED);
+        sprintf(stdout,"Pi:Error with httpcode: %i",rc);
+        senddatablock(stdout,30,true);
+        free(tokens);
+        free(stdout);
+        free(theurl);
+        return rc;
+    }
+    
+    printf("with success\n");
+    piexchangebyte(RC_SUCCESS);
+    
+    free(tokens);
+    free(stdout);
+    free(theurl);
+    
+    printf("pcopy:Exiting with rc=%x\n",rc);
+    return rc;
+    
+}
+
+
+int pdir(unsigned char * msxcommand) {
+    memcpy(msxcommand,"ls  ",4);
+    return runpicmd(msxcommand);
+}
+
+char *strdup (const char *s) {
+    char *d = malloc (255*sizeof(char*));               // Space for length plus nul
+    if (d == NULL) return NULL;          // No memory
+    strcpy (d,s);                        // Copy the characters
+    return d;                            // Return the new string
+}
+
+int isDirectory(const char *path) {
+    struct stat statbuf;
+    if (stat(path, &statbuf) != 0)
+        return 0;
+    return S_ISDIR(statbuf.st_mode);
+}
+
+static void *realloc_or_free(void *ptr, size_t size) {
+    void *tmp = realloc(ptr, size);
+    if (tmp == NULL) {
+        free(ptr);
+    }
+    return tmp;
+}
+
+static int get_dirent_dir(char const *path, struct dirent **result,
+                          size_t *size) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        closedir(dir);
+        return -1;
+    }
+    
+    struct dirent *array = NULL;
+    size_t i = 0;
+    size_t used = 0;
+    struct dirent *dirent;
+    while ((dirent = readdir(dir)) != NULL) {
+        if (used == i) {
+            i += 42; // why not?
+            array = realloc_or_free(array, sizeof *array * i);
+            if (array == NULL) {
+                closedir(dir);
+                return -1;
+            }
+        }
+        
+        array[used++] = *dirent;
+    }
+    
+    struct dirent *tmp = realloc(array, sizeof *array * used);
+    if (tmp != NULL) {
+        array = tmp;
+    }
+    
+    *result = array;
+    *size = used;
+    
+    closedir(dir);
+    
+    return 0;
+}
+static int cmp_dirent_aux(struct dirent const *a, struct dirent const *b) {
+    return strcmp(a->d_name, b->d_name);
+}
+
+static int cmp_dirent(void const *a, void const *b) {
+    return cmp_dirent_aux(a, b);
+}
+
+int nfs_8dot3(char *strin, char ***strout){
+    char name[8];
+    char ext[4];
+    int len1,len2;
+    char** tokens;
+    
+    printf("nfs_8dot3:starting\n");
+    memset(strout,32,25);
+    
+    tokens = str_split(strin,'.');
+    if (*(tokens + 1)==NULL)
+        sprintf(strout," %-8s    ",*(tokens + 0));
+    else {
+        len1=strlen(*(tokens + 0));
+        len2=strlen(*(tokens + 1));
+        
+        sprintf(strout," %-.8s.%-.3s",*(tokens + 0),*(tokens + 1));
+        
+        printf("nfs_8dot3:>%s<\n",strout);
+    }
+    
+    memset(strout+14,0,1);
+    printf("nfs_8dot3:Returning:>%s<,len=%i\n",strout,strlen(strout));
+    free(tokens);
+}
+
+char * nfs_setfname(char curpath[254],char *msxpath) {
+    char localpath[254];
+    char localthisfile[254];
+    long filesize;
+    struct stat st;
+    struct tm *sttime;
+    
+    int dst,i;
+    char **tokens;
+    
+    printf("nfs_setfname:starting\n");
+    
+    printf("nfs_setfname:curpath=%s msxpath=%s\n",curpath,msxpath);
+    
+    if ((*msxpath)=='/')
+        strcpy(localpath,msxpath);
+    else {
+        strcpy(localpath,curpath);
+        strcat(localpath,"/");
+        strcat(localpath,msxpath);
+    }
+    
+    printf("nfs_setfname:final path: %s\n",localpath);
+    
+    dst = stat(localpath, &st);
+    
+    if(dst != 0) {
+        printf("nfs_setfname:file not found\n");
+        return 1;
+    }
+    
+    printf("nfs_setfname:file exist\n");
+    
+    if (((*msxpath)!='.') && (strcmp(msxpath,"..")!=0)) {
+        
+        printf("spliting\n");
+        
+        if (strstr(msxpath,"/")!=NULL) {
+            tokens = str_split(msxpath,'/');
+            for(;*(tokens+i)!=NULL;i++) {};
+            
+            nfs_8dot3(*(tokens+i-1),&localthisfile);
+        } else
+            // format filename to 8.3 characters and terminate with zero
+            nfs_8dot3(msxpath,&localthisfile);
+        
+    } else {
+        printf("not spliting because it is . or .. special files\n");
+        strcpy(localthisfile," ");
+        strcat(localthisfile,msxpath);
+    }
+    
+    //memset(localthisfile+13,0,1);
+    
+    printf("nfs_setfname:localthisfile=%s, localpath=%s\n",localthisfile,localpath);
+    
+    // set file attributes
+    // enable bit4 when directory
+    if (isDirectory(localpath))
+        memset(localthisfile+14,16,1);
+    else
+        memset(localthisfile+14,0,1);
+    
+    printf("nfs_setfname:localthisfile=%s\n",localthisfile);
+    
+    // set time attributes
+    sttime = gmtime(&(st.st_mtime));
+    int minute = sttime->tm_min;
+    int second = 0;
+    int hour = sttime->tm_hour+TZ;
+    int day = sttime->tm_mday;
+    int month = (sttime->tm_mon) + 1;
+    int year = (sttime->tm_year)-20;
+    
+    int f15 = ((minute & 7) << 5) | (second / 2);
+    int f16 = (hour << 3) | (minute >> 3);
+    int f17 = (month << 5) | day;
+    int f18 = ((year - 1980) << 1) | (month >> 3);
+    
+    memset(localthisfile+15,f15,1);
+    memset(localthisfile+16,f16,1);
+    memset(localthisfile+17,f17,1);
+    memset(localthisfile+18,f18,1);
+    
+    // get file size
+    // This need rethingking to store as litle endian value - if not already.
+    memset(localthisfile+21,0,4);
+    filesize = st.st_size;
+    
+    *(localthisfile+21) = filesize & 0xff;
+    *(localthisfile+22) = filesize>>8 & 0xff;
+    *(localthisfile+23) = filesize>>16 & 0xff;
+    *(localthisfile+24) = filesize>>24 & 0xff;
+    
+    printf("nfs_setfname:Returning:%s\n",localthisfile+1);
+    
+    return &localthisfile;
+    
+}
+
+void ffirst(char *curpath,char *msxpath) {
+    
+    int count = 0;
+    size_t length = 0;
+    DIR *dp = NULL;
+    char** tokens;
+    struct dirent *ep = NULL;
+    
+    int rc;
+    
+    printf("ffirst:search attributes = %x\n",piexchangebyte(SENDNEXT));
+    
+    memset(msxpath,0,255);
+    
+    // receive path to list
+    rc = secrecvdata(msxpath);
+    
+    msxpath = replace(msxpath,'\\','/');
+    printf("ffirst:curpath=%s msxpath=%s\n",curpath,msxpath);
+    
+    if (strstr(msxpath,"/*.*")!=NULL) {
+        tokens = str_split(msxpath,'*');
+        strcpy(msxpath,*(tokens));
+        free(tokens);
+    }
+    
+    if (*(msxpath+strlen(msxpath)-1)=='/') {
+        *(msxpath+strlen(msxpath)-1) = 0;
+    }
+    
+    printf("ffirst:Exiting curpath=%s,msxpath=%s,rc=%x\n",curpath,msxpath,rc);
+    return rc;
+    
+}
+
+int fnext(char *msxpath,int nfs_findex,int nfs_count,char *filelist) {
+    int rc;
+    char *thisFile;
+    
+    printf("fnext:starting\n");
+    
+    printf("fnext:dirfiles=%s\n",filelist);
+    
+    if (nfs_count==0) {
+        piexchangebyte(__NOFIL);
+        printf("fnext:no such file or directory\n");
+        return RC_FILENOTFOUND;
+    }
+    
+    if (nfs_count==nfs_findex) {
+        piexchangebyte(__NOFIL);
+        printf("fnext:end of files\n");
+        return RC_SUCCESS;
+    }
+    
+    printf("fnext:file %i of %i:%s\n",nfs_findex,nfs_count,filelist);
+    
+    thisFile = malloc(sizeof(char*)*255);
+    thisFile = nfs_setfname(msxpath,filelist);
+    
+    printf("fnext:sending:>%s, len=%i<\n",thisFile,strlen(thisFile));
+    
+    
+    piexchangebyte(__SUCCESS);
+    
+    rc = secsenddata(thisFile+1,24);
+    
+    printf("fnext:exiting rc = %x\n",rc);
+    //free(thisFile);
+    
+    return rc;
+    
+}
+
+int pdate() {
+    
+    char *array = (char*)malloc(sizeof(char)*25);
+    time_t rawtime;
+    time (&rawtime);
+    struct tm  *timeinfo = localtime (&rawtime);
+    
+    char *buf;
+    
+    // date
+    
+    piexchangebyte(2000+((timeinfo->tm_year)-100)&0xff);
+    piexchangebyte(2000+((timeinfo->tm_year)-100)>>8);
+    piexchangebyte((timeinfo->tm_mon)+1);
+    piexchangebyte(timeinfo->tm_mday);
+    
+    // time
+    piexchangebyte((timeinfo->tm_hour)+TZ);
+    piexchangebyte(timeinfo->tm_min);
+    piexchangebyte(timeinfo->tm_sec);
+    piexchangebyte(0);
+    
+    buf = malloc(sizeof(char*) * 6);
+    strcpy(buf,"Pi:Ok");
+    senddatablock(buf,strlen(buf)+1,true);
+    free(buf);
+    
+    return RC_SUCCESS;
+    
+}
+
+int main(int argc, char *argv[]){
+    
+    int startaddress,endaddress,execaddress;
+    
+    // numdrives is hardocde here to assure MSX will always have only 2 drives allocated
+    // more than 2 drives causes some MSX to hang
+    unsigned char numdrives = 0;
+    unsigned char msxcommand[255];
+    
+    
+    unsigned char appstate = st_init;
+    
+    unsigned char mymsxbyte;
+    unsigned char mymsxbyte2;
+    
+    int rc;
+    
+    //time_t start_t, end_t;
+    
+    transferStruct dataInfo;
+    struct DiskImgInfo drive0,drive1,currentdrive;
+    DOS_SectorStruct sectorInfo;
+    
+    char buf[255];
+    
+    // NFS VARIABLES
+    int nfs_findex,nfs_fcount;
+    char curpath[254];
+    char nfs_workingdir[254];
+    char nfs_msxpath[65];
+    struct dirent *dirfiles;
+    
+    //pcopy
+    MemoryStruct chunk;
+    MemoryStruct *chunkptr = &chunk;
+    int pcopyindex,retries;
+    int pcopystat = 0;
+    
+    struct psettype psetvar[10];
+    strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
+    strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
+    strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpitools.dsk");
+    strcpy(psetvar[3].var,"DRIVE2");strcpy(psetvar[3].value,"notused");
+    strcpy(psetvar[4].var,"DRIVE3");strcpy(psetvar[4].value,"notused");
+    strcpy(psetvar[5].var,"WIFISSID");strcpy(psetvar[5].value,"my wifi");
+    strcpy(psetvar[6].var,"WIFIPWD");strcpy(psetvar[6].value,"secret");
+    strcpy(psetvar[7].var,"DSKTMPL");strcpy(psetvar[7].value,"msxpi_720KB_template.dsk");
+    strcpy(psetvar[8].var,"free");strcpy(psetvar[8].value,"");
+    strcpy(psetvar[9].var,"free");strcpy(psetvar[9].value,"");
+    
+    strcpy(curpath,"/home/pi/msxpi");
     
     if (gpioInitialise() < 0)
     {
         fprintf(stderr, "pigpio initialisation failed\n");
-        // fprintf(flog, "pigpio initialisation failed\n");
         return 1;
     }
     
@@ -358,1079 +2193,441 @@ int main(int argc, char *argv[])
     gpioWrite(rdy,LOW);
     
     printf("GPIO Initialized\n");
-    // fprintf(flog,"GPIO Initialized\n");
+    printf("Starting MSXPi Server Version %s Build %s\n",version,build);
     
-    printf("Starting MSXPi Server v%s\n",version);
-    // fprintf(flog, "Starting MSXPi Server v%s\n",version);
+    strcpy(drive0.dskname,psetvar[1].value);
+    drive0.deviceNumber = 0;
+    msxdos_inihrd(&drive0);
     
-    time(&start_t);
-    
-    // waiti Pi boot and be ready for commands
-    // while (difftime(time(&end_t), start_t) < bootdelaycnt) time(&end_t);
-    
-    gpioSetISRFunc(cs, FALLING_EDGE, SPI_INT_TIME, func_st_cmd);
+    strcpy(drive1.dskname,psetvar[2].value);
+    drive1.deviceNumber = 1;
+    msxdos_inihrd(&drive1);
     
     while(appstate != st_shutdown){
-    //while(1==1){
+        
         switch (appstate) {
             case st_init:
-                printf("Entered init state\n");
-                // fprintf(flog,"Entered init state\n");
-                
-                memset(temp_path1,0,255);
-                memset(temp_path2,0,255);
-                memset(msx_path1,0,255);
-                memset(msx_path2,0,255);
-                memset(buf_parm,0,255);
-                memset(remoteuser,0,sizeof(remoteuser));
-                memset(remoteuser,0,sizeof(remotepass));
-                syncherrorcount  = 0;
-                syncherrorcount2 = 0;
-                
+                printf("Entered init state. Syncying with MSX...\n");
                 appstate = st_cmd;
-                nextstate = st_cmd;
-                msxbyterdy = 0;
-                msxbyte = 0;
-                nextbyte = PI_READY;
-                idx = 0;
-                gpioWrite(rdy,HIGH);
+                /*if(sync_client()==READY) {
+                 printf("ok, synced. Listening for commands now.\n");
+                 appstate = st_cmd;
+                 } else {
+                 printf("OPS...not synced. Will continue trying.\n");
+                 appstate = st_init;
+                 }*/
                 break;
                 
             case st_cmd:
-        
-	        pthread_mutex_lock(&newComMutex);
-				while (msxbyterdy == 0) {
-					fflush(stdout); //Print all the buffered information
-					pthread_cond_wait(&newComCond, &newComMutex);
-				}
-				pthread_mutex_unlock(&newComMutex);
                 
-                if (msxbyterdy) {
-					
-                    syncherrorcount2++;
-                    if (syncherrorcount2>10) syncherrorcount2 = 0;
-                    
-                    switch (msxbyte) {
-                        case SHUTDOWN:
-                            printf("Received command SHUTDOWN 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command SHUTDOWN 0x%x\n",msxbyte);
-                            pibyte = msxbyte;
-                            appstate = st_send_ack;
-                            nextstate = st_shutdown;
-                            //nextstate = st_cmd;
-                            nextbyte = appstate;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case LOADCLIENT:
-                            printf("Received command LOADCLIENT 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command LOADCLIENT 0x%x\n",msxbyte);
-                            //memset(temp_path1,0, sizeof(temp_path1));
-                            //temp_path1[0] = '\0';
-                            strcpy(buf_parm, "/home/pi/msxpi/msxpi-client.bin");
-                            FSTYPE=FSLOCAL;
-                            //curr_parm = 0;
-                            msxbyterdy = 0;
-                            pibyte = NOT_READY;
-                            nextstate = msxbyte;
-                            appstate = st_file_read;
-                            nextstate = st_file_send;
-                            lastcmd = LOADCLIENT;
-                            gpioWrite(rdy,LOW);
-                            break;
-                            
-                        case LOADROM:
-                            printf("Received command LOADROM 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command LOADROM 0x%x\n",msxbyte);
-                            //memset(temp_path1,0,sizeof(temp_path1));
-                            strcpy(buf_parm,"/home/pi/msxpi/msxpi-rom.bin");
-                            FSTYPE=FSLOCAL;
-                            //curr_parm = 0;
-                            msxbyterdy = 0;
-                            pibyte = NOT_READY;
-                            nextbyte = msxbyte;
-                            appstate = st_file_read;
-                            nextstate = st_file_send;
-                            lastcmd = LOADROM;
-                            gpioWrite(rdy,LOW);
-                            break;
-                            
-                        case CMDLDFILE:
-                            printf("CMDLDFILE:Received command CMDLDFILE 0x%x\n",msxbyte);
-                            printf("parameter is: %s\n",buf_parm);
-                            printf("remotecommand: %s\n",remotecommand);
-                            
-                            // enable interrupts, so Pi send NOT_READY messages to MSX
-                            
-                            pibyte = PROCESSING;
-                            //msxbyterdy = 0;
-                            gpioWrite(rdy,HIGH);
-                            
-                            if ((strncmp(buf_parm,"http:",5)!=0) &&
-                                (strncmp(buf_parm,"win:",4)!=0) &&
-                                (strncmp(buf_parm,"nfs:",4)!=0) &&
-                                (strncmp(buf_parm,"ftp:",4)!=0) &&
-                                (strncmp(buf_parm,"/",1)!=0)) {
-                                strcpy(temp_str,buf_parm);
-                                strcpy(buf_parm,msx_path1);
-                                strcat(buf_parm,temp_str);
-                            }
-                                
-                            appstate = st_file_read;
-                            nextstate = st_file_send;
-                            nextbyte = msxbyte;
-                            lastcmd = CMDLDFILE;
-                            break;
-                        
-                        case CMDSETVAR:
-                        case CMDSETPARM:
-                        case CMDSETPATH:          // set parameters
-                            lastcmd = msxbyte;
-                            printf("Received command CMDSETPARM 0x%x\n",msxbyte);
-                            buf_parm[0] = '\0';
-                            idx=0;
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            nextbyte = NOT_READY;
-                            appstate = st_send_ack;
-                            nextstate = st_recvparm;
-                            gpioWrite(rdy,HIGH);
-                            
-                            break;
-                            
-                        case CMDDIR:
-                            printf("Received command CMDDIR 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command CMDDIR 0x%x\n",msxbyte);
-                            
-                            // enable interrupts, so Pi send NOT_READY messages to MSX
-                            msxbyterdy = 0;
-                            pibyte = PROCESSING;
-                            gpioWrite(rdy,HIGH);
-                            
-                            printf("CMDDIR: msx_path1 path is %s\n",msx_path1);
-                            printf("CMDDIR: buf_parm  is %s\n",buf_parm);
-                        
-                            strcpy(temp_path1,msx_path1);
-                            
-                            if (buf_parm[0]!=0)
-                                strcat(temp_path1,buf_parm);    // append command parameter
-                            
-                            if (temp_path1[0]==0)
-                                strcpy(temp_path1,"./");    // append command parameter
-                            
-                            strcpy(buf_parm,temp_path1);
-                            
-                            // is this a http/ftp command?
-                            //if ((FSTYPE==FSHTTP) || (FSTYPE==FSFTP) || (FSTYPE==FSNFS) || (FSTYPE==FSWIN)) {
-                            if ((strncmp(buf_parm,"http:",5)==0) ||
-                                (strncmp(buf_parm,"win:",4)==0) ||
-                                (strncmp(buf_parm,"nfs:",4)==0) ||
-                                (strncmp(buf_parm,"ftp:",4)==0)) {
-                                
-                                strcpy(temp_path1,remotecommand);
-                                strcat(temp_path1,buf_parm);   // append basepath
-                                
-                                if ((temp_path1[strlen(temp_path1)-1])!=0x2f)
-                                    strcat(temp_path1,"/");
-                                
-                                printf("CMDDIR: 1.acessing %s\n",temp_path1);
-
-                                system(temp_path1);
-                                
-                                strcpy(temp_path1, "/bin/cat ");
-                                strcat(temp_path1, hloadfname);
-                                
-                                if (FSTYPE==FSHTTP||FSTYPE==FSFTP)
-                                    strcat(temp_path1, " | /usr/bin/html2text -width 37 > /tmp/msxpi.tmp");
-                                else
-                                    strcat(temp_path1, " | /usr/bin/awk '{print $1,$6,$7,$8,$9}' > /tmp/msxpi.tmp");
-                            
-                                printf("CMDDIR: 2.displaying %s\n",temp_path1);
-                                
-                                system(temp_path1);
-                                
-                            } else {
-
-                                printf("CMDDIR %s\n",buf_parm);
-                                
-                                // fprintf(flog,"Reading dir and writing to temporary file\n");
-                                fdir = fopen("/tmp/msxpi.tmp", "w+");
-                            
-                                noOfFiles = scandir(buf_parm, &fileListTemp, NULL, alphasort);
-                                fprintf(fdir,"total: %d files\n",noOfFiles);
-                            
-                                for(i = 0; i < noOfFiles; i++){
-                                    fprintf(fdir, "%s\n",fileListTemp[i]->d_name);
-                                }
-                                i = 0;
-                                fwrite(&i,sizeof(int),1,fdir);
-                                fclose(fdir);
-                                
-                            }
-                        
-                            printf("CMDDIR: final path is %s\n",buf_parm);
-                            printf("CMDDIR: FSTYPE = %i\n",FSTYPE);
-                        
-                        
-                            //memset(buf_parm,0,sizeof(buf_parm));
-                            buf_parm[0] = '\0';
-                            temp_path1[0] = '\0';
-                            
-                            // fprintf(flog,"Buffering list of files\n");
-                            fp = fopen("/tmp/msxpi.tmp","rb");
-                            fseek(fp, 0L, SEEK_END);
-                            filesize = ftell(fp) - 3;        // file has 4 zeros at the end, we only need one
-                            rewind(fp);
-                            fread(msx_pi_so,filesize,1,fp);
-                            fclose(fp);
-                        
-                            msx_pi_so[filesize] = '\0';
-                        
-                            fileindex = 0;
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            nextbyte = DATATRANSF;
-                            appstate = st_send_ack;
-                            nextstate = st_file_send;
-                            lastcmd = CMDDIR;
-                            TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                            // prepare to check time
-                            time(&start_t);
-                            //printf("Sent ACK 0x%x\n",pibyte);
-                            break;
-                            
-                        case PI_READY:
-                            printf("Received command CHECKPICONN 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command CHECKPICONN 0x%x\n",msxbyte);
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            appstate = st_send_ack;
-                            nextstate = st_cmd;
-                            nextbyte = appstate;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case CMDGETSTAT:
-                            printf("Received command PIAPPSTATE 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command PIAPPSTATE 0x%x\n",msxbyte);
-                            msxbyterdy = 0;
-                            appstate = st_send_ack;
-                            nextstate = st_send_rsp;
-                            nextbyte = appstate;
-                            pibyte = msxbyte;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case CMDRESET:
-                            printf("Received command RESET 0x%x\n",msxbyte);
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            appstate = st_send_ack;
-                            nextstate = st_init;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case CMDREAD:
-                            pibyte = PI_READY;
-                            printf("Received command READ 0x%x, sent byte 0x%x\n",msxbyte,pibyte);
-                            
-                            syncherrorcount++;
-                            if (syncherrorcount>10 && syncherrorcount==syncherrorcount2) {
-                                printf("Out if synch with MSX Client... resetting state\n");
-                                // timeout MSX connection
-                                delay(5);
-                                syncherrorcount  = 0;
-                                syncherrorcount2 = 0;
-                                printf("Back in st_cmd state... waiting MSX commands.\n");
-                            }
-                            
-                            msxbyterdy = 0;
-                            appstate = st_cmd;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                        
-                        case CMDPWD:
-                            printf("Received command PWD 0x%x\n",msxbyte);
-                            
-                            if (msx_path1[0]==0)
-                                strcpy(msx_path1,"./");
-
-                            // memset(msx_pi_so,0,sizeof(msx_path1));
-                            strcpy(msx_pi_so,msx_path1);
-                            fileindex = 0;
-                            filesize = strlen(msx_path1);
-                            pibyte = msxbyte;
-                            appstate = st_send_ack;
-                            nextstate = st_file_send;
-                            msxbyterdy = 0;
-                            
-                            printf("Current path is %s\n",msx_path1);
-                            
-                            TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                            // prepare to check time
-                            time(&start_t);
-                            
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case RUNPICMD:
-                            printf("Received command RUNPICMD 0x%x\n",msxbyte);
-                            // fprintf(flog,"Received command RUNPICMD 0x%x\n",msxbyte);
-                            
-		            msxbyterdy = 0;
-                            pibyte = PROCESSING;
-                            gpioWrite(rdy,HIGH);
-
-                            if(!(fp = popen(buf_parm, "r")))
-                            {
-                                printf("Command Error.\n");
-                                strcpy(temp_str,"Command Error.\n");
-                                appstate = st_set_response;
-                                msxbyte = CMDERROR;
-                                break;
-                            }
-                            
-                            memset(msx_pi_so,0,sizeof(msx_pi_so));
-                            fread(msx_pi_so, sizeof(char), sizeof(char) * sizeof(msx_pi_so), fp);
-                            
-                            fclose(fp);
-                            buf_parm[0] = '\0';
-                            
-                            printf("Command : %s\n",buf_parm);
-                            printf("PATH: %s\n",msx_path1);
-                            
-                            fileindex = 0;
-                            filesize = strlen(msx_pi_so);
-                            
-                            appstate = st_send_ack;
-                            nextstate = st_file_send;
-                            lastcmd = RUNPICMD;
-                            TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                            // prepare to check time
-                            time(&start_t);
-                            
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            nextbyte = DATATRANSF;
-                            
-                            gpioWrite(rdy,HIGH);
-                            break;
-                            
-                        case CMDMORE:
-                            printf("Received command MORE 0x%x\n",msxbyte);
-                            
-                            // enable interrupts, for Pi to send PROCESSING messages to MSX
-                            msxbyterdy = 0;
-                            pibyte = PROCESSING;
-                            gpioWrite(rdy,HIGH);
-                            
-                            printf("CMDMORE: msx_path1 path is %s\n",msx_path1);
-                            printf("CMDMORE: buf_parm  is %s\n",buf_parm);
-                            
-                            strcpy(temp_path1,msx_path1);
-                            
-                            if (buf_parm[0]!=0)
-                                strcat(temp_path1,buf_parm);    // append command parameter
-                            
-                            if (temp_path1[0]==0)
-                                strcpy(temp_path1,"./");    // append command parameter
-                            
-                            strcpy(buf_parm,temp_path1);
-                            
-                            printf("CMDMORE: final path is %s\n",buf_parm);
-                            printf("CMDMORE: remotecommand is %s\n",remotecommand);
-                            
-                            // is this a http/ftp command?
-                            if ((strncmp(buf_parm,"http:",5)==0) ||
-                                (strncmp(buf_parm,"win:",4)==0) ||
-                                (strncmp(buf_parm,"nfs:",4)==0) ||
-                                (strncmp(buf_parm,"ftp:",4)==0)) {
-                                
-                                strcpy(temp_path1,remotecommand);
-                                strcat(temp_path1,buf_parm);   // append basepath
-                                
-                                printf("CMDMORE: 1.acessing %s\n",temp_path1);
-                                
-                                system(temp_path1);
-                                
-                                strcpy(temp_path1, "/bin/cat ");
-                                strcat(temp_path1, hloadfname);
-                                strcat(temp_path1," > /tmp/msxpi.tmp");
-                                
-                                system(temp_path1);
-                                
-                            } else {
-                                strcpy(temp_path1,"/bin/cat ");
-                                strcat(temp_path1, buf_parm);
-                                strcat(temp_path1," > /tmp/msxpi.tmp");
-                                
-                                system(temp_path1);
-                            }
-                            
-                            buf_parm[0] = '\0';
-                            
-                            // fprintf(flog,"Buffering list of files\n");
-                            fp = fopen("/tmp/msxpi.tmp","rb");
-                            fseek(fp, 0L, SEEK_END);
-                            filesize = ftell(fp);
-                            rewind(fp);
-                            fread(msx_pi_so,filesize,1,fp);
-                            fclose(fp);
-                            
-                            fileindex = 0;
-                            msxbyterdy = 0;
-                            pibyte = msxbyte;
-                            nextbyte = DATATRANSF;
-                            appstate = st_send_ack;
-                            nextstate = st_file_send;
-                            lastcmd = CMDMORE;
-                            TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                            // prepare to check time
-                            time(&start_t);
-                            //printf("Sent ACK 0x%x\n",pibyte);
-                            break;
-                        
-                        case WIFICFG:
-                            // enable interrupts, for Pi to send PROCESSING messages to MSX
-                            msxbyterdy = 0;
-                            pibyte = PROCESSING;
-                            gpioWrite(rdy,HIGH);
-                            
-                            printf("Received command WIFICFG 0x%x\n",msxbyte);
-
-                            if (strstr(buf_parm,"display")) {
-                                system("ifconfig wlan0 >/tmp/msxpi.tmp");
-                                system("ifconfig wlan1 >>/tmp/msxpi.tmp");
-                                
-                                // this is the response
-                                // will read msxpitmp file as text and setup everything needed to start transfer to MSX
-                                appstate = st_send_response;
-                                break;
-                                
-                            } else {
-                                temp_str[0] = '\0';
-                                if (strstr(buf_parm,"add"))
-                                    fp = fopen("/etc/wpa_supplicant/wpa_supplicant.conf", "a");\
-                                else if (strstr(buf_parm,"replace")) {
-                                        fp = fopen("/etc/wpa_supplicant/wpa_supplicant.conf", "w+");
-                                        strcpy(temp_str,"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n");
-                                        strcat(temp_str,"update_config=1\n");
-                                } else {
-                                        printf("Parameter invalid.\n");
-                                        system("echo Parameter invalid >/tmp/msxpi.tmp");
-                                        appstate = st_send_response;
-                                        msxbyte = CMDERROR;
-                                        break;
-                                }
-                            }
-                            
-                            // Reached this point, will add new WiFi network, or replace everything with the current essid/passwd.
-                            strcat(temp_str,"network={\n");
-                            strcat(temp_str,"\tssid=\"");
-                            strcat(temp_str,wifissid);
-                            strcat(temp_str,"\"\n");
-                            strcat(temp_str,"\tpsk=\"");
-                            strcat(temp_str,wifipass);
-                            strcat(temp_str,"\"\n");
-                            strcat(temp_str,"}\n");
-                            
-                            fprintf(fp,temp_str);
-                            fclose(fp);
-                            
-                            if (strstr(buf_parm,"wlan1"))
-                                system("/sbin/ifdown wlan1;/sbin/ifup wlan1;");
-                            else system("/sbin/ifdown wlan0;/sbin/ifup wlan0;");
-                                
-                            system("echo OK>/tmp/msxpi.tmp");
-                            buf_parm[0] = '\0';
-                            appstate = st_send_response;
-                            break;
-                            
-                        default:
-                            msxbyterdy = 0;
-                            printf("Received an invalid command: 0x%x\n",msxbyte);
-                            printf("    appstate = %i\n",appstate);
-                            pibyte = PI_READY;
-                            gpioWrite(rdy,HIGH);
-                            break;
-                    }
-                }
-               
-                break;
+                printf("st_recvcmd: waiting command\n");
+                dataInfo = recvdatablock(msxcommand);
                 
-            case st_send_rsp:
-                if (msxbyterdy) {
-                    appstate = nextstate;
-                    msxbyterdy = 0;
-                    pibyte = 0;
-                    gpioWrite(rdy,HIGH);
-                    break;
-                }
-                break;
-                
-            case st_recvparm:
-                if (msxbyterdy) {
-                    // End of data?
-                    
-                    if (msxbyte == 0) {
-  
-                        printf("finished receiving parameter: %i\n",lastcmd);
-                        
-                        if ((lastcmd==CMDSETPATH) || (lastcmd==CMDSETPARM)) {
-                            
-                            
-                            //printf("last char in buf_parm is position %i\n",buf_parm[idx]);
-                            
-                            if (lastcmd==CMDSETPATH) {
-                                printf("entered  (lastcmd==CMDSETPATH) %s\n",buf_parm);
-                                if (buf_parm[idx-1]!=0x2f) {  // "/"
-                                    buf_parm[idx] = 0x2f;
-                                    idx++;
-                                }
-                            }
-                            
-                            buf_parm[idx] = '\0';
-                            
-                            printf("Parameter received in buf_parm = %s\n",buf_parm);
-                            
-                            if (strncmp(buf_parm,"win:",4)==0) {
-                                strcpy(temp_str,buf_parm);
-                                tokens = str_split(temp_str, ':');
-                                strcpy(temp_path1,"mkdir -p /tmp/msxpismb; /bin/mount -t cifs ");
-                                
-                                // is remote credentials set?
-                                // if so, append to request
-                                if ((remoteuser[0]!=0)&&(remotepass[0]!=0)) {
-                                    printf("smb using credentials %s:%s\n",remoteuser,remoteuser);
-                                    strcat(temp_path1," -o username=");
-                                    strcat(temp_path1,remoteuser);
-                                    strcat(temp_path1,",");
-                                    strcat(temp_path1,"password=");
-                                    strcat(temp_path1,remotepass);
-                                    strcat(temp_path1," ");
-                                } else
-                                    strcat(temp_path1," -o username=guest,password=guest ");
-                                
-                                strcat(temp_path1,*(tokens + 1));
-                                
-                                strcat(temp_path1," /tmp/msxpismb;chmod 755 /tmp/msxpismb");
-                                
-                                printf("%s\n",temp_path1);
-                                
-                                system(temp_path1);
-                                
-                                // memset(msx_path1,0,sizeof(msx_path1));
-                                strcpy(msx_path1,"/tmp/msxpismb/");
-                                chdir(msx_path1);
-                                
-                                // memset(buf_parm,0,sizeof(buf_parm));
-                                buf_parm[0] = '\0';
-                                
-                                free(tokens);
-                                FSTYPE=FSWIN;
-                                
-                            } else if (strncmp(buf_parm,"nfs:",4)==0) {
-                                strcpy(temp_str,buf_parm);
-                                tokens = str_split(temp_str, '/');
-                                printf("tokens returned %s\n",tokens);
-                                // memset(temp_path1,0,sizeof(temp_path1));
-                                strcpy(temp_path1,"mkdir -p /tmp/msxpinfs; /bin/mount -o nolock,rw ");
-                                strcat(temp_path1,*(tokens + 1));
-                                strcat(temp_path1,":/");
-                                strcat(temp_path1,*(tokens + 2));
-                                
-                                i=3;
-                                while (*(tokens + i))
-                                {
-                                    strcat(temp_path1,"/");
-                                    strcat(temp_path1,*(tokens + i));
-                                    i++;
-                                }
-                                
-                                strcat(temp_path1," /tmp/msxpinfs;chmod 755 /tmp/msxpinfs");
-                                
-                                printf("%s\n",temp_path1);
-                                
-                                system(temp_path1);
-                                // memset(msx_path1,0,sizeof(msx_path1));
-                                strcpy(msx_path1,"/tmp/msxpinfs/");
-                                chdir(msx_path1);
-                                
-                                //memset(buf_parm,0,sizeof(buf_parm));
-                                buf_parm[0] = '\0';
-                                
-                                free(tokens);
-                                FSTYPE=FSNFS;
-
-                            } else if (strncmp(buf_parm,"http:",5)==0) {
-                                printf("2Parameter received in buf_parm = %s\n",buf_parm);
-                                strcpy(temp_str,buf_parm);
-                                tokens = str_split(temp_str, ':');
-                                printf("after token Parameter received in buf_parm = %s\n",buf_parm);
-                                // strcpy(remotecommand,"/usr/bin/curl --connect-timeout ");
-                                strcpy(remotecommand,"/usr/bin/wget --timeout=");
-                                strcat(remotecommand,remotetimeout);
-                                strcat(remotecommand," ");
-
-                                
-                                // is remote credentials set?
-                                // if so, append to request
-                                if ((remoteuser[0]!=0)&&(remotepass[0]!=0)) {
-                                    printf("http using credentials %s:%s\n",remoteuser,remoteuser);
-                                    strcat(remotecommand," --user=");
-                                    strcat(remotecommand,remoteuser);
-                                    strcat(remotecommand," --password=");
-                                    strcat(remotecommand,remotepass);
-                                }
-                                
-                                // output for curl command
-                                strcat(remotecommand," -O ");
-                                strcat(remotecommand,hloadfname);
-                                strcat(remotecommand," ");
-                                
-                               if (lastcmd==CMDSETPATH) {
-                                    strcpy(msx_path1,"http:");
-                                    strcat(msx_path1,*(tokens + 1));
-                                    printf("%s %s\n",remotecommand,msx_path1);
-                                
-                                    if (*(tokens + 2)) {
-                                        strcat(msx_path1,":");
-                                        strcat(msx_path1,*(tokens + 2));
-                                    }
-                                    printf("%s %s\n",remotecommand,msx_path1);
-                                    buf_parm[0] = '\0';
-                                    free(tokens);
-                                }
-                                
-                                printf("exiting http check with buf_parm = %s\n",buf_parm);
-                                FSTYPE=FSHTTP;
-                                
-                            } else if (strncmp(buf_parm,"ftp:",4)==0) {
-                                strcpy(temp_str,buf_parm);
-                                tokens = str_split(temp_str, ':');
-                                strcpy(remotecommand,"/usr/bin/wget --timeout=");
-                                strcat(remotecommand,remotetimeout);
-                                strcat(remotecommand," ");
-                                
-                                
-                                // is remote credentials set?
-                                // if so, append to request
-                                if ((remoteuser[0]!=0)&&(remotepass[0]!=0)) {
-                                    printf("ftp using credentials %s:%s\n",remoteuser,remoteuser);
-                                    strcat(remotecommand," --user=");
-                                    strcat(remotecommand,remoteuser);
-                                    strcat(remotecommand," --password=");
-                                    strcat(remotecommand,remotepass);
-                                }
-                                
-                                // output for curl command
-                                strcat(remotecommand," -O ");
-                                strcat(remotecommand,hloadfname);
-                                strcat(remotecommand," ");
-                                
-                                if (lastcmd==CMDSETPATH) {
-                                    strcpy(msx_path1,"ftp:");
-                                    strcat(msx_path1,*(tokens + 1));
-
-                                    //memset(buf_parm,0,sizeof(buf_parm));
-                                    buf_parm[0] = '\0';
-                                    free(tokens);
-                                }
-                                
-                                printf("%s %s\n",remotecommand,msx_path1);
-                                FSTYPE=FSFTP;
-                            
-                            } else {
-                                
-                                if (msx_path1[0]==0x2f || buf_parm[0]==0x2f)
-                                    FSTYPE = FSLOCAL;
-                                
-                                printf("entered  (lastcmd==CMDSETPATH:relative path) idx=%i\n",idx);
-                                
-                                if (lastcmd==CMDSETPATH && (idx==0 || buf_parm[idx-1]!=0x2f)) {  // "/"
-                                    buf_parm[idx] = 0x2f;
-                                    idx++;
-                                }
-                                
-                                buf_parm[idx] = '\0';
-                                
-                                printf("preparing path from buf_parm: %s\n",buf_parm);
-                                
-                                if ((lastcmd==CMDSETPATH)) {
-                                    if (buf_parm[0]!=0x2f && buf_parm[0]!=0)
-                                        strcat(msx_path1,buf_parm);
-                                    else
-                                        strcpy(msx_path1,buf_parm);
-                                
-                                    if (FSTYPE==FSLOCAL)
-                                        chdir(msx_path1);
-                                    
-                                    printf("new path is %s\n",msx_path1);
-                                    buf_parm[0] = '\0';
-                                } else {
-                                    strcpy(msx_path2,msx_path1);
-                                    strcat(msx_path2,buf_parm);
-                                    
-                                    printf("new path is %s\n",msx_path2);
-                                }
-                                
-                            }
-                        } else if (lastcmd==CMDSETVAR) {
-                            
-                                    printf("entered  (lastcmd==CMDSETVAR)\n");
-                                    buf_parm[idx] = '\0';
-                                    printf("st_recvparm set %s\n",buf_parm);
-                                    if (strstr(buf_parm,"display")) {
-                                        printf("st_recvparm set display: %s\n",buf_parm);
-
-                                        // enable interrupts, for Pi to send PROCESSING messages to MSX
-                                        msxbyterdy = 0;
-                                        appstate = st_set_display;
-                                        buf_parm[0] = '\0';
-                                        break;
-                                    } else if (strncmp(buf_parm,"remoteuser=",11)==0) {
-                                        
-                                        msxbyterdy = 0;
-                                        tokens = str_split(buf_parm, '=');
-                                        
-                                        if (*(tokens + 1))
-                                            strcpy(remoteuser,*(tokens+1));
-                                        else
-                                            remoteuser[0] = '\0';
-                                            
-                                        printf("strncmp is remoteuser %s\n",*(tokens+1));
-                                        
-                                        appstate = st_set_display;
-                                        break;
-                                        
-                                    } else if (strncmp(buf_parm,"remotepass=",11)==0) {
-                                        msxbyterdy = 0;
-                                        tokens = str_split(buf_parm, '=');
-                                        
-                                        if (*(tokens + 1))
-                                            strcpy(remotepass,*(tokens+1));
-                                        else
-                                            remotepass[0] = '\0';
-                                            
-                                        appstate = st_set_display;
-                                        break;
-                                    } else if (strncmp(buf_parm,"wifissid=",9)==0) {
-                                        
-                                        msxbyterdy = 0;
-                                        tokens = str_split(buf_parm, '=');
-                                        
-                                        if (*(tokens + 1))
-                                            strcpy(wifissid,*(tokens+1));
-                                        else
-                                            wifissid[0] = '\0';
-                                        
-                                        printf("strncmp is wifissid %s\n",*(tokens+1));
-                                        
-                                        appstate = st_set_display;
-                                        break;
-                                        
-                                    } else if (strncmp(buf_parm,"wifipass=",9)==0) {
-                                        msxbyterdy = 0;
-                                        tokens = str_split(buf_parm, '=');
-                                        
-                                        if (*(tokens + 1))
-                                            strcpy(wifipass,*(tokens+1));
-                                        else
-                                            wifipass[0] = '\0';
-                                        
-                                        appstate = st_set_display;
-                                        break;
-                                        
-                                    } else {
-                                        buf_parm[0] = '\0';
-                                        strcpy(msx_pi_so,"Error: Variable does not exist");
-                                        appstate = st_send_text;
-                                        break;
-
-                                    }
-                            
-                        // This else covers scenarios such as:
-                        // dir <dir>
-                        // load <file>, etc... the paramtere <...> will be picked up here.
-                        } else if (lastcmd==CMDSETPARM) {
-                            printf("entered  (lastcmd==CMDSETPARM)\n");
-                            
-                            buf_parm[idx] = '\0';
-                            
-                            printf("Received command with parameter. Final parameter is : %s\n",buf_parm);
-
-                        }
-                        
-                        // This code is common for CMDSETPARM,CMDSETVAR,CMDSETPATH
-                        printf("CMDSET COMMON PATH\n");
-                        appstate = st_cmd;
-                        pibyte = PI_READY;
-                        msxbyterdy = 0;
-                        gpioWrite(rdy,HIGH);
-                        break;
-                    
-                    // There is still data to come
-                    } else {
-
-                        //printf("st_recvparm: received buf_parm %s\n",buf_parm);
-                        printf("reading char for parameter: %c,%i\n",msxbyte,idx);
-                        buf_parm[idx] = msxbyte;
-                        idx++;
-                        pibyte = PI_READY;
-                        msxbyterdy = 0;
-                        
-                        gpioWrite(rdy,HIGH);
-                        break;
-                    }
-                }
-                break;
-        
-            // call this state to send a response / string to msx
-            // string to send should be in array temp_str
-            case st_set_response:
-                printf("st_set_response: writting response to local buffer file\n");
-                fp = fopen("/tmp/msxpi.tmp", "w+");
-                fprintf(fp,temp_str);
-                appstate = st_send_response;
-                break;
-            
-            // call this state to send a response / string to msx
-            // string / text must be already in file /tmp/msxpi.tmp
-            case st_send_response:
-                printf("st_send_response: reading response to local buffer file\n");
-                
-                buf_parm[0] = '\0';
-    
-                fp = fopen("/tmp/msxpi.tmp","rb");
-                fseek(fp, 0L, SEEK_END);
-                filesize = ftell(fp);
-                rewind(fp);
-                fread(msx_pi_so,filesize,1,fp);
-                fclose(fp);
-                
-                fileindex = 0;
-                msxbyterdy = 0;
-                pibyte = msxbyte;
-                nextbyte = DATATRANSF;
-                appstate = st_send_ack;
-                nextstate = st_file_send;
-                TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                // prepare to check time
-                time(&start_t);
-                //printf("Sent ACK 0x%x\n",pibyte);
-                break;
-        
-            case st_send_text:
-        
-                fileindex = 0;
-                filesize = strlen(msx_pi_so);
-                appstate = st_file_send;
-                msxbyterdy = 0;
-        
-                TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                // prepare to check time
-                time(&start_t);
-        
-                gpioWrite(rdy,HIGH);
-                break;
-        
-            case st_file_read:
-                
-                printf("st_file_read: current parameter is %s\n",buf_parm);
-                printf("command type is %i\n",FSTYPE);
-                
-                // is this a http/ftp command?
-                if (FSTYPE >= FSHTTP) {
-                    
-                    strcpy(temp_path1,remotecommand);
-                    strcat(temp_path1,buf_parm);   // append basepath
-
-                    printf("st_file_read: acessing %s\n",temp_path1);
-                    
-                    system(temp_path1);
-                    
-                    strcpy(buf_parm,hloadfname);
-                }
-                
-                printf("st_file_read: load file %s\n",buf_parm);
-                
-                fp = fopen(buf_parm,"rb");
-                fileindex = 0;
-                
-                if (fp) {
-                    
-                    // get file type and size
-                    fread(msx_pi_so,7,1,fp);
-                    fseek(fp, 0L, SEEK_END);
-                    filesize = ftell(fp);
-                    rewind(fp);
-                    
-                    if (msx_pi_so[0] == 0xFE) {
-                        printf("File type     = BIN\n");
-                        startaddress = msx_pi_so[fileindex+1] + (256 * msx_pi_so[fileindex+2]);
-                        endaddress   = msx_pi_so[fileindex+3] + (256 * msx_pi_so[fileindex+4]);
-                        execaddress  = msx_pi_so[fileindex+5] + (256 * msx_pi_so[fileindex+6]);
-                        //fileType = BIN;
-                    } else if (msx_pi_so[0] == 0x41 && msx_pi_so[1] == 0x42) {
-                        printf("File type     = ROM\n");
-                        startaddress = 0x4000;
-                        endaddress   = 0x4000 + filesize - 1;
-                        execaddress  = msx_pi_so[fileindex+2] + (256 * msx_pi_so[fileindex+3]);
-                        //fileType = ROM;
-                    } else {
-                        printf("File type     = RAW\n");
-                        startaddress=0;
-                        endaddress=0;
-                        execaddress=0;
-                        //fileType = RAW;
-                    }
-                    
-                    // Insert file size in the beggining of the file if not EPROM file
-                    if (lastcmd == LOADROM)
-                        fread(msx_pi_so,filesize,1,fp);
-                    else {
-                        msx_pi_so[0] = (int) (filesize % 256);   // LSB
-                        msx_pi_so[1] = (int) filesize / 256;     // MSB
-                        fread(msx_pi_so+2,filesize,1,fp);
-                    }
-                    
-                    fclose(fp);
-                    //memset(temp_path1,0,sizeof(temp_path1));
-                    
-                    printf("File name     = %s\n",buf_parm);
-                    printf("Filesize      = %i\n",filesize);
-                    printf("Start address = %x\n",startaddress);
-                    printf("End address   = %x\n",endaddress);
-                    printf("Exec address  = %x\n",execaddress);
-                    
-                    buf_parm[0] = '\0';
-                    time(&start_t);
-                    
-                    if (lastcmd == LOADROM || lastcmd == LOADCLIENT) {
-                        pibyte = msxbyte;
-                        //nextbyte = NOT_READY;
-                        appstate = st_file_send;
-                        nextstate = st_cmd;
-                        TRANSFTIMEOUT = PIWAITTIMEOUTBIOS;
-                        gpioWrite(rdy,HIGH);
-                        msxbyterdy = 0;
-                        break;
-                    } else {
-                        TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                        //nextbyte = msxbyte;
-                        nextstate = st_file_send;
-                        msxbyterdy = 0;
-                        pibyte = msxbyte;
-                        appstate = st_send_ack;
-                        break;
-                    }
-   
+                if(dataInfo.rc==RC_SUCCESS) {
+                    //printf("st_recvcmd: received command: ");
+                    *(msxcommand + dataInfo.datasize) = '\0';
+                    //printf("%s\n",msxcommand);
+                    appstate = st_runcmd;
                 } else {
-                    printf("Error reading file %s\n",buf_parm);
-                    // fprintf(flog,"Error reading file %s\n",buf_parm);
-                    msxbyterdy = 0;
-                    appstate = st_send_ack;
-                    nextstate = st_cmd;
-                    pibyte = FNOTFOUND;
-                    gpioWrite(rdy,HIGH);
+                    printf("st_recvcmd: error receiving data\n");
+                    appstate = st_cmd;
+                }
+                break;
+                
+            case st_runcmd:
+                printf("st_run_cmd: running command ");
+                
+                if(strcmp(msxcommand,"SCT")==0) {
+                    printf("DOS_SECINFO\n");
+                    
+                    if(msxdos_secinfo(&sectorInfo)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
                     break;
                     
-                }
-                
-            case st_send_ack:
-                if (msxbyterdy) {
-                    printf("st_send_ack: sent 0x%x\n",pibyte);
-                    // fprintf(flog,"st_send_ack: sent 0x%x\n",pibyte);
-                    msxbyterdy = 0;
-                    appstate = nextstate;
-                    nextstate = st_cmd;
-                    pibyte = nextbyte;
-                    gpioWrite(rdy,HIGH);
-                    break;
-                }
-                
-                break;
-                
-            case st_file_send:
-                if (msxbyterdy) {
-                    if (fileindex+1 > filesize )  {
-                        printf("st_file_send: end of file transfer\n");
-                        appstate = st_cmd;
-                        msxbyterdy = 0;
-                        pibyte = 0;
-                        //memset(msx_pi_so,0,65536);
-                        gpioWrite(rdy,HIGH);
-                        break;
-                    }
-                    msxbyterdy = 0;
-                    gpioWrite(rdy,HIGH);
-                }
-                
-                time(&end_t);
-                diff_t = difftime(end_t, start_t);
-                if (diff_t > TRANSFTIMEOUT) {
-                    printf("st_file_send: Waiting timeout. Resseting to init state\n");
-                    // fprintf(flog,"st_file_send: Waiting timeout. Resseting to init state\n");
+                } else if((strcmp(msxcommand,"RDS")==0) || (strcmp(msxcommand,"WRS")==0)) {
+                    
+                    if (sectorInfo.deviceNumber==0)
+                        if(strcmp(msxcommand,"RDS")==0) {
+                            printf("READ SECTOR\n");
+                            // This function could be implemented in this single line,
+                            // but I am usign a function instead for learning purposes.
+                            //rc = secsenddata(currentdrive+(sectorInfo.initialSector*512),sectorInfo.sectors*512);
+                            rc = msxdos_readsector(drive0.data,&sectorInfo);
+                        } else {
+                            printf("WRITE SECTOR\n");
+                            rc = msxdos_writesector(drive0.data,&sectorInfo);
+                        }
+                        else if (sectorInfo.deviceNumber==1)
+                            if(strcmp(msxcommand,"RDS")==0) {
+                                printf("READ SECTOR\n");
+                                // This function could be implemented in this single line,
+                                // but I am usign a function instead for learning purposes.
+                                //rc = secsenddata(currentdrive+(sectorInfo.initialSector*512),sectorInfo.sectors*512);
+                                rc = msxdos_readsector(drive1.data,&sectorInfo);
+                            } else {
+                                printf("WRITE SECTOR\n");
+                                rc = msxdos_writesector(drive1.data,&sectorInfo);
+                            }
+                            else {
+                                printf("Error. Invalid device number.\n");
+                                piexchangebyte(ABORT);
+                                break;
+                            }
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
                     appstate = st_cmd;
-                    msxbyterdy = 0;
-                    gpioWrite(rdy,HIGH);
+                    break;
+                    
+                } else if(strcmp(msxcommand,"INIHRD")==0) {
+                    printf("DOS_INIHRD\n");
+                    // limit number of drives to two.
+                    if(numdrives<2)
+                        numdrives++;
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strcmp(msxcommand,"DRIVES")==0) {
+                    printf("DOS_DRIVES\n");
+                    
+                    printf("Returning number of drives:%i\n",numdrives);
+                    piexchangebyte(numdrives);
+                    numdrives = 0;
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"ptype",4)==0) ||
+                          (strncmp(msxcommand,"PTYPE",4)==0)) {
+                    
+                    printf("PTYPE\n");
+                    
+                    piexchangebyte(SENDNEXT);
+                    if (ptype(msxcommand)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"ploadrom",8)==0) ||
+                          (strncmp(msxcommand,"PLOADROM",8)==0)) {
+                    
+                    printf("PLOADROM\n");
+                    rc = loadrom(msxcommand);
+                    
+                    appstate = st_cmd;
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!");
+                    
+                    break;
+                    
+                } else if((strncmp(msxcommand,"ploadbin",8)==0) ||
+                          (strncmp(msxcommand,"loadbin",7)==0) ||
+                          (strncmp(msxcommand,"PLOADBIN",8)==0)) {
+                    
+                    printf("PLOADBIN\n");
+                    rc = loadbin(msxcommand);
+                    
+                    appstate = st_cmd;
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!");
+                    
+                    break;
+                    
+                } else if(strcmp(msxcommand,"FMT")==0) {
+                    printf("FMT\n");
+                    
+                    // Read Choice, but not used by the driver
+                    mymsxbyte = piexchangebyte(SENDNEXT);
+                    printf("st_run_cmd:Choice is %x\n",mymsxbyte);
+                    
+                    // Read drive number
+                    mymsxbyte2 = piexchangebyte(SENDNEXT);
+                    printf("st_run_cmd:drive number is %x\n",mymsxbyte2);
+                    
+                    if (mymsxbyte2 == 0) {
+                        rc = msxdos_format(&drive0);
+                    } else {
+                        rc = msxdos_format(&drive1);
+                    }
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"SYN",3)==0) ||
+                          (strncmp(msxcommand,"chkpiconn",9)==0) ||
+                          (strncmp(msxcommand,"CHKPICONN",9)==0)) {
+                    
+                    printf("chkpiconn\n");
+                    //strcpy(buf,"MSXPi Server is running");
+                    
+                    //dataInfo = senddatablock(buf,strlen(buf)+1,true);
+                    piexchangebyte(READY);
+                    
+                    //if(dataInfo.rc != RC_SUCCESS)
+                    //    printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"#",1)==0) ||
+                          (strncmp(msxcommand,"RUN",3)==0)) {
+                    printf("RUNPICMD\n");
+                    
+                    if (strncmp(msxcommand,"#",1)==0)
+                        memcpy(msxcommand," ",1);
+                    else
+                        memcpy(msxcommand,"   ",3);
+                    
+                    if (runpicmd(msxcommand)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PDIR",4)==0) ||
+                          (strncmp(msxcommand,"pdir",4)==0)) {
+                    
+                    printf("PDIR\n");
+                    
+                    if (pdir(msxcommand)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PCOPY",4)==0) ||
+                          (strncmp(msxcommand,"PCOPY",4)==0)) {
+                    
+                    printf("PCOPY:");
+                    if (pcopystat==0) {
+                        printf("1ST CALL\n");
+                        pcopystat = 1;
+                        pcopyindex = 0;
+                        retries = 0;
+                        chunk.memory = malloc(1);
+                        chunk.size = 0;
+
+                        if (pcopy(msxcommand,chunkptr)!=RC_SUCCESS) {
+                            pcopystat = 0;
+                            printf("!!!!! Error !!!!!\n");
+                        } else
+                            printf("file size:%i\n",chunk.size);
+                    } else {
+                        printf("CALLS: %i\n",pcopyindex);
+                        rc = uploaddata(chunk.memory,chunk.size,pcopyindex);
+                        if (rc==ENDTRANSFER) {
+                            printf("ENDTRANSFER\n");
+
+                            pcopystat = 0;
+                            free(chunk.memory );
+    
+                            strcpy(buf,"Pi:Ok");
+                            senddatablock(buf,strlen(buf)+1,true);
+                            
+                        } else if (rc==RC_SUCCESS) {
+                            pcopyindex++;
+                        } else if (rc==RC_CRCERROR && retries < GLOBALRETRIES) {
+                            retries++;
+                        } else {
+                            printf("!!!!! Error !!!!!\n");
+                            pcopystat = 0;
+                            free(chunk.memory);
+                        }
+                    }
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PSETDISK",8)==0) ||
+                          (strncmp(msxcommand,"psetdisk",8)==0)) {
+                    
+                    printf("PSETDISK\n");
+                    
+                    currentdrive = psetdisk(msxcommand);
+                    if (currentdrive.rc!=RC_FAILED) {
+                        if (currentdrive.deviceNumber == 0) {
+                            munmap(drive0.data,drive0.size);
+                            strcpy(&drive0.dskname,&currentdrive.dskname);
+                            printf("calling INIHRD with %s\n",drive0.dskname);
+                            msxdos_inihrd(&drive0);
+                            strcpy(psetvar[1].value,drive0.dskname);
+                        } else if (currentdrive.deviceNumber == 1) {
+                            munmap(drive1.data,drive1.size);
+                            strcpy(&drive1.dskname,&currentdrive.dskname);
+                            printf("calling INIHRD with %s\n",drive1.dskname);
+                            msxdos_inihrd(&drive1);
+                            strcpy(psetvar[2].value,drive1.dskname);
+                        }
+                    }
+                    
+                    if (currentdrive.rc==RC_FAILED)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PSET",3)==0)  ||
+                          (strncmp(msxcommand,"pset",3)==0)) {
+                    
+                    printf("PSET\n");
+                    
+                    if (pset(&psetvar,msxcommand)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PCD",3)==0)  ||
+                          (strncmp(msxcommand,"pcd",3)==0)) {
+                    
+                    printf("PCD\n");
+                    
+                    if (pcd(&psetvar,msxcommand)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PNEWDISK",8)==0)  ||
+                          (strncmp(msxcommand,"pnewdisk",8)==0)) {
+                    
+                    printf("PNEWDISK\n");
+                    
+                    if (pnewdisk(msxcommand,psetvar[7].value)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if((strncmp(msxcommand,"PWIFI",5)==0)  ||
+                          (strncmp(msxcommand,"pwifi",6)==0)) {
+                    
+                    printf("PWIFI\n");
+                    
+                    if (pwifi(msxcommand,psetvar[5].value,psetvar[6].value)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+               
+                } else if(strncmp(msxcommand,"FFIRST",6)==0) {
+                    printf("NFS_FFIRST\n");
+                    
+                    nfs_findex = 0;
+                    printf("NFS_FFIRST:1:curpath=%s,nfs_workingdir=%s\n",curpath,nfs_workingdir);
+                    // read msx path or file name
+                    ffirst(&curpath,&nfs_workingdir);
+                    printf("NFS_FFIRST:2:curpath=%s,nfs_workingdir=%s\n",curpath,nfs_workingdir);
+                    
+                    // list file(s)
+                    if (get_dirent_dir(nfs_workingdir, &dirfiles, &nfs_fcount) == 0) {
+                        if (nfs_fcount>1)
+                            qsort(dirfiles, nfs_fcount, sizeof *dirfiles, &cmp_dirent);
+                        
+                        fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name);
+                        
+                    } else
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strncmp(msxcommand,"FNEXT",5)==0) {
+                    printf("NFS_FNEXT\n");
+                    nfs_findex++;
+                    printf("NFS_FNEXT:1:nfs_workingdir=%s\n",nfs_workingdir);
+                    printf("NFS_FNEXT:dirfiles=%s\n",dirfiles[nfs_findex]);
+                    
+                    if (fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name)!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strncmp(msxcommand,"CHDIR",5)==0) {
+                    printf("NFS_CHDIR\n");
+                    
+                    memset(buf,0,255);
+                    rc = secrecvdata(buf);
+                    
+                    printf("NFS_CHDIR:received buf = %s\n",buf);
+                    if (rc == RC_SUCCESS) {
+                        strcpy(msxcommand,"cd ");
+                        strcat(msxcommand,buf);
+                        rc = pcd(&psetvar,msxcommand);
+                        if (rc==RC_SUCCESS) {
+                            strcpy(curpath,psetvar[0].value);
+                            piexchangebyte(__SUCCESS);
+                        } else
+                            piexchangebyte(__DISK);
+                    }
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strncmp(msxcommand,"GETCD",5)==0) {
+                    printf("NFS_GETCD\n");
+                    
+                    printf("NFS_GETCD:Sending curpath:%s\n",curpath);
+                    rc = secsenddata(curpath,strlen(curpath)+1);
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strncmp(msxcommand,"GETVOL",6)==0) {
+                    printf("NFS_GETVOL\n");
+                    
+                    rc = secsenddata("RaspberryPi",11);
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
+                } else if(strncmp(msxcommand,"PDATE",6)==0) {
+                    printf("PDATE\n");
+                    
+                    msxbyte = piexchangebyte(RC_SUCCESS);
+                    if (msxbyte==SENDNEXT) {
+                        rc = pdate();
+                        if (rc!=RC_SUCCESS)
+                            printf("!!!!! Error !!!!!\n");
+                    }
+                    
+                    appstate = st_cmd;
+                    break;
+
+                } else {
+                    printf("st_run_cmd:Command %s - Not Implemented!\n",msxcommand);
+                    msxbyte = piexchangebyte(RC_INVALIDCOMMAND);
+                    if (msxbyte==SENDNEXT) {
+                        strcpy(buf,"Pi:Command not implemented on server");
+                        senddatablock(buf,strlen(buf)+1,true);
+                    }
+                    
+                    appstate = st_cmd;
                     break;
                 }
-                
-                break;
-        
-            case st_set_display:
-                // enable interrupts, for Pi to send PROCESSING messages to MSX
-                msxbyterdy = 0;
-                pibyte = PROCESSING;
-                gpioWrite(rdy,HIGH);
-
-                printf("st_set_display");
-                
-                msx_pi_so[0] = '\0';
-                
-                // list here all the variables available for the MSXPi Client
-                //-
-                strcpy(msx_pi_so,"remoteuser");
-                strcat(msx_pi_so,"=");
-                strcat(msx_pi_so,remoteuser);
-                strcat(msx_pi_so,"\n");
-                //-
-                strcat(msx_pi_so,"remotepass");
-                strcat(msx_pi_so,"=");
-                strcat(msx_pi_so,remotepass);
-                strcat(msx_pi_so,"\n");
-                //-
-                strcat(msx_pi_so,"msx_path1");
-                strcat(msx_pi_so,"=");
-                strcat(msx_pi_so,msx_path1);
-                strcat(msx_pi_so,"\n");
-                //-
-                strcat(msx_pi_so,"wifissid");
-                strcat(msx_pi_so,"=");
-                strcat(msx_pi_so,wifissid);
-                strcat(msx_pi_so,"\n");
-                //-
-                strcat(msx_pi_so,"wifipass");
-                strcat(msx_pi_so,"=");
-                strcat(msx_pi_so,wifipass);
-                strcat(msx_pi_so,"\n");
-                //-
-                fileindex = 0;
-                filesize = strlen(msx_pi_so);
-                appstate = st_file_send;
-                msxbyterdy = 0;
-                
-                TRANSFTIMEOUT = PIWAITTIMEOUTOTHER;
-                // prepare to check time
-                time(&start_t);
-                
-                gpioWrite(rdy,HIGH);
-                break;
                 
         }
     }
     
+    //create_disk
     /* Stop DMA, release resources */
     printf("Terminating GPIO\n");
     // fprintf(flog,"Terminating GPIO\n");
@@ -1438,6 +2635,7 @@ int main(int argc, char *argv[])
     
     //system("/sbin/shutdown now &");
     //system("/usr/sbin/killall msxpi-server &");
+    
     
     return 0;
 }

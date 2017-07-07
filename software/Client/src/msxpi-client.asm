@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.7.0.1                                                          |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,55 +30,50 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.8.1  : Client now uses protocol-v2.
 ; 0.7    : Revised to sync with other component´s verisons
 ; 0.6d   : Changed header of Client to: <size><exec address><rom binary>
 ;          Size and exec address are two bytes long each.
 ;          Size is inserted by the MSXPi Server App.
 ; 0.6c   : Initial version commited to git
 ;
- 
-MODEL4b:    EQU     0
 
-INLINBUF:   EQU     $F55E
-INLIN:      EQU     $00B1
-CHPUT:      EQU     $00A2
-CHGET:      EQU     $009F
-INITXT:     EQU     $006C
-EXPTBL:     EQU     $FCC1
-RDSLT:      EQU     $000C
-WRSLT:      EQU     $0014
-CALSLT:     EQU     $001C
-ENASLT:     EQU     $0024
-CSRY:       EQU     $F3DC
-CSRX:       EQU     $F3DD
-ERAFNK:     EQU     $00CC
-DSPFNK:     EQU     $00CF
-PROCNM:     EQU     $FD89
-XF365:      EQU     $F365                  ; routine read primary slotregister
+TEXTTERMINATOR: EQU 0
 
+
+            DB      $FE
+            DW      PROG
+            DW      FIM
             DW      PROG
 
-            ORG     0D000H
+            ORG     0C000H
 CLIENTSTART:EQU     $
+MSXPIBUFF:  EQU     $-513
 PROG:
             CALL    ERAFNK
             CALL    INITXT
             LD      HL,TITLE
             CALL    PRINT
+            LD      A,RESET
+            CALL    SENDIFCMD
+;CALL    SYNCH
             CALL    FINDRAMSLOTS
-            CALL    CHKPICONN
-
 PROGLOOP:
+
+; Read keyboard, return data in buffer INLINBUF
             CALL    READCMD
-; PARSE cmd will return in DE address of parameter after command
+
+; PARSE cmd and return in DE the buffer address with the text
 ; This can be used for exaple to load a file such as in a command like:
 ; LOAD "FILE.EXT"
             CALL    PARSECMD        ;C set ==> cmd not found
             JR      C,CMDNOTFOUND0   ;Command not found
             OR      A
             JR      Z,PROGLOOP      ;A=0 ==> Input has no chars to parse
-            LD      BC,PROGLOOP
-            PUSH    BC              ;Return address
+            PUSH    HL
+            LD      HL,PROGLOOP
+            EX      (SP),HL
+            LD      DE,INLINBUF
             JP      (HL)            ;Execute command. DE contain address of parameter in BUF
 
 CMDNOTFOUND0:
@@ -95,14 +90,6 @@ CMDNOTFOUND:
 ; ================================================================
 
 ;-----------------------
-; PIPOWEROFF           |
-;-----------------------
-
-PIPOWEROFF:
-            CALL    PISERVERSHUT
-            RET
-
-;-----------------------
 ; CLS                  |
 ;-----------------------
 CLS:
@@ -114,12 +101,11 @@ CLS:
 ; CHKPICONN            |
 ;-----------------------
 CHKPICONN:
-            CALL    CHKPISTATUS       ;Send command do PI
+            CALL    SENDPICMD
+            CALL    PIEXCHANGEBYTE
+            CP      READY
+            JP      NZ,PRINTCOMMERROR
             LD      HL,PIONLINE
-            JP      NC,PRINT
-            LD      A,255
-            CALL    SENDIFCMD       ;reinitialize interface state
-            LD      HL,PIOFFLINE
             JP      PRINT
 
 ;-----------------------
@@ -138,45 +124,24 @@ HELP:
             CALL    PRINT
             RET
 
-
-LOADPROG:
-; HL is required if file type is RAW.
-; Other file types are recognized automatically and loaded into
-; the address in the headers
-            CALL    LOAD
-            JR      C,LOADBINERR     ;Load failed.
-            LD      C,A
-            LD      A,(AUTORUN)
-            OR      A
-            RET     Z               ;Autorun not set
-            LD      A,C
-            CP      4
-            JR      Z,EXECROMPROG
-
-;SWITCH OFF PI because we are going to run a game,
-;and it is not possible to reset or exit to BASIC
-; Therefore it is safer to shutdown PI before runnign the program
-
-;            CALL    PIPOWEROFF
-            JP      (HL)
-
-EXECROMPROG:
-
-;run the program
-
-;does not work
-            PUSH    HL
+LOADROMPROG:
+            CALL    SENDPICMD
+            JP      C,LOADPROGERR
+            CALL    LOADROM
+            JP      C,LOADPROGERR
+LOADROMPROG1:
+            PUSH    AF
+            CALL    PRINTPISTDOUT
+            CALL    PRINTNLINE
+            POP     AF
+            CP      ENDTRANSFER
+            RET     NZ
+            ;JP      $0000
             LD      A,(SLOTRAM1)
             LD      H,40h ; b01000000 = page 1
             CALL    ENASLT
-            POP     HL
+            LD      HL,($4002)
             JP      (HL)
-
-LOADBINERR:
-; FILE NOT FOUND
-            LD      HL,FNOTFOUND
-            CP      $EE
-            JR      Z,PRINTPARMERR0
 
 ; OTHER ERROR
 PRINTPARMERR:
@@ -186,168 +151,172 @@ PRINTPARMERR0:
             RET
 
 ;-----------------------
-; PIAPPSTATE           |
+; LOADROM              |
 ;-----------------------
-PIAPPSTATE:
-            LD      A,(CMDGETSTAT)
-            CALL    SENDPICMD
-            JP      C,PRINTPIERR
-            LD      HL,PIAPPMSG
-            CALL    PRINT
-            CALL    READBYTE
-            CALL    PRINTNUMBER 
-            CALL    PRINTNLINE
+LOADROM:
+; Will load the ROM directly on the destiantion page in $4000
+; Might be slower, but that is what we have so far...
+;Get number of bytes to transfer
+            LD      A,STARTTRANSFER
+            CALL    PIEXCHANGEBYTE
+            RET     C
+            CP      STARTTRANSFER
+            SCF
+            CCF
+            RET     NZ
+            CALL    READDATASIZE
+            LD      HL,$4000
+LOADROM0:
+            PUSH    BC
+            PUSH    HL
+            LD      DE,$9000
+
+; LOAD1BLOCK READ 1 BLOCK OF DATA FROM PI
+; AND RETURN IN BC THE ACTUAL NUMBER OF BYTES
+
+            LD      A,GLOBALRETRIES
+LOADROMRETRY:
+; retries
+            PUSH    AF
+            CALL    RECVDATABLOCK
+            JR      NC,LOADROM1
+            POP     AF
+            DEC     A
+            JR      NZ,LOADROMRETRY
+            LD      A,ABORT
+            POP     HL
+            POP     BC
+            OR      A
             RET
+
+LOADROM1:
+            LD      A,'.'
+            CALL    CHPUT
+            POP     AF
+            LD      DE,$9000
+;Get rom address to write
+            POP     HL
+            PUSH    BC
+            CALL    LOADTOROM
+            POP     BC
+            EX      (SP),HL
+
+;DE now contain ROM address
+            SBC     HL,BC
+            JR      C,LOADROMEND
+            JR      Z,LOADROMEND
+            LD      B,H
+            LD      C,L
+            POP     HL
+            JR      LOADROM0
+
+LOADTOROM:
+            LD      A,(SLOTRAM1)
+LOADTOROM0:
+            PUSH    AF
+            PUSH    BC
+            PUSH    DE
+            LD      B,A
+            LD      A,(DE)
+            LD      E,A
+            LD      A,B
+            CALL    WRSLT
+            POP     DE
+            POP     BC
+            INC     HL
+            INC     DE
+            DEC     BC
+            LD      A,B
+            OR      C
+            JR      Z,LOADTOROM1
+            POP     AF
+            JR      LOADTOROM0
+LOADTOROM1:
+            POP     AF
+            RET
+
+; File load successfully.
+; Return C reseted, and A = filetype
+LOADROMEND:
+            POP     HL          ;Discard next rom address, not needed anymore
+            LD      A,ENDTRANSFER
+            CALL    PIEXCHANGEBYTE
+            CP      ENDTRANSFER
+            SCF
+            CCF
+            RET     NZ
+            LD      HL,$4002    ; ROM exec address
+            LD      A,(SLOTRAM1)
+            PUSH    AF
+            CALL    RDSLT
+            LD      E,A
+            POP     AF
+            PUSH    DE
+            INC     HL
+            CALL    RDSLT
+            POP     HL
+            LD      H,A
+            LD      A,ENDTRANSFER
+            OR      A               ;Reset C flag
+            EI
+            RET
+
+LOADPROGERR:
+            LD      HL,LOADPROGERRMSG
+            JP      PRINT
+
+LOADPROGERRMSG:
+            DB      "Error loading file",13,10,0
+
+LOADBINPRG:
+            CALL    SENDPICMD
+            JP      C,LOADPROGERR
+            CALL    LOADBINPROG
+            JP      C,LOADPROGERR
+            PUSH    AF
+            PUSH    HL
+            CALL    PRINTPISTDOUT
+            CALL    PRINTNLINE
+            POP     HL
+            POP     AF
+            CP      ENDTRANSFER
+            RET     NZ
+            JP      (HL)
 
 ;-----------------------
 ; RESET                |
 ;-----------------------
-RESET:
-            CALL    PIAPPRESET
-            RET
+RESETPROG:
+        LD      A,RESET
+        CALL    SENDIFCMD
+        CALL    SYNCH
+        LD      BC,9
+        LD      DE,CHKPICONNSTR
+        CALL    CHKPICONN
+        RET
 
 
-;-----------------------
-; RUNPICMD             |
-;-----------------------
-RUNPICMD:
-            CALL    PARSEPARM
-            JP      C,PRINTPARMERR
-            CALL    SETPARM
-            JP      C,PRINTPARMERR
-            LD      A,(CMDRUNPICMD)
-            CALL    SENDPICMD
-            JP      C,PRINTPIERR
-            SCF
-            CALL    READTEXTSTREAM
-            CALL    PRINTNLINE
-            RET
-
-;-----------------------
-; MORE                 |
-;-----------------------
-MOREPROG:
-            CALL    PARSEPARM
-            JP      C,PRINTPARMERR
-            LD      HL,(PARMBUF)
-            LD      A,(HL)
-            OR      A
-
-;MORE need a file name. If there is not a parameter,
-;print error message
-            JP      Z,PRINTPARMERR
-            CALL    SETPARM
-            JP      C,PRINTPARMERR
-
-MOREPRG0:
-            LD      A,(CMDMORE)
-            CALL    SENDPICMD
-            JP      C,PRINTPIERR
-            SCF
-            CALL    READTEXTSTREAM
-            CALL    PRINTNLINE
-            RET
-
-;-----------------------
-; CD                    |
-;-----------------------
-CDPROG:
-            CALL    PARSEPARM
-            OR      A
-            JR      NZ,CDPROG2
-
-; No parameters... will set to root "/"
-CDPROG1:
-            LD      HL,(PARMBUF)
-            LD      A,'/'
-            LD      (HL),A
-            INC     HL
-            XOR     A
-            LD      (HL),A
-
-CDPROG2:
-            LD      A,(CMDSETDIR)
-            CALL    SENDPICMD
-            RET     C               ;Error
-            CALL    SENDPARM
-            RET
-
-;-----------------------
-; PWD                  |
-;-----------------------
-PWDPROG:
-            LD      A,(CMDPWD)
-            CALL    SENDPICMD
-            JP      C,PRINTPIERR
-            CALL    READTEXTSTREAM
-            CALL    PRINTNLINE
-            RET
-
-;-----------------------
-; DIR                  |
-;-----------------------
 DIRPROG:
-            CALL    PARSEPARM
-            CP      255
-            JR      Z,PRINTPIERR
-            OR      A
-            JR      Z,DIR0
-            CALL    SETPARM
-            JP      C,PIERRRMSG
-DIR0:
-            LD      A,(CMDFILES)
+TYPEPROG:
+RUNPICMD:
             CALL    SENDPICMD
-            JR      C,PRINTPIERR
-            CALL    READTEXTSTREAM
-;           CALL    READBYTE
-;           CALL    READBYTE
-;           CALL    READBYTE
+            JP      C,PRINTPIERR
+            LD      A,SENDNEXT
+            CALL    PIEXCHANGEBYTE
+            CALL    PRINTPISTDOUT
             CALL    PRINTNLINE
             RET
 
 PRINTPIERR:
 
-            LD      HL,PIERRRMSG
+            LD      HL,PICOMMERR
             JP      PRINT
 
+GETPOINTERPRG:
+            DB      "GETPOINTER "
+GETPTSTUB:  DB      00
+            DB      00
 
-;-----------------------
-; SET                  |
-;-----------------------
-SETPROG:
-            CALL    PARSEPARM
-            OR      A
-            JP      Z,PRINTPARMERR
-            LD      A,(CMDSETVAR)
-            CALL    SENDPICMD
-            RET     C               ;Error
-            CALL    SENDPARM
-            CALL    READTEXTSTREAM
-            CALL    PRINTNLINE
-            RET
-
-;-----------------------
-; WIFI                 |
-;-----------------------
-WIFIPROG:
-            CALL    PARSEPARM
-            CP      255
-            JR      Z,PRINTPIERR
-            OR      A
-            JR      Z,WIFIPRGERR
-            CALL    SETPARM
-            JP      C,PIERRRMSG
-WIFIPROG0:
-            LD      A,(WIFICFG)
-            CALL    SENDPICMD
-            JR      C,PRINTPIERR
-            CALL    READTEXTSTREAM
-            CALL    PRINTNLINE
-            RET
-
-WIFIPRGERR:
-            LD      HL,PARMERRMSG
-            JP      PRINT
 
 ; ================================================================
 ; API AND OTHER SUPPORTING FUNCTIONS STARTS HERE
@@ -369,12 +338,10 @@ INCLUDE    "msxpi_api.asm"
 ; Model4b = 1 means we are compiling the ROM for the 1st model.
 ; Model4b = 0 means we are compilig the ROM for the 2nd model.
 
-IF MODEL4b
-    INCLUDE    "msxpi_io_4bits.asm"
-ELSE
-    INCLUDE    "msxpi_io.asm"
-ENDIF
-
+INCLUDE "include.asm"
+INCLUDE "msxpi_bios.asm"
+INCLUDE "basic_stdio.asm"
+INCLUDE "msxpi_io.asm"
 
 ; ==================================================================
 ; LIST OF COMMAND CODES, SHOULD MATCH COMMANDS DEFINED IN THE PI APP
@@ -405,14 +372,15 @@ NOT_READY:  DB      0AFH
 
 TITLE:
             DB      "MSXPi Hardware Interface v0.7",13,10
-            DB      "MSXPi Cloud OS (Client) v0.7.0.1",13,10
+            DB      "MSXPi Cloud OS (Client) v0.8.1",13,10
             DB      "(c) Ronivon C. Costa,2017",13,10
             DB      "TYPE HELP for available commands",13,10
             DB      00
 
-HLPTXT:     DB      "BASIC CHKPICONN CD",34,"<url>|dir",34," CLS DIR HELP "
-            DB      "LOAD ",34,"<url>|file",34,"<,R> MORE PIAPPSTATE #(Pi command) "
-            DB      "PIPOWEROFF PWD RESET SET WIFI",13,10
+HLPTXT:     DB      "BASIC CHKPICONN CLS PDIR HELP PLOADBIN PLOADROM PTYPE #(Pi command) PRESET",13,10,0
+;DB      "CD",34,"<url>|dir",34," DIR "
+;DB      "LOAD ",34,"<url>|file",34,"<,R>  "
+;DB      "PIPOWEROFF PWD SET WIFI",13,10
             DB      00
 
 
@@ -429,8 +397,8 @@ FNOTFOUND:
             DB      "File not Found.",13,10
             DB      00
 
-PIERRRMSG:
-            DB      "Pi responded with and error",13,10
+PICOMMERR:
+            DB      "Communication Error",13,10
             DB      00
 
 NOCMDMSG:
@@ -471,49 +439,33 @@ EXITSTR:
 
             DB      "BASIC",0
             DW      EXIT
-FILESTR:
-            DB      "DIR",0
-            DW      DIRPROG
+
 HELPSTR:
             DB      "HELP",0
             DW      HELP
-LOADSTR:
-            DB      "LOAD",0
-            DW      LOADPROG
+LOADROMSTR:
+            DB      "PLOADROM",0
+            DW      LOADROMPROG
 
-CHECKPISTR:
+LOADBINSTR:
+            DB      "PLOADBIN",0
+            DW      LOADBINPRG
+
+CHKPICONNSTR:
             DB      "CHKPICONN",0
             DW      CHKPICONN
 
-PIAPPSTATESTR:
-            DB      "PIAPPSTATE",0
-            DW      PIAPPSTATE
-
-PIPOWEROFFSTR:
-            DB      "PIPOWEROFF",0
-            DW      PIPOWEROFF
-
 RESETSTR:
-            DB      "RESET",0
-            DW      RESET
-
-CDSTR:
-            DB      "CD",0
-            DW      CDPROG
-
-PWDSTR:
-            DB      "PWD",0
-            DW      PWDPROG
+            DB      "PRESET",0
+            DW      RESETPROG
 
 MORESTR:
-            DB      "MORE",0
-            DW      MOREPROG
+            DB      "PTYPE",0
+            DW      TYPEPROG
 
-SETSTR:     DB      "SET",0
-            DW      SETPROG
-
-SETWIFICFG: DB      "WIFI",0
-            DW      WIFIPROG
+DIRSTR:
+            DB      "PDIR",0
+            DW      DIRPROG
 
 ENDOFCMDS:  DB      00
 
@@ -558,4 +510,3 @@ VAR1:       DB      00
 FIM:        EQU     $
 
             END
-

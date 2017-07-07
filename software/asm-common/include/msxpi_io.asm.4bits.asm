@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.7                                                             |
+;| Version : 0.8                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,9 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.8    : Re-worked protocol as protocol-v2:
+;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
+;          Moved to here various routines from msxpi_api.asm
 ; 0.7    : Replaced CHKPIRDY retries to $FFFF
 ;          Removed the RESET when PI is not responding. This is now responsability
 ;           of the calling function, which might opt to do something else.
@@ -49,18 +52,18 @@
 ;-----------------------
 ; SENDIFCMD            |
 ;-----------------------
-SENDIFCMD:                     ; registers A,B and FLAGS are modified
+SENDIFCMD:
             PUSH    BC
 			LD      B,A
-            AND     %11110000
+            AND     $F0
             RRA
             RRA
             RRA
             RRA
-            OUT     (8),A
+            OUT     (CONTROL_PORT2),A
             LD      A,B
-            AND     %00001111
-            OUT     (6),A       ; Send data, or command
+            AND     $0F
+            OUT     (CONTROL_PORT),A       ; Send data, or command
             POP     BC
             RET
 
@@ -71,9 +74,11 @@ CHKPIRDY:
             PUSH    BC
             LD      BC,0FFFFH
 CHKPIRDY0:
-            IN      A,(6)           ; Verify SPIRDY register on the MSXInterface
-            AND     %00001111
-            JR      Z,CHKPIRDYOK
+            IN      A,(CONTROL_PORT); Verify SPIRDY register on the MSXInterface
+            AND     $0F
+            OR	    A
+            JR      Z,CHKPIRDYOK    ; RDY signal is zero, Pi App FSM is ready
+                                    ; for next command/byte
             DEC     BC              ; Pi not ready, wait a little bit
             LD      A,B
             OR      C
@@ -85,141 +90,69 @@ CHKPIRDYOK:
             RET
 
 ;-----------------------
-; READBYTE             |
+; PIREADBYTE           |
 ;-----------------------
-READBYTE:
+PIREADBYTE:
             PUSH    BC
-            XOR	    A
-            OUT     (8),A       ; Send 4 bits READ command to the Interface
-            OUT		(6),A
-            JR      READPIBYTE
+            CALL    CHKPIRDY
+            JR      C,PIREADBYTE1
+            XOR     A                   ; do not use XOR to preserve C flag state
+            OUT     (CONTROL_PORT2),A    ; Send READ command to the Interface
+            OUT     (CONTROL_PORT),A    ; Send READ command to the Interface
+            CALL    CHKPIRDY            ;Wait Interface transfer data to PI and
+                                        ; Pi App processing
+                                        ; No RET C is required here, because IN A,(7) does not reset C flag
+PIREADBYTE1:
+            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+            SLA     A
+            SLA     A
+            SLA     A
+            SLA     A            ; four SLA to rotate for bits to the left,
+                                 ; since this data is the LSB
+            LD      B,A          ; save LSB to later merge with MSB
+            IN      A,(DATA_PORT); read MSB part of the byte
+            AND     $0F          ; clean left four bits because
+            OR      B            ; Merge LSB with MSB to get the actual byte received
+            POP     BC
+            RET                  ; Return in A the byte received
 
 ;-----------------------
-; TRANSFBYTE           |
+; PIWRITEBYTE          |
 ;-----------------------
-TRANSFBYTE:                     ; registers A,B and FLAGS are modified
+PIWRITEBYTE:
             PUSH    BC
             PUSH    AF
             CALL    CHKPIRDY
             POP     AF
             LD      B,A
-            AND     %11110000
+            AND     $F0
             RRA
             RRA
             RRA
             RRA     
-            OUT     (8),A
+            OUT     (CONTROL_PORT2),A
             LD      A,B
-            AND     %00001111
-            OUT     (7),A       ; Send data, or command
-READPIBYTE:
-            CALL    CHKPIRDY     ;Wait Interface transfer data to PI and Pi App processing
-            IN      A,(8)       ; read MSB part of the byte
-            SLA     A
-            SLA     A
-            SLA     A
-            SLA     A           ; four SLA to rotate for bits to the left, since this data is the LSB
-            LD      B,A         ; save LSB to later merge with MSB
-            IN      A,(7)       ; read MSB part of the byte
-            AND     %00001111   ; clean left four bits because
-            OR      B           ; Merge LSB with MSB to get the actual byte received
+            AND     $0F
+            OUT     (DATA_PORT),A       ; Send data, or command
             POP     BC
-            RET                 ; Return in A the byte received
-
-;-----------------------
-; SENDPICMD            |
-;-----------------------
-; Send a command to Raspberry Pi
-; Command should be in A
-; Return Flag C set if there was a communication error
-; Return A = command sent if command was successfull (ack)
-; Return A = 0xEE if command resulted in error during execution
-SENDPICMD:
-            PUSH    AF
-            CALL    TRANSFBYTE      ;Send command do PI
-            LD      B,1
-            CALL    DELAY
-            POP     DE
-
-; now read ACK
-SENDPICMD1:
-            PUSH    DE
-            CALL    READBYTE        ;Read response ACK
-
-;debug to show response from Pi
-;            PUSH    AF
-;            CALL    PRINTNUMBER_
-;            POP     AF
-            POP     DE
-            CP      D               ; Ack received?
-            RET     Z               ; Ack correct, command executed
-            CP      0AEH            ; PROCESSING ?
-            JR      Z,SENDPICMD2
-            CP      0EEH            ; CMDERROR on Pi, means that Pi actually ran
-                                    ; the command, but it failed for some reason.
-            RET     Z
-            SCF                     ; set C flag when MSXPi failed to execute command
             RET
 
-; command was run by Pi, but resulted in error.
-; this should return an error string to MSX to be printed.
-; delay before checking ACK again
-SENDPICMD2:
-            LD      B,1     ;MULTIPLIER FOR THE LOOP
-            CALL    DELAY
-            JR      SENDPICMD1
-
-; Wait A cycles counting from 0 to 65535
-DELAY:
-            PUSH    DE
-            LD      DE,0FFFFH
-DELAY1:
-            NOP
-            NOP
-            NOP
-            DEC     DE
-            LD      A,D
-            OR      E
-            JR      NZ,DELAY1
-DELAY2:
-            DJNZ    DELAY1
-            POP     DE
-            RET
-
-;debug only
 ;-----------------------
-; PRINTNUMBER          |
+; PIEXCHANGEBYTE       |
 ;-----------------------
-PRINTNUMBER_:
-            PUSH    DE
-            LD      E,A
-            PUSH    DE
-            AND     0F0H
-            RRA
-            RRA
-            RRA
-            RRA
-            CALL    PRINTDIGIT_
-            POP     DE
-            LD      A,E
-            AND     %00001111
-            CALL    PRINTDIGIT_
-            POP     DE
-            RET
-
-PRINTDIGIT_:
-            CP      0AH
-            JR      C,PRINTNUMERIC_
-PRINTALFA_:
-            LD      D,37H
-            JR      PRINTNUM1_
-
-PRINTNUMERIC_:
-            LD      D,30H
-PRINTNUM1_:
-            ADD     A,D
-            CALL    CHPUT
-            RET
-
-
-
+PIEXCHANGEBYTE:
+            PUSH    BC
+            CALL    PIWRITEBYTE
+            CALL    CHKPIRDY
+            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+            SLA     A
+            SLA     A
+            SLA     A
+            SLA     A            ; four SLA to rotate for bits to the left,
+                                 ; since this data is the LSB
+            LD      B,A          ; save LSB to later merge with MSB
+            IN      A,(DATA_PORT); read MSB part of the byte
+            AND     $0F          ; clean left four bits because
+            OR      B            ; Merge LSB with MSB to get the actual byte received
+            POP     BC
+            RET                  ; Return in A the byte received
