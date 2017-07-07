@@ -1,6 +1,6 @@
 #!/bin/sh
 export PI=192.168.1.5
-export HW="4b"
+export HW="8b"
 
 if [[ "$HW" == "8b" ]];then
     cp ./asm-common/include/msxpi_io.asm.8bits.asm asm-common/include/msxpi_io.asm

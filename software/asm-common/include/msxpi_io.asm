@@ -53,106 +53,61 @@
 ; SENDIFCMD            |
 ;-----------------------
 SENDIFCMD:
-            PUSH    BC
-			LD      B,A
-            AND     $F0
-            RRA
-            RRA
-            RRA
-            RRA
-            OUT     (CONTROL_PORT2),A
-            LD      A,B
-            AND     $0F
-            OUT     (CONTROL_PORT),A       ; Send data, or command
-            POP     BC
-            RET
+            out     (CONTROL_PORT),a       ; Send data, or command
+            ret
 
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            PUSH    BC
-            LD      BC,0FFFFH
+            push    bc
+            ld      bc,0ffffh
 CHKPIRDY0:
-            IN      A,(CONTROL_PORT); Verify SPIRDY register on the MSXInterface
-            AND     $0F
-            OR	    A
-            JR      Z,CHKPIRDYOK    ; RDY signal is zero, Pi App FSM is ready
+            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
+            or	    a
+            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
                                     ; for next command/byte
-            DEC     BC              ; Pi not ready, wait a little bit
-            LD      A,B
-            OR      C
-            JR      NZ,CHKPIRDY0
+            dec     bc              ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
 CHKPIRDYNOTOK:
-            SCF
+            scf
 CHKPIRDYOK:
-            POP     BC
-            RET
+            pop     bc
+            ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            PUSH    BC
-            CALL    CHKPIRDY
-            JR      C,PIREADBYTE1
-            XOR     A                   ; do not use XOR to preserve C flag state
-            OUT     (CONTROL_PORT2),A    ; Send READ command to the Interface
-            OUT     (CONTROL_PORT),A    ; Send READ command to the Interface
-            CALL    CHKPIRDY            ;Wait Interface transfer data to PI and
-                                        ; Pi App processing
-                                        ; No RET C is required here, because IN A,(7) does not reset C flag
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                   ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT),a    ; send read command to the interface
+            call    CHKPIRDY            ;wait interface transfer data to pi and
+                                        ; pi app processing
+                                        ; no ret c is required here, because in a,(7) does not reset c flag
 PIREADBYTE1:
-            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
-            SLA     A
-            SLA     A
-            SLA     A
-            SLA     A            ; four SLA to rotate for bits to the left,
-                                 ; since this data is the LSB
-            LD      B,A          ; save LSB to later merge with MSB
-            IN      A,(DATA_PORT); read MSB part of the byte
-            AND     $0F          ; clean left four bits because
-            OR      B            ; Merge LSB with MSB to get the actual byte received
-            POP     BC
-            RET                  ; Return in A the byte received
+            in      a,(DATA_PORT)       ; read byte
+            ret                         ; return in a the byte received
 
 ;-----------------------
 ; PIWRITEBYTE          |
 ;-----------------------
 PIWRITEBYTE:
-            PUSH    BC
-            PUSH    AF
-            CALL    CHKPIRDY
-            POP     AF
-            LD      B,A
-            AND     $F0
-            RRA
-            RRA
-            RRA
-            RRA     
-            OUT     (CONTROL_PORT2),A
-            LD      A,B
-            AND     $0F
-            OUT     (DATA_PORT),A       ; Send data, or command
-            POP     BC
-            RET
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT),a       ; send data, or command
+            ret
 
 ;-----------------------
 ; PIEXCHANGEBYTE       |
 ;-----------------------
 PIEXCHANGEBYTE:
-            PUSH    BC
-            CALL    PIWRITEBYTE
-            CALL    CHKPIRDY
-            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
-            SLA     A
-            SLA     A
-            SLA     A
-            SLA     A            ; four SLA to rotate for bits to the left,
-                                 ; since this data is the LSB
-            LD      B,A          ; save LSB to later merge with MSB
-            IN      A,(DATA_PORT); read MSB part of the byte
-            AND     $0F          ; clean left four bits because
-            OR      B            ; Merge LSB with MSB to get the actual byte received
-            POP     BC
-            RET                  ; Return in A the byte received
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT)       ; read byte
+            ret
+
