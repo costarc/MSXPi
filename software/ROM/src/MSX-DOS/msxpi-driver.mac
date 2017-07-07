@@ -133,7 +133,7 @@ INIHRD_PI:
 ; PI_WAITBOOT          |
 ;-----------------------
 PI_WAITBOOT:
-        ld      b,15
+        ld      b,10
 
 PI_WAITBOOT1:
         ld      a,'.'
@@ -583,24 +583,21 @@ MSXPILOAD:
         jr		c,MSXPILOADERROR
         call    LOADBINPROG
         jp      c,MSXPILOADERROR
-        push    af
-        push    hl
-        call    GETSTDOUTNULL
-        pop     hl
-        pop     af
+        call    PIEXCHANGEBYTE
         cp      ENDOFTRANSFER
-        ret     nz
+        jr      nz,MSXPILOADERR
+        push    hl
+        call    MSXPILOADERR
+        pop     hl
         jp      (hl)
+MSXPILOADERR:
+        call    PRINTPISTDOUT
+        ret
 
 LOADERRMSG:     DB "Error loading file",13,10,0
 MSXPILOADERROR:
         ld      hl,LOADERRMSG
         jp      PRINT
-
-GETSTDOUTNULL:
-        ld      de,$0000
-        call    RECVDATABLOCK
-        ret
 
 ;-----------------------
 ; call GETPOINTERS      |
@@ -687,14 +684,28 @@ CHECK_CTRL:
         ret		z
         or		a
         ret
+
+CHECK_P:
+        ld		b,4
+        in		a,(0AAh)
+        and		11110000b
+        or		b
+        out		(0AAh),a
+        in		a,(0A9h)
+        scf
+        bit		5,a
+        ret		z
+        or		a
+        ret
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
-        DB      "MSXPi ROM v0.8.1 Build "
-build:  DB      "20170612.00052"
+        DB      "MSXPi ROM v0.8.1",13,10
+        DB      "      Build "
+build:  DB      "20170705.00060"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10

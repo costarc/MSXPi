@@ -31,151 +31,101 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+;
+;     Parameters:    C = 2BH (_SDATE)
+;HL = Year 1980...2079
+;D = Month (1=Jan...12=Dec)
+;E = Date (1...31)
+;Results:       A = 00H if date was valid
+;FFH if date was invalid
+;
+;Parameters:    C = 2DH (_STIME)
+;H = Hours (0...23)
+;L = Minutes (0...59)
+;D = Seconds (0...59)
+;E = Centiseconds (ignored)
+;Results:       A = 00H if time was valid
 
 TEXTTERMINATOR: EQU '$'
 
         ORG     $0100
+        JP      MSXPICMDSETUP
 
-        LD      BC,4
-        LD      DE,DIRCMD
+; Replace with your command name here
+CMDSTR:  DB      "PDATE"
+
+; --------------------------------
+; CODE FOR YOUR COMMAND GOES HERE
+; --------------------------------
+MYCOMMAND:
+; set date
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      L,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      H,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      D,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      E,A
+        LD      C,$2B
+        CALL    BDOS
+
+; set time
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      H,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      L,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      D,A
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      E,A
+        LD      C,$2D
+        CALL    BDOS
+        CALL    PRINTPISTDOUT
+        RET
+
+; --------------------------------------
+; End of your command
+; You should not modify this code below
+; --------------------------------------
+
+MSXPICMDSETUP:
+        LD      DE,CMDSTR
+        LD      BC,MYCOMMAND-CMDSTR
         CALL    DOSSENDPICMD
+; Communication error?
         JR      C,PRINTPIERR
-
+; Check PI response
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-
         CP      RC_SUCCESS
-        JR      NZ,PGETEND
-
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        LD      (RUNOPTION),A
-
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        LD      (SAVEOPTION),A
-
-        LD      A,(SAVEOPTION)
-        CP      1
-        JR      NZ,PGETRECVFILE
-
-; receive filename to save
-        LD      DE,SAVFNAME
-        CALL    RECVDATABLOCK
-        CALL    INITSAVEFILE
-
-PGETRECVFILE:
-; read 512 bytes at a time, and save to disk
-; look at loadrom.com.asm to understand the required headers
-;
-; get the total file size
-;->
-
-; read 512 bytes at a time - this is determined by the server routine
-; I recommend to use secrecvdata becuase it retransmits data
-; in case of crc errors.
-; but you can also try RECVDATABLOCK for a slightly faster transfer
-;
-
-        CALL    LOADROM
-
-        PUSH    HL
-        PUSH    AF
+        JP      Z,MYCOMMAND
+        CP      RC_INVALIDCOMMAND
+        JR      NZ,PRINTPIERR
         CALL    PRINTPISTDOUT
-        POP     AF
-        POP     HL
-        CP      ENDTRANSFER
-        JP      NZ,0
-        PUSH    HL
-        LD      HL,0
-        LD      A,($FCC1)
-        CALL    ENASLT
-        POP     HL
-        JP      (HL)
-
-INITSAVEFILE:
         RET
-WRITEFILETODISK:
-        RET
-
-PGETEND:
-        CALL    PRINTPISTDOUT
-        JP      0
-
 PRINTPIERR:
         LD      HL,PICOMMERR
         CALL    PRINT
-        JP      0
-
-;-----------------------
-; LOADROM              |
-;-----------------------
-LOADROM:
-; Will load the ROM directly on the destiantion page in $4000
-; Might be slower, but that is what we have so far...
-;Get number of bytes to transfer
-        LD      A,STARTTRANSFER
-        CALL    PIEXCHANGEBYTE
-        RET     C
-        CP      STARTTRANSFER
-        SCF
-        RET     NZ
-        LD      DE,$4000
-        CALL    READDATASIZE
-LOADROM0:
-        PUSH    BC
-        LD      A,GLOBALRETRIES
-LOADROMRETRY:
-; retries
-        PUSH    AF
-        CALL    RECVDATABLOCK
-        JR      NC,LOADROM1
-        POP     AF
-        DEC     A
-        JR      NZ,LOADROMRETRY
-        LD      A,ABORT
-        POP     BC
-        OR      A
         RET
-
-LOADROM1:
-        LD      A,'.'
-        CALL    PUTCHAR
-        POP     AF
-;Get rom address to write
-        POP     HL
-
-;DE now contain ROM address
-        SBC     HL,BC
-        JR      C,LOADROMEND
-        JR      Z,LOADROMEND
-        LD      B,H
-        LD      C,L
-        JR      LOADROM0
-
-; File load successfully.
-; Return C reseted, and A = filetype
-LOADROMEND:
-        LD      A,ENDTRANSFER
-        CALL    PIEXCHANGEBYTE
-        CP      ENDTRANSFER
-        SCF
-        RET     NZ
-        LD      HL,($4002)    ; ROM exec address
-        LD      A,ENDTRANSFER
-        OR      A             ;Reset C flag
-        RET
-
-DIRCMD: DB      "PGET"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
-RUNOPTION:  db  0
-SAVEOPTION: db  0
+
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-SAVFNAME:   equ $
+
+
+

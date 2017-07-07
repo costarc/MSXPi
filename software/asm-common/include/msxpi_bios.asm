@@ -301,11 +301,8 @@ SECRECVDATAEND:
 ;   Flag C set if error
 ; -------------------------------------------------------------
 SECSENDDATA:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        scf
-        ret     nz
+        call    CHECKBUSY
+        ret     c
 
 ;Get number of bytes to transfer
         call    SENDDATASIZE

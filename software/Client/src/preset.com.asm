@@ -36,13 +36,13 @@ TEXTTERMINATOR: EQU '$'
 
         ORG     $0100
 
-        LD      BC,3
-        LD      DE,DIRCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CALL    PRINTPISTDOUT
+RESETPROG:
+        LD      A,RESET
+        CALL    SENDIFCMD
+        CALL    SYNCH
+        LD      BC,9
+        LD      DE,CHKPICONNSTR
+        CALL    CHKPICONN
         JP      0
 
 PRINTPIERR:
@@ -50,14 +50,30 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-DIRCMD: DB      "RUN"
+;-----------------------
+; CHKPICONN            |
+;-----------------------
+CHKPICONN:
+            CALL    SENDPICMD
+            CALL    PIEXCHANGEBYTE
+            CP      READY
+            JR      NZ,PRINTPIERR
+            LD      HL,PIONLINE
+            JP      PRINT
+
+CHKPICONNSTR:
+        DB      "CHKPICONN"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
-
+PIONLINE:
+        DB      "Rasperry PI is online",13,10,"$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+
+
+
 

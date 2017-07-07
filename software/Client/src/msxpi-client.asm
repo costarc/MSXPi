@@ -6,7 +6,7 @@
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
-;| All rights res ;erved                                                       |
+;| All rights reserved                                                       |
 ;|                                                                           |
 ;| Redistribution and use in source and compiled forms, with or without      |
 ;| modification, are permitted under GPL license.                            |
@@ -101,19 +101,12 @@ CLS:
 ; CHKPICONN            |
 ;-----------------------
 CHKPICONN:
-            CALL    SYNCH
             CALL    SENDPICMD
-            JP      C,PRINTCOMMERROR
-            LD      DE,MSXPIBUFF
-            CALL    RECVDATABLOCK
-            LD      HL,MSXPIBUFF
-            CALL    PRINT
-            CALL    PRINTNLINE
-            RET
-
-
-F1: DB "RETURNED FROM SENDPICMD",0
-F2: DB "RETURNED FROM RECVDATAFILE",0
+            CALL    PIEXCHANGEBYTE
+            CP      READY
+            JP      NZ,PRINTCOMMERROR
+            LD      HL,PIONLINE
+            JP      PRINT
 
 ;-----------------------
 ; EXIT                |
@@ -138,7 +131,8 @@ LOADROMPROG:
             JP      C,LOADPROGERR
 LOADROMPROG1:
             PUSH    AF
-            CALL    GETSTDOUT
+            CALL    PRINTPISTDOUT
+            CALL    PRINTNLINE
             POP     AF
             CP      ENDTRANSFER
             RET     NZ
@@ -281,7 +275,8 @@ LOADBINPRG:
             JP      C,LOADPROGERR
             PUSH    AF
             PUSH    HL
-            CALL    GETSTDOUT
+            CALL    PRINTPISTDOUT
+            CALL    PRINTNLINE
             POP     HL
             POP     AF
             CP      ENDTRANSFER
@@ -295,34 +290,27 @@ RESETPROG:
         LD      A,RESET
         CALL    SENDIFCMD
         CALL    SYNCH
+        LD      BC,9
+        LD      DE,CHKPICONNSTR
+        CALL    CHKPICONN
         RET
 
 
 DIRPROG:
-MOREPROG:
+TYPEPROG:
 RUNPICMD:
             CALL    SENDPICMD
             JP      C,PRINTPIERR
-            JP      PRINTPISTDOUT
+            LD      A,SENDNEXT
+            CALL    PIEXCHANGEBYTE
+            CALL    PRINTPISTDOUT
+            CALL    PRINTNLINE
+            RET
 
 PRINTPIERR:
 
             LD      HL,PICOMMERR
             JP      PRINT
-
-; Read a stream of data from PI and print to screen
-; Uses an intermediary buffer to received, and only
-; after trnasfer is finished the text is printed
-; Input:
-;  DE = Buffer address to store text
-;
-GETSTDOUT:
-            CALL    RECVDATABLOCK
-            LD      HL,MSXPIBUFF
-            SCF
-            CALL    PRINT
-            CALL    PRINTNLINE
-            RET
 
 GETPOINTERPRG:
             DB      "GETPOINTER "
@@ -389,7 +377,7 @@ TITLE:
             DB      "TYPE HELP for available commands",13,10
             DB      00
 
-HLPTXT:     DB      "BASIC CHKPICONN CLS PDIR HELP PLOADBIN PLOADROM PMORE #(Pi command) PRESET",13,10,0
+HLPTXT:     DB      "BASIC CHKPICONN CLS PDIR HELP PLOADBIN PLOADROM PTYPE #(Pi command) PRESET",13,10,0
 ;DB      "CD",34,"<url>|dir",34," DIR "
 ;DB      "LOAD ",34,"<url>|file",34,"<,R>  "
 ;DB      "PIPOWEROFF PWD SET WIFI",13,10
@@ -472,8 +460,8 @@ RESETSTR:
             DW      RESETPROG
 
 MORESTR:
-            DB      "PMORE",0
-            DW      MOREPROG
+            DB      "PTYPE",0
+            DW      TYPEPROG
 
 DIRSTR:
             DB      "PDIR",0

@@ -37,9 +37,10 @@ TEXTTERMINATOR: EQU '$'
         ORG     $0100
 
         LD      BC,5
-        LD      DE,DIRCMD
+        LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
+        CALL    PIEXCHANGEBYTE
         CALL    PRINTPISTDOUT
         JP      0
 
@@ -48,7 +49,7 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-DIRCMD: DB      "PWIFI"
+MYCMD:  DB      "PWIFI"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"

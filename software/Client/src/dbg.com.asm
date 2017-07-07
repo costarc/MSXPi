@@ -35,14 +35,13 @@
 TEXTTERMINATOR: EQU '$'
 
         ORG     $0100
-
-        LD      BC,3
-        LD      DE,DIRCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-        LD      A,SENDNEXT
+        LD      BC,13
+        LD      DE,DBGCMD
+        CALL    SENDDATABLOCK
+        LD      A,ENDTRANSFER
         CALL    PIEXCHANGEBYTE
-        CALL    PRINTPISTDOUT
+        CP      ENDTRANSFER
+        JR      NZ,PRINTPIERR
         JP      0
 
 PRINTPIERR:
@@ -50,14 +49,89 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-DIRCMD: DB      "RUN"
+DBGCMD: DB      "DEBUG COMMAND",0
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
 
+;-----------------------
+; SENDIFCMD            |
+;-----------------------
+SENDIFCMD:
+            out     (CONTROL_PORT),a       ; Send data, or command
+            ret
+
+;-----------------------
+; CHKPIRDY             |
+;-----------------------
+CHKPIRDY:
+            push    bc
+            ld      bc,0ffffh
+CHKPIRDY0:
+            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
+            and     $01
+            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
+                                    ; for next command/byte
+            dec     bc              ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+CHKPIRDYNOTOK:
+            scf
+CHKPIRDYOK:
+            pop     bc
+            ret
+
+;-----------------------
+; PIREADBYTE           |
+;-----------------------
+PIREADBYTE:
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                   ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT),a    ; send read command to the interface
+            call    CHKPIRDY            ;wait interface transfer data to pi and
+                                        ; pi app processing
+                                        ; no ret c is required here, because in a,(7) does not reset c flag
+PIREADBYTE1:
+            in      a,(DATA_PORT)       ; read byte
+            ret                         ; return in a the byte received
+
+;-----------------------
+; PIWRITEBYTE          |
+;-----------------------
+PIWRITEBYTE:
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT),a       ; send data, or command
+            ret
+
+;-----------------------
+; PIEXCHANGEBYTE       |
+;-----------------------
+PIEXCHANGEBYTE:
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT)       ; read byte
+            ret
+
+            in      a,(CONTROL_PORT)
+            sla     a
+            or      a
+            jr      z,PIEXCHANGEBYTE
+            out     (DATA_PORT),a
+PIEXCHANGEBYTE1:
+            in      a,(CONTROL_PORT)
+            sla     a
+            or      a
+            jr      z,PIEXCHANGEBYTE1
+            in      a,(DATA_PORT)
+            ret
+
+
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 

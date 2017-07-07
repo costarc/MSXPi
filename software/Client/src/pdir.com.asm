@@ -40,6 +40,8 @@ TEXTTERMINATOR: EQU '$'
         LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         CALL    PRINTPISTDOUT
         JP      0
 

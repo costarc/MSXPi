@@ -37,7 +37,7 @@ TEXTTERMINATOR: EQU '$'
         ORG     $0100
 
         LD      BC,4
-        LD      DE,DIRCMD
+        LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
         CALL    PRINTPISTDOUT
@@ -48,7 +48,7 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-DIRCMD: DB      "PSET"
+MYCMD:  DB      "PSET"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
