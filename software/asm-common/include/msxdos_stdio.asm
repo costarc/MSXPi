@@ -73,5 +73,5 @@ PUTCHAR:
         ret
 
 FULLCMD:equ     $
-        ds      64
+        ds      256
 

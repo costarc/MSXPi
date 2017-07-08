@@ -120,18 +120,29 @@ PRINTFNAME:
         ld      a,(HL)
         INC     HL
         OR      A
-        JR      Z,PLOOP
-        SUB     'A'
-        CALL    PRINTNUMBER
+        JR      Z,PRINTFNAME2
+        CP      1
+        LD      A,'A'
+        JR      Z,PRINTFNAME1
+        LD      A,'B'
+PRINTFNAME1:
+        CALL    PUTCHAR
         LD      A,':'
         CALL    PUTCHAR
+PRINTFNAME2:
         LD      B,8
+        CALL    PLOOP
+        LD      A,'.'
+        CALL    PUTCHAR
+        LD      B,3
+        CALL    PLOOP
+        CALL    PRINTNLINE
+        RET
 PLOOP:
         LD      A,(HL)
         CALL    PUTCHAR
         INC     HL
         DJNZ    PLOOP
-        CALL    PRINTNLINE
         RET
 
 ; This routime will read the whole file from Pi
@@ -183,7 +194,6 @@ DSKREADBLK:
         EX      DE,HL
         OR      A
         SBC     HL,DE
-;CALL    DBGHL
         CALL    DSKWRITEBLK
         JR      DSKREADBLK
 
@@ -268,7 +278,13 @@ FILLEXT0:
 GETDRIVEID:
 READPARMS3:
         LD      A,(HL)
-        SUB     'A'
+        LD      B,'A'
+        CP      'a'
+        JR      C,READPARMS4
+        LD      B,'a'
+READPARMS4:
+        SUB     B
+        ADD     1
         INC     HL
         INC     HL
         JR      GET_NAME
@@ -309,6 +325,7 @@ INIFCB:
 
 SETFILEFCB:
         LD      DE,DMA
+        CALL    DBGDE
         LD      C,$1A
         CALL    BDOS
         LD      HL,DSKBLOCKSIZE
@@ -348,13 +365,11 @@ PARMSERR:   DB      "Invalid parameters",13,10,"$"
 RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
-
+FILEFCB:    ds     40
+INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-         DS 64
-FILEFCB: DS     40
 DMA:     EQU    $
-

@@ -196,19 +196,6 @@ typedef struct {
 } transferStruct;
 
 typedef struct {
-    unsigned char appstate;
-    unsigned char pibyte;
-    unsigned char msxbyte;
-    unsigned char datasize;
-    unsigned char data[32768];
-    unsigned char bytecounter;
-    unsigned char crc;
-    unsigned char rc;
-    char stdout[255];
-    char stderr[255];
-} MSXData;
-
-typedef struct {
     unsigned char deviceNumber;
     unsigned char mediaDescriptor;
     unsigned char logicUnitNumber;
@@ -226,7 +213,7 @@ struct DiskImgInfo {
 
 struct psettype {
     char var[16];
-    char value[129];
+    char value[255];
 };
 
 struct curlMemStruct {
@@ -1325,7 +1312,7 @@ int pset(struct psettype *psetvar, unsigned char *msxcommand) {
             (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
             
             printf("pcd:generating output for DISPLAY\n");
-            buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*128) + 1);
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*255) + 1);
             strcpy(buf,"\n");
             for(n=0;n<10;n++) {
                 strcat(buf,psetvar[n].var);
@@ -1469,7 +1456,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
                (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
         
         printf("pcd:generating output for DISPLAY\n");
-        buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*128) + 1);
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*255) + 1);
         strcpy(buf,"\n");
         for(i=0;i<10;i++) {
             strcat(buf,psetvar[0].var);
@@ -1514,7 +1501,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         strcpy(psetvar[0].value,*(tokens + 1));
         
         // is resulting path too long?
-    } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >128) {
+    } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >255) {
         printf("pcd:Resulting path is too long\n");
         strcpy(stdout,"Pi:Error: Resulting path is too long");
         rc = RC_FAILED;
@@ -1957,7 +1944,6 @@ char * nfs_setfname(char curpath[254],char *msxpath) {
         return 1;
     }
     
-    printf("nfs_setfname:file exist\n");
     
     if (((*msxpath)!='.') && (strcmp(msxpath,"..")!=0)) {
         
@@ -1973,14 +1959,11 @@ char * nfs_setfname(char curpath[254],char *msxpath) {
             nfs_8dot3(msxpath,&localthisfile);
         
     } else {
-        printf("not spliting because it is . or .. special files\n");
         strcpy(localthisfile," ");
         strcat(localthisfile,msxpath);
     }
     
     //memset(localthisfile+13,0,1);
-    
-    printf("nfs_setfname:localthisfile=%s, localpath=%s\n",localthisfile,localpath);
     
     // set file attributes
     // enable bit4 when directory
@@ -1989,7 +1972,6 @@ char * nfs_setfname(char curpath[254],char *msxpath) {
     else
         memset(localthisfile+14,0,1);
     
-    printf("nfs_setfname:localthisfile=%s\n",localthisfile);
     
     // set time attributes
     sttime = gmtime(&(st.st_mtime));
@@ -2083,9 +2065,8 @@ int fnext(char *msxpath,int nfs_findex,int nfs_count,char *filelist) {
     
     printf("fnext:file %i of %i:%s\n",nfs_findex,nfs_count,filelist);
     
-    thisFile = malloc(sizeof(char*)*255);
+    thisFile = malloc(255*sizeof(char*));
     thisFile = nfs_setfname(msxpath,filelist);
-    
     printf("fnext:sending:>%s, len=%i<\n",thisFile,strlen(thisFile));
     
     
@@ -2134,12 +2115,11 @@ int pdate() {
 int main(int argc, char *argv[]){
     
     int startaddress,endaddress,execaddress;
+    int pcopystat2 = 0;
     
     // numdrives is hardocde here to assure MSX will always have only 2 drives allocated
     // more than 2 drives causes some MSX to hang
     unsigned char numdrives = 0;
-    unsigned char msxcommand[255];
-    
     
     unsigned char appstate = st_init;
     
@@ -2147,6 +2127,11 @@ int main(int argc, char *argv[]){
     unsigned char mymsxbyte2;
     
     int rc;
+    
+    //pcopy
+    int pcopyindex,retries,pcopystat;
+    MemoryStruct chunk;
+    MemoryStruct *chunkptr = &chunk;
     
     //time_t start_t, end_t;
     
@@ -2162,13 +2147,7 @@ int main(int argc, char *argv[]){
     char nfs_workingdir[254];
     char nfs_msxpath[65];
     struct dirent *dirfiles;
-    
-    //pcopy
-    MemoryStruct chunk;
-    MemoryStruct *chunkptr = &chunk;
-    int pcopyindex,retries;
-    int pcopystat = 0;
-    
+
     struct psettype psetvar[10];
     strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
     strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
@@ -2181,7 +2160,12 @@ int main(int argc, char *argv[]){
     strcpy(psetvar[8].var,"free");strcpy(psetvar[8].value,"");
     strcpy(psetvar[9].var,"free");strcpy(psetvar[9].value,"");
     
-    strcpy(curpath,"/home/pi/msxpi");
+    
+    // there is a memory corruption / leak somewhere in the code
+    // if these two variables are moved to other places, and dummy is removed,
+    // some commands will crash. PCOPY won't work for sure.
+    unsigned char msxcommand[255];
+    char dummy[255];
     
     if (gpioInitialise() < 0)
     {
@@ -2209,6 +2193,8 @@ int main(int argc, char *argv[]){
             case st_init:
                 printf("Entered init state. Syncying with MSX...\n");
                 appstate = st_cmd;
+                pcopystat = 0;
+                
                 /*if(sync_client()==READY) {
                  printf("ok, synced. Listening for commands now.\n");
                  appstate = st_cmd;
@@ -2403,20 +2389,23 @@ int main(int argc, char *argv[]){
                     appstate = st_cmd;
                     break;
                     
-                } else if((strncmp(msxcommand,"PCOPY",4)==0) ||
-                          (strncmp(msxcommand,"PCOPY",4)==0)) {
+                } else if((strncmp(msxcommand,"PCOPY",5)==0) ||
+                          (strncmp(msxcommand,"PCOPY",5)==0)) {
+                    printf("pcopystat:%i\n",pcopystat);
+                    printf("pcopyindex:%i\n",pcopyindex);
+                    printf("pcopyretries:%i\n",retries);
                     
                     printf("PCOPY:");
-                    if (pcopystat==0) {
+                    if (pcopystat2==0) {
                         printf("1ST CALL\n");
-                        pcopystat = 1;
+                        pcopystat2 = 1;
                         pcopyindex = 0;
                         retries = 0;
                         chunk.memory = malloc(1);
                         chunk.size = 0;
 
                         if (pcopy(msxcommand,chunkptr)!=RC_SUCCESS) {
-                            pcopystat = 0;
+                            pcopystat2 = 0;
                             printf("!!!!! Error !!!!!\n");
                         } else
                             printf("file size:%i\n",chunk.size);
@@ -2426,7 +2415,7 @@ int main(int argc, char *argv[]){
                         if (rc==ENDTRANSFER) {
                             printf("ENDTRANSFER\n");
 
-                            pcopystat = 0;
+                            pcopystat2 = 0;
                             free(chunk.memory );
     
                             strcpy(buf,"Pi:Ok");
@@ -2438,7 +2427,7 @@ int main(int argc, char *argv[]){
                             retries++;
                         } else {
                             printf("!!!!! Error !!!!!\n");
-                            pcopystat = 0;
+                            pcopystat2 = 0;
                             free(chunk.memory);
                         }
                     }
@@ -2544,7 +2533,7 @@ int main(int argc, char *argv[]){
                     printf("NFS_FNEXT\n");
                     nfs_findex++;
                     printf("NFS_FNEXT:1:nfs_workingdir=%s\n",nfs_workingdir);
-                    printf("NFS_FNEXT:dirfiles=%s\n",dirfiles[nfs_findex]);
+                    //printf("NFS_FNEXT:dirfiles=%s\n",dirfiles[nfs_findex]);
                     
                     if (fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");
@@ -2579,7 +2568,6 @@ int main(int argc, char *argv[]){
                 } else if(strncmp(msxcommand,"GETCD",5)==0) {
                     printf("NFS_GETCD\n");
                     
-                    printf("NFS_GETCD:Sending curpath:%s\n",curpath);
                     rc = secsenddata(curpath,strlen(curpath)+1);
                     
                     if (rc!=RC_SUCCESS)
