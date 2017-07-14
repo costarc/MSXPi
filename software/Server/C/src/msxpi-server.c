@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170705.00060"
+#define build "20170711.00062"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -119,6 +119,7 @@
 #define RC_INFORESPONSE         0xE8
 #define RC_WAIT                 0xE9
 #define RC_READY                0xEA
+#define RC_SUCCNOSTD            0XEB
 #define RC_UNDEFINED            0xEF
 
 #define st_init                 0       // waiting loop, waiting for a command
@@ -289,10 +290,10 @@ char** str_split(char* a_str, const char a_delim) {
             assert(idx < count);
             *(result + idx++) = strdup(token);
             token = strtok(0, delim);
-            //printf("token,idx,count = %s,%i,%i\n",token,idx,count);
+            printf("token,idx,count = %s,%i,%i\n",token,idx,count);
         }
         
-        assert(idx == count - 1);
+        //assert(idx == count - 1);
         *(result + idx) = 0;
     }
     
@@ -2112,6 +2113,98 @@ int pdate() {
     
 }
 
+int pplay(unsigned char *msxcommand) {
+    int rc;
+    unsigned char *buf;
+    unsigned char *fname;
+    char** tokens;
+    FILE *fp;
+    
+    printf("pplay:Starting for command %s\n",msxcommand);
+    tokens = str_split(msxcommand,' ');
+    
+    // Send ERROR signal to MSX
+    // If it is stil in synch, send error message.
+    if ((*(tokens + 1) == NULL) || (*(tokens + 2) == NULL)) {
+        printf("pplay:Missing parameters\n");
+        if (piexchangebyte(RC_FAILED)==SENDNEXT) {
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
+            strcpy(buf,"Missing parameters\nSyntax:\nPPLAY PLAY|PAUSE|RESUME|STOP FILENAME|PROCESSID");
+            senddatablock(buf,strlen(buf)+1,true);
+        }
+        free(tokens);
+        return 0;
+    }
+    
+    if((strcmp(*(tokens + 1),"PLAY")==0) || (strcmp(*(tokens + 1),"play")==0)) {
+       printf("pplay:starting new player instance\n");
+       fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+       sprintf(fname,"/home/pi/msxpi/pplay.sh PLAY %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+       
+       if(fp = popen(fname, "r")) {
+           printf("pplay:Success opening file %s\n",fname);
+           fclose(fp);
+           if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+               buf = (unsigned char *)malloc(sizeof(unsigned char) * 25 );
+               strcpy(buf,"ptype /tmp/msxpi_out.txt");
+               ptype(buf);
+               free(buf);
+           }
+           rc = RC_SUCCESS;
+       } else {
+           printf("pplay:Error opening file %s\n",fname);
+           if (piexchangebyte(RC_FAILED)==SENDNEXT) {
+               buf = (unsigned char *)malloc(sizeof(unsigned char) * 22 );
+               strcpy(buf,"Pi:Error opening file");
+               senddatablock(buf,strlen(buf)+1,true);
+               free(buf);
+           }
+           rc = RC_FILENOTFOUND;
+       }
+    } else if((strcmp(*(tokens + 1),"PAUSE")==0) || (strcmp(*(tokens + 1),"pause")==0)) {
+           printf("pplay:Pausing audio playback %s\n",*(tokens + 2));
+           fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+           sprintf(fname,"/home/pi/msxpi/pplay.sh PAUSE %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+           if(fp = popen(fname, "r")) {
+               fclose(fp);
+               piexchangebyte(RC_SUCCNOSTD);
+               rc = RC_SUCCESS;
+           } else {
+                piexchangebyte(RC_FAILED);
+               rc = RC_FAILED;
+           }
+    } else if((strcmp(*(tokens + 1),"RESUME")==0) || (strcmp(*(tokens + 1),"resume")==0)) {
+            printf("pplay:Resuming audio playback %s\n",*(tokens + 2));
+            fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+            sprintf(fname,"/home/pi/msxpi/pplay.sh RESUME %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+            if(fp = popen(fname, "r")) {
+                fclose(fp);
+                piexchangebyte(RC_SUCCNOSTD);
+                rc = RC_SUCCESS;
+            } else {
+                piexchangebyte(RC_FAILED);
+                rc = RC_FAILED;
+            }
+    } else if((strcmp(*(tokens + 1),"STOP")==0) || (strcmp(*(tokens + 1),"stop")==0)) {
+            printf("pplay:Stopping audio playback %s\n",*(tokens + 2));
+            fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+            sprintf(fname,"/home/pi/msxpi/pplay.sh STOP %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+            if(fp = popen(fname, "r")) {
+                fclose(fp);
+                piexchangebyte(RC_SUCCNOSTD);
+                rc = RC_SUCCESS;
+            } else {
+                piexchangebyte(RC_FAILED);
+                rc = RC_FAILED;
+            }
+    }
+            free(fname);
+            free(tokens);
+            
+            printf("pplay:exiting rc = %x\n",rc);
+            return rc;
+}
+
 int main(int argc, char *argv[]){
     
     int startaddress,endaddress,execaddress;
@@ -2600,6 +2693,16 @@ int main(int argc, char *argv[]){
                     appstate = st_cmd;
                     break;
 
+                } else if(strncmp(msxcommand,"PPLAY",5)==0) {
+                    printf("PPLAY\n");
+                    
+                    rc = pplay(msxcommand);
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
+                    
+                    appstate = st_cmd;
+                    break;
+                    
                 } else {
                     printf("st_run_cmd:Command %s - Not Implemented!\n",msxcommand);
                     msxbyte = piexchangebyte(RC_INVALIDCOMMAND);

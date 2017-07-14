@@ -42,6 +42,12 @@ wget abyz.co.uk/rpi/pigpio/pigpio.tar
  make -j4
  sudo make install
 
+sudo apt-get install libcurl3:armhf libcurl3-gnutls:armhf libcurl3-nss:armhf libcurl4-nss-dev:armhf
+
+sudo apt-get install music123
+sudo apt-get install libmpg123-dev
+sudo apt-get install libmagic-dev
+sudo apt-get install smbclient
 
 
 Install MSXPi server

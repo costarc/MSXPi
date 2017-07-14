@@ -30,6 +30,7 @@ scp  ~/Dev/gitlab/msxpi/software/target/msxpi-client.bin pi@${PI}:msxpi/
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 
 # Nextor File System driver
 # Hack to work around issue with includes on sjasm
@@ -59,5 +60,5 @@ fi
 
 # build distribution package
 if [[ $1 == "-f" ]];then
-    [ -f ~/Dev/gitlab/build-pkg.sh ] && ~/Dev/gitlab/build-pkg.sh
+    [ -f ~/Dev/gitlab/build-pkg.sh ] && ~/Dev/gitlab/build-pkg.sh $PI
 fi

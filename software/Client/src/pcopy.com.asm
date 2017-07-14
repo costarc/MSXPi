@@ -325,7 +325,6 @@ INIFCB:
 
 SETFILEFCB:
         LD      DE,DMA
-        CALL    DBGDE
         LD      C,$1A
         CALL    BDOS
         LD      HL,DSKBLOCKSIZE
