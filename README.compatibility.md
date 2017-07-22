@@ -23,7 +23,7 @@ MSXPi v0.7 Build 20170722.00064 has been tested and verified to work on the foll
 8.  Sharp Hotbit HB-8000
 9.  Frael Bruc 100
 10. Sony F1-XV
-
+11. Sony HB-T7
 
 Incompatibility List
 --------------------
