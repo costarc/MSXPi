@@ -29,47 +29,71 @@
  | along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
  |===========================================================================|
 
-RaspberryPi setup
+Raspberry Pi setup
+
+This is the process to setup MSXPi using the custom Raspbian Image
+==================================================================
+
+1. Download MSXPi ready-to-go Raspbian Jessie Lite minimal image zip file from:
+https://www.dropbox.com/home/MSXPi/msxpi_raspbian.zip
+
+2. Unzip the file.
+Under Mac OS or Linux:
+unzip msxpi_raspbian.zip
+
+3. Insert / connect a micro-SD Card into the computer (8GB minimum)
+
+4. Identify the device corresponding to the SD card. On Linux it should be /dev/sdb for example.
+Make sure you do not use the device corresponding to your computer disk, or you will overwrite it, and loose all your data - for example, your SD card on Linux should never be /dev/sda, and on Mac OS should never be /dev/disk0 or /dev/disk1.
+
+5. Transfer the raspbian image to the SD card.
+For example, on Linux:
+sudo dd if=msxpi_raspbian.zip of=/dev/sdb
+
+On Mac OS:
+sudo dd if=msxpi_raspbian.zip of=/dev/disk2
+
+6. Insert the card on Raspberry Pi and switch it on. MSXPi server process will start automatically during boot.
+
+
+
+This is the process to setup MSXPi using the official Raspbian Jessie Lite image
+================================================================================
+
+1. Download Raspbian Jessie Lite minimal image zip file from:
+https://downloads.raspberrypi.org/raspbian_lite_latest
+On this guide, the file downloaded was 2017-07-05-raspbian-jessie-lite.zip
+
+2. Unzip the file.
+Under Mac Os or Linux:
+unzip 2017-07-05-raspbian-jessie-lite.zip
+
+3. Insert / connect a micro-SD Card into the computer (2GB minimum)
+
+4. Identify the device corresponding to the SD card. On Linux it should be /dev/sdb for example.
+Make sure you do not use the device corresponding to your computer disk, or you will overwrite it, and loose all your data - for example, your SD card on Linux should never be /dev/sda, and on Mac OS should never be /dev/disk0 or /dev/disk1.
+
+5. Transfer the raspbian image to the SD card.
+For example, on Linux:
+sudo dd if=2017-07-05-raspbian-jessie-lite.img of=/dev/sdb
+
+On Mac OS:
+sudo dd if=2017-07-05-raspbian-jessie-lite.img of=/dev/disk2
+
 
 Recommended Raspberry distribution: Raspbian Lite
 Do no enable Windows (graphical user interface) for better performance.
 
-Install required libs on Pi:
----------------------------- 
-wget abyz.co.uk/rpi/pigpio/pigpio.tar
- tar xf pigpio.tar
- cd PIGPIO
- make -j4
- sudo make install
+6. Insert the card on Raspberry Pi and switch it on. Logon using the default Raspbian credentials:
+User: pi
+Password: raspberry
 
-sudo apt-get install libcurl3:armhf libcurl3-gnutls:armhf libcurl3-nss:armhf libcurl4-nss-dev:armhf
+7. Edit file /home/pi/msxpi-setup.sh
+Change the “said” and “ask” to your wifi network name, and wifi password respectively.
 
-sudo apt-get install music123
-sudo apt-get install libmpg123-dev
-sudo apt-get install libmagic-dev
-sudo apt-get install smbclient
+8. run msxpi-setup.sh
+sudo /home/pi/msxpi-setup.sh
 
-
-Install MSXPi server
--------------------- 
-create /home/pi/msxpi/
-copy msxpi-server     to /home/pi/msxpi/
-copy directory disks  to /home/pi/msxpi/
-copy msxpi-client.bin to /home/pi/msxpi/
-install systemd (follow instructions in the file)
-
-run msxpi-server manually (if systems is not installed):
----------------------------- 
-
-   cd /home/pi/msxpi
-   sudo ./msxpi-server
-
-
-Kill msxpi-server when auto-started from systemd, and run manually for debug:
----------------------------- 
-
- sudo killall msxpi-server
- cd /home/pi/msxpi
- sudo ./msxpi-server
- 
+9. Reboot Raspberry Pi. 
+MSXPi server process will start automatically during boot.
 

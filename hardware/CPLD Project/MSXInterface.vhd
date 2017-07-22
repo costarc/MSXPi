@@ -26,11 +26,23 @@
 -- version 0.7
 -- Added signal BUSDIR
 ----------------------------------------------------------------------------------
-
+-- Version 0.7 Rev 4 - 2017-07-22
+-- Added package msxpi_package with PORTS definition
+-- Modified ports (from 6,7,8) to range 0x56 - 0x5D
+----------------------------------------------------------------------------------
+-- MSXPI Versions:
+-- 0001: Wired up prototype, without EPROM,EPM3064ALC-44
+-- 0010: Semi-wired up prototype, with EPROM, EPM3064ATC-44
+-- 0011: Limited 10-samples PCB, with EPROM, EPM3064ALC-44
+-- 0100: Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits mode.
+-- 0101: Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44
+-- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
+-- 0111: Rev.4 batch, EPM3064ALC-44
+-- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
---use ieee.std_logic_unsigned.all;
+use work.msxpi_package.all;
 
 ENTITY MSXInterface IS
 PORT ( 
@@ -51,6 +63,20 @@ PORT (
 );
 END MSXInterface;
 
+library ieee;
+use ieee.std_logic_1164.all;
+package msxpi_package is
+		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
+		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
+		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+		constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
+		constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
+		constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
+		constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+		constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
+		constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
+end msxpi_package;
+
 architecture rtl of MSXInterface is
 	type fsm_type is (idle, prepare, transferring);
 	signal spi_state	: fsm_type := idle;
@@ -70,23 +96,24 @@ architecture rtl of MSXInterface is
 begin
 
 	LED <= not SPI_RDY_s;
-	BUSDIR <= '0' when (readoper = '1' and (A = x"06" or A = x"07")) else '1';
+	BUSDIR <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
 	
 	readoper   <= not (IORQ_n or RD_n);
 	writeoper  <= not (IORQ_n or WR_n);
-	spi_en     <= '1' when writeoper = '1' and (A = x"06" or A = x"07") else
+	spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
 					 '0';
 	
 	-- SPI_en_s = '1' means SPI is busy
 	-- SPI_RDY  = '1' means Pi is Busy
 	SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
 	
-	RESET <= '1' when writeoper = '1' and A = x"06" and D = x"FF" else '0';
+	RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
 	
-	D_buff_msx <= D when writeoper = '1' and (A = x"06" or A = x"07");
+	D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
 
-	D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = x"06") else  	
-	     D_buff_pi when readoper = '1' and A = x"07" else
+	D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  	
+	     D_buff_pi when readoper = '1' and A = DATAPORT1 else
+		  "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
 		  "ZZZZZZZZ";
 
 spi:process(SPI_SCLK,readoper,writeoper,RESET)

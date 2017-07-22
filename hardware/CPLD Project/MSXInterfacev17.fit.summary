@@ -1,0 +1,9 @@
+Fitter Status : Successful - Sat Jul 22 09:49:03 2017
+Quartus II 64-Bit Version : 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition
+Revision Name : MSXInterfacev17
+Top-level Entity Name : MSXInterface
+Family : MAX3000A
+Device : EPM3064ALC44-10
+Timing Models : Final
+Total macrocells : 48 / 64 ( 75 % )
+Total pins : 30 / 34 ( 88 % )

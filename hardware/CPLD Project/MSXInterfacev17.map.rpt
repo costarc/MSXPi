@@ -1,0 +1,265 @@
+Analysis & Synthesis report for MSXInterfacev17
+Sat Jul 22 09:48:57 2017
+Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
+
+
+---------------------
+; Table of Contents ;
+---------------------
+  1. Legal Notice
+  2. Analysis & Synthesis Summary
+  3. Analysis & Synthesis Settings
+  4. Parallel Compilation
+  5. Analysis & Synthesis Source Files Read
+  6. Analysis & Synthesis Resource Usage Summary
+  7. Analysis & Synthesis Resource Utilization by Entity
+  8. User-Specified and Inferred Latches
+  9. Parameter Settings for Inferred Entity Instance: lpm_counter:spibitcount_s_rtl_0
+ 10. Analysis & Synthesis Messages
+
+
+
+----------------
+; Legal Notice ;
+----------------
+Copyright (C) 1991-2013 Altera Corporation
+Your use of Altera Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Altera Program License 
+Subscription Agreement, Altera MegaCore Function License 
+Agreement, or other applicable license agreement, including, 
+without limitation, that your use is for the sole purpose of 
+programming logic devices manufactured by Altera and sold by 
+Altera or its authorized distributors.  Please refer to the 
+applicable agreement for further details.
+
+
+
++-------------------------------------------------------------------------------+
+; Analysis & Synthesis Summary                                                  ;
++-----------------------------+-------------------------------------------------+
+; Analysis & Synthesis Status ; Successful - Sat Jul 22 09:48:57 2017           ;
+; Quartus II 64-Bit Version   ; 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition ;
+; Revision Name               ; MSXInterfacev17                                 ;
+; Top-level Entity Name       ; MSXInterface                                    ;
+; Family                      ; MAX3000A                                        ;
+; Total macrocells            ; 48                                              ;
+; Total pins                  ; 26                                              ;
++-----------------------------+-------------------------------------------------+
+
+
++----------------------------------------------------------------------------------------------------------------+
+; Analysis & Synthesis Settings                                                                                  ;
++----------------------------------------------------------------------------+-----------------+-----------------+
+; Option                                                                     ; Setting         ; Default Value   ;
++----------------------------------------------------------------------------+-----------------+-----------------+
+; Device                                                                     ; EPM3064ALC44-10 ;                 ;
+; Top-level entity name                                                      ; MSXInterface    ; MSXInterfacev17 ;
+; Family name                                                                ; MAX3000A        ; Cyclone IV GX   ;
+; State Machine Processing                                                   ; Minimal Bits    ; Auto            ;
+; Safe State Machine                                                         ; On              ; Off             ;
+; Limit AHDL Integers to 32 Bits                                             ; On              ; Off             ;
+; Optimization Technique                                                     ; Area            ; Speed           ;
+; Auto Parallel Expanders                                                    ; Off             ; On              ;
+; Maximum Number of LABs                                                     ; 20              ; -1 (Unlimited)  ;
+; Use smart compilation                                                      ; Off             ; Off             ;
+; Enable parallel Assembler and TimeQuest Timing Analyzer during compilation ; On              ; On              ;
+; Enable compact report table                                                ; Off             ; Off             ;
+; Create Debugging Nodes for IP Cores                                        ; Off             ; Off             ;
+; Preserve fewer node names                                                  ; On              ; On              ;
+; Disable OpenCore Plus hardware evaluation                                  ; Off             ; Off             ;
+; Verilog Version                                                            ; Verilog_2001    ; Verilog_2001    ;
+; VHDL Version                                                               ; VHDL_1993       ; VHDL_1993       ;
+; Extract Verilog State Machines                                             ; On              ; On              ;
+; Extract VHDL State Machines                                                ; On              ; On              ;
+; Ignore Verilog initial constructs                                          ; Off             ; Off             ;
+; Iteration limit for constant Verilog loops                                 ; 5000            ; 5000            ;
+; Iteration limit for non-constant Verilog loops                             ; 250             ; 250             ;
+; Add Pass-Through Logic to Inferred RAMs                                    ; On              ; On              ;
+; Infer RAMs from Raw Logic                                                  ; On              ; On              ;
+; Parallel Synthesis                                                         ; On              ; On              ;
+; NOT Gate Push-Back                                                         ; On              ; On              ;
+; Power-Up Don't Care                                                        ; On              ; On              ;
+; Remove Duplicate Registers                                                 ; On              ; On              ;
+; Ignore CARRY Buffers                                                       ; Off             ; Off             ;
+; Ignore CASCADE Buffers                                                     ; Off             ; Off             ;
+; Ignore GLOBAL Buffers                                                      ; Off             ; Off             ;
+; Ignore ROW GLOBAL Buffers                                                  ; Off             ; Off             ;
+; Ignore LCELL Buffers                                                       ; Auto            ; Auto            ;
+; Ignore SOFT Buffers                                                        ; Off             ; Off             ;
+; Allow XOR Gate Usage                                                       ; On              ; On              ;
+; Auto Logic Cell Insertion                                                  ; On              ; On              ;
+; Parallel Expander Chain Length                                             ; 4               ; 4               ;
+; Auto Open-Drain Pins                                                       ; On              ; On              ;
+; Auto Resource Sharing                                                      ; Off             ; Off             ;
+; Maximum Fan-in Per Macrocell                                               ; 100             ; 100             ;
+; Use LogicLock Constraints during Resource Balancing                        ; On              ; On              ;
+; Ignore translate_off and synthesis_off directives                          ; Off             ; Off             ;
+; Report Parameter Settings                                                  ; On              ; On              ;
+; Report Source Assignments                                                  ; On              ; On              ;
+; Report Connectivity Checks                                                 ; On              ; On              ;
+; HDL message level                                                          ; Level2          ; Level2          ;
+; Suppress Register Optimization Related Messages                            ; Off             ; Off             ;
+; Number of Removed Registers Reported in Synthesis Report                   ; 5000            ; 5000            ;
+; Number of Swept Nodes Reported in Synthesis Report                         ; 5000            ; 5000            ;
+; Number of Inverted Registers Reported in Synthesis Report                  ; 100             ; 100             ;
+; Block Design Naming                                                        ; Auto            ; Auto            ;
+; Synthesis Effort                                                           ; Auto            ; Auto            ;
+; Shift Register Replacement - Allow Asynchronous Clear Signal               ; On              ; On              ;
+; Pre-Mapping Resynthesis Optimization                                       ; Off             ; Off             ;
+; Analysis & Synthesis Message Level                                         ; Medium          ; Medium          ;
+; Disable Register Merging Across Hierarchies                                ; Auto            ; Auto            ;
+; Synthesis Seed                                                             ; 1               ; 1               ;
++----------------------------------------------------------------------------+-----------------+-----------------+
+
+
+Parallel compilation was disabled, but you have multiple processors available. Enable parallel compilation to reduce compilation time.
++-------------------------------------+
+; Parallel Compilation                ;
++----------------------------+--------+
+; Processors                 ; Number ;
++----------------------------+--------+
+; Number detected on machine ; 2      ;
+; Maximum allowed            ; 1      ;
++----------------------------+--------+
+
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Analysis & Synthesis Source Files Read                                                                                                                     ;
++----------------------------------+-----------------+-----------------+---------------------------------------------------------------------------+---------+
+; File Name with User-Entered Path ; Used in Netlist ; File Type       ; File Name with Absolute Path                                              ; Library ;
++----------------------------------+-----------------+-----------------+---------------------------------------------------------------------------+---------+
+; MSXInterface.vhd                 ; yes             ; User VHDL File  ; F:/gitlab/msxpi/hardware/CPLD Project/MSXInterface.vhd                    ;         ;
+; lpm_counter.tdf                  ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_counter.tdf         ;         ;
+; lpm_constant.inc                 ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_constant.inc        ;         ;
+; lpm_decode.inc                   ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_decode.inc          ;         ;
+; lpm_add_sub.inc                  ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_add_sub.inc         ;         ;
+; cmpconst.inc                     ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/cmpconst.inc            ;         ;
+; lpm_compare.inc                  ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_compare.inc         ;         ;
+; lpm_counter.inc                  ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/lpm_counter.inc         ;         ;
+; dffeea.inc                       ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/dffeea.inc              ;         ;
+; alt_counter_stratix.inc          ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/alt_counter_stratix.inc ;         ;
+; aglobal130.inc                   ; yes             ; Megafunction    ; c:/altera/13.0sp1/quartus/libraries/megafunctions/aglobal130.inc          ;         ;
++----------------------------------+-----------------+-----------------+---------------------------------------------------------------------------+---------+
+
+
++---------------------------------------------+
+; Analysis & Synthesis Resource Usage Summary ;
++----------------------+----------------------+
+; Resource             ; Usage                ;
++----------------------+----------------------+
+; Logic cells          ; 48                   ;
+; Total registers      ; 25                   ;
+; I/O pins             ; 26                   ;
+; Shareable expanders  ; 4                    ;
+; Maximum fan-out node ; IORQ_n               ;
+; Maximum fan-out      ; 26                   ;
+; Total fan-out        ; 599                  ;
+; Average fan-out      ; 7.68                 ;
++----------------------+----------------------+
+
+
++-------------------------------------------------------------------------------------------------------------------------+
+; Analysis & Synthesis Resource Utilization by Entity                                                                     ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+; Compilation Hierarchy Node           ; Macrocells ; Pins ; Full Hierarchy Name                           ; Library Name ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+; |MSXInterface                        ; 48         ; 26   ; |MSXInterface                                 ; work         ;
+;    |lpm_counter:spibitcount_s_rtl_0| ; 4          ; 0    ; |MSXInterface|lpm_counter:spibitcount_s_rtl_0 ; work         ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+
+
++---------------------------------------------------------------------------------------------------+
+; User-Specified and Inferred Latches                                                               ;
++----------------------------------------------------+---------------------+------------------------+
+; Latch Name                                         ; Latch Enable Signal ; Free of Timing Hazards ;
++----------------------------------------------------+---------------------+------------------------+
+; D_buff_msx[7]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[6]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[5]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[4]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[3]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[2]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[1]                                      ; spi_en              ; yes                    ;
+; D_buff_msx[0]                                      ; spi_en              ; yes                    ;
+; Number of user-specified and inferred latches = 8  ;                     ;                        ;
++----------------------------------------------------+---------------------+------------------------+
+Note: All latches listed above may not be present at the end of synthesis due to various synthesis optimizations.
+
+
++----------------------------------------------------------------------------------+
+; Parameter Settings for Inferred Entity Instance: lpm_counter:spibitcount_s_rtl_0 ;
++------------------------+-------------------+-------------------------------------+
+; Parameter Name         ; Value             ; Type                                ;
++------------------------+-------------------+-------------------------------------+
+; AUTO_CARRY_CHAINS      ; ON                ; AUTO_CARRY                          ;
+; IGNORE_CARRY_BUFFERS   ; OFF               ; IGNORE_CARRY                        ;
+; AUTO_CASCADE_CHAINS    ; ON                ; AUTO_CASCADE                        ;
+; IGNORE_CASCADE_BUFFERS ; OFF               ; IGNORE_CASCADE                      ;
+; LPM_WIDTH              ; 4                 ; Untyped                             ;
+; LPM_DIRECTION          ; UP                ; Untyped                             ;
+; LPM_MODULUS            ; 0                 ; Untyped                             ;
+; LPM_AVALUE             ; UNUSED            ; Untyped                             ;
+; LPM_SVALUE             ; UNUSED            ; Untyped                             ;
+; LPM_PORT_UPDOWN        ; PORT_CONNECTIVITY ; Untyped                             ;
+; DEVICE_FAMILY          ; MAX3000A          ; Untyped                             ;
+; CARRY_CHAIN            ; MANUAL            ; Untyped                             ;
+; CARRY_CHAIN_LENGTH     ; 48                ; CARRY_CHAIN_LENGTH                  ;
+; NOT_GATE_PUSH_BACK     ; ON                ; NOT_GATE_PUSH_BACK                  ;
+; CARRY_CNT_EN           ; SMART             ; Untyped                             ;
+; LABWIDE_SCLR           ; ON                ; Untyped                             ;
+; USE_NEW_VERSION        ; TRUE              ; Untyped                             ;
+; CBXI_PARAMETER         ; NOTHING           ; Untyped                             ;
++------------------------+-------------------+-------------------------------------+
+Note: In order to hide this table in the UI and the text report file, please set the "Show Parameter Settings in Synthesis Report" option in "Analysis and Synthesis Settings -> More Settings" to "Off".
+
+
++-------------------------------+
+; Analysis & Synthesis Messages ;
++-------------------------------+
+Info: *******************************************************************
+Info: Running Quartus II 64-Bit Analysis & Synthesis
+    Info: Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
+    Info: Processing started: Sat Jul 22 09:48:50 2017
+Info: Command: quartus_map --read_settings_files=on --write_settings_files=off MSX_Interface -c MSXInterfacev17
+Warning (20028): Parallel compilation is not licensed and has been disabled
+Info (12021): Found 3 design units, including 1 entities, in source file msxinterface.vhd
+    Info (12022): Found design unit 1: msxpi_package
+    Info (12022): Found design unit 2: MSXInterface-rtl
+    Info (12023): Found entity 1: MSXInterface
+Info (12127): Elaborating entity "MSXInterface" for the top level hierarchy
+Warning (10492): VHDL Process Statement warning at MSXInterface.vhd(125): signal "SPI_en_s" is read inside the Process Statement but isn't in the Process Statement's sensitivity list
+Warning (10492): VHDL Process Statement warning at MSXInterface.vhd(125): signal "spi_en" is read inside the Process Statement but isn't in the Process Statement's sensitivity list
+Warning (10492): VHDL Process Statement warning at MSXInterface.vhd(147): signal "SPI_en_s" is read inside the Process Statement but isn't in the Process Statement's sensitivity list
+Info (10041): Inferred latch for "D_buff_msx[0]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[1]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[2]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[3]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[4]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[5]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[6]" at MSXInterface.vhd(112)
+Info (10041): Inferred latch for "D_buff_msx[7]" at MSXInterface.vhd(112)
+Info (10018): Can't recognize finite state machine "spi_state" because it has a complex reset state
+Info (19000): Inferred 1 megafunctions from design logic
+    Info (19001): Inferred lpm_counter megafunction (LPM_WIDTH=4) from the following logic: "spibitcount_s_rtl_0"
+Info (12130): Elaborated megafunction instantiation "lpm_counter:spibitcount_s_rtl_0"
+Info (12133): Instantiated megafunction "lpm_counter:spibitcount_s_rtl_0" with the following parameter:
+    Info (12134): Parameter "LPM_WIDTH" = "4"
+    Info (12134): Parameter "LPM_DIRECTION" = "UP"
+    Info (12134): Parameter "LPM_TYPE" = "LPM_COUNTER"
+Info (21057): Implemented 78 device resources after synthesis - the final resource count might be different
+    Info (21058): Implemented 14 input pins
+    Info (21059): Implemented 4 output pins
+    Info (21060): Implemented 8 bidirectional pins
+    Info (21063): Implemented 48 macrocells
+    Info (21073): Implemented 4 shareable expanders
+Info: Quartus II 64-Bit Analysis & Synthesis was successful. 0 errors, 4 warnings
+    Info: Peak virtual memory: 462 megabytes
+    Info: Processing ended: Sat Jul 22 09:48:57 2017
+    Info: Elapsed time: 00:00:07
+    Info: Total CPU time (on all processors): 00:00:06
+
+

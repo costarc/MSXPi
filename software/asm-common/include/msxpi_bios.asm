@@ -456,6 +456,13 @@ READDLOOP2:
         ret
 
 ;-------------------
+; UPLOADDATA     |
+;-------------------
+; TO-DO
+UPLOADDATA:
+        ret
+
+;-------------------
 ; LOADBINPROG      |
 ;-------------------
 ; Load a .bin program in BASIC environment

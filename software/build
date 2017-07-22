@@ -1,5 +1,5 @@
 #!/bin/sh
-export PI=192.168.1.5
+export PI=192.168.1.15
 export HW="8b"
 
 if [[ "$HW" == "8b" ]];then
@@ -13,7 +13,6 @@ if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
 fi
 
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
-scp  ~/Dev/gitlab/msxpi/software/target/msxpi-client.bin pi@${PI}:msxpi/
 
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat ./target/msxpi-dos_16k.rom > ./target/msxpi-dos.rom && cat ./target/msxpi-dos_16k.rom >> ./target/msxpi-dos.rom
@@ -59,6 +58,7 @@ if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
 fi
 
 # build distribution package
-if [[ $1 == "-f" ]];then
+scp  ~/Dev/gitlab/msxpi/software/target/msxpi-client.bin pi@${PI}:msxpi/
+if [[ $1 == "-f" || $2 == "-f" || $3 == "-f" ]];then
     [ -f ~/Dev/gitlab/build-pkg.sh ] && ~/Dev/gitlab/build-pkg.sh $PI
 fi

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -60,10 +60,10 @@ SENDIFCMD:
             RRA
             RRA
             RRA
-            OUT     (CONTROL_PORT2),A
+            OUT     (DATA_PORT2),A
             LD      A,B
             AND     $0F
-            OUT     (CONTROL_PORT),A       ; Send data, or command
+            OUT     (CONTROL_PORT1),A       ; Send data, or command
             POP     BC
             RET
 
@@ -74,7 +74,7 @@ CHKPIRDY:
             PUSH    BC
             LD      BC,0FFFFH
 CHKPIRDY0:
-            IN      A,(CONTROL_PORT); Verify SPIRDY register on the MSXInterface
+            IN      A,(CONTROL_PORT1); Verify SPIRDY register on the MSXInterface
             AND     $0F
             OR	    A
             JR      Z,CHKPIRDYOK    ; RDY signal is zero, Pi App FSM is ready
@@ -97,20 +97,20 @@ PIREADBYTE:
             CALL    CHKPIRDY
             JR      C,PIREADBYTE1
             XOR     A                   ; do not use XOR to preserve C flag state
-            OUT     (CONTROL_PORT2),A    ; Send READ command to the Interface
-            OUT     (CONTROL_PORT),A    ; Send READ command to the Interface
+            OUT     (DATA_PORT2),A    ; Send READ command to the Interface
+            OUT     (CONTROL_PORT1),A    ; Send READ command to the Interface
             CALL    CHKPIRDY            ;Wait Interface transfer data to PI and
                                         ; Pi App processing
                                         ; No RET C is required here, because IN A,(7) does not reset C flag
 PIREADBYTE1:
-            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+            IN      A,(DATA_PORT2)   ; read MSB part of the byte
             SLA     A
             SLA     A
             SLA     A
             SLA     A            ; four SLA to rotate for bits to the left,
                                  ; since this data is the LSB
             LD      B,A          ; save LSB to later merge with MSB
-            IN      A,(DATA_PORT); read MSB part of the byte
+            IN      A,(DATA_PORT1); read MSB part of the byte
             AND     $0F          ; clean left four bits because
             OR      B            ; Merge LSB with MSB to get the actual byte received
             POP     BC
@@ -130,10 +130,10 @@ PIWRITEBYTE:
             RRA
             RRA
             RRA     
-            OUT     (CONTROL_PORT2),A
+            OUT     (DATA_PORT2),A
             LD      A,B
             AND     $0F
-            OUT     (DATA_PORT),A       ; Send data, or command
+            OUT     (DATA_PORT1),A       ; Send data, or command
             POP     BC
             RET
 
@@ -144,14 +144,14 @@ PIEXCHANGEBYTE:
             PUSH    BC
             CALL    PIWRITEBYTE
             CALL    CHKPIRDY
-            IN      A,(CONTROL_PORT2)   ; read MSB part of the byte
+            IN      A,(DATA_PORT2)   ; read MSB part of the byte
             SLA     A
             SLA     A
             SLA     A
             SLA     A            ; four SLA to rotate for bits to the left,
                                  ; since this data is the LSB
             LD      B,A          ; save LSB to later merge with MSB
-            IN      A,(DATA_PORT); read MSB part of the byte
+            IN      A,(DATA_PORT1); read MSB part of the byte
             AND     $0F          ; clean left four bits because
             OR      B            ; Merge LSB with MSB to get the actual byte received
             POP     BC

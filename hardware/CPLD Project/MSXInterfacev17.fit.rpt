@@ -1,0 +1,497 @@
+Fitter report for MSXInterfacev17
+Sat Jul 22 09:49:03 2017
+Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
+
+
+---------------------
+; Table of Contents ;
+---------------------
+  1. Legal Notice
+  2. Fitter Summary
+  3. Fitter Settings
+  4. Parallel Compilation
+  5. Pin-Out File
+  6. Fitter Resource Usage Summary
+  7. Input Pins
+  8. Output Pins
+  9. Bidir Pins
+ 10. All Package Pins
+ 11. Output Pin Default Load For Reported TCO
+ 12. Fitter Resource Utilization by Entity
+ 13. Control Signals
+ 14. Non-Global High Fan-Out Signals
+ 15. Other Routing Usage Summary
+ 16. LAB Macrocells
+ 17. Shareable Expander
+ 18. Logic Cell Interconnection
+ 19. Fitter Device Options
+ 20. Fitter Messages
+
+
+
+----------------
+; Legal Notice ;
+----------------
+Copyright (C) 1991-2013 Altera Corporation
+Your use of Altera Corporation's design tools, logic functions 
+and other software and tools, and its AMPP partner logic 
+functions, and any output files from any of the foregoing 
+(including device programming or simulation files), and any 
+associated documentation or information are expressly subject 
+to the terms and conditions of the Altera Program License 
+Subscription Agreement, Altera MegaCore Function License 
+Agreement, or other applicable license agreement, including, 
+without limitation, that your use is for the sole purpose of 
+programming logic devices manufactured by Altera and sold by 
+Altera or its authorized distributors.  Please refer to the 
+applicable agreement for further details.
+
+
+
++-----------------------------------------------------------------------------+
+; Fitter Summary                                                              ;
++---------------------------+-------------------------------------------------+
+; Fitter Status             ; Successful - Sat Jul 22 09:49:03 2017           ;
+; Quartus II 64-Bit Version ; 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition ;
+; Revision Name             ; MSXInterfacev17                                 ;
+; Top-level Entity Name     ; MSXInterface                                    ;
+; Family                    ; MAX3000A                                        ;
+; Device                    ; EPM3064ALC44-10                                 ;
+; Timing Models             ; Final                                           ;
+; Total macrocells          ; 48 / 64 ( 75 % )                                ;
+; Total pins                ; 30 / 34 ( 88 % )                                ;
++---------------------------+-------------------------------------------------+
+
+
++--------------------------------------------------------------------------------------------------------------+
+; Fitter Settings                                                                                              ;
++----------------------------------------------------------------------------+-----------------+---------------+
+; Option                                                                     ; Setting         ; Default Value ;
++----------------------------------------------------------------------------+-----------------+---------------+
+; Device                                                                     ; EPM3064ALC44-10 ;               ;
+; Optimize Multi-Corner Timing                                               ; On              ; Off           ;
+; Fitter Effort                                                              ; Standard Fit    ; Auto Fit      ;
+; Use smart compilation                                                      ; Off             ; Off           ;
+; Enable parallel Assembler and TimeQuest Timing Analyzer during compilation ; On              ; On            ;
+; Enable compact report table                                                ; Off             ; Off           ;
+; Optimize Timing for ECOs                                                   ; Off             ; Off           ;
+; Regenerate full fit report during ECO compiles                             ; Off             ; Off           ;
+; Optimize IOC Register Placement for Timing                                 ; Normal          ; Normal        ;
+; Fitter Initial Placement Seed                                              ; 1               ; 1             ;
+; Slow Slew Rate                                                             ; Off             ; Off           ;
+; Force Fitter to Avoid Periphery Placement Warnings                         ; Off             ; Off           ;
++----------------------------------------------------------------------------+-----------------+---------------+
+
+
+Parallel compilation was disabled, but you have multiple processors available. Enable parallel compilation to reduce compilation time.
++-------------------------------------+
+; Parallel Compilation                ;
++----------------------------+--------+
+; Processors                 ; Number ;
++----------------------------+--------+
+; Number detected on machine ; 2      ;
+; Maximum allowed            ; 1      ;
++----------------------------+--------+
+
+
++--------------+
+; Pin-Out File ;
++--------------+
+The pin-out file can be found in F:/gitlab/msxpi/hardware/CPLD Project/MSXInterfacev17.pin.
+
+
++-------------------------------------------------+
+; Fitter Resource Usage Summary                   ;
++------------------------------+------------------+
+; Resource                     ; Usage            ;
++------------------------------+------------------+
+; Logic cells                  ; 48 / 64 ( 75 % ) ;
+; Registers                    ; 25 / 64 ( 39 % ) ;
+; Number of pterms used        ; 159              ;
+; I/O pins                     ; 30 / 34 ( 88 % ) ;
+;     -- Clock pins            ; 0 / 2 ( 0 % )    ;
+;     -- Dedicated input pins  ; 0 / 2 ( 0 % )    ;
+;                              ;                  ;
+; Global signals               ; 0                ;
+; Shareable expanders          ; 5 / 64 ( 8 % )   ;
+; Parallel expanders           ; 0 / 60 ( 0 % )   ;
+; Cells using turbo bit        ; 48 / 64 ( 75 % ) ;
+; Maximum fan-out              ; 27               ;
+; Highest non-global fan-out   ; 27               ;
+; Total fan-out                ; 617              ;
+; Average fan-out              ; 7.43             ;
++------------------------------+------------------+
+
+
++-------------------------------------------------------------------------------------------------------------------------------+
+; Input Pins                                                                                                                    ;
++----------+-------+----------+-----+-----------------------+--------------------+--------+--------------+----------------------+
+; Name     ; Pin # ; I/O Bank ; LAB ; Combinational Fan-Out ; Registered Fan-Out ; Global ; I/O Standard ; Location assigned by ;
++----------+-------+----------+-----+-----------------------+--------------------+--------+--------------+----------------------+
+; A[0]     ; 31    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[1]     ; 29    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[2]     ; 24    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[3]     ; 26    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[4]     ; 25    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[5]     ; 27    ; --       ; 3   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[6]     ; 33    ; --       ; 4   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; A[7]     ; 4     ; --       ; 1   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; IORQ_n   ; 40    ; --       ; 4   ; 27                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; RD_n     ; 37    ; --       ; 4   ; 10                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; SPI_MISO ; 41    ; --       ; 4   ; 1                     ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; SPI_RDY  ; 12    ; --       ; 1   ; 2                     ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; SPI_SCLK ; 34    ; --       ; 4   ; 25                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
+; WR_n     ; 39    ; --       ; 4   ; 17                    ; 0                  ; no     ; 3.3-V LVTTL  ; User                 ;
++----------+-------+----------+-----+-----------------------+--------------------+--------+--------------+----------------------+
+
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Output Pins                                                                                                                                                                                  ;
++----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+; Name     ; Pin # ; I/O Bank ; LAB ; Output Register ; Slow Slew Rate ; Open Drain ; TRI Primitive ; I/O Standard ; Location assigned by ; Load  ; Output Enable Source ; Output Enable Group ;
++----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+; BUSDIR   ; 6     ; --       ; 1   ; no              ; no             ; no         ; no            ; 3.3-V LVTTL  ; User                 ; 10 pF ; -                    ; -                   ;
+; LED      ; 8     ; --       ; 1   ; no              ; no             ; no         ; no            ; 3.3-V LVTTL  ; User                 ; 10 pF ; -                    ; -                   ;
+; SPI_CS   ; 28    ; --       ; 3   ; no              ; no             ; no         ; no            ; 3.3-V LVTTL  ; User                 ; 10 pF ; -                    ; -                   ;
+; SPI_MOSI ; 5     ; --       ; 1   ; no              ; no             ; no         ; no            ; 3.3-V LVTTL  ; User                 ; 10 pF ; -                    ; -                   ;
++----------+-------+----------+-----+-----------------+----------------+------------+---------------+--------------+----------------------+-------+----------------------+---------------------+
+
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Bidir Pins                                                                                                                                                                                                                     ;
++------+-------+----------+-----+-----------------------+--------------------+--------+-----------------+----------------+------------+--------------+----------------------+-------+----------------------+---------------------+
+; Name ; Pin # ; I/O Bank ; LAB ; Combinational Fan-Out ; Registered Fan-Out ; Global ; Output Register ; Slow Slew Rate ; Open Drain ; I/O Standard ; Location assigned by ; Load  ; Output Enable Source ; Output Enable Group ;
++------+-------+----------+-----+-----------------------+--------------------+--------+-----------------+----------------+------------+--------------+----------------------+-------+----------------------+---------------------+
+; D[0] ; 9     ; --       ; 1   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[1] ; 20    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[2] ; 11    ; --       ; 1   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[3] ; 18    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[4] ; 14    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[5] ; 21    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[6] ; 16    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
+; D[7] ; 19    ; --       ; 2   ; 17                    ; 0                  ; no     ; no              ; no             ; no         ; 3.3-V LVTTL  ; User                 ; 10 pF ; D[7]~41              ; -                   ;
++------+-------+----------+-----+-----------------------+--------------------+--------+-----------------+----------------+------------+--------------+----------------------+-------+----------------------+---------------------+
+
+
++-------------------------------------------------------------------------------------------------------+
+; All Package Pins                                                                                      ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+; Location ; Pad Number ; I/O Bank ; Pin Name/Usage ; Dir.   ; I/O Standard ; Voltage ; User Assignment ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+; 1        ; 0          ; --       ; GND+           ;        ;              ;         ;                 ;
+; 2        ; 1          ; --       ; GND+           ;        ;              ;         ;                 ;
+; 3        ; 2          ; --       ; VCCINT         ; power  ;              ; 3.3V    ;                 ;
+; 4        ; 3          ; --       ; A[7]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 5        ; 4          ; --       ; SPI_MOSI       ; output ; 3.3-V LVTTL  ;         ; Y               ;
+; 6        ; 5          ; --       ; BUSDIR         ; output ; 3.3-V LVTTL  ;         ; Y               ;
+; 7        ; 6          ; --       ; TDI            ; input  ; 3.3-V LVTTL  ;         ; N               ;
+; 8        ; 7          ; --       ; LED            ; output ; 3.3-V LVTTL  ;         ; Y               ;
+; 9        ; 8          ; --       ; D[0]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 10       ; 9          ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 11       ; 10         ; --       ; D[2]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 12       ; 11         ; --       ; SPI_RDY        ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 13       ; 12         ; --       ; TMS            ; input  ; 3.3-V LVTTL  ;         ; N               ;
+; 14       ; 13         ; --       ; D[4]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 15       ; 14         ; --       ; VCCIO          ; power  ;              ; 3.3V    ;                 ;
+; 16       ; 15         ; --       ; D[6]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 17       ; 16         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 18       ; 17         ; --       ; D[3]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 19       ; 18         ; --       ; D[7]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 20       ; 19         ; --       ; D[1]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 21       ; 20         ; --       ; D[5]           ; bidir  ; 3.3-V LVTTL  ;         ; Y               ;
+; 22       ; 21         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 23       ; 22         ; --       ; VCCINT         ; power  ;              ; 3.3V    ;                 ;
+; 24       ; 23         ; --       ; A[2]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 25       ; 24         ; --       ; A[4]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 26       ; 25         ; --       ; A[3]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 27       ; 26         ; --       ; A[5]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 28       ; 27         ; --       ; SPI_CS         ; output ; 3.3-V LVTTL  ;         ; Y               ;
+; 29       ; 28         ; --       ; A[1]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 30       ; 29         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 31       ; 30         ; --       ; A[0]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 32       ; 31         ; --       ; TCK            ; input  ; 3.3-V LVTTL  ;         ; N               ;
+; 33       ; 32         ; --       ; A[6]           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 34       ; 33         ; --       ; SPI_SCLK       ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 35       ; 34         ; --       ; VCCIO          ; power  ;              ; 3.3V    ;                 ;
+; 36       ; 35         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 37       ; 36         ; --       ; RD_n           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 38       ; 37         ; --       ; TDO            ; output ; 3.3-V LVTTL  ;         ; N               ;
+; 39       ; 38         ; --       ; WR_n           ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 40       ; 39         ; --       ; IORQ_n         ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 41       ; 40         ; --       ; SPI_MISO       ; input  ; 3.3-V LVTTL  ;         ; Y               ;
+; 42       ; 41         ; --       ; GND            ; gnd    ;              ;         ;                 ;
+; 43       ; 42         ; --       ; GND+           ;        ;              ;         ;                 ;
+; 44       ; 43         ; --       ; GND+           ;        ;              ;         ;                 ;
++----------+------------+----------+----------------+--------+--------------+---------+-----------------+
+Note: Pin directions (input, output or bidir) are based on device operating in user mode.
+
+
++-----------------------------------------------+
+; Output Pin Default Load For Reported TCO      ;
++--------------+-------+------------------------+
+; I/O Standard ; Load  ; Termination Resistance ;
++--------------+-------+------------------------+
+; 3.3-V LVTTL  ; 10 pF ; Not Available          ;
+; 3.3-V LVCMOS ; 10 pF ; Not Available          ;
+; 3.3-V PCI    ; 10 pF ; 25 Ohm (Parallel)      ;
+; 2.5 V        ; 10 pF ; Not Available          ;
++--------------+-------+------------------------+
+Note: User assignments will override these defaults. The user specified values are listed in the Output Pins and Bidir Pins tables.
+
+
++-------------------------------------------------------------------------------------------------------------------------+
+; Fitter Resource Utilization by Entity                                                                                   ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+; Compilation Hierarchy Node           ; Macrocells ; Pins ; Full Hierarchy Name                           ; Library Name ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+; |MSXInterface                        ; 48         ; 30   ; |MSXInterface                                 ; work         ;
+;    |lpm_counter:spibitcount_s_rtl_0| ; 4          ; 0    ; |MSXInterface|lpm_counter:spibitcount_s_rtl_0 ; work         ;
++--------------------------------------+------------+------+-----------------------------------------------+--------------+
+
+
++-------------------------------------------------------------------------------------------------------------------------+
+; Control Signals                                                                                                         ;
++--------------------------+----------+---------+----------------------+--------+----------------------+------------------+
+; Name                     ; Location ; Fan-Out ; Usage                ; Global ; Global Resource Used ; Global Line Name ;
++--------------------------+----------+---------+----------------------+--------+----------------------+------------------+
+; A[0]                     ; PIN_31   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[1]                     ; PIN_29   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[2]                     ; PIN_24   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[3]                     ; PIN_26   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[4]                     ; PIN_25   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[5]                     ; PIN_27   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[6]                     ; PIN_33   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; A[7]                     ; PIN_4    ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[0]                     ; PIN_9    ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[1]                     ; PIN_20   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[2]                     ; PIN_11   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[3]                     ; PIN_18   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[4]                     ; PIN_14   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[5]                     ; PIN_21   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[6]                     ; PIN_16   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; D[7]                     ; PIN_19   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; IORQ_n                   ; PIN_40   ; 27      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; RESET~22sexp             ; SEXP33   ; 5       ; Async. clear, Preset ; no     ; --                   ; --               ;
+; RESET~24                 ; SEXP1    ; 4       ; Async. clear         ; no     ; --                   ; --               ;
+; SPI_SCLK                 ; PIN_34   ; 25      ; Clock                ; no     ; --                   ; --               ;
+; SPI_en_s                 ; LC39     ; 13      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; WR_n                     ; PIN_39   ; 17      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; spi_en~1                 ; LC37     ; 18      ; Async. clear, Preset ; no     ; --                   ; --               ;
+; spi_state.transferring~5 ; SEXP35   ; 1       ; Async. clear         ; no     ; --                   ; --               ;
+; spi_state.transferring~6 ; SEXP34   ; 1       ; Async. clear         ; no     ; --                   ; --               ;
++--------------------------+----------+---------+----------------------+--------+----------------------+------------------+
+
+
++---------------------------------------------------+
+; Non-Global High Fan-Out Signals                   ;
++-----------------------------------------+---------+
+; Name                                    ; Fan-Out ;
++-----------------------------------------+---------+
+; A[7]                                    ; 27      ;
+; A[6]                                    ; 27      ;
+; A[5]                                    ; 27      ;
+; A[4]                                    ; 27      ;
+; A[1]                                    ; 27      ;
+; A[3]                                    ; 27      ;
+; A[2]                                    ; 27      ;
+; A[0]                                    ; 27      ;
+; IORQ_n                                  ; 27      ;
+; SPI_SCLK                                ; 25      ;
+; spi_en~1                                ; 18      ;
+; D[7]~8                                  ; 17      ;
+; D[6]~7                                  ; 17      ;
+; D[5]~6                                  ; 17      ;
+; D[4]~5                                  ; 17      ;
+; D[3]~4                                  ; 17      ;
+; D[2]~3                                  ; 17      ;
+; D[1]~2                                  ; 17      ;
+; D[0]~1                                  ; 17      ;
+; WR_n                                    ; 17      ;
+; spi_state.transferring                  ; 16      ;
+; SPI_en_s                                ; 13      ;
+; spi_state.idle                          ; 11      ;
+; RD_n                                    ; 10      ;
+; spi_state.transferring~4                ; 9       ;
+; D_buff_pi[0]~27                         ; 8       ;
+; D[7]~41                                 ; 8       ;
+; lpm_counter:spibitcount_s_rtl_0|dffs[0] ; 6       ;
+; RESET~22sexp                            ; 5       ;
+; lpm_counter:spibitcount_s_rtl_0|dffs[1] ; 5       ;
+; RESET~24                                ; 4       ;
+; lpm_counter:spibitcount_s_rtl_0|dffs[2] ; 4       ;
+; D_buff_pi[6]                            ; 3       ;
+; D_buff_pi[5]                            ; 3       ;
+; D_buff_pi[4]                            ; 3       ;
+; D_buff_pi[3]                            ; 3       ;
+; D_buff_pi[2]                            ; 3       ;
+; D_buff_pi[1]                            ; 3       ;
+; D_buff_pi[0]                            ; 3       ;
+; lpm_counter:spibitcount_s_rtl_0|dffs[3] ; 3       ;
+; SPI_RDY                                 ; 2       ;
+; D_buff_msx[0]~62                        ; 2       ;
+; D_buff_msx[1]~58                        ; 2       ;
+; D_buff_msx[2]~54                        ; 2       ;
+; D_buff_msx[3]~50                        ; 2       ;
+; D_buff_msx[4]~46                        ; 2       ;
+; D_buff_msx[5]~42                        ; 2       ;
+; D_buff_msx[6]~38                        ; 2       ;
+; D_buff_msx[7]~34                        ; 2       ;
+; spi_state.prepare                       ; 2       ;
+; D_buff_msx_r[0]                         ; 2       ;
+; D_buff_msx_r[1]                         ; 2       ;
+; D_buff_msx_r[2]                         ; 2       ;
+; D_buff_msx_r[3]                         ; 2       ;
+; D_buff_msx_r[4]                         ; 2       ;
+; D_buff_msx_r[5]                         ; 2       ;
+; D_buff_pi[7]                            ; 2       ;
+; D_buff_msx_r[6]                         ; 2       ;
+; D_buff_msx_r[7]                         ; 2       ;
+; SPI_MOSI~reg0                           ; 2       ;
+; SPI_MISO                                ; 1       ;
+; spi_state.prepare~3                     ; 1       ;
+; spi_state.transferring~6                ; 1       ;
+; spi_state.transferring~5                ; 1       ;
+; D[7]~59                                 ; 1       ;
+; D[6]~57                                 ; 1       ;
+; D[5]~55                                 ; 1       ;
+; D[4]~53                                 ; 1       ;
+; D[3]~51                                 ; 1       ;
+; D[2]~48                                 ; 1       ;
+; D[1]~44                                 ; 1       ;
+; D[0]~37                                 ; 1       ;
+; SPI_RDY_s~1                             ; 1       ;
+; SPI_en_s~12                             ; 1       ;
+; BUSDIR~4                                ; 1       ;
++-----------------------------------------+---------+
+
+
++--------------------------------------------------+
+; Other Routing Usage Summary                      ;
++-----------------------------+--------------------+
+; Other Routing Resource Type ; Usage              ;
++-----------------------------+--------------------+
+; Output enables              ; 1 / 6 ( 17 % )     ;
+; PIA buffers                 ; 125 / 144 ( 87 % ) ;
++-----------------------------+--------------------+
+
+
++-----------------------------------------------------------------------+
+; LAB Macrocells                                                        ;
++-----------------------------------------+-----------------------------+
+; Number of Macrocells  (Average = 12.00) ; Number of LABs  (Total = 4) ;
++-----------------------------------------+-----------------------------+
+; 0                                       ; 0                           ;
+; 1                                       ; 0                           ;
+; 2                                       ; 0                           ;
+; 3                                       ; 0                           ;
+; 4                                       ; 0                           ;
+; 5                                       ; 0                           ;
+; 6                                       ; 0                           ;
+; 7                                       ; 0                           ;
+; 8                                       ; 0                           ;
+; 9                                       ; 0                           ;
+; 10                                      ; 2                           ;
+; 11                                      ; 0                           ;
+; 12                                      ; 0                           ;
+; 13                                      ; 1                           ;
+; 14                                      ; 0                           ;
+; 15                                      ; 1                           ;
++-----------------------------------------+-----------------------------+
+
+
++-------------------------------------------------------------------------------+
+; Shareable Expander                                                            ;
++-------------------------------------------------+-----------------------------+
+; Number of shareable expanders  (Average = 1.25) ; Number of LABs  (Total = 2) ;
++-------------------------------------------------+-----------------------------+
+; 0                                               ; 2                           ;
+; 1                                               ; 1                           ;
+; 2                                               ; 0                           ;
+; 3                                               ; 0                           ;
+; 4                                               ; 1                           ;
++-------------------------------------------------+-----------------------------+
+
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; Logic Cell Interconnection                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     ;
++-----+------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+; LAB ; Logic Cell ; Input                                                                                                                                                                                                                                                                                                                                                                ; Output                                                                                                                                                                                                                                                                                                                                                                                                                               ;
++-----+------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+;  A  ; LC11       ; IORQ_n, RD_n, A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0]                                                                                                                                                                                                                                                                                                         ; BUSDIR                                                                                                                                                                                                                                                                                                                                                                                                                               ;
+;  A  ; LC12       ; A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], spi_state.transferring, SPI_SCLK, SPI_en_s, spi_en~1, RESET~24                                                                                                                                                                                         ; spi_state.idle, spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[1], spi_state.prepare~3                                                                                                                                                                                                                                               ;
+;  A  ; LC5        ; SPI_en_s, SPI_RDY                                                                                                                                                                                                                                                                                                                                                    ; LED                                                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  A  ; LC4        ; SPI_RDY, SPI_en_s, A[3], A[0], A[4], A[6], A[7], A[5], A[1], A[2], IORQ_n, RD_n, D_buff_pi[0]                                                                                                                                                                                                                                                                        ; D[0]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  A  ; LC1        ; A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], IORQ_n, RD_n                                                                                                                                                                                                                                                                                                         ; D[0], D[1], D[2], D[3], D[4], D[5], D[6], D[7]                                                                                                                                                                                                                                                                                                                                                                                       ;
+;  A  ; LC14       ; D_buff_msx_r[7], spi_state.transferring, spi_state.transferring~4, SPI_MOSI~reg0, SPI_SCLK                                                                                                                                                                                                                                                                           ; SPI_MOSI, SPI_MOSI~reg0                                                                                                                                                                                                                                                                                                                                                                                                              ;
+;  A  ; LC3        ; D_buff_pi[2], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[2]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  A  ; LC7        ; D_buff_pi[1], D_buff_pi[0]~27, D_buff_pi[2], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[2]~48, D_buff_pi[2], D_buff_pi[3]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  A  ; LC2        ; spi_state.transferring, SPI_en_s, spi_en~1                                                                                                                                                                                                                                                                                                                           ; D_buff_pi[0], D_buff_pi[1], D_buff_pi[2], D_buff_pi[3], D_buff_pi[4], D_buff_pi[5], D_buff_pi[6], D_buff_pi[7]                                                                                                                                                                                                                                                                                                                       ;
+;  A  ; LC8        ; SPI_MISO, D_buff_pi[0]~27, D_buff_pi[0], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                      ; D[0]~37, D_buff_pi[0], D_buff_pi[1]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  A  ; LC9        ; lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[1], spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[0], SPI_SCLK, SPI_en_s, spi_en~1, RESET~24                                                                                                                                                                            ; spi_state.idle, spi_state.transferring, spi_state.prepare                                                                                                                                                                                                                                                                                                                                                                            ;
+;  A  ; LC10       ; lpm_counter:spibitcount_s_rtl_0|dffs[1], spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[0], SPI_SCLK, SPI_en_s, spi_en~1, RESET~24                                                                                                                                                                                                                     ; spi_state.idle, spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], spi_state.prepare~3                                                                                                                                                                                                                                                                                                                                 ;
+;  A  ; LC13       ; A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[0], SPI_SCLK, SPI_en_s, spi_en~1, RESET~24                                                                                                                                                ; spi_state.idle, spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], spi_state.prepare~3                                                                                                                                                                                                                                                                                        ;
+;  B  ; LC29       ; D_buff_pi[5], D_buff_pi[0]~27, D_buff_pi[6], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[6]~57, D_buff_pi[6], D_buff_pi[7]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  B  ; LC19       ; D_buff_pi[1], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[1]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC21       ; D_buff_pi[3], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[3]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC30       ; D_buff_pi[4], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[4]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC17       ; D_buff_pi[5], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[5]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC25       ; D_buff_pi[6], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[6]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC20       ; D_buff_pi[7], A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0], IORQ_n, RD_n                                                                                                                                                                                                                                                                                           ; D[7]                                                                                                                                                                                                                                                                                                                                                                                                                                 ;
+;  B  ; LC32       ; D_buff_pi[3], D_buff_pi[0]~27, D_buff_pi[4], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[4]~53, D_buff_pi[4], D_buff_pi[5]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  B  ; LC28       ; D_buff_pi[4], D_buff_pi[0]~27, D_buff_pi[5], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[5]~55, D_buff_pi[5], D_buff_pi[6]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  B  ; LC18       ; D_buff_pi[6], D_buff_pi[0]~27, D_buff_pi[7], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[7]~59, D_buff_pi[7]                                                                                                                                                                                                                                                                                                                                                                                                                ;
+;  C  ; LC39       ; SPI_en_s, spi_state.idle, SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], spi_en~1, RESET~22sexp                                                                                                                                                                                             ; SPI_en_s~12, SPI_RDY_s~1, D[0]~37, SPI_en_s, spi_state.transferring~4, spi_state.idle, spi_state.transferring~5, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[1], lpm_counter:spibitcount_s_rtl_0|dffs[0], D_buff_pi[0]~27, spi_state.prepare                                                                                                              ;
+;  C  ; LC34       ; A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], SPI_en_s, spi_en~1                                                                                                                                                                                                                                     ; SPI_MOSI~reg0, D_buff_msx_r[7], D_buff_msx_r[6], D_buff_msx_r[5], D_buff_msx_r[4], D_buff_msx_r[3], D_buff_msx_r[2], D_buff_msx_r[1], D_buff_msx_r[0]                                                                                                                                                                                                                                                                                ;
+;  C  ; LC36       ; lpm_counter:spibitcount_s_rtl_0|dffs[3], spi_state.transferring, spi_state.idle, lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[0], lpm_counter:spibitcount_s_rtl_0|dffs[1], SPI_SCLK, SPI_en_s, spi_en~1, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], RESET~22sexp ; SPI_en_s, spi_state.idle, D_buff_msx_r[7], spi_state.transferring, D_buff_msx_r[6], D_buff_msx_r[5], D_buff_msx_r[4], D_buff_msx_r[3], D_buff_msx_r[2], D_buff_msx_r[1], spi_state.prepare                                                                                                                                                                                                                                           ;
+;  C  ; LC35       ; D[7], spi_en~1, D_buff_msx[7]~34                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[7], D_buff_msx[7]~34                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  C  ; LC38       ; spi_state.idle, spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[0], lpm_counter:spibitcount_s_rtl_0|dffs[1], SPI_SCLK, spi_state.transferring~5, spi_state.transferring~6                                                                                             ; SPI_MOSI~reg0, spi_state.idle, D_buff_msx_r[7], spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[1], lpm_counter:spibitcount_s_rtl_0|dffs[0], D_buff_msx_r[6], D_buff_pi[0]~27, D_buff_msx_r[5], D_buff_msx_r[4], D_buff_msx_r[3], D_buff_msx_r[2], D_buff_msx_r[1], spi_state.prepare                                                 ;
+;  C  ; LC33       ; D_buff_pi[0], D_buff_pi[0]~27, D_buff_pi[1], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[1]~44, D_buff_pi[1], D_buff_pi[2]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  C  ; LC42       ; D_buff_pi[2], D_buff_pi[0]~27, D_buff_pi[3], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0]                                                                                                                                                                                                  ; D[3]~51, D_buff_pi[3], D_buff_pi[4]                                                                                                                                                                                                                                                                                                                                                                                                  ;
+;  C  ; LC40       ; SPI_en_s                                                                                                                                                                                                                                                                                                                                                             ; SPI_CS                                                                                                                                                                                                                                                                                                                                                                                                                               ;
+;  C  ; LC44       ; spi_state.idle, spi_state.prepare, spi_state.prepare~3, spi_state.transferring, lpm_counter:spibitcount_s_rtl_0|dffs[3], SPI_SCLK, A[0], A[4], A[6], A[7], A[5], A[1], A[3], A[2], D[7], D[2], D[1], D[5], D[3], D[6], IORQ_n, WR_n, D[4], D[0], SPI_en_s, spi_en~1, RESET~22sexp                                                                                    ; D_buff_msx_r[0], spi_state.prepare                                                                                                                                                                                                                                                                                                                                                                                                   ;
+;  C  ; LC37       ; IORQ_n, WR_n, A[4], A[6], A[7], A[5], A[1], A[2], A[3], A[0]                                                                                                                                                                                                                                                                                                         ; SPI_en_s, spi_state.transferring~4, spi_state.idle, spi_state.transferring~6, lpm_counter:spibitcount_s_rtl_0|dffs[3], lpm_counter:spibitcount_s_rtl_0|dffs[2], lpm_counter:spibitcount_s_rtl_0|dffs[1], lpm_counter:spibitcount_s_rtl_0|dffs[0], D_buff_pi[0]~27, spi_state.prepare, D_buff_msx[7]~34, D_buff_msx[6]~38, D_buff_msx[5]~42, D_buff_msx[4]~46, D_buff_msx[3]~50, D_buff_msx[2]~54, D_buff_msx[1]~58, D_buff_msx[0]~62 ;
+;  D  ; LC50       ; spi_state.idle, D_buff_msx_r[7], D_buff_msx_r[6], spi_state.transferring, spi_state.transferring~4, D_buff_msx[7]~34, SPI_SCLK                                                                                                                                                                                                                                       ; SPI_MOSI~reg0, D_buff_msx_r[7]                                                                                                                                                                                                                                                                                                                                                                                                       ;
+;  D  ; LC61       ; spi_state.idle, D_buff_msx_r[3], D_buff_msx_r[2], spi_state.transferring, spi_state.transferring~4, D_buff_msx[3]~50, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[4], D_buff_msx_r[3]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC55       ; spi_state.idle, D_buff_msx_r[2], D_buff_msx_r[1], spi_state.transferring, spi_state.transferring~4, D_buff_msx[2]~54, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[3], D_buff_msx_r[2]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC54       ; spi_state.idle, D_buff_msx_r[1], D_buff_msx_r[0], spi_state.transferring, spi_state.transferring~4, D_buff_msx[1]~58, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[2], D_buff_msx_r[1]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC51       ; D_buff_msx[0]~62, spi_state.prepare, spi_state.transferring~4, D_buff_msx_r[0], SPI_SCLK                                                                                                                                                                                                                                                                             ; D_buff_msx_r[1], D_buff_msx_r[0]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC52       ; spi_state.idle, D_buff_msx_r[6], D_buff_msx_r[5], spi_state.transferring, spi_state.transferring~4, D_buff_msx[6]~38, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[7], D_buff_msx_r[6]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC57       ; spi_state.idle, D_buff_msx_r[5], D_buff_msx_r[4], spi_state.transferring, spi_state.transferring~4, D_buff_msx[5]~42, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[6], D_buff_msx_r[5]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC60       ; spi_state.idle, D_buff_msx_r[4], D_buff_msx_r[3], spi_state.transferring, spi_state.transferring~4, D_buff_msx[4]~46, SPI_SCLK                                                                                                                                                                                                                                       ; D_buff_msx_r[5], D_buff_msx_r[4]                                                                                                                                                                                                                                                                                                                                                                                                     ;
+;  D  ; LC53       ; D[6], spi_en~1, D_buff_msx[6]~38                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[6], D_buff_msx[6]~38                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC62       ; D[5], spi_en~1, D_buff_msx[5]~42                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[5], D_buff_msx[5]~42                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC49       ; D[4], spi_en~1, D_buff_msx[4]~46                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[4], D_buff_msx[4]~46                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC56       ; D[3], spi_en~1, D_buff_msx[3]~50                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[3], D_buff_msx[3]~50                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC58       ; D[2], spi_en~1, D_buff_msx[2]~54                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[2], D_buff_msx[2]~54                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC59       ; D[1], spi_en~1, D_buff_msx[1]~58                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[1], D_buff_msx[1]~58                                                                                                                                                                                                                                                                                                                                                                                                    ;
+;  D  ; LC63       ; D[0], spi_en~1, D_buff_msx[0]~62                                                                                                                                                                                                                                                                                                                                     ; D_buff_msx_r[0], D_buff_msx[0]~62                                                                                                                                                                                                                                                                                                                                                                                                    ;
++-----+------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
++---------------------------------------------------------------+
+; Fitter Device Options                                         ;
++----------------------------------------------+----------------+
+; Option                                       ; Setting        ;
++----------------------------------------------+----------------+
+; Enable user-supplied start-up clock (CLKUSR) ; Off            ;
+; Enable device-wide reset (DEV_CLRn)          ; Off            ;
+; Enable device-wide output enable (DEV_OE)    ; Off            ;
+; Enable INIT_DONE output                      ; Off            ;
+; Configuration scheme                         ; Passive Serial ;
+; Security bit                                 ; Off            ;
+; Base pin-out file on sameframe device        ; Off            ;
++----------------------------------------------+----------------+
+
+
++-----------------+
+; Fitter Messages ;
++-----------------+
+Warning (20028): Parallel compilation is not licensed and has been disabled
+Info (119006): Selected device EPM3064ALC44-10 for design "MSXInterfacev17"
+Info: Quartus II 64-Bit Fitter was successful. 0 errors, 1 warning
+    Info: Peak virtual memory: 459 megabytes
+    Info: Processing ended: Sat Jul 22 09:49:03 2017
+    Info: Elapsed time: 00:00:04
+    Info: Total CPU time (on all processors): 00:00:02
+
+

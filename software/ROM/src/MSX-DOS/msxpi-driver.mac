@@ -31,11 +31,18 @@
 ;
 ; MSXPi Driver v0.8.1 (2017,2018)
 
+CONTROL_PORT1 EQU $56
+CONTROL_PORT2 EQU $57
+CONTROL_PORT3 EQU $58
+CONTROL_PORT4 EQU $59
+DATA_PORT1 EQU $5A
+DATA_PORT2 EQU $5B
+DATA_PORT3 EQU $5C
+DATA_PORT4 EQU $5D
+
 TEXTTERMINATOR EQU 0
 BDOS           EQU 5
-BUSYretRIES    EQU 2
-CONTROL_PORT   EQU $06
-DATA_PORT      EQU $07
+BUSYRETRIES    EQU 2
 RESET          EQU $FF
 
 STARTTRANSFER  EQU $A0
@@ -90,6 +97,13 @@ SECLEN		equ	512		; Size of biggest sector
 ; Remark: This i called twice. I distinguish the 1st and 2nd verifyig reggister A.
 ; A = #40 in first call, and #80 in second all.
 INIHRD:
+; If P is pressed during boot, MSXPi disk driver is not initialized
+        call    CHECK_P
+        jr      nc,INIHRD_START
+        xor     a
+        ld      (DEVICE),A
+        ret
+INIHRD_START:
         ld      a,$80
         cp      h
         ret     z
@@ -606,8 +620,7 @@ MSXPILOADERROR:
 ; Input:
 ;  A = Routine index
 ; Output:
-;  A =  slot id for this ROM (to-do)
-;  hl = CAll address of the given routine
+;  (sp) = address of the given routine
 ; Modify: af,hl
 ;
 GETPOINTERS:
@@ -627,6 +640,7 @@ GETPOINTERSEXIT:
         inc     hl
         ld		h,(hl)
         ld		l,e
+        ld      (PROCNM),hl
         pop     de
         ret
 
@@ -647,12 +661,14 @@ BIOSENTRYADDR:  EQU     $
         DW      SENDIFCMD
         DW      SENDPICMD
         DW      CHECKBUSY
-        DW      LOADBINPROG
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
+        DW      SYNCH
+        DW      DOWNLOADDATA
+        DW      UPLOADDATA
 
 ;-----------------------------------------------------------------------------
 ;
@@ -705,7 +721,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20170711.00061"
+build:  DB      "20170722.00064"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
@@ -745,6 +761,7 @@ STR_CALL_CMD:
 ENDOFCMDS:
         DB      00
 
+INCLUDE debug.asm
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm
 INCLUDE basic_stdio.asm

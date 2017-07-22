@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -53,7 +53,7 @@
 ; SENDIFCMD            |
 ;-----------------------
 SENDIFCMD:
-            out     (CONTROL_PORT),a       ; Send data, or command
+            out     (CONTROL_PORT1),a       ; Send data, or command
             ret
 
 ;-----------------------
@@ -63,7 +63,7 @@ CHKPIRDY:
             push    bc
             ld      bc,0ffffh
 CHKPIRDY0:
-            in      a,(CONTROL_PORT); verify spirdy register on the msxinterface
+            in      a,(CONTROL_PORT1); verify spirdy register on the msxinterface
             or	    a
             jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
                                     ; for next command/byte
@@ -84,12 +84,13 @@ PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
             xor     a                   ; do not use xor to preserve c flag state
-            out     (CONTROL_PORT),a    ; send read command to the interface
+            out     (CONTROL_PORT1),a    ; send read command to the interface
+;in      a,(DATA_PORT1)
             call    CHKPIRDY            ;wait interface transfer data to pi and
                                         ; pi app processing
                                         ; no ret c is required here, because in a,(7) does not reset c flag
 PIREADBYTE1:
-            in      a,(DATA_PORT)       ; read byte
+            in      a,(DATA_PORT1)       ; read byte
             ret                         ; return in a the byte received
 
 ;-----------------------
@@ -99,7 +100,7 @@ PIWRITEBYTE:
             push    af
             call    CHKPIRDY
             pop     af
-            out     (DATA_PORT),a       ; send data, or command
+            out     (DATA_PORT1),a       ; send data, or command
             ret
 
 ;-----------------------
@@ -108,6 +109,6 @@ PIWRITEBYTE:
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
             call    CHKPIRDY
-            in      a,(DATA_PORT)       ; read byte
+            in      a,(DATA_PORT1)       ; read byte
             ret
 

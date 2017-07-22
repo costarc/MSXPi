@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.8.1                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -4267,8 +4267,6 @@ T570D:	defw	A40A7,A5445,A53A7,A546E,A5474,A5465,A5454,A5462
 	defw	A4720
 
 A576F:
-    call    CHECK_P     ; do not initialize MSXPi Drives if P is pressed during Boot
-    ret     c
     call	INIHRD			; initialize diskhardware
 	di
 	ld	a,(DEVICE)

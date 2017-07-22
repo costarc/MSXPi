@@ -13,8 +13,6 @@ Description=Start MSXPi Server
 
 [Service]
 WorkingDirectory=/home/pi/msxpi
-#Type=forking
-#ExecStart=/bin/bash start_msx.sh
 ExecStart=/home/pi/msxpi/msxpi-server
 
 [Install]

@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170711.00062"
+#define build "20170722.00064"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -290,7 +290,7 @@ char** str_split(char* a_str, const char a_delim) {
             assert(idx < count);
             *(result + idx++) = strdup(token);
             token = strtok(0, delim);
-            printf("token,idx,count = %s,%i,%i\n",token,idx,count);
+            //printf("token,idx,count = %s,%i,%i\n",token,idx,count);
         }
         
         //assert(idx == count - 1);
@@ -441,7 +441,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         }
     }
     
-    printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
+    //printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
     return dataInfo;
 }
 
@@ -545,7 +545,7 @@ int secsenddata(unsigned char *buf, int filesize) {
         rc = RC_UNDEFINED;
         while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
             rc = RC_UNDEFINED;
-            printf("secsenddata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,blocksize);
+            //printf("secsenddata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,blocksize);
             dataInfo = senddatablock(buf+blockindex,blocksize,true);
             rc = dataInfo.rc;
             retries++;
@@ -681,7 +681,7 @@ int ptype(unsigned char *msxcommand) {
     unsigned char *fname;
     transferStruct dataInfo;
     
-    printf("ptype:starting %s\n",msxcommand);
+    //printf("ptype:starting %s\n",msxcommand);
     
     filesize = 22;
     buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
@@ -691,11 +691,11 @@ int ptype(unsigned char *msxcommand) {
         fname = (unsigned char *)malloc((sizeof(unsigned char) * strlen(msxcommand)) - 5);
         strcpy(fname,msxcommand+6);
         
-        printf("ptype:fname is %s\n",fname);
+        //printf("ptype:fname is %s\n",fname);
 
         fp = fopen(fname,"rb");
         if(fp) {
-            printf("ptype:file name to show is %s\n",fname);
+            //printf("ptype:file name to show is %s\n",fname);
             fseek(fp, 0L, SEEK_END);
             filesize = ftell(fp);        // file has 4 zeros at the end, we only need one
             rewind(fp);
@@ -711,11 +711,11 @@ int ptype(unsigned char *msxcommand) {
         
     }
     
-    printf("ptype:file size is %i\n",filesize);
+    //printf("ptype:file size is %i\n",filesize);
     dataInfo = senddatablock(buf,filesize+1,true);
     free(buf);
     rc = dataInfo.rc;
-    printf("ptype:exiting rc = %x\n",rc);
+    //printf("ptype:exiting rc = %x\n",rc);
     return rc;
     
 }
@@ -727,19 +727,19 @@ int runpicmd(unsigned char *msxcommand) {
     unsigned char *buf;
     unsigned char *fname;
     
-    printf("runpicmd:starting command >%s<+\n",msxcommand);
+    //printf("runpicmd:starting command >%s<+\n",msxcommand);
     
     fname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
     sprintf(fname,"%s>/tmp/msxpi_out.txt 2>&1",msxcommand);
     
-    printf("runpicmd:prepared output in command >%s<\n",fname);
+    //printf("runpicmd:prepared output in command >%s<\n",fname);
     
     if(fp = popen(fname, "r")) {
         fclose(fp);
         filesize = 24;
         buf = (unsigned char *)malloc(sizeof(unsigned char) * 256 );
         strcpy(buf,"ptype /tmp/msxpi_out.txt");
-        printf("ptype:Success running command %s\n",fname);
+        //printf("ptype:Success running command %s\n",fname);
         rc = RC_SUCCESS;
     } else {
         printf("ptype:Error running command %s\n",fname);
@@ -749,7 +749,7 @@ int runpicmd(unsigned char *msxcommand) {
         rc = RC_FILENOTFOUND;
     }
     
-    printf("runpicmd:call more to send output\n");
+    //printf("runpicmd:call more to send output\n");
     if (rc==RC_SUCCESS) {
         piexchangebyte(RC_SUCCESS);
         ptype(buf);
@@ -761,7 +761,7 @@ int runpicmd(unsigned char *msxcommand) {
     free(buf);
     free(fname);
     
-    printf("runpicmd:exiting rc = %x\n",rc);
+    //printf("runpicmd:exiting rc = %x\n",rc);
     return rc;
     
 }
@@ -1312,7 +1312,7 @@ int pset(struct psettype *psetvar, unsigned char *msxcommand) {
         if ((strncmp(*(tokens + 1),"display",1)==0) ||
             (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
             
-            printf("pcd:generating output for DISPLAY\n");
+            //printf("pcd:generating output for DISPLAY\n");
             buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*255) + 1);
             strcpy(buf,"\n");
             for(n=0;n<10;n++) {
@@ -1329,7 +1329,7 @@ int pset(struct psettype *psetvar, unsigned char *msxcommand) {
         }
     } else {
         
-        printf("pset:setting %s to %s\n",*(tokens+1),*(tokens+2));
+        //printf("pset:setting %s to %s\n",*(tokens+1),*(tokens+2));
         
         for(n=0;n<10;n++) {
             printf("psetvar[%i]=%s\n",n,psetvar[n].var);
@@ -1342,7 +1342,7 @@ int pset(struct psettype *psetvar, unsigned char *msxcommand) {
         
         if (!found) {
             for(n=0;n<10;n++) {
-                printf("psetvar[%i]=%s\n",n,psetvar[n].var);
+                //printf("psetvar[%i]=%s\n",n,psetvar[n].var);
                 if (strcmp(psetvar[n].var,"free")==0) {
                     strcpy(psetvar[n].var,*(tokens +1));
                     strcpy(psetvar[n].value,*(tokens +2));
@@ -1358,12 +1358,12 @@ int pset(struct psettype *psetvar, unsigned char *msxcommand) {
     }
     
     if (rc == RC_INFORESPONSE) {
-        printf("pset:sending Display output\n");
+        //printf("pset:sending Display output\n");
         senddatablock(buf,strlen(buf)+1,true);
         free(buf);
         rc = RC_SUCCESS;
     } else {
-        printf("pset:sending stdout %s\n",stdout);
+        //printf("pset:sending stdout %s\n",stdout);
         senddatablock(stdout,strlen(stdout)+1,true);
     }
     
@@ -1400,16 +1400,12 @@ int pwifi(char * msxcommand, char *wifissid, char *wifipass) {
         buf = (unsigned char *)malloc(sizeof(unsigned char) * 256);
         fp = fopen("/etc/wpa_supplicant/wpa_supplicant.conf", "w+");
         
-        strcpy(buf,"ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n");
-        strcat(buf,"update_config=1\n");
-        strcat(buf,"network={\n");
+        strcpy(buf,"country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n");
         strcat(buf,"\tssid=\"");
         strcat(buf,wifissid);
-        strcat(buf,"\"\n");
-        strcat(buf,"\tpsk=\"");
+        strcat(buf,"\"\n\tpsk=\"");
         strcat(buf,wifipass);
-        strcat(buf,"\"\n");
-        strcat(buf,"}\n");
+        strcat(buf,"\"\n}\n");
         
         fprintf(fp,buf);
         fclose(fp);
