@@ -29,6 +29,13 @@
  | along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
  |===========================================================================|
 
+To use MSXPi, you will need:
+
+1. MSXPi kit
+2. Raspberry Pi (Any model)
+3. SD Card for Raspberry Pi
+4. MSX Computer
+
 Raspberry Pi setup
 
 This is the process to setup MSXPi using the custom Raspbian Image
