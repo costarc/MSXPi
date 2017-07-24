@@ -24,7 +24,8 @@ MSXPi v0.7 Build 20170722.00064 has been tested and verified to work on the foll
 9.  Frael Bruc 100
 10. Sony F1-XV
 11. Sony HB-T7
+12. Gradiente Expert DDPlus
 
 Incompatibility List
 --------------------
-No compatibility issues has been verified so far, but the MSXPi hasn't been tested with other models.
+No electric compatibility issues has been verified so far, but the MSXPi hasn't been tested with other models.
