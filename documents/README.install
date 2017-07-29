@@ -95,12 +95,17 @@ Do no enable Windows (graphical user interface) for better performance.
 User: pi
 Password: raspberry
 
-7. Edit file /home/pi/msxpi-setup.sh
-Change the “said” and “ask” to your wifi network name, and wifi password respectively.
+7. Configure your Pi to access the network / internet
 
-8. run msxpi-setup.sh
+8. Download the setup script:
+wget https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Shell/msxpi-setup.sh
+
+9. Edit file /home/pi/msxpi-setup.sh
+Change the “ssid” and “psk” to your wifi network name, and wifi password respectively.
+
+10. run msxpi-setup.sh
 sudo /home/pi/msxpi-setup.sh
 
-9. Reboot Raspberry Pi. 
+11. Reboot Raspberry Pi. 
 MSXPi server process will start automatically during boot.
 

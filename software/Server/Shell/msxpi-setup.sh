@@ -32,6 +32,7 @@
 # File history :
 # 0.1    : Initial version.
 #!/bin/sh
+MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
 
@@ -60,9 +61,9 @@ EOF
 # -------------------------------------------
 # Create msxpi directory and link on home dir
 # -------------------------------------------
-mkdir -p /home/pi/msxpi/disks
-chown -R pi.pi /home/pi/msxpi
-ln -s /home/pi/msxpi /home/msxpi
+mkdir -p $MSXPIHOME/disks
+chown -R pi.pi $MSXPIHOME
+ln -s $MSXPIHOME /home/msxpi
 
 # ----------------------------------------
 # Install msxpi-server service for systemd
@@ -97,8 +98,17 @@ cd PIGPIO
 make -j4
 sudo make install
 
-if [[ $RMFILES==true ]];then
-    rm $MYTMP/pigpio.tar
-    rm -rf $MYTMP/PIGPIO
-fi
+# Download and compile the msxpi.server
+cd $MSXPIHOME
+mkdir msxpi-code
+cd msxpi-code
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
+cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
+mv msxpi-server $MSXPIHOME/
+
+cd $MSXPIHOME/disks/
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk
+
+chown -R pi.pi $MSXPIHOME
 
