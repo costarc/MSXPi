@@ -103,8 +103,8 @@ wget --no-check-certificate https://goo.gl/wAf3U6
 Note: You can use the longer URL if you want to:
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Shell/msxpi-setup.sh
 
-9. Edit file /home/pi/msxpi-setup.sh
-Change the “ssid” and “psk” to your wifi network name, and wifi password respectively.
+9. Rename the file downloaded to msxpi-setup.sh if necessary
+Edit msxpi-setup.sh and change the “ssid” and “psk” to your wifi network name, and wifi password respectively.
 
 10. run msxpi-setup.sh
 sudo /home/pi/msxpi-setup.sh
