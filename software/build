@@ -1,7 +1,7 @@
 #!/bin/sh
 export PI=192.168.1.15
 export HW="8b"
-export ROMPART2=~/Desktop/MSXPi/Disks/romgames1/roadfighter.rom
+export ROMPART2=./target/msxpi-dos_16k.rom
 
 if [[ "$HW" == "8b" ]];then
     cp ./asm-common/include/msxpi_io.asm.8bits.asm asm-common/include/msxpi_io.asm
