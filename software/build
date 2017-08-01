@@ -10,7 +10,7 @@ else
 fi
 
 if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
-   /Users/ronivon/Dev/gitlab/add-build-id.sh
+   /Users/ronivon/Dev/github/add-build-id.sh
 fi
 
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
@@ -31,6 +31,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 
 # Nextor File System driver
 # Hack to work around issue with includes on sjasm
@@ -53,13 +54,13 @@ fi
 
 # build distribution package
 if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
-    scp  ~/Dev/gitlab/msxpi/software/Server/C/src/msxpi-server.c pi@${PI}:msxpi/
+    scp  ~/Dev/github/msxpi/software/Server/C/src/msxpi-server.c pi@${PI}:msxpi/
     ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
     ssh pi@${PI} ls -lrt msxpi/msxpi-server*
 fi
 
 # build distribution package
-scp  ~/Dev/gitlab/msxpi/software/target/msxpi-client.bin pi@${PI}:msxpi/
+scp  ~/Dev/github/msxpi/software/target/msxpi-client.bin pi@${PI}:msxpi/
 if [[ $1 == "-f" || $2 == "-f" || $3 == "-f" ]];then
-    [ -f ~/Dev/gitlab/build-pkg.sh ] && ~/Dev/gitlab/build-pkg.sh $PI
+    [ -f ~/Dev/github/build-pkg.sh ] && ~/Dev/github/build-pkg.sh $PI
 fi
