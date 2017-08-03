@@ -1,5 +1,5 @@
 #!/bin/sh
-export PI=192.168.1.15
+export PI=192.168.1.9
 export HW="8b"
 export ROMPART2=./target/msxpi-dos_16k.rom
 
