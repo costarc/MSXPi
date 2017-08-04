@@ -34,82 +34,9 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
-RMFILES=true
-
-ssid=YourWiFiId
-psk=YourWiFiPassword
-
-# ------------------
-# Enable ssh into Pi
-# ------------------
-touch /boot/ssh
-
-# ----------------------------------------------------------
-# Configure Wireless network with provided SSID and Password
-# ----------------------------------------------------------
-cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
-country=GB
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-network={
-	ssid="myssid"
-	psk="mypsk"
-}
-EOF
-
-
-# -------------------------------------------
-# Create msxpi directory and link on home dir
-# -------------------------------------------
-mkdir -p $MSXPIHOME/disks
-chown -R pi.pi $MSXPIHOME
-ln -s $MSXPIHOME /home/msxpi
-
-# ----------------------------------------
-# Install msxpi-server service for systemd
-# ----------------------------------------
-cat <<EOF >/lib/systemd/system/msxpi-server.service
-[Unit]
-Description=Start MSXPi Server
-
-[Service]
-WorkingDirectory=/home/pi/msxpi
-#Type=forking
-#ExecStart=/bin/bash start_msx.sh
-ExecStart=/home/pi/msxpi/msxpi-server
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable msxpi-server
-
 
 # ------------------------------------------
 # Install libraries required by msxpi-server
 # ------------------------------------------
 cd $MYTMP
-sudo apt-get -y install music123
-sudo apt-get -y install smbclient
-sudo apt-get -y install libcurl4-nss-dev
-sudo apt-get -y install html2text
-wget abyz.co.uk/rpi/pigpio/pigpio.tar
-tar xvf pigpio.tar
-cd PIGPIO
-make -j4
-sudo make install
-
-# Download and compile the msxpi.server
-cd $MSXPIHOME
-mkdir msxpi-code
-cd msxpi-code
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
-cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
-mv msxpi-server $MSXPIHOME/
-
-cd $MSXPIHOME/disks/
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk
-
-chown -R pi.pi $MSXPIHOME
-
+sudo apt-get -y install music123 smbclient html2text

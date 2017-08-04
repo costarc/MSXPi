@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170801.00069"
+#define build "20170804.00070"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1449,8 +1449,8 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         sprintf(stdout,"Pi:%s",HOMEPATH);
         
         //DISPLAY is requested?
-    } else if ((strncmp(*(tokens + 1),"display",1)==0) ||
-               (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
+    } else if ((strncmp(*(tokens + 1),"display",7)==0) ||
+               (strncmp(*(tokens + 1),"DISPLAY",7)==0)) {
         
         printf("pcd:generating output for DISPLAY\n");
         buf = (unsigned char *)malloc(sizeof(unsigned char) * (10*16 + 10*255) + 1);
@@ -1557,6 +1557,84 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
 }
 
+int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
+    int rc;
+    MemoryStruct chunk;
+    MemoryStruct *chunkptr = &chunk;
+    char *buf;
+    char *theurl;
+    
+    printf("pdir:starting command:%s\n",msxcommand);
+    
+    // is current PATH a remote PATH / URL?
+    
+    if ((strncmp(psetvar[0].value,"ftp:",4)==0) ||
+        (strncmp(psetvar[0].value,"smb:",4)==0) ||
+        (strncmp(psetvar[0].value,"nfs:",4)==0)) {
+        
+        printf("pdir:remote path:%s\n",psetvar[0].value);
+        
+        chunk.memory = malloc(1);
+        chunk.size = 0;
+        
+        theurl = malloc((strlen(psetvar[0].value)+2)*sizeof(char));
+        strcpy(theurl,psetvar[0].value);
+        strcat(theurl,"/");
+        
+        rc = loadfile_remote(theurl,chunkptr);
+        free(theurl);
+        
+        //printf("pdir: curl returned %s\n",chunk.memory);
+        
+        if (rc==RC_SUCCESS) {
+            printf("pdir:listing generated\n");
+            piexchangebyte(RC_SUCCESS);
+            senddatablock(chunk.memory,strlen(chunk.memory)+1,true);
+            free(chunk.memory);
+        } else {
+            printf("pdir:listing error\n");
+
+            piexchangebyte(RC_FAILED);
+            strcpy(chunk.memory,"Pi:Error");
+            senddatablock(chunk.memory,strlen(chunk.memory)+1,true);
+            free(chunk.memory);
+        }
+    
+    } else if (strncmp(psetvar[0].value,"http:",5)==0) {
+        
+        buf = malloc(512*sizeof(char));
+        strcpy(buf,"wget --no-check-certificate  -O /tmp/msxpifile1.tmp ");
+        strcat(buf,psetvar[0].value);
+        
+        system(buf);
+        
+        strcpy(buf,"/bin/cat /tmp/msxpifile1.tmp|/usr/bin/html2text -width 37 > /tmp/msxpi.tmp");
+        
+        system(buf);
+        
+        piexchangebyte(RC_SUCCESS);
+        
+        ptype("ptype /tmp/msxpi.tmp");
+        
+        
+        
+        free(buf);
+        
+    } else {
+        printf("pdir:local path:");
+        
+        strcpy(msxcommand,"ls ");
+        strcat(msxcommand,psetvar[0].value);
+               
+        printf("%s\n",msxcommand);
+               
+        return runpicmd(msxcommand);
+        rc = RC_SUCCESS;
+    }
+        
+    return rc;
+               
+}
 
 static size_t
 WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -1582,7 +1660,8 @@ int loadfile_local(unsigned char *theurl,MemoryStruct *chunk) {
     FILE *fd;
     char *fname = malloc(sizeof(char) * strlen(theurl) - 7);
     
-    strcpy(fname,theurl+7);
+    //strcpy(fname,theurl+7);
+    strcpy(fname,theurl);
     
     printf("loadfile_local:Starting with url:%s\n",theurl);
 
@@ -1718,10 +1797,10 @@ int uploaddata(unsigned char *data, size_t totalsize, int index) {
     
 }
 
-int pcopy(unsigned char * msxcommand,MemoryStruct *chunkptr) {
+int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chunkptr) {
     char** tokens;
     char *stdout;
-    unsigned char *theurl;
+    unsigned char *theurl, *fullurl;
     int rc,fidpos,transftype;
     transferStruct dataInfo;
     
@@ -1776,13 +1855,29 @@ int pcopy(unsigned char * msxcommand,MemoryStruct *chunkptr) {
     strcpy(theurl,*(tokens + fidpos));
     
     transftype = 0;
-    if ((strncmp(theurl,"FILE://",7)==0) || (strncmp(theurl,"file://",7)==0))
-        rc = loadfile_local(theurl,chunkptr);
-    else if (strncmp(*(tokens + fidpos + 1),"FILE://",7)==0) {
+    if ((strncmp(theurl,"FILE://",7)==0) ||
+        (strncmp(theurl,"file://",7)==0) ||
+        (strncmp(theurl,"/",1)==0) ||
+        (strncmp(psetvar[0].value,"/",1)==0)) {
+        
+        fullurl = malloc(256*sizeof(char));
+        strcpy(fullurl,psetvar[0].value);
+        strcat(fullurl,"/");
+        strcat(fullurl,theurl);
+        rc = loadfile_local(fullurl,chunkptr);
+        
+    } else if (strncmp(*(tokens + fidpos + 1),"FILE://",7)==0) {
         transftype = 1;
         //rc = loadfile_frommsx(theurl,chunkptr);
-    } else
-        rc = loadfile_remote(theurl,chunkptr);
+    } else {
+        fullurl = malloc(256*sizeof(char));
+        strcpy(fullurl,psetvar[0].value);
+        strcat(fullurl,"/");
+        strcat(fullurl,theurl);
+        rc = loadfile_remote(fullurl,chunkptr);
+        printf("pcopy:loadfile_remote returned rc=%x\n",rc);
+        free(fullurl);
+    }
     
     printf("Buffer size:%i\n",chunkptr->size);
     //printf("Buffer data:%s\n",chunkptr->memory);
@@ -1809,12 +1904,6 @@ int pcopy(unsigned char * msxcommand,MemoryStruct *chunkptr) {
     printf("pcopy:Exiting with rc=%x\n",rc);
     return rc;
     
-}
-
-
-int pdir(unsigned char * msxcommand) {
-    memcpy(msxcommand,"ls  ",4);
-    return runpicmd(msxcommand);
 }
 
 char *strdup (const char *s) {
@@ -2472,7 +2561,7 @@ int main(int argc, char *argv[]){
                     
                     printf("PDIR\n");
                     
-                    if (pdir(msxcommand)!=RC_SUCCESS)
+                    if (pdir(&psetvar,msxcommand)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");
                     
                     appstate = st_cmd;
@@ -2493,7 +2582,7 @@ int main(int argc, char *argv[]){
                         chunk.memory = malloc(1);
                         chunk.size = 0;
 
-                        if (pcopy(msxcommand,chunkptr)!=RC_SUCCESS) {
+                        if (pcopy(&psetvar,msxcommand,chunkptr)!=RC_SUCCESS) {
                             pcopystat2 = 0;
                             printf("!!!!! Error !!!!!\n");
                         } else
@@ -2717,7 +2806,7 @@ int main(int argc, char *argv[]){
     //create_disk
     /* Stop DMA, release resources */
     printf("Terminating GPIO\n");
-    // fprintf(flog,"Terminating GPIO\n");
+    // fprintf(flog,"Terminating GPIO\n");chunkptr
     gpioWrite(rdy,LOW);
     
     //system("/sbin/shutdown now &");
