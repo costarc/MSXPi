@@ -39,6 +39,21 @@ RMFILES=true
 ssid=YourWiFiId
 psk=YourWiFiPassword
 
+# ------------------------------------------
+# Install libraries required by msxpi-server
+# ------------------------------------------
+cd $MYTMP
+sudo apt-get -y install alsa-utils
+sudo apt-get -y install music123
+sudo apt-get -y install smbclient
+sudo apt-get -y install html2text
+sudo apt-get -y install libcurl4-nss-dev
+wget abyz.co.uk/rpi/pigpio/pigpio.tar
+tar xvf pigpio.tar
+cd PIGPIO
+make -j4
+sudo make install
+
 # ------------------
 # Enable ssh into Pi
 # ------------------
@@ -56,7 +71,6 @@ network={
 	psk="mypsk"
 }
 EOF
-
 
 # -------------------------------------------
 # Create msxpi directory and link on home dir
@@ -84,20 +98,11 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable msxpi-server
 
-
-# ------------------------------------------
-# Install libraries required by msxpi-server
-# ------------------------------------------
-cd $MYTMP
-sudo apt-get -y install music123
-sudo apt-get -y install smbclient
-sudo apt-get -y install libcurl4-nss-dev
-sudo apt-get -y install html2text
-wget abyz.co.uk/rpi/pigpio/pigpio.tar
-tar xvf pigpio.tar
-cd PIGPIO
-make -j4
-sudo make install
+# --------------------------------------------------
+# Configure PWM (analog audio) on GPIO18 and GPIO13
+# --------------------------------------------------
+echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
+amixer cset numid=3 1
 
 # Download and compile the msxpi.server
 cd $MSXPIHOME
