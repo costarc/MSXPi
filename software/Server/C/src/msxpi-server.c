@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170804.00070"
+#define build "20170805.00071"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -683,10 +683,6 @@ int ptype(unsigned char *msxcommand) {
     
     //printf("ptype:starting %s\n",msxcommand);
     
-    filesize = 22;
-    buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
-    strcpy(buf,"Pi:Error opening file");
-    
     if (strlen(msxcommand)>5) {
         fname = (unsigned char *)malloc((sizeof(unsigned char) * strlen(msxcommand)) - 5);
         strcpy(fname,msxcommand+6);
@@ -705,10 +701,18 @@ int ptype(unsigned char *msxcommand) {
             fclose(fp);
             
             *(buf + filesize) = 0;
+        } else {
+            filesize = 22;
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+            strcpy(buf,"Pi:Error opening file");
         }
         
         free(fname);
         
+    } else {
+        filesize = 22;
+        buf = (unsigned char *)malloc(sizeof(unsigned char) * filesize);
+        strcpy(buf,"Pi:Error opening file");
     }
     
     //printf("ptype:file size is %i\n",filesize);
@@ -1587,9 +1591,10 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         //printf("pdir: curl returned %s\n",chunk.memory);
         
         if (rc==RC_SUCCESS) {
-            printf("pdir:listing generated\n");
+            printf("pdir:listing generated, size is: %i\n",chunk.size);
             piexchangebyte(RC_SUCCESS);
-            senddatablock(chunk.memory,strlen(chunk.memory)+1,true);
+            *(chunk.memory + chunk.size + 1) = 0;
+            senddatablock(chunk.memory,chunk.size + 2,true);
             free(chunk.memory);
         } else {
             printf("pdir:listing error\n");
@@ -1600,7 +1605,7 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
             free(chunk.memory);
         }
     
-    } else if (strncmp(psetvar[0].value,"http:",5)==0) {
+    } else if (strncmp(psetvar[0].value,"http",4)==0) {
         
         buf = malloc(512*sizeof(char));
         strcpy(buf,"wget --no-check-certificate  -O /tmp/msxpifile1.tmp ");
@@ -1608,7 +1613,9 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         
         system(buf);
         
-        strcpy(buf,"/bin/cat /tmp/msxpifile1.tmp|/usr/bin/html2text -width 37 > /tmp/msxpi.tmp");
+        strcpy(buf,"/bin/cat /tmp/msxpifile1.tmp|/usr/bin/html2text -width ");
+        strcat(buf,psetvar[3].value);
+        strcat(buf," > /tmp/msxpi.tmp");
         
         system(buf);
         
@@ -1616,7 +1623,7 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         
         ptype("ptype /tmp/msxpi.tmp");
         
-        
+        rc = RC_SUCCESS;
         
         free(buf);
         
@@ -1627,7 +1634,7 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         strcat(msxcommand,psetvar[0].value);
                
         printf("%s\n",msxcommand);
-               
+        
         return runpicmd(msxcommand);
         rc = RC_SUCCESS;
     }
@@ -2330,8 +2337,8 @@ int main(int argc, char *argv[]){
     strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
     strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
     strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpitools.dsk");
-    strcpy(psetvar[3].var,"DRIVE2");strcpy(psetvar[3].value,"notused");
-    strcpy(psetvar[4].var,"DRIVE3");strcpy(psetvar[4].value,"notused");
+    strcpy(psetvar[3].var,"WIDTH");strcpy(psetvar[3].value,"80");
+    strcpy(psetvar[4].var,"free");strcpy(psetvar[4].value,"notused");
     strcpy(psetvar[5].var,"WIFISSID");strcpy(psetvar[5].value,"my wifi");
     strcpy(psetvar[6].var,"WIFIPWD");strcpy(psetvar[6].value,"secret");
     strcpy(psetvar[7].var,"DSKTMPL");strcpy(psetvar[7].value,"msxpi_720KB_template.dsk");
