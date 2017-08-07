@@ -35,9 +35,35 @@
 # MSXPi PPLAY command helper
 # Will start the music player, and return the PID to the caller.
 
+if [ "$1" = "PAUSE" ]; then
+    kill -19 $2
+    exit 0
+fi
+
+if [ "$1" = "RESUME" ]; then
+    kill -18 $2
+    exit 0
+fi
+
+if [ "$1" = "STOP" ]; then
+    kill $2
+    exit 0
+fi
+
+if [ "$1" = "GETIDS" ]; then
+        echo MusicID=$(ps -ef | grep mpg123 | grep -v music123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')
+        exit 0
+fi
+
+if [ "$1" = "GETLIDS" ]; then
+        echo MusicID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        exit 0
+fi
+
 if [ "$1" = "PLAY" ]; then
-    music123 $2 &
-    sleep 1
+   music123 $2 &
+   sleep 1
+
    if [ $(echo "$2" | grep -i \.mp3) != "" ]; then
         echo MusicID=$(ps -ef | grep mpg123 | grep -v music123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')
         exit 0
@@ -50,15 +76,18 @@ if [ "$1" = "PLAY" ]; then
 
 fi
 
-if [ "$1" = "PAUSE" ]; then
-    kill -19 $2
-fi
+if [ "$1" = "LOOP" ]; then
+   music123 -l 0 $2 &
+   sleep 1
 
-if [ "$1" = "RESUME" ]; then
-    kill -18 $2
-fi
+   if [ $(echo "$2" | grep -i \.mp3) != "" ]; then
+        echo MusicID=$(ps -ef | grep mpg123 | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        exit 0
+   fi
 
-if [ "$1" = "STOP" ]; then
-    kill $2
-fi
+   if [ $(echo "$2" | grep -i \.wav) != "" ]; then
+        echo MusicID=$(ps -ef | grep aplay | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        exit 0
+   fi
 
+fi

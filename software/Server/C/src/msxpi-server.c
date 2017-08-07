@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170805.00071"
+#define build "20170805.00072"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1663,25 +1663,30 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return realsize;
 }
 
-int loadfile_local(unsigned char *theurl,MemoryStruct *chunk) {
+int loadfile_local(char *theurl,MemoryStruct *chunk) {
     FILE *fd;
-    char *fname = malloc(sizeof(char) * strlen(theurl) - 7);
+    char *fname = malloc(sizeof(char) * strlen(theurl));
     
     //strcpy(fname,theurl+7);
     strcpy(fname,theurl);
     
-    printf("loadfile_local:Starting with url:%s\n",theurl);
+    printf("loadfile_local:Starting with url ->:%s\n",theurl);
 
     //Open file
     fd = fopen(fname, "rb");
+    printf("loadfile_local:after fopen\n");
     if (!fd) {
         fprintf(stderr, "Unable to open file %s", fname);
         return RC_FAILED;
     }
     
+    printf("loadfile_local:after fopen if\n");
+    
     //Get file length
     fseek(fd, 0, SEEK_END);
+    printf("loadfile_local:after fseek\n");
     chunk->size=ftell(fd);
+    printf("loadfile_local:after ftell\n");
     fseek(fd, 0, SEEK_SET);
     
     printf("loadfile_local:File size is:%i\n",chunk->size);
@@ -1813,7 +1818,7 @@ int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chun
     
     tokens = str_split(msxcommand,' ');
     
-    stdout = malloc(sizeof(char) * 50);
+    stdout = malloc(sizeof(char) * 60);
     
     fidpos = 1; // token position for source file name
 
@@ -1823,7 +1828,7 @@ int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chun
         (*(tokens + fidpos + 1)) == NULL) {
         printf("pcopy:missing parameters\n");
         piexchangebyte(RC_FAILED);
-        strcpy(stdout,"Pi:Error\nSyntax: pget <source url> <target file>\n");
+        strcpy(stdout,"Pi:Error\nSyntax: pcopy <source url> <target file>\n");
         printf("%i\n",strlen(stdout));
         senddatablock(stdout,strlen(stdout)+1,true);
         free(stdout);
@@ -1854,19 +1859,17 @@ int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chun
     //chunk.memory = malloc(1);
     //chunk.size = 0;
     
-    printf("pcopy:Reading file into memory\n");
-    
     // send WAIT to MSX
     piexchangebyte(RC_WAIT);
     
     strcpy(theurl,*(tokens + fidpos));
     
+    //printf("pcopy:Reading file into memory:%s\n");
+    
     transftype = 0;
-    if ((strncmp(theurl,"FILE://",7)==0) ||
-        (strncmp(theurl,"file://",7)==0) ||
-        (strncmp(theurl,"/",1)==0) ||
-        (strncmp(psetvar[0].value,"/",1)==0)) {
+    if (strncmp(psetvar[0].value,"/",1)==0) {
         
+        printf("pcopy:local file\n");
         fullurl = malloc(256*sizeof(char));
         strcpy(fullurl,psetvar[0].value);
         strcat(fullurl,"/");
@@ -1877,6 +1880,7 @@ int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chun
         transftype = 1;
         //rc = loadfile_frommsx(theurl,chunkptr);
     } else {
+        printf("pcopy:remote file\n");
         fullurl = malloc(256*sizeof(char));
         strcpy(fullurl,psetvar[0].value);
         strcat(fullurl,"/");
@@ -2221,17 +2225,22 @@ int pplay(unsigned char *msxcommand) {
         printf("pplay:Missing parameters\n");
         if (piexchangebyte(RC_FAILED)==SENDNEXT) {
             buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
-            strcpy(buf,"Missing parameters\nSyntax:\nPPLAY PLAY|PAUSE|RESUME|STOP FILENAME|PROCESSID");
+            strcpy(buf,"Missing parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
             senddatablock(buf,strlen(buf)+1,true);
         }
         free(tokens);
         return 0;
     }
     
-    if((strcmp(*(tokens + 1),"PLAY")==0) || (strcmp(*(tokens + 1),"play")==0)) {
+    if((strcmp(*(tokens + 1),"PLAY")==0) || (strcmp(*(tokens + 1),"play")==0) ||
+       (strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0)) {
        printf("pplay:starting new player instance\n");
        fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
-       sprintf(fname,"/home/pi/msxpi/pplay.sh PLAY %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+        
+        if ((strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0))
+            sprintf(fname,"/home/pi/msxpi/pplay.sh LOOP %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+        else
+            sprintf(fname,"/home/pi/msxpi/pplay.sh PLAY %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
        
        if(fp = popen(fname, "r")) {
            printf("pplay:Success opening file %s\n",fname);
@@ -2313,6 +2322,18 @@ int main(int argc, char *argv[]){
     
     int rc;
     
+    struct psettype psetvar[10];
+    strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
+    strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
+    strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpitools.dsk");
+    strcpy(psetvar[3].var,"WIDTH");strcpy(psetvar[3].value,"80");
+    strcpy(psetvar[4].var,"free");strcpy(psetvar[4].value,"notused");
+    strcpy(psetvar[5].var,"WIFISSID");strcpy(psetvar[5].value,"my wifi");
+    strcpy(psetvar[6].var,"WIFIPWD");strcpy(psetvar[6].value,"secret");
+    strcpy(psetvar[7].var,"DSKTMPL");strcpy(psetvar[7].value,"msxpi_720KB_template.dsk");
+    strcpy(psetvar[8].var,"free");strcpy(psetvar[8].value,"");
+    strcpy(psetvar[9].var,"free");strcpy(psetvar[9].value,"");
+    
     //pcopy
     int pcopyindex,retries,pcopystat;
     MemoryStruct chunk;
@@ -2333,24 +2354,15 @@ int main(int argc, char *argv[]){
     char nfs_msxpath[65];
     struct dirent *dirfiles;
 
-    struct psettype psetvar[10];
-    strcpy(psetvar[0].var,"PATH");strcpy(psetvar[0].value,"/home/pi/msxpi");
-    strcpy(psetvar[1].var,"DRIVE0");strcpy(psetvar[1].value,"disks/msxpiboot.dsk");
-    strcpy(psetvar[2].var,"DRIVE1");strcpy(psetvar[2].value,"disks/msxpitools.dsk");
-    strcpy(psetvar[3].var,"WIDTH");strcpy(psetvar[3].value,"80");
-    strcpy(psetvar[4].var,"free");strcpy(psetvar[4].value,"notused");
-    strcpy(psetvar[5].var,"WIFISSID");strcpy(psetvar[5].value,"my wifi");
-    strcpy(psetvar[6].var,"WIFIPWD");strcpy(psetvar[6].value,"secret");
-    strcpy(psetvar[7].var,"DSKTMPL");strcpy(psetvar[7].value,"msxpi_720KB_template.dsk");
-    strcpy(psetvar[8].var,"free");strcpy(psetvar[8].value,"");
-    strcpy(psetvar[9].var,"free");strcpy(psetvar[9].value,"");
-    
+    // bug in code is oversriting ENV vars below.
+    // as a temp workaround I reserved some space here to allow dir entries
+    //char dummy[2500];
     
     // there is a memory corruption / leak somewhere in the code
     // if these two variables are moved to other places, and dummy is removed,
     // some commands will crash. PCOPY won't work for sure.
     unsigned char msxcommand[255];
-    char dummy[255];
+    char dummy[250];
     
     if (gpioInitialise() < 0)
     {

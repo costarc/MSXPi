@@ -99,10 +99,10 @@ SECLEN		equ	512		; Size of biggest sector
 INIHRD:
 ; If P is pressed during boot, MSXPi disk driver is not initialized
         call    CHECK_P
-        jr      nc,INIHRD_START
+        JR      C,INIHRD_DISABLE
         xor     a
         ld      (DEVICE),A
-        ret
+
 INIHRD_START:
         ld      a,$80
         cp      h
@@ -113,6 +113,11 @@ INIHRD_START:
         call    PRINT
         call    PI_WAITBOOT
 		ret     c
+
+INIHRD_DISABLE:
+        ld      a,128
+        ld      (DEVICE),A
+        ret
 
 ; Always initialize all disk drives
 ; Actually, call INIHRD 4 times, but this version only implements 2 drives
@@ -721,7 +726,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20170805.00071"
+build:  DB      "20170805.00072"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
