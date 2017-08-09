@@ -1,5 +1,5 @@
 #!/bin/sh
-export PI=192.168.1.5
+export PI=192.168.1.3
 export HW="8b"
 export ROMPART2=./target/msxpi-dos_16k.rom
 
@@ -10,7 +10,15 @@ else
 fi
 
 if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
-   ../../add-build-id.sh
+   ../../add-build-id.sh -v
+fi
+
+if [[ $1 == "-vr" || $2 == "-vr" || $3 == "-vr" ]];then
+   ../../add-build-id.sh -vr
+fi
+
+if [[ $1 == "-vs" || $2 == "-vs" || $3 == "-vs" ]];then
+   ../../add-build-id.sh -vs
 fi
 
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
@@ -34,6 +42,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 
 # Nextor File System driver
 # Hack to work around issue with includes on sjasm

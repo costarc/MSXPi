@@ -31,7 +31,7 @@
 #
 # File history :
 # 0.1    : Initial version.
-#!/bin/bash
+#!/bin/sh
 # MSXPi PPLAY command helper
 # Will start the music player, and return the PID to the caller.
 
@@ -56,7 +56,7 @@ if [ "$1" = "GETIDS" ]; then
 fi
 
 if [ "$1" = "GETLIDS" ]; then
-        echo MusicID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
 fi
 
@@ -81,12 +81,12 @@ if [ "$1" = "LOOP" ]; then
    sleep 1
 
    if [ $(echo "$2" | grep -i \.mp3) != "" ]; then
-        echo MusicID=$(ps -ef | grep mpg123 | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
    fi
 
    if [ $(echo "$2" | grep -i \.wav) != "" ]; then
-        echo MusicID=$(ps -ef | grep aplay | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
    fi
 

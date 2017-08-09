@@ -35,50 +35,37 @@
 TEXTTERMINATOR: EQU '$'
 
         ORG     $0100
+; Using the existing RUN command to shutdown Pi
+; This is the lazy approach, but it won't require any extra
+; code implementation on the server side.
 
-        LD      BC,4
-        LD      DE,DIRCMD
+; move shutdown command to DOS command line buffer
+        LD      HL,PICMD
+        LD      DE,$80
+        LD      BC,27
+        LDIR
+
+; Send RUN command to Pi, along with buffer in DOS command line
+        LD      BC,3
+        LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        JP      C,PRINTPIERR
-        CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-WAITLOOP:
-        CALL    CHECK_ESC
-        RET     C
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        JP      C,PRINTPIERR
         CALL    PRINTPISTDOUT
-        JP      0
+        RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         CALL    PRINT
         JP      0
 
-CHECK_ESC:
-	ld	b,7
-	in	a,(0AAh)
-	and	11110000b
-	or	b
-	out	(0AAh),a
-	in	a,(0A9h)	
-	bit	2,a
-	jr	nz,CHECK_ESC_END
-	scf
-CHECK_ESC_END:
-	ret
-
-DIRCMD: DB      "PDIR",0
+MYCMD:  DB      "RUN"
+PICMD:  DB      26," cat /tmp/msxpi_error.log",$0D
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
+
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

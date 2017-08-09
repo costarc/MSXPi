@@ -417,6 +417,8 @@ DOWNLOADDATA:
         call    READDATASIZE
 ;       call    DBGBC
 
+RETRYLOOP:
+
 ; Initialize crc checker
         ld      h,0
 
@@ -634,6 +636,12 @@ PRINTPISTDOUT:
         push    af
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        jr      z,PRINTPI0
+        pop     af
+        scf
+        ret
+PRINTPI0:
         call    READDATASIZE
         pop     af
         push    hl

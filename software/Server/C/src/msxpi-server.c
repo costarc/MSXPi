@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170805.00072"
+#define build "20170809.00073"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1439,7 +1439,18 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     char *buf;
     int i;
     
-    printf("pcd:aprsign command:%s\n",msxcommand);
+    printf("pcd:path is %s\n",msxcommand);
+    
+    if (strlen(msxcommand)<5) {
+        stdout = (unsigned char *)malloc(sizeof(unsigned char) * 50);
+        strcpy(psetvar[0].value,HOMEPATH);
+        sprintf(stdout,"Pi:%s",HOMEPATH);
+        senddatablock(stdout,strlen(stdout)+1,true);
+        rc = RC_SUCCESS;
+        printf("pcd:PCD empty - exiting with rc=%x\n",rc);
+        return rc;
+    }
+    
     tokens = str_split(msxcommand,' ');
     
     rc = RC_SUCCESS;
@@ -1570,6 +1581,11 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
     
     printf("pdir:starting command:%s\n",msxcommand);
     
+    if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
+        printf("pdir:out of sync\n");
+        return RC_FAILED;
+    }
+    
     // is current PATH a remote PATH / URL?
     
     if ((strncmp(psetvar[0].value,"ftp:",4)==0) ||
@@ -1588,27 +1604,30 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         rc = loadfile_remote(theurl,chunkptr);
         free(theurl);
         
-        //printf("pdir: curl returned %s\n",chunk.memory);
+        printf("pdir: curl returned %s\n",chunk.memory);
         
         if (rc==RC_SUCCESS) {
             printf("pdir:listing generated, size is: %i\n",chunk.size);
-            piexchangebyte(RC_SUCCESS);
-            *(chunk.memory + chunk.size + 1) = 0;
-            senddatablock(chunk.memory,chunk.size + 2,true);
-            free(chunk.memory);
+            if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                senddatablock(chunk.memory,chunk.size,true);
+            } else {
+                printf("pdir:out of sync\n");
+            }
+
         } else {
             printf("pdir:listing error\n");
-
-            piexchangebyte(RC_FAILED);
-            strcpy(chunk.memory,"Pi:Error");
-            senddatablock(chunk.memory,strlen(chunk.memory)+1,true);
-            free(chunk.memory);
+            if (piexchangebyte(RC_FAILED)==SENDNEXT) {
+                strcpy(chunk.memory,"Pi:Error");
+                senddatablock(chunk.memory,9,true);
+            }
         }
     
+        free(chunk.memory);
+        
     } else if (strncmp(psetvar[0].value,"http",4)==0) {
         
         buf = malloc(512*sizeof(char));
-        strcpy(buf,"wget --no-check-certificate  -O /tmp/msxpifile1.tmp ");
+        strcpy(buf,"wget --no-check-certificate  -O /tmp/msxpifile1.tmp -o /tmp/msxpi_error.log ");
         strcat(buf,psetvar[0].value);
         
         system(buf);
@@ -1618,14 +1637,9 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
         strcat(buf," > /tmp/msxpi.tmp");
         
         system(buf);
-        
-        piexchangebyte(RC_SUCCESS);
-        
-        ptype("ptype /tmp/msxpi.tmp");
-        
-        rc = RC_SUCCESS;
-        
         free(buf);
+        
+        rc = runpicmd("cat /tmp/msxpi.tmp");
         
     } else {
         printf("pdir:local path:");
@@ -1635,10 +1649,12 @@ int pdir(struct psettype *psetvar,unsigned char * msxcommand) {
                
         printf("%s\n",msxcommand);
         
-        return runpicmd(msxcommand);
-        rc = RC_SUCCESS;
-    }
+        // piexchangebyte is not here because runpicm has it already
+        rc = runpicmd(msxcommand);
         
+    }
+    
+    printf("pdir:Exiting with rc=%x\n",rc);
     return rc;
                
 }
@@ -2217,19 +2233,35 @@ int pplay(unsigned char *msxcommand) {
     FILE *fp;
     
     printf("pplay:Starting for command %s\n",msxcommand);
-    tokens = str_split(msxcommand,' ');
     
-    // Send ERROR signal to MSX
-    // If it is stil in synch, send error message.
-    if ((*(tokens + 1) == NULL) || (*(tokens + 2) == NULL)) {
+    if (strlen(msxcommand) <= 5) {
         printf("pplay:Missing parameters\n");
         if (piexchangebyte(RC_FAILED)==SENDNEXT) {
             buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
             strcpy(buf,"Missing parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
             senddatablock(buf,strlen(buf)+1,true);
+            return 0;
         }
-        free(tokens);
-        return 0;
+    }
+    
+    tokens = str_split(msxcommand,' ');
+    
+    // Send ERROR signal to MSX
+    // If it is stil in synch, send error message.
+    if ((*(tokens + 1) == NULL) || (*(tokens + 2) == NULL)) {
+        if ((strcmp(*(tokens + 1),"GETIDS")==0) || (strcmp(*(tokens + 1),"getids")==0) ||
+            (strcmp(*(tokens + 1),"GETLIDS")==0) || (strcmp(*(tokens + 1),"getlids")==0)) {
+            printf("pplay: get ids received\n");
+        } else {
+            printf("pplay:Missing parameters\n");
+            if (piexchangebyte(RC_FAILED)==SENDNEXT) {
+                buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
+                strcpy(buf,"Missing parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
+                senddatablock(buf,strlen(buf)+1,true);
+                free(tokens);
+                return 0;
+            }
+        }
     }
     
     if((strcmp(*(tokens + 1),"PLAY")==0) || (strcmp(*(tokens + 1),"play")==0) ||
@@ -2249,7 +2281,7 @@ int pplay(unsigned char *msxcommand) {
                buf = (unsigned char *)malloc(sizeof(unsigned char) * 25 );
                strcpy(buf,"ptype /tmp/msxpi_out.txt");
                ptype(buf);
-               free(buf);
+               //free(buf);
            }
            rc = RC_SUCCESS;
        } else {
@@ -2258,7 +2290,7 @@ int pplay(unsigned char *msxcommand) {
                buf = (unsigned char *)malloc(sizeof(unsigned char) * 22 );
                strcpy(buf,"Pi:Error opening file");
                senddatablock(buf,strlen(buf)+1,true);
-               free(buf);
+               //free(buf);
            }
            rc = RC_FILENOTFOUND;
        }
@@ -2298,12 +2330,55 @@ int pplay(unsigned char *msxcommand) {
                 piexchangebyte(RC_FAILED);
                 rc = RC_FAILED;
             }
+    } else if((strcmp(*(tokens + 1),"GETIDS")==0) || (strcmp(*(tokens + 1),"getids")==0)) {
+        printf("pplay:Getting audio id\n");
+        fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+        sprintf(fname,"/home/pi/msxpi/pplay.sh GETIDS>/tmp/msxpi_out.txt 2>&1");
+        if(fp = popen(fname, "r")) {
+            fclose(fp);
+            if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                buf = (unsigned char *)malloc(sizeof(unsigned char) * 25 );
+                strcpy(buf,"ptype /tmp/msxpi_out.txt");
+                ptype(buf);
+                //free(buf);
+            }
+        } else {
+            piexchangebyte(RC_FAILED);
+            rc = RC_FAILED;
+        }
+    } else if((strcmp(*(tokens + 1),"GETLIDS")==0) || (strcmp(*(tokens + 1),"getlids")==0)) {
+        printf("pplay:Getting audio loop id\n");
+        fname = (unsigned char *)malloc(sizeof(unsigned char) * 128);
+        sprintf(fname,"/home/pi/msxpi/pplay.sh GETLIDS>/tmp/msxpi_out.txt 2>&1");
+        if(fp = popen(fname, "r")) {
+            fclose(fp);
+            if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                buf = (unsigned char *)malloc(sizeof(unsigned char) * 25 );
+                strcpy(buf,"ptype /tmp/msxpi_out.txt");
+                ptype(buf);
+                //free(buf);
+            }
+        } else {
+            piexchangebyte(RC_FAILED);
+            rc = RC_FAILED;
+        }
+    } else {
+        if (piexchangebyte(RC_FAILED)==SENDNEXT) {
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
+            strcpy(buf,"Invalid parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
+            senddatablock(buf,strlen(buf)+1,true);
+            //free(buf);
+        }
+        free(tokens);
+        return 0;
     }
-            free(fname);
-            free(tokens);
+    
+    printf("pplay:exiting rc = %x\n",rc);
+
+    free(fname);
+    free(tokens);
             
-            printf("pplay:exiting rc = %x\n",rc);
-            return rc;
+    return rc;
 }
 
 int main(int argc, char *argv[]){
