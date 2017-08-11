@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170809.00073"
+#define build "20170811.00074"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -2237,9 +2237,10 @@ int pplay(unsigned char *msxcommand) {
     if (strlen(msxcommand) <= 5) {
         printf("pplay:Missing parameters\n");
         if (piexchangebyte(RC_FAILED)==SENDNEXT) {
-            buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
+            buf = (unsigned char *)malloc(sizeof(unsigned char) * 99 );
             strcpy(buf,"Missing parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
             senddatablock(buf,strlen(buf)+1,true);
+            free(buf);
             return 0;
         }
     }
@@ -2255,9 +2256,10 @@ int pplay(unsigned char *msxcommand) {
         } else {
             printf("pplay:Missing parameters\n");
             if (piexchangebyte(RC_FAILED)==SENDNEXT) {
-                buf = (unsigned char *)malloc(sizeof(unsigned char) * 75 );
+                buf = (unsigned char *)malloc(sizeof(unsigned char) * 99 );
                 strcpy(buf,"Missing parameters\nSyntax:\npplay play|loop|pause|resume|stop|getids|getlids <filename|processid>");
                 senddatablock(buf,strlen(buf)+1,true);
+                free(buf);
                 free(tokens);
                 return 0;
             }

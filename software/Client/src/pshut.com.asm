@@ -42,7 +42,7 @@ TEXTTERMINATOR: EQU '$'
 ; move shutdown command to DOS command line buffer
         LD      HL,SHUTDMD
         LD      DE,$80
-        LD      BC,17
+        LD      BC,18
         LDIR
 
 ; Send RUN command to Pi, along with buffer in DOS command line
