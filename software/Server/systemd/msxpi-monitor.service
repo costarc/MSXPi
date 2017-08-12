@@ -1,0 +1,19 @@
+#How to install and run
+#copy into /lib/systemd/system
+#sudo systemctl daemon-reload  (May be needed if the script was already there)
+#sudo systemctl enable msxpi-monitor (so it gets executed at boot)
+#sudo systemctl start msxpi-monitor (to start it)
+#sudo systemctl stop msxpi-monitor (to stop it)
+#sudo journalctl -u msxpi-monitor (logging)
+#sudo journalctl -f -u msxpi-monitor (continuous logging)
+
+
+[Unit]
+Description=Monitor MSXPi Server process
+
+[Service]
+WorkingDirectory=/home/pi/msxpi
+ExecStart=/home/pi/msxpi/msxpi-monitor
+
+[Install]
+WantedBy=multi-user.target

@@ -40,20 +40,25 @@ TEXTTERMINATOR: EQU '$'
         LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
+
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        JP      C,PRINTPIERR
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
+
 WAITLOOP:
         CALL    CHECK_ESC
-        RET     C
+        JR      C,PRINTPIERR
         CALL    CHKPIRDY
         JR      C,WAITLOOP
 ; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        JP      C,PRINTPIERR
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JR      NZ,WAITLOOP
+
         CALL    PRINTPISTDOUT
         JP      0
 

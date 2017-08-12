@@ -32,26 +32,34 @@
 # File history :
 # 0.1    : Initial version.
 #!/bin/sh
+
 MSXPIHOME=/home/pi/msxpi
-MYTMP=/tmp
+FILESERVER=http://192.168.1.4:8000/MSXPI
+GETCMD=/usr/bin/wget
+TMPDIR=/tmp
 
-# ------------------------------------------
-# Install libraries required by msxpi-server
-# ------------------------------------------
-cd $MYTMP
-sudo apt-get -y install alsa-utils
-sudo apt-get -y install music123
-sudo apt-get -y install smbclient
-sudo apt-get -y install html2text
-sudo apt-get -y install libcurl4-nss-dev
-wget abyz.co.uk/rpi/pigpio/pigpio.tar
-tar xvf pigpio.tar
-cd PIGPIO
-make -j4
-sudo make install
+cd $TMPDIR
+rm msxpitools 2>/dev/null
 
-# --------------------------------------------------
-# Configure PWM (analog audio) on GPIO18 and GPIO13
-# --------------------------------------------------
-echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
-amixer cset numid=3 1
+# Download msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client
+/bin/mv msxpi-server $MSXPIHOME/
+/bin/mv msxpi-client $MSXPIHOME/
+/bin/chmod 755 $MSXPIHOME/*.sh
+/bin/chmod 755 $MSXPIHOME/msxpi-server
+/bin/chown pi.pi $MSXPIHOME/*
+
+# Create the update .bat to run from MSX-DOS
+echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
+$GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS
+FILELIST=$(/bin/cat MSXPi-DOS |/bin/grep "a href="| /usr/bin/cut -f3 -d">"|/usr/bin/cut -f1 -d"<")
+for FILE in $FILELIST
+do
+    echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
+done
+
+/bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
+
+/bin/mv MSXPIUP1.BAT $MSXPIHOME/
+/bin/rm MSXPIUP1.BAT.0 

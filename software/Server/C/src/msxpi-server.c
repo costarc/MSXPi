@@ -1446,6 +1446,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         strcpy(psetvar[0].value,HOMEPATH);
         sprintf(stdout,"Pi:%s",HOMEPATH);
         senddatablock(stdout,strlen(stdout)+1,true);
+        free(stdout);
         rc = RC_SUCCESS;
         printf("pcd:PCD empty - exiting with rc=%x\n",rc);
         return rc;
@@ -1454,7 +1455,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     tokens = str_split(msxcommand,' ');
     
     rc = RC_SUCCESS;
-    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 70);
+    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 255);
     
     // Deals with absolute local filesystem PATHs
     //if cd has no parameter (want to go home)
@@ -1496,14 +1497,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
             strcpy(stdout,"Pi:Error: Path does not exist");
             rc = RC_FAILED;
         }
-        
-        // Deals with absolute remote filesystems / URLs
-        /*
-         else if start with "http"
-         test PATH
-         if OK
-         pset(PATH)
-         cd PATH*/
+
     } else if ((strncmp(*(tokens + 1),"http:",5)==0) ||
                (strncmp(*(tokens + 1),"ftp:",4)==0) ||
                (strncmp(*(tokens + 1),"smb:",4)==0) ||
@@ -1529,18 +1523,13 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         strcat(psetvar[0].value,"/");
         strcat(psetvar[0].value,*(tokens + 1));
         
-        /* else is local
-         test PATH/<given path>
-         if OK
-         pset(PATH)
-         cd PATH
-         */
     } else {
-        printf("pcd:append to relative path\n");
         char *newpath = (unsigned char *)malloc(sizeof(unsigned char) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+2)));
         strcpy(newpath,psetvar[0].value);
         strcat(newpath,"/");
         strcat(newpath,*(tokens + 1));
+        
+        printf("pcd:append to relative path. final path is %s\n",newpath);
         
         if( access( newpath, F_OK ) != -1 ) {
             strcpy(psetvar[0].value,newpath);
@@ -1552,17 +1541,18 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         free(newpath);
     }
     
-    
     if (rc == RC_INFORESPONSE) {
         printf("pcd:sending Display output\n");
         senddatablock(buf,strlen(buf)+1,true);
         free(buf);
     } else {
         if (rc == RC_SUCCESS ) {
-            sprintf(stdout,"Pi:OK\n%s",psetvar[0].value);
-        }
-        printf("pcd:sending stdout\n");
-        senddatablock(stdout,strlen(stdout)+1,true);
+            //stdout = (unsigned char *)malloc(sizeof(unsigned char) * strlen(psetvar[0].value)+1);
+            sprintf(stdout,"Pi:%s",psetvar[0].value);
+            printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
+            senddatablock(stdout,strlen(stdout)+1,true);
+        } else
+            senddatablock(stdout,strlen(stdout)+1,true);
     }
     
     free(tokens);
@@ -2216,8 +2206,8 @@ int pdate() {
     piexchangebyte(timeinfo->tm_sec);
     piexchangebyte(0);
     
-    buf = malloc(sizeof(char*) * 6);
-    strcpy(buf,"Pi:Ok");
+    buf = malloc(sizeof(char*) * 7);
+    strcpy(buf,"Pi:Ok\n");
     senddatablock(buf,strlen(buf)+1,true);
     free(buf);
     
