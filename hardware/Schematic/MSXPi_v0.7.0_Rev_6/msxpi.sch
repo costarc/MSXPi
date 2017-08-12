@@ -85,7 +85,10 @@ Rev. 5
 - Added C4 (for 27C256)
 - Added missing route between SW1 and SW2 in MSX Bus
 - Added jumper JP1 to to disable VCC for Raspberry Pi
-- Replaced BUSDIR pads by a Jumper JP2</description>
+- Replaced BUSDIR pads by a Jumper JP2
+
+Rev. 6
+- Added R6 - pull up for EPROM /OE</description>
 <libraries>
 <library name="memory">
 <description>&lt;b&gt;Generic Memories&lt;/b&gt;&lt;p&gt;
@@ -15297,6 +15300,8 @@ Layout para cartuchos MSX com a furação para caixas patola pequenas.</descript
 <part name="GND12" library="supply1" deviceset="GND" device=""/>
 <part name="JP1" library="jumper" deviceset="JP1E" device=""/>
 <part name="JP2" library="jumper" deviceset="JP1E" device=""/>
+<part name="R6" library="rcl" deviceset="R-US_" device="0207/7"/>
+<part name="P+8" library="supply1" deviceset="VCC" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -15399,6 +15404,8 @@ Layout para cartuchos MSX com a furação para caixas patola pequenas.</descript
 <instance part="GND12" gate="1" x="43.18" y="40.64"/>
 <instance part="JP1" gate="A" x="152.4" y="-63.5" rot="R270"/>
 <instance part="JP2" gate="A" x="88.9" y="50.8"/>
+<instance part="R6" gate="G$1" x="83.82" y="-25.4"/>
+<instance part="P+8" gate="VCC" x="99.06" y="-20.32" smashed="yes"/>
 </instances>
 <busses>
 <bus name="A[0..15],CS1,SLTSL,RD,WR,IORQ">
@@ -16032,6 +16039,12 @@ Layout para cartuchos MSX com a furação para caixas patola pequenas.</descript
 <pinref part="P+1" gate="VCC" pin="VCC"/>
 <wire x1="149.86" y1="-63.5" x2="149.86" y2="-58.42" width="0.1524" layer="91"/>
 </segment>
+<segment>
+<pinref part="R6" gate="G$1" pin="2"/>
+<wire x1="88.9" y1="-25.4" x2="99.06" y2="-25.4" width="0.1524" layer="91"/>
+<pinref part="P+8" gate="VCC" pin="VCC"/>
+<wire x1="99.06" y1="-25.4" x2="99.06" y2="-22.86" width="0.1524" layer="91"/>
+</segment>
 </net>
 <net name="VCCIO" class="0">
 <segment>
@@ -16174,8 +16187,13 @@ Layout para cartuchos MSX com a furação para caixas patola pequenas.</descript
 <net name="ROM_OE" class="0">
 <segment>
 <pinref part="27C256" gate="A" pin="!OE"/>
-<wire x1="71.12" y1="-15.24" x2="66.04" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="71.12" y1="-15.24" x2="68.58" y2="-15.24" width="0.1524" layer="91"/>
 <label x="58.42" y="-15.24" size="1.778" layer="95"/>
+<wire x1="68.58" y1="-15.24" x2="66.04" y2="-15.24" width="0.1524" layer="91"/>
+<wire x1="68.58" y1="-15.24" x2="68.58" y2="-25.4" width="0.1524" layer="91"/>
+<junction x="68.58" y="-15.24"/>
+<wire x1="68.58" y1="-25.4" x2="78.74" y2="-25.4" width="0.1524" layer="91"/>
+<pinref part="R6" gate="G$1" pin="1"/>
 </segment>
 <segment>
 <pinref part="ROMOE1" gate="1" pin="P"/>

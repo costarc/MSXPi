@@ -1548,7 +1548,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     } else {
         if (rc == RC_SUCCESS ) {
             //stdout = (unsigned char *)malloc(sizeof(unsigned char) * strlen(psetvar[0].value)+1);
-            sprintf(stdout,"Pi:%s",psetvar[0].value);
+            sprintf(stdout,"Pi:%s\n",psetvar[0].value);
             printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
             senddatablock(stdout,strlen(stdout)+1,true);
         } else
@@ -2682,7 +2682,7 @@ int main(int argc, char *argv[]){
                             pcopystat2 = 0;
                             free(chunk.memory );
     
-                            strcpy(buf,"Pi:Ok");
+                            strcpy(buf,"Pi:Ok\n");
                             senddatablock(buf,strlen(buf)+1,true);
                             
                         } else if (rc==RC_SUCCESS) {
