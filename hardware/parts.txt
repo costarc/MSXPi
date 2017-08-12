@@ -3,12 +3,15 @@ R2		1k Ohm
 R3		1k Ohm
 R4		1k Ohm
 R5		1k Ohm
+R6		10k Ohm
 LED1		3mm, 3v
 C1		0.1uF (ceramic capacitor, code 104)
-C1		0.1uF (ceramic capacitor, code 104)
+C2		0.1uF (ceramic capacitor, code 104)
+C3		47uF 16v (electrolytic capacitor)
+C4		0.1uF (ceramic capacitor, code 104)
 IC1		LD117AS33TR 3.3v Voltage Regulator
 IC2		CPLD Altera EPM3064ALC44-10N
-IC3		EEPROM 27C256
+IC3		EPROM 27C256
 JP7		JTAG Male conector (10 x PinHead or 90 degree 10xPinHead)
 JP (ALL)	Pin Head
 
