@@ -34,8 +34,9 @@
 #!/bin/sh
 
 MSXPIHOME=/home/pi/msxpi
-FILESERVER=http://192.168.1.4:8000/MSXPI
-GETCMD=/usr/bin/wget
+FILESERVER=http://retro-cpu.run/MSXPI
+GETCMD="/usr/bin/wget --user=msxpi@retro-cpu.run --password=retro-cpu.run"
+GETCMD="/usr/bin/wget"
 TMPDIR=/tmp
 
 cd $TMPDIR
@@ -52,8 +53,8 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
-$GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS
-FILELIST=$(/bin/cat MSXPi-DOS |/bin/grep "a href="| /usr/bin/cut -f3 -d">"|/usr/bin/cut -f1 -d"<" | grep -v "DS_Store")
+$GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS/
+FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | grep -v "Name" | grep -v "Parent")
 for FILE in $FILELIST
 do
     echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
@@ -62,4 +63,5 @@ done
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
 
 /bin/mv MSXPIUP1.BAT $MSXPIHOME/
-/bin/rm MSXPIUP1.BAT.0 
+/bin/rm MSXPIUP1.BAT.0
+/bin/rm index.html*

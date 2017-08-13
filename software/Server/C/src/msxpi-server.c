@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170811.00074"
+#define build "20170813.00075"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -731,7 +731,9 @@ int runpicmd(unsigned char *msxcommand) {
     unsigned char *buf;
     unsigned char *fname;
     
-    //printf("runpicmd:starting command >%s<+\n",msxcommand);
+    printf("runpicmd:starting command >%s<+\n",msxcommand);
+    
+    piexchangebyte(RC_WAIT);
     
     fname = (unsigned char *)malloc(sizeof(unsigned char) * 256);
     sprintf(fname,"%s>/tmp/msxpi_out.txt 2>&1",msxcommand);
@@ -765,7 +767,7 @@ int runpicmd(unsigned char *msxcommand) {
     free(buf);
     free(fname);
     
-    //printf("runpicmd:exiting rc = %x\n",rc);
+    printf("runpicmd:exiting rc = %x\n",rc);
     return rc;
     
 }
@@ -1721,7 +1723,7 @@ int loadfile_remote(unsigned char *theurl,MemoryStruct *chunk) {
     CURLcode res;
     long curl_code = 0;
     
-    printf("loadfile_remote:Starting\n");
+    printf("loadfile_remote:Starting:%s\n",theurl);
     curl_global_init(CURL_GLOBAL_ALL);
     
     curl_handle = curl_easy_init();
@@ -1733,7 +1735,11 @@ int loadfile_remote(unsigned char *theurl,MemoryStruct *chunk) {
     curl_easy_setopt(curl_handle, CURLOPT_URL, theurl);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEDATA, (void *)chunk);
-    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+    //curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "libcurl-agent/1.0");
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "Mozilla/4.0");
+    
+    //if(authreq)
+    //    curl_easy_setopt(curl_handle, CURLOPT_USERPWD, "msxpi@retro-cpu.run:retro-cpu.run");
     
     res = curl_easy_perform(curl_handle);
     curl_easy_getinfo (curl_handle, CURLINFO_RESPONSE_CODE, &curl_code);

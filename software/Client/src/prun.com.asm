@@ -34,28 +34,51 @@
 
 TEXTTERMINATOR: EQU '$'
 
-    ORG     $0100
+        ORG     $0100
 
-    LD      BC,3
-    LD      DE,MYCMD
-    CALL    DOSSENDPICMD
-    JR      C,PRINTPIERR
-    LD      A,SENDNEXT
-    CALL    PIEXCHANGEBYTE
-    CP      RC_SUCCNOSTD
-    RET     Z
-    CP      RC_SUCCESS
-    JR      Z,SHOWSTD
-    CP      RC_FAILED
-    JR      NZ,PRINTPIERR
+        LD      BC,3
+        LD      DE,MYCMD
+        CALL    DOSSENDPICMD
+
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        SCF
+        RET     NZ
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JR      Z,SHOWSTD
+        CP      RC_SUCCESS
+        JR      NZ,WAITLOOP
+
 SHOWSTD:
-    CALL    PRINTPISTDOUT
-    RET
+        CALL    PRINTPISTDOUT
+        RET
 
 PRINTPIERR:
-    LD      HL,PICOMMERR
-    CALL    PRINT
-    JP      0
+        LD      HL,PICOMMERR
+        CALL    PRINT
+        JP      0
+
+CHECK_ESC:
+	ld	b,7
+	in	a,(0AAh)
+	and	11110000b
+	or	b
+	out	(0AAh),a
+	in	a,(0A9h)	
+	bit	2,a
+	jr	nz,CHECK_ESC_END
+	scf
+CHECK_ESC_END:
+	ret
 
 MYCMD: DB      "RUN"
 
