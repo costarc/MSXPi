@@ -2,7 +2,7 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                             |
+#| Version : 0.8.1                                                           |
 #|                                                                           |
 #| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
