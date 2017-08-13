@@ -43,9 +43,9 @@ rm msxpitools 2>/dev/null
 
 # Download msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
-$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client
-/bin/mv msxpi-server $MSXPIHOME/
-/bin/mv msxpi-client $MSXPIHOME/
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
+/bin/mv msxpi-server     $MSXPIHOME/
+/bin/mv msxpi-client.bin $MSXPIHOME/
 /bin/chmod 755 $MSXPIHOME/*.sh
 /bin/chmod 755 $MSXPIHOME/msxpi-server
 /bin/chown pi.pi $MSXPIHOME/*
@@ -53,7 +53,7 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
 $GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS
-FILELIST=$(/bin/cat MSXPi-DOS |/bin/grep "a href="| /usr/bin/cut -f3 -d">"|/usr/bin/cut -f1 -d"<")
+FILELIST=$(/bin/cat MSXPi-DOS |/bin/grep "a href="| /usr/bin/cut -f3 -d">"|/usr/bin/cut -f1 -d"<" | grep -v "DS_Store")
 for FILE in $FILELIST
 do
     echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0

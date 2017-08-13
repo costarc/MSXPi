@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                             |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -34,33 +34,33 @@
 
 TEXTTERMINATOR: EQU '$'
 
-ORG     $0100
+    ORG     $0100
 
-LD      BC,3
-LD      DE,MYCMD
-CALL    DOSSENDPICMD
-JR      C,PRINTPIERR
-LD      A,SENDNEXT
-CALL    PIEXCHANGEBYTE
-CP      RC_SUCCNOSTD
-RET     Z
-CP      RC_SUCCESS
-JR      Z,SHOWSTD
-CP      RC_FAILED
-JR      NZ,PRINTPIERR
+    LD      BC,3
+    LD      DE,MYCMD
+    CALL    DOSSENDPICMD
+    JR      C,PRINTPIERR
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_SUCCNOSTD
+    RET     Z
+    CP      RC_SUCCESS
+    JR      Z,SHOWSTD
+    CP      RC_FAILED
+    JR      NZ,PRINTPIERR
 SHOWSTD:
-CALL    PRINTPISTDOUT
-RET
+    CALL    PRINTPISTDOUT
+    RET
 
 PRINTPIERR:
-LD      HL,PICOMMERR
-CALL    PRINT
-JP      0
+    LD      HL,PICOMMERR
+    CALL    PRINT
+    JP      0
 
 MYCMD: DB      "RUN"
 
 PICOMMERR:
-DB      "Communication Error",13,10,"$"
+    DB      "Communication Error",13,10,"$"
 
 
 INCLUDE "include.asm"
