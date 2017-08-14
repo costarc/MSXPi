@@ -726,7 +726,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20170805.00072"
+build:  DB      "20170814.00073"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10

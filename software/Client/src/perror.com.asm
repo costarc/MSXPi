@@ -50,8 +50,25 @@ TEXTTERMINATOR: EQU '$'
         LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
+
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        SCF
+        RET     NZ
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JR      Z,EXITSTDOUT
+        CP      RC_SUCCESS
+
+EXITSTDOUT:
         CALL    PRINTPISTDOUT
         RET
 
@@ -59,6 +76,19 @@ PRINTPIERR:
         LD      HL,PICOMMERR
         CALL    PRINT
         JP      0
+
+CHECK_ESC:
+	ld	b,7
+	in	a,(0AAh)
+	and	11110000b
+	or	b
+	out	(0AAh),a
+	in	a,(0A9h)	
+	bit	2,a
+	jr	nz,CHECK_ESC_END
+	scf
+CHECK_ESC_END:
+	ret
 
 MYCMD:  DB      "RUN"
 PICMD:  DB      26," cat /tmp/msxpi_error.log",$0D

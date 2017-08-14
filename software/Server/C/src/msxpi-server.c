@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170813.00075"
+#define build "20170814.00076"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1443,21 +1443,21 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
     printf("pcd:path is %s\n",msxcommand);
     
-    if (strlen(msxcommand)<5) {
+    if ((strlen(msxcommand)<5) || (strcmp(msxcommand,"PCD ..")==0) || (strcmp(msxcommand,"pcd ..")==0)) {
         stdout = (unsigned char *)malloc(sizeof(unsigned char) * 50);
-        strcpy(psetvar[0].value,HOMEPATH);
-        sprintf(stdout,"Pi:%s",HOMEPATH);
+        //strcpy(psetvar[0].value,HOMEPATH);
+        sprintf(stdout,"Pi:%s",psetvar[0].value);
         senddatablock(stdout,strlen(stdout)+1,true);
         free(stdout);
         rc = RC_SUCCESS;
-        printf("pcd:PCD empty - exiting with rc=%x\n",rc);
+        printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
         return rc;
     }
     
     tokens = str_split(msxcommand,' ');
     
     rc = RC_SUCCESS;
-    stdout = (unsigned char *)malloc(sizeof(unsigned char) * 255);
+    stdout = (char *)malloc(sizeof(char) * 255);
     
     // Deals with absolute local filesystem PATHs
     //if cd has no parameter (want to go home)
@@ -1526,7 +1526,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         strcat(psetvar[0].value,*(tokens + 1));
         
     } else {
-        char *newpath = (unsigned char *)malloc(sizeof(unsigned char) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+2)));
+        char *newpath = (char *)malloc(sizeof(char) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+2)));
         strcpy(newpath,psetvar[0].value);
         strcat(newpath,"/");
         strcat(newpath,*(tokens + 1));
@@ -1546,10 +1546,10 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     if (rc == RC_INFORESPONSE) {
         printf("pcd:sending Display output\n");
         senddatablock(buf,strlen(buf)+1,true);
+        printf("pcd:free buf\n");
         free(buf);
     } else {
         if (rc == RC_SUCCESS ) {
-            //stdout = (unsigned char *)malloc(sizeof(unsigned char) * strlen(psetvar[0].value)+1);
             sprintf(stdout,"Pi:%s\n",psetvar[0].value);
             printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
             senddatablock(stdout,strlen(stdout)+1,true);
@@ -1558,7 +1558,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     }
     
     free(tokens);
-    free(stdout);
+    //free(stdout);
     printf("pcd:Exiting with rc=%x\n",rc);
     return rc;
     
