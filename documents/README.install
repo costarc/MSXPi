@@ -41,8 +41,8 @@ Raspberry Pi setup
 This is the process to setup MSXPi using the custom Raspbian Image
 ==================================================================
 
-1. Download MSXPi ready-to-go Raspbian Jessie Lite minimal image zip file from:
-https://www.dropbox.com/home/MSXPi/msxpi_raspbian.zip
+1. Download msxpi_raspbian.zip - MSXPi ready-to-go Raspbian Jessie Lite minimal image zip file from:
+https://www.dropbox.com/sh/icncwnbdo0z0089/AAB9zX1w7pgQFZkWKfxhL82ha/
 
 2. Unzip the file.
 Under Mac OS or Linux:
