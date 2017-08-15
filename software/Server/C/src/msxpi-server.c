@@ -673,7 +673,7 @@ int sync_client() {
     return rc;
 }
 
-int ptype(unsigned char *msxcommand) {
+int ptype(char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize;
@@ -724,7 +724,7 @@ int ptype(unsigned char *msxcommand) {
     
 }
 
-int runpicmd(unsigned char *msxcommand) {
+int runpicmd(char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize;
@@ -772,7 +772,7 @@ int runpicmd(unsigned char *msxcommand) {
     
 }
 
-int loadrom(unsigned char *msxcommand) {
+int loadrom(char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize,index,blocksize,retries;
@@ -871,7 +871,7 @@ int loadrom(unsigned char *msxcommand) {
     
 }
 
-int loadbin(unsigned char *msxcommand) {
+int loadbin(char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize,index,blocksize,retries;
@@ -1292,7 +1292,7 @@ struct DiskImgInfo psetdisk(unsigned char * msxcommand) {
     return diskimgdata;
 }
 
-int pset(struct psettype *psetvar, unsigned char *msxcommand) {
+int pset(struct psettype *psetvar, char *msxcommand) {
     int rc;
     unsigned char *buf;
     char** tokens;
@@ -1433,12 +1433,14 @@ int pwifi(char * msxcommand, char *wifissid, char *wifipass) {
     
 }
 
-int pcd(struct psettype *psetvar,char * msxcommand) {
+
+int old_pcd(struct psettype *psetvar,char * msxcommand) {
     int rc;
     struct stat diskstat;
     char** tokens;
     char *stdout;
     char *buf;
+    char *newpath;
     int i;
     
     printf("pcd:path is %s\n",msxcommand);
@@ -1526,7 +1528,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         strcat(psetvar[0].value,*(tokens + 1));
         
     } else {
-        char *newpath = (char *)malloc(sizeof(char) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+2)));
+        newpath = malloc(sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)+1)));
         strcpy(newpath,psetvar[0].value);
         strcat(newpath,"/");
         strcat(newpath,*(tokens + 1));
@@ -1559,6 +1561,142 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
     free(tokens);
     //free(stdout);
+    printf("pcd:Exiting with rc=%x\n",rc);
+    return rc;
+    
+}
+
+int pcd(struct psettype *psetvar,char * msxcommand) {
+    int rc;
+    struct stat diskstat;
+    char** tokens;
+    char *stdout;
+    char *buf;
+    char *newpath;
+    int i;
+    
+    printf("pcd:path is %s\n",msxcommand);
+    
+    stdout = malloc(1);
+    
+    if ((strlen(msxcommand)<5) || (strcmp(msxcommand,"PCD ..")==0) || (strcmp(msxcommand,"pcd ..")==0)) {
+        stdout = realloc(stdout, strlen(psetvar[0].value)*sizeof(*stdout)+1);
+        // pcd without parameters should go to home?
+        //strcpy(psetvar[0].value,HOMEPATH);
+        sprintf(stdout,"Pi:%s",psetvar[0].value);
+        senddatablock(stdout,strlen(stdout)+1,true);
+        rc = RC_SUCCESS;
+        printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
+        free(stdout);
+        return rc;
+    }
+    
+    tokens = str_split(msxcommand,' ');
+    
+    rc = RC_SUCCESS;
+    
+    stdout = realloc(stdout,255*sizeof(*stdout));
+    buf = malloc(1);
+    
+    // Deals with absolute local filesystem PATHs
+    //if cd has no parameter (want to go home)
+    if (*(tokens + 1)==NULL) {
+        printf("pcd:going local home\n");
+        strcpy(psetvar[0].value,HOMEPATH);
+        sprintf(stdout,"Pi:%s",HOMEPATH);
+        
+        //DISPLAY is requested?
+    } else if ((strncmp(*(tokens + 1),"display",7)==0) ||
+               (strncmp(*(tokens + 1),"DISPLAY",7)==0)) {
+        
+        printf("pcd:generating output for DISPLAY\n");
+        buf = realloc(buf, ((10*16 + 10*255) * sizeof(*buf)) + 1);
+        strcpy(buf,"\n");
+        for(i=0;i<10;i++) {
+            strcat(buf,psetvar[0].var);
+            strcat(buf,"=");
+            strcat(buf,psetvar[0].value);
+            strcat(buf,"\n");
+        }
+        
+        rc = RC_INFORESPONSE;
+        
+        //error if path is too long (> 128)
+    } else if (strlen(*(tokens + 1))>128) {
+        printf("pcd:path is too long\n");
+        strcpy(stdout,"Pi:Error: Path is too long");
+        rc = RC_FAILED;
+        
+        
+        //if start with "/<ANYTHING>"
+    } else if (strncmp(*(tokens + 1),"/",1)==0) {
+        printf("pcd:going local root /\n");
+        if( access( *(tokens + 1), F_OK ) != -1 ) {
+            strcpy(psetvar[0].value,*(tokens + 1));
+            sprintf(stdout,"Pi:OK\n%s",*(tokens + 1));
+        } else {
+            strcpy(stdout,"Pi:Error: Path does not exist");
+            rc = RC_FAILED;
+        }
+        
+    } else if ((strncmp(*(tokens + 1),"http:",5)==0) ||
+               (strncmp(*(tokens + 1),"ftp:",4)==0) ||
+               (strncmp(*(tokens + 1),"smb:",4)==0) ||
+               (strncmp(*(tokens + 1),"nfs:",4)==0)) {
+        
+        printf("pcd:absolute remote path / URL\n");
+        strcpy(psetvar[0].value,*(tokens + 1));
+        
+        // is resulting path too long?
+    } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >255) {
+        printf("pcd:Resulting path is too long\n");
+        strcpy(stdout,"Pi:Error: Resulting path is too long");
+        rc = RC_FAILED;
+        
+        // is relative path
+        // is current PATH a remote PATH / URL?
+    } else if ((strncmp(psetvar[0].value,"http:",5)==0)||
+               (strncmp(psetvar[0].value,"ftp:",4)==0) ||
+               (strncmp(psetvar[0].value,"smb:",4)==0) ||
+               (strncmp(psetvar[0].value,"nfs:",4)==0)) {
+        
+        printf("pcd:append to relative remote path / URL\n");
+        strcat(psetvar[0].value,"/");
+        strcat(psetvar[0].value,*(tokens + 1));
+        
+    } else {
+        newpath = malloc(sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1))) + 1);
+        strcpy(newpath,psetvar[0].value);
+        strcat(newpath,"/");
+        strcat(newpath,*(tokens + 1));
+        
+        printf("pcd:append to relative path. final path is %s\n",newpath);
+        
+        if( access( newpath, F_OK ) != -1 ) {
+            strcpy(psetvar[0].value,newpath);
+        } else {
+            strcpy(stdout,"Pi:Error: Path does not exist");
+            rc = RC_FAILED;
+        }
+        
+        free(newpath);
+    }
+    
+    if (rc == RC_INFORESPONSE) {
+        printf("pcd:sending Display output\n");
+        senddatablock(buf,strlen(buf)+1,true);
+    } else {
+        if (rc == RC_SUCCESS ) {
+            sprintf(stdout,"Pi:%s\n",psetvar[0].value);
+            printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
+            senddatablock(stdout,strlen(stdout)+1,true);
+        } else
+            senddatablock(stdout,strlen(stdout)+1,true);
+    }
+    
+    free(tokens);
+    free(stdout);
+    free(buf);
     printf("pcd:Exiting with rc=%x\n",rc);
     return rc;
     
@@ -1821,7 +1959,7 @@ int uploaddata(unsigned char *data, size_t totalsize, int index) {
     
 }
 
-int pcopy(struct psettype *psetvar,unsigned char * msxcommand,MemoryStruct *chunkptr) {
+int pcopy(struct psettype *psetvar, char * msxcommand,MemoryStruct *chunkptr) {
     char** tokens;
     char *stdout;
     unsigned char *theurl, *fullurl;
@@ -2221,7 +2359,7 @@ int pdate() {
     
 }
 
-int pplay(unsigned char *msxcommand) {
+int pplay(char *msxcommand) {
     int rc;
     unsigned char *buf;
     unsigned char *fname;
@@ -2632,6 +2770,12 @@ int main(int argc, char *argv[]){
                     
                     appstate = st_cmd;
                     break;
+                
+                } else if(strncmp(msxcommand,"RUN STOP",8)==0) {
+                    printf("Stopping msxpi-server\n");
+                    
+                    appstate = st_shutdown;
+                    break;
                     
                 } else if((strncmp(msxcommand,"#",1)==0) ||
                           (strncmp(msxcommand,"RUN",3)==0)) {
@@ -2879,7 +3023,7 @@ int main(int argc, char *argv[]){
                     
                     appstate = st_cmd;
                     break;
-                    
+
                 } else {
                     printf("st_run_cmd:Command %s - Not Implemented!\n",msxcommand);
                     msxbyte = piexchangebyte(RC_INVALIDCOMMAND);
