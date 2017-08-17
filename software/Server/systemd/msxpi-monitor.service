@@ -7,7 +7,6 @@
 #sudo journalctl -u msxpi-monitor (logging)
 #sudo journalctl -f -u msxpi-monitor (continuous logging)
 
-
 [Unit]
 Description=Monitor MSXPi Server process
 

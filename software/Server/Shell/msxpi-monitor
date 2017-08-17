@@ -1,0 +1,36 @@
+#!/bin/bash
+echo "Restarting msxpi-server"
+/home/pi/msxpi/msxpi-server &
+
+while :
+do
+sleep 5
+state1=$(systemctl status msxpi-server | grep  -c "Unit msxpi-server.service entered failed state")
+state2=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
+
+if [[ $state1 -eq 1 || $state2 -eq 0 ]];then
+    msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
+    msxpid="$msxpid 99999"
+    echo "killing $msxpid"
+    set $msxpid 
+    if [[ $# -gt 1 ]];then
+        kill -9 $msxpid
+    fi
+
+    echo "Restarting msxpi-server"
+    /home/pi/msxpi/msxpi-server &
+    sleep 1
+    msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
+    msxpid="$msxpid 99999"
+    set $msxpid 
+    if [[ $# -gt 1 ]];then
+        kill -9 $msxpid
+    fi
+    ret=$(/home/pi/msxpi/msxpi-server 2>&1 &)
+    if [[ `echo $ret | grep -c "initialisation failed"` -eq 1 ]];then
+        shutdown -h now
+    fi
+fi
+done
+
+
