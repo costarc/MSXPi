@@ -48,7 +48,10 @@ fi
 
 # Update script for MSXPi
 echo "pdate"                            > /tmp/MSXPIUPD.BAT
-echo "prun $MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
+echo "pcd /home/pi/msxpi"              >> /tmp/MSXPIUPD.BAT
+echo "prun wget --user=msxpi@retro-cpu.run --password=retro-cpu.run http://retro-cpu.run/MSXPI/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
+echo "prun chmod 755 $MSXPIHOME/msxpi-update.sh;$MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
+echo "prun rm $MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
 echo "pcd $MSXPIHOME"                  >> /tmp/MSXPIUPD.BAT
 echo "pcopy MSXPIUP1.BAT MSXPIUP1.BAT" >> /tmp/MSXPIUPD.BAT
 echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
@@ -83,7 +86,7 @@ if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
 fi
 
 # build distribution package
-scp  ./target/msxpi-client.bin pi@${PI}:msxpi/
 if [[ $1 == "-f" || $2 == "-f" || $3 == "-f" ]];then
+    scp  ./target/msxpi-client.bin pi@${PI}:msxpi/
     [ -f ../../build-pkg.sh ] && ../../build-pkg.sh $PI
 fi

@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170817.00079"
+#define build "20170817.00080"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1597,7 +1597,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         stdout = malloc((strlen(psetvar[0].value)*sizeof(*stdout))+1);
         // pcd without parameters should go to home?
         //strcpy(psetvar[0].value,HOMEPATH);
-        sprintf(stdout,"Pi:%s",psetvar[0].value);
+        sprintf(stdout,"%s\n",psetvar[0].value);
         senddatablock(stdout,strlen(stdout)+1,true);
         rc = RC_SUCCESS;
         printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
@@ -1616,7 +1616,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     if (*(tokens + 1)==NULL) {
         printf("pcd:going local home\n");
         strcpy(psetvar[0].value,HOMEPATH);
-        sprintf(stdout,"Pi:%s",HOMEPATH);
+        sprintf(stdout,"%s\n",HOMEPATH);
         
         //DISPLAY is requested?
     } else if ((strncmp(*(tokens + 1),"display",7)==0) ||
@@ -1646,8 +1646,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         printf("pcd:going local root /\n");
         if( access( *(tokens + 1), F_OK ) != -1 ) {
             strcpy(psetvar[0].value,*(tokens + 1));
-            strcpy(stdout,*(tokens + 1));
-            sprintf(stdout,"Pi:OK\n%s",*(tokens + 1));
+            sprintf(stdout,"%s\n",*(tokens + 1));
         } else {
             strcpy(stdout,"Pi:Error: Path does not exist");
             rc = RC_FAILED;
@@ -1660,8 +1659,8 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         
         printf("pcd:absolute remote path / URL\n");
         strcpy(psetvar[0].value,*(tokens + 1));
-        strcpy(stdout,*(tokens + 1));
-
+        sprintf(stdout,"%s\n",*(tokens + 1));
+        
         // is resulting path too long?
     } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >254) {
         printf("pcd:Resulting path is too long\n");
@@ -1678,7 +1677,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         printf("pcd:append to relative remote path / URL\n");
         strcat(psetvar[0].value,"/");
         strcat(psetvar[0].value,*(tokens + 1));
-        strcpy(stdout,*psetvar[0].value);
+        sprintf(stdout,"%s\n",*psetvar[0].value);
         
     } else {
         newpath = malloc(sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1))) + 1);
@@ -1690,7 +1689,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         
         if( access( newpath, F_OK ) != -1 ) {
             strcpy(psetvar[0].value,newpath);
-            strcpy(stdout,newpath);
+            sprintf(stdout,"%s\n",newpath);
         } else {
             strcpy(stdout,"Pi:Error: Path does not exist");
             rc = RC_FAILED;

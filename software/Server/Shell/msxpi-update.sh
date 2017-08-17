@@ -49,7 +49,6 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 /bin/mv msxpi-client.bin $MSXPIHOME/
 /bin/chmod 755 $MSXPIHOME/*.sh
 /bin/chmod 755 $MSXPIHOME/msxpi-server
-/bin/chown pi.pi $MSXPIHOME/*
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
@@ -61,7 +60,10 @@ do
 done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
+/bin/chown pi.pi $MSXPIHOME/*
 
 /bin/mv MSXPIUP1.BAT $MSXPIHOME/
 /bin/rm MSXPIUP1.BAT.0
 /bin/rm index.html*
+
+
