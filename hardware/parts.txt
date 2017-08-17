@@ -1,4 +1,4 @@
-R1		2K Ohm (may vary, depend on led intensity you want)
+R1		2K Ohm
 R2		1k Ohm
 R3		1k Ohm
 R4		1k Ohm
