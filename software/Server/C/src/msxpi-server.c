@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170817.00080"
+#define build "20170818.00082"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -395,7 +395,7 @@ int piexchangebyte(char mypibyte) {
  
  Return code will contain the result of the oepration.
  */
-transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize) {
+transferStruct senddatablock(char *buffer, int datasize, bool sendsize) {
     
     transferStruct dataInfo;
     
@@ -414,7 +414,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         if (sendsize)
             piexchangebyte(datasize % 256); piexchangebyte(datasize / 256);
         
-        printf("senddatablock:blocksize = %i\n",datasize);
+        //printf("senddatablock:blocksize = %i\n",datasize);
         
         while(datasize>bytecounter && mymsxbyte>=0) {
             //printf("senddatablock:waiting MSX request byte\n");
@@ -440,11 +440,11 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         }
         
         if(mymsxbyte>=0) {
-            printf("senddatablock:Sending CRC: %x\n",crc);
+            //printf("senddatablock:Sending CRC: %x\n",crc);
             
             mymsxbyte = piexchangebyte(crc);
             
-            printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
+            //printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
             if (mymsxbyte == crc) {
                 //printf("mymsxbyte:CRC verified\n");
                 dataInfo.rc = RC_SUCCESS;
@@ -1311,7 +1311,6 @@ struct DiskImgInfo psetdisk(unsigned char * msxcommand) {
 
 int pset(struct psettype *psetvar, char *msxcommand) {
     int rc;
-    unsigned char *buf;
     char** tokens;
     char *stdout;
     int n;
@@ -1323,12 +1322,12 @@ int pset(struct psettype *psetvar, char *msxcommand) {
     stdout = malloc(sizeof(*stdout) * 64);
     strcpy(stdout,"Pi:Ok");
     
-    rc = RC_FAILED;
+    rc = RC_SUCCESS;
     
     
     if ((*(tokens + 1) == NULL)) {
         printf("pset:missing parameters\n");
-        strcpy(stdout,"Pi:Error\nSyntax: pset display | <variable> <value>");
+        strcpy(stdout,"Pi:Error\nSyntax: pset display | <variable> <value>\n");
     } else if ((*(tokens + 2) == NULL)) {
         
         //DISPLAY is requested?
@@ -1336,23 +1335,22 @@ int pset(struct psettype *psetvar, char *msxcommand) {
             (strncmp(*(tokens + 1),"DISPLAY",1)==0)) {
             
             //printf("pcd:generating output for DISPLAY\n");
-            buf = malloc(sizeof(*buf) * (10*16 + 10*255) + 1);
-            strcpy(buf,"\n");
+            stdout = realloc(stdout,sizeof(*stdout) * (10*16 + 10*255) + 12);
+            strcpy(stdout,"\n");
             for(n=0;n<10;n++) {
-                strcat(buf,psetvar[n].var);
-                strcat(buf,"=");
-                strcat(buf,psetvar[n].value);
-                strcat(buf,"\n");
+                strcat(stdout,psetvar[n].var);
+                strcat(stdout,"=");
+                strcat(stdout,psetvar[n].value);
+                strcat(stdout,"\n");
             }
             
-            rc = RC_INFORESPONSE;
         } else {
             printf("pset:missing parameters\n");
-            strcpy(stdout,"Pi:Error\nSyntax: pset <variable> <value>");
+            strcpy(stdout,"Pi:Error\nSyntax: pset <variable> <value>\n");
         }
     } else {
         
-        //printf("pset:setting %s to %s\n",*(tokens+1),*(tokens+2));
+        printf("pset:setting %s to %s\n",*(tokens+1),*(tokens+2));
         
         for(n=0;n<10;n++) {
             printf("psetvar[%i]=%s\n",n,psetvar[n].var);
@@ -1374,21 +1372,12 @@ int pset(struct psettype *psetvar, char *msxcommand) {
             }
         }
         if (n==10) {
-            rc = RC_FAILED;
             printf("pset:All slots are taken\n");
-            strcpy(stdout,"Pi:Error\nAll slots are taken");
+            strcpy(stdout,"Pi:Error\nAll slots are taken\n");
         }
     }
     
-    if (rc == RC_INFORESPONSE) {
-        //printf("pset:sending Display output\n");
-        senddatablock(buf,strlen(buf)+1,true);
-        free(buf);
-        rc = RC_SUCCESS;
-    } else {
-        //printf("pset:sending stdout %s\n",stdout);
-        senddatablock(stdout,strlen(stdout)+1,true);
-    }
+    senddatablock(stdout,strlen(stdout)+1,true);
     
     free(stdout);
     free(tokens);
@@ -1450,139 +1439,6 @@ int pwifi(char * msxcommand, char *wifissid, char *wifipass) {
     
 }
 
-
-int old_pcd(struct psettype *psetvar,char * msxcommand) {
-    int rc;
-    struct stat diskstat;
-    char** tokens;
-    char *stdout;
-    char *buf;
-    char *newpath;
-    int i;
-    
-    printf("pcd:path is %s\n",msxcommand);
-    
-    if ((strlen(msxcommand)<5) || (strcmp(msxcommand,"PCD ..")==0) || (strcmp(msxcommand,"pcd ..")==0)) {
-        stdout = malloc(sizeof(*stdout) * 50);
-        //strcpy(psetvar[0].value,HOMEPATH);
-        sprintf(stdout,"Pi:%s",psetvar[0].value);
-        senddatablock(stdout,strlen(stdout)+1,true);
-        free(stdout);
-        rc = RC_SUCCESS;
-        printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
-        return rc;
-    }
-    
-    tokens = str_split(msxcommand,' ');
-    
-    rc = RC_SUCCESS;
-    stdout = (char *)malloc(sizeof(char) * 255);
-    
-    // Deals with absolute local filesystem PATHs
-    //if cd has no parameter (want to go home)
-    if (*(tokens + 1)==NULL) {
-        printf("pcd:going local home\n");
-        strcpy(psetvar[0].value,HOMEPATH);
-        sprintf(stdout,"Pi:%s",HOMEPATH);
-        
-        //DISPLAY is requested?
-    } else if ((strncmp(*(tokens + 1),"display",7)==0) ||
-               (strncmp(*(tokens + 1),"DISPLAY",7)==0)) {
-        
-        printf("pcd:generating output for DISPLAY\n");
-        buf = malloc(sizeof(*buf) * (10*16 + 10*255) + 1);
-        strcpy(buf,"\n");
-        for(i=0;i<10;i++) {
-            strcat(buf,psetvar[0].var);
-            strcat(buf,"=");
-            strcat(buf,psetvar[0].value);
-            strcat(buf,"\n");
-        }
-        
-        rc = RC_INFORESPONSE;
-        
-        //error if path is too long (> 128)
-    } else if (strlen(*(tokens + 1))>128) {
-        printf("pcd:path is too long\n");
-        strcpy(stdout,"Pi:Error: Path is too long");
-        rc = RC_FAILED;
-        
-        
-        //if start with "/<ANYTHING>"
-    } else if (strncmp(*(tokens + 1),"/",1)==0) {
-        printf("pcd:going local root /\n");
-        if( access( *(tokens + 1), F_OK ) != -1 ) {
-            strcpy(psetvar[0].value,*(tokens + 1));
-            sprintf(stdout,"Pi:OK\n%s",*(tokens + 1));
-        } else {
-            strcpy(stdout,"Pi:Error: Path does not exist");
-            rc = RC_FAILED;
-        }
-
-    } else if ((strncmp(*(tokens + 1),"http:",5)==0) ||
-               (strncmp(*(tokens + 1),"ftp:",4)==0) ||
-               (strncmp(*(tokens + 1),"smb:",4)==0) ||
-               (strncmp(*(tokens + 1),"nfs:",4)==0)) {
-        
-        printf("pcd:absolute remote path / URL\n");
-        strcpy(psetvar[0].value,*(tokens + 1));
-        
-        // is resulting path too long?
-    } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >255) {
-        printf("pcd:Resulting path is too long\n");
-        strcpy(stdout,"Pi:Error: Resulting path is too long");
-        rc = RC_FAILED;
-        
-        // is relative path
-        // is current PATH a remote PATH / URL?
-    } else if ((strncmp(psetvar[0].value,"http:",5)==0)||
-               (strncmp(psetvar[0].value,"ftp:",4)==0) ||
-               (strncmp(psetvar[0].value,"smb:",4)==0) ||
-               (strncmp(psetvar[0].value,"nfs:",4)==0)) {
-        
-        printf("pcd:append to relative remote path / URL\n");
-        strcat(psetvar[0].value,"/");
-        strcat(psetvar[0].value,*(tokens + 1));
-        
-    } else {
-        newpath = malloc((sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1))))+1);
-        strcpy(newpath,psetvar[0].value);
-        strcat(newpath,"/");
-        strcat(newpath,*(tokens + 1));
-        
-        printf("pcd:append to relative path. final path is %s\n",newpath);
-        
-        if( access( newpath, F_OK ) != -1 ) {
-            strcpy(psetvar[0].value,newpath);
-        } else {
-            strcpy(stdout,"Pi:Error: Path does not exist");
-            rc = RC_FAILED;
-        }
-        
-        free(newpath);
-    }
-    
-    if (rc == RC_INFORESPONSE) {
-        printf("pcd:sending Display output\n");
-        senddatablock(buf,strlen(buf)+1,true);
-        printf("pcd:free buf\n");
-        free(buf);
-    } else {
-        if (rc == RC_SUCCESS ) {
-            sprintf(stdout,"Pi:%s\n",psetvar[0].value);
-            printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
-            senddatablock(stdout,strlen(stdout)+1,true);
-        } else
-            senddatablock(stdout,strlen(stdout)+1,true);
-    }
-    
-    free(tokens);
-    //free(stdout);
-    printf("pcd:Exiting with rc=%x\n",rc);
-    return rc;
-    
-}
-
 int pcd(struct psettype *psetvar,char * msxcommand) {
     int rc;
     struct stat diskstat;
@@ -1593,21 +1449,20 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
     printf("pcd:path is %s\n",msxcommand);
     
+    rc = RC_SUCCESS;
+    
     if ((strlen(msxcommand)<5) || (strcmp(msxcommand,"PCD ..")==0) || (strcmp(msxcommand,"pcd ..")==0)) {
         stdout = malloc((strlen(psetvar[0].value)*sizeof(*stdout))+1);
         // pcd without parameters should go to home?
         //strcpy(psetvar[0].value,HOMEPATH);
         sprintf(stdout,"%s\n",psetvar[0].value);
         senddatablock(stdout,strlen(stdout)+1,true);
-        rc = RC_SUCCESS;
         printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
         free(stdout);
         return rc;
     }
     
     tokens = str_split(msxcommand,' ');
-    
-    rc = RC_SUCCESS;
     
     stdout = malloc(255 * sizeof(*stdout));
     
@@ -1637,7 +1492,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         //error if path is too long (> 128)
     } else if (strlen(*(tokens + 1))>128) {
         printf("pcd:path is too long\n");
-        strcpy(stdout,"Pi:Error: Path is too long");
+        strcpy(stdout,"Pi:Error: Path is too long\n");
         rc = RC_FAILED;
         
         
@@ -1648,7 +1503,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
             strcpy(psetvar[0].value,*(tokens + 1));
             sprintf(stdout,"%s\n",*(tokens + 1));
         } else {
-            strcpy(stdout,"Pi:Error: Path does not exist");
+            strcpy(stdout,"Pi:Error: Path does not exist\n");
             rc = RC_FAILED;
         }
         
@@ -1664,7 +1519,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         // is resulting path too long?
     } else if ((strlen(psetvar[0].value)+strlen(*(tokens + 1))+2) >254) {
         printf("pcd:Resulting path is too long\n");
-        strcpy(stdout,"Pi:Error: Resulting path is too long");
+        strcpy(stdout,"Pi:Error: Resulting path is too long\n");
         rc = RC_FAILED;
         
         // is relative path
@@ -1675,12 +1530,11 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
                (strncmp(psetvar[0].value,"nfs:",4)==0)) {
         
         printf("pcd:append to relative remote path / URL\n");
-        strcat(psetvar[0].value,"/");
-        strcat(psetvar[0].value,*(tokens + 1));
-        sprintf(stdout,"%s\n",*psetvar[0].value);
+        sprintf(psetvar[0].value,"%s/%s",psetvar[0].value,*(tokens + 1));
+        sprintf(stdout,"%s\n",psetvar[0].value);
         
     } else {
-        newpath = malloc(sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1))) + 1);
+        newpath = malloc((sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)))) + 1);
         strcpy(newpath,psetvar[0].value);
         strcat(newpath,"/");
         strcat(newpath,*(tokens + 1));
@@ -1691,9 +1545,11 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
             strcpy(psetvar[0].value,newpath);
             sprintf(stdout,"%s\n",newpath);
         } else {
-            strcpy(stdout,"Pi:Error: Path does not exist");
+            strcpy(stdout,"Pi:Error: Path does not exist\n");
             rc = RC_FAILED;
         }
+        
+        printf("pcd:append to relative path: result is %s\n",stdout);
         
         free(newpath);
     }
@@ -1703,7 +1559,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
     free(tokens);
     printf("freeing memory-stdout - this locks down the server, must be fixed.\n");
-    //free(stdout);
+    free(stdout);
     printf("pcd:Exiting with rc=%x\n",rc);
     return rc;
     
@@ -1729,7 +1585,7 @@ int pdir(struct psettype *psetvar, char *msxcommand) {
         (strncmp(psetvar[0].value,"smb:",4)==0) ||
         (strncmp(psetvar[0].value,"nfs:",4)==0)) {
         
-        printf("pdir:remote path:%s\n",psetvar[0].value);
+        printf("pdir:remote ftp/smb/nfs path:%s\n",psetvar[0].value);
         
         chunk.memory = malloc(1);
         chunk.size = 0;
@@ -1762,20 +1618,33 @@ int pdir(struct psettype *psetvar, char *msxcommand) {
         free(chunk.memory);
         
     } else if (strncmp(psetvar[0].value,"http",4)==0) {
+        printf("pdir:remote http path:%s\n",psetvar[0].value);
+        buf = malloc(255 * sizeof(*buf));
         
-        buf = malloc(512*sizeof(*buf));
+        sprintf(buf,"/usr/bin/wget --no-check-certificate  -O /tmp/msxpifile1.tmp -o /tmp/msxpi_error.log %s",psetvar[0].value);
+        /*
         strcpy(buf,"wget --no-check-certificate  -O /tmp/msxpifile1.tmp -o /tmp/msxpi_error.log ");
         strcat(buf,psetvar[0].value);
+        */
         
+        printf("pdir:running %s\n",buf);
         system(buf);
         
+        sprintf(buf,"/bin/cat /tmp/msxpifile1.tmp|/usr/bin/html2text -width %s > /tmp/msxpi.tmp",psetvar[3].value);
+        
+        /*
         strcpy(buf,"/bin/cat /tmp/msxpifile1.tmp|/usr/bin/html2text -width ");
         strcat(buf,psetvar[3].value);
         strcat(buf," > /tmp/msxpi.tmp");
+        */
         
+        printf("pdir:running %s\n",buf);
         system(buf);
+        
+        printf("pdir:freeing buf\n");
         free(buf);
         
+        printf("pdir:send output to msx via runpicmd\n");
         rc = runpicmd("cat /tmp/msxpi.tmp");
         
     } else {

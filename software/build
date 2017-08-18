@@ -47,12 +47,11 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 
 # Update script for MSXPi
-echo "pdate"                            > /tmp/MSXPIUPD.BAT
-echo "pcd /home/pi/msxpi"              >> /tmp/MSXPIUPD.BAT
+echo "pdate"                               > /tmp/MSXPIUPD.BAT
+echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
+echo "prun rm $MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
 echo "prun wget --user=msxpi@retro-cpu.run --password=retro-cpu.run http://retro-cpu.run/MSXPI/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
 echo "prun chmod 755 $MSXPIHOME/msxpi-update.sh;$MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
-echo "prun rm $MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
-echo "pcd $MSXPIHOME"                  >> /tmp/MSXPIUPD.BAT
 echo "pcopy MSXPIUP1.BAT MSXPIUP1.BAT" >> /tmp/MSXPIUPD.BAT
 echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
 echo "perror"                          >> /tmp/MSXPIUPD.BAT

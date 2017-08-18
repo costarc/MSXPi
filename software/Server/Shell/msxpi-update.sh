@@ -60,10 +60,9 @@ do
 done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
-/bin/chown pi.pi $MSXPIHOME/*
-
 /bin/mv MSXPIUP1.BAT $MSXPIHOME/
 /bin/rm MSXPIUP1.BAT.0
 /bin/rm index.html*
+/bin/chown -R pi.pi $MSXPIHOME
 
 
