@@ -39,6 +39,22 @@ RMFILES=true
 ssid=YourWiFiId
 psk=YourWiFiPassword
 
+if [[ $ssid == "YourWiFiId" ]];then
+    echo "Enter your WIFI Netowrk name:"; read ssid
+    echo "Enter your WIFI Network password:"; read psk
+    echo "Confirm this info?"
+    echo "WIFI SSID:$ssid"
+    echo "WIFF Password:$psk"
+    echo "Yes or No ?"
+    read confirm
+    if [[ "x$confirm" == "xYes" ]];then
+        echo "Starting setup..."
+    else
+        echo "Interrupting setup"
+       exit 1
+    fi
+fi
+
 # ------------------------------------------
 # Install libraries required by msxpi-server
 # ------------------------------------------
