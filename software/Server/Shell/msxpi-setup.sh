@@ -54,9 +54,9 @@ cd PIGPIO
 make -j4
 sudo make install
 
-# ------------------
-# Enable ssh into Pi
-# ------------------
+# -------------------------
+# Enable remote ssh into Pi
+# -------------------------
 touch /boot/ssh
 
 # ----------------------------------------------------------
@@ -79,24 +79,28 @@ mkdir -p $MSXPIHOME/disks
 chown -R pi.pi $MSXPIHOME
 ln -s $MSXPIHOME /home/msxpi
 
-# ----------------------------------------
-# Install msxpi-server service for systemd
-# ----------------------------------------
-cat <<EOF >/lib/systemd/system/msxpi-server.service
+# ------------------------------------------
+# Install msxpi-monitor service for systemd
+# ------------------------------------------
+
+# remove deprecated msxpi-server startup config
+sudo systemctl disable msxpi-server
+rm /lib/systemd/system/msxpi-server
+
+# Install new controller / monitor
+cat <<EOF >/lib/systemd/system/msxpi-monitor.service
 [Unit]
-Description=Start MSXPi Server
+Description=Monitor MSXPi Server control Process
 
 [Service]
 WorkingDirectory=/home/pi/msxpi
-#Type=forking
-#ExecStart=/bin/bash start_msx.sh
-ExecStart=/home/pi/msxpi/msxpi-server
+ExecStart=/home/pi/msxpi/msxpi-monitor
 
 [Install]
 WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload
-sudo systemctl enable msxpi-server
+sudo systemctl enable msxpi-monitor
 
 # --------------------------------------------------
 # Configure PWM (analog audio) on GPIO18 and GPIO13
