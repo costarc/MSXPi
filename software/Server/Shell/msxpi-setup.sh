@@ -104,6 +104,10 @@ sudo systemctl disable msxpi-server
 rm /lib/systemd/system/msxpi-server
 
 # Install new controller / monitor
+cd $MYTMP
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Shell/msxpi-monitor
+mv msxpi-monitor $MSXPIHOME/
+
 cat <<EOF >/lib/systemd/system/msxpi-monitor.service
 [Unit]
 Description=Monitor MSXPi Server control Process
