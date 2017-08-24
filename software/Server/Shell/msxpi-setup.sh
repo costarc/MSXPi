@@ -137,4 +137,5 @@ wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/ta
 wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk
 
 chown -R pi.pi $MSXPIHOME
+sudo systemctl start msxpi-monitor
 
