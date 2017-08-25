@@ -107,6 +107,7 @@ rm /lib/systemd/system/msxpi-server
 cd $MYTMP
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Shell/msxpi-monitor
 mv msxpi-monitor $MSXPIHOME/
+chmod 755 $MSXPIHOME/msxpi-monitor
 
 cat <<EOF >/lib/systemd/system/msxpi-monitor.service
 [Unit]
@@ -135,6 +136,7 @@ cd msxpi-code
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
 cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
 mv msxpi-server $MSXPIHOME/
+chmod 755 $MSXPIHOME/msxpi-server
 
 cd $MSXPIHOME/disks/
 wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk
