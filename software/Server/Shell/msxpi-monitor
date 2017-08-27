@@ -5,10 +5,9 @@ echo "Restarting msxpi-server"
 while :
 do
 sleep 5
-state1=$(systemctl status msxpi-server | grep  -c "Unit msxpi-server.service entered failed state")
-state2=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
+state=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
 
-if [[ $state1 -eq 1 || $state2 -eq 0 ]];then
+if [[ $state -eq 0 ]];then
     msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
     msxpid="$msxpid 99999"
     echo "killing $msxpid"
