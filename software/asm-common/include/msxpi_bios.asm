@@ -667,3 +667,109 @@ PRINTPI2:
         call    PIEXCHANGEBYTE
         pop     hl
         ret
+
+SEARCHMSXPISLOT:
+        di
+        call    RSLREG
+        ld      (confatual),a
+        CALL    PRINTNUMBER
+        OR      A
+        RET
+        xor     a
+        ld      hl,EXPTBL
+        ld      b,4
+loopbusca:
+        ld      (slotatual),a
+        ld      (subsatual),a
+        bit     7,(hl)
+        jr      nz,slotsecund
+        call    TESTMSXPI
+        jr      c,fimbusca
+loopbus_1:
+        inc     hl
+        ld      a,(slotatual)
+        inc     a
+        djnz    loopbusca
+naoachou:
+        ld      a,(confatual)
+        call    WSLREG
+        ei
+        and     a
+        ret
+fimbusca:
+        ld      a,(confatual)
+        call    WSLREG
+        ld      a,(subsatual)
+        ei
+        scf
+        ret
+slotsecund:
+        push    bc
+        push    hl
+        ld      e,0
+        ld      b,4
+slotsec_1:
+        ld      a,e
+        rla
+        rla
+        and     $0C
+        ld      e,a
+        ld      a,(slotatual)
+        and     $03
+        or      e
+        set     7,a
+        ld      (subsatual),a
+        call    TESTMSXPI
+        jr      c,fimslotsec
+        inc     e
+        djnz    slotsec_1
+fimslotsec:
+        pop     hl
+        pop     bc
+        jp      nc,loopbus_1
+        jr      fimbusca
+
+TESTMSXPI:
+        push    bc
+        push    de
+        push    hl
+        ld      hl,$7716
+        ld      de,TESTMSXPISTR
+        ld      bc,5
+TESTMSXPIL:
+        ld      a,(subsatual)
+        call    RDSLT
+        ex      de,hl
+        cpi
+; BC < 0 means found MSXPi in this slot
+        jr      c,TESTMSXPIFOUND
+
+; Z is set, means (hl) = a
+; test next character
+        jr      nz,TESTMSXPINOTFOUND
+        inc     de
+        ex      de,hl
+        jr      TESTMSXPIL
+
+; did not found MSXPi in this slot
+TESTMSXPINOTFOUND:
+        or      a
+TESTMSXPIFOUND:
+        pop     hl
+        pop     de
+        pop     bc
+        ei
+        ret
+
+TESTMSXPISTR:
+        DB      'MSXPi'
+confatual:
+        DB      00
+slotatual:
+        DB      00
+subsatual:
+        DB      00
+
+
+
+

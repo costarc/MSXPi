@@ -1,6 +1,6 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
-export PI=192.168.1.5
+export PI=192.168.1.11
 export HW="8b"
 export ROMBANK1=./target/msxpi-dos_16k.rom
 export ROMBANK2=./target/msxpi-dos_16k.rom
@@ -45,6 +45,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 
 # Update script for MSXPi
 echo "pdate"                               > /tmp/MSXPIUPD.BAT
@@ -60,7 +61,7 @@ rm /tmp/MSXPIUPD.BAT
 
 # Nextor File System driver
 # Hack to work around issue with includes on sjasm
-if [ -f ./Client/src/NFS.ASM ];then
+if [ -f ./Client/src/_NFS.ASM ];then
     cp Client/src/NFS.ASM Client/src/NFS.ASM.work
     if [[ "$HW" == "8b" ]];then
        cat asm-common/include/msxpi_io.asm.8bits.asm >> Client/src/NFS.ASM.work

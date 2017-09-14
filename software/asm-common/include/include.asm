@@ -38,6 +38,8 @@ RDSLT:          EQU     $000C
 WRSLT:          EQU     $0014
 CALSLT:         EQU     $001C
 ENASLT:         EQU     $0024
+RSLREG:         EQU     $0138
+WSLREG:         EQU     $013B
 CSRY:           EQU     $F3DC
 CSRX:           EQU     $F3DD
 ERAFNK:         EQU     $00CC
