@@ -34,6 +34,15 @@
 ; gabarito.asm
 ; A tempalte for MSXPi development
 
+; This template will implement the command gabarito.com
+; Thsi command can be invoked usign the following syntaxed:
+;
+; gabarito
+; gabarito help
+; gabarito fastresponse
+; gabarito slowresponse
+; gabarito ???? whaat else?
+;
 ; Here it is the generic communication flow between MSX and Pi.
 ; It may change depending on the command being implemented,
 ; therefore, the flow is designed to represent the functions
@@ -68,12 +77,11 @@
 
 
 TEXTTERMINATOR: EQU '$'
-DSKNUMREGISTERS:   EQU 8192
-DSKBLOCKSIZE:   EQU 1
 
         ORG     $0100
 
 ; -------------------------------------------------------------
+; Sequence 1
 ; This block of code will send your command to Raspberry Pi
 ; You should not need to change anything here.
 ; The actual command is defined in "MYCOMMAND:  DB"
@@ -89,9 +97,26 @@ DSKBLOCKSIZE:   EQU 1
 ; in other words, the command never reached Pi.
 
         JR      C,PRINTPIERR
-
-A
-; SYNC TO RECEIVE FILENAME
+; -------------------------------------------------------------
+; Sequence 2
+; The rc code is now read from RPi.
+; Note that MSX has always to request data to RPI, in this sense,
+; the code is different than the sequence diagram.
+; But this is how Sequence 2 is implemented, stick to it.
+; MSX Ask RPi, "what is the rc for the last command I sent?"
+; Then MSX reads the answer.
+;
+; At this stage, MSX only will accept:
+;    RC_FAILED: RPi could not get the data MSX requested
+;               (for example, a file as not found)
+;    SENDNEXT:  RPi completed the command and is ready to
+;               send the result to MSX
+;    Aything else: The Code on the RPi must return one of the
+;               two rc above. If anything else is returned,
+;               it might happen that there was sync error,
+;               or MSX just read spurios data in the I/O
+;               port - that is, not an actual response from RPi.
+; -------------------------------------------------------------
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED

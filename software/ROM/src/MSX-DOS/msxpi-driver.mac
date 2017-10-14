@@ -529,7 +529,7 @@ CHECKNEXT:
 		inc		hl
 		inc		hl
         cp		(hl)
-		jr		nz,call_CHECK	;Check next command
+		jr		nz,CALL_CHECK	;Check next command
 		pop		hl
         scf
 		ret

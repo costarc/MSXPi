@@ -47,6 +47,8 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 
+~/Dev/z80asm-1.8/z80asm ./Client/src/msxpiext.asm -o ./target/msxpiext.bin
+
 # Update script for MSXPi
 echo "pdate"                               > /tmp/MSXPIUPD.BAT
 echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
