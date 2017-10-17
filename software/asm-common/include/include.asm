@@ -51,4 +51,12 @@ BDOS:           EQU 5
 
 DEVICE:         equ	0FD99H
 
+txttab:         equ	$f676
+vartab:         equ	$f6c2
+arytab:         equ	$f6c4
+strend:         equ	$f6c6
+SLTATR:         equ	$fcc9
+CALBAS:         equ   $0159
+CHRGTR:         equ   $4666
+
 

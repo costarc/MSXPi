@@ -32,7 +32,7 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
+TEXTTERMINATOR: EQU '0'
 
         ORG     $0100
 
