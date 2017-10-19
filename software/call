@@ -1,2 +1,1 @@
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm -o ./target/msxpiext.bin
-cp  ./target/msxpiext.bin ~/Desktop/MSXPI/commands/
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm -o ~/Desktop/MSXPI/commands/t.bin

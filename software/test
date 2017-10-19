@@ -1,0 +1,2 @@
+~/Dev/bin/z80asm -I ./asm-common/include ./test.asm -o ~/Desktop/MSXPI/commands/test.bin
+

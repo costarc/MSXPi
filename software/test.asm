@@ -1,13 +1,15 @@
+; External variables & routines
 ERRHAND: EQU     $406F
 FRMEVL:  EQU     $4C64
-FRESTR:	 EQU	 $67D0
+FRESTR:  EQU	 $67D0
 VALTYP:  EQU     $F663
 USR:     EQU     $F7F8
 
+INCLUDE "include.asm"
 
-TEXTTERMINATOR: EQU     0
-
-
+;---------------------------
+; ROM installer
+;---------------------------
 		db	$fe
 		dw	inicio
         dw	fim-romprog+rotina+1
@@ -200,93 +202,78 @@ PG1RAMSEARCH7:
         SCF
         RET
 
+
+;---------------------------
+
 rotina:
+
         org	$4000
 
 romprog:
-        db	$41,$42
-		dw	$0000
-		dw	iniromprog
-		ds	10
 
-iniromprog:
-		push    hl
-		ld      de,comandos
-CALL_CHECK:
-		ld      hl,PROCNM
-CHECKCMD:
-        ld      a,(de)
-        or      a
-        jr      z,FOUNDCMD
-		cp      (hl)
-		jr		nz,CHECKIFFOUND
-        inc     de
-		inc     hl
-        jr      CHECKCMD
-
-CHECKIFFOUND:
-        ld      a,(hl)
-        cp      13
-        jr      z,FOUNDCMD
-        cp      10
-		jr		z,FOUNDCMD
-        cp      32
-		jr		nz,CHECKNEXT
-
-FOUNDCMD:
-        push    hl
-        inc     de
-		ld		a,(de)
-        ld      l,a
-		inc     de
-		ld		a,(de)
-        ld      h,a
-        pop     de
-		call	MYCOMMAND
-		pop     hl
-;call	GETPREVCHAR
-		or		a
-		ret
-
-; Find entry address of next command to test
-CHECKNEXT:
-		ld      a,(de)
-		inc		de
-        or      a
-        jr      nz,CHECKNEXT
-        ld      a,(de)
-        or      a
-        jr      z,CHECKEND
-        inc     de
-        inc     de
-        ld      a,(de)
-        or      a
-        jr		nz,CALL_CHECK	;Check next command
-CHECKEND:
-        pop		hl
-        scf
-		ret
+; ROM-file header
  
-MYCOMMAND:
-		push	hl
-		ret
-
-CALL_PCD_tmp:
-        LD      BC,3
-        LD      DE,PCDCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-        CALL    PRINTPISTDOUT
-        JP      0
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
-
-PCDCMD: DB      "PCD"
-
-CALL_PCD:
+        DEFW    $4241,0,CALLHAND,0,0,0,0,0
+ 
+ 
+;---------------------------
+ 
+; General BASIC CALL-instruction handler
+ 
+CALLHAND:
+ 
+	PUSH    HL
+	LD	HL,CMDS	        ; Table with "_" instructions
+.CHKCMD:
+	LD	DE,PROCNM
+.LOOP1:
+LD	A,(DE)
+	CP	(HL)
+	JR	NZ,.TONEXTCMD	; Not equal
+	INC	DE
+	INC	HL
+	AND	A
+	JR	NZ,.LOOP1	; No end of instruction name, go checking
+	LD	E,(HL)
+	INC	HL
+	LD	D,(HL)
+	POP	HL		; routine address
+	CALL	GETPREVCHAR
+	CALL	.CALLDE		; Call routine
+	AND	A
+	RET
+ 
+.TONEXTCMD:
+	LD	C,0FFH
+	XOR	A
+	CPIR			; Skip to end of instruction name
+	INC	HL
+	INC	HL		; Skip address
+	CP	(HL)
+	JR	NZ,.CHKCMD	; Not end of table, go checking
+	POP	HL
+        SCF
+	RET
+ 
+.CALLDE:
+	PUSH	DE
+	RET
+ 
+;---------------------------
+CMDS:
+ 
+; List of available instructions (as ASCIIZ) and execute address (as word)
+ 
+	DEFB	"UPRINT",0      ; Print upper case string
+	DEFW	_UPRINT
+ 
+	DEFB	"LPRINT",0      ; Print lower case string
+	DEFW	_LPRINT
+ 
+	DEFB	0               ; No more instructions
+ 
+;---------------------------
+_UPRINT:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
         CALL    GETSTRPNT
@@ -307,60 +294,46 @@ CALL_PCD:
         POP     HL
         OR      A
         RET
-
-command2:
-        ld      hl,msgcallworked2
-		call 	printb
-		ret
-
-CALL_DEBUG:
-        ex      de,hl
-        push    hl
-        call    printb
-        pop     hl
-;call    EVALTXTPARAM
-        push    hl
-;call    GETSTRPNT
-        ld      HL,($F7F8)
-CALL_DEBUG0:
-        ld      a,(hl)
-        call    CHPUT
-        inc     hl
-        djnz    CALL_DEBUG0
-        pop     hl
-        or      a
-        ret
-
-foundzero:
-        ld      hl,msgfoundzero
-        jr      printb
-found13:
-        ld      hl,msgfound13
-        jr      printb
-found10:
-        ld      hl,msgfound10
-
-printb:
-        ld      a,(hl)
-		or      a
-		ret     z
-		call	PUTCHAR
-		inc     hl
-		jr      printb
-
-msgfoundzero:
-        db      "found zero",13,10,0
-msgfound10:
-        db      "found 10",13,10,0
-msgfound13:
-        db      "found 13",13,10,0
-
+ 
+.UCASE:
+        CP      "a"
+        RET     C
+        CP      "z"+1
+        RET     NC
+        AND     %11011111
+        LD      (HL),A
+        RET
+;---------------------------
+_LPRINT:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+        PUSH	HL
+        CALL    GETSTRPNT
+.LOOP3:
+        LD      A,(HL)
+        CALL    .LCASE
+        CALL    CHPUT  ;Print
+        INC     HL
+        DJNZ    .LOOP3
+ 
+        POP     HL
+        OR      A
+        RET
+ 
+.LCASE:
+        CP      "A"
+        RET     C
+        CP      "Z"+1
+        RET     NC
+        OR      %00100000
+        RET
+;---------------------------
+ 
 GETSTRPNT:
 ; OUT:
 ; HL = String Address
 ; B  = Lenght
  
-        LD      HL,($F7F8)
+        LD      HL,(USR)
         LD      B,(HL)
         INC     HL
         LD      E,(HL)
@@ -410,39 +383,4 @@ SYNTAX_ERROR:
         LD      IX,ERRHAND	; Call the Basic error handler
         JP      CALBAS
 
-DOSSENDPICMD:
-
-comandos:
-        db      "PCD",0
-        dw      CALL_PCD
-
-        db      "CALL_DEBUG",0
-        dw      CALL_DEBUG
-
-        db      0
-
-PICOMMERR:
-        db      "Communication Error",13,10,0
-
-msgcallworked1:
-        db      "command1 executed in $4000",13,10,0
-msgcallworked2:
-        db      "command2 executed in $4000",13,10,0
-msgcallworked3:
-        db  "   command3 executed in $4000",13,10,0
-
-sltrampg1:
-        db      $00
-ptrbasic:
-        dw      $0000
-
-        db      00
-        db      00
-
-INCLUDE "include.asm"
-INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "basic_stdio.asm"
-
-fim:    equ	$
-
+fim:    equ $
