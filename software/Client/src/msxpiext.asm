@@ -306,6 +306,9 @@ CALL_MSXPI0:
         POP     HL
         LD      E,'1'
         JR      C,CALL_MSXPI1
+        PUSH    HL
+        CALL    PRINTPISTDOUT
+        POP     HL
         LD      E,0
 
 ; return to BASIC
