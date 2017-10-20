@@ -293,7 +293,7 @@ CALL_MSXPI:
 ; END DEBUG
 
         LD      A,(DE)
-        CP      '?'
+        CP      '#'
         JR      Z,CALL_MSXPI0
         EX      DE,HL
         LD      E,'1'
@@ -304,12 +304,13 @@ CALL_MSXPI0:
         INC     DE
         CALL    SENDPICMD
         POP     HL
+CALL_MSXPIERR:
         LD      E,'1'
         JR      C,CALL_MSXPI1
         PUSH    HL
-        CALL    PRINTPISTDOUT
+        CALL    RECVSTDOUT
         POP     HL
-        LD      E,0
+        LD      E,'0'
 
 ; return to BASIC
 CALL_MSXPI1:
@@ -318,6 +319,41 @@ CALL_MSXPI1:
         POP     HL
         OR      A
         RET
+
+RECVSTDOUT:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        SCF
+        JR      NZ,CALL_MSXPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,CALL_MSXPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JR      NZ,WAITLOOP
+        CALL    PRINTPISTDOUT
+        RET
+
+CHECK_ESC:
+	ld	b,7
+	in	a,(0AAh)
+	and	11110000b
+	or	b
+	out	(0AAh),a
+	in	a,(0A9h)	
+	bit	2,a
+	jr	nz,CHECK_ESC_END
+	scf
+CHECK_ESC_END:
+	ret
 
 _LPRINT:
         LD      A,(DE)
