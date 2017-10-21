@@ -47,16 +47,23 @@ DSPFNK:         EQU     $00CF
 PROCNM:         EQU     $FD89
 XF365:          EQU     $F365                  ; routine read primary slotregister
 
-BDOS:           EQU 5
+BDOS:           EQU     5
 
-DEVICE:         equ	0FD99H
+DEVICE:         equ     0FD99H
 
-txttab:         equ	$f676
-vartab:         equ	$f6c2
-arytab:         equ	$f6c4
-strend:         equ	$f6c6
-SLTATR:         equ	$fcc9
-CALBAS:         equ   $0159
-CHRGTR:         equ   $4666
+txttab:         equ     $f676
+vartab:         equ     $f6c2
+arytab:         equ     $f6c4
+strend:         equ     $f6c6
+SLTATR:         equ     $fcc9
+CALBAS:         equ     $0159
+CHRGTR:         equ     $4666
 
+ERRHAND:        EQU     $406F
+FRMEVL:         EQU     $4C64
+FRESTR:         EQU     $67D0
+VALTYP:         EQU     $F663
+USR:            EQU     $F7F8
+RAMAD3:         EQU     $F344
+ERRFLG:         EQU     $F414
 

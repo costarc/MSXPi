@@ -1,11 +1,3 @@
-; External variables & routines
-ERRHAND: EQU     $406F
-FRMEVL:  EQU     $4C64
-FRESTR:  EQU	 $67D0
-VALTYP:  EQU     $F663
-USR:     EQU     $F7F8
-RAMAD3:  EQU     $F344
-
 TEXTTERMINATOR: EQU '0'
 
 ;---------------------------
@@ -270,10 +262,6 @@ CMDS:
  
 	DEFB	"MSXPI",0      ; Print upper case string
 	DEFW	CALL_MSXPI
- 
-	DEFB	"LPRINT",0      ; Print lower case string
-	DEFW	_LPRINT
- 
 	DEFB	0               ; No more instructions
  
 ;---------------------------
@@ -281,36 +269,27 @@ CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
         CALL    GETSTRPNT
-
-; DEBUG
-        PUSH    DE
-        PUSH    BC
-        INC     DE
-        DEC     BC
-        CALL    _LPRINT
-        POP     BC
-        POP     DE
-; END DEBUG
-
         LD      A,(DE)
         CP      '#'
         JR      Z,CALL_MSXPI0
         EX      DE,HL
-        LD      E,'1'
-        JR      CALL_MSXPI1
+        JR      CALL_MSXPIERR
 
 CALL_MSXPI0:
         PUSH    DE
         INC     DE
         CALL    SENDPICMD
         POP     HL
-CALL_MSXPIERR:
-        LD      E,'1'
-        JR      C,CALL_MSXPI1
+        JR      C,CALL_MSXPIERR
         PUSH    HL
         CALL    RECVSTDOUT
         POP     HL
+        JR      C,CALL_MSXPIERR
         LD      E,'0'
+        JR      CALL_MSXPI1
+
+CALL_MSXPIERR:
+        LD      E,'1'
 
 ; return to BASIC
 CALL_MSXPI1:
@@ -325,45 +304,38 @@ RECVSTDOUT:
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         SCF
-        JR      NZ,CALL_MSXPIERR
+        RET     NZ
+        CALL    WAITLOOP
+        RET     C
+        CALL    PRINTPISTDOUT
+        RET
 
 WAITLOOP:
         CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR
+        RET     C
         CALL    CHKPIRDY
         JR      C,WAITLOOP
 ; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
+        RET     Z
         CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
-        CALL    PRINTPISTDOUT
-        RET
+        RET     Z
+        JR      WAITLOOP
 
 CHECK_ESC:
-	ld	b,7
-	in	a,(0AAh)
-	and	11110000b
-	or	b
-	out	(0AAh),a
-	in	a,(0A9h)	
-	bit	2,a
-	jr	nz,CHECK_ESC_END
-	scf
+        ld	b,7
+        in	a,(0AAh)
+        and	11110000b
+        or	b
+        out	(0AAh),a
+        in	a,(0A9h)	
+        bit	2,a
+        jr	nz,CHECK_ESC_END
+        scf
 CHECK_ESC_END:
-	ret
-
-_LPRINT:
-        LD      A,(DE)
-        CALL    CHPUT
-        INC     DE
-        DEC     BC
-        LD      A,B
-        OR      C
-        JR      NZ,_LPRINT
-        RET
+        ret
 
 GETSTRPNT:
 ; OUT:
