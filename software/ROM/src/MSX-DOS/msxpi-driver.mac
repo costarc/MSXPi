@@ -674,6 +674,148 @@ BIOSENTRYADDR:  EQU     $
         DW      SYNCH
         DW      DOWNLOADDATA
         DW      UPLOADDATA
+        DW      MSXPI
+
+MSXPI:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+        PUSH	HL
+        CALL    GETSTRPNT
+
+CALL_MSXPI_PARM:
+; Verify is command has STD parameters specified
+; Examples:
+; call ("0,pdir")  -> will not print the output
+; call ("pdir") and
+; call ("1,pdir")    -> will print the output to screen
+
+        INC     DE
+        LD      A,(DE)
+        DEC     DE
+        CP      ','
+        JR      NZ,CALL_MSXPI_S0
+        PUSH    DE
+        INC     DE
+        INC     DE
+        JR      CALL_MSXPI_S1
+
+CALL_MSXPI_S0:
+        PUSH    DE
+
+CALL_MSXPI_S1:
+; Save DE with address of string containing command
+        CALL    SENDPICMD
+        LD      E,1
+        JR      C,CALL_MSXPI1
+
+; protocol to detect result of command sent to RPi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,CALL_MSXPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,CALL_MSXPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      E,1
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPISTD
+        LD      E,0
+        CP      RC_SUCCESS
+        JR      Z,CALL_MSXPISTD
+        CP      RC_SUCCNOSTD
+        JR      Z,CALL_MSXPI1
+        JR      WAITLOOP
+
+CALL_MSXPISTD:
+; Restore address of string with command
+        POP     DE
+; Verify if user wants to print STDOUT from RPi
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+; User did not specify. Default is to print
+        JR      NZ,CALL_MSXPISTDOUT
+        DEC     DE
+        LD      A,(DE)
+        CP      '1'
+        JR      Z,CALL_MSXPISTDOUT
+        CALL    NOSTDOUT
+        LD      E,2
+        JR      CALL_MSXPI2
+
+CALL_MSXPISTDOUT:
+        CALL    PRINTPISTDOUT
+        LD      E,3
+        JR      CALL_MSXPI2
+
+CALL_MSXPIERR:
+        LD      E,1
+
+; return to BASIC
+CALL_MSXPI1:
+; Discard address of string containing command
+        POP     HL
+; Send RC / return code to BASIC
+CALL_MSXPI2:
+        LD      HL,ERRFLG
+        LD      A,(RAMAD3)
+        CALL    WRSLT
+        POP     HL
+        OR      A
+        RET
+
+GETSTRPNT:
+; OUT:
+; HL = String Address
+; BC = Length
+ 
+        LD      HL,(USR)
+        LD      C,(HL)
+        LD      B,0
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        RET
+ 
+EVALTXTPARAM:
+        CALL	CHKCHAR
+        DEFB	"("             ; Check for (
+        LD      IX,FRMEVL
+        CALL	CALBAS		; Evaluate expression
+        LD      A,(VALTYP)
+        CP      3               ; Text type?
+        JP      NZ,TYPE_MISMATCH
+        PUSH	HL
+        LD      IX,FRESTR         ; Free the temporary string
+        CALL	CALBAS
+        POP     HL
+        CALL	CHKCHAR
+        DEFB	")"             ; Check for )
+        RET
+ 
+ 
+CHKCHAR:
+        CALL	GETPREVCHAR	; Get previous basic char
+        EX      (SP),HL
+        CP      (HL) 	        ; Check if good char
+        JR      NZ,SYNTAX_ERROR	; No, Syntax error
+        INC     HL
+        EX      (SP),HL
+        INC     HL		; Get next basic char
+
+TYPE_MISMATCH:
+        LD      E,13
+        DB      1
+ 
+SYNTAX_ERROR:
+        LD      E,2
+        LD      IX,ERRHAND	; Call the Basic error handler
+        JP      CALBAS
 
 ;-----------------------------------------------------------------------------
 ;
@@ -726,11 +868,11 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20170814.00072"
+build:  DB      "20171021.00073"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPILOAD MSXPISTATUS MSXPIVER",13,10
+        DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI",13,10
         DB      00
 
 MSXPILOADING:
@@ -762,6 +904,9 @@ STR_CALL_CMD:
 
         DB      "GETPOINTERS",0
         DW      GETPOINTERS
+
+        DB      "MSXPI",0
+        DW      MSXPI
 
 ENDOFCMDS:
         DB      00

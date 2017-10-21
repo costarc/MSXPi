@@ -40,13 +40,46 @@ TEXTTERMINATOR: EQU '0'
         LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-        CALL    PRINTPISTDOUT
-        JP      0
+
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JR      Z,GETSTDOUT_TO_DOS
+        CP      RC_SUCCESS
+        JR      Z,GETSTDOUT_TO_DOS
+        CP      RC_SUCCNOSTD
+        JR      NZ,WAITLOOP
+
+GETSTDOUT_TO_DOS:
+        JP      PRINTPISTDOUT
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
+
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 DIRCMD: DB      "PCD"
 

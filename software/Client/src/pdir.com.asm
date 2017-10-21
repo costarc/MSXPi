@@ -55,30 +55,31 @@ WAITLOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
+        JR      Z,GETSTDOUT_TO_DOS
         CP      RC_SUCCESS
+        JR      Z,GETSTDOUT_TO_DOS
+        CP      RC_SUCCNOSTD
         JR      NZ,WAITLOOP
 
-        CALL    PRINTPISTDOUT
-        JP      0
+GETSTDOUT_TO_DOS:
+        JP      PRINTPISTDOUT
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
 
 CHECK_ESC:
-        ld	b,7
-        in	a,(0AAh)
-        and	11110000b
-        or	b
-        out	(0AAh),a
-        in	a,(0A9h)	
-        bit	2,a
-        jr	nz,CHECK_ESC_END
-        scf
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
 CHECK_ESC_END:
-        ret
+        RET
 
 DIRCMD: DB      "PDIR",0
 

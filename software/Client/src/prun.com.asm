@@ -36,7 +36,7 @@ TEXTTERMINATOR: EQU '$'
 
         ORG     $0100
 
-        LD      BC,3
+        LD      BC,4
         LD      DE,MYCMD
         CALL    DOSSENDPICMD
 
@@ -80,7 +80,7 @@ CHECK_ESC:
 CHECK_ESC_END:
 	ret
 
-MYCMD: DB      "RUN"
+MYCMD: DB      "PRUN"
 
 PICOMMERR:
     DB      "Communication Error",13,10,"$"

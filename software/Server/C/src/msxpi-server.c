@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20170818.00082"
+#define build "20171021.00085"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1450,8 +1450,15 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     printf("pcd:path is %s\n",msxcommand);
     
     rc = RC_SUCCESS;
+    if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
+        printf("pdir:out of sync\n");
+        return RC_FAILED;
+    }
     
     if ((strlen(msxcommand)<5) || (strcmp(msxcommand,"PCD ..")==0) || (strcmp(msxcommand,"pcd ..")==0)) {
+        
+        piexchangebyte(RC_FAILED);
+        
         stdout = malloc((strlen(psetvar[0].value)*sizeof(*stdout))+1);
         // pcd without parameters should go to home?
         //strcpy(psetvar[0].value,HOMEPATH);
@@ -1465,6 +1472,10 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     tokens = str_split(msxcommand,' ');
     
     stdout = malloc(255 * sizeof(*stdout));
+    
+    
+    //printf("pcd:debug tokens0 = %s\n",*(tokens + 0));
+    //printf("pcd:debug tokens1 = %s\n",*(tokens + 1));
     
     // Deals with absolute local filesystem PATHs
     //if cd has no parameter (want to go home)
@@ -1554,7 +1565,13 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         free(newpath);
     }
     
+    
     printf("pcd:sending stdout %s with %i bytes\n",stdout,strlen(stdout));
+    
+    if (piexchangebyte(RC_SUCCESS)!=SENDNEXT) {
+        printf("pdir:out of sync\n");
+        return RC_FAILED;
+    }
     senddatablock(stdout,strlen(stdout)+1,true);
     
     free(tokens);
@@ -2657,13 +2674,14 @@ int main(int argc, char *argv[]){
                     break;
                     
                 } else if((strncmp(msxcommand,"#",1)==0) ||
-                          (strncmp(msxcommand,"RUN",3)==0)) {
-                    printf("RUNPICMD\n");
+                          (strncmp(msxcommand,"PRUN",4)==0) ||
+                          (strncmp(msxcommand,"prun",4)==0)){
+                    printf("PRUN\n");
                     
                     if (strncmp(msxcommand,"#",1)==0)
                         memcpy(msxcommand," ",1);
                     else
-                        memcpy(msxcommand,"   ",3);
+                        memcpy(msxcommand,"    ",4);
                     
                     if (runpicmd(msxcommand)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");

@@ -668,6 +668,34 @@ PRINTPI2:
         pop     hl
         ret
 
+NOSTDOUT:
+        push    af
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        jr      z,NOSTDOUT0
+        pop     af
+        scf
+        ret
+NOSTDOUT0:
+        call    READDATASIZE
+        pop     af
+        push    hl
+        ld      h,0
+NOSTDOUT1:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        xor     h
+        ld      h,a
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,NOSTDOUT1
+        ld      a,h
+        call    PIEXCHANGEBYTE
+        pop     hl
+        ret
+
 SEARCHMSXPISLOT:
         di
         call    RSLREG

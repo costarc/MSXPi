@@ -1,6 +1,6 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
-export PI=192.168.1.11
+export PI=192.168.1.9
 export HW="8b"
 export ROMBANK1=./target/msxpi-dos_16k.rom
 export ROMBANK2=./target/msxpi-dos_16k.rom

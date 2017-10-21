@@ -269,73 +269,95 @@ CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
         CALL    GETSTRPNT
-        LD      A,(DE)
-        CP      '#'
-        JR      Z,CALL_MSXPI0
-        EX      DE,HL
-        JR      CALL_MSXPIERR
 
-CALL_MSXPI0:
+CALL_MSXPI_PARM:
+; Verify is command has STD parameters specified
+; Examples:
+; call ("0,pdir")  -> will not print the output
+; call ("pdir") and
+; call ("1,pdir")    -> will print the output to screen
+
+        INC     DE
+        LD      A,(DE)
+        DEC     DE
+        CP      ','
+        JR      NZ,CALL_MSXPI_S0
         PUSH    DE
         INC     DE
+        INC     DE
+        DEC     BC
+        DEC     BC
+        JR      CALL_MSXPI_S1
+
+CALL_MSXPI_S0:
+        PUSH    DE
+
+CALL_MSXPI_S1:
+; Save DE with address of string containing command
         CALL    SENDPICMD
-        POP     HL
+        LD      E,1
+        JR      C,CALL_MSXPI1
+
+; protocol to detect result of command sent to RPi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,CALL_MSXPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
         JR      C,CALL_MSXPIERR
-        PUSH    HL
-        CALL    RECVSTDOUT
-        POP     HL
-        JR      C,CALL_MSXPIERR
-        LD      E,'0'
-        JR      CALL_MSXPI1
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      E,1
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPISTD
+        LD      E,0
+        CP      RC_SUCCESS
+        JR      Z,CALL_MSXPISTD
+        CP      RC_SUCCNOSTD
+        JR      Z,CALL_MSXPI1
+        JR      WAITLOOP
+
+CALL_MSXPISTD:
+; Restore address of string with command
+        POP     DE
+; Verify if user wants to print STDOUT from RPi
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+; User did not specify. Default is to print
+        JR      NZ,CALL_MSXPISTDOUT
+        DEC     DE
+        LD      A,(DE)
+        CP      '1'
+        JR      Z,CALL_MSXPISTDOUT
+        CALL    NOSTDOUT
+        LD      E,0
+        JR      CALL_MSXPI2
+
+CALL_MSXPISTDOUT:
+        CALL    PRINTPISTDOUT
+        LD      E,0
+        JR      CALL_MSXPI2
 
 CALL_MSXPIERR:
-        LD      E,'1'
+        LD      E,1
 
 ; return to BASIC
 CALL_MSXPI1:
+; Discard address of string containing command
+        POP     HL
+; Send RC / return code to BASIC
+CALL_MSXPI2:
+        LD      HL,ERRFLG
         LD      A,(RAMAD3)
         CALL    WRSLT
         POP     HL
         OR      A
         RET
-
-RECVSTDOUT:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        SCF
-        RET     NZ
-        CALL    WAITLOOP
-        RET     C
-        CALL    PRINTPISTDOUT
-        RET
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        RET     C
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        RET     Z
-        CP      RC_SUCCESS
-        RET     Z
-        JR      WAITLOOP
-
-CHECK_ESC:
-        ld	b,7
-        in	a,(0AAh)
-        and	11110000b
-        or	b
-        out	(0AAh),a
-        in	a,(0A9h)	
-        bit	2,a
-        jr	nz,CHECK_ESC_END
-        scf
-CHECK_ESC_END:
-        ret
 
 GETSTRPNT:
 ; OUT:
@@ -391,6 +413,19 @@ SYNTAX_ERROR:
         LD      E,2
         LD      IX,ERRHAND	; Call the Basic error handler
         JP      CALBAS
+
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
