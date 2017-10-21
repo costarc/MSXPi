@@ -47,8 +47,6 @@ DSPFNK:         EQU     $00CF
 PROCNM:         EQU     $FD89
 XF365:          EQU     $F365                  ; routine read primary slotregister
 
-BDOS:           EQU     5
-
 DEVICE:         equ     0FD99H
 
 txttab:         equ     $f676

@@ -32,7 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
 

@@ -32,8 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
-
         ORG     $0100
 ; Using the existing RUN command to shutdown Pi
 ; This is the lazy approach, but it won't require any extra
@@ -46,7 +44,7 @@ TEXTTERMINATOR: EQU '$'
         LDIR
 
 ; Send RUN command to Pi, along with buffer in DOS command line
-        LD      BC,3
+        LD      BC,4
         LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
@@ -57,7 +55,7 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-DIRCMD: DB      "RUN"
+DIRCMD: DB      "PRUN"
 SHUTDMD:DB      17," shutdown -h now",$0D
 PICOMMERR:
         DB      "Communication Error",13,10,"$"

@@ -32,8 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
-
         ORG     $0100
 
 ; Print hw interface version (CPLD logic and pcb)

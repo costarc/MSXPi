@@ -32,8 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
-
         ORG     $0100
 ; Using the existing RUN command to shutdown Pi
 ; This is the lazy approach, but it won't require any extra
@@ -46,7 +44,7 @@ TEXTTERMINATOR: EQU '$'
         LDIR
 
 ; Send RUN command to Pi, along with buffer in DOS command line
-        LD      BC,3
+        LD      BC,4
         LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
@@ -54,8 +52,8 @@ TEXTTERMINATOR: EQU '$'
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        SCF
-        RET     NZ
+        JR      NZ,PRINTPIERR
+
 WAITLOOP:
         CALL    CHECK_ESC
         JR      C,PRINTPIERR
@@ -65,32 +63,31 @@ WAITLOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JR      Z,EXITSTDOUT
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-
-EXITSTDOUT:
-        CALL    PRINTPISTDOUT
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCNOSTD
+        JR      NZ,WAITLOOP
         RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
 
 CHECK_ESC:
-	ld	b,7
-	in	a,(0AAh)
-	and	11110000b
-	or	b
-	out	(0AAh),a
-	in	a,(0A9h)	
-	bit	2,a
-	jr	nz,CHECK_ESC_END
-	scf
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
 CHECK_ESC_END:
-	ret
+        RET
 
-MYCMD:  DB      "RUN"
+MYCMD:  DB      "PRUN"
 PICMD:  DB      26," cat /tmp/msxpi_error.log",$0D
 
 PICOMMERR:

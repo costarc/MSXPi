@@ -46,13 +46,60 @@
 ;E = Centiseconds (ignored)
 ;Results:       A = 00H if time was valid
 
-TEXTTERMINATOR: EQU '$'
-
+; Start of command - You may not need to change this
         ORG     $0100
-        JP      MSXPICMDSETUP
+        LD      DE,CMDSTR
+        LD      BC,MYCOMMAND-CMDSTR
+        CALL    DOSSENDPICMD
+; Communication error?
+        JR      C,PRINTPIERR
 
-; Replace with your command name here
-CMDSTR:  DB      "PDATE"
+; -------------------------------------------------
+; Sync protocol. You should not have to change this
+; -------------------------------------------------
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+
+; Command successful, then we need to read the data
+; sent by RPi. No stdout.
+        CP      RC_SUCCNOSTD
+        JR      Z,MYCOMMAND
+
+; There is data plus stdout to show
+        CP      RC_SUCCESS
+        JR      NZ,WAITLOOP
+        CALL    MYCOMMAND
+        JP      PRINTPISTDOUT
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
@@ -89,37 +136,18 @@ MYCOMMAND:
         LD      E,A
         LD      C,$2D
         CALL    BDOS
-        CALL    PRINTPISTDOUT
         RET
+
+; Replace with your command name here
+CMDSTR:  DB      "PDATE"
 
 ; --------------------------------------
 ; End of your command
 ; You should not modify this code below
 ; --------------------------------------
 
-MSXPICMDSETUP:
-        LD      DE,CMDSTR
-        LD      BC,MYCOMMAND-CMDSTR
-        CALL    DOSSENDPICMD
-; Communication error?
-        JR      C,PRINTPIERR
-; Check PI response
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_SUCCESS
-        JP      Z,MYCOMMAND
-        CP      RC_INVALIDCOMMAND
-        JR      NZ,PRINTPIERR
-        CALL    PRINTPISTDOUT
-        RET
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        CALL    PRINT
-        RET
-
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
-
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

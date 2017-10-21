@@ -2224,6 +2224,11 @@ int fnext(char *msxpath,int nfs_findex,int nfs_count,char *filelist) {
 
 int pdate() {
     
+    if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
+        printf("pdate:out of sync\n");
+        return RC_FAILED;
+    }
+    
     time_t rawtime;
     time (&rawtime);
     struct tm  *timeinfo = localtime (&rawtime);
@@ -2231,6 +2236,11 @@ int pdate() {
     char *buf;
     
     // date
+    
+    if (piexchangebyte(RC_SUCCESS)!=SENDNEXT) {
+        printf("pdate:out of sync\n");
+        return RC_FAILED;
+    }
     
     piexchangebyte(2000+((timeinfo->tm_year)-100)&0xff);
     piexchangebyte(2000+((timeinfo->tm_year)-100)>>8);
@@ -2260,6 +2270,10 @@ int pplay(char *msxcommand) {
     FILE *fp;
     
     printf("pplay:Starting for command %s\n",msxcommand);
+    if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
+        printf("pplay:out of sync\n");
+        return RC_FAILED;
+    }
     
     if (strlen(msxcommand) <= 5) {
         printf("pplay:Missing parameters\n");

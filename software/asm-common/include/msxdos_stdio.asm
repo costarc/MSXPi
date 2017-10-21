@@ -31,7 +31,8 @@
 ;
 ; File history :
 ; 0.1    : initial version
-
+TEXTTERMINATOR: EQU     '$'
+BDOS:           EQU     5
 DOSSENDPICMD:
         ld      hl,FULLCMD
         push    hl

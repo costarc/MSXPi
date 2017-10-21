@@ -32,8 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
-
         ORG     $0100
 
         LD      BC,4
@@ -55,14 +53,12 @@ WAITLOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JR      Z,GETSTDOUT_TO_DOS
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JR      Z,GETSTDOUT_TO_DOS
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCNOSTD
         JR      NZ,WAITLOOP
-
-GETSTDOUT_TO_DOS:
-        JP      PRINTPISTDOUT
+        RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR

@@ -32,8 +32,6 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '0'
-
         ORG     $0100
 
         LD      BC,3
@@ -55,14 +53,12 @@ WAITLOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JR      Z,GETSTDOUT_TO_DOS
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JR      Z,GETSTDOUT_TO_DOS
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCNOSTD
         JR      NZ,WAITLOOP
-
-GETSTDOUT_TO_DOS:
-        JP      PRINTPISTDOUT
+        RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR
@@ -81,11 +77,10 @@ CHECK_ESC:
 CHECK_ESC_END:
         RET
 
-DIRCMD: DB      "PCD"
-
 PICOMMERR:
-        DB      "Communication Error",13,10,"$"
+    DB      "Communication Error",13,10,"$"
 
+DIRCMD: DB      "PCD"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

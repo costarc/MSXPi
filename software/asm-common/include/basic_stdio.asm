@@ -32,4 +32,4 @@
 ; File history :
 ; 0.1    : initial version
 
-PUTCHAR:    jp      CHPUT
+PUTCHAR:    JP      CHPUT

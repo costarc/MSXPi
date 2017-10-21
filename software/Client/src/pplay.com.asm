@@ -32,36 +32,55 @@
 ; File history :
 ; 0.1    : Initial version.
 
-TEXTTERMINATOR: EQU '$'
-
         ORG     $0100
 
         LD      BC,5
         LD      DE,MYCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
+
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      RC_SUCCNOSTD
-        RET     Z
-        CP      RC_SUCCESS
-        JR      Z,SHOWSTD
-        CP      RC_FAILED
+        CP      RC_WAIT
         JR      NZ,PRINTPIERR
-SHOWSTD:
-        CALL    PRINTPISTDOUT
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCNOSTD
+        JR      NZ,WAITLOOP
         RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
 
-MYCMD: DB      "PPLAY"
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 PICOMMERR:
-        DB      "Communication Error",13,10,"$"
+    DB      "Communication Error",13,10,"$"
 
+MYCMD: DB      "PPLAY"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
