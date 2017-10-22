@@ -95,7 +95,7 @@ SENDPICMD:
 ;   Flag C set if error
 ;   A = error code
 ;   de = Original address if routine finished in error,
-;   de = Next current address to read if finished successfully
+;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
 RECVDATABLOCK:
         ld      a,SENDNEXT

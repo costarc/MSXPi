@@ -84,12 +84,23 @@ instcall:
         or      a
         jr      z,setcall2
         ld      b,a
-setcall1:   add     hl,de
+
+setcall1:
+        add     hl,de
         djnz    setcall1
-setcall2:   xor     a
+
+setcall2:
+        xor     a
         set     5,a
         inc     hl
         ld      (hl),a
+
+        ld      hl,msgcallhlp
+        call    localprint
+
+; Reserve RAM for MSXPI commands
+        ld      hl,MSXPICALLBUF
+        ld      (HIMEM),hl
         ret
 
 printmsg:
@@ -132,10 +143,10 @@ relocprog1:
         ret
 
 msgstart:   db      "Search for ram in $4000",13,10,0
-msgramf:    db      "found ram",13,10,0
 msgramnf:   db      "ram not found",13,10,0
 msgdoing:   db      "Installing MSXPi extension...",13,10,0
-msgdone:    db      "relocate completed",13,10,0
+msgcallhlp: db      "Installed. Use CALL MSXPI(",$22,"commmand",$22,") to run MSXPi Commands"
+            db      13,10,0
 
 ramcheck:
         push    af
@@ -249,54 +260,53 @@ romprog:
 ;---------------------------
  
 ; General BASIC CALL-instruction handler
- 
 CALLHAND:
  
-	PUSH    HL
-	LD	HL,CMDS	        ; Table with "_" instructions
+        PUSH    HL
+        LD	HL,CMDS	        ; Table with "_" instructions
 .CHKCMD:
-	LD	DE,PROCNM
+        LD	DE,PROCNM
 .LOOP1:
-LD	A,(DE)
-	CP	(HL)
-	JR	NZ,.TONEXTCMD	; Not equal
-	INC	DE
-	INC	HL
-	AND	A
-	JR	NZ,.LOOP1	; No end of instruction name, go checking
-	LD	E,(HL)
-	INC	HL
-	LD	D,(HL)
-	POP	HL		; routine address
-	CALL	GETPREVCHAR
-	CALL	.CALLDE		; Call routine
-	AND	A
-	RET
+        LD	A,(DE)
+        CP	(HL)
+        JR	NZ,.TONEXTCMD	; Not equal
+        INC	DE
+        INC	HL
+        AND	A
+        JR	NZ,.LOOP1	; No end of instruction name, go checking
+        LD	E,(HL)
+        INC	HL
+        LD	D,(HL)
+        POP	HL		; routine address
+        CALL	GETPREVCHAR
+        CALL	.CALLDE		; Call routine
+        AND	A
+        RET
  
 .TONEXTCMD:
-	LD	C,0FFH
-	XOR	A
-	CPIR			; Skip to end of instruction name
-	INC	HL
-	INC	HL		; Skip address
-	CP	(HL)
-	JR	NZ,.CHKCMD	; Not end of table, go checking
-	POP	HL
+        LD	C,0FFH
+        XOR	A
+        CPIR			; Skip to end of instruction name
+        INC	HL
+        INC	HL		; Skip address
+        CP	(HL)
+        JR	NZ,.CHKCMD	; Not end of table, go checking
+        POP	HL
         SCF
-	RET
+        RET
  
 .CALLDE:
-	PUSH	DE
-	RET
+        PUSH	DE
+        RET
  
 ;---------------------------
 CMDS:
  
 ; List of available instructions (as ASCIIZ) and execute address (as word)
  
-	DEFB	"MSXPI",0      ; Print upper case string
-	DEFW	CALL_MSXPI
-	DEFB	0               ; No more instructions
+        DEFB	"MSXPI",0      ; Print upper case string
+        DEFW	CALL_MSXPI
+        DEFB	0               ; No more instructions
  
 ;---------------------------
 CALL_MSXPI:
@@ -368,6 +378,8 @@ CALL_MSXPISTD:
         LD      A,(DE)
         CP      '1'
         JR      Z,CALL_MSXPISTDOUT
+        CP      '2'
+        JR      Z,CALL_MSXPISAVSTD
         CALL    NOSTDOUT
         LD      E,0
         JR      CALL_MSXPI2
@@ -392,6 +404,41 @@ CALL_MSXPI2:
         POP     HL
         OR      A
         RET
+
+; This routine will save the RPi data to (STREND)
+CALL_MSXPISAVSTD:
+        LD      DE,MSXPICALLBUF
+;        CALL    DBGDE
+;Save buffer address
+        PUSH    DE
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+
+        POP     HL
+
+;Save buffer address again
+        PUSH    HL
+
+; Exchange buffer address with end of data received
+; to alow SBC and get the size of data received
+        EX      DE,HL
+        OR      A
+        SBC     HL,DE
+
+        POP     DE
+        EX      DE,HL
+
+; DE now contain size of data received
+
+;        CALL    DBGDE
+;        call    DBGHL
+; two first bytes of buffer contain size of data received.
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        LD      E,0
+        JR      CALL_MSXPI2
 
 GETSTRPNT:
 ; OUT:
@@ -465,5 +512,6 @@ INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "basic_stdio.asm"
+INCLUDE "debug.asm"
 
 fim:    equ $
