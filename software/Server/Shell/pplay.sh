@@ -2,7 +2,7 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                             |
+#| Version : 0.8.1                                                           |
 #|                                                                           |
 #| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
@@ -35,57 +35,76 @@
 # MSXPi PPLAY command helper
 # Will start the music player, and return the PID to the caller.
 
-if [ "$1" = "PAUSE" ]; then
-    kill -19 $2
+shift
+CMD=$(echo $1 | tr [a-z] [A-Z])
+
+if [ $# -gt 0 ];then
+    shift
+    MEDIA=$*
+fi
+
+if [ "$CMD" = "PAUSE" ]; then
+    kill -19 $MEDIA 2>&1
     exit 0
 fi
 
-if [ "$1" = "RESUME" ]; then
-    kill -18 $2
+if [ "$CMD" = "RESUME" ]; then
+    kill -18 $MEDIA 2>&1
     exit 0
 fi
 
-if [ "$1" = "STOP" ]; then
-    kill $2
+if [ "$CMD" = "STOP" ]; then
+    kill $MEDIA 2>&1
     exit 0
 fi
 
-if [ "$1" = "GETIDS" ]; then
-        echo MusicID=$(ps -ef | grep mpg123 | grep -v music123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')
+if [ "$CMD" = "GETIDS" ]; then
+        echo MusicID=$(ps -ef | grep mpg123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
         exit 0
 fi
 
-if [ "$1" = "GETLIDS" ]; then
+if [ "$CMD" = "GETLIDS" ]; then
         echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
 fi
 
-if [ "$1" = "PLAY" ]; then
-   music123 $2 &
-   sleep 1
+if [ "$CMD" = "PLAY" ]; then
 
-   if [ $(echo "$2" | grep -i \.mp3) != "" ]; then
-        echo MusicID=$(ps -ef | grep mpg123 | grep -v music123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')
+   rc=$(echo "$MEDIA" | grep -c -i ^http)
+   if [ $rc -eq 1 ];then
+      (mplayer -nocache -afm ffmpeg "$MEDIA" 2>&1) >/dev/null &
+      sleep 1
+   else
+      music123 "$MEDIA" &
+      sleep 1
+   fi
+
+    rc=$(echo "$MEDIA" | grep -c -i \.mp3)
+    if [ $rc -eq 1 ];then
+        echo MusicID=$(ps -ef | grep mpg123 | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
         exit 0
    fi
 
-   if [ $(echo "$2" | grep -i \.wav) != "" ]; then
-        echo MusicID=$(ps -ef | grep aplay | grep -v music123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')
+    rc=$(echo "$MEDIA" | grep -c -i \.wav)
+    if [ $rc -eq 1 ];then
+        echo MusicID=$(ps -ef | grep aplay | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
         exit 0
    fi
 
 fi
 
-if [ "$1" = "LOOP" ]; then
-   music123 -l 0 $2 &
+if [ "$CMD" = "LOOP" ]; then
+   music123 -l 0 "$MEDIA" &
    sleep 1
 
-   if [ $(echo "$2" | grep -i \.mp3) != "" ]; then
+   rc=$(echo "$MEDIA" | grep -c -i \.mp3)
+   if [ $rc -eq 1 ];then
         echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
    fi
 
-   if [ $(echo "$2" | grep -i \.wav) != "" ]; then
+   rc=$(echo "$MEDIA" | grep -c -i \.wav)
+   if [ $rc -eq 1 ];then
         echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
    fi

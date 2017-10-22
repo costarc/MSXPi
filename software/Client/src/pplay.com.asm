@@ -49,16 +49,24 @@ WAITLOOP:
         JR      C,PRINTPIERR
         CALL    CHKPIRDY
         JR      C,WAITLOOP
+
 ; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
+
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
+
         CP      RC_SUCCESS
         JP      Z,PRINTPISTDOUT
+
         CP      RC_SUCCNOSTD
-        JR      NZ,WAITLOOP
-        RET
+        RET     Z
+
+        CP      RC_FAILNOSTD
+        RET     Z
+
+        JR      WAITLOOP
 
 PRINTPIERR:
         LD      HL,PICOMMERR

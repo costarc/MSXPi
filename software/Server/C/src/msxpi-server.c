@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20171021.00085"
+#define build "20171022.00086"
 
 #define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -120,6 +120,7 @@
 #define RC_WAIT                 0xE9
 #define RC_READY                0xEA
 #define RC_SUCCNOSTD            0XEB
+#define RC_FAILNOSTD            0XEC
 #define RC_UNDEFINED            0xEF
 
 #define st_init                 0       // waiting loop, waiting for a command
@@ -2268,6 +2269,7 @@ int pplay(char *msxcommand) {
     unsigned char *fname;
     char** tokens;
     FILE *fp;
+    char *msxcommandtmp;
     
     printf("pplay:Starting for command %s\n",msxcommand);
     if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
@@ -2286,6 +2288,9 @@ int pplay(char *msxcommand) {
         }
     }
     
+    
+    msxcommandtmp = malloc(sizeof(msxcommand)*strlen(msxcommand)+1);
+    strcpy(msxcommandtmp,msxcommand);
     tokens = str_split(msxcommand,' ');
     
     // Send ERROR signal to MSX
@@ -2302,21 +2307,25 @@ int pplay(char *msxcommand) {
                 senddatablock(buf,strlen(buf)+1,true);
                 free(buf);
                 free(tokens);
-                return 0;
+                free(msxcommandtmp);
+                return RC_SUCCESS;
             }
         }
     }
     
     if((strcmp(*(tokens + 1),"PLAY")==0) || (strcmp(*(tokens + 1),"play")==0) ||
        (strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0)) {
-       printf("pplay:starting new player instance\n");
+       printf("pplay:starting new player instance for %s\n",msxcommandtmp);
        fname = malloc(sizeof(*fname) * 128);
         
-        if ((strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0))
-            sprintf(fname,"/home/pi/msxpi/pplay.sh LOOP %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+        /*if ((strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0))
+            sprintf(fname,"/home/pi/msxpi/pplay.sh %s>/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
         else
-            sprintf(fname,"/home/pi/msxpi/pplay.sh PLAY %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
-       
+            sprintf(fname,"/home/pi/msxpi/pplay.sh \"%s\">/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
+        */
+        
+       sprintf(fname,"/home/pi/msxpi/pplay.sh %s>/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
+        
        if(fp = popen(fname, "r")) {
            printf("pplay:Success opening file %s\n",fname);
            fclose(fp);
@@ -2340,43 +2349,58 @@ int pplay(char *msxcommand) {
     } else if((strcmp(*(tokens + 1),"PAUSE")==0) || (strcmp(*(tokens + 1),"pause")==0)) {
            printf("pplay:Pausing audio playback %s\n",*(tokens + 2));
            fname = malloc(sizeof(*fname) * 128);
-           sprintf(fname,"/home/pi/msxpi/pplay.sh PAUSE %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+           sprintf(fname,"/home/pi/msxpi/pplay.sh dummy PAUSE %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
            if(fp = popen(fname, "r")) {
                fclose(fp);
-               piexchangebyte(RC_SUCCNOSTD);
+               if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                   buf = malloc(sizeof(*buf) * 25 );
+                   strcpy(buf,"ptype /tmp/msxpi_out.txt");
+                   ptype(buf);
+                   //free(buf);
+               }
                rc = RC_SUCCESS;
            } else {
-                piexchangebyte(RC_FAILED);
-               rc = RC_FAILED;
+               piexchangebyte(RC_FAILED);
+               rc = RC_FAILNOSTD;
            }
     } else if((strcmp(*(tokens + 1),"RESUME")==0) || (strcmp(*(tokens + 1),"resume")==0)) {
             printf("pplay:Resuming audio playback %s\n",*(tokens + 2));
             fname = malloc(sizeof(*fname) * 128);
-            sprintf(fname,"/home/pi/msxpi/pplay.sh RESUME %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+            sprintf(fname,"/home/pi/msxpi/pplay.sh dummy RESUME %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
             if(fp = popen(fname, "r")) {
                 fclose(fp);
-                piexchangebyte(RC_SUCCNOSTD);
+                if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                    buf = malloc(sizeof(*buf) * 25 );
+                    strcpy(buf,"ptype /tmp/msxpi_out.txt");
+                    ptype(buf);
+                    //free(buf);
+                }
                 rc = RC_SUCCESS;
             } else {
-                piexchangebyte(RC_FAILED);
+                piexchangebyte(RC_FAILNOSTD);
                 rc = RC_FAILED;
             }
     } else if((strcmp(*(tokens + 1),"STOP")==0) || (strcmp(*(tokens + 1),"stop")==0)) {
             printf("pplay:Stopping audio playback %s\n",*(tokens + 2));
             fname = malloc(sizeof(*fname) * 128);
-            sprintf(fname,"/home/pi/msxpi/pplay.sh STOP %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
+            sprintf(fname,"/home/pi/msxpi/pplay.sh dummy STOP %s>/tmp/msxpi_out.txt 2>&1",*(tokens + 2));
             if(fp = popen(fname, "r")) {
                 fclose(fp);
-                piexchangebyte(RC_SUCCNOSTD);
+                if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+                    buf = malloc(sizeof(*buf) * 25 );
+                    strcpy(buf,"ptype /tmp/msxpi_out.txt");
+                    ptype(buf);
+                    //free(buf);
+                }
                 rc = RC_SUCCESS;
             } else {
                 piexchangebyte(RC_FAILED);
-                rc = RC_FAILED;
+                rc = RC_FAILNOSTD;
             }
     } else if((strcmp(*(tokens + 1),"GETIDS")==0) || (strcmp(*(tokens + 1),"getids")==0)) {
         printf("pplay:Getting audio id\n");
         fname = malloc(sizeof(*fname) * 128);
-        sprintf(fname,"/home/pi/msxpi/pplay.sh GETIDS>/tmp/msxpi_out.txt 2>&1");
+        sprintf(fname,"/home/pi/msxpi/pplay.sh dummy GETIDS>/tmp/msxpi_out.txt 2>&1");
         if(fp = popen(fname, "r")) {
             fclose(fp);
             if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
@@ -2386,13 +2410,13 @@ int pplay(char *msxcommand) {
                 //free(buf);
             }
         } else {
-            piexchangebyte(RC_FAILED);
+            piexchangebyte(RC_FAILNOSTD);
             rc = RC_FAILED;
         }
     } else if((strcmp(*(tokens + 1),"GETLIDS")==0) || (strcmp(*(tokens + 1),"getlids")==0)) {
         printf("pplay:Getting audio loop id\n");
         fname = malloc(sizeof(*fname) * 128);
-        sprintf(fname,"/home/pi/msxpi/pplay.sh GETLIDS>/tmp/msxpi_out.txt 2>&1");
+        sprintf(fname,"/home/pi/msxpi/pplay.sh dummy GETLIDS>/tmp/msxpi_out.txt 2>&1");
         if(fp = popen(fname, "r")) {
             fclose(fp);
             if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
@@ -2402,7 +2426,7 @@ int pplay(char *msxcommand) {
                 //free(buf);
             }
         } else {
-            piexchangebyte(RC_FAILED);
+            piexchangebyte(RC_FAILNOSTD);
             rc = RC_FAILED;
         }
     } else {
@@ -2418,9 +2442,11 @@ int pplay(char *msxcommand) {
     
     printf("pplay:exiting rc = %x\n",rc);
 
+    
+    free(msxcommandtmp);
     free(fname);
     free(tokens);
-            
+    
     return rc;
 }
 
