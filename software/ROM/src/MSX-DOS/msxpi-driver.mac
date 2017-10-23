@@ -677,6 +677,7 @@ BIOSENTRYADDR:  EQU     $
         DW      MSXPI
 
 MSXPI:
+CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
         CALL    GETSTRPNT
@@ -696,6 +697,8 @@ CALL_MSXPI_PARM:
         PUSH    DE
         INC     DE
         INC     DE
+        DEC     BC
+        DEC     BC
         JR      CALL_MSXPI_S1
 
 CALL_MSXPI_S0:
@@ -743,13 +746,15 @@ CALL_MSXPISTD:
         LD      A,(DE)
         CP      '1'
         JR      Z,CALL_MSXPISTDOUT
+        CP      '2'
+        JR      Z,CALL_MSXPISAVSTD
         CALL    NOSTDOUT
-        LD      E,2
+        LD      E,0
         JR      CALL_MSXPI2
 
 CALL_MSXPISTDOUT:
         CALL    PRINTPISTDOUT
-        LD      E,3
+        LD      E,0
         JR      CALL_MSXPI2
 
 CALL_MSXPIERR:
@@ -767,6 +772,41 @@ CALL_MSXPI2:
         POP     HL
         OR      A
         RET
+
+; This routine will save the RPi data to (STREND)
+CALL_MSXPISAVSTD:
+        LD      DE,MSXPICALLBUF
+;        CALL    DBGDE
+;Save buffer address
+        PUSH    DE
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+
+        POP     HL
+
+;Save buffer address again
+        PUSH    HL
+
+; Exchange buffer address with end of data received
+; to alow SBC and get the size of data received
+        EX      DE,HL
+        OR      A
+        SBC     HL,DE
+
+        POP     DE
+        EX      DE,HL
+
+; DE now contain size of data received
+
+;        CALL    DBGDE
+;        call    DBGHL
+; two first bytes of buffer contain size of data received.
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        LD      E,0
+        JR      CALL_MSXPI2
 
 GETSTRPNT:
 ; OUT:
@@ -807,7 +847,7 @@ CHKCHAR:
         INC     HL
         EX      (SP),HL
         INC     HL		; Get next basic char
-
+ 
 TYPE_MISMATCH:
         LD      E,13
         DB      1
@@ -868,7 +908,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20171021.00073"
+build:  DB      "20171023.00074"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
