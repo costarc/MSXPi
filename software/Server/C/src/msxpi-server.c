@@ -2941,12 +2941,10 @@ int main(int argc, char *argv[]){
                 } else if(strncmp(msxcommand,"PDATE",6)==0) {
                     printf("PDATE\n");
                     
-                    msxbyte = piexchangebyte(RC_SUCCESS);
-                    if (msxbyte==SENDNEXT) {
-                        rc = pdate();
-                        if (rc!=RC_SUCCESS)
-                            printf("!!!!! Error !!!!!\n");
-                    }
+                    rc = pdate();
+                    
+                    if (rc!=RC_SUCCESS)
+                        printf("!!!!! Error !!!!!\n");
                     
                     appstate = st_cmd;
                     break;

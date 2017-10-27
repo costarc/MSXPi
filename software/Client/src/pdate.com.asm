@@ -49,7 +49,7 @@
 ; Start of command - You may not need to change this
         ORG     $0100
         LD      DE,CMDSTR
-        LD      BC,MYCOMMAND-CMDSTR
+        LD      BC,CMDSTREND-CMDSTR
         CALL    DOSSENDPICMD
 ; Communication error?
         JR      C,PRINTPIERR
@@ -140,6 +140,7 @@ MYCOMMAND:
 
 ; Replace with your command name here
 CMDSTR:  DB      "PDATE"
+CMDSTREND:  EQU $
 
 ; --------------------------------------
 ; End of your command
