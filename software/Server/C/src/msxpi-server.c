@@ -1577,7 +1577,7 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
     
     free(tokens);
     printf("freeing memory-stdout - this locks down the server, must be fixed.\n");
-    free(stdout);
+    //free(stdout);
     printf("pcd:Exiting with rc=%x\n",rc);
     return rc;
     
