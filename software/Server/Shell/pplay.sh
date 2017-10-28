@@ -35,6 +35,9 @@
 # MSXPi PPLAY command helper
 # Will start the music player, and return the PID to the caller.
 
+VERSION=1
+RELEASE=0
+
 shift
 CMD=$(echo $1 | tr [a-z] [A-Z])
 
@@ -110,4 +113,45 @@ if [ "$CMD" = "LOOP" ]; then
    fi
 
 fi
+
+OUTPUT=$VERSION$RELEASE
+
+rc=$(echo $CMD | tr ['a-z'] ['A-Z'] | grep -c -i "LIST")
+if [ $rc -eq 1  ]; then
+   rc=$(echo "$MEDIA" | grep -c -i "playlist")
+   if [ $rc -eq 1 ];then
+      echo "Play list management not implemented"
+      exit 1
+   fi
+
+   #Media type. MP3/WAV/Other digital audio file=0
+   OUTPUT=$OUTPUT$(echo 0)
+
+   rc=$(echo "x$MEDIA" | grep -c -i -w "x$")
+   if [ $rc -eq 1 ];then
+      MEDIAPATH="."
+   else
+      MEDIAPATH=$MEDIA
+   fi
+
+   ls $MEDIAPATH >/tmp/msxpi_media.log
+   INDEX=0
+   > /tmp/msxpi_media.dat
+   while read music
+   do
+      INDEX=$((INDEX+1))
+      OUTPUT=$OUTPUT$(printf "%03g$INDEX$music")
+      echo $OUTPUT >> /tmp/msxpi_media.dat
+      OUTPUT=""
+   done < /tmp/msxpi_media.log
+   # rm /tmp/msxpi_media.log 2>&1 >/dev/null
+
+   cat /tmp/msxpi_media.dat
+
+   exit 0
+fi
+
+echo "Command not implemented or missinfg parameters"
+echo "Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
+exit 1
 

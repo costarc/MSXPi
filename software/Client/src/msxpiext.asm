@@ -434,6 +434,9 @@ CALL_MSXPISAVSTD:
 ;        CALL    DBGDE
 ;        call    DBGHL
 ; two first bytes of buffer contain size of data received.
+; Decrement by two to return only actual size of buffer
+        DEC     DE
+        DEC     DE
         LD      (HL),E
         INC     HL
         LD      (HL),D

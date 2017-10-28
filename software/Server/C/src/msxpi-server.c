@@ -2268,6 +2268,26 @@ int pplay(char *msxcommand) {
         return RC_FAILED;
     }
     
+    // new code with shell script taking care of logic
+    printf("pplay:Calling media player for %s\n",msxcommand);
+    fname = malloc(sizeof(*fname) * 128);
+    sprintf(fname,"/home/pi/msxpi/pplay.sh %s>/tmp/msxpi_out.txt 2>&1",msxcommand);
+    if(fp = popen(fname, "r")) {
+        fclose(fp);
+        if (piexchangebyte(RC_SUCCESS)==SENDNEXT) {
+            buf = malloc(sizeof(*buf) * 25 );
+            strcpy(buf,"ptype /tmp/msxpi_out.txt");
+            ptype(buf);
+            //free(buf);
+        }
+        rc = RC_SUCCESS;
+    } else {
+        piexchangebyte(RC_FAILED);
+        rc = RC_FAILNOSTD;
+    }
+
+    
+    /*
     if (strlen(msxcommand) <= 5) {
         printf("pplay:Missing parameters\n");
         if (piexchangebyte(RC_FAILED)==SENDNEXT) {
@@ -2278,7 +2298,6 @@ int pplay(char *msxcommand) {
             return 0;
         }
     }
-    
     
     msxcommandtmp = malloc(sizeof(msxcommand)*strlen(msxcommand)+1);
     strcpy(msxcommandtmp,msxcommand);
@@ -2308,12 +2327,6 @@ int pplay(char *msxcommand) {
        (strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0)) {
        printf("pplay:starting new player instance for %s\n",msxcommandtmp);
        fname = malloc(sizeof(*fname) * 128);
-        
-        /*if ((strcmp(*(tokens + 1),"LOOP")==0) || (strcmp(*(tokens + 1),"loop")==0))
-            sprintf(fname,"/home/pi/msxpi/pplay.sh %s>/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
-        else
-            sprintf(fname,"/home/pi/msxpi/pplay.sh \"%s\">/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
-        */
         
        sprintf(fname,"/home/pi/msxpi/pplay.sh %s>/tmp/msxpi_out.txt 2>&1",msxcommandtmp);
         
@@ -2431,12 +2444,14 @@ int pplay(char *msxcommand) {
         return 0;
     }
     
+    */
+    
     printf("pplay:exiting rc = %x\n",rc);
 
     
-    free(msxcommandtmp);
+    //free(msxcommandtmp);
     free(fname);
-    free(tokens);
+    //free(tokens);
     
     return rc;
 }
