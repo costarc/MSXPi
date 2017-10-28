@@ -649,33 +649,6 @@ GETPOINTERSEXIT:
         pop     de
         ret
 
-BIOSENTRYADDR:  EQU     $
-        DW      MSXPIVER
-        DW      MSXPISTATUS
-        DW      MSXPILOAD
-        DW      RECVDATABLOCK
-        DW      SENDDATABLOCK
-        DW      SECRECVDATA
-        DW      SECSENDDATA
-        DW      READDATASIZE
-        DW      SENDDATASIZE
-        DW      CHKPIRDY
-        DW      PIREADBYTE
-        DW      PIWRITEBYTE
-        DW      PIEXCHANGEBYTE
-        DW      SENDIFCMD
-        DW      SENDPICMD
-        DW      CHECKBUSY
-        DW      PRINT
-        DW      PRINTNLINE
-        DW      PRINTNUMBER
-        DW      PRINTDIGIT
-        DW      PRINTPISTDOUT
-        DW      SYNCH
-        DW      DOWNLOADDATA
-        DW      UPLOADDATA
-        DW      MSXPI
-
 MSXPI:
 CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
@@ -900,6 +873,34 @@ CHECK_P:
         ret		z
         or		a
         ret
+
+BIOSENTRYADDR:  EQU     $
+        DW      MSXPIVER
+        DW      MSXPISTATUS
+        DW      MSXPILOAD
+        DW      RECVDATABLOCK
+        DW      SENDDATABLOCK
+        DW      SECRECVDATA
+        DW      SECSENDDATA
+        DW      READDATASIZE
+        DW      SENDDATASIZE
+        DW      CHKPIRDY
+        DW      PIREADBYTE
+        DW      PIWRITEBYTE
+        DW      PIEXCHANGEBYTE
+        DW      SENDIFCMD
+        DW      SENDPICMD
+        DW      CHECKBUSY
+        DW      PRINT
+        DW      PRINTNLINE
+        DW      PRINTNUMBER
+        DW      PRINTDIGIT
+        DW      PRINTPISTDOUT
+        DW      SYNCH
+        DW      DOWNLOADDATA
+        DW      UPLOADDATA
+        DW      MSXPI
+
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
