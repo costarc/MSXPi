@@ -1,5 +1,5 @@
 Assembler report for MSXInterfacev17
-Sat Jul 22 09:49:07 2017
+Sat Oct 28 04:33:01 2017
 Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
 
 
@@ -10,7 +10,7 @@ Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edit
   2. Assembler Summary
   3. Assembler Settings
   4. Assembler Generated Files
-  5. Assembler Device Options: F:/gitlab/msxpi/hardware/CPLD Project/MSXInterfacev17.pof
+  5. Assembler Device Options: F:/github/MSXPi/hardware/CPLD Project/MSXInterfacev17.pof
   6. Assembler Messages
 
 
@@ -37,7 +37,7 @@ applicable agreement for further details.
 +---------------------------------------------------------------+
 ; Assembler Summary                                             ;
 +-----------------------+---------------------------------------+
-; Assembler Status      ; Successful - Sat Jul 22 09:49:07 2017 ;
+; Assembler Status      ; Successful - Sat Oct 28 04:33:01 2017 ;
 ; Revision Name         ; MSXInterfacev17                       ;
 ; Top-level Entity Name ; MSXInterface                          ;
 ; Family                ; MAX3000A                              ;
@@ -79,12 +79,12 @@ applicable agreement for further details.
 +-----------------------------------------------------------+
 ; File Name                                                 ;
 +-----------------------------------------------------------+
-; F:/gitlab/msxpi/hardware/CPLD Project/MSXInterfacev17.pof ;
+; F:/github/MSXPi/hardware/CPLD Project/MSXInterfacev17.pof ;
 +-----------------------------------------------------------+
 
 
 +-------------------------------------------------------------------------------------+
-; Assembler Device Options: F:/gitlab/msxpi/hardware/CPLD Project/MSXInterfacev17.pof ;
+; Assembler Device Options: F:/github/MSXPi/hardware/CPLD Project/MSXInterfacev17.pof ;
 +----------------+--------------------------------------------------------------------+
 ; Option         ; Setting                                                            ;
 +----------------+--------------------------------------------------------------------+
@@ -100,13 +100,13 @@ applicable agreement for further details.
 Info: *******************************************************************
 Info: Running Quartus II 64-Bit Assembler
     Info: Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
-    Info: Processing started: Sat Jul 22 09:49:05 2017
+    Info: Processing started: Sat Oct 28 04:33:00 2017
 Info: Command: quartus_asm --read_settings_files=off --write_settings_files=off MSX_Interface -c MSXInterfacev17
 Info (115030): Assembler is generating device programming files
 Info: Quartus II 64-Bit Assembler was successful. 0 errors, 0 warnings
     Info: Peak virtual memory: 375 megabytes
-    Info: Processing ended: Sat Jul 22 09:49:07 2017
-    Info: Elapsed time: 00:00:02
+    Info: Processing ended: Sat Oct 28 04:33:01 2017
+    Info: Elapsed time: 00:00:01
     Info: Total CPU time (on all processors): 00:00:01
 
 

@@ -1,5 +1,5 @@
 Flow report for MSXInterfacev17
-Sat Jul 22 09:49:14 2017
+Sat Oct 28 04:33:06 2017
 Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
 
 
@@ -40,7 +40,7 @@ applicable agreement for further details.
 +-----------------------------------------------------------------------------+
 ; Flow Summary                                                                ;
 +---------------------------+-------------------------------------------------+
-; Flow Status               ; Successful - Sat Jul 22 09:49:07 2017           ;
+; Flow Status               ; Successful - Sat Oct 28 04:33:01 2017           ;
 ; Quartus II 64-Bit Version ; 13.0.1 Build 232 06/12/2013 SP 1 SJ Web Edition ;
 ; Revision Name             ; MSXInterfacev17                                 ;
 ; Top-level Entity Name     ; MSXInterface                                    ;
@@ -57,7 +57,7 @@ applicable agreement for further details.
 +-------------------+---------------------+
 ; Option            ; Setting             ;
 +-------------------+---------------------+
-; Start date & time ; 07/22/2017 09:48:52 ;
+; Start date & time ; 10/28/2017 04:32:49 ;
 ; Main task         ; Compilation         ;
 ; Revision Name     ; MSXInterfacev17     ;
 +-------------------+---------------------+
@@ -70,7 +70,7 @@ applicable agreement for further details.
 +------------------------------------+-------------------------------+-----------------+-------------+------------+
 ; ALM_REGISTER_PACKING_EFFORT        ; High                          ; Medium          ; --          ; --         ;
 ; AUTO_PARALLEL_EXPANDERS            ; Off                           ; On              ; --          ; --         ;
-; COMPILER_SIGNATURE_ID              ; 8796761971725.150074213202128 ; --              ; --          ; --         ;
+; COMPILER_SIGNATURE_ID              ; 8796761971725.150919036902380 ; --              ; --          ; --         ;
 ; FITTER_EFFORT                      ; Standard Fit                  ; Auto Fit        ; --          ; --         ;
 ; LIMIT_AHDL_INTEGERS_TO_32_BITS     ; On                            ; Off             ; --          ; --         ;
 ; MAX7000_OPTIMIZATION_TECHNIQUE     ; Area                          ; Speed           ; --          ; --         ;
@@ -90,11 +90,11 @@ applicable agreement for further details.
 +---------------------------+--------------+-------------------------+---------------------+------------------------------------+
 ; Module Name               ; Elapsed Time ; Average Processors Used ; Peak Virtual Memory ; Total CPU Time (on all processors) ;
 +---------------------------+--------------+-------------------------+---------------------+------------------------------------+
-; Analysis & Synthesis      ; 00:00:07     ; 1.0                     ; 462 MB              ; 00:00:06                           ;
-; Fitter                    ; 00:00:04     ; 1.0                     ; 459 MB              ; 00:00:02                           ;
-; Assembler                 ; 00:00:02     ; 1.0                     ; 375 MB              ; 00:00:01                           ;
-; TimeQuest Timing Analyzer ; 00:00:04     ; 1.0                     ; 356 MB              ; 00:00:03                           ;
-; Total                     ; 00:00:17     ; --                      ; --                  ; 00:00:12                           ;
+; Analysis & Synthesis      ; 00:00:06     ; 1.0                     ; 456 MB              ; 00:00:05                           ;
+; Fitter                    ; 00:00:03     ; 1.0                     ; 459 MB              ; 00:00:02                           ;
+; Assembler                 ; 00:00:01     ; 1.0                     ; 375 MB              ; 00:00:01                           ;
+; TimeQuest Timing Analyzer ; 00:00:02     ; 1.0                     ; 356 MB              ; 00:00:02                           ;
+; Total                     ; 00:00:12     ; --                      ; --                  ; 00:00:10                           ;
 +---------------------------+--------------+-------------------------+---------------------+------------------------------------+
 
 

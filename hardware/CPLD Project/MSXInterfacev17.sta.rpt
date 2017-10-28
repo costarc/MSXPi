@@ -1,5 +1,5 @@
 TimeQuest Timing Analyzer report for MSXInterfacev17
-Sat Jul 22 09:49:14 2017
+Sat Oct 28 04:33:06 2017
 Quartus II 64-Bit Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
 
 
@@ -871,7 +871,7 @@ No dedicated SERDES Receiver circuitry present in device or used in design
 Info: *******************************************************************
 Info: Running Quartus II 64-Bit TimeQuest Timing Analyzer
     Info: Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
-    Info: Processing started: Sat Jul 22 09:49:10 2017
+    Info: Processing started: Sat Oct 28 04:33:04 2017
 Info: Command: quartus_sta MSX_Interface -c MSXInterfacev17
 Info: qsta_default_script.tcl version: #1
 Warning (20028): Parallel compilation is not licensed and has been disabled
@@ -933,8 +933,8 @@ Info (332102): Design is not fully constrained for setup requirements
 Info (332102): Design is not fully constrained for hold requirements
 Info: Quartus II 64-Bit TimeQuest Timing Analyzer was successful. 0 errors, 28 warnings
     Info: Peak virtual memory: 356 megabytes
-    Info: Processing ended: Sat Jul 22 09:49:14 2017
-    Info: Elapsed time: 00:00:04
-    Info: Total CPU time (on all processors): 00:00:03
+    Info: Processing ended: Sat Oct 28 04:33:06 2017
+    Info: Elapsed time: 00:00:02
+    Info: Total CPU time (on all processors): 00:00:02
 
 
