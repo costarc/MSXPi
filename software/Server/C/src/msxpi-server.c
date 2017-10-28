@@ -859,7 +859,7 @@ int runpicmd(char *msxcommand) {
     
 }
 
-int loadrom(struct psettype *psetvar,char *msxcommand) {
+int ploadrom(struct psettype *psetvar,char *msxcommand) {
     int rc, sz;
     FILE *fp;
     int filesize,index,blocksize,retries;
@@ -872,7 +872,7 @@ int loadrom(struct psettype *psetvar,char *msxcommand) {
     printf("load:starting %s\n",msxcommand);
     
     if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
-        printf("pdir:out of sync\n");
+        printf("ploadrom:out of sync\n");
         return RC_FAILED;
     }
     
@@ -914,7 +914,17 @@ int loadrom(struct psettype *psetvar,char *msxcommand) {
         } else {
             
             // This status tells MSX to start receiving data
-            piexchangebyte(RC_SUCCNOSTD);
+            if (piexchangebyte(RC_SUCCNOSTD)!=SENDNEXT) {
+                printf("ploadrom:out of sync: RC_SUCCNOSTD\n");
+                return RC_FAILED;
+            }
+            
+            
+            // Now enters into the logic for MSX "LOADROM"
+            if (piexchangebyte(STARTTRANSFER)!=STARTTRANSFER) {
+                printf("ploadrom:out of sync: STARTTRANSFER\n");
+                return RC_FAILED;
+            }
             
             // send to msx the total size of file
             printf("load:sending file size %i\n",filesize);
@@ -2626,7 +2636,7 @@ int main(int argc, char *argv[]){
                           (strncmp(msxcommand,"PLOADROM",8)==0)) {
                     
                     printf("PLOADROM\n");
-                    rc = loadrom(&psetvar,msxcommand);
+                    rc = ploadrom(&psetvar,msxcommand);
                     
                     appstate = st_cmd;
                     
