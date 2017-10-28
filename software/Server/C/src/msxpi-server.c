@@ -396,15 +396,15 @@ int piexchangebyte(char mypibyte) {
  
  Return code will contain the result of the oepration.
  */
-transferStruct senddatablock(char *buffer, int datasize, bool sendsize) {
+transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize) {
     
     transferStruct dataInfo;
     
     int bytecounter = 0;
-    char mymsxbyte,mypibyte;
+    unsigned char mymsxbyte,mypibyte;
     unsigned char crc = 0;
     
-    printf("senddatablock: starting\n");
+    //printf("senddatablock: starting\n");
     mymsxbyte = piexchangebyte(SENDNEXT);
     
     if (mymsxbyte != SENDNEXT) {
@@ -459,7 +459,7 @@ transferStruct senddatablock(char *buffer, int datasize, bool sendsize) {
         }
     }
     
-    printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
+    //printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
     return dataInfo;
 }
 
@@ -691,7 +691,7 @@ int sync_client() {
     return rc;
 }
 
-int ptype(char *msxcommand) {
+int ptype(unsigned char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize;
@@ -746,8 +746,8 @@ int runpicmd(char *msxcommand) {
     int rc;
     FILE *fp;
     int filesize;
-    unsigned char *buf;
-    unsigned char *fname;
+    char *buf;
+    char *fname;
     
     printf("runpicmd:starting command >%s<+\n",msxcommand);
     
@@ -790,13 +790,13 @@ int runpicmd(char *msxcommand) {
     
 }
 
-int loadrom(char *msxcommand) {
-    int rc;
+int loadrom(struct psettype *psetvar,char *msxcommand) {
+    int rc, sz;
     FILE *fp;
     int filesize,index,blocksize,retries;
     unsigned char *buf;
-    unsigned char *stdout;
-    unsigned char mymsxbyte;
+    char *stdout;
+    char *newpath;
     transferStruct dataInfo;
     char** tokens;
     
@@ -804,19 +804,33 @@ int loadrom(char *msxcommand) {
     
     tokens = str_split(msxcommand,' ');
     printf("load:parsed command is %s %s\n",*(tokens),*(tokens + 1));
-    
-    stdout = malloc(sizeof(*stdout) * 65);
-    
+
     dataInfo.rc = RC_UNDEFINED;
     
-    fp = fopen(*(tokens + 1),"rb");
+    sz = (sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)))) + 2;
+    
+    printf("newpath size will be: %i\n",sz);
+    
+    newpath = malloc(sz);
+    strcpy(newpath,psetvar[0].value);
+    strcat(newpath,"/");
+    strcat(newpath,*(tokens + 1));
+    
+    printf("ploadrom:append to relative path: result is %s\n",newpath);
+
+    stdout = malloc(sizeof(*stdout) * 65);
+    
+    fp = fopen(newpath,"rb");
     if (fp) {
+        printf("Found file\n");
         fseek(fp, 0L, SEEK_END);
         filesize = ftell(fp);
         rewind(fp);
-        buf = malloc(sizeof(*buf) * filesize);
+        buf = malloc(sizeof(*buf) * filesize + 1);
         fread(buf,filesize,1,fp);
         fclose(fp);
+        
+        printf("File read into buffer\n");
         
         if ((*(buf)!='A') || (*(buf+1)!='B')) {
             printf("loadrom:Not a .rom program. Aborting\n");
@@ -828,7 +842,7 @@ int loadrom(char *msxcommand) {
             piexchangebyte(STARTTRANSFER);
             
             // send to msx the total size of file
-            //printf("load:sending file size %i\n",filesize);
+            printf("load:sending file size %i\n",filesize);
             piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
             
             //printf("load:calling senddatablock\n");
@@ -856,25 +870,23 @@ int loadrom(char *msxcommand) {
             }
             
             if(retries>=GLOBALRETRIES) {
-                //printf("load:Transfer interrupted due to CRC error\n");
+                printf("load:Transfer interrupted due to CRC error\n");
                 rc = RC_CRCERROR;
                 strcpy(stdout,"Pi:CRC Error");
-                mymsxbyte = piexchangebyte(ABORT);
+                piexchangebyte(ABORT);
             } else {
-                //printf("load:done\n");
+                printf("load:done\n");
                 
                 strcpy(stdout,"Pi:Ok");
-                mymsxbyte = piexchangebyte(ENDTRANSFER);
-                printf("load:Sent ENDTRANSFER, Received %x\n",mymsxbyte);
+                piexchangebyte(ENDTRANSFER);
             }
         }
         
         free(buf);
         
     } else {
-        //printf("load:error opening file\n");
         rc = RC_FILENOTFOUND;
-        mymsxbyte = piexchangebyte(ABORT);
+        piexchangebyte(ABORT);
         strcpy(stdout,"Pi:Error opening file");
     }
     
@@ -883,6 +895,7 @@ int loadrom(char *msxcommand) {
     
     free(tokens);
     free(stdout);
+    free(newpath);
     
     printf("load:exiting rc = %x\n",rc);
     return rc;
@@ -894,7 +907,7 @@ int loadbin(char *msxcommand) {
     FILE *fp;
     int filesize,index,blocksize,retries;
     unsigned char *buf;
-    unsigned char *stdout;
+    char *stdout;
     unsigned char mymsxbyte;
     char** tokens;
     transferStruct dataInfo;
@@ -1107,10 +1120,10 @@ int msxdos_writesector(unsigned char *currentdrive,DOS_SectorStruct *sectorInfo)
     return rc;
 }
 
-int pnewdisk(unsigned char * msxcommand, char *dsktemplate) {
+int pnewdisk(char * msxcommand, char *dsktemplate) {
     char** tokens;
     struct stat diskstat;
-    char *buf;
+    unsigned char *stdout;
     char *cpycmd;
     int rc;
     FILE *fp;
@@ -1119,7 +1132,7 @@ int pnewdisk(unsigned char * msxcommand, char *dsktemplate) {
     
     tokens = str_split(msxcommand,' ');
     
-    buf = malloc(sizeof(*buf) * 40);
+    stdout = malloc(sizeof(*stdout) * 40);
     
     rc = RC_FAILED;
     
@@ -1140,22 +1153,22 @@ int pnewdisk(unsigned char * msxcommand, char *dsktemplate) {
                 sprintf(cpycmd,"chown pi.pi %s",*(tokens + 1));
                 fp = popen(cpycmd, "r");
                 fclose(fp);
-                strcpy(buf,"Pi:Ok");
+                strcpy(stdout,"Pi:Ok");
                 rc = RC_SUCCESS;
             } else
-                strcpy(buf,"Pi:Error verifying disk");
+                strcpy(stdout,"Pi:Error verifying disk");
         } else
-            strcpy(buf,"Pi:Error creating disk");
+            strcpy(stdout,"Pi:Error creating disk");
         
         free(cpycmd);
         
     } else
-        strcpy(buf,"Pi:Error\nSyntax: pnewdisk <file>");
+        strcpy(stdout,"Pi:Error\nSyntax: pnewdisk <file>");
     
-    senddatablock(buf,strlen(buf)+1,true);
+    senddatablock(stdout,strlen(stdout)+1,true);
     
     free(tokens);
-    free(buf);
+    free(stdout);
     printf("pnewdisk:Exiting with rc=%x\n",rc);
     return rc;
     
@@ -1219,55 +1232,16 @@ int * msxdos_inihrd(struct DiskImgInfo *driveInfo) {
     return driveInfo->rc;
 }
 
-/* LOADCLIENT_V07PROTOCOL
- ------------------------
- 21/03/2017
- 
- This function implemente the protocol for the load in ROM v0.7
- it will allow using the existing ROM in the EPROM without chantes to load the Client.
- */
-
-int LOADCLIENT_V07PROTOCOL(void) {
-    FILE *fp;
-    unsigned char *buf;
-    int counter = 7;
-    int rc;
-    
-    printf("LOADCLIENT_V07PROTOCOL:Sending msxpi-client.bin using protocol v0.7\n");
-    fp = fopen("/home/pi/msxpi/msxpi-client.bin","rb");
-    fseek(fp, 0L, SEEK_END);
-    int filesize = ftell(fp) - 7;
-    rewind(fp);
-    buf = malloc(sizeof(*buf) * filesize);
-    fread(buf,filesize,1,fp);
-    fclose(fp);
-    
-    piexchangebyte(filesize % 256);
-    piexchangebyte(filesize / 256);
-    piexchangebyte(*(buf+5));
-    piexchangebyte(*(buf+6));
-    
-    printf("Filesize = %i\n",filesize);
-    printf("Exec address =%02x%02x\n",*(buf+6),*(buf+5));
-    while(filesize>counter) {
-        //printf("cunter:%i  byte:%x\n",counter,*(buf+counter));
-        rc = piexchangebyte(*(buf+counter));
-        counter++;
-    }
-    printf("LOADCLIENT_V07PROTOCOL:terminated\n");
-    return rc;
-}
-
-struct DiskImgInfo psetdisk(unsigned char * msxcommand) {
+struct DiskImgInfo psetdisk(char * msxcommand) {
     struct DiskImgInfo diskimgdata;
     char** tokens;
     struct   stat diskstat;
-    char *buf;
+    char *stdout;
     
     printf("psetdisk:starting %s\n",msxcommand);
     
     tokens = str_split(msxcommand,' ');
-    buf = malloc(sizeof(*buf) * 64);
+    stdout = malloc(sizeof(*stdout) * 64);
     
     if ((*(tokens + 2) != NULL) && (*(tokens + 1) != NULL)) {
         
@@ -1286,26 +1260,26 @@ struct DiskImgInfo psetdisk(unsigned char * msxcommand) {
             
             if( access( diskimgdata.dskname, F_OK ) != -1 ) {
                 printf("psetdisk:Found disk image\n");
-                strcpy(buf,"Pi:OK");
+                strcpy(stdout,"Pi:OK");
             } else {
                 printf("psetdisk:Disk image not found.\n");
                 diskimgdata.rc = RC_FAILED;
-                strcpy(buf,"Pi:Error\nDisk image not found");
+                strcpy(stdout,"Pi:Error\nDisk image not found");
             }
         } else {
             printf("psetdisk:Invalid device\n");
             diskimgdata.rc = RC_FAILED;
-            strcpy(buf,"Pi:Error\nInvalid device\nDevice must be 0 or 1");
+            strcpy(stdout,"Pi:Error\nInvalid device\nDevice must be 0 or 1");
         }
     } else {
         printf("psetdisk:Invalid parameters\n");
         diskimgdata.rc = RC_FAILED;
-        strcpy(buf,"Pi:Error\nSyntax: psetdisk <0|1> <file>");
+        strcpy(stdout,"Pi:Error\nSyntax: psetdisk <0|1> <file>");
     }
     
-    senddatablock(buf,strlen(buf)+1,true);
+    senddatablock(stdout,strlen(stdout)+1,true);
     free(tokens);
-    free(buf);
+    free(stdout);
     
     return diskimgdata;
 }
@@ -1705,7 +1679,7 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 
 int loadfile_local(char *theurl,MemoryStruct *chunk) {
     FILE *fd;
-    char *fname = malloc(sizeof(char) * strlen(theurl));
+    char *fname = malloc(sizeof(char) * strlen(theurl) + 1);
     
     //strcpy(fname,theurl+7);
     strcpy(fname,theurl);
@@ -2645,7 +2619,7 @@ int main(int argc, char *argv[]){
                           (strncmp(msxcommand,"PLOADROM",8)==0)) {
                     
                     printf("PLOADROM\n");
-                    rc = loadrom(msxcommand);
+                    rc = loadrom(&psetvar,msxcommand);
                     
                     appstate = st_cmd;
                     
