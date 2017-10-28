@@ -67,12 +67,12 @@ library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
 		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
-		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
-		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x”06";
+		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x”57”;
 		constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
 		constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
-		constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-		constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+		constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x”07”;
+		constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x”5B”;
 		constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
 		constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 end msxpi_package;
