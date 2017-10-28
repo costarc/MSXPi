@@ -80,7 +80,7 @@
 #define version "0.8.1"
 #define build "20171022.00086"
 
-#define V07SUPPORT
+//#define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
 #define HOMEPATH "/home/pi/msxpi"
 
@@ -219,7 +219,7 @@ struct psettype {
 };
 
 struct curlMemStruct {
-    char *memory;
+    unsigned char *memory;
     size_t size;
 };
 typedef struct curlMemStruct MemoryStruct;
@@ -303,6 +303,75 @@ char** str_split(char* a_str, const char a_delim) {
     return result;
 }
 
+char *strdup (const char *s) {
+    char *d;
+    d = malloc(255*sizeof(*d));          // Space for length plus nul
+    if (d == NULL) return NULL;          // No memory
+    strcpy (d,s);                        // Copy the characters
+    return d;                            // Return the new string
+}
+
+int isDirectory(const char *path) {
+    struct stat statbuf;
+    if (stat(path, &statbuf) != 0)
+        return 0;
+    return S_ISDIR(statbuf.st_mode);
+}
+
+static void *realloc_or_free(void *ptr, size_t size) {
+    void *tmp = realloc(ptr, size);
+    if (tmp == NULL) {
+        free(ptr);
+    }
+    return tmp;
+}
+
+static int get_dirent_dir(char const *path, struct dirent **result,
+                          size_t *size) {
+    DIR *dir = opendir(path);
+    if (dir == NULL) {
+        closedir(dir);
+        return -1;
+    }
+    
+    struct dirent *array = NULL;
+    size_t i = 0;
+    size_t used = 0;
+    struct dirent *dirent;
+    while ((dirent = readdir(dir)) != NULL) {
+        if (used == i) {
+            i += 42; // why not?
+            array = realloc_or_free(array, sizeof *array * i);
+            if (array == NULL) {
+                closedir(dir);
+                return -1;
+            }
+        }
+        
+        array[used++] = *dirent;
+    }
+    
+    struct dirent *tmp = realloc(array, sizeof *array * used);
+    if (tmp != NULL) {
+        array = tmp;
+    }
+    
+    *result = array;
+    *size = used;
+    
+    closedir(dir);
+    
+    return 0;
+}
+
+static int cmp_dirent_aux(struct dirent const *a, struct dirent const *b) {
+    return strcmp(a->d_name, b->d_name);
+}
+
+static int cmp_dirent(void const *a, void const *b) {
+    return cmp_dirent_aux(a, b);
+}
+
 void init_spi_bitbang(void) {
     gpioSetMode(cs, PI_INPUT);
     gpioSetMode(sclk, PI_OUTPUT);
@@ -360,7 +429,7 @@ unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     
 }
 
-int piexchangebyte(char mypibyte) {
+int piexchangebyte(unsigned char mypibyte) {
     time_t t = time(NULL) + BYTETRANSFTIMEOUT;
     int mymsxbyte;
     gpioWrite(rdy,HIGH);
@@ -1935,74 +2004,6 @@ int pcopy(struct psettype *psetvar, char *msxcommand, MemoryStruct *chunkptr) {
     
 }
 
-char *strdup (const char *s) {
-    char *d;
-    d = malloc(255*sizeof(*d));          // Space for length plus nul
-    if (d == NULL) return NULL;          // No memory
-    strcpy (d,s);                        // Copy the characters
-    return d;                            // Return the new string
-}
-
-int isDirectory(const char *path) {
-    struct stat statbuf;
-    if (stat(path, &statbuf) != 0)
-        return 0;
-    return S_ISDIR(statbuf.st_mode);
-}
-
-static void *realloc_or_free(void *ptr, size_t size) {
-    void *tmp = realloc(ptr, size);
-    if (tmp == NULL) {
-        free(ptr);
-    }
-    return tmp;
-}
-
-static int get_dirent_dir(char const *path, struct dirent **result,
-                          size_t *size) {
-    DIR *dir = opendir(path);
-    if (dir == NULL) {
-        closedir(dir);
-        return -1;
-    }
-    
-    struct dirent *array = NULL;
-    size_t i = 0;
-    size_t used = 0;
-    struct dirent *dirent;
-    while ((dirent = readdir(dir)) != NULL) {
-        if (used == i) {
-            i += 42; // why not?
-            array = realloc_or_free(array, sizeof *array * i);
-            if (array == NULL) {
-                closedir(dir);
-                return -1;
-            }
-        }
-        
-        array[used++] = *dirent;
-    }
-    
-    struct dirent *tmp = realloc(array, sizeof *array * used);
-    if (tmp != NULL) {
-        array = tmp;
-    }
-    
-    *result = array;
-    *size = used;
-    
-    closedir(dir);
-    
-    return 0;
-}
-static int cmp_dirent_aux(struct dirent const *a, struct dirent const *b) {
-    return strcmp(a->d_name, b->d_name);
-}
-
-static int cmp_dirent(void const *a, void const *b) {
-    return cmp_dirent_aux(a, b);
-}
-
 int nfs_8dot3(char *strin, char ***strout){
     char name[8];
     char ext[4];
@@ -2124,7 +2125,7 @@ char * nfs_setfname(char curpath[254],char *msxpath) {
     
 }
 
-void ffirst(char *curpath,char *msxpath) {
+void dos_ffirst(char *curpath,char *msxpath) {
     
     int count = 0;
     size_t length = 0;
@@ -2159,7 +2160,7 @@ void ffirst(char *curpath,char *msxpath) {
     
 }
 
-int fnext(char *msxpath,int nfs_findex,int nfs_count,char *filelist) {
+int dos_fnext(char *msxpath,int nfs_findex,int nfs_count,char *filelist) {
     int rc;
     char *thisFile;
     
@@ -2239,8 +2240,8 @@ int pdate() {
 
 int pplay(char *msxcommand) {
     int rc;
-    unsigned char *buf;
-    unsigned char *fname;
+    char *buf;
+    char *fname;
     char** tokens;
     FILE *fp;
     char *msxcommandtmp;
@@ -2431,7 +2432,7 @@ int main(int argc, char *argv[]){
     
     // numdrives is hardocde here to assure MSX will always have only 2 drives allocated
     // more than 2 drives causes some MSX to hang
-    unsigned char numdrives = 0;
+    char numdrives = 0;
     
     unsigned char appstate = st_init;
     
@@ -2479,7 +2480,7 @@ int main(int argc, char *argv[]){
     // there is a memory corruption / leak somewhere in the code
     // if these two variables are moved to other places, and dummy is removed,
     // some commands will crash. PCOPY won't work for sure.
-    unsigned char msxcommand[255];
+    char msxcommand[255];
     char dummy[250];
     
     if (gpioInitialise() < 0)
@@ -2838,7 +2839,7 @@ int main(int argc, char *argv[]){
                     nfs_findex = 0;
                     printf("NFS_FFIRST:1:curpath=%s,nfs_workingdir=%s\n",curpath,nfs_workingdir);
                     // read msx path or file name
-                    ffirst(&curpath,&nfs_workingdir);
+                    dos_ffirst(&curpath,&nfs_workingdir);
                     printf("NFS_FFIRST:2:curpath=%s,nfs_workingdir=%s\n",curpath,nfs_workingdir);
                     
                     // list file(s)
@@ -2846,7 +2847,7 @@ int main(int argc, char *argv[]){
                         if (nfs_fcount>1)
                             qsort(dirfiles, nfs_fcount, sizeof *dirfiles, &cmp_dirent);
                         
-                        fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name);
+                        dos_fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name);
                         
                     } else
                         printf("!!!!! Error !!!!!\n");
@@ -2860,7 +2861,7 @@ int main(int argc, char *argv[]){
                     printf("NFS_FNEXT:1:nfs_workingdir=%s\n",nfs_workingdir);
                     //printf("NFS_FNEXT:dirfiles=%s\n",dirfiles[nfs_findex]);
                     
-                    if (fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name)!=RC_SUCCESS)
+                    if (dos_fnext(nfs_workingdir,nfs_findex,nfs_fcount,dirfiles[nfs_findex].d_name)!=RC_SUCCESS)
                         printf("!!!!! Error !!!!!\n");
                     
                     appstate = st_cmd;
