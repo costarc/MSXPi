@@ -49,7 +49,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
-# Update script for MSXPi
+# Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT
 echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
 echo "prun rm $MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
@@ -60,6 +60,19 @@ echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
 echo "perror"                          >> /tmp/MSXPIUPD.BAT
 cat /tmp/MSXPIUPD.BAT | awk 'sub("$", "\r")' > ./target/MSXPIUPD.BAT 
 rm /tmp/MSXPIUPD.BAT
+
+# Update script for MSXPi Rev0
+echo "pdate"                               > /tmp/MSXPIUPD.BAT
+echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
+echo "prun rm $MSXPIHOME/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
+echo "prun wget --user=msxpi@retro-cpu.run --password=retro-cpu.run http://retro-cpu.run/MSXPI/rev0/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
+echo "prun chmod 755 $MSXPIHOME/msxpi-update_rev0.sh;$MSXPIHOME/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
+echo "pcopy MSXPIUP1.BAT MSXPIUP1.BAT" >> /tmp/MSXPIUPD.BAT
+echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
+echo "perror"                          >> /tmp/MSXPIUPD.BAT
+cat /tmp/MSXPIUPD.BAT | awk 'sub("$", "\r")' > ./target/MSXPIUP0.BAT
+rm /tmp/MSXPIUPD.BAT
+
 
 # Nextor File System driver
 # Hack to work around issue with includes on sjasm

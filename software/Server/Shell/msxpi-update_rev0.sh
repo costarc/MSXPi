@@ -34,7 +34,7 @@
 #!/bin/sh
 
 MSXPIHOME=/home/pi/msxpi
-FILESERVER=http://retro-cpu.run/MSXPI
+FILESERVER=http://retro-cpu.run/MSXPI/rev0
 GETCMD="/usr/bin/wget --user=msxpi@retro-cpu.run --password=retro-cpu.run"
 GETCMD="/usr/bin/wget"
 TMPDIR=/tmp
@@ -52,8 +52,8 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
 /bin/chmod 755 $MSXPIHOME/msxpi-server
 
 # Create the update .bat to run from MSX-DOS
-echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
-$GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS/
+echo "pcd $FILESERVER" > MSXPIUP1.BAT.0
+$GETCMD -o /tmp/msxpi_error.log $FILESERVER/
 FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | grep -v "Name" | grep -v "Parent")
 for FILE in $FILELIST
 do

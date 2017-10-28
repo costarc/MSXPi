@@ -38,8 +38,33 @@ LOADROMPROG:
         LD      BC,8
         LD      DE,LOADROMCMD
         CALL    DOSSENDPICMD
-        JR      C,LOADPROGERR
+        JR      C,PRINTPIERR
+
+; wait RPi to load the program
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCNOSTD
+        JR      Z,LOADREADY
+        CP      RC_SUCCESS
+        JR      NZ,WAITLOOP
+
+LOADREADY:
         CALL    LOADROM
+
+
 LOADROMPROG1:
         PUSH    HL
         PUSH    AF
@@ -54,6 +79,23 @@ LOADROMPROG1:
         CALL    ENASLT
         POP     HL
         JP      (HL)
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     %11110000
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 ;-----------------------
 ; LOADROM              |

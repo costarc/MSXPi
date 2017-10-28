@@ -871,6 +871,11 @@ int loadrom(struct psettype *psetvar,char *msxcommand) {
     
     printf("load:starting %s\n",msxcommand);
     
+    if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
+        printf("pdir:out of sync\n");
+        return RC_FAILED;
+    }
+    
     tokens = str_split(msxcommand,' ');
     printf("load:parsed command is %s %s\n",*(tokens),*(tokens + 1));
 
@@ -905,10 +910,11 @@ int loadrom(struct psettype *psetvar,char *msxcommand) {
             printf("loadrom:Not a .rom program. Aborting\n");
             rc = RC_UNDEFINED;
             strcpy(stdout,"Pi:Not a .rom file");
-            piexchangebyte(ABORT);
+            piexchangebyte(RC_FAILED);
         } else {
             
-            piexchangebyte(STARTTRANSFER);
+            // This status tells MSX to start receiving data
+            piexchangebyte(RC_SUCCNOSTD);
             
             // send to msx the total size of file
             printf("load:sending file size %i\n",filesize);
@@ -955,7 +961,7 @@ int loadrom(struct psettype *psetvar,char *msxcommand) {
         
     } else {
         rc = RC_FILENOTFOUND;
-        piexchangebyte(ABORT);
+        piexchangebyte(RC_FAILED);
         strcpy(stdout,"Pi:Error opening file");
     }
     
