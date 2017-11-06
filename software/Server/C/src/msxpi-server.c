@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20171022.00086"
+#define build "20171106.00087"
 
 //#define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
@@ -1464,7 +1464,7 @@ int pwifi(char * msxcommand, char *wifissid, char *wifipass) {
     } else if ((strncmp(*(tokens + 1),"DISPLAY",1)==0) ||
                (strncmp(*(tokens + 1),"display",1)==0)) {
         
-        rc = runpicmd("ifconfig wlan0 | grep inet >/tmp/msxpi.tmp");
+        rc = runpicmd("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6 >/tmp/msxpi.tmp");
         
     } else if ((strncmp(*(tokens + 1),"SET",1)==0) ||
                (strncmp(*(tokens + 1),"set",1)==0)) {
