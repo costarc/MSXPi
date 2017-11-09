@@ -863,13 +863,13 @@ int ploadrom(struct psettype *psetvar,char *msxcommand) {
     int rc, sz;
     FILE *fp;
     int filesize,index,blocksize,retries;
-    unsigned char *buf;
     char *stdout;
     char *newpath;
     transferStruct dataInfo;
     char** tokens;
+    unsigned char *buf;
     
-    printf("load:starting %s\n",msxcommand);
+    printf("ploadrom::starting %s\n",msxcommand);
     
     if (piexchangebyte(RC_WAIT)!=SENDNEXT) {
         printf("ploadrom:out of sync\n");
@@ -877,13 +877,24 @@ int ploadrom(struct psettype *psetvar,char *msxcommand) {
     }
     
     tokens = str_split(msxcommand,' ');
-    printf("load:parsed command is %s %s\n",*(tokens),*(tokens + 1));
+    printf("ploadrom::parsed command is %s %s\n",*(tokens),*(tokens + 1));
 
     dataInfo.rc = RC_UNDEFINED;
     
+    stdout = malloc(sizeof(*stdout) * 110);
+    
+    if (*(tokens + 1) == NULL) {
+        strcpy(stdout,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file");
+        printf("ploadrom::Syntax error. Missing parameters\n");
+        piexchangebyte(RC_FAILED);
+        dataInfo = senddatablock(stdout,strlen(stdout)+1,true);
+        free(stdout);
+        return RC_FAILED;
+    }
+    
     sz = (sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)))) + 2;
     
-    printf("newpath size will be: %i\n",sz);
+    printf("ploadrom:newpath size will be: %i\n",sz);
     
     newpath = malloc(sz);
     strcpy(newpath,psetvar[0].value);
@@ -891,23 +902,28 @@ int ploadrom(struct psettype *psetvar,char *msxcommand) {
     strcat(newpath,*(tokens + 1));
     
     printf("ploadrom:append to relative path: result is %s\n",newpath);
-
-    stdout = malloc(sizeof(*stdout) * 65);
     
     fp = fopen(newpath,"rb");
     if (fp) {
-        printf("Found file\n");
+        printf("ploadrom:Found file\n");
         fseek(fp, 0L, SEEK_END);
         filesize = ftell(fp);
+        printf("ploadrom:filesize=%i\n",filesize);
         rewind(fp);
-        buf = malloc(sizeof(*buf) * filesize + 1);
-        fread(buf,filesize,1,fp);
+        buf = malloc(sizeof(unsigned char) * filesize + 1);
+        
+        if (buf != NULL) {
+            printf("ploadrom:malloc size is %i\n",buf);
+            fread(buf,filesize,1,fp);
+        } else
+            printf("ploadrom:malloc is NULL\n");
+        
         fclose(fp);
         
-        printf("File read into buffer\n");
+        printf("ploadrom:File read into buffer\n");
         
         if ((*(buf)!='A') || (*(buf+1)!='B')) {
-            printf("loadrom:Not a .rom program. Aborting\n");
+            printf("ploadrom::Not a .rom program. Aborting\n");
             rc = RC_UNDEFINED;
             strcpy(stdout,"Pi:Not a .rom file");
             piexchangebyte(RC_FAILED);
@@ -1605,12 +1621,13 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         sprintf(stdout,"%s\n",psetvar[0].value);
         
     } else {
-        newpath = malloc((sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)))) + 1);
+        int newps = (sizeof(*newpath) * (strlen(psetvar[0].value)+strlen(*(tokens + 1)))) + 1;
+        newpath = malloc(newps);
         strcpy(newpath,psetvar[0].value);
         strcat(newpath,"/");
         strcat(newpath,*(tokens + 1));
         
-        printf("pcd:append to relative path. final path is %s\n",newpath);
+        printf("pcd:append to relative path. final path and size is %i:%s\n",newps,newpath);
         
         if( access( newpath, F_OK ) != -1 ) {
             strcpy(psetvar[0].value,newpath);
@@ -1727,13 +1744,16 @@ int pdir(struct psettype *psetvar, char *msxcommand) {
     } else {
         printf("pdir:local path:");
         
-        strcpy(msxcommand,"ls ");
-        strcat(msxcommand,psetvar[0].value);
+        buf = malloc(sizeof(*buf)*strlen(psetvar[0].value)+5);
+        
+        strcpy(buf,"ls ");
+        strcat(buf,psetvar[0].value);
                
-        printf("%s\n",msxcommand);
+        printf("pdir:running %s\n",buf);
         
         // piexchangebyte is not here because runpicm has it already
-        rc = runpicmd(msxcommand);
+        rc = runpicmd(buf);
+        free(buf);
         
     }
     

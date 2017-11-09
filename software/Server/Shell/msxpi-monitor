@@ -2,6 +2,8 @@
 echo "Restarting msxpi-server"
 /home/pi/msxpi/msxpi-server &
 
+rm /home/pi/msxpi/msxpi-update*
+
 while :
 do
 sleep 5

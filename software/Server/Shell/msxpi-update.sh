@@ -43,13 +43,21 @@ cd $TMPDIR
 rm msxpitools 2>/dev/null
 
 # Download msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-monitor
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
+
+/bin/mv msxpi-monitor    $MSXPIHOME/
 /bin/mv msxpi-server     $MSXPIHOME/
 /bin/mv msxpi-client.bin $MSXPIHOME/
-/bin/chmod 755 $MSXPIHOME/*.sh
-/bin/chmod 755 $MSXPIHOME/msxpi-server
+/bin/mv msxpiext.bin     $MSXPIHOME/
+/bin/mv pplay.sh         $MSXPIHOME/
+/bin/mv pshut.sh         $MSXPIHOME/
+
+/bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor $MSXPIHOME/msxpi-server
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0

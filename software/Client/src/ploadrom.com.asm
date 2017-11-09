@@ -39,13 +39,16 @@ LOADROMPROG:
         LD      DE,LOADROMCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-
+        ld      a,'1'
+        call    PUTCHAR
 ; wait RPi to load the program
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
 
+        ld      a,'2'
+        call    PUTCHAR
 WAITLOOP:
         CALL    CHECK_ESC
         JR      C,PRINTPIERR
@@ -61,7 +64,13 @@ WAITLOOP:
         CP      RC_SUCCESS
         JR      NZ,WAITLOOP
 
+        ld      a,'3A'
+        call    PUTCHAR
+
 LOADREADY:
+        ld      a,'3B'
+        call    PUTCHAR
+
         CALL    LOADROM
 
 

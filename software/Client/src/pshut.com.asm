@@ -40,7 +40,7 @@
 ; move shutdown command to DOS command line buffer
         LD      HL,SHUTDMD
         LD      DE,$80
-        LD      BC,18
+        LD      BC,26
         LDIR
 
 ; Send RUN command to Pi, along with buffer in DOS command line
@@ -56,7 +56,7 @@ PRINTPIERR:
         JP      0
 
 DIRCMD: DB      "PRUN"
-SHUTDMD:DB      17," shutdown -h now",$0D
+SHUTDMD:DB      17," /home/pi/msxpi/pshut.sh",$0D
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
 
