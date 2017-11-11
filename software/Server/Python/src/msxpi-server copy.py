@@ -97,6 +97,8 @@ def SPI_MASTER_transfer_byte(byte_out):
 def piexchangebyte(checktimeout,mypibyte):
     time_start = time.time()
     timeout = False
+    rc = RC_SUCCESS
+    
     GPIO.output(rdyPin, GPIO.HIGH)
     #GPIO.wait_for_edge(csPin, GPIO.FALLING)
     if (checktimeout):
@@ -109,8 +111,11 @@ def piexchangebyte(checktimeout,mypibyte):
 
     mymsxbyte = SPI_MASTER_transfer_byte(mypibyte);
     GPIO.output(rdyPin, GPIO.LOW)
-    return [timeout,mymsxbyte]
 
+    if (timeout):
+        rc = RC_TIMEOUT
+
+    return [rc,mymsxbyte]
 
 def recvdatablock(checktimeout):
     buffer = bytearray()
@@ -130,7 +135,7 @@ def recvdatablock(checktimeout):
         #print "recvdatablock:Received blocksize =",datasize;
         while(datasize>bytecounter and rc == RC_SUCCESS):
             mymsxbyte = piexchangebyte(False,SENDNEXT)
-            if (not mymsxbyte[0]):
+            if (mymsxbyte[0] == RC_SUCCESS):
                 #print "recvdatablock:Received byte:",chr(mymsxbyte[1]);
                 buffer.append(mymsxbyte[1])
                 crc ^= mymsxbyte[1]
@@ -142,11 +147,12 @@ def recvdatablock(checktimeout):
     if (rc == RC_SUCCESS):
         #print "crc = ",crc
         mymsxbyte = piexchangebyte(False,crc)
-        if (mymsxbyte[1] <> crc):
+        if (mymsxbyte[1] != crc):
             rc = RC_CRCERROR
         #else:
             #print "recvdatablock:CRC verified"
 
+    print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
 def senddatablock(checktimeout,buffer,datasize,sendsize):
@@ -161,7 +167,7 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
         rc = RC_OUTOFSYNC;
     else:
         if (sendsize):
-            print "senddatablock:Sending blocksize ",datasize
+            #print "senddatablock:Sending blocksize ",datasize
             piexchangebyte(True,datasize % 256)
             piexchangebyte(True,datasize / 256)
 
@@ -172,9 +178,9 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
         while(datasize>bytecounter and rc == RC_SUCCESS):
             mypibyte = bufarray[bytecounter]
             mymsxbyte = piexchangebyte(True,mypibyte)
-            print "senddatablock:",chr(mypibyte)
-            if (not mymsxbyte[0]):
-                print "senddatablock:byte sent successfully"
+            #print "senddatablock:",chr(mypibyte)
+            if (mymsxbyte[0] == RC_SUCCESS):
+                #print "senddatablock:byte sent successfully"
                 crc ^= mypibyte
                 bytecounter += 1
             else:
@@ -182,23 +188,23 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
                 rc = RC_TIMEOUT
 
     if (rc == RC_SUCCESS):
-        print "senddatablock:local crc = ",crc
+        #print "senddatablock:local crc = ",crc
         mymsxbyte = piexchangebyte(False,crc)
-        if (mymsxbyte[1] == crc):
-            print "senddatablock:CRC verified"
-        else:
+        if (mymsxbyte[1] != crc):
             rc = RC_CRCERROR;
+        #else:
+        #    print "senddatablock:CRC verified"
 
+    print "senddatablock:Exiting with rc=",hex(rc)
     return rc
 
 def runpicmd(msxcommand):
-    print "runpicmd:starting command:",msxcommand
+    #print "runpicmd:starting command:",msxcommand
     msxcommand = msxcommand.decode().split(" ")
     piexchangebyte(False,RC_WAIT);
     buf = subprocess.check_output(msxcommand)
-    print "runpicmd:result is ",buf
-    
-    print "runpicmd:Sending output to MSX. Size is:",len(buf)
+    #print "runpicmd:result is ",buf
+    #print "runpicmd:Sending output to MSX. Size is:",len(buf)
     piexchangebyte(False,RC_SUCCESS);
     rc = senddatablock(True,buf,len(buf),True);
 
@@ -236,8 +242,10 @@ try:
                 runpicmd(msxcommand[5:])
                 appstate = st_cmd
         
-        print "Error"
-        piexchangebyte(False,RC_FAILNOSTD)
+        if (appstate == st_runcmd):
+            print "Error"
+            piexchangebyte(False,RC_FAILNOSTD)
+
         appstate = st_cmd
 
 except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
