@@ -66,6 +66,7 @@ sudo apt-get -y install smbclient
 sudo apt-get -y install html2text
 sudo apt-get -y install libcurl4-nss-dev
 sudo apt-get -y install mplayer
+sudo apt-get -y install pypy
 wget abyz.co.uk/rpi/pigpio/pigpio.tar
 tar xvf pigpio.tar
 cd PIGPIO
