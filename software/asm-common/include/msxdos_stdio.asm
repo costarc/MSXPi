@@ -34,28 +34,60 @@
 TEXTTERMINATOR: EQU     '$'
 BDOS:           EQU     5
 DOSSENDPICMD:
+; Copy our command to the buffer
         ld      hl,FULLCMD
-        push    hl
         ex      de,hl
         push    bc
         ldir
-        ld      hl,$81
-        pop     bc
-DOSSENDPICMD0:
+
+; now check if there are parameters in the command line
+        ld      hl,$80
         ld      a,(hl)
-        cp      $0D
+        ld      b,a
+        or      a
         jr      z,DOSSEND1
+
+DOSSENDPICMD0:
+; b contain number of chars passed as arguments in the command
+        inc     hl
+        call    EATSPACES
+        jr      c,DOSSEND1
+
+; save number of characters in B
+        push    bc
+
+; there are parameters - have to concatenate to our buffer
+DOSSENDPICMD1:
+        ld      a,32
+        ld      (de),a
+        inc     de
+DOSSENDPICMD2:
+        ld      a,(hl)
         ld      (de),a
         inc     hl
         inc     de
-        inc     bc
-        jr      DOSSENDPICMD0
+        djnz    DOSSENDPICMD2
+
+; now get number of chars in command line arguments
+        pop     hl
+        ld      l,h
+        ld      h,0
+
+; then get number of chars in our command
+        pop     bc
+
+; and calc the total size of the command line to send to RPi
+        add     hl,bc
+        ld      b,h
+        ld      c,l
+        push    bc
 
 DOSSEND1:
         ld      a,0
         ld      (de),a
+        pop     bc
         inc     bc
-        pop     de
+        ld      de,FULLCMD
         di
         call    SENDPICMD
         ei
@@ -73,6 +105,17 @@ PUTCHAR:
         pop     bc
         ret
 
+EATSPACES:
+        ld      a,(hl)
+        cp      32
+        jr      nz,EATSPACEEND
+        inc     hl
+        djnz    EATSPACES
+        scf
+        ret
+EATSPACEEND:
+        or      a
+        ret
 FULLCMD:equ     $
         ds      256
 
