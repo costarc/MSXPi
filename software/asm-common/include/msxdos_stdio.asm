@@ -34,36 +34,6 @@
 TEXTTERMINATOR: EQU     '$'
 BDOS:           EQU     5
 DOSSENDPICMD:
-
-; debug
-        push    de
-        push    bc
-        ld      hl,$80
-        ld      a,(hl)
-        ld      e,a
-        ld      d,0
-        call    DBGDE
-        ld      a,'_'
-        call    PUTCHAR
-        ld      a,(hl)
-        or      a
-        jr      z,enddbg
-        ld      b,a
-        inc     hl
-        inc     hl
-dbg1:
-        ld      a,(hl)
-        call    PUTCHAR
-        ld      a,'_'
-        call    PUTCHAR
-        inc     hl
-        djnz    dbg1
-
-enddbg:
-        pop     bc
-        pop     de
-; end debug
-
 ; Copy our command to the buffer
         ld      hl,FULLCMD
         ex      de,hl
@@ -146,7 +116,6 @@ EATSPACES:
 EATSPACEEND:
         or      a
         ret
-INCLUDE "debug.asm"
 FULLCMD:equ     $
         ds      256
 
