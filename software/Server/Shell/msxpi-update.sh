@@ -45,6 +45,7 @@ rm msxpitools 2>/dev/null
 # Download msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-monitor
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server.py
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
@@ -52,6 +53,7 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
 
 /bin/mv msxpi-monitor    $MSXPIHOME/
 /bin/mv msxpi-server     $MSXPIHOME/
+/bin/mv msxpi-server.py  $MSXPIHOME/
 /bin/mv msxpi-client.bin $MSXPIHOME/
 /bin/mv msxpiext.bin     $MSXPIHOME/
 /bin/mv pplay.sh         $MSXPIHOME/

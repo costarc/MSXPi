@@ -2,7 +2,8 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
-import struct
+import urllib
+from HTMLParser import HTMLParser
 
 version = 0.1
 build   = 20171110
@@ -345,6 +346,77 @@ def ploadr(basepath, file):
 
     print "pload:Exiting with rc = ",hex(rc)
 
+def getpath(basepath, path):
+    if  path.startswith('/'):
+        urltype = 0 # this is an absolute local path
+        newpath = path
+    elif (path.startswith('http') or \
+          path.startswith('ftp') or \
+          path.startswith('nfs') or \
+          path.startswith('smb')):
+        urltype = 1 # this is an absolute network path
+        newpath = path
+    elif basepath.startswith('/'):
+        urltype = 2 # this is an absolute local path
+        newpath = basepath + "/" + path
+    elif (basepath.startswith('http') or \
+          basepath.startswith('ftp') or \
+          basepath.startswith('nfs') or \
+          basepath.startswith('smb')):
+        urltype = 3 # this is an absolute network path
+        newpath = basepath + "/" + path
+
+    return [urltype, newpath]
+
+# create a subclass and override the handler methods
+class MyHTMLParser(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+    def handle_starttag(self, tag, attrs):
+        self.NEWTAGS.append(tag)
+        self.NEWATTRS.append(attrs)
+    def handle_data(self, data):
+        self.HTMLDATA.append(data)
+    def clean(self):
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+
+def pdir(basepath, path):
+    rc = RC_SUCCESS
+    print "pdir:starting"
+
+    msxbyte = piexchangebyte(False,RC_WAIT)
+    urltype = 1 # realtive path is assumed default
+    if (msxbyte[1]==SENDNEXT):
+        urlcheck = getpath(basepath, path)
+        if (urlcheck[0] == 0 or urlcheck[0] == 2):
+            cmd = "ls -l " +  urlcheck[1]
+            cmd = cmd.decode().split(" ")
+            buf = subprocess.check_output(cmd)
+            piexchangebyte(False,RC_SUCCESS);
+            rc = senddatablock(True,buf,len(buf),True);
+        else:
+            #cmd = "/usr/bin/wget --no-check-certificate  -O /tmp/msxpifile1.tmp -o /tmp/msxpi_error.log " +  urltype[1]
+            print "pdir:network access:"+urlcheck[1].decode()
+            parser = MyHTMLParser()
+            htmldata = urllib.urlopen(urlcheck[1].decode()).read()
+            parser = MyHTMLParser()
+            parser.feed(htmldata)
+            buf = " ".join(parser.HTMLDATA)
+            print buf
+            piexchangebyte(False,RC_SUCCESS);
+            rc = senddatablock(True,buf,len(buf),True);
+    else:
+        rc = RC_FAILNOSTD
+        print "pdir:out of sync in RC_WAIT"
+
+    print "runpicmd:exiting rc:",hex(rc)
+    return rc;
+
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
@@ -394,14 +466,17 @@ try:
             if (msxcommand[:6] == "ploadr" or msxcommand[:6] == "PLOADR"):
                 ploadr(psetvar[0][1],msxcommand[7:])
                 appstate = st_cmd
-        
+            if (msxcommand[:4] == "pdir" or msxcommand[:4] == "PDIR"):
+                pdir(psetvar[0][1],msxcommand[5:])
+                appstate = st_cmd
+                
         if (appstate == st_runcmd):
             print "Error"
             piexchangebyte(False,RC_FAILNOSTD)
 
         appstate = st_cmd
 
-except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
+except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
     print "Terminating msxpi-server"
 
