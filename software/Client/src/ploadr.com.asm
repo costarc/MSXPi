@@ -35,7 +35,7 @@
         ORG     $0100
 
 LOADROMPROG:
-        LD      BC,8
+        LD      BC,6
         LD      DE,LOADROMCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
@@ -60,9 +60,12 @@ WAITLOOP:
         JR      NZ,WAITLOOP
 LOADREADY:
 
+        LD      HL,LOADPROGRESS
+        CALL    PRINT
         CALL    LOADROM
 
 LOADROMPROG1:
+        CALL    PIEXCHANGEBYTE
         PUSH    HL
         PUSH    AF
         CALL    PRINTPISTDOUT
@@ -109,46 +112,11 @@ LOADROM:
         SCF
         RET     NZ
         LD      DE,$4000
-        CALL    READDATASIZE
-LOADROM0:
-        PUSH    BC
-        LD      A,GLOBALRETRIES
-LOADROMRETRY:
-; retries
-        PUSH    AF
         CALL    RECVDATABLOCK
-        JR      NC,LOADROM1
-        POP     AF
-        DEC     A
-        JR      NZ,LOADROMRETRY
-        LD      A,ABORT
-        POP     BC
-        OR      A
-        RET
-
-LOADROM1:
-        LD      A,'.'
-        CALL    PUTCHAR
-        POP     AF
-;Get rom address to write
-        POP     HL
-
-;DE now contain ROM address
-        SBC     HL,BC
-        JR      C,LOADROMEND
-        JR      Z,LOADROMEND
-        LD      B,H
-        LD      C,L
-        JR      LOADROM0
-
+        JR      C,LOADPROGERR
 ; File load successfully.
 ; Return C reseted, and A = filetype
 LOADROMEND:
-        LD      A,ENDTRANSFER
-        CALL    PIEXCHANGEBYTE
-        CP      ENDTRANSFER
-        SCF
-        RET     NZ
         LD      HL,($4002)    ; ROM exec address
         LD      A,ENDTRANSFER
         OR      A             ;Reset C flag
@@ -157,16 +125,20 @@ LOADROMEND:
 LOADPROGERR:
         LD      HL,LOADPROGERRMSG
         CALL    PRINT
-        JP      0
+        SCF
+        RET
 
 LOADROMCMD:
-        DB      "PLOADROM"
+        DB      "PLOADR"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
 
 LOADPROGERRMSG:
         DB      "Error loading file",13,10,"$"
+
+LOADPROGRESS:
+        DB      "Loading game...$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

@@ -2,6 +2,7 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
+import struct
 
 version = 0.1
 build   = 20171110
@@ -16,6 +17,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
+GLOBALRETRIES       =    5
 SPI_INT_TIME        =    3000
 PIWAITTIMEOUTOTHER  =    120     # seconds
 PIWAITTIMEOUTBIOS   =    60      # seconds
@@ -63,7 +65,6 @@ def init_spi_bitbang():
     GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
-    GPIO.output(rdyPin, GPIO.LOW)
 
 def tick_sclk():
     GPIO.output(sclkPin, GPIO.HIGH)
@@ -91,7 +92,7 @@ def SPI_MASTER_transfer_byte(byte_out):
         #time.sleep(SPI_SCLK_LOW_TIME)
 
     tick_sclk();
-#print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
+    #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
 def piexchangebyte(checktimeout,mypibyte):
@@ -116,6 +117,10 @@ def piexchangebyte(checktimeout,mypibyte):
         rc = RC_TIMEOUT
 
     return [rc,mymsxbyte]
+
+def senderror(rc, message):
+    piexchangebyte(False,rc)
+    return senddatablock(True,message,len(message),True);
 
 def recvdatablock(checktimeout):
     buffer = bytearray()
@@ -167,18 +172,14 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
         rc = RC_OUTOFSYNC;
     else:
         if (sendsize):
-            #print "senddatablock:Sending blocksize ",datasize
+            print "senddatablock:Sending blocksize ",datasize
             piexchangebyte(True,datasize % 256)
             piexchangebyte(True,datasize / 256)
-
-
-        bufarray = bytearray()
-        bufarray.extend(buffer)
     
         while(datasize>bytecounter and rc == RC_SUCCESS):
-            mypibyte = bufarray[bytecounter]
+            mypibyte = ord(buffer[bytecounter])
+            #print "senddatablock:",mypibyte
             mymsxbyte = piexchangebyte(True,mypibyte)
-            #print "senddatablock:",chr(mypibyte)
             if (mymsxbyte[0] == RC_SUCCESS):
                 #print "senddatablock:byte sent successfully"
                 crc ^= mypibyte
@@ -188,8 +189,8 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
                 rc = RC_TIMEOUT
 
     if (rc == RC_SUCCESS):
-        #print "senddatablock:local crc = ",crc
         mymsxbyte = piexchangebyte(False,crc)
+        print "senddatablock:CRC local:remote = ",crc,":",mymsxbyte[1]
         if (mymsxbyte[1] != crc):
             rc = RC_CRCERROR;
         #else:
@@ -211,11 +212,157 @@ def runpicmd(msxcommand):
     print "runpicmd:exiting rc:",hex(rc)
     return rc;
 
+def secsenddata(basepath, file):
+    rc = RC_SUCCESS
+    
+    print "ploadrom:starting"
+    
+    msxbyte = piexchangebyte(False,RC_WAIT)
+    if (msxbyte[1]==SENDNEXT):
+        file = file.decode().split(" ")
+        if (file[0] <> ""):
+            filepath = basepath + "/" + file[0]
+            print "ploadrom:full file path is:",filepath
+            
+            try:
+                fh = open(filepath, 'rb')
+                buf = fh.read()
+                fh.close()
+                
+                filesize = len(buf)
+                
+                print "ploadrom:len of buf:",filesize
+                
+                if (buf[0]=='A' and buf[1]=='B'):
+                    msxbyte = piexchangebyte(False,RC_SUCCNOSTD)
+                    if (msxbyte[1]==SENDNEXT):
+                        
+                        msxbyte = piexchangebyte(False,STARTTRANSFER)
+                        if (msxbyte[1]==STARTTRANSFER):
+                            piexchangebyte(True,filesize % 256)
+                            piexchangebyte(True,filesize / 256)
+                            
+                            if (filesize>512):
+                                blocksize = 512
+                            else:
+                                blocksize = filesize
+                        
+                            index = 0
+                            retries = 0
+                            while(blocksize and retries <= GLOBALRETRIES):
+                                retries = 0
+                                rc = RC_UNDEFINED
+                                
+                                lastindex = index+blocksize
+                                
+                                while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
+                                    print "ploadrom:sending block:blocksize ",index,":",blocksize
+                                    print "ploadrom:data range:",index,":",lastindex
+                                    rc = senddatablock(True,buf[index:lastindex],blocksize,True)
+                                    retries += 1
+
+                                index += blocksize
+                                if (filesize - index > 512):
+                                    blocksize = 512
+                                else:
+                                    blocksize = filesize - index
+                                                                
+                            if(retries>=GLOBALRETRIES):
+                                print "load:Transfer interrupted due to CRC error"
+                                rc = ABORT
+                                senderror(rc,"Pi:CRC Error")
+                            else:
+                                print "ploadrom:successful"
+                                rc = RC_SUCCESS
+                                senderror(rc,"Pi:Ok")
+                        else:
+                            rc = RC_FAILED
+                            senderror(rc,"ploadrom:out of sync in STARTTRANSFER")
+                    else:
+                        rc = RC_FAILED;
+                        print "ploadrom:out of sync: RC_SUCCNOSTD"
+                else:
+                    print "ploadrom::Not a .rom program. Aborting"
+                    rc = RC_FAILED
+                    senderror(rc,"Pi:Not a .rom file")
+        
+            except IOError:
+                rc = RC_FAILED
+                print "Error opening file"
+                senderror(rc,"Pi:Error opening file")
+        else:
+            print "ploadrom:syntax error in command"
+            rc = RC_FAILED
+            senderror(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
+    else:
+        print "ploadrom:out of sync"
+        piexchangebyte(False,RC_FAILNOSTD)
+        rc = RC_FAILNOSTD
+
+    print "ploadrom:Exiting with rc = ",hex(rc)
+
+def ploadr(basepath, file):
+    rc = RC_SUCCESS
+    
+    print "pload:starting"
+    
+    msxbyte = piexchangebyte(False,RC_WAIT)
+    if (msxbyte[1]==SENDNEXT):
+        file = file.decode().split(" ")
+        if (file[0] <> ""):
+            filepath = basepath + "/" + file[0]
+            print "pload:full file path is:",filepath
+            
+            try:
+                fh = open(filepath, 'rb')
+                buf = fh.read()
+                fh.close()
+                
+                print "pload:len of buf:",len(buf)
+                
+                if (buf[0]=='A' and buf[1]=='B'):
+                    msxbyte = piexchangebyte(False,RC_SUCCNOSTD)
+                    if (msxbyte[1]==SENDNEXT):
+                        
+                        msxbyte = piexchangebyte(False,STARTTRANSFER)
+                        if (msxbyte[1]==STARTTRANSFER):
+                            rc = senddatablock(True,buf,len(buf),True)
+                        if (rc == RC_SUCCESS):
+                            print "pload:successful"
+                            senderror(rc,"Pi:Ok")
+                        else:
+                            rc = RC_FAILED
+                            senderror(rc,"pload:out of sync in STARTTRANSFER")
+    
+            except IOError:
+                rc = RC_FAILED
+                print "Error opening file"
+                senderror(rc,"Pi:Error opening file")
+        else:
+            print "pload:syntax error in command"
+            rc = RC_FAILED
+            senderror(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
+
+    print "pload:Exiting with rc = ",hex(rc)
+
+
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
+
+psetvar = [['PATH','/home/msxpi'], \
+           ['DRIVE0','disks/msxpiboot.dsk'], \
+           ['DRIVE1','disks/msxpitools.dsk'], \
+           ['WIDTH','80'], \
+           ['free',''], \
+           ['WIFISSID','MYWIFI'], \
+           ['WIFIPWD','MYWFIPASSWORD'], \
+           ['DSKTMPL','disks/msxpi_720KB_template.dsk'], \
+           ['free',''], \
+           ['free',''] \
+           ]
 
 appstate = st_init
 
@@ -237,9 +384,15 @@ try:
                     
         if (appstate == st_runcmd):
             msxcommand = rc[1]
-            print "st_runcmd:",msxcommand[:4]
+            print "st_runcmd:",msxcommand
             if (msxcommand[:4] == "prun" or msxcommand[:4] == "PRUN"):
                 runpicmd(msxcommand[5:])
+                appstate = st_cmd
+            if (msxcommand[:8] == "ploadrom" or msxcommand[:8] == "PLOADROM"):
+                ploadrom(psetvar[0][1],msxcommand[9:])
+                appstate = st_cmd
+            if (msxcommand[:6] == "ploadr" or msxcommand[:6] == "PLOADR"):
+                ploadr(psetvar[0][1],msxcommand[7:])
                 appstate = st_cmd
         
         if (appstate == st_runcmd):

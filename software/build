@@ -32,6 +32,7 @@ fi
 # MSX-DOS commands
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadrom.com.asm -o ./target/ploadrom.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psetdisk.com.asm -o ./target/psetdisk.com
