@@ -642,6 +642,7 @@ int secsenddata(unsigned char *buf, int filesize) {
         if(retries>=GLOBALRETRIES) break;
         
         blockindex += 512;
+        //blockindex += blocksize;
         
         if (filesize-blockindex>512) blocksize = 512; else blocksize = filesize-blockindex;
         //printf("secsenddata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
