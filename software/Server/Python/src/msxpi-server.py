@@ -301,6 +301,7 @@ def secsenddata(buffer, initpos, filesize):
         piexchangebyte(TimeOutCheck,rc)
 
     print "secsenddata:Exiting with rc = ",hex(rc)
+    return rc
 
 def runpicmd(msxcommand):
     #print "runpicmd:starting command:",msxcommand
@@ -464,7 +465,7 @@ def pset(psetvar, attrs):
     function to initialize disk image into a memory mapped variable
 """
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    print "msxdos_inihrd:Starting"
+    #print "msxdos_inihrd:Starting"
     size = os.path.getsize(filename)
     fd = os.open(filename, os.O_RDWR)
     return mmap.mmap(fd, size, access=access)
@@ -480,7 +481,7 @@ def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
 
 def msxdos_secinfo(sectorInfo):
     rc = RC_SUCCESS
-    print "msxdos_secinfo: Starting with sectorInfo:",sectorInfo
+    #print "msxdos_secinfo: Starting with sectorInfo:",sectorInfo
     mymsxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     if (mymsxbyte[1] == SENDNEXT):
         sectorInfo[0] = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
@@ -493,11 +494,10 @@ def msxdos_secinfo(sectorInfo):
         print "msxdos_secinfo:sync_transf error"
         rc = RC_OUTOFSYNC;
     
-    print "msxdos_secinfo:deviceNumber=",sectorInfo[0]
-    print "msxdos_secinfo:sectors=",sectorInfo[1]
-    print "msxdos_secinfo:mediaDescriptor=",sectorInfo[2]
-    print "msxdos_secinfo:initialSector=",sectorInfo[3]
-
+    #print "msxdos_secinfo:deviceNumber=",sectorInfo[0]
+    #print "msxdos_secinfo:sectors=",sectorInfo[1]
+    #print "msxdos_secinfo:mediaDescriptor=",sectorInfo[2]
+    #print "msxdos_secinfo:initialSector=",sectorInfo[3]
     print "msxdos_secinfo:exiting rc:",hex(rc)
     return rc;
 
@@ -505,16 +505,17 @@ def msxdos_secinfo(sectorInfo):
     msxdos_readsector
 """
 def msxdos_readsector(driveData, sectorInfo):
-    print "msxdos_readsector:Starting with sectorInfo=",sectorInfo
-    print "msxdos_readsector:deviceNumber=",sectorInfo[0]
-    print "msxdos_readsector:numsectors=",sectorInfo[1]
-    print "msxdos_readsector:mediaDescriptor=",sectorInfo[2]
-    print "msxdos_readsector:initialSector=",sectorInfo[3]
+    #print "msxdos_readsector:Starting with sectorInfo=",sectorInfo
+    #print "msxdos_readsector:deviceNumber=",sectorInfo[0]
+    #print "msxdos_readsector:numsectors=",sectorInfo[1]
+    #print "msxdos_readsector:mediaDescriptor=",sectorInfo[2]
+    #print "msxdos_readsector:initialSector=",sectorInfo[3]
 
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
-    print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
-    return secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
+    #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
+    rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
+    print "msxdos_readsector:exiting rc:",hex(rc)
 
 """ 
     msxdos_writesector
