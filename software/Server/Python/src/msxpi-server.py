@@ -150,7 +150,7 @@ def recvdatablock(timeoutFlag):
                 crc ^= mymsxbyte[1]
                 bytecounter += 1
             else:
-                print "recvdatablock:Error during transfer"
+                #print "recvdatablock:Error during transfer"
                 rc = RC_TIMEOUT
 
     if (rc == RC_SUCCESS):
@@ -168,7 +168,7 @@ def secrecvdata():
     buffer = bytearray()
     rc = RC_SUCCESS
     
-    print "secrecvdata:starting"
+    #print "secrecvdata:starting"
     
     msxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     if (msxbyte[1]==SENDNEXT):
@@ -186,8 +186,8 @@ def secrecvdata():
             retries = 0
             rc = RC_UNDEFINED
             while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
-                print "secrecvdata:sending block:blocksize ",index,":",blocksize
-                print "secrecvdata:data range:",index,":",lastindex
+                #print "secrecvdata:sending block:blocksize ",index,":",blocksize
+                #print "secrecvdata:data range:",index,":",lastindex
                 recvdata = recvdatablock(NoTimeOutCheck)
                 rc = recvdata[0]
                 retries += 1
@@ -202,8 +202,8 @@ def secrecvdata():
         if(retries>=GLOBALRETRIES):
             print "secrecvdata:Transfer interrupted due to CRC error"
             rc = RC_CRCERROR
-        else:
-            print "secrecvdata:successful"
+        #else:
+            #print "secrecvdata:successful"
                 
     else:
         rc = RC_FAILNOSTD
@@ -224,7 +224,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
         rc = RC_OUTOFSYNC;
     else:
         if (sendsize):
-            print "senddatablock:Sending blocksize ",datasize
+            #print "senddatablock:Sending blocksize ",datasize
             piexchangebyte(NoTimeOutCheck,datasize % 256)
             piexchangebyte(NoTimeOutCheck,datasize / 256)
     
@@ -239,12 +239,12 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
                 crc ^= mypibyte
                 bytecounter += 1
             else:
-                print "senddatablock:Error during transfer"
+                print "senddatablock:Error during transfer:",hex(rc)
                 rc = RC_TIMEOUT
 
     if (rc == RC_SUCCESS):
         mymsxbyte = piexchangebyte(NoTimeOutCheck,crc)
-        print "senddatablock:CRC local:remote = ",crc,":",mymsxbyte[1]
+        #print "senddatablock:CRC local:remote = ",crc,":",mymsxbyte[1]
         if (mymsxbyte[1] != crc):
             rc = RC_CRCERROR;
         #else:
@@ -256,7 +256,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
 def secsenddata(buffer, initpos, filesize):
     rc = RC_SUCCESS
     
-    print "secsenddata:starting transfer for",filesize,"bytes"
+    #print "secsenddata:starting transfer for",filesize,"bytes"
     
     msxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     
@@ -277,7 +277,7 @@ def secsenddata(buffer, initpos, filesize):
             lastindex = index+blocksize
                                 
             while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
-                print "secsenddata:initpos=",index,"endpos=",lastindex,"retry=",retries
+                #print "secsenddata:initpos=",index,"endpos=",lastindex,"retry=",retries
                 rc = senddatablock(TimeOutCheck,buffer,index+initpos,blocksize,True)
                 retries += 1
 
@@ -293,11 +293,11 @@ def secsenddata(buffer, initpos, filesize):
         if(retries>=GLOBALRETRIES):
             print "secsenddata:Transfer interrupted due to CRC error"
             rc = RC_CRCERROR
-        else:
-            print "secsenddata:successful"
+        #else:
+            #print "secsenddata:successful"
     else:
         rc = RC_FAILNOSTD
-        print "secsenddata:out of sync"
+        #print "secsenddata:out of sync"
         piexchangebyte(TimeOutCheck,rc)
 
     print "secsenddata:Exiting with rc = ",hex(rc)
