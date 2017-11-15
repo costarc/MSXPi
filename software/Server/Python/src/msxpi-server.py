@@ -124,7 +124,7 @@ def piexchangebyte(checktimeout,mypibyte):
 
 def senderror(rc, message):
     piexchangebyte(NoTimeOutCheck,rc)
-    return senddatablock(TimeOutCheck,message,len(message),True);
+    return senddatablock(TimeOutCheck,message,0,len(message),True);
 
 def recvdatablock(timeoutFlag):
     buffer = bytearray()
@@ -213,7 +213,7 @@ def secrecvdata():
     print "secrecvdata:Exiting with rc = ",hex(rc)
     return [rc,buffer]
 
-def senddatablock(checktimeout,buffer,datasize,sendsize):
+def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     bytecounter = 0
     crc = 0
     rc = RC_SUCCESS
@@ -229,10 +229,12 @@ def senddatablock(checktimeout,buffer,datasize,sendsize):
             piexchangebyte(NoTimeOutCheck,datasize / 256)
     
         while(datasize>bytecounter and rc == RC_SUCCESS):
-            mypibyte = ord(buffer[bytecounter])
+            #mypibyte = ord(buffer[bytecounter])
+            mypibyte = ord(buffer[initpos+bytecounter])
             #print "senddatablock:",mypibyte
+            rc = mymsxbyte[0]
             mymsxbyte = piexchangebyte(TimeOutCheck,mypibyte)
-            if (mymsxbyte[0] == RC_SUCCESS):
+            if (rc == RC_SUCCESS):
                 #print "senddatablock:byte sent successfully"
                 crc ^= mypibyte
                 bytecounter += 1
@@ -266,26 +268,27 @@ def secsenddata(buffer, initpos, filesize):
         if (filesize>512):
             blocksize = 512
 
-        index = initpos
+        index = 0
         retries = 0
         
-        print "secsenddata:Starting transfer of data with block size:",blocksize
-        while(blocksize<=filesize and retries <= GLOBALRETRIES):
+        while(index<filesize):
             retries = 0
             rc = RC_UNDEFINED
             lastindex = index+blocksize
                                 
             while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
-                print "secsenddata:sending block:blocksize ",index,":",blocksize
-                print "secsenddata:data range:",index,":",lastindex
-                rc = senddatablock(TimeOutCheck,buffer,index,blocksize,True)
+                print "secsenddata:initpos=",index,"endpos=",lastindex,"retry=",retries
+                rc = senddatablock(TimeOutCheck,buffer,index+initpos,blocksize,True)
                 retries += 1
 
-            index += 512
-            if (filesize - index > 512):
-                blocksize = 512
+            if(retries>=GLOBALRETRIES):
+                break
             else:
-                blocksize = filesize - index
+                index += 512
+                if (filesize - index > 512):
+                    blocksize = 512
+                else:
+                    blocksize = filesize - index
                                                                 
         if(retries>=GLOBALRETRIES):
             print "secsenddata:Transfer interrupted due to CRC error"
@@ -307,7 +310,7 @@ def runpicmd(msxcommand):
     #print "runpicmd:result is ",buf
     #print "runpicmd:Sending output to MSX. Size is:",len(buf)
     piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-    rc = senddatablock(TimeOutCheck,buf,len(buf),True);
+    rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
 
     print "runpicmd:exiting rc:",hex(rc)
     return rc;
@@ -337,7 +340,7 @@ def ploadr(basepath, file):
                         
                         msxbyte = piexchangebyte(NoTimeOutCheck,STARTTRANSFER)
                         if (msxbyte[1]==STARTTRANSFER):
-                            rc = senddatablock(True,buf,len(buf),True)
+                            rc = senddatablock(True,buf,0,len(buf),True)
                         if (rc == RC_SUCCESS):
                             print "pload:successful"
                             senderror(rc,"Pi:Ok")
@@ -407,7 +410,7 @@ def pdir(basepath, path):
             cmd = cmd.decode().split(" ")
             buf = subprocess.check_output(cmd)
             piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-            rc = senddatablock(TimeOutCheck,buf,len(buf),True);
+            rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
         else:
             print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
@@ -417,7 +420,7 @@ def pdir(basepath, path):
             buf = " ".join(parser.HTMLDATA)
             print buf
             piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-            rc = senddatablock(TimeOutCheck,buf,len(buf),True);
+            rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
     else:
         rc = RC_FAILNOSTD
         print "pdir:out of sync in RC_WAIT"
@@ -450,7 +453,7 @@ def pset(psetvar, attrs):
     s = str(psetvar)
     buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
     #piexchangebyte(False,RC_SUCCESS)
-    senddatablock(True,buf,len(buf),True);
+    senddatablock(True,buf,0,len(buf),True);
     #else:
     #rc = RC_FAILNOSTD
     #print "pcd:out of sync in RC_WAIT"
@@ -510,7 +513,7 @@ def msxdos_readsector(driveData, sectorInfo):
 
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
-    print "Total bytes to transfer:",finalbytepos-initbytepos
+    print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
     return secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
 
 """ 
