@@ -164,36 +164,37 @@ def recvdatablock(timeoutFlag):
     print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
-def secrecvdata():
-    buffer = bytearray()
+def secrecvdata(buffer,initbytepos):
     rc = RC_SUCCESS
     
     #print "secrecvdata:starting"
     
     msxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     if (msxbyte[1]==SENDNEXT):
-        bytel = piexchangebyte(NoTimeOutCheck,filesize)
-        bytem = piexchangebyte(NoTimeOutCheck,filesize)
+        bytel = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
+        bytem = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
         filesize = bytel + (bytem * 256)
-        
+
         blocksize = filesize
         if (filesize>512):
             blocksize = 512
         
         index = 0
         retries = 0
-        while(blocksize<filesize and retries <= GLOBALRETRIES):
+        while(index<filesize):
             retries = 0
             rc = RC_UNDEFINED
             while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
-                #print "secrecvdata:sending block:blocksize ",index,":",blocksize
-                #print "secrecvdata:data range:",index,":",lastindex
-                recvdata = recvdatablock(NoTimeOutCheck)
-                rc = recvdata[0]
+                datablock = recvdatablock(NoTimeOutCheck)
+                rc = datablock[0]
                 retries += 1
             
-            buffer.append(recvdata[1])
+            if(retries>GLOBALRETRIES):
+                break
+
+            buffer[index+initbytepos:index+initbytepos+len(datablock[1])] = str(datablock[1])
             index += 512
+            
             if (filesize - index > 512):
                 blocksize = 512
             else:
@@ -211,7 +212,7 @@ def secrecvdata():
         piexchangebyte(TimeOutCheck,rc)
 
     print "secrecvdata:Exiting with rc = ",hex(rc)
-    return [rc,buffer]
+    return rc
 
 def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     bytecounter = 0
@@ -461,6 +462,35 @@ def pset(psetvar, attrs):
     
     print "pset:Exiting rc:",hex(rc)
 
+def pcopy(pcopystat2,psertvar,args):
+    rc = RC_SUCCESS
+    args = args.decode().split(" ")
+
+    # if pcopy has only the source file name, then we have to generate target file name
+    if (len(args) == 1):
+        srcurl = args[1].split("/")
+        fname = srcurl[len(srcurl)-1]
+    elif (len(args) == 2):
+        fname = args[1]
+    else:
+        print "pcopy:Syntax error"
+        senderror(rc,"Pi:Error\nSyntax: pcopy <source file|url> <target file>")
+
+    mymsxbyte = piexchangebyte(TimeOutCheck, SENDNEXT)
+    if (mymsxbyte[0] == SENDNEXT):
+        print "pcopy:Sending filename"
+        senddatablock(True,fname,0,len(fname),True)
+
+        piexchangebyte(True, RC_WAIT)
+
+
+
+
+    else:
+        print "pcopy:Syntax error"
+
+    return pcopystat2
+
 """
     function to initialize disk image into a memory mapped variable
 """
@@ -505,12 +535,6 @@ def msxdos_secinfo(sectorInfo):
     msxdos_readsector
 """
 def msxdos_readsector(driveData, sectorInfo):
-    #print "msxdos_readsector:Starting with sectorInfo=",sectorInfo
-    #print "msxdos_readsector:deviceNumber=",sectorInfo[0]
-    #print "msxdos_readsector:numsectors=",sectorInfo[1]
-    #print "msxdos_readsector:mediaDescriptor=",sectorInfo[2]
-    #print "msxdos_readsector:initialSector=",sectorInfo[3]
-
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
     #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
@@ -520,25 +544,33 @@ def msxdos_readsector(driveData, sectorInfo):
 """ 
     msxdos_writesector
 """
+
 def msxdos_writesector(driveData, sectorInfo):
     rc = RC_SUCCESS
     print "msxdos_writesector:Starting"
-    initbytepos = sectorInfo[4]*512
-    finalbytepos = sectorInfo[3]*512 + initbytepos - 1
+    #print "msxdos_readsector:Starting with sectorInfo=",sectorInfo
+    #print "msxdos_readsector:deviceNumber=",sectorInfo[0]
+    #print "msxdos_readsector:numsectors=",sectorInfo[1]
+    #print "msxdos_readsector:mediaDescriptor=",sectorInfo[2]
+    #print "msxdos_readsector:initialSector=",sectorInfo[3]
+    initbytepos = sectorInfo[3]*512
                                  
     index = 0;
-    sectorcount = sectorInfo[3]
+    sectorcount = sectorInfo[1]
     # Read data from MSX
     while(sectorcount and rc == RC_SUCCESS):
-        rc = secrecvdata(driveData+index+(initsector*512))
+        print "Sectors to write:",sectorcount
+        rc = secrecvdata(driveData,index+initbytepos)
         index += 512
         sectorcount -= 1
 
-""" msxpi-server.py
+    print "msxdos_writesector:exiting rc:",hex(rc)
+
+""" ============================================================================
+    msxpi-server.py
     main program starts here
+    ============================================================================
 """
-
-
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
@@ -563,6 +595,8 @@ drive0Data = msxdos_inihrd(psetvar[1][1])
 drive1Data = msxdos_inihrd(psetvar[2][1])
 
 appstate = st_init
+pcopystat = 0
+
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 
@@ -599,9 +633,9 @@ try:
                     msxdos_readsector(drive1Data,sectorInfo)
             elif (msxcommand[:3] == "WRS"):
                 if (sectorInfo[0] == 0):
-                    msxdos_readsector(drive0Data,sectorInfo)
+                    msxdos_writesector(drive0Data,sectorInfo)
                 else:
-                    msxdos_readsector(drive1Data,sectorInfo)
+                    msxdos_writesector(drive1Data,sectorInfo)
             elif (msxcommand[:6] == "INIHRD"):
                 if (numdrives<2):
                     numdrives += 1
@@ -609,9 +643,7 @@ try:
                 piexchangebyte(NoTimeOutCheck,numdrives)
                 numdrives = 0
             elif (msxcommand[:3] == "FMT"):
-                msxdos_secinfo(sectorInfo)
-            elif (msxcommand[:3] == "SCT"):
-                msxdos_secinfo(sectorInfo)
+                piexchangebyte(NoTimeOutCheck,RC_UNDEFINED)
             elif (msxcommand[:4] == "prun" or msxcommand[:4] == "PRUN"):
                 runpicmd(msxcommand[5:])
 
@@ -636,6 +668,9 @@ try:
                   msxcommand[:9] == "chkpiconn" or \
                   msxcommand[:9] == "chkpiconn"):
                 piexchangebyte(TimeOutCheck,READY)
+
+            elif (msxcommand[:5] == "pcopy" or msxcommand[:5] == "PCOPY"):
+                pcopystat = pcopy(pcopystat,psetvar,msxcommand[6:])
             else:
                 print "Error"
                 piexchangebyte(False,RC_FAILNOSTD)
