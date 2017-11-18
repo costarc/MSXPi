@@ -40,21 +40,21 @@ DSKBLOCKSIZE:   EQU 1
         LD      BC,5
         LD      DE,PCOPYCMD
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
+        JP      C,PRINTPIERR
 
 ; SYNC TO RECEIVE FILENAME
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JR      Z,EXITSTDOUT
+        JP      Z,EXITSTDOUT
         CP      SENDNEXT
-        JR      NZ,PRINTPIERR
+        JP      NZ,PRINTPIERR
 
         CALL    INIFCB
 
 ; READ FILENAME
         CALL    READPARMS
-        JR      C,PRINTPIERR
+        JP      C,PRINTPIERR
 
 ; Sync to wait Pi download the file
 ; Since a network transfer my get delayed, this routine
@@ -68,14 +68,14 @@ DSKBLOCKSIZE:   EQU 1
         RET     NZ
 WAITLOOP:
         CALL    CHECK_ESC
-        JR      C,PRINTPIERR
+        JP      C,PRINTPIERR
         CALL    CHKPIRDY
         JR      C,WAITLOOP
 ; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
-        JR      Z,EXITSTDOUT
+        JP      Z,EXITSTDOUT
         CP      RC_SUCCESS
         JR      NZ,WAITLOOP
 
@@ -93,7 +93,12 @@ WAITLOOP:
 
         CALL    CLOSEFILE
 
-        JP      0
+        RET
+
+;M1:     DB      "READING PARAMETERS FROM RPi",13,10,"$"
+;M2:     DB      "Looping waiting RC_WAIT to terminate",13,10,"$"
+;M3:     DB      "Exited RC_WAIT",13,10,"$"
+M4:     DB      "STARTING GETFILE",13,10,"$"
 
 EXITSTDOUT:
         CALL    PRINTNLINE
@@ -150,11 +155,10 @@ PLOOP:
 GETFILE:
 DSKREADBLK:
 
-; SEND COMMAND TO TRANSFER NEXT BLOCK
-        LD      BC,5
-        LD      DE,PCOPYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
+        PUSH    HL
+        LD      HL,M4
+        CALL    PRINT
+        POP     HL
 
 ; BLOCK SIZE TO USE
         LD      BC,DSKNUMREGISTERS
