@@ -1,6 +1,16 @@
 #!/bin/bash
+# 2017-11-18 : Added switch to python or C version
+
+MSXPIHOME=/home/pi/msxpi
+
+msxpisrv = $(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
+
 echo "Restarting msxpi-server"
-/home/pi/msxpi/msxpi-server &
+if [[ msxpisrv -eq 1 ]];then
+    ${MSXPIHOME}/msxpi-server &
+else
+    /usr/bin/python ${MSXPIHOME}/msxpi-server.py &
+fi
 
 rm /home/pi/msxpi/msxpi-update*
 
@@ -19,7 +29,12 @@ if [[ $state -eq 0 ]];then
     fi
 
     echo "Restarting msxpi-server"
-    /home/pi/msxpi/msxpi-server &
+    msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
+    if [[ msxpisrv -eq 1 ]];then
+        ${MSXPIHOME}/msxpi-server &
+    else
+        /usr/bin/python ${MSXPIHOME}/msxpi-server.py &
+    fi
     sleep 1
     msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
     msxpid="$msxpid 99999"
@@ -27,7 +42,11 @@ if [[ $state -eq 0 ]];then
     if [[ $# -gt 1 ]];then
         kill -9 $msxpid
     fi
-    ret=$(/home/pi/msxpi/msxpi-server 2>&1 &)
+    if [[ msxpisrv -eq 1 ]];then
+        ret=$(${MSXPIHOME}/msxpi-server 2>&1 &)
+    else
+        ret=$(/usr/bin/python ${MSXPIHOME}/msxpi-server.py 2>&1 &)
+    fi
     if [[ `echo $ret | grep -c "initialisation failed"` -eq 1 ]];then
         shutdown -h now
     fi

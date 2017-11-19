@@ -1,3 +1,4 @@
+#!/bin/bash
 #|===========================================================================|
 #|                                                                           |
 #| MSXPi Interface                                                           |
@@ -151,7 +152,6 @@ if [ $rc -eq 1  ]; then
    exit 0
 fi
 
-echo "Command not implemented or missinfg parameters"
-echo "Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
+echo "Syntax:\n pplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
 exit 1
 
