@@ -2,12 +2,14 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
-import urllib
+import urllib2
 import mmap
 import os
 import sys
 from subprocess import Popen,PIPE,STDOUT
 from HTMLParser import HTMLParser
+import datetime
+import time
 
 version = 0.1
 build   = 20171110
@@ -316,9 +318,10 @@ def prun(cmd):
     try:
         p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
         buf = p.stdout.read()
-        print "prun:result is ",buf
-        print "prun:Sending output to MSX. Size is:",len(buf)
-        sendstdmsg(rc,buf);
+        if (len(buf) == 0):
+            sendstdmsg(rc,"Pi:Ok")
+        else:
+            sendstdmsg(rc,buf);
     except subprocess.CalledProcessError as e:
         print "Error:",buf
         rc = RC_FAILED
@@ -371,6 +374,7 @@ def ploadr(basepath, file):
     return rc
 
 def getpath(basepath, path):
+    path=path.strip()
     if  path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
@@ -382,15 +386,16 @@ def getpath(basepath, path):
         newpath = path
     elif basepath.startswith('/'):
         urltype = 1 # this is an relative local path
-        newpath = basepath + "/" + path.strip()
+        newpath = basepath + "/" + path
     elif (basepath.startswith('http') or \
           basepath.startswith('ftp') or \
           basepath.startswith('nfs') or \
           basepath.startswith('smb')):
         urltype = 3 # this is an relative network path
-        newpath = basepath + "/" + path.strip()
+        newpath = basepath + "/" + path
 
-    #print "fullpath =",newpath
+    print "getpath:path type:",urltype
+    print "fullpath =",newpath
     return [urltype, newpath]
 
 # create a subclass and override the handler methods
@@ -427,7 +432,7 @@ def pdir(basepath, path):
         else:
             #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
-            htmldata = urllib.urlopen(urlcheck[1].decode()).read()
+            htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
             parser = MyHTMLParser()
             parser.feed(htmldata)
             buf = " ".join(parser.HTMLDATA)
@@ -443,7 +448,7 @@ def pdir(basepath, path):
 
 def pcd(basepath, path):
     rc = RC_SUCCESS
-    #print "pcd:starting"
+    print "pcd:starting basepath:path=",basepath,path
     
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
@@ -455,53 +460,83 @@ def pcd(basepath, path):
         rc = RC_FAILNOSTD
         print "pcd:out of sync in RC_WAIT"
     
+    print "pcd:newpath =",newpath
     #print "pcd:Exiting rc:",hex(rc)
     return [rc, newpath];
 
-def pset(psetvar, attrs):
+def pset(psetvar, cmd):
     rc = RC_SUCCESS
-    #print "pset: Starting"
-    #msxbyte = piexchangebyte(False,RC_WAIT)
-    #if (msxbyte[1]==SENDNEXT):
-    s = str(psetvar)
-    buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
-    #piexchangebyte(False,RC_SUCCESS)
-    senddatablock(True,buf,0,len(buf),True);
-    #else:
-    #rc = RC_FAILNOSTD
-    #print "pcd:out of sync in RC_WAIT"
+    buf = "Pi:Error\nSyntax: pset <var> <value>"
+    cmd = cmd.strip()
+
+    print "pset: Starting:",cmd
+    #pset display
+    if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
+        s = str(psetvar)
+        buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
     
+    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+        cmd=cmd.split(" ")
+        found = False
+        if (len(cmd) == 3):
+            for index in range(0,10):
+                if (psetvar[index][0] == str(cmd[1])):
+                    psetvar[index][1] = str(cmd[2])
+                    found = True
+                    buf = "Pi:Ok"
+                    break
+                
+            if (not found):
+                for index in range(7,10):
+                    if (psetvar[index][0] == "free"):
+                        psetvar[index][0] = str(cmd[1])
+                        psetvar[index][1] = str(cmd[2])
+                        found = True
+                        buf = "Pi:Ok"
+                        break
+            if (not found):
+                rc = RC_FAILED
+                buf = "Pi:Erro setting parameter"
+
+    senddatablock(True,buf,0,len(buf),True);
     #print "pset:Exiting rc:",hex(rc)
     return rc
 
 
 def readf_tobuf(fpath,buf,ftype):
+    buffer = bytearray()
     rc = RC_SUCCESS
     if (ftype < 2):
-        print "local file"
+        #print "local file"
         fh = open(fpath,'rb')
         buf = fh.read()
         fh.close()
         errmgs = "Pi:OK"
     else:
-        req = urllib2.Request(url)
+        #print "readf_tobuf:network file:",fpath
+        req = urllib2.Request(url=fpath)
         
         try:
             getf = urllib2.urlopen(req)
-            if (getf == 200):
-                buf = getf.read()
+            #print "http code:",getf.getcode()
+            
+            if (getf.getcode() == 200):
+                buffer = getf.read()
                 rc = RC_SUCCESS
                 errmgs = "Pi:Success"
             else:
-                errmgs = "Pi:http error "+getf.getcode()
+                errmgs = "Pi:http error "+str(getf.getcode())
+                #print "info:",getf.info()
+                #print "http code:",getf.getcode()
         except urllib2.URLError as e:
             rc = RC_FAILED
-            errmgs = "Pi:" + e
+            errmgs = "Pi:" + str(e)
         except:
             rc = RC_FAILED
             errmgs = "Pi:Error accessing network file"
 
-    return [rc, errmgs]
+    print "readf_tobuf:Exiting with rc:",hex(rc)
+    return [rc, errmgs, buffer]
 
 def pplay(cmd):
     rc = RC_SUCCESS
@@ -509,7 +544,7 @@ def pplay(cmd):
     cmd = "bash /home/pi/msxpi/pplay.sh PPLAY "+cmd+" >/tmp/msxpi.tmp"
     cmd = str(cmd)
     
-    print "pplay:starting command:len:",cmd,len(cmd)
+    #print "pplay:starting command:len:",cmd,len(cmd)
 
     piexchangebyte(NoTimeOutCheck,RC_WAIT);
     try:
@@ -529,11 +564,11 @@ def pplay(cmd):
     return rc;
 
 def uploaddata(buffer, totalsize, index):
-    print "uploaddata:Starting"
+    #print "uploaddata:Starting"
 
     msxbyte = piexchangebyte(TimeOutCheck, STARTTRANSFER)
     if (msxbyte[1] == STARTTRANSFER):
-        print "uploaddata:Receiving blocksize"
+        #print "uploaddata:Receiving blocksize"
         #read blocksize, MAXIMUM 65535 KB
         msxblocksize = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1] + 256 * piexchangebyte(NoTimeOutCheck, SENDNEXT)[1]
         myblocksize = msxblocksize;
@@ -545,18 +580,18 @@ def uploaddata(buffer, totalsize, index):
         else:
             piexchangebyte(NoTimeOutCheck, SENDNEXT)
 
-            print "uploaddata:Received block size:",msxblocksize
+            #print "uploaddata:Received block size:",msxblocksize
             if (totalsize <= index*msxblocksize+msxblocksize):
                 myblocksize = totalsize - (index*msxblocksize)
 
-            print "uploaddata:Sent possible block size:",myblocksize
+            #print "uploaddata:Sent possible block size:",myblocksize
             piexchangebyte(NoTimeOutCheck, myblocksize % 256)
             piexchangebyte(NoTimeOutCheck, myblocksize / 256)
             
             crc = 0
             bytecounter = 0
     
-            print "uploaddata: Loop to send block\n"
+            #print "uploaddata: Loop to send block\n"
             while(bytecounter<myblocksize):
                 #print "Byte pos:",index*myblocksize + bytecounter
                 mypibyte = buffer[index*myblocksize + bytecounter]
@@ -575,6 +610,68 @@ def uploaddata(buffer, totalsize, index):
         print "uploaddata:Error - out of sync. Received",hex(msxbyte[1])
 
     print "upladodata:Exiting with rc=",hex(rc)
+    return rc
+
+def pdate():
+    rc = RC_FAILED
+    
+    msxbyte = piexchangebyte(NoTimeOutCheck,RC_WAIT)
+    if (msxbyte[1]==SENDNEXT):
+        now = datetime.datetime.now()
+
+        msxbyte = piexchangebyte(TimeOutCheck,RC_SUCCESS)
+        if (msxbyte[1]==SENDNEXT):
+            piexchangebyte(NoTimeOutCheck,now.year & 0xff)
+            piexchangebyte(NoTimeOutCheck,now.year >>8)
+            piexchangebyte(NoTimeOutCheck,now.month)
+            piexchangebyte(NoTimeOutCheck,now.day)
+            piexchangebyte(NoTimeOutCheck,now.hour)
+            piexchangebyte(NoTimeOutCheck,now.minute)
+            piexchangebyte(NoTimeOutCheck,now.second)
+            piexchangebyte(NoTimeOutCheck,0)
+            buf = "Pi:Ok"
+            senddatablock(True,buf,0,len(buf),True)
+            rc = RC_SUCCESS
+        else:
+            print "pdate:out of sync in SENDNEXT"
+    else:
+        print "pdate:out of sync in RC_WAIT"
+
+    #print "pdate:Exiting with rc=",hex(rc)
+    return rc
+
+def pwifi(cmd,wifissid,wifipass):
+    rc = RC_FAILED
+
+    if (len(cmd)==0):
+        sendstdmsg(rc,"Pi:Error\nSyntax: pwifi display | set")
+    elif (cmd[:1] == "d" or cmd[:1] == "D"):
+        prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+        buf = "country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
+        buf = buf + "\tssid=\"" + wifissid
+        buf = buf + "\"\n\tpsk=\"" + wifipass
+        buf = buf + "\"\n}\n"
+
+        subprocess.check_output("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak".split(" "))
+        try:
+            f = open("/tmp/wpa_supplicant.conf","w")
+            f.write(buf)
+            f.close()
+            subprocess.check_output("sudo cp -f /tmp/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf".split(" "))
+            cmd = cmd.strip().split(" ")
+            if (len(cmd) == 2 and cmd[1] == "wlan1"):
+                prun("sudo ifdown wlan1 && sleep 1 && sudo ifup wlan1")
+            else:
+                prun("sudo ifdown wlan0 && sleep 1 && sudo ifup wlan0")
+        except:
+            print "Error writting supplicant file"
+            subprocess.check_output("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf.bak /etc/wpa_supplicant/wpa_supplicant.conf".split(" "))
+            sendstdmsg(rc,"Pi:Error writing /etc/wpa_supplicant/wpa_supplicant.conf")
+
+        rc = RC_SUCCESS
+
+    print "pwifi:Exiting with rc=",hex(rc)
     return rc
 
 """
@@ -664,16 +761,16 @@ def msxdos_writesector(driveData, sectorInfo):
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
-psetvar = [['PATH','/home/msxpi'], \
+psetvar = [['PATH','http://retro-cpu.run/MSXPI'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
            ['DRIVE1','disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
-           ['free',''], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
            ['DSKTMPL','disks/msxpi_720KB_template.dsk'], \
            ['free',''], \
-           ['free',''] \
+           ['free',''], \
+           ['free',''], \
            ]
 
 # Initialize disk system parameters
@@ -760,20 +857,21 @@ try:
                     if (mymsxbyte[1] == SENDNEXT):
                         rc = senddatablock(True,fname,0,len(fname),True)
                         msxbyte = piexchangebyte(NoTimeOutCheck, RC_WAIT)
-                        fpath = getpath(psetvar[0][1],args[1])[1]
-                        
-                        if (fpath[0] < 2):
-                            if (os.path.exists(fpath)):
-                                buf = msxdos_inihrd(fpath)
+                        urlcheck = getpath(psetvar[0][1],args[1])
+                        print "pcopy:urlcheck=",urlcheck
+                        if (urlcheck[0] < 2):
+                            if (os.path.exists(urlcheck[1])):
+                                buf = msxdos_inihrd(urlcheck[1])
                             else:
                                 print "pcopy:error reading file"
                                 rc = RC_FAILED
                                 sendstdmsg(rc,"RPi:Error reading file")
                                 pcopystat2 = 0
                         else:  # network path
-                            rcbuf = readf_tobuf(fpath[1],buf,fpath[0])
+                            buf = bytearray()
+                            rcbuf = readf_tobuf(urlcheck[1],0,urlcheck[0])
                             if (rcbuf[0] == RC_SUCCESS):
-                                buf = rcbuf[1]
+                                buf = rcbuf[2]
                             else:
                                 print "pcopy:error reading acessing network"
                                 rc = RC_FAILED
@@ -804,6 +902,10 @@ try:
                           
             elif (cmd[:5] == "pplay" or cmd[:5] == "PPLAY"):
                 pplay(cmd[6:])
+            elif (cmd[:5] == "pdate" or cmd[:5] == "PDATE"):
+                pdate()
+            elif (cmd[:5] == "pwifi" or cmd[:5] == "PWIFI"):
+                pwifi(cmd[6:],psetvar[4][1],psetvar[5][1])
             else:
                 print "Error"
                 piexchangebyte(False,RC_FAILNOSTD)
