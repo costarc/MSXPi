@@ -307,7 +307,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
     unsigned char mymsxbyte,mypibyte;
     unsigned char crc = 0;
     
-    //printf("senddatablock: starting\n");
+    printf("senddatablock: starting\n");
     mymsxbyte = piexchangebyte(SENDNEXT);
     
     if (mymsxbyte != SENDNEXT) {
@@ -318,7 +318,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         if (sendsize)
             piexchangebyte(datasize % 256); piexchangebyte(datasize / 256);
         
-        //printf("senddatablock:blocksize = %i\n",datasize);
+        printf("senddatablock:blocksize = %i\n",datasize);
         
         while(datasize>bytecounter && mymsxbyte>=0) {
             //printf("senddatablock:waiting MSX request byte\n");
@@ -344,13 +344,13 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         }
         
         if(mymsxbyte>=0) {
-            //printf("senddatablock:Sending CRC: %x\n",crc);
+            printf("senddatablock:Sending CRC: %x\n",crc);
             
             mymsxbyte = piexchangebyte(crc);
             
-            //printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
+            printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
             if (mymsxbyte == crc) {
-                //printf("mymsxbyte:CRC verified\n");
+                printf("mymsxbyte:CRC verified\n");
                 dataInfo.rc = RC_SUCCESS;
             } else {
                 dataInfo.rc = RC_CRCERROR;
@@ -362,7 +362,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         }
     }
     
-    //printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
+    printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
     return dataInfo;
 }
 
@@ -506,9 +506,6 @@ int main(int argc, char *argv[]){
     int rc = 0;
     transferStruct dataInfo;
     
-    printf("GPIO Initialized\n");
-    printf("Starting MSXPi Server Python module Version %s Build %s\n",version,build);
-    
     if (argc != 3){
         fprintf(stderr, "wrong number of arguments\n");
         return 0;
@@ -521,6 +518,8 @@ int main(int argc, char *argv[]){
     
     init_spi_bitbang();
     gpioWrite(rdy,LOW);
+    printf("GPIO Initialized\n");
+    printf("Starting MSXPi Server module Version %s Build %s\n",version,build);
     
     // get GLBOARETRIES from argv
     errno = 0;
@@ -531,7 +530,10 @@ int main(int argc, char *argv[]){
     } else
         GLOBALRETRIES = conv;
     
-    // open file and read to buffer
+    printf ("GLOBALRETRIES = %i\n",GLOBALRETRIES);
+    printf ("File name     = %s\n",argv[1]);
+    
+    //open file and read to buffer
     file = fopen(argv[1], "rb");
     if (!file)
     {
@@ -539,53 +541,39 @@ int main(int argc, char *argv[]){
         gpioTerminate();
         return 0;
     }
-    
+
     //Get file length
-    fseek(file, 0, SEEK_END);
+    fseek(file, 0L, SEEK_END);
     fileLen=ftell(file);
-    fseek(file, 0, SEEK_SET);
+    rewind(file);
+    
+    printf ("FileLen = %i\n",fileLen);
     
     //Allocate memory
-    buffer=(char *)malloc(fileLen+1);
+    buffer = malloc(sizeof(unsigned char) * fileLen + 1);
+    
     if (!buffer)
     {
-        fprintf(stderr, "Memory error!");
+        fprintf(stderr, "Memory allocation error!");
         fclose(file);
         gpioTerminate();
         return 0;
     }
     
-    //Read file contents into buffer
-    fread(buffer, fileLen, 1, file);
+    fread(buffer,fileLen,1,file);
+    fclose(file);
+    
+    file = fopen("newrom.rom","w");
+    fwrite(buffer,1,fileLen,file);
     fclose(file);
     
     bool loop = true;
     int pcopyindex = 0;
     int retries = 0;
-    
-    while (loop) {
-        dataInfo = senddatablock(&buffer,fileLen,true);
 
-        if (rc==ENDTRANSFER) {
-            printf("ENDTRANSFER\n");
-            free(buffer);
-            rc = RC_SUCCESS;
-            loop = false;
-        } else if (rc==RC_SUCCESS) {
-            printf("loop:index = %i\n",pcopyindex);
-            pcopyindex++;
-        } else if (rc==RC_CRCERROR && retries < GLOBALRETRIES) {
-            printf("loop:crcerror - retry = %i\n",retries);
-            retries++;
-        } else {
-            printf("!!!!! Error !!!!!\n");
-            free(buffer);
-            rc = RC_FAILED;
-            loop = false;
-        
-        }
-    }
+    dataInfo = senddatablock(buffer,fileLen,true);
     
+    free(buffer);
     printf("Terminating GPIO\n");
     gpioWrite(rdy,LOW);
     gpioTerminate();

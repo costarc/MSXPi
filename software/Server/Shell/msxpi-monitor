@@ -3,6 +3,15 @@
 
 MSXPIHOME=/home/pi/msxpi
 
+
+# create a ramdisk for MSXPi
+if [ ! -e /media/ramdisk ]; then
+    mkdir /media/ramdisk
+fi
+
+/sbin/mke2fs -m 0 /dev/ramdisk 1m
+/bin/mount /dev/ramdisk /media/ramdisk
+
 msxpisrv = $(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 
 echo "Restarting msxpi-server"

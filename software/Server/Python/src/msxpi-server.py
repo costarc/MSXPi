@@ -66,6 +66,7 @@ TimeOutCheck        = True
 
 MSXPIHOME = "/home/msxpi"
 TMPFILE = "/tmp/msxpi.tmp"
+RAMDISK = "/media/ramdisk"
 
 def init_spi_bitbang():
 # Pin Setup:
@@ -330,6 +331,64 @@ def prun(cmd):
     #print "prun:exiting rc:",hex(rc)
     return rc;
 
+def ploadr2(basepath, file):
+    rc = RC_SUCCESS
+    
+    init_spi_bitbang()
+    GPIO.output(rdyPin, GPIO.LOW)
+    
+    #print "pload:starting"
+    # usar readf_to_buffer: return [rc, errmgs, buffer]
+    
+    msxbyte = piexchangebyte(NoTimeOutCheck,RC_WAIT)
+    if (msxbyte[1]==SENDNEXT):
+        fpath = getpath(basepath, file)
+        print "ploadr:fpath =",fpath[1]
+        if (len(fpath[1]) > 0 and fpath[1] <> ''):
+            try:
+                fh = open(str(fpath[1]), 'rb')
+                buf = fh.read()
+                fh.close()
+            
+                #print "pload:len of buf:",len(buf)
+                
+                if (buf[0]=='A' and buf[1]=='B'):
+                    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+                    fh.write(buf)
+                    fh.flush()
+                    fh.close()
+                    
+                    msxbyte = piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    if (msxbyte[1]==SENDNEXT):
+                        
+                        msxbyte = piexchangebyte(NoTimeOutCheck,STARTTRANSFER)
+                        if (msxbyte[1]==STARTTRANSFER):
+                            print "ploadr:Calling senddatablock.msx "
+                            rc = RC_SUCCESS
+                            GPIO.cleanup()
+                            cmd = "sudo " + MSXPIHOME + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
+                            print "ploadr:",cmd
+                            #subprocess.check_output(cmd,shell=True)
+                            p = subprocess.call(cmd, shell=True)
+                            #p = Popen('sudo ' + MSXPIHOME + '/senddatablock.msx '+str(GLOBALRETRIES) + ' ' + str(len(buf)), stdin=PIPE, shell=True)
+                            #p.stdin.write(buf)
+                            #p.stdin.close()
+                            #p.wait()
+                            init_spi_bitbang()
+                            GPIO.output(rdyPin, GPIO.LOW)
+                            sendstdmsg(rc,"Pi:Ok")
+            except IOError as e:
+                rc = RC_FAILED
+                print "Error opening file:",e
+                sendstdmsg(rc,"Pi:" + str(e))
+    else:
+        print "pload:syntax error in command"
+        rc = RC_FAILED
+        sendstdmsg(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
+
+    #print "pload:Exiting with rc = ",hex(rc)
+    return rc
+
 def ploadr(basepath, file):
     rc = RC_SUCCESS
     
@@ -432,13 +491,18 @@ def pdir(basepath, path):
         else:
             #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
-            htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
-            parser = MyHTMLParser()
-            parser.feed(htmldata)
-            buf = " ".join(parser.HTMLDATA)
-            print buf
-            piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-            rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
+            try:
+                htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
+                parser = MyHTMLParser()
+                parser.feed(htmldata)
+                buf = " ".join(parser.HTMLDATA)
+                print buf
+                piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
+                rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
+            except urllib2.HTTPError as e:
+                rc = RC_FAILED
+                print "pdir:http error "+ str(e)
+                sendstdmsg(rc,str(e))
     else:
         rc = RC_FAILNOSTD
         print "pdir:out of sync in RC_WAIT"
@@ -758,10 +822,8 @@ def msxdos_writesector(driveData, sectorInfo):
     main program starts here
     ============================================================================
 """
-print "GPIO Initialized\n"
-print "Starting MSXPi Server Version ",version,"Build",build
 
-psetvar = [['PATH','http://retro-cpu.run/MSXPI'], \
+psetvar = [['PATH','/home/msxpi'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
            ['DRIVE1','disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
@@ -787,6 +849,8 @@ pcopyindex = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
+print "GPIO Initialized\n"
+print "Starting MSXPi Server Version ",version,"Build",build
 
 try:
     while (appstate != st_shutdown):
@@ -823,13 +887,15 @@ try:
             elif (cmd[:4] == "prun" or cmd[:4] == "PRUN"):
                 prun(cmd[5:])
             elif (cmd[:6] == "ploadr" or cmd[:6] == "PLOADR"):
-                ploadr(psetvar[0][1],cmd[7:])
-
+                GPIO.cleanup()
+                ploadr2(psetvar[0][1],cmd[7:])
+                init_spi_bitbang()
+                    #GPIO.output(rdyPin, GPIO.LOW)
             elif (cmd[:4] == "pdir" or cmd[:4] == "PDIR"):
                 pdir(psetvar[0][1],cmd[5:])
     
             elif (cmd[:3] == "pcd" or cmd[:3] == "PCD"):
-                newpath = pcd(psetvar[0][1],cmd[3:])
+                newpath = pcd(psetvar[0][1],cmd[4:])
                 if (newpath[0] == RC_SUCCESS):
                     psetvar[0][1] = str(newpath[1])
                    
