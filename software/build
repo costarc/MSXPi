@@ -41,12 +41,10 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy2.com.asm   -o ./target/pcopy2.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
@@ -96,9 +94,9 @@ fi
 
 # build distribution package
 if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
-    #scp  ./Server/C/src/msxpi-server.c pi@${PI}:msxpi/
-    scp  ./Server/C/src/senddatablock.c pi@${PI}:msxpi/
+    scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c pi@${PI}:msxpi/
     #ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
     ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
 fi
 

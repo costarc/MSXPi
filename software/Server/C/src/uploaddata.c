@@ -21,65 +21,7 @@
  ;| the Free Software Foundation, either version 3 of the License, or         |
  ;| (at your option) any later version.                                       |
  ;|                                                                           |
- ;| M        if (appstate == st_runcmd):
-            appstate = st_cmd
-            msxcommand = rc[1]
-            print "st_runcmd:",msxcommand
-            
-            """ 
-            MSX-DOS Driver routines 
-            """
-            if (msxcommand[:3] == "SCT"):
-                msxdos_secinfo(sectorInfo)
-            elif (msxcommand[:3] == "RDS"):
-                if (sectorInfo[0] == 0):
-                    msxdos_readsector(drive0Data,sectorInfo)
-                else:
-                    msxdos_readsector(drive1Data,sectorInfo)
-            elif (msxcommand[:3] == "WRS"):
-                if (sectorInfo[0] == 0):
-                    msxdos_writesector(drive0Data,sectorInfo)
-                else:
-                    msxdos_writesector(drive1Data,sectorInfo)
-            elif (msxcommand[:6] == "INIHRD"):
-                if (numdrives<2):
-                    numdrives += 1
-            elif(msxcommand[:6] == "DRIVES"):
-                piexchangebyte(NoTimeOutCheck,numdrives)
-                numdrives = 0
-            elif (msxcommand[:3] == "FMT"):
-                piexchangebyte(NoTimeOutCheck,RC_UNDEFINED)
-            elif (msxcommand[:4] == "prun" or msxcommand[:4] == "PRUN"):
-                prun(msxcommand[5:])
-
-            elif (msxcommand[:8] == "ploadrom" or msxcommand[:8] == "PLOADROM"):
-                ploadrom(psetvar[0][1],msxcommand[9:])
-
-            elif (msxcommand[:6] == "ploadr" or msxcommand[:6] == "PLOADR"):
-                ploadr(psetvar[0][1],msxcommand[7:])
-
-            elif (msxcommand[:4] == "pdir" or msxcommand[:4] == "PDIR"):
-                pdir(psetvar[0][1],msxcommand[5:])
-    
-            elif (msxcommand[:3] == "pcd" or msxcommand[:3] == "PCD"):
-                newpath = pcd(psetvar[0][1],msxcommand[3:])
-                if (newpath[0] == RC_SUCCESS):
-                    psetvar[0][1] = str(newpath[1])
-                   
-            elif (msxcommand[:4] == "pset" or msxcommand[:4] == "PSET"):
-                pset(psetvar,msxcommand[5:])
-
-            elif (msxcommand[:3] == "SYN" or \
-                  msxcommand[:9] == "chkpiconn" or \
-                  msxcommand[:9] == "chkpiconn"):
-                piexchangebyte(TimeOutCheck,READY)
-
-            elif (msxcommand[:5] == "pcopy" or msxcommand[:5] == "PCOPY"):
-                pcopystat = pcopy(psetvar,msxcommand[6:])
-            else:
-                print "Error"
-                piexchangebyte(False,RC_FAILNOSTD)
-SX PI Interface is distributed in the hope that it will be useful,       |
+ ;| MSX PI Interface is distributed in the hope that it will be useful,       |
  ;| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
  ;| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
  ;| GNU General Public License for more details.                              |
@@ -95,27 +37,15 @@ SX PI Interface is distributed in the hope that it will be useful,       |
 #include <stdio.h>
 #include <pigpio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <sys/types.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <curl/curl.h>
-#include <assert.h>
-#include <time.h>
-#include <unistd.h>
-#include <stdbool.h>
-#include <sys/mman.h>
-#include <fcntl.h>
 #include <errno.h>   // for errno
 #include <limits.h>  // for INT_MAX
+#include <time.h>
+#include <stdbool.h>
 
 #define TZ (0)
 #define version "0.8.1"
 #define build "20171106.00087"
 
-//#define V07SUPPORT
-#define DISKIMGPATH "/home/pi/msxpi/disks"
 #define HOMEPATH "/home/pi/msxpi"
 
 /* GPIO pin numbers used in this program */
@@ -224,45 +154,10 @@ SX PI Interface is distributed in the hope that it will be useful,       |
 #define __DISK      0xFD
 #define __SUCCESS   0x00
 
-typedef struct {
-    unsigned char rc;
-    int  datasize;
-} transferStruct;
-
-typedef struct {
-    unsigned char deviceNumber;
-    unsigned char mediaDescriptor;
-    unsigned char logicUnitNumber;
-    unsigned char sectors;
-    int           initialSector;
-} DOS_SectorStruct;
-
-struct DiskImgInfo {
+struct doubleRCtype {
     int rc;
-    char dskname[65];
-    unsigned char *data;
-    unsigned char deviceNumber;
-    double size;
+    unsigned char byte;
 };
-
-struct psettype {
-    char var[16];
-    char value[254];
-};
-
-struct curlMemStruct {
-    unsigned char *memory;
-    size_t size;
-};
-typedef struct curlMemStruct MemoryStruct;
-
-unsigned char appstate = st_init;
-unsigned char msxbyte;
-unsigned char msxbyterdy;
-unsigned char pibyte;
-int debug;
-bool CHECKTIMEOUT = false;
-bool PIEXCHANGETIMEDOUT = false;
 
 void init_spi_bitbang(void) {
     gpioSetMode(cs, PI_INPUT);
@@ -270,10 +165,8 @@ void init_spi_bitbang(void) {
     gpioSetMode(mosi, PI_INPUT);
     gpioSetMode(miso, PI_OUTPUT);
     gpioSetMode(rdy, PI_OUTPUT);
-    
     gpioSetPullUpDown(cs, PI_PUD_UP);
     gpioSetPullUpDown(mosi, PI_PUD_DOWN);
-    
 }
 
 void write_MISO(unsigned char bit) {
@@ -300,285 +193,69 @@ unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     unsigned rdbit;
     
     tick_sclk();
-    
     for (bit = 0x80; bit; bit >>= 1) {
-        
         write_MISO((byte_out & bit) ? HIGH : LOW);
         gpioWrite(sclk,HIGH);
         gpioDelay(SPI_SCLK_HIGH_TIME);
-        
         rdbit = gpioRead(mosi);
         if (rdbit == HIGH)
             byte_in |= bit;
         
         gpioWrite(sclk,LOW);
         gpioDelay(SPI_SCLK_LOW_TIME);
-        
     }
-    
     tick_sclk();
     return byte_in;
-    
 }
 
-int piexchangebyte(unsigned char mypibyte) {
+struct doubleRCtype piexchangebyte(bool CHECKTIMEOUT, unsigned char pibyte) {
+    struct doubleRCtype ret;
     time_t t = time(NULL) + BYTETRANSFTIMEOUT;
-    int mymsxbyte;
+    ret.rc = RC_SUCCESS;
     gpioWrite(rdy,HIGH);
-    PIEXCHANGETIMEDOUT = false;
     while (gpioRead(cs) == HIGH) {
         if (CHECKTIMEOUT)
             if (time(NULL) >= t) {
-                PIEXCHANGETIMEDOUT = true;
+                ret.rc = RC_TIMEOUT;
                 break;
             }
     }
     
-    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte);
+    if (ret.rc == RC_SUCCESS)
+        ret.byte = SPI_MASTER_transfer_byte(pibyte);
+    
     gpioWrite(rdy,LOW);
-    return mymsxbyte;
+    return ret;
 }
 
-/* senddatablock
- ---------------
- 21/03/2017
- 
- Send a block of data to MSX. Read the data from a pointer passed to the function.
- Do not retry if it fails (this should be implemented somewhere else).
- Will inform the block size to MSX (two bytes) so it knows the size of transfer.
- 
- Logic sequence is:
- 1. read MSX status (expect SENDNEXT)
- 2. send lsb for block size
- 3. send msb for block size
- 4. read (lsb+256*msb) bytes from buffer and send to MSX
- 5. exchange crc with msx
- 6. end function and return status
- 
- Return code will contain the result of the oepration.
- */
-transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize) {
-    
-    transferStruct dataInfo;
-    
-    int bytecounter = 0;
-    unsigned char mymsxbyte,mypibyte;
-    unsigned char crc = 0;
-    
-    //printf("senddatablock: starting\n");
-    mymsxbyte = piexchangebyte(SENDNEXT);
-    
-    if (mymsxbyte != SENDNEXT) {
-        printf("senddatablock:Out of sync with MSX, waiting SENDNEXT, received %x\n",mymsxbyte);
-        dataInfo.rc = RC_OUTOFSYNC;
-    } else {
-        // send block size if requested by caller.
-        if (sendsize)
-            piexchangebyte(datasize % 256); piexchangebyte(datasize / 256);
-        
-        //printf("senddatablock:blocksize = %i\n",datasize);
-        
-        while(datasize>bytecounter && mymsxbyte>=0) {
-            //printf("senddatablock:waiting MSX request byte\n");
-            
-            mypibyte = *(buffer + bytecounter);
-            
-            mymsxbyte = piexchangebyte(mypibyte);
-            
-            if (PIEXCHANGETIMEDOUT) {
-                printf("senddatablock:time out error during transfer\n");
-                mymsxbyte = -1;
-                break;
-            }
-            
-            if (mymsxbyte>=0) {
-                //printf("senddatablock:%i Sent %x %c Received:%x\n",bytecounter,mypibyte,mypibyte,mymsxbyte);
-                crc ^= mypibyte;
-                bytecounter++;
-            } else {
-                printf("senddatablock:Error during transfer\n");
-                break;
-            }
-        }
-        
-        if(mymsxbyte>=0) {
-            //printf("senddatablock:Sending CRC: %x\n",crc);
-            
-            mymsxbyte = piexchangebyte(crc);
-            
-            //printf("senddatablock:Received MSX CRC: %x\n",mymsxbyte);
-            if (mymsxbyte == crc) {
-                //printf("mymsxbyte:CRC verified\n");
-                dataInfo.rc = RC_SUCCESS;
-            } else {
-                dataInfo.rc = RC_CRCERROR;
-                printf("senddatablock:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,dataInfo.rc);
-            }
-            
-        } else {
-            dataInfo.rc = RC_TIMEOUT;
-        }
-    }
-    
-    //printf("senddatablock:exiting with rc = %x\n",dataInfo.rc);
-    return dataInfo;
-}
-
-/* recvdatablock
- ---------------
- Read a block of data from MSX and stores in the pointer passed to the function.
- Do not retry if it fails (this should be implemented somewhere else).
- Will read the block size from MSX (two bytes) to know size of transfer.
- 
- Logic sequence is:
- 1. read MSX status (expect SENDNEXT)
- 2. read lsb for block size
- 3. read msb for block size
- 4. read (lsb+256*msb) bytes from MSX and store in buffer
- 5. exchange crc with msx
- 6. end function and return status
- 
- Return code will contain the result of the oepration.
- */
-
-transferStruct recvdatablock(unsigned char *buffer) {
-    transferStruct dataInfo;
-    
-    int bytecounter = 0;
-    unsigned char mymsxbyte;
-    unsigned char crc = 0;
-    
-    //printf("recvdatablock:starting\n");
-    mymsxbyte = piexchangebyte(SENDNEXT);
-    if (mymsxbyte != SENDNEXT) {
-        printf("recvdatablock:Out of sync with MSX, waiting SENDNEXT, received %x\n",mymsxbyte);
-        dataInfo.rc = RC_OUTOFSYNC;
-    } else {
-        // read block size
-        dataInfo.datasize = (unsigned char)piexchangebyte(SENDNEXT)+(256 * (unsigned char)piexchangebyte(SENDNEXT));
-        //printf("recvdatablock:blocksize = %i\n",dataInfo.datasize);
-        
-        while(dataInfo.datasize>bytecounter && mymsxbyte>=0) {
-            //printf("recvdatablock:waiting byte from MSX\n");
-            
-            mymsxbyte = piexchangebyte(SENDNEXT);
-            
-            if (mymsxbyte>=0) {
-                //printf("recvdatablock:Received byte:%x\n",mymsxbyte);
-                *(buffer + bytecounter) = mymsxbyte;
-                crc ^= mymsxbyte;
-                bytecounter++;
-            } else {
-                //printf("recvdatablock:Error during transfer\n");
-                break;
-            }
-        }
-        
-        if(mymsxbyte>=0) {
-            //printf("recvdatablock:Sending CRC: %x\n",crc);
-            
-            mymsxbyte = piexchangebyte(crc);
-            
-            //printf("recvdatablock:Received MSX CRC: %x\n",mymsxbyte);
-            if (mymsxbyte == crc) {
-                //printf("recvdatablock:CRC verified\n");
-                dataInfo.rc = RC_SUCCESS;
-            } else {
-                dataInfo.rc = RC_CRCERROR;
-                //printf("recvdatablock:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,dataInfo.rc);
-            }
-            
-        } else {
-            dataInfo.rc = RC_TIMEOUT;
-        }
-    }
-    
-    //printf("recvdatablock:exiting with rc = %x\n",dataInfo.rc);
-    return dataInfo;
-}
-
-int secsenddata(unsigned char *buf, int filesize,int GLOBALRETRIES) {
-    
-    int rc;
-    int blockindex,numsectors,initsector,mymsxbyte,blocksize,retries;
-    transferStruct dataInfo;
-    
-    mymsxbyte = piexchangebyte(SENDNEXT);
-    //printf("secsenddata:Sent SENDNEXT, received:%x\n",mymsxbyte);
-    
-    if(mymsxbyte!=SENDNEXT) {
-        rc = RC_OUTOFSYNC;
-        printf("secsenddata:Exiting with rc:%x\n",rc);
-        return rc;
-    }
-    
-    piexchangebyte(filesize % 256); piexchangebyte(filesize / 256);
-    //printf("secsenddata:Sent filesize: %i\n",filesize);
-    
-    
-    // now send 512 bytes at a time.
-    blockindex = 0;
-    if (filesize>512) blocksize = 512; else blocksize = filesize;
-    while(blockindex<filesize) {
-        retries=0;
-        rc = RC_UNDEFINED;
-        while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
-            rc = RC_UNDEFINED;
-            //printf("secsenddata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,blocksize);
-            dataInfo = senddatablock(buf+blockindex,blocksize,true);
-            rc = dataInfo.rc;
-            retries++;
-        }
-        
-        // Transfer interrupted due to CRC error
-        if(retries>=GLOBALRETRIES) break;
-        
-        blockindex += 512;
-        //blockindex += blocksize;
-        
-        if (filesize-blockindex>512) blocksize = 512; else blocksize = filesize-blockindex;
-        //printf("secsenddata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
-        
-    }
-    
-    //printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
-    
-    if(retries>=GLOBALRETRIES) {
-        printf("secsenddata:Transfer interrupted due to CRC error\n");
-        rc = RC_CRCERROR;
-    } else {
-        rc = dataInfo.rc;
-    }
-    
-    //printf("secsenddata:Exiting with rc:%x\n",rc);
-    return rc;
-    
-}
-
-int uploaddata(unsigned char *data, size_t totalsize, int index, int GLOBALRETRIES) {
+int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     int rc,crc,bytecounter,myblocksize,msxblocksize;
-    unsigned char mypibyte,mymsxbyte;
+    unsigned char pibyte;
+    struct doubleRCtype msxdata;
     
     printf("uploaddata: Sending STARTTRANSFER\n");
     
-    mymsxbyte=piexchangebyte(STARTTRANSFER);
-    if (mymsxbyte != STARTTRANSFER) {
-        printf("uploaddata: Received %x\n",mymsxbyte);
+    msxdata = piexchangebyte(true,STARTTRANSFER);
+    if (msxdata.byte != STARTTRANSFER) {
+        printf("uploaddata: Received %x\n",msxdata.byte);
         return RC_OUTOFSYNC;
     }
     
     printf("uploaddata:blocksize - ");
     // read blocksize, MAXIMUM 65535 KB
-    msxblocksize = piexchangebyte(SENDNEXT) + 256 * piexchangebyte(SENDNEXT);
+    msxdata = piexchangebyte(true,SENDNEXT);
+    msxblocksize = msxdata.rc;
+    msxdata = piexchangebyte(true,SENDNEXT);
+    msxblocksize = msxblocksize + 256 * msxdata.rc;
     myblocksize = msxblocksize;
     
     //Now verify if has finished transfering data
     if (index*msxblocksize >= totalsize) {
-        piexchangebyte(ENDTRANSFER);
+        piexchangebyte(true,ENDTRANSFER);
         return ENDTRANSFER;
     }
     
-    piexchangebyte(SENDNEXT);
+    piexchangebyte(true,SENDNEXT);
     
     printf("recv:%i ",msxblocksize);
     // send back to msx the block size, or the actual file size if blocksize > totalsize
@@ -589,28 +266,27 @@ int uploaddata(unsigned char *data, size_t totalsize, int index, int GLOBALRETRI
     
     printf("uploaddata:totalsize is %i, this block is %i, block end is %i\n",totalsize,index*msxblocksize,index*msxblocksize+myblocksize);
     
-    piexchangebyte(myblocksize % 256); piexchangebyte(myblocksize / 256);
+    piexchangebyte(true,myblocksize % 256); piexchangebyte(true,myblocksize / 256);
     
     crc = 0;
     bytecounter = 0;
     
     printf("uploaddata: Loop to send block\n");
     while(bytecounter<myblocksize) {
-        mypibyte = *(data + (index*myblocksize) + bytecounter);
-        piexchangebyte(mypibyte);
-        crc ^= mypibyte;
+        pibyte = *(data + (index*myblocksize) + bytecounter);
+        piexchangebyte(true,pibyte);
+        crc ^= pibyte;
         bytecounter++;
     }
     
-    
     // exchange crc
-    mymsxbyte=piexchangebyte(crc);
-    if (mymsxbyte == crc)
+    msxdata = piexchangebyte(true,crc);
+    if (msxdata.byte == crc)
         rc = RC_SUCCESS;
     else
         rc = RC_CRCERROR;
     
-    printf("uploaddata:local crc: %x / remote crc:%x\n",crc,mymsxbyte);
+    printf("uploaddata:local crc: %x / remote crc:%x\n",crc,msxdata.byte);
     
     printf("uploaddata:exiting rc = %x\n",rc);
     
@@ -621,22 +297,20 @@ int uploaddata(unsigned char *data, size_t totalsize, int index, int GLOBALRETRI
 int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;
-    unsigned long fileLen;
-    int GLOBALRETRIES;
     char *p;
-    int rc = 0;
+    unsigned long fileLen;
+    int GLOBALRETRIES, pcopyindex,rc;
     
-    printf("GPIO Initialized\n");
-    printf("Starting MSXPi Server Python module Version %s Build %s\n",version,build);
+    printf("upploaddata.c: Starting\n");
     
-    if (argc != 3){
-        fprintf(stderr, "wrong number of arguments\n");
-        return 0;
+    if (argc != 5){
+        printf("wrong number of arguments\ncommand:%s\n",argv);
+        return 1;
     }
     
     if (gpioInitialise() < 0){
-        fprintf(stderr, "pigpio initialisation failed\n");
-        return 0;
+        printf("pigpio initialisation failed\n");
+        return 1;
     }
     
     init_spi_bitbang();
@@ -646,80 +320,62 @@ int main(int argc, char *argv[]){
     errno = 0;
     long conv = strtol(argv[2], &p, 10);
     if (errno != 0 || *p != '\0' || conv > INT_MAX) {
-        fprintf(stderr, "GLOBALRETRIES parameters invalid or non numeric\n");
-        return 0;
+        printf("fileLen parameter invalid or not numeric\n");
+        return 1;
+    } else
+        fileLen = conv;
+
+    errno = 0;
+    conv = strtol(argv[3], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        printf("pcopyindex parameter invalid or not numeric\n");
+        return 1;
+    } else
+        pcopyindex = conv;
+    
+    errno = 0;
+    conv = strtol(argv[4], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        printf("GLOBALRETRIES parameter invalid or not numeric\n");
+        return 1;
     } else
         GLOBALRETRIES = conv;
     
-    // open file and read to buffer
+    //open file and read to buffer
     file = fopen(argv[1], "rb");
     if (!file)
     {
-        fprintf(stderr, "Unable to open file %s", argv[1]);
+        printf("Unable to open file %s", argv[1]);
         gpioTerminate();
-        return 0;
+        return 1;
     }
-    
+
     //Get file length
-    fseek(file, 0, SEEK_END);
+    fseek(file, 0L, SEEK_END);
     fileLen=ftell(file);
-    fseek(file, 0, SEEK_SET);
+    rewind(file);
     
     //Allocate memory
-    buffer=(char *)malloc(fileLen+1);
+    buffer = malloc(sizeof(unsigned char) * fileLen + 1);
+    
     if (!buffer)
     {
-        fprintf(stderr, "Memory error!");
+        printf("Memory allocation error!");
         fclose(file);
         gpioTerminate();
-        return 0;
+        return 1;
     }
     
-    //Read file contents into buffer
-    fread(buffer, fileLen, 1, file);
+    fread(buffer,fileLen,1,file);
     fclose(file);
     
-    bool loop = true;
-    int pcopyindex = 0;
-    int retries = 0;
-
-    printf("Waiting 0x55\n");
+    // Send the file to MSX
+    rc = uploaddata(buffer,fileLen,pcopyindex,GLOBALRETRIES);
     
-    piexchangebyte(RC_SUCCESS);
-    
-    printf("waiting 0x55\n");
-    
-    rc = piexchangebyte(0x56);
-    //while (rc != 0x55)
-    //    rc = piexchangebyte(SENDNEXT);
-    
-    printf("sync with 0x55\n");
-    
-    while (loop) {
-        rc = uploaddata(&buffer,fileLen,pcopyindex,GLOBALRETRIES);
-        if (rc==ENDTRANSFER) {
-            printf("ENDTRANSFER\n");
-            free(buffer);
-            rc = RC_SUCCESS;
-            loop = false;
-        } else if (rc==RC_SUCCESS) {
-            printf("loop:index = %i\n",pcopyindex);
-            pcopyindex++;
-        } else if (rc==RC_CRCERROR && retries < GLOBALRETRIES) {
-            printf("loop:crcerror - retry = %i\n",retries);
-            retries++;
-        } else {
-            printf("!!!!! Error !!!!!\n");
-            free(buffer);
-            rc = RC_FAILED;
-            loop = false;
-        
-        }
-    }
-    
-    printf("Terminating GPIO\n");
+    free(buffer);
+    //printf("Terminating GPIO\n");
     gpioWrite(rdy,LOW);
     gpioTerminate();
         
-    return 0;
+    return rc;
 }

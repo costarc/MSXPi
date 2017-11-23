@@ -262,6 +262,23 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     #print "senddatablock:Exiting with rc=",hex(rc)
     return rc
 
+def senddatablockC(flag1,buf,index,size,flag2):
+    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+    fh.write(buf[:size+1])
+    fh.flush()
+    fh.close()
+    print "senddatablockC:Calling senddatablock.msx "
+    cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
+    p = subprocess.call(cmd, shell=True)
+    print "Exiting senddatablockC:call returned:",p
+
+def uploaddataC(buf,size,index,GLOBALRETRIES):
+    print "senddatablockC:Calling uploaddata.msx "
+    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
+    p = subprocess.call(cmd, shell=True)
+    print "Exiting senddatablockC:call returned:",p
+
+
 def secsenddata(buffer, initpos, filesize):
     rc = RC_SUCCESS
     
@@ -376,7 +393,7 @@ def ploadr(basepath, file):
                             #print "ploadr:Calling senddatablock.msx "
                             rc = RC_SUCCESS
                             GPIO.cleanup()
-                            cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
+                            cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp"
                             p = subprocess.call(cmd, shell=True)
                             GPIO.setwarnings(False)
                             init_spi_bitbang()
@@ -444,7 +461,7 @@ def pdir(basepath, path):
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
         urlcheck = getpath(basepath, path)
-        print "File type =",urlcheck[0]
+        #print "File type =",urlcheck[0]
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
             cmd = "ls -l " +  urlcheck[1]
             cmd = cmd.decode().split(" ")
@@ -660,7 +677,7 @@ def uploaddata(buffer, totalsize, index):
         rc = RC_OUTOFSYNC
         print "uploaddata:Error - out of sync. Received",hex(msxbyte[1])
 
-    print "upladodata:Exiting with rc=",hex(rc)
+    print "uploaddata:Exiting with rc=",hex(rc)
     return rc
 
 def pdate():
@@ -913,7 +930,16 @@ try:
                         urlcheck = getpath(psetvar[0][1],args[1])
                         if (urlcheck[0] < 2):
                             if (os.path.exists(urlcheck[1])):
-                                buf = msxdos_inihrd(urlcheck[1])
+                                #buf = msxdos_inihrd(urlcheck[1])
+                                # new update 000.01
+                                fh = open(urlcheck[1], 'rb')
+                                buf = fh.read()
+                                fh.close()
+                                fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+                                fh.write(buf)
+                                fh.flush()
+                                fh.close()
+                            # end of new update 000.01
                             else:
                                 print "pcopy:error reading file"
                                 rc = RC_FAILED
@@ -924,6 +950,12 @@ try:
                             rcbuf = readf_tobuf(urlcheck[1],0,urlcheck[0])
                             if (rcbuf[0] == RC_SUCCESS):
                                 buf = rcbuf[2]
+                                # new update 000.01
+                                fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+                                fh.write(buf)
+                                fh.flush()
+                                fh.close()
+                                # end of new update 000.01
                             else:
                                 print "pcopy:error reading acessing network"
                                 rc = RC_FAILED
@@ -938,7 +970,15 @@ try:
                     else:
                         print "pcopy:sync error"
                 else:
-                    rc = uploaddata(buf,filesize,pcopyindex)
+                    #rc = uploaddata(buf,filesize,pcopyindex)
+                    # update 000.01
+                    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    print cmd
+                    rc = subprocess.call(cmd, shell=True)
+                    print "pcopy:Exiting uploaddata.msx:call returned:",rc
+                    init_spi_bitbang()
+                    GPIO.output(rdyPin, GPIO.LOW)
+                    # end of update 000.01
                     if (rc == ENDTRANSFER):
                         pcopystat2 = 0
                         rc = RC_SUCCESS

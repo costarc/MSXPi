@@ -41,16 +41,6 @@
 #include <limits.h>  // for INT_MAX
 #include <time.h>
 #include <stdbool.h>
-//#include <unistd.h>
-//#include <string.h>
-//#include <sys/types.h>
-//#include <dirent.h>
-//#include <sys/stat.h>
-//#include <curl/curl.h>
-//#include <assert.h>
-//#include <sys/mman.h>
-//#include <fcntl.h>
-
 
 #define TZ (0)
 #define version "0.8.1"
@@ -168,10 +158,6 @@ struct doubleRCtype {
     int rc;
     unsigned char byte;
 };
-
-unsigned char msxbyte;
-unsigned char msxbyterdy;
-unsigned char pibyte;
 
 void init_spi_bitbang(void) {
     gpioSetMode(cs, PI_INPUT);
@@ -296,11 +282,9 @@ int senddatablock(char *buffer, int datasize, bool sendsize) {
 int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;
-    char *p;
     unsigned long fileLen;
-    int GLOBALRETRIES;
-    
-    if (argc != 3){
+
+    if (argc != 2){
         fprintf(stderr, "wrong number of arguments\n");
         return 0;
     }
@@ -312,17 +296,6 @@ int main(int argc, char *argv[]){
     
     init_spi_bitbang();
     gpioWrite(rdy,LOW);
-    //printf("senddatablock.c:GPIO Initialized\n");
-    //printf("senddatablock.c:Starting MSXPi Server module Version %s Build %s\n",version,build);
-    
-    // get GLBOARETRIES from argv
-    errno = 0;
-    long conv = strtol(argv[2], &p, 10);
-    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
-        fprintf(stderr, "GLOBALRETRIES parameters invalid or not numeric\n");
-        return 0;
-    } else
-        GLOBALRETRIES = conv;
     
     //open file and read to buffer
     file = fopen(argv[1], "rb");
