@@ -343,7 +343,7 @@ def ploadr2(basepath, file):
     msxbyte = piexchangebyte(NoTimeOutCheck,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
         fpath = getpath(basepath, file)
-        print "ploadr:fpath =",fpath[1]
+        #print "ploadr:fpath =",fpath[1]
         if (len(fpath[1]) > 0 and fpath[1] <> ''):
             try:
                 fh = open(str(fpath[1]), 'rb')
@@ -363,17 +363,12 @@ def ploadr2(basepath, file):
                         
                         msxbyte = piexchangebyte(NoTimeOutCheck,STARTTRANSFER)
                         if (msxbyte[1]==STARTTRANSFER):
-                            print "ploadr:Calling senddatablock.msx "
+                            #print "ploadr:Calling senddatablock.msx "
                             rc = RC_SUCCESS
                             GPIO.cleanup()
                             cmd = "sudo " + MSXPIHOME + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
-                            print "ploadr:",cmd
-                            #subprocess.check_output(cmd,shell=True)
                             p = subprocess.call(cmd, shell=True)
-                            #p = Popen('sudo ' + MSXPIHOME + '/senddatablock.msx '+str(GLOBALRETRIES) + ' ' + str(len(buf)), stdin=PIPE, shell=True)
-                            #p.stdin.write(buf)
-                            #p.stdin.close()
-                            #p.wait()
+                            GPIO.setwarnings(False)
                             init_spi_bitbang()
                             GPIO.output(rdyPin, GPIO.LOW)
                             sendstdmsg(rc,"Pi:Ok")
@@ -453,8 +448,6 @@ def getpath(basepath, path):
         urltype = 3 # this is an relative network path
         newpath = basepath + "/" + path
 
-    print "getpath:path type:",urltype
-    print "fullpath =",newpath
     return [urltype, newpath]
 
 # create a subclass and override the handler methods

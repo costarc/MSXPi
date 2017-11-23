@@ -11,6 +11,7 @@ fi
 
 /sbin/mke2fs -m 0 /dev/ramdisk 1m
 /bin/mount /dev/ramdisk /media/ramdisk
+chown pi.pi /media/ramdisk
 
 msxpisrv = $(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 
