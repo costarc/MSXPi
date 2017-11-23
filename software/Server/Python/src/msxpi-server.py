@@ -333,35 +333,44 @@ def prun(cmd):
 
 def ploadr(basepath, file):
     rc = RC_SUCCESS
-    
     init_spi_bitbang()
     GPIO.output(rdyPin, GPIO.LOW)
-    
-    #print "pload:starting"
-    # usar readf_to_buffer: return [rc, errmgs, buffer]
-    
     msxbyte = piexchangebyte(NoTimeOutCheck,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
-        fpath = getpath(basepath, file)
-        #print "ploadr:fpath =",fpath[1]
-        #if (fpath[0] < 2):
-        if (len(fpath[1]) > 0 and fpath[1] <> ''):
-            try:
-                fh = open(str(fpath[1]), 'rb')
-                buf = fh.read()
-                fh.close()
-        
-                #print "pload:len of buf:",len(buf)
-                
+        if (file.strip() <> ''):
+            fpath = getpath(basepath, file)
+            
+            # local file?
+            if (fpath[0] < 2):
+                try:
+                    fh = open(str(fpath[1]), 'rb')
+                    buf = fh.read()
+                    fh.close()
+                except IOError as e:
+                    rc = RC_FAILED
+                    print "Error opening file:",e
+                    sendstdmsg(rc,"Pi:" + str(e))
+            #Remote file
+            else:
+                try:
+                    buf = urllib2.urlopen(fpath[1].decode()).read()
+                except urllib2.HTTPError as e:
+                    rc = RC_FAILED
+                    print "pdir:http error "+ str(e)
+                    sendstdmsg(rc,"Pi:" + str(e))
+                except:
+                    rc = RC_FAILED
+                    print "pdir:http unknow error"
+                    sendstdmsg(rc,"Pi:Error unknow downloading file")
+            if (rc == RC_SUCCESS):
+                #print "ploadr:checking rom"
                 if (buf[0]=='A' and buf[1]=='B'):
                     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
                     fh.write(buf)
                     fh.flush()
                     fh.close()
-                    
                     msxbyte = piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                     if (msxbyte[1]==SENDNEXT):
-                        
                         msxbyte = piexchangebyte(NoTimeOutCheck,STARTTRANSFER)
                         if (msxbyte[1]==STARTTRANSFER):
                             #print "ploadr:Calling senddatablock.msx "
@@ -373,15 +382,18 @@ def ploadr(basepath, file):
                             init_spi_bitbang()
                             GPIO.output(rdyPin, GPIO.LOW)
                             sendstdmsg(rc,"Pi:Ok")
-            except IOError as e:
-                rc = RC_FAILED
-                print "Error opening file:",e
-                sendstdmsg(rc,"Pi:" + str(e))
+                else:
+                    print "pload:not a ROM file"
+                    rc = RC_FAILED
+                    sendstdmsg(rc,"Pi:Error - not a ROM file")
+        else:
+            print "pload:syntax error in command"
+            rc = RC_FAILED
+            sendstdmsg(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
     else:
-        print "pload:syntax error in command"
+        print "pload:sync error"
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
-
+                       
     #print "pload:Exiting with rc = ",hex(rc)
     return rc
 
