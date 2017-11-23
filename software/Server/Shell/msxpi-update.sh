@@ -50,16 +50,19 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
 
-/bin/mv msxpi-monitor    $MSXPIHOME/
-/bin/mv msxpi-server     $MSXPIHOME/
-/bin/mv msxpi-server.py  $MSXPIHOME/
-/bin/mv msxpi-client.bin $MSXPIHOME/
-/bin/mv msxpiext.bin     $MSXPIHOME/
-/bin/mv pplay.sh         $MSXPIHOME/
-/bin/mv pshut.sh         $MSXPIHOME/
+/bin/mv msxpi-monitor     $MSXPIHOME/
+/bin/mv msxpi-server      $MSXPIHOME/
+/bin/mv msxpi-server.py   $MSXPIHOME/
+/bin/mv msxpi-client.bin  $MSXPIHOME/
+/bin/mv msxpiext.bin      $MSXPIHOME/
+/bin/mv pplay.sh          $MSXPIHOME/
+/bin/mv pshut.sh          $MSXPIHOME/
+/bin/mv senddatablock.msx $MSXPIHOME/
 
-/bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor $MSXPIHOME/msxpi-server
+/bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor \
+               $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
@@ -76,4 +79,9 @@ done
 /bin/rm index.html*
 /bin/chown -R pi.pi $MSXPIHOME
 
+# changes to prevent sd corruption
+# disable swap
+sudo dphys-swapfile swapoff
+sudo dphys-swapfile uninstall
+sudo update-rc.d dphys-swapfile remove
 

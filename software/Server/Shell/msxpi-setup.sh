@@ -148,3 +148,10 @@ wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/ta
 chown -R pi.pi $MSXPIHOME
 sudo systemctl start msxpi-monitor
 
+# changes to prevent sd corruption
+# disable swap
+sudo dphys-swapfile swapoff
+sudo dphys-swapfile uninstall
+sudo update-rc.d dphys-swapfile remove
+
+

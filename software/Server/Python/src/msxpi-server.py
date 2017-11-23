@@ -592,7 +592,7 @@ def readf_tobuf(fpath,buf,ftype):
             rc = RC_FAILED
             errmgs = "Pi:Error accessing network file"
 
-    print "readf_tobuf:Exiting with rc:",hex(rc)
+    #print "readf_tobuf:Exiting with rc:",hex(rc)
     return [rc, errmgs, buffer]
 
 def pplay(cmd):
@@ -917,7 +917,6 @@ try:
                         rc = senddatablock(True,fname,0,len(fname),True)
                         msxbyte = piexchangebyte(NoTimeOutCheck, RC_WAIT)
                         urlcheck = getpath(psetvar[0][1],args[1])
-                        print "pcopy:urlcheck=",urlcheck
                         if (urlcheck[0] < 2):
                             if (os.path.exists(urlcheck[1])):
                                 buf = msxdos_inihrd(urlcheck[1])
