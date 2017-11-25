@@ -3,7 +3,7 @@
 # 2017-11-18 : Added switch to python or C version
 
 MSXPIHOME=/home/msxpi
-FILELIST="senddatablock.msx uploaddata.msx pplay.sh pshut.sh"
+FILELIST="senddatablock.msx uploaddata.msx secsenddata.msx pplay.sh pshut.sh"
 USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 
 if [[ $USEROOT -eq 1 ]];then
@@ -16,7 +16,7 @@ msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 if [[ $msxpisrv -eq 1 ]];then
     MSXPISERVER="sudo $MSXPIHOME/msxpi-server"
 else
-    MSXPISERVER="python $MSXPIHOME/msxpi-server.py"
+    MSXPISERVER="/usr/bin/python $MSXPIHOME/msxpi-server.py"
 fi
 
 # check if msxpi files are already installed in ramdisk
@@ -29,11 +29,12 @@ if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
         ${PREFIX}/bin/mount /dev/ramdisk /media/ramdisk
         ${PREFIX}chown pi.pi /media/ramdisk
     fi
-    for file in $FILELIST
-    do
-        cp -p $MSXPIHOME/$file /media/ramdisk/
-    done
 fi
+
+for file in $FILELIST
+do
+    cp -p $MSXPIHOME/$file /media/ramdisk/
+done
 
 R=$(echo $1 | /bin/grep -c "\-t")
 if [[ $# -eq 1 && $R -eq 1 ]]; then
@@ -43,7 +44,7 @@ if [[ $# -eq 1 && $R -eq 1 ]]; then
 fi
 
 echo "Restarting msxpi-server"
-$MSXPIHOME/$MSXPISERVER
+$MSXPISERVER
 
 rm /home/pi/msxpi/msxpi-update*
 

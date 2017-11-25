@@ -40,24 +40,43 @@ GETCMD="/usr/bin/wget"
 TMPDIR=/tmp
 
 cd $TMPDIR
-rm msxpitools 2>/dev/null
+rm  msxpi-monitor msxpi-server msxpi-server.py msxpi.ini  2>/dev/null
+rm  msxpi-client.bin msxpiext.bin pplay.sh pshut.sh 2>/dev/null
+rm *.msx 2>/dev/nill
 
 # Download msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-monitor
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server.py
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi.ini
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
-/bin/mv msxpi-server     $MSXPIHOME/
-/bin/mv msxpi-client.bin $MSXPIHOME/
-/bin/chmod 755 $MSXPIHOME/*.sh
-/bin/chmod 755 $MSXPIHOME/msxpi-server
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/secsenddata.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
+
+/bin/mv msxpi-monitor     $MSXPIHOME/
+/bin/mv msxpi-server      $MSXPIHOME/
+/bin/mv msxpi-server.py   $MSXPIHOME/
+/bin/mv msxpi.ini         $MSXPIHOME/
+/bin/mv msxpi-client.bin  $MSXPIHOME/
+/bin/mv msxpiext.bin      $MSXPIHOME/
+/bin/mv pplay.sh          $MSXPIHOME/
+/bin/mv pshut.sh          $MSXPIHOME/
+/bin/mv *.msx             $MSXPIHOME/
+
+/bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor \
+$MSXPIHOME/msxpi-server* $MSXPIHOME/*.msx
 
 # Create the update .bat to run from MSX-DOS
-echo "pcd $FILESERVER" > MSXPIUP1.BAT.0
-$GETCMD -o /tmp/msxpi_error.log $FILESERVER/
+echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
+$GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS/
 FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | grep -v "Name" | grep -v "Parent")
 for FILE in $FILELIST
 do
-    echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
+echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
 done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
@@ -66,4 +85,8 @@ done
 /bin/rm index.html*
 /bin/chown -R pi.pi $MSXPIHOME
 
-
+# changes to prevent sd corruption
+# disable swap
+sudo dphys-swapfile swapoff
+sudo dphys-swapfile uninstall
+sudo update-rc.d dphys-swapfile remove

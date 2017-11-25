@@ -36,7 +36,7 @@ MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
 
-ssid=YourWiFiId
+ssid=YourWiFiIdx
 psk=YourWiFiPassword
 
 if [[ $ssid == "YourWiFiId" ]];then
@@ -60,7 +60,7 @@ if [[ $ssid == "YourWiFiId" ]];then
         ssid="myssid"
         psk="mypsk"
         }
-        EOF
+EOF
     else
         echo "Interrupting setup"
        exit 1
@@ -135,17 +135,26 @@ amixer cset numid=3 1
 cd $MSXPIHOME
 mkdir msxpi-code
 cd msxpi-code
+rm *.c *.msx
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/senddatablock.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/uploaddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/secsenddata.c
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Python/src/msxpi-server.py
-cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
-mv msxpi-server $MSXPIHOME/
-chmod 755 $MSXPIHOME/msxpi-server
+cc -Wall -pthread -o msxpi-server      msxpi-server.c  -lpigpio -lrt -lcurl
+cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
+cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
+cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
+mv msxpi-server *.msx $MSXPIHOME/
+chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
 
 cd $MSXPIHOME/disks/
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk
+rm -f msxpiboot.dsk msxpitools.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk -O msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpitools.dsk
 
 chown -R pi.pi $MSXPIHOME
+sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor
 
 # changes to prevent sd corruption
@@ -153,5 +162,3 @@ sudo systemctl start msxpi-monitor
 sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
-
-
