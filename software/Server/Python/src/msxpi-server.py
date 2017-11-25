@@ -799,7 +799,17 @@ def msxdos_readsector(driveData, sectorInfo):
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
     #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
-    rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
+    
+    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+    fh.write(driveData[initbytepos:finalbytepos-initbytepos)
+    fh.flush()
+    fh.close()
+    cmd = "sudo " + RAMDISK + "/secsenddata " + RAMDISK + "/msxpi.tmp " + finalbytepos-initbytepos + " " + str(GLOBALRETRIES)
+    rc = subprocess.call(cmd, shell=True)
+    init_spi_bitbang()
+    GPIO.output(rdyPin, GPIO.LOW)
+                       
+    #rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
     #print "msxdos_readsector:exiting rc:",hex(rc)
 
 """ 

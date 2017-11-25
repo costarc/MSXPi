@@ -2,7 +2,7 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                             |
+#| Version : 0.8.1                                                           |
 #|                                                                           |
 #| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
@@ -49,6 +49,18 @@ if [[ $ssid == "YourWiFiId" ]];then
     read confirm
     if [[ "x$confirm" == "xYes" ]];then
         echo "Starting setup..."
+        # ----------------------------------------------------------
+        # Configure Wireless network with provided SSID and Password
+        # ----------------------------------------------------------
+        cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
+        country=GB
+        ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+        update_config=1
+        network={
+        ssid="myssid"
+        psk="mypsk"
+        }
+        EOF
     else
         echo "Interrupting setup"
        exit 1
@@ -77,19 +89,6 @@ sudo make install
 # Enable remote ssh into Pi
 # -------------------------
 touch /boot/ssh
-
-# ----------------------------------------------------------
-# Configure Wireless network with provided SSID and Password
-# ----------------------------------------------------------
-cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
-country=GB
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-network={
-	ssid="myssid"
-	psk="mypsk"
-}
-EOF
 
 # -------------------------------------------
 # Create msxpi directory and link on home dir
@@ -132,11 +131,12 @@ sudo systemctl enable msxpi-monitor
 echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
 amixer cset numid=3 1
 
-# Download and compile the msxpi.server
+# Download msxpi-server (C and Python). Compile the C msxpi-server
 cd $MSXPIHOME
 mkdir msxpi-code
 cd msxpi-code
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Python/src/msxpi-server.py
 cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
 mv msxpi-server $MSXPIHOME/
 chmod 755 $MSXPIHOME/msxpi-server

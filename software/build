@@ -94,10 +94,11 @@ fi
 
 # build distribution package
 if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
-    scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c pi@${PI}:msxpi/
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
+    scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c ./Server/C/src/secsenddata.c pi@${PI}:msxpi/
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
     ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
     ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/secsenddata.msx msxpi/secsenddata.c -lpigpio -lrt -lcurl
 fi
 
 # build distribution package
