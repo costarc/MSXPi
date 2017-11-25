@@ -283,7 +283,8 @@ int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;
     unsigned long fileLen;
-
+    int rc;
+    
     if (argc != 2){
         fprintf(stderr, "wrong number of arguments\n");
         return 0;
@@ -294,15 +295,11 @@ int main(int argc, char *argv[]){
         return 0;
     }
     
-    init_spi_bitbang();
-    gpioWrite(rdy,LOW);
-    
     //open file and read to buffer
     file = fopen(argv[1], "rb");
     if (!file)
     {
         fprintf(stderr, "Unable to open file %s", argv[1]);
-        gpioTerminate();
         return 0;
     }
 
@@ -318,20 +315,19 @@ int main(int argc, char *argv[]){
     {
         fprintf(stderr, "Memory allocation error!");
         fclose(file);
-        gpioTerminate();
         return 0;
     }
     
     fread(buffer,fileLen,1,file);
     fclose(file);
     
-    // Send the file to MSX
-    senddatablock(buffer,fileLen,true);
-    
+    // Send the buffer to MSX
+    init_spi_bitbang();
+    gpioWrite(rdy,LOW);
+    rc = senddatablock(buffer,fileLen,true);
     free(buffer);
-    //printf("Terminating GPIO\n");
     gpioWrite(rdy,LOW);
     gpioTerminate();
-        
-    return 0;
+    printf("senddatablock.c: Exiting with rc = %x\n",rc);
+    return rc;
 }

@@ -232,21 +232,21 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     int rc,crc,bytecounter,myblocksize,msxblocksize;
     unsigned char pibyte;
     struct doubleRCtype msxdata;
-    
-    printf("uploaddata: Sending STARTTRANSFER\n");
+    int msb,lsb;
+    //printf("uploaddata.c: Sending STARTTRANSFER\n");
     
     msxdata = piexchangebyte(true,STARTTRANSFER);
     if (msxdata.byte != STARTTRANSFER) {
-        printf("uploaddata: Received %x\n",msxdata.byte);
+        printf("uploaddata.c: Out of sync - received:%x\n",msxdata.byte);
         return RC_OUTOFSYNC;
     }
     
-    printf("uploaddata:blocksize - ");
     // read blocksize, MAXIMUM 65535 KB
     msxdata = piexchangebyte(true,SENDNEXT);
-    msxblocksize = msxdata.rc;
+    lsb = msxdata.byte;
     msxdata = piexchangebyte(true,SENDNEXT);
-    msxblocksize = msxblocksize + 256 * msxdata.rc;
+    msb = msxdata.byte;
+    msxblocksize = lsb+256*msb;
     myblocksize = msxblocksize;
     
     //Now verify if has finished transfering data
@@ -257,21 +257,14 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     
     piexchangebyte(true,SENDNEXT);
     
-    printf("recv:%i ",msxblocksize);
+    //printf("uploaddata.c:recv:%i ",msxblocksize);
     // send back to msx the block size, or the actual file size if blocksize > totalsize
     if (totalsize <= index*msxblocksize+msxblocksize)
         myblocksize = totalsize - (index*msxblocksize);
     
-    printf("sent:%i\n",myblocksize);
-    
-    printf("uploaddata:totalsize is %i, this block is %i, block end is %i\n",totalsize,index*msxblocksize,index*msxblocksize+myblocksize);
-    
     piexchangebyte(true,myblocksize % 256); piexchangebyte(true,myblocksize / 256);
-    
     crc = 0;
     bytecounter = 0;
-    
-    printf("uploaddata: Loop to send block\n");
     while(bytecounter<myblocksize) {
         pibyte = *(data + (index*myblocksize) + bytecounter);
         piexchangebyte(true,pibyte);
@@ -286,12 +279,8 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     else
         rc = RC_CRCERROR;
     
-    printf("uploaddata:local crc: %x / remote crc:%x\n",crc,msxdata.byte);
-    
-    printf("uploaddata:exiting rc = %x\n",rc);
-    
+    //printf("uploaddata.c:exiting rc = %x\n",rc);
     return rc;
-    
 }
 
 int main(int argc, char *argv[]){
@@ -301,10 +290,10 @@ int main(int argc, char *argv[]){
     unsigned long fileLen;
     int GLOBALRETRIES, pcopyindex,rc;
     
-    printf("upploaddata.c: Starting\n");
+    //printf("upploaddata.c: Starting\n");
     
     if (argc != 5){
-        printf("wrong number of arguments\ncommand:%s\n",argv);
+        printf("wrong number of arguments\n");
         return 1;
     }
     
@@ -312,9 +301,6 @@ int main(int argc, char *argv[]){
         printf("pigpio initialisation failed\n");
         return 1;
     }
-    
-    init_spi_bitbang();
-    gpioWrite(rdy,LOW);
     
     // get GLBOARETRIES from argv
     errno = 0;
@@ -346,7 +332,6 @@ int main(int argc, char *argv[]){
     if (!file)
     {
         printf("Unable to open file %s", argv[1]);
-        gpioTerminate();
         return 1;
     }
 
@@ -368,14 +353,12 @@ int main(int argc, char *argv[]){
     
     fread(buffer,fileLen,1,file);
     fclose(file);
-    
-    // Send the file to MSX
+    init_spi_bitbang();
+    gpioWrite(rdy,LOW);
     rc = uploaddata(buffer,fileLen,pcopyindex,GLOBALRETRIES);
-    
     free(buffer);
-    //printf("Terminating GPIO\n");
     gpioWrite(rdy,LOW);
     gpioTerminate();
-        
+    printf("upploaddata.c: Exiting with rc = %x\n",rc);
     return rc;
 }

@@ -262,21 +262,25 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     #print "senddatablock:Exiting with rc=",hex(rc)
     return rc
 
-def senddatablockC(flag1,buf,index,size,flag2):
+#   senddatablockC(TimeOutCheck,buffer,index+initpos,blocksize,True)
+def senddatablockC(flag1,buf,initpos,size,flag2):
     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-    fh.write(buf[:size+1])
+    fh.write(buf[initpos:initpos+size])
     fh.flush()
     fh.close()
-    print "senddatablockC:Calling senddatablock.msx "
-    cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
-    p = subprocess.call(cmd, shell=True)
-    print "Exiting senddatablockC:call returned:",p
+    print "senddatablockC:Calling senddatablock.msx:",initpos,size
+    cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp"
+    rc = subprocess.call(cmd, shell=True)
+    init_spi_bitbang()
+    GPIO.output(rdyPin, GPIO.LOW)
+    print "Exiting senddatablockC:call returned:",hex(rc)
+    return rc
 
 def uploaddataC(buf,size,index,GLOBALRETRIES):
     print "senddatablockC:Calling uploaddata.msx "
     cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
     p = subprocess.call(cmd, shell=True)
-    print "Exiting senddatablockC:call returned:",p
+    print "Exiting senddatablockC:call returned:",hex(p)
 
 
 def secsenddata(buffer, initpos, filesize):
@@ -323,7 +327,7 @@ def secsenddata(buffer, initpos, filesize):
             #print "secsenddata:successful"
     else:
         rc = RC_FAILNOSTD
-        #print "secsenddata:out of sync"
+        print "secsenddata:out of sync"
         piexchangebyte(TimeOutCheck,rc)
 
     #print "secsenddata:Exiting with rc = ",hex(rc)
@@ -415,7 +419,7 @@ def ploadr(basepath, file):
     return rc
 
 def getpath(basepath, path):
-    path=path.strip()
+    path=path.strip().rstrip(' \t\r\n\0')
     if  path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
@@ -518,9 +522,11 @@ def pcd(basepath, path):
                 rc = RC_SUCCESS
                 sendstdmsg(rc,str(newpath))
             else:
-                if (os.path.isdir(str(newpath))):
+                newpath = str(newpath) #[:len(newpath)-1])
+                print "newpath=",type(newpath),len(newpath)
+                if (os.path.isdir(newpath)):
                     rc = RC_SUCCESS
-                    sendstdmsg(rc,str(newpath))
+                    sendstdmsg(rc,newpath)
                 elif (os.path.isfile(str(newpath))):
                     sendstdmsg(rc,"Pi:Error - not a folder")
                 else:
@@ -973,9 +979,7 @@ try:
                     #rc = uploaddata(buf,filesize,pcopyindex)
                     # update 000.01
                     cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                    print cmd
                     rc = subprocess.call(cmd, shell=True)
-                    print "pcopy:Exiting uploaddata.msx:call returned:",rc
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)
                     # end of update 000.01
