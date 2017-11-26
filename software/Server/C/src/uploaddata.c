@@ -233,7 +233,6 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     unsigned char pibyte;
     struct doubleRCtype msxdata;
     int msb,lsb;
-    //printf("uploaddata.c: Sending STARTTRANSFER\n");
     
     msxdata = piexchangebyte(true,STARTTRANSFER);
     if (msxdata.byte != STARTTRANSFER) {
@@ -248,7 +247,7 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     msb = msxdata.byte;
     msxblocksize = lsb+256*msb;
     myblocksize = msxblocksize;
-    
+           
     //Now verify if has finished transfering data
     if (index*msxblocksize >= totalsize) {
         piexchangebyte(true,ENDTRANSFER);
@@ -261,6 +260,9 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
     // send back to msx the block size, or the actual file size if blocksize > totalsize
     if (totalsize <= index*msxblocksize+msxblocksize)
         myblocksize = totalsize - (index*msxblocksize);
+    
+    
+    printf("uploaddata.c: Starting at position: %i\n",index*myblocksize);
     
     piexchangebyte(true,myblocksize % 256); piexchangebyte(true,myblocksize / 256);
     crc = 0;
@@ -287,7 +289,7 @@ int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;
     char *p;
-    unsigned long fileLen;
+    size_t fileLen;
     int GLOBALRETRIES, pcopyindex,rc;
     
     //printf("upploaddata.c: Starting\n");
@@ -302,9 +304,8 @@ int main(int argc, char *argv[]){
         return 1;
     }
     
-    // get GLBOARETRIES from argv
     errno = 0;
-    long conv = strtol(argv[2], &p, 10);
+    size_t conv = strtol(argv[2], &p, 10);
     if (errno != 0 || *p != '\0' || conv > INT_MAX) {
         printf("fileLen parameter invalid or not numeric\n");
         return 1;
@@ -320,12 +321,12 @@ int main(int argc, char *argv[]){
         pcopyindex = conv;
     
     errno = 0;
-    conv = strtol(argv[4], &p, 10);
-    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+    int convi = strtol(argv[4], &p, 10);
+    if (errno != 0 || *p != '\0' || convi > INT_MAX) {
         printf("GLOBALRETRIES parameter invalid or not numeric\n");
         return 1;
     } else
-        GLOBALRETRIES = conv;
+        GLOBALRETRIES = convi;
     
     //open file and read to buffer
     file = fopen(argv[1], "rb");
@@ -336,12 +337,12 @@ int main(int argc, char *argv[]){
     }
 
     //Get file length
-    fseek(file, 0L, SEEK_END);
-    fileLen=ftell(file);
-    rewind(file);
+    //fseek(file, 0L, SEEK_END);
+    //fileLen=ftell(file);
+    //rewind(file);
     
     //Allocate memory
-    buffer = malloc(sizeof(unsigned char) * fileLen + 1);
+    buffer = malloc(sizeof(unsigned char) * fileLen);
     
     if (!buffer)
     {

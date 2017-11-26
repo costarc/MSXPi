@@ -276,13 +276,6 @@ def senddatablockC(flag1,buf,initpos,size,flag2):
     print "Exiting senddatablockC:call returned:",hex(rc)
     return rc
 
-def uploaddataC(buf,size,index,GLOBALRETRIES):
-    print "senddatablockC:Calling uploaddata.msx "
-    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(GLOBALRETRIES)
-    p = subprocess.call(cmd, shell=True)
-    print "Exiting senddatablockC:call returned:",hex(p)
-
-
 def secsenddata(buffer, initpos, filesize):
     rc = RC_SUCCESS
     
@@ -642,11 +635,12 @@ def uploaddata(buffer, totalsize, index):
 
     msxbyte = piexchangebyte(TimeOutCheck, STARTTRANSFER)
     if (msxbyte[1] == STARTTRANSFER):
-        #print "uploaddata:Receiving blocksize"
+        print "uploaddata:Receiving blocksize"
         #read blocksize, MAXIMUM 65535 KB
         msxblocksize = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1] + 256 * piexchangebyte(NoTimeOutCheck, SENDNEXT)[1]
         myblocksize = msxblocksize;
     
+        print "uploaddata: Position in file to send:",index*myblocksize
         #Now verify if has finished transfering data
         if (index*msxblocksize >= totalsize):
             piexchangebyte(NoTimeOutCheck, ENDTRANSFER)
@@ -654,11 +648,11 @@ def uploaddata(buffer, totalsize, index):
         else:
             piexchangebyte(NoTimeOutCheck, SENDNEXT)
 
-            #print "uploaddata:Received block size:",msxblocksize
+            print "uploaddata:Received block size:",msxblocksize
             if (totalsize <= index*msxblocksize+msxblocksize):
                 myblocksize = totalsize - (index*msxblocksize)
 
-            #print "uploaddata:Sent possible block size:",myblocksize
+            print "uploaddata:Sent possible block size:",myblocksize
             piexchangebyte(NoTimeOutCheck, myblocksize % 256)
             piexchangebyte(NoTimeOutCheck, myblocksize / 256)
             
@@ -685,6 +679,12 @@ def uploaddata(buffer, totalsize, index):
 
     print "uploaddata:Exiting with rc=",hex(rc)
     return rc
+
+def uploaddataC(buf,size,index,GLOBALRETRIES):
+    print "senddatablockC:Calling uploaddata.msx "
+    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(index) + " " + str(GLOBALRETRIES)
+    p = subprocess.call(cmd, shell=True)
+    print "Exiting senddatablockC:call returned:",hex(p)
 
 def pdate():
     rc = RC_FAILED
@@ -798,7 +798,7 @@ def msxdos_secinfo(sectorInfo):
 def msxdos_readsector(driveData, sectorInfo):
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
-    #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
+    print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
     """
     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
     fh.write(driveData[initbytepos:finalbytepos-initbytepos])
@@ -810,7 +810,7 @@ def msxdos_readsector(driveData, sectorInfo):
     GPIO.output(rdyPin, GPIO.LOW)
     """
     rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
-    #print "msxdos_readsector:exiting rc:",hex(rc)
+    print "msxdos_readsector:exiting rc:",hex(rc)
 
 """ 
     msxdos_writesector
@@ -946,8 +946,8 @@ try:
                         urlcheck = getpath(psetvar[0][1],args[1])
                         if (urlcheck[0] < 2):
                             if (os.path.exists(urlcheck[1])):
-                                buf = msxdos_inihrd(urlcheck[1])
-                                """# new update 000.01
+                                #buf = msxdos_inihrd(urlcheck[1])
+                                # new update 000.01
                                 fh = open(urlcheck[1], 'rb')
                                 buf = fh.read()
                                 fh.close()
@@ -955,7 +955,7 @@ try:
                                 fh.write(buf)
                                 fh.flush()
                                 fh.close()
-                            # end of new update 000.01"""
+                            # end of new update 000.01
                             else:
                                 print "pcopy:error reading file"
                                 rc = RC_FAILED
@@ -982,17 +982,18 @@ try:
                         pcopyindex = 0;
                         retries = 0;
                         filesize = len(buf)
+                        print "pcopy:filesize:",filesize
                         piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                     else:
                         print "pcopy:sync error"
                 else:
-                    rc = uploaddata(buf,filesize,pcopyindex)
+                    #rc = uploaddata(buf,filesize,pcopyindex)
                     # update 000.01
-                    """cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
                     rc = subprocess.call(cmd, shell=True)
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)
-                    # end of update 000.01"""
+                    # end of update 000.01
                     if (rc == ENDTRANSFER):
                         pcopystat2 = 0
                         rc = RC_SUCCESS
