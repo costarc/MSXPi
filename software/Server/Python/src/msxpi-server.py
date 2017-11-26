@@ -799,17 +799,17 @@ def msxdos_readsector(driveData, sectorInfo):
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
     #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
-    
+    """
     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-    fh.write(driveData[initbytepos:finalbytepos-initbytepos)
+    fh.write(driveData[initbytepos:finalbytepos-initbytepos])
     fh.flush()
     fh.close()
     cmd = "sudo " + RAMDISK + "/secsenddata " + RAMDISK + "/msxpi.tmp " + finalbytepos-initbytepos + " " + str(GLOBALRETRIES)
     rc = subprocess.call(cmd, shell=True)
     init_spi_bitbang()
     GPIO.output(rdyPin, GPIO.LOW)
-                       
-    #rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
+    """                   
+    rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
     #print "msxdos_readsector:exiting rc:",hex(rc)
 
 """ 
@@ -946,8 +946,8 @@ try:
                         urlcheck = getpath(psetvar[0][1],args[1])
                         if (urlcheck[0] < 2):
                             if (os.path.exists(urlcheck[1])):
-                                #buf = msxdos_inihrd(urlcheck[1])
-                                # new update 000.01
+                                buf = msxdos_inihrd(urlcheck[1])
+                                """# new update 000.01
                                 fh = open(urlcheck[1], 'rb')
                                 buf = fh.read()
                                 fh.close()
@@ -955,7 +955,7 @@ try:
                                 fh.write(buf)
                                 fh.flush()
                                 fh.close()
-                            # end of new update 000.01
+                            # end of new update 000.01"""
                             else:
                                 print "pcopy:error reading file"
                                 rc = RC_FAILED
@@ -986,13 +986,13 @@ try:
                     else:
                         print "pcopy:sync error"
                 else:
-                    #rc = uploaddata(buf,filesize,pcopyindex)
+                    rc = uploaddata(buf,filesize,pcopyindex)
                     # update 000.01
-                    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    """cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
                     rc = subprocess.call(cmd, shell=True)
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)
-                    # end of update 000.01
+                    # end of update 000.01"""
                     if (rc == ENDTRANSFER):
                         pcopystat2 = 0
                         rc = RC_SUCCESS
