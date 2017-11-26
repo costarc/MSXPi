@@ -808,7 +808,7 @@ def msxdos_readsector(driveData, sectorInfo):
     rc = subprocess.call(cmd, shell=True)
     init_spi_bitbang()
     GPIO.output(rdyPin, GPIO.LOW)
-    """                   
+    """
     rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
     #print "msxdos_readsector:exiting rc:",hex(rc)
 
