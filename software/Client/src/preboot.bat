@@ -1,0 +1,1 @@
+prun sudo reboot

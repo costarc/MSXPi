@@ -3,13 +3,27 @@
 MSXPIHOME=/home/pi/msxpi
 export PI=192.168.1.2
 export HW="8b"
+export REV="7"
 export ROMBANK1=./target/msxpi-dos_16k.rom
 export ROMBANK2=./target/msxpi-dos_16k.rom
+export OPENMSXDISK=~/Desktop/MSXPi/commands
 
 if [[ "$HW" == "8b" ]];then
     cp ./asm-common/include/msxpi_io.asm.8bits.asm asm-common/include/msxpi_io.asm
 else
     cp ./asm-common/include/msxpi_io.asm.4bits.asm asm-common/include/msxpi_io.asm
+fi
+
+if [[ "$REV" == "0" ]];then
+    cat ./asm-common/include/include.asm | sed 's/CONTROL_PORT1: EQU $56/CONTROL_PORT1: EQU $06/' | sed 's/DATA_PORT1: EQU $5A/DATA_PORT1: EQU $07/' >./asm-common/include/include.asm.tmp
+    mv ./asm-common/include/include.asm.tmp ./asm-common/include/include.asm
+    cat ./ROM/src/MSX-DOS/msxpi-driver.mac | sed 's/CONTROL_PORT1 EQU $56/CONTROL_PORT1 EQU $06/' | sed 's/DATA_PORT1 EQU $5A/DATA_PORT1 EQU $07/' > ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp
+    mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
+else
+    cat ./asm-common/include/include.asm | sed 's/CONTROL_PORT1: EQU $06/CONTROL_PORT1: EQU $56/' | sed 's/DATA_PORT1: EQU $07/DATA_PORT1: EQU $5A/' >./asm-common/include/include.asm.tmp
+    mv ./asm-common/include/include.asm.tmp ./asm-common/include/include.asm
+    cat ./ROM/src/MSX-DOS/msxpi-driver.mac | sed 's/CONTROL_PORT1 EQU $06/CONTROL_PORT1 EQU $56/' | sed 's/DATA_PORT1 EQU $07/DATA_PORT1 EQU $5A/' > ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp
+    mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
 fi
 
 if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
@@ -45,7 +59,6 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 ~/Dev/bin/z80asm -I ./asm-common/include ./NewClient/src/pcopy.com.asm    -o ./target/pcopy2.com
@@ -96,14 +109,14 @@ fi
 
 # build distribution package
 if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
-    #scp  ./Server/C/src/msxpi-server.c pi@${PI}:msxpi/
-    scp  ./Server/C/src/senddatablock.c pi@${PI}:msxpi/
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
+    scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c ./Server/C/src/secsenddata.c pi@${PI}:msxpi/
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
     ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/secsenddata.msx msxpi/secsenddata.c -lpigpio -lrt -lcurl
 fi
 
 # build distribution package
 if [[ $1 == "-f" || $2 == "-f" || $3 == "-f" ]];then
-    scp  ./target/msxpi-client.bin pi@${PI}:msxpi/
     [ -f ../../build-pkg.sh ] && ../../build-pkg.sh $PI
 fi

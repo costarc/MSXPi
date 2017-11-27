@@ -40,29 +40,35 @@ GETCMD="/usr/bin/wget"
 TMPDIR=/tmp
 
 cd $TMPDIR
-rm msxpitools 2>/dev/null
+rm  msxpi-monitor msxpi-server msxpi-server.py msxpi.ini  2>/dev/null
+rm  msxpi-client.bin msxpiext.bin pplay.sh pshut.sh 2>/dev/null
+rm *.msx 2>/dev/nill
 
 # Download msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-monitor
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server.py
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi.ini
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/secsenddata.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 
 /bin/mv msxpi-monitor     $MSXPIHOME/
 /bin/mv msxpi-server      $MSXPIHOME/
 /bin/mv msxpi-server.py   $MSXPIHOME/
+/bin/mv msxpi.ini         $MSXPIHOME/
 /bin/mv msxpi-client.bin  $MSXPIHOME/
 /bin/mv msxpiext.bin      $MSXPIHOME/
 /bin/mv pplay.sh          $MSXPIHOME/
 /bin/mv pshut.sh          $MSXPIHOME/
-/bin/mv senddatablock.msx $MSXPIHOME/
+/bin/mv *.msx             $MSXPIHOME/
 
 /bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor \
-               $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx
+               $MSXPIHOME/msxpi-server* $MSXPIHOME/*.msx
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0

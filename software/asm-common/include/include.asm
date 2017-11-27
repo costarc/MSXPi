@@ -68,10 +68,6 @@ VALTYP:         EQU     $F663
 USR:            EQU     $F7F8
 RAMAD3:         EQU     $F344
 ERRFLG:         EQU     $F414
-MEMSIZ:         EQU     $F672
-STKTOP:         EQU     $F674
-FRETOP:         EQU     $F69B
-STREND:         EQU     $F6C6
-BOTTOM:         EQU     $FC48
 HIMEM:          EQU     $FC4A
 MSXPICALLBUF:   EQU     $E3D8
+

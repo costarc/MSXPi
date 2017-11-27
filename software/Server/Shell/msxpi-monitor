@@ -1,26 +1,50 @@
 #!/bin/bash
+# 2017-11-23 : Added ramdisk setup
 # 2017-11-18 : Added switch to python or C version
 
-MSXPIHOME=/home/pi/msxpi
+MSXPIHOME=/home/msxpi
+FILELIST="senddatablock.msx uploaddata.msx secsenddata.msx pplay.sh pshut.sh"
+USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 
-
-# create a ramdisk for MSXPi
-if [ ! -e /media/ramdisk ]; then
-    mkdir /media/ramdisk
+if [[ $USEROOT -eq 1 ]];then
+    PREFIX=
+else
+    PREFIX="sudo "
 fi
 
-/sbin/mke2fs -m 0 /dev/ramdisk 1m
-/bin/mount /dev/ramdisk /media/ramdisk
-chown pi.pi /media/ramdisk
+msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
+if [[ $msxpisrv -eq 1 ]];then
+    MSXPISERVER="sudo $MSXPIHOME/msxpi-server"
+else
+    MSXPISERVER="/usr/bin/python $MSXPIHOME/msxpi-server.py"
+fi
 
-msxpisrv = $(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
+# check if msxpi files are already installed in ramdisk
+if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
+    if [[ $(/bin/df /media/ramdisk | /bin/grep -c ramdisk) -eq 0 ]]; then
+        if [[ ! -e /media/ramdisk/ ]]; then
+            ${PREFIX}mkdir /media/ramdisk
+        fi
+        echo y | ${PREFIX}/sbin/mke2fs -q -m 0 /dev/ramdisk 1m
+        ${PREFIX}/bin/mount /dev/ramdisk /media/ramdisk
+        ${PREFIX}chown pi.pi /media/ramdisk
+    fi
+fi
+
+for file in $FILELIST
+do
+    cp -p $MSXPIHOME/$file /media/ramdisk/
+done
+
+R=$(echo $1 | /bin/grep -c "\-t")
+if [[ $# -eq 1 && $R -eq 1 ]]; then
+    echo "Entering test mode"
+    $MSXPISERVER
+    exit 0
+fi
 
 echo "Restarting msxpi-server"
-if [[ msxpisrv -eq 1 ]];then
-    ${MSXPIHOME}/msxpi-server &
-else
-    /usr/bin/python ${MSXPIHOME}/msxpi-server.py &
-fi
+$MSXPISERVER
 
 rm /home/pi/msxpi/msxpi-update*
 

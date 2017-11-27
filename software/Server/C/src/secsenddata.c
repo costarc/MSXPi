@@ -279,6 +279,63 @@ int senddatablock(char *buffer, int datasize, bool sendsize) {
     return msxdata.rc;
 }
 
+int secsenddata(unsigned char *buf, int buffersize, int GLOBALRETRIES) {
+    
+    int rc;
+    int blockindex,blocksize,retries;
+    struct doubleRCtype msxdata;
+    
+    printf("senddatablock.c:Starting\n");
+    msxdata = piexchangebyte(true,SENDNEXT);
+    printf("secsenddata.c:Sent SENDNEXT, received:%x\n",msxdata.byte);
+    
+    if(msxdata.byte != SENDNEXT) {
+        rc = RC_OUTOFSYNC;
+        printf("secsenddata.c:Exiting with rc:%x\n",msxdata.rc);
+        return msxdata.rc;
+    }
+    
+    piexchangebyte(true,buffersize % 256); piexchangebyte(true,buffersize / 256);
+    printf("secsenddata.c:Sent filesize: %i\n",buffersize);
+    
+    // now send 512 bytes at a time.
+    blockindex = 0;
+    if (buffersize>512) blocksize = 512; else blocksize = buffersize;
+    while(blockindex<buffersize) {
+        retries=0;
+        rc = RC_UNDEFINED;
+        while(retries<GLOBALRETRIES && rc != RC_SUCCESS) {
+            rc = RC_UNDEFINED;
+            //printf("secsenddata:inner:index = %i retries:%i filesize:%i  blocksize:%i\n",blockindex,retries,filesize,blocksize);
+            rc = senddatablock(buf+blockindex,blocksize,true);
+            retries++;
+        }
+        
+        // Transfer interrupted due to CRC error
+        if(retries>=GLOBALRETRIES) break;
+        
+        blockindex += 512;
+        //blockindex += blocksize;
+        
+        if (buffersize-blockindex>512) blocksize = 512; else blocksize = buffersize-blockindex;
+        //printf("secsenddata:outer:index = %i retries:%i filesize:%i  blocksize:%i  rc:%x\n",blockindex,retries,filesize,blocksize,rc);
+        
+    }
+    
+    //printf("secsenddata:Exiting transfer loop with rc:%x\n",rc);
+    
+    if(retries>=GLOBALRETRIES) {
+        printf("secsenddata.c:Transfer interrupted due to CRC error\n");
+        rc = RC_CRCERROR;
+    } else {
+        rc = msxdata.rc;
+    }
+    
+    printf("secsenddata.c:Exiting with rc:%x\n",rc);
+    return rc;
+    
+}
+
 int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;

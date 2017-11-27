@@ -2,7 +2,7 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                             |
+#| Version : 0.8.1                                                           |
 #|                                                                           |
 #| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
@@ -36,7 +36,7 @@ MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
 
-ssid=YourWiFiId
+ssid=YourWiFiIdx
 psk=YourWiFiPassword
 
 if [[ $ssid == "YourWiFiId" ]];then
@@ -49,6 +49,18 @@ if [[ $ssid == "YourWiFiId" ]];then
     read confirm
     if [[ "x$confirm" == "xYes" ]];then
         echo "Starting setup..."
+        # ----------------------------------------------------------
+        # Configure Wireless network with provided SSID and Password
+        # ----------------------------------------------------------
+        cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
+        country=GB
+        ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+        update_config=1
+        network={
+        ssid="myssid"
+        psk="mypsk"
+        }
+EOF
     else
         echo "Interrupting setup"
        exit 1
@@ -77,19 +89,6 @@ sudo make install
 # Enable remote ssh into Pi
 # -------------------------
 touch /boot/ssh
-
-# ----------------------------------------------------------
-# Configure Wireless network with provided SSID and Password
-# ----------------------------------------------------------
-cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
-country=GB
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-network={
-	ssid="myssid"
-	psk="mypsk"
-}
-EOF
 
 # -------------------------------------------
 # Create msxpi directory and link on home dir
@@ -132,20 +131,30 @@ sudo systemctl enable msxpi-monitor
 echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
 amixer cset numid=3 1
 
-# Download and compile the msxpi.server
+# Download msxpi-server (C and Python). Compile the C msxpi-server
 cd $MSXPIHOME
 mkdir msxpi-code
 cd msxpi-code
+rm *.c *.msx
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
-cc -Wall -pthread -o msxpi-server msxpi-server.c -lpigpio -lrt -lcurl
-mv msxpi-server $MSXPIHOME/
-chmod 755 $MSXPIHOME/msxpi-server
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/senddatablock.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/uploaddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/secsenddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Python/src/msxpi-server.py
+cc -Wall -pthread -o msxpi-server      msxpi-server.c  -lpigpio -lrt -lcurl
+cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
+cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
+cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
+mv msxpi-server *.msx $MSXPIHOME/
+chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
 
 cd $MSXPIHOME/disks/
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk
+rm -f msxpiboot.dsk msxpitools.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk -O msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpitools.dsk
 
 chown -R pi.pi $MSXPIHOME
+sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor
 
 # changes to prevent sd corruption
@@ -153,5 +162,3 @@ sudo systemctl start msxpi-monitor
 sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
-
-
