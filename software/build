@@ -41,7 +41,6 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy2.com.asm   -o ./target/pcopy2.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
@@ -49,6 +48,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/perror.com.asm   -o ./target/perror.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./NewClient/src/pcopy.com.asm    -o ./target/pcopy2.com
 
 # Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT
