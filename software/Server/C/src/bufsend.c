@@ -242,48 +242,6 @@ struct doubleRCtype piexchangebyte(bool CHECKTIMEOUT, unsigned char pibyte) {
     return ret;
 }
 
-/* BUFRECV on MSX
- -----------------*/
-int bufsend(char *buf, int blocksize, int GLOBALRETRIES) {
-    bool loop = true;
-    int rc = RC_SUCCESS;
-    int index = 0;
-    
-    printf("bufsend.c:Starting\n");
-    
-    while(loop) {
-        msxdata = piexchangebyte(true,STARTTRANSFER);
-        if (msxdata.rc != RC_SUCCESS) {
-            rc = msxdata.rc;
-            break;
-        }
-        
-        if (msxdata.byte != STARTTRANSFER) {
-            rc = RC_CONNERR;
-            break;
-        }
-        
-        rc = blocksend(&buf + (index * blocksize), blocksize, GLOBALRETRIES );
-        printf("bufsend.c:blocksend returned %x\n",rc);
-        if (rc != RC_SUCCESS)
-            break;
-        
-        msxdata = piexchangebyte(true,STARTTRANSFER);
-        if (msxdata.rc != RC_SUCCESS) {
-            rc = msxdata.rc;
-            loop = false;
-        } else if (msxdata.byte == STARTTRANSFER)
-            index = index + blocksize;
-          else if (msxdata.byte == ENDTRANSFER) {
-                rc = RC_SUCCESS;
-                loop = false;
-        }
-        
-
-        printf("bufsend.c:Exiting with rc = %x\n",rc);
-    }
-}
-
 /* BLOCKRECV on MSX
  ------------------*/
 int blocksend(char *buffer, int blocksize, int GLOBALRETRIES) {
@@ -296,7 +254,7 @@ int blocksend(char *buffer, int blocksize, int GLOBALRETRIES) {
     
     msxdata = piexchangebyte(true,STARTTRANSFER);
     
-    if (msxdata.byte != STARTTRANSFER) {
+    if (msxdata.byte != STARTTRANSFER)
         return RC_CONNERR;
 
     // Send number of retreis
@@ -315,22 +273,23 @@ int blocksend(char *buffer, int blocksize, int GLOBALRETRIES) {
         while(blocksize > bytecounter) {
             pibyte = *(buffer + bytecounter);
             msxdata = piexchangebyte(true,pibyte);
-            if (msxdata.rc != RC_SUCCESS)
-                break;
+            //printf("%c",pibyte);
+            if (msxdata.rc != RC_SUCCESS) break;
             crc ^= pibyte;
             bytecounter++;
         }
+        //printf("\n");
         
         if(msxdata.rc == RC_SUCCESS) {
             msxdata = piexchangebyte(true,crc);
             if (msxdata.byte == crc)
-                reryloop = false;
+                retryloop = false;
             else {
                 printf("blocksend.c:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,msxdata.byte);
                 GLOBALRETRIES --;
             }
         } else {
-            reryloop = false;
+            retryloop = false;
         }
     }
 
@@ -341,17 +300,134 @@ int blocksend(char *buffer, int blocksize, int GLOBALRETRIES) {
     return msxdata.rc;
 }
 
+/* BUFRECV on MSX
+ -----------------
+int bufsend(char *buf, int bufsize, int blocksize, int GLOBALRETRIES) {
+    bool loop = true;
+    int rc = RC_SUCCESS
+    int myblocksize, blockindex;
+    struct doubleRCtype msxdata;
+    
+    printf("bufsend.c:Starting\n");
+    blockindex = 0;
+    while(loop) {
+        msxdata = piexchangebyte(true,STARTTRANSFER);
+        if (msxdata.rc != RC_SUCCESS) {
+            rc = msxdata.rc;
+            break;
+        }
+        
+        if (msxdata.byte != STARTTRANSFER) {
+            rc = RC_CONNERR;
+            break;
+        }
+        if (blocksize > bufsize)
+            myblocksize = bufsize;
+        else
+            myblocksize = blocksize;
+        
+        rc = blocksend(&buf + blockindex, myblocksize, GLOBALRETRIES);
+        printf("bufsend.c:blocksend returned %x\n",rc);
+        if (rc != RC_SUCCESS)
+            break;
+        
+        msxdata = piexchangebyte(true,STARTTRANSFER);
+        if (msxdata.rc != RC_SUCCESS) {
+            rc = msxdata.rc;
+            loop = false;
+        } else if (msxdata.byte == STARTTRANSFER)
+            blockindex = blockindex + blocksize;
+        else if (msxdata.byte == ENDTRANSFER) {
+            rc = RC_SUCCESS;
+            loop = false;
+        }
+        
+        
+        printf("bufsend.c:Exiting with rc = %x\n",rc);
+    }
+} */
+
 int main(int argc, char *argv[]){
     FILE *file;
     char *buffer;
     char *p;
-    unsigned long fileLen;
-    int GLOBALRETRIES,blocksize,rc;
+    unsigned long bufsize;
+    int GLOBALRETRIES,blocksize,blockindex,rc;
     
-    if (argc != 3){
+    if (argc != 6){
         fprintf(stderr, "wrong number of arguments\n");
         return 0;
     }
+    
+    // get total buffer size from argv
+    errno = 0;
+    unsigned long conv = strtol(argv[2], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        fprintf(stderr, "blocksize parameter invalid or not numeric\n");
+        return 0;
+    } else
+        bufsize = conv;
+    
+    // get blocksize from argv
+    errno = 0;
+    conv = strtol(argv[3], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        fprintf(stderr, "blocksize parameter invalid or not numeric\n");
+        return 0;
+    } else
+        blocksize = conv;
+    
+    // get index from argv
+    errno = 0;
+    conv = strtol(argv[4], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        fprintf(stderr, "index parameter invalid or not numeric\n");
+        return 0;
+    } else
+        blockindex = conv;
+    
+    // get GLBOARETRIES from argv
+    errno = 0;
+    conv = strtol(argv[5], &p, 10);
+    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
+        fprintf(stderr, "GLOBALRETRIES parameter invalid or not numeric\n");
+        return 0;
+    } else
+        GLOBALRETRIES = conv;
+    
+    //open file and read to buffer
+    file = fopen(argv[1], "rb");
+    if (!file)
+    {
+        fprintf(stderr, "Unable to open file %s", argv[1]);
+        return 0;
+    }
+
+    //Get file length
+    //fseek(file, 0L, SEEK_END);
+    //fileLen=ftell(file);
+    //rewind(file);
+    
+    //Allocate memory
+    buffer = malloc(sizeof(unsigned char) * bufsize);
+    
+    if (!buffer)
+    {
+        fprintf(stderr, "Memory allocation error!");
+        fclose(file);
+        return 0;
+    }
+    
+    fread(buffer,bufsize,1,file);
+    fclose(file);
+    
+    // Send a block to MSX
+    
+    //do not loop when calling from pcopy.block
+    //instead, send one block and return NXTDEV_STATUS
+    
+    if (bufsize - blockindex * blocksize < blocksize)
+        blocksize = bufsize - blockindex * blocksize;
     
     if (gpioInitialise() < 0){
         fprintf(stderr, "pigpio initialisation failed\n");
@@ -360,62 +436,30 @@ int main(int argc, char *argv[]){
     
     init_spi_bitbang();
     gpioWrite(rdy,LOW);
-    //printf("senddatablock.c:GPIO Initialized\n");
-    //printf("senddatablock.c:Starting MSXPi Server module Version %s Build %s\n",version,build);
     
-    // get GLBOARETRIES from argv
-    errno = 0;
-    long conv = strtol(argv[2], &p, 10);
-    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
-        fprintf(stderr, "GLOBALRETRIES parameter invalid or not numeric\n");
-        return 0;
-    } else
-        GLOBALRETRIES = conv;
+    printf("bufsend.c:buffer name:%s\n",argv[1]);
+    printf("bufsend.c:buf size   :%i\n",bufsize);
+    printf("bufsend.c:block size :%i\n",blocksize);
+    printf("bufsend.c:block index:%i\n",blockindex);
+    printf("bufsend.c:Retries    :%i\n",GLOBALRETRIES);
+    
+    rc = blocksend(buffer+blocksize*blockindex,blocksize,GLOBALRETRIES);
+    // rc one of: RC_SUCCESS,RC_CRCERROR,RC_CONERR
 
-    // get blocksize from argv
-    errno = 0;
-    long conv = strtol(argv[2], &p, 10);
-    if (errno != 0 || *p != '\0' || conv > INT_MAX) {
-        fprintf(stderr, "blocksize parameter invalid or not numeric\n");
-        return 0;
-    } else
-        blocksize = conv;
-    
-    //open file and read to buffer
-    file = fopen(argv[1], "rb");
-    if (!file)
-    {
-        fprintf(stderr, "Unable to open file %s", argv[1]);
-        gpioTerminate();
-        return 0;
-    }
-
-    //Get file length
-    fseek(file, 0L, SEEK_END);
-    fileLen=ftell(file);
-    rewind(file);
-    
-    //Allocate memory
-    buffer = malloc(sizeof(unsigned char) * fileLen + 1);
-    
-    if (!buffer)
-    {
-        fprintf(stderr, "Memory allocation error!");
-        fclose(file);
-        gpioTerminate();
-        return 0;
+    if (rc == RC_CONNERR || rc == RC_CRCERROR) {
+        printf("bufsend.c:Sending rc to MSX:%x\n",rc);
+        //piexchangebyte(true,rc);
+    } else {
+         printf("(blockindex+1)*blocksize=%i and bufsize = %i\n",(blockindex+1)*blocksize,bufsize);
+        if ((blockindex+1)*blocksize >= bufsize)
+            rc = ENDTRANSFER;
     }
     
-    fread(buffer,fileLen,1,file);
-    fclose(file);
-    
-    // Send the file to MSX
-    rc = bufsend(buffer,fileLen,blocksize,true);
-    
+    piexchangebyte(false,rc);
     free(buffer);
-    //printf("Terminating GPIO\n");
     gpioWrite(rdy,LOW);
     gpioTerminate();
-        
+    
+    printf("bufsend.c: Exiting with rc = %x\n",rc);
     return rc;
 }

@@ -170,18 +170,17 @@ DSKREADBLK:
 ;        LD      BC,DSKNUMREGISTERS
 
 ; Buffer where data is stored during transfer, and also DMA for disk access
-        LD      HL,DMA
+        LD      DE,DMA
 
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
 
 ; A = 1 Tells the download routine to show dots or every 256 bytes transfered
 ; HL = buffer to store data
 ; The routine returns C set is there was a communication error
-        LD      A,'.'
-        CALL    PUTCHAR
-        CALL    BLOCKRECV
+        LD      A,1
+        CALL    BUFRECV
         RET     C
-;        CALL    PRINTNUMBER
+
 ; The routine return
 ;     Carry set for any error
 ;     A = status code
@@ -190,30 +189,13 @@ DSKREADBLK:
 ; A = ENDTRANSFER means the transfer ended.
 ; Note that the last block of data was transferd in the previous call,
 ; which means that in this call (the last call) there will never be data to save.
-        ld      a,':'
-        call    PUTCHAR
-        CALL    DSKWRITE
-        PUSH    AF
-        CALL    PRINTNUMBER
-        POP     AF
-        OR      A
-        LD      A,RC_DSKIOERR
-        JR      NZ,DSKENDTRF
-        ld      a,':'
-        call    PUTCHAR
-        CALL    PIEXCHANGEBYTE
-        PUSH    AF
-        CALL    PRINTNUMBER
-        POP     AF
-        CP      RC_SUCCESS
-        JR      Z,DSKREADBLK
         CP      ENDTRANSFER
-        RET     NZ
-        LD      A,'-'
-        CALL    PUTCHAR
+        JR      NZ,DSKREADBLK1
+        CALL    DSKWRITE
         OR      A
-        RET
-DSKENDTRF:
+        LD      A,RC_SUCCESS
+        RET     Z
+        LD      A,RC_DSKIOERR
         SCF
         RET
 
@@ -619,9 +601,9 @@ BLOCKRECV:
         jr      nc,BLKRCVERR2
         push    af
 ; Recv size of block
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         ld      e,a
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         ld      d,a
 ; All set, will start data transfer
 ; DE is saved to return to the caller the size of the block
@@ -636,9 +618,6 @@ BLKTRPSAV:
 BLKRCVLOOP:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
-        push    af
-        call    PUTCHAR
-        pop     af
         jr      c,BLKRCVERR1
         ld      (hl),a
 ; Calc CRC
@@ -675,10 +654,9 @@ BLKRCVERR2:
         scf
         ret
 BLKRCVEND:
-        pop     de
+        pop     af
         pop     de
         ld      a,RC_SUCCESS
-        or      a
         ret
 PCOPYCMD:   DB      "PCOPY"
 LOADROMCMD: DB      "PLOADROM"

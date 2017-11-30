@@ -13,6 +13,7 @@ import time
 
 version = 0.1
 build   = 20171110
+TRANSBLOCKSIZE = 1024
 
 # Pin Definitons
 csPin   = 21
@@ -46,7 +47,7 @@ RC_INVALIDDATASIZE  =    0xE4
 RC_OUTOFSYNC        =    0xE5
 RC_FILENOTFOUND     =    0xE6
 RC_FAILED           =    0xE7
-RC_INFORESPONSE     =    0xE8
+RC_CONNERR          =    0xE8
 RC_WAIT             =    0xE9
 RC_READY            =    0xEA
 RC_SUCCNOSTD        =    0XEB
@@ -229,7 +230,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     
     mymsxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     if (mymsxbyte[1] != SENDNEXT):
-        print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",mymsxbyte
+        print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(mymsxbyte[0]),hex(mymsxbyte[1])
         rc = RC_OUTOFSYNC;
     else:
         if (sendsize):
@@ -798,7 +799,7 @@ def msxdos_secinfo(sectorInfo):
 def msxdos_readsector(driveData, sectorInfo):
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
-    print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
+    #print "msxdos_readsector:Total bytes to transfer:",finalbytepos-initbytepos
     """
     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
     fh.write(driveData[initbytepos:finalbytepos-initbytepos])
@@ -810,7 +811,7 @@ def msxdos_readsector(driveData, sectorInfo):
     GPIO.output(rdyPin, GPIO.LOW)
     """
     rc = secsenddata(driveData,initbytepos,finalbytepos-initbytepos)
-    print "msxdos_readsector:exiting rc:",hex(rc)
+    #print "msxdos_readsector:exiting rc:",hex(rc)
 
 """ 
     msxdos_writesector
@@ -955,6 +956,12 @@ try:
                                 fh.write(buf)
                                 fh.flush()
                                 fh.close()
+                                pcopystat2 = 1;
+                                pcopyindex = 0;
+                                retries = 0;
+                                filesize = len(buf)
+                                print "pcopy:filesize:",filesize
+                                piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                             # end of new update 000.01
                             else:
                                 print "pcopy:error reading file"
@@ -971,40 +978,41 @@ try:
                                 fh.write(buf)
                                 fh.flush()
                                 fh.close()
+                                pcopystat2 = 1;
+                                pcopyindex = 0;
+                                retries = 0;
+                                filesize = len(buf)
+                                print "pcopy:filesize:",filesize
+                                piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                                 # end of new update 000.01
                             else:
                                 print "pcopy:error reading acessing network"
                                 rc = RC_FAILED
                                 sendstdmsg(rc,"RPi:Error acessing network file")
                                 pcopystat2 = 0
-                        
-                        pcopystat2 = 1;
-                        pcopyindex = 0;
-                        retries = 0;
-                        filesize = len(buf)
-                        print "pcopy:filesize:",filesize
-                        piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                     else:
                         print "pcopy:sync error"
                 else:
                     #rc = uploaddata(buf,filesize,pcopyindex)
                     # update 000.01
-                    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    #cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    cmd = "sudo " + RAMDISK + "/bufsend.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(TRANSBLOCKSIZE) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    print cmd
                     rc = subprocess.call(cmd, shell=True)
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)
                     # end of update 000.01
+                    print "pcopy:received from bufsend.c:",hex(rc)
                     if (rc == ENDTRANSFER):
+                        print "pcopy:ENDTRANSFER"
                         pcopystat2 = 0
-                        rc = RC_SUCCESS
                         buf = "Pi:Ok"
                         senddatablock(TimeOutCheck,buf,0,len(buf),True);
                     elif (rc == RC_SUCCESS):
                         pcopyindex += 1
-                    elif (rc == RC_CRCERROR and retries < GLOBALRETRIES):
-                        retries += 1
+                        print "pcopy:block",pcopyindex
                     else:
-                        print "pcopy:uploaddata error"
+                        print "pcopy:error trasnfering block:",pcopyindex," with rc=",hex(rc)
                         pcopystat2 = 0
                           
             elif (cmd[:5] == "pplay" or cmd[:5] == "PPLAY"):
