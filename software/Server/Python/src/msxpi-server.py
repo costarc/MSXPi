@@ -491,7 +491,7 @@ def pcd(basepath, path):
     rc = RC_FAILED
     newpath = basepath
     
-    print "pcd:starting basepath:path=",basepath + ":" + path
+    #print "pcd:starting basepath:path=",basepath + ":" + path
     
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
@@ -504,10 +504,10 @@ def pcd(basepath, path):
                 newpath = '/'
             sendstdmsg(rc,str(newpath))
         else:
-            print "pcd:calling getpath"
+            #print "pcd:calling getpath"
             urlcheck = getpath(basepath, path)
             newpath = urlcheck[1]
-            print "pcd:getpath returned:",newpath
+            #print "pcd:getpath returned:",newpath
             if (newpath[:4] == "http" or \
                 newpath[:3] == "ftp" or \
                 newpath[:3] == "nfs" or \
@@ -516,7 +516,7 @@ def pcd(basepath, path):
                 sendstdmsg(rc,str(newpath))
             else:
                 newpath = str(newpath) #[:len(newpath)-1])
-                print "newpath=",type(newpath),len(newpath)
+                #print "newpath=",type(newpath),len(newpath)
                 if (os.path.isdir(newpath)):
                     rc = RC_SUCCESS
                     sendstdmsg(rc,newpath)
@@ -528,7 +528,7 @@ def pcd(basepath, path):
         rc = RC_FAILNOSTD
         print "pcd:out of sync in RC_WAIT"
     
-    print "pcd:newpath =",newpath
+    #print "pcd:newpath =",newpath
     #print "pcd:Exiting rc:",hex(rc)
     return [rc, newpath];
 
@@ -973,16 +973,16 @@ try:
                                 fh.close()
                                 # end of new update 000.01
                             else:
-                                print "pcopy:error reading acessing network"
+                                print "pcopy:error reading file from network"
                                 rc = RC_FAILED
-                                sendstdmsg(rc,"RPi:Error acessing network file")
+                                sendstdmsg(rc,"RPi:Error reading ile from network")
                                 pcopystat2 = 0
                         
                         pcopystat2 = 1;
                         pcopyindex = 0;
                         retries = 0;
                         filesize = len(buf)
-                        print "pcopy:filesize:",filesize
+                        #print "pcopy:filesize:",filesize
                         piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                     else:
                         print "pcopy:sync error"

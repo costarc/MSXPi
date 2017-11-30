@@ -156,6 +156,9 @@ DSKREADBLK:
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
 
+        LD      A,'.'
+        CALL    PUTCHAR
+
 ; BLOCK SIZE TO USE
         LD      BC,DSKNUMREGISTERS
 
@@ -166,7 +169,7 @@ DSKREADBLK:
 
 ; A = 1 Tells the download routine to show dots or every 256 bytes transfered
 ; The routine rturns C set is there was a communication error
-        LD      A,1
+        LD      A,0
         CALL    DOWNLOADDATA
         RET     C
 
