@@ -960,7 +960,7 @@ try:
                                 pcopyindex = 0;
                                 retries = 0;
                                 filesize = len(buf)
-                                print "pcopy:filesize:",filesize
+                                #print "pcopy:filesize:",filesize
                                 piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                             # end of new update 000.01
                             else:
@@ -982,7 +982,7 @@ try:
                                 pcopyindex = 0;
                                 retries = 0;
                                 filesize = len(buf)
-                                print "pcopy:filesize:",filesize
+                                #print "pcopy:filesize:",filesize
                                 piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                                 # end of new update 000.01
                             else:
@@ -993,11 +993,11 @@ try:
                     else:
                         print "pcopy:sync error"
                 else:
-                    #rc = uploaddata(buf,filesize,pcopyindex)
+                    rc = uploaddata(buf,filesize,pcopyindex)
                     # update 000.01
-                    #cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                    cmd = "sudo " + RAMDISK + "/bufsend.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(TRANSBLOCKSIZE) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                    print cmd
+                    cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    #cmd = "sudo " + RAMDISK + "/bufsend.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(TRANSBLOCKSIZE) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
+                    #print cmd
                     rc = subprocess.call(cmd, shell=True)
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)

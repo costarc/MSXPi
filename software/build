@@ -1,7 +1,7 @@
 #!/bin/sh
 
 MSXPIHOME=/home/pi/msxpi
-export PI=192.168.1.2
+export PI=192.168.1.6
 export HW="8b"
 export REV="7"
 export ROMBANK1=./target/msxpi-dos_16k.rom
@@ -111,10 +111,10 @@ fi
 if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
     scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c ./Server/C/src/secsenddata.c ./Server/C/src/bufsend.c pi@${PI}:msxpi/
     ssh pi@${PI} cc -Wall -pthread -o msxpi/bufsend.msx msxpi/bufsend.c -lpigpio -lrt -lcurl
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
-    #ssh pi@${PI} cc -Wall -pthread -o msxpi/secsenddata.msx msxpi/secsenddata.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
+    ssh pi@${PI} cc -Wall -pthread -o msxpi/secsenddata.msx msxpi/secsenddata.c -lpigpio -lrt -lcurl
 fi
 
 # build distribution package
