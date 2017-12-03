@@ -38,10 +38,19 @@ DOSSENDPICMD:
         ld      hl,FULLCMD
         ex      de,hl
         push    bc
+        CALL    DBGHL
+        CALL    DBGDE
+        CALL    DBGBC
         ldir
 
 ; now check if there are parameters in the command line
         ld      hl,$80
+        ld      a,(hl)
+        push    de
+        ld      d,0
+        ld      e,a
+        call    DBGDE
+        pop     de
         ld      a,(hl)
         ld      b,a
         or      a
@@ -64,6 +73,7 @@ DOSSENDPICMD1:
 DOSSENDPICMD2:
         ld      a,(hl)
         ld      (de),a
+        call    PUTCHAR
         inc     hl
         inc     de
         djnz    DOSSENDPICMD2
@@ -116,6 +126,7 @@ EATSPACES:
 EATSPACEEND:
         or      a
         ret
+INCLUDE "debug.asm"
 FULLCMD:equ     $
         ds      256
 

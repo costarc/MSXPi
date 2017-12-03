@@ -905,6 +905,7 @@ try:
             elif (cmd[:3] == "FMT"):
                 piexchangebyte(NoTimeOutCheck,RC_UNDEFINED)
             elif (cmd[:4] == "prun" or cmd[:4] == "PRUN"):
+                print "Command:",cmd
                 prun(cmd[5:])
             elif (cmd[:6] == "ploadr" or cmd[:6] == "PLOADR"):
                 GPIO.cleanup()
