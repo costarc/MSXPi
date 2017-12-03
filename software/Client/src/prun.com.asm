@@ -34,57 +34,59 @@
 
 ORG     $0100
 
-LD      BC,4
-LD      DE,MYCMD
-CALL    DOSSENDPICMD
+    LD      BC,4
+    LD      DE,MYCMD
+    CALL    DOSSENDPICMD
 
-LD      A,SENDNEXT
-CALL    PIEXCHANGEBYTE
-CP      RC_WAIT
-SCF
-RET     NZ
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_WAIT
+    SCF
+    RET     NZ
 WAITLOOP:
-CALL    CHECK_ESC
-JR      C,PRINTPIERR
-CALL    CHKPIRDY
-JR      C,WAITLOOP
-; Loop waiting download on Pi
-LD      A,SENDNEXT
-CALL    PIEXCHANGEBYTE
-CP      RC_FAILED
-JR      Z,SHOWSTD
-CP      RC_SUCCESS
-JR      NZ,WAITLOOP
+    CALL    CHECK_ESC
+    JR      C,PRINTPIERR
+    CALL    CHKPIRDY
+    JR      C,WAITLOOP
+    ; Loop waiting download on Pi
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_FAILED
+    JR      Z,SHOWSTD
+    CP      RC_SUCCESS
+    JR      NZ,WAITLOOP
 
 SHOWSTD:
-CALL    PRINTPISTDOUT
-RET
+    CALL    PRINTPISTDOUT
+    RET
 
 PRINTPIERR:
-LD      HL,PICOMMERR
-CALL    PRINT
-JP      0
+    LD      HL,PICOMMERR
+    CALL    PRINT
+    JP      0
 
 CHECK_ESC:
-ld	b,7
-in	a,(0AAh)
-and	11110000b
-or	b
-out	(0AAh),a
-in	a,(0A9h)
-bit	2,a
-jr	nz,CHECK_ESC_END
-scf
+    ld	b,7
+    in	a,(0AAh)
+    and	11110000b
+    or	b
+    out	(0AAh),a
+    in	a,(0A9h)
+    bit	2,a
+    jr	nz,CHECK_ESC_END
+    scf
 CHECK_ESC_END:
-ret
+    ret
 
-MYCMD: DB      "PRUN"
+MYCMD:
+    DB      "PRUN"
 
 PICOMMERR:
-DB      "Communication Error",13,10,"$"
-
+    DB      "Communication Error",13,10,"$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+
+

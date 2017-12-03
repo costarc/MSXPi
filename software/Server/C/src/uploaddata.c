@@ -262,7 +262,7 @@ int uploaddata(char *data, size_t totalsize, int index, int GLOBALRETRIES) {
         myblocksize = totalsize - (index*msxblocksize);
     
     
-    printf("uploaddata.c: Starting at position: %i\n",index*myblocksize);
+    //printf("uploaddata.c: Starting at position: %i\n",index*myblocksize);
     
     piexchangebyte(true,myblocksize % 256); piexchangebyte(true,myblocksize / 256);
     crc = 0;
@@ -360,6 +360,6 @@ int main(int argc, char *argv[]){
     free(buffer);
     gpioWrite(rdy,LOW);
     gpioTerminate();
-    printf("upploaddata.c: Exiting with rc = %x\n",rc);
+    //printf("upploaddata.c: Exiting with rc = %x\n",rc);
     return rc;
 }

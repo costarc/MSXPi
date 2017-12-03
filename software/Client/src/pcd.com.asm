@@ -62,7 +62,8 @@ WAITLOOP:
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        JP      PRINT
+        CALL    PRINT
+        JP      0
 
 CHECK_ESC:
         LD      B,7

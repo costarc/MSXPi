@@ -10,6 +10,8 @@ from subprocess import Popen,PIPE,STDOUT
 from HTMLParser import HTMLParser
 import datetime
 import time
+import glob
+import array
 
 version = 0.1
 build   = 20171110
@@ -52,6 +54,7 @@ RC_WAIT             =    0xE9
 RC_READY            =    0xEA
 RC_SUCCNOSTD        =    0XEB
 RC_FAILNOSTD        =    0XEC
+RC_ESCAPE           =    0xED
 RC_UNDEFINED        =    0xEF
 
 st_init             =    0       # waiting loop, waiting for a command
@@ -87,7 +90,7 @@ def tick_sclk():
 def SPI_MASTER_transfer_byte(byte_out):
     #print "transfer_byte:sending",hex(byte_out)
     byte_in = 0
-    tick_sclk();
+    tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
         if (byte_out & bit):
             GPIO.output(misoPin, GPIO.HIGH)
@@ -103,7 +106,7 @@ def SPI_MASTER_transfer_byte(byte_out):
         GPIO.output(sclkPin, GPIO.LOW)
         #time.sleep(SPI_SCLK_LOW_TIME)
 
-    tick_sclk();
+    tick_sclk()
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
@@ -122,7 +125,7 @@ def piexchangebyte(checktimeout,mypibyte):
         while(GPIO.input(csPin)):
             ()
 
-    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte);
+    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte)
     GPIO.output(rdyPin, GPIO.LOW)
 
     if (timeout):
@@ -133,7 +136,7 @@ def piexchangebyte(checktimeout,mypibyte):
 
 def sendstdmsg(rc, message):
     piexchangebyte(NoTimeOutCheck,rc)
-    return senddatablock(TimeOutCheck,message,0,len(message),True);
+    return senddatablock(TimeOutCheck,message,0,len(message),True)
 
 def recvdatablock(timeoutFlag):
     buffer = bytearray()
@@ -144,17 +147,17 @@ def recvdatablock(timeoutFlag):
     mymsxbyte = piexchangebyte(timeoutFlag,SENDNEXT)
     if (mymsxbyte[1] != SENDNEXT):
         print "recvdatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(mymsxbyte[0]),hex(mymsxbyte[1])
-        rc = RC_OUTOFSYNC;
+        rc = RC_OUTOFSYNC
     else:
         dsL = piexchangebyte(NoTimeOutCheck,SENDNEXT)
         dsM = piexchangebyte(NoTimeOutCheck,SENDNEXT)
         datasize = dsL[1] + 256 * dsM[1]
         
-        #print "recvdatablock:Received blocksize =",datasize;
+        #print "recvdatablock:Received blocksize =",datasize
         while(datasize>bytecounter and rc == RC_SUCCESS):
             mymsxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
             if (mymsxbyte[0] == RC_SUCCESS):
-                #print "recvdatablock:Received byte:",chr(mymsxbyte[1]);
+                #print "recvdatablock:Received byte:",chr(mymsxbyte[1])
                 buffer.append(mymsxbyte[1])
                 crc ^= mymsxbyte[1]
                 bytecounter += 1
@@ -231,7 +234,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
     mymsxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
     if (mymsxbyte[1] != SENDNEXT):
         print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(mymsxbyte[0]),hex(mymsxbyte[1])
-        rc = RC_OUTOFSYNC;
+        rc = RC_OUTOFSYNC
     else:
         if (sendsize):
             #print "senddatablock:Sending blocksize ",datasize
@@ -256,7 +259,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
         mymsxbyte = piexchangebyte(NoTimeOutCheck,crc)
         #print "senddatablock:CRC local:remote = ",crc,":",mymsxbyte[1]
         if (mymsxbyte[1] != crc):
-            rc = RC_CRCERROR;
+            rc = RC_CRCERROR
         #else:
         #    print "senddatablock:CRC verified"
 
@@ -329,22 +332,30 @@ def secsenddata(buffer, initpos, filesize):
 
 def prun(cmd):
     rc = RC_SUCCESS
-    print "prun:starting command:",cmd
-    piexchangebyte(NoTimeOutCheck,RC_WAIT);
-    try:
-        p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-        buf = p.stdout.read()
-        if (len(buf) == 0):
-            sendstdmsg(rc,"Pi:Ok")
-        else:
-            sendstdmsg(rc,buf);
-    except subprocess.CalledProcessError as e:
-        print "Error:",buf
+    print "prun:starting command:",cmd,len(cmd)
+    piexchangebyte(NoTimeOutCheck,RC_WAIT)
+    
+    if (cmd.strip() == '' or len(cmd.strip()) == 0):
+        print "prun:syntax error"
+        sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Error\n"+buf)
+    else:
+        cmd = cmd.replace('::','|')
+        try:
+            p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            buf = p.stdout.read()
+            if (len(buf) == 0):
+                buf = p.stderr.read()
+                if  (len(buf) == 0):
+                    buf = str("Pi:Error running command "+cmd)
+            sendstdmsg(rc,buf)
+        except subprocess.CalledProcessError as e:
+            print "Error:",buf
+            rc = RC_FAILED
+            sendstdmsg(rc,"Pi:Error\n"+buf)
 
     #print "prun:exiting rc:",hex(rc)
-    return rc;
+    return rc
 
 def ploadr(basepath, file):
     rc = RC_SUCCESS
@@ -371,11 +382,11 @@ def ploadr(basepath, file):
                     buf = urllib2.urlopen(fpath[1].decode()).read()
                 except urllib2.HTTPError as e:
                     rc = RC_FAILED
-                    print "pdir:http error "+ str(e)
+                    print "ploadr:http error "+ str(e)
                     sendstdmsg(rc,"Pi:" + str(e))
                 except:
                     rc = RC_FAILED
-                    print "pdir:http unknow error"
+                    print "ploadr:http unknow error"
                     sendstdmsg(rc,"Pi:Error unknow downloading file")
             if (rc == RC_SUCCESS):
                 #print "ploadr:checking rom"
@@ -459,13 +470,17 @@ def pdir(basepath, path):
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
         urlcheck = getpath(basepath, path)
-        #print "File type =",urlcheck[0]
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            cmd = "ls -l " +  urlcheck[1]
-            cmd = cmd.decode().split(" ")
-            buf = subprocess.check_output(cmd)
-            piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-            rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
+            if (path.strip() == '*'):
+                prun('ls -l ' + urlcheck[1])
+            elif ('*' in path):
+                numChilds = path.count('/')
+                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
+                if (fileDesc == '' or len(fileDesc) == 0):
+                    fileDesc = '.'
+                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+            else:
+                prun('ls -l ' + urlcheck[1])
         else:
             #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
@@ -474,9 +489,8 @@ def pdir(basepath, path):
                 parser = MyHTMLParser()
                 parser.feed(htmldata)
                 buf = " ".join(parser.HTMLDATA)
-                print buf
-                piexchangebyte(NoTimeOutCheck,RC_SUCCESS);
-                rc = senddatablock(TimeOutCheck,buf,0,len(buf),True);
+                piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                rc = senddatablock(TimeOutCheck,buf,0,len(buf),True)
             except urllib2.HTTPError as e:
                 rc = RC_FAILED
                 print "pdir:http error "+ str(e)
@@ -486,13 +500,13 @@ def pdir(basepath, path):
         print "pdir:out of sync in RC_WAIT"
 
     #print "pdir:exiting rc:",hex(rc)
-    return rc;
+    return rc
 
 def pcd(basepath, path):
     rc = RC_FAILED
     newpath = basepath
     
-    print "pcd:starting basepath:path=",basepath + ":" + path
+    #print "pcd:starting basepath:path=",basepath + ":" + path
     
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
@@ -505,10 +519,10 @@ def pcd(basepath, path):
                 newpath = '/'
             sendstdmsg(rc,str(newpath))
         else:
-            print "pcd:calling getpath"
+            #print "pcd:calling getpath"
             urlcheck = getpath(basepath, path)
             newpath = urlcheck[1]
-            print "pcd:getpath returned:",newpath
+            #print "pcd:getpath returned:",newpath
             if (newpath[:4] == "http" or \
                 newpath[:3] == "ftp" or \
                 newpath[:3] == "nfs" or \
@@ -517,7 +531,7 @@ def pcd(basepath, path):
                 sendstdmsg(rc,str(newpath))
             else:
                 newpath = str(newpath) #[:len(newpath)-1])
-                print "newpath=",type(newpath),len(newpath)
+                #print "newpath=",type(newpath),len(newpath)
                 if (os.path.isdir(newpath)):
                     rc = RC_SUCCESS
                     sendstdmsg(rc,newpath)
@@ -529,9 +543,9 @@ def pcd(basepath, path):
         rc = RC_FAILNOSTD
         print "pcd:out of sync in RC_WAIT"
     
-    print "pcd:newpath =",newpath
+    #print "pcd:newpath =",newpath
     #print "pcd:Exiting rc:",hex(rc)
-    return [rc, newpath];
+    return [rc, newpath]
 
 def pset(psetvar, cmd):
     rc = RC_SUCCESS
@@ -567,7 +581,7 @@ def pset(psetvar, cmd):
                 rc = RC_FAILED
                 buf = "Pi:Erro setting parameter"
 
-    senddatablock(True,buf,0,len(buf),True);
+    senddatablock(True,buf,0,len(buf),True)
     #print "pset:Exiting rc:",hex(rc)
     return rc
 
@@ -615,21 +629,21 @@ def pplay(cmd):
     
     #print "pplay:starting command:len:",cmd,len(cmd)
 
-    piexchangebyte(NoTimeOutCheck,RC_WAIT);
+    piexchangebyte(NoTimeOutCheck,RC_WAIT)
     try:
         p = subprocess.call(cmd, shell=True)
         buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
         if (buf == RC_FAILED):
             sendstdmsg(RC_SUCCESS,"Pi:Ok\n")
         else:
-            sendstdmsg(rc,buf);
+            sendstdmsg(rc,buf)
     except subprocess.CalledProcessError as e:
         print "pplay:Error:",p
         rc = RC_FAILED
         sendstdmsg(rc,"Pi:Error\n"+str(e))
     
     #print "pplay:exiting rc:",hex(rc)
-    return rc;
+    return rc
 
 def uploaddata(buffer, totalsize, index):
     #print "uploaddata:Starting"
@@ -639,7 +653,7 @@ def uploaddata(buffer, totalsize, index):
         print "uploaddata:Receiving blocksize"
         #read blocksize, MAXIMUM 65535 KB
         msxblocksize = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1] + 256 * piexchangebyte(NoTimeOutCheck, SENDNEXT)[1]
-        myblocksize = msxblocksize;
+        myblocksize = msxblocksize
     
         print "uploaddata: Position in file to send:",index*myblocksize
         #Now verify if has finished transfering data
@@ -781,17 +795,17 @@ def msxdos_secinfo(sectorInfo):
         sectorInfo[2] = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
         byte_lsb = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
         byte_msb = piexchangebyte(NoTimeOutCheck,SENDNEXT)[1]
-        sectorInfo[3] = byte_lsb + 256 * byte_msb;
+        sectorInfo[3] = byte_lsb + 256 * byte_msb
     else:
         print "msxdos_secinfo:sync_transf error"
-        rc = RC_OUTOFSYNC;
+        rc = RC_OUTOFSYNC
     
     #print "msxdos_secinfo:deviceNumber=",sectorInfo[0]
     #print "msxdos_secinfo:sectors=",sectorInfo[1]
     #print "msxdos_secinfo:mediaDescriptor=",sectorInfo[2]
     #print "msxdos_secinfo:initialSector=",sectorInfo[3]
     #print "msxdos_secinfo:exiting rc:",hex(rc)
-    return rc;
+    return rc
 
 """ 
     msxdos_readsector
@@ -827,7 +841,7 @@ def msxdos_writesector(driveData, sectorInfo):
     #print "msxdos_readsector:initialSector=",sectorInfo[3]
     initbytepos = sectorInfo[3]*512
                                  
-    index = 0;
+    index = 0
     sectorcount = sectorInfo[1]
     # Read data from MSX
     while(sectorcount and rc == RC_SUCCESS):
@@ -876,7 +890,7 @@ print "Starting MSXPi Server Version ",version,"Build",build
 try:
     while (appstate != st_shutdown):
         print "st_recvcmd: waiting command"
-        rc = recvdatablock(NoTimeOutCheck);
+        rc = recvdatablock(NoTimeOutCheck)
 
         if (rc[0] == RC_SUCCESS):
             cmd = rc[1]
@@ -906,6 +920,7 @@ try:
             elif (cmd[:3] == "FMT"):
                 piexchangebyte(NoTimeOutCheck,RC_UNDEFINED)
             elif (cmd[:4] == "prun" or cmd[:4] == "PRUN"):
+                print "Command:",cmd
                 prun(cmd[5:])
             elif (cmd[:6] == "ploadr" or cmd[:6] == "PLOADR"):
                 GPIO.cleanup()
@@ -934,80 +949,72 @@ try:
                     if (len(args) == 1 or args[1] == ''):
                         print "pcopy:Syntax error"
                         sendstdmsg(RC_FILENOTFOUND,"Pi:Error\nSyntax: pcopy <source file|url> <target file>")
-                    elif (len(args) == 2 and args[1] <> ''):
-                        srcurl = args[1].split("/")
-                        fname = srcurl[len(srcurl)-1]
-                    elif (len(args) == 3):
-                        fname = args[2]
-
-                    mymsxbyte = piexchangebyte(NoTimeOutCheck, SENDNEXT)
-                    if (mymsxbyte[1] == SENDNEXT):
-                        rc = senddatablock(True,fname,0,len(fname),True)
-                        msxbyte = piexchangebyte(NoTimeOutCheck, RC_WAIT)
-                        urlcheck = getpath(psetvar[0][1],args[1])
-                        if (urlcheck[0] < 2):
-                            if (os.path.exists(urlcheck[1])):
-                                #buf = msxdos_inihrd(urlcheck[1])
-                                # new update 000.01
-                                fh = open(urlcheck[1], 'rb')
-                                buf = fh.read()
-                                fh.close()
-                                fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-                                fh.write(buf)
-                                fh.flush()
-                                fh.close()
-                                pcopystat2 = 1;
-                                pcopyindex = 0;
-                                retries = 0;
-                                filesize = len(buf)
-                                #print "pcopy:filesize:",filesize
-                                piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
-                            # end of new update 000.01
-                            else:
-                                print "pcopy:error reading file"
-                                rc = RC_FAILED
-                                sendstdmsg(rc,"RPi:Error reading file")
-                                pcopystat2 = 0
-                        else:  # network path
-                            buf = bytearray()
-                            rcbuf = readf_tobuf(urlcheck[1],0,urlcheck[0])
-                            if (rcbuf[0] == RC_SUCCESS):
-                                buf = rcbuf[2]
-                                # new update 000.01
-                                fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-                                fh.write(buf)
-                                fh.flush()
-                                fh.close()
-                                pcopystat2 = 1;
-                                pcopyindex = 0;
-                                retries = 0;
-                                filesize = len(buf)
-                                #print "pcopy:filesize:",filesize
-                                piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
-                                # end of new update 000.01
-                            else:
-                                print "pcopy:error reading acessing network"
-                                rc = RC_FAILED
-                                sendstdmsg(rc,"RPi:Error acessing network file")
-                                pcopystat2 = 0
                     else:
-                        print "pcopy:sync error"
+                        if (len(args) == 2 and args[1] <> ''):
+                            srcurl = args[1].split("/")
+                            fname = srcurl[len(srcurl)-1]
+                        elif (len(args) == 3):
+                            fname = args[2]
+
+                        mymsxbyte = piexchangebyte(NoTimeOutCheck, SENDNEXT)
+                        if (mymsxbyte[1] == SENDNEXT):
+                            rc = senddatablock(True,fname,0,len(fname),True)
+                            msxbyte = piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                            urlcheck = getpath(psetvar[0][1],args[1])
+                            if (urlcheck[0] < 2):
+                                if (os.path.exists(urlcheck[1])):
+                                    #buf = msxdos_inihrd(urlcheck[1])
+                                    # new update 000.01
+                                    fh = open(urlcheck[1], 'rb')
+                                    buf = fh.read()
+                                    fh.close()
+                                    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+                                    fh.write(buf)
+                                    fh.flush()
+                                    fh.close()
+                                    pcopystat2 = 1
+                                    pcopyindex = 0
+                                    retries = 0
+                                    filesize = len(buf)
+                                    piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
+                                else:
+                                    print "pcopy:error reading file"
+                                    rc = RC_FAILED
+                                    sendstdmsg(rc,"RPi:Error reading file")
+                                    pcopystat2 = 0
+                            else:  # network path
+                                buf = bytearray()
+                                rcbuf = readf_tobuf(urlcheck[1],0,urlcheck[0])
+                                if (rcbuf[0] == RC_SUCCESS):
+                                    buf = rcbuf[2]
+                                    # new update 000.01
+                                    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
+                                    fh.write(buf)
+                                    fh.flush()
+                                    fh.close()
+                                    pcopystat2 = 1
+                                    pcopyindex = 0
+                                    retries = 0
+                                    filesize = len(buf)
+                                    piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
+                                else:
+                                    print "pcopy:error reading file from network"
+                                    rc = RC_FAILED
+                                    sendstdmsg(rc,"RPi:Error reading ile from network")
+                                    pcopystat2 = 0
+                        else:
+                            print "pcopy:sync error"
                 else:
-                    rc = uploaddata(buf,filesize,pcopyindex)
-                    # update 000.01
                     cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                    #cmd = "sudo " + RAMDISK + "/bufsend.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(TRANSBLOCKSIZE) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                    #print cmd
                     rc = subprocess.call(cmd, shell=True)
                     init_spi_bitbang()
                     GPIO.output(rdyPin, GPIO.LOW)
-                    # end of update 000.01
                     print "pcopy:received from bufsend.c:",hex(rc)
                     if (rc == ENDTRANSFER):
                         print "pcopy:ENDTRANSFER"
                         pcopystat2 = 0
                         buf = "Pi:Ok"
-                        senddatablock(TimeOutCheck,buf,0,len(buf),True);
+                        senddatablock(TimeOutCheck,buf,0,len(buf),True)
                     elif (rc == RC_SUCCESS):
                         pcopyindex += 1
                         print "pcopy:block",pcopyindex
