@@ -10,6 +10,8 @@ from subprocess import Popen,PIPE,STDOUT
 from HTMLParser import HTMLParser
 import datetime
 import time
+import glob
+import array
 
 version = 0.1
 build   = 20171110
@@ -329,19 +331,27 @@ def secsenddata(buffer, initpos, filesize):
 
 def prun(cmd):
     rc = RC_SUCCESS
-    print "prun:starting command:",cmd
+    print "prun:starting command:",cmd,len(cmd)
     piexchangebyte(NoTimeOutCheck,RC_WAIT)
-    try:
-        p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=STDOUT, close_fds=True)
-        buf = p.stdout.read()
-        if (len(buf) == 0):
-            sendstdmsg(rc,"Pi:Ok")
-        else:
-            sendstdmsg(rc,buf)
-    except subprocess.CalledProcessError as e:
-        print "Error:",buf
+    
+    if (cmd.strip() == '' or len(cmd.strip()) == 0):
+        print "prun:syntax error"
+        sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Error\n"+buf)
+    else:
+        cmd = cmd.replace('::','|')
+        try:
+            p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            buf = p.stdout.read()
+            if (len(buf) == 0):
+                buf = p.stderr.read()
+                if  (len(buf) == 0):
+                    buf = str("Pi:Error running command "+cmd)
+            sendstdmsg(rc,buf)
+        except subprocess.CalledProcessError as e:
+            print "Error:",buf
+            rc = RC_FAILED
+            sendstdmsg(rc,"Pi:Error\n"+buf)
 
     #print "prun:exiting rc:",hex(rc)
     return rc
@@ -371,11 +381,11 @@ def ploadr(basepath, file):
                     buf = urllib2.urlopen(fpath[1].decode()).read()
                 except urllib2.HTTPError as e:
                     rc = RC_FAILED
-                    print "pdir:http error "+ str(e)
+                    print "ploadr:http error "+ str(e)
                     sendstdmsg(rc,"Pi:" + str(e))
                 except:
                     rc = RC_FAILED
-                    print "pdir:http unknow error"
+                    print "ploadr:http unknow error"
                     sendstdmsg(rc,"Pi:Error unknow downloading file")
             if (rc == RC_SUCCESS):
                 #print "ploadr:checking rom"
@@ -459,13 +469,17 @@ def pdir(basepath, path):
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
         urlcheck = getpath(basepath, path)
-        #print "File type =",urlcheck[0]
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            cmd = "ls -l " +  urlcheck[1]
-            cmd = cmd.decode().split(" ")
-            buf = subprocess.check_output(cmd)
-            piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-            rc = senddatablock(TimeOutCheck,buf,0,len(buf),True)
+            if (path.strip() == '*'):
+                prun('ls -l ' + urlcheck[1])
+            elif ('*' in path):
+                numChilds = path.count('/')
+                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
+                if (fileDesc == '' or len(fileDesc) == 0):
+                    fileDesc = '.'
+                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+            else:
+                prun('ls -l ' + urlcheck[1])
         else:
             #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
