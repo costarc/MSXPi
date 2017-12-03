@@ -45,10 +45,10 @@ DSKBLOCKSIZE:   EQU 1
 ; SYNC TO RECEIVE FILENAME
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JR      Z,EXITSTDOUT
+        LD      HL,PICOMMERR
+        JR      C,PRINTERRMSG
         CP      SENDNEXT
-        JR      NZ,PRINTPIERR
+        JR      NZ,EXITSTDOUT
 
         CALL    INIFCB
 
@@ -68,6 +68,7 @@ DSKBLOCKSIZE:   EQU 1
         RET     NZ
 WAITLOOP:
         CALL    CHECK_ESC
+        LD      A,RC_ESCAPE
         JR      C,PRINTPIERR
         CALL    CHKPIRDY
         JR      C,WAITLOOP
@@ -109,6 +110,9 @@ PRINTPIERR:
         JR      Z,PRINTERRMSG
         LD      HL,DSKERR
         CP      RC_DSKIOERR
+        JR      Z,PRINTERRMSG
+        LD      HL,USERESCAPE
+        CP      RC_ESCAPE
         JR      Z,PRINTERRMSG
         LD      HL,PIUNKNERR
 PRINTERRMSG:
@@ -376,6 +380,7 @@ DSKERR:     DB      "DISK IO ERROR",13,10,"$"
 LOADPROGERRMSG: DB  "Error download file from network",13,10,10
 FOPENERR:   DB      "Error opening file",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
+USERESCAPE: DB      "Cancelled",13,10,"$"
 RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
