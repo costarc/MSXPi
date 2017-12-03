@@ -1021,7 +1021,6 @@ try:
                     else:
                         print "pcopy:error trasnfering block:",pcopyindex," with rc=",hex(rc)
                         pcopystat2 = 0
-                          
             elif (cmd[:5] == "pplay" or cmd[:5] == "PPLAY"):
                 pplay(cmd[6:])
             elif (cmd[:5] == "pdate" or cmd[:5] == "PDATE"):
