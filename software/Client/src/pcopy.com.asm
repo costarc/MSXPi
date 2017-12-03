@@ -102,6 +102,16 @@ EXITSTDOUT:
 
 PRINTPIERR:
         LD      HL,PICOMMERR
+        CP      RC_CONNERR
+        JR      Z,PRINTERRMSG
+        LD      HL,PICRCERR
+        CP      RC_CRCERROR
+        JR      Z,PRINTERRMSG
+        LD      HL,DSKERR
+        CP      RC_DSKIOERR
+        JR      Z,PRINTERRMSG
+        LD      HL,PIUNKNERR
+PRINTERRMSG:
         CALL    PRINT
         JP      0
 
@@ -360,6 +370,9 @@ PCOPYCMD:   DB      "PCOPY"
 LOADROMCMD: DB      "PLOADROM"
 FNTITLE:    DB      "Saving file:$"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
+PIUNKNERR:  DB      "Unknown error",13,10,"$"
+PICRCERR:   DB      "CRC Error",13,10,"$"
+DSKERR:     DB      "DISK IO ERROR",13,10,"$"
 LOADPROGERRMSG: DB  "Error download file from network",13,10,10
 FOPENERR:   DB      "Error opening file",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
