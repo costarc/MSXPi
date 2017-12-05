@@ -344,19 +344,6 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-CHECK_ESC:
-	ld	b,7
-	in	a,(0AAh)
-	and	11110000b
-	or	b
-	out	(0AAh),a
-	in	a,(0A9h)	
-	bit	2,a
-	jr	nz,CHECK_ESC_END
-	scf
-CHECK_ESC_END:
-	ret
-
 PCOPYCMD:   DB      "PCOPY"
 LOADROMCMD: DB      "PLOADROM"
 FNTITLE:    DB      "Saving file:$"

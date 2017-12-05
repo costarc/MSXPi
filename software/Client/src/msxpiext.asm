@@ -145,7 +145,12 @@ relocprog1:
 msgstart:   db      "Search for ram in $4000",13,10,0
 msgramnf:   db      "ram not found",13,10,0
 msgdoing:   db      "Installing MSXPi extension...",13,10,0
-msgcallhlp: db      "Installed. Use CALL MSXPI(",$22,"commmand",$22,") to run MSXPi Commands"
+msgcallhlp: db      "Installed. Use ",13,10
+            db      "CALL MSXPI(",$22,"<option,><buffer,><commmand>",$22,") to run MSXPi Commands",13,10
+            db      "CALL MSXPISEND(",$22,"<buffer>",$22,") to send data to RPi",13,10
+            db      "CALL MSXPIRECV(",$22,"<buffer>",$22,") to read data from RPi",13,10
+            db      "flag: 0=no screen output, 1=screen output(default), 2=store output in buffer", 13,10
+            db      "buffer = valid hexadecimal number (4 digits)"
             db      13,10,0
 
 ramcheck:
@@ -299,39 +304,6 @@ CALLHAND:
         PUSH	DE
         RET
 
-;---------------------------
-
-CALL_CONV:
-        CALL	EVALTXTPARAM	; Evaluate text parameter
-        PUSH	HL
-        CALL    GETSTRPNT
-        LD      H,D
-        LD      L,E
-        ;CALL    DBGLOCAL
-        CALL    STRTOHEX
-        JR      C,CALL_CONVERR
-        ;CALL    DBGHL
-CALL_CONVEXIT:
-        POP     HL
-        OR      A
-        RET
-CALL_CONVERR:
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        JR      CALL_CONVEXIT
-
-DBGLOCAL:
-        PUSH    HL
-        LD      B,4
-DBGLOCAL0:
-        LD      A,(HL)
-        CALL    PUTCHAR
-        INC     HL
-        DJNZ    DBGLOCAL0
-        CALL    PRINTNLINE
-        POP     HL
-        RET
-
 CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
@@ -474,8 +446,79 @@ CALL_MSXPISAVSTD:
         LD      E,0
         JR      CALL_MSXPI3
 
-MSXPIRECV:
+;----------------------------------------
+; Call MSXPI BIOS function SENDDATABLOCK|
+;----------------------------------------
 MSXPISEND:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+        PUSH	HL
+        CALL    GETSTRPNT
+        LD      H,D
+        LD      L,E
+        CALL    STRTOHEX
+        JR      NC,MSXPISEND1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        POP     HL
+        SCF
+        RET
+MSXPISEND1:
+; first two bytes in buffer must be size of buffer
+; store buffer size in BC
+        LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      D,H
+        LD      E,L
+        CALL    SENDDATABLOCK
+        POP     HL
+        OR      A
+        RET
+
+;----------------------------------------
+; Call MSXPI BIOS function RECVDATABLOCK|
+;----------------------------------------
+MSXPIRECV:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+        PUSH	HL
+        CALL    GETSTRPNT
+        LD      H,D
+        LD      L,E
+        CALL    STRTOHEX
+        JR      NC,MSXPIRECV1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        POP     HL
+        SCF
+        RET
+MSXPIRECV1:
+        LD      D,H
+        LD      E,L
+        PUSH    HL
+; Save two memory positions to store buffer size later
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+        POP     HL
+        JR      C,MSXPIRECV2
+        PUSH    HL
+; Get buffer size
+        EX      DE,HL
+        OR      A
+        SBC     HL,DE
+        POP     DE
+        EX      DE,HL
+        DEC     DE
+        DEC     DE
+; Return buffer size to BASIC in first two positions of buffer
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+MSXPIRECV2:
+        POP     HL
         OR      A
         RET
 
@@ -536,126 +579,6 @@ SYNTAX_ERROR:
         LD      E,2
         LD      IX,ERRHAND	; Call the Basic error handler
         JP      CALBAS
-
-CHECK_ESC:
-        LD      B,7
-        IN      A,($AA)
-        AND     %11110000
-        OR      B
-        OUT     ($AA),A
-        IN      A,($A9)
-        BIT     2,A
-        JR      NZ,CHECK_ESC_END
-        SCF
-CHECK_ESC_END:
-        RET
-
-STRTOHEX:
-; Convert the ascii values in buffer HL to hex
-        PUSH    DE
-        LD      DE,0
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        SLA     A
-        SLA     A
-        SLA     A
-        SLA     A
-        LD      D,A
-        INC     HL
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        OR      D
-        LD      D,A
-        INC     HL
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        SLA     A
-        SLA     A
-        SLA     A
-        SLA     A
-        LD      E,A
-        INC     HL
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        OR      E
-        LD      H,D
-        LD      L,A
-STREXIT:POP     DE
-        RET
-ATOHEX:
-        CP      '0'
-        RET     C
-        CP      '9'+1
-        JR      NC,ATOHU
-        SUB     '0'
-        RET
-ATOHU:
-        CP      'A'
-        RET     C
-        CP      'G'
-        JR      NC,ATOHL
-        SUB     'A'-10
-        RET
-ATOHL:
-        CP      'a'
-        RET     C
-        CP      'g'
-        JR      NC,ATOHERR
-        SUB     'a'-10
-        RET
-ATOHERR:
-        SCF
-        RET
-
-; Evaluate CALL Commands to check for optional parameters
-; Returns Buffer address in HL (or HL=0000 if parameter not found)
-; DE = address of command - after all parameters
-PARMSEVAL:
-        INC     DE
-        LD      A,(DE)
-        DEC     DE
-        CP      ','
-        JR      NZ,PARMSEVAL1
-        INC     DE
-        INC     DE
-        DEC     BC
-        DEC     BC
-PARMSEVAL1:
-; Check if a buffer address has been passed
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE
-        INC     DE
-        LD      A,(DE)
-        CP      ','
-        JR      NZ,PARMSEVAL2
-; CALL has a buffer address in this format:
-; CALL MSXPI("XXXX,COMMAND")
-; Move pointer to start of command
-        INC     DE
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        POP     HL
-; Convert ascii chars POINTED BY DE to hex. Return value in HL
-; Flag C is set if there was an error
-        CALL    STRTOHEX
-        RET
-; CALL did not have buffer address.
-; We set this case with 00 n the stack
-PARMSEVAL2:
-;Buffer not passed in CALL, then we set adddress to 0000
-        POP     DE
-        LD      HL,0
-        OR      A
-        RET
 
 ;---------------------------
 CMDS:

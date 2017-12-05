@@ -237,7 +237,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
         rc = RC_OUTOFSYNC
     else:
         if (sendsize):
-            #print "senddatablock:Sending blocksize ",datasize
+            print "senddatablock:Sending blocksize ",datasize
             piexchangebyte(NoTimeOutCheck,datasize % 256)
             piexchangebyte(NoTimeOutCheck,datasize / 256)
     
@@ -1027,6 +1027,9 @@ try:
                 pdate()
             elif (cmd[:5] == "pwifi" or cmd[:5] == "PWIFI"):
                 pwifi(cmd[6:],psetvar[4][1],psetvar[5][1])
+            elif (cmd[:5] == "psend" or cmd[:5] == "PSEND"):
+                print "Pi:Sending response"
+                senddatablock(TimeOutCheck,"PSEND RECEIVED",0,14,True)
             else:
                 print "Error"
                 piexchangebyte(False,RC_FAILNOSTD)

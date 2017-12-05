@@ -65,19 +65,6 @@ PRINTPIERR:
         CALL    PRINT
         JP      0
 
-CHECK_ESC:
-        LD      B,7
-        IN      A,($AA)
-        AND     %11110000
-        OR      B
-        OUT     ($AA),A
-        IN      A,($A9)
-        BIT     2,A
-        JR      NZ,CHECK_ESC_END
-        SCF
-CHECK_ESC_END:
-        RET
-
 PICOMMERR:
     DB      "Communication Error",13,10,"$"
 

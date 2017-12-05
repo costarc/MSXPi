@@ -788,6 +788,133 @@ TESTMSXPIFOUND:
         pop     bc
         ei
         ret
+STRTOHEX:
+; Convert the 4 bytes ascii values in buffer HL to hex
+        PUSH    DE
+        LD      DE,0
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        SLA     A
+        SLA     A
+        SLA     A
+        SLA     A
+        LD      D,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        OR      D
+        LD      D,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        SLA     A
+        SLA     A
+        SLA     A
+        SLA     A
+        LD      E,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        OR      E
+        LD      H,D
+        LD      L,A
+STREXIT:POP     DE
+        RET
+ATOHEX:
+        CP      '0'
+        RET     C
+        CP      '9'+1
+        JR      NC,ATOHU
+        SUB     '0'
+        RET
+ATOHU:
+        CP      'A'
+        RET     C
+        CP      'G'
+        JR      NC,ATOHL
+        SUB     'A'-10
+        RET
+ATOHL:
+        CP      'a'
+        RET     C
+        CP      'g'
+        JR      NC,ATOHERR
+        SUB     'a'-10
+        RET
+ATOHERR:
+        SCF
+        RET
+
+; Evaluate CALL Commands to check for optional parameters
+; Returns Buffer address in HL (or HL=0000 if parameter not found)
+; DE = address of command - after all parameters
+PARMSEVAL:
+        INC     DE
+        LD      A,(DE)
+        DEC     DE
+        CP      ','
+        JR      NZ,PARMSEVAL1
+        INC     DE
+        INC     DE
+        DEC     BC
+        DEC     BC
+PARMSEVAL1:
+; Check if a buffer address has been passed
+        PUSH    DE
+        INC     DE
+        INC     DE
+        INC     DE
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+        JR      NZ,PARMSEVAL2
+; CALL has a buffer address in this format:
+; CALL MSXPI("XXXX,COMMAND")
+; Move pointer to start of command
+        INC     DE
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        POP     HL
+; Convert ascii chars POINTED BY DE to hex. Return value in HL
+; Flag C is set if there was an error
+        CALL    STRTOHEX
+        RET
+; CALL did not have buffer address.
+; We set this case with 00 n the stack
+PARMSEVAL2:
+;Buffer not passed in CALL, then we set adddress to 0000
+        POP     DE
+        LD      HL,0
+        OR      A
+        RET
+
+; -------------------------------------------------------------
+; CHECK_ESC
+; -------------------------------------------------------------
+; This routine is required by the communication
+; protocol to allow user to ESCAPE from a blocked state
+; when Pi stops responding MSX for some reason.
+; Note that this routine must be called by you in your code.
+; -------------------------------------------------------------
+CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     11110000b
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
 
 TESTMSXPISTR:
         DB      'MSXPi'

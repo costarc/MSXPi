@@ -414,27 +414,6 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-; -------------------------------------------------------------
-; CHECK_ESC
-; -------------------------------------------------------------
-; This routine is required by the communication
-; protocol to allow user to ESCAPE from a blocked state
-; when Pi stops responding MSX for some reason.
-; Note that this routine must be called by you in your code.
-; -------------------------------------------------------------
-CHECK_ESC:
-	ld	b,7
-	in	a,(0AAh)
-	and	11110000b
-	or	b
-	out	(0AAh),a
-	in	a,(0A9h)	
-	bit	2,a
-	jr	nz,CHECK_ESC_END
-	scf
-CHECK_ESC_END:
-	ret
-
 MYCOMMAND:  DB      "GABARITO"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
