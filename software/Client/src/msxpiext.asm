@@ -298,7 +298,7 @@ CALLHAND:
 .CALLDE:
         PUSH	DE
         RET
- 
+
 ;---------------------------
 CMDS:
  
@@ -306,9 +306,43 @@ CMDS:
  
         DEFB	"MSXPI",0      ; Print upper case string
         DEFW	CALL_MSXPI
+        DEFB    "CONV",0
+        DEFW    CALL_CONV
         DEFB	0               ; No more instructions
  
 ;---------------------------
+
+CALL_CONV:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+        PUSH	HL
+        CALL    GETSTRPNT
+        LD      H,D
+        LD      L,E
+        ;CALL    DBGLOCAL
+        CALL    STRTOHEX
+        JR      C,CALL_CONVERR
+        ;CALL    DBGHL
+CALL_CONVEXIT:
+        POP     HL
+        OR      A
+        RET
+CALL_CONVERR:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        JR      CALL_CONVEXIT
+
+DBGLOCAL:
+        PUSH    HL
+        LD      B,4
+DBGLOCAL0:
+        LD      A,(HL)
+        CALL    PUTCHAR
+        INC     HL
+        DJNZ    DBGLOCAL0
+        CALL    PRINTNLINE
+        POP     HL
+        RET
+
 CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
@@ -317,27 +351,56 @@ CALL_MSXPI:
 CALL_MSXPI_PARM:
 ; Verify is command has STD parameters specified
 ; Examples:
-; call ("0,pdir")  -> will not print the output
-; call ("pdir") and
-; call ("1,pdir")    -> will print the output to screen
-
+; call msxpi("pdir") and
+; call mspxi("0,pdir")  -> will not print the output
+; call msxpi("1,pdir")  -> will print the output to screen
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
+        PUSH    DE
         INC     DE
         LD      A,(DE)
         DEC     DE
         CP      ','
-        JR      NZ,CALL_MSXPI_S0
-        PUSH    DE
+        JR      NZ,CALL_MSXPI_S1
         INC     DE
         INC     DE
         DEC     BC
         DEC     BC
-        JR      CALL_MSXPI_S1
-
-CALL_MSXPI_S0:
-        PUSH    DE
-
 CALL_MSXPI_S1:
-; Save DE with address of string containing command
+; Check if a buffer address has been passed
+        PUSH    DE
+        INC     DE
+        INC     DE
+        INC     DE
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+        JR      NZ,CALL_MSXPI_S2
+; CALL has a buffer address in this format:
+; CALL MSXPI("XXXX,COMMAND")
+; Move pointer to start of command
+        INC     DE
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        POP     HL
+; Convert ascii chars POINTED BY DE to hex. Return value in HL
+        CALL    STRTOHEX
+        JR      C,CALL_MSXPIBUFER
+        JR      CALL_MSXPI_S3
+; CALL did not have buffer address.
+; We set this case with 00 n the stack
+CALL_MSXPI_S2:
+;Buffer not passed in CALL, then we set adddress to 0000
+        POP     DE
+        LD      HL,0
+CALL_MSXPI_S3:
+; Retrieve position with start of command to HL,
+; Store buffer address in stack
+        EX      (SP),HL
+; Save command address to stack
+        PUSH    HL
         CALL    SENDPICMD
         LD      E,1
         JR      C,CALL_MSXPI1
@@ -381,23 +444,34 @@ CALL_MSXPISTD:
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
         CALL    NOSTDOUT
+; Discard buffer addres in stack
+        POP     HL
         LD      E,0
         JR      CALL_MSXPI2
 
 CALL_MSXPISTDOUT:
+; Discard buffer address
         CALL    PRINTPISTDOUT
         LD      E,0
         JR      CALL_MSXPI2
+
+BUFERRMSG:DB    "Buffer address invalid",13,10,0
+CALL_MSXPIBUFER:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
 
 CALL_MSXPIERR:
         LD      E,1
 
 ; return to BASIC
 CALL_MSXPI1:
-; Discard address of string containing command
+; Discard address of string containing command and buffer address
+        POP     HL
+CALL_MSXPI2:
+CALL_MSXPIERR2:
         POP     HL
 ; Send RC / return code to BASIC
-CALL_MSXPI2:
+CALL_MSXPI3:
         LD      HL,ERRFLG
         LD      A,(RAMAD3)
         CALL    WRSLT
@@ -407,8 +481,9 @@ CALL_MSXPI2:
 
 ; This routine will save the RPi data to (STREND)
 CALL_MSXPISAVSTD:
-        LD      DE,MSXPICALLBUF
-;        CALL    DBGDE
+; Retrieve buffer address from stack
+        POP     DE
+        ;CALL    DBGDE
 ;Save buffer address
         PUSH    DE
         INC     DE
@@ -441,7 +516,7 @@ CALL_MSXPISAVSTD:
         INC     HL
         LD      (HL),D
         LD      E,0
-        JR      CALL_MSXPI2
+        JR      CALL_MSXPI3
 
 GETSTRPNT:
 ; OUT:
@@ -509,6 +584,67 @@ CHECK_ESC:
         JR      NZ,CHECK_ESC_END
         SCF
 CHECK_ESC_END:
+        RET
+
+STRTOHEX:
+; Convert the ascii values in buffer HL to hex
+        PUSH    DE
+        LD      DE,0
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        SLA     A
+        SLA     A
+        SLA     A
+        SLA     A
+        LD      D,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        OR      D
+        LD      D,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        SLA     A
+        SLA     A
+        SLA     A
+        SLA     A
+        LD      E,A
+        INC     HL
+        LD      A,(HL)
+        CALL    ATOHEX
+        JR      C,STREXIT
+        OR      E
+        LD      H,D
+        LD      L,A
+STREXIT:POP     DE
+        RET
+ATOHEX:
+        CP      '0'
+        RET     C
+        CP      '9'+1
+        JR      NC,ATOHU
+        SUB     '0'
+        RET
+ATOHU:
+        CP      'A'
+        RET     C
+        CP      'G'
+        JR      NC,ATOHL
+        SUB     'A'-10
+        RET
+ATOHL:
+        CP      'a'
+        RET     C
+        CP      'g'
+        JR      NC,ATOHERR
+        SUB     'a'-10
+        RET
+ATOHERR:
+        SCF
         RET
 
 INCLUDE "include.asm"
