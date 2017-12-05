@@ -300,17 +300,6 @@ CALLHAND:
         RET
 
 ;---------------------------
-CMDS:
- 
-; List of available instructions (as ASCIIZ) and execute address (as word)
- 
-        DEFB	"MSXPI",0      ; Print upper case string
-        DEFW	CALL_MSXPI
-        DEFB    "CONV",0
-        DEFW    CALL_CONV
-        DEFB	0               ; No more instructions
- 
-;---------------------------
 
 CALL_CONV:
         CALL	EVALTXTPARAM	; Evaluate text parameter
@@ -356,46 +345,13 @@ CALL_MSXPI_PARM:
 ; call msxpi("1,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
         PUSH    DE
-        INC     DE
-        LD      A,(DE)
-        DEC     DE
-        CP      ','
-        JR      NZ,CALL_MSXPI_S1
-        INC     DE
-        INC     DE
-        DEC     BC
-        DEC     BC
-CALL_MSXPI_S1:
-; Check if a buffer address has been passed
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE
-        INC     DE
-        LD      A,(DE)
-        CP      ','
-        JR      NZ,CALL_MSXPI_S2
-; CALL has a buffer address in this format:
-; CALL MSXPI("XXXX,COMMAND")
-; Move pointer to start of command
-        INC     DE
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        POP     HL
-; Convert ascii chars POINTED BY DE to hex. Return value in HL
-        CALL    STRTOHEX
-        JR      C,CALL_MSXPIBUFER
-        JR      CALL_MSXPI_S3
-; CALL did not have buffer address.
-; We set this case with 00 n the stack
-CALL_MSXPI_S2:
-;Buffer not passed in CALL, then we set adddress to 0000
-        POP     DE
-        LD      HL,0
-CALL_MSXPI_S3:
+
+        CALL    PARMSEVAL
+        JR      NC,CALL_MSXPI1
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        JR      CALL_MSXPIERR2
+CALL_MSXPI1:
 ; Retrieve position with start of command to HL,
 ; Store buffer address in stack
         EX      (SP),HL
@@ -403,7 +359,7 @@ CALL_MSXPI_S3:
         PUSH    HL
         CALL    SENDPICMD
         LD      E,1
-        JR      C,CALL_MSXPI1
+        JR      C,CALL_MSXPI2
 
 ; protocol to detect result of command sent to RPi
         LD      A,SENDNEXT
@@ -425,7 +381,7 @@ WAITLOOP:
         CP      RC_SUCCESS
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCNOSTD
-        JR      Z,CALL_MSXPI1
+        JR      Z,CALL_MSXPI2
         JR      WAITLOOP
 
 CALL_MSXPISTD:
@@ -447,13 +403,13 @@ CALL_MSXPISTD:
 ; Discard buffer addres in stack
         POP     HL
         LD      E,0
-        JR      CALL_MSXPI2
+        JR      CALL_MSXPI3
 
 CALL_MSXPISTDOUT:
 ; Discard buffer address
         CALL    PRINTPISTDOUT
         LD      E,0
-        JR      CALL_MSXPI2
+        JR      CALL_MSXPI3
 
 BUFERRMSG:DB    "Buffer address invalid",13,10,0
 CALL_MSXPIBUFER:
@@ -464,14 +420,14 @@ CALL_MSXPIERR:
         LD      E,1
 
 ; return to BASIC
-CALL_MSXPI1:
+CALL_MSXPI2:
 ; Discard address of string containing command and buffer address
         POP     HL
-CALL_MSXPI2:
+CALL_MSXPI3:
 CALL_MSXPIERR2:
         POP     HL
 ; Send RC / return code to BASIC
-CALL_MSXPI3:
+CALL_MSXPI4:
         LD      HL,ERRFLG
         LD      A,(RAMAD3)
         CALL    WRSLT
@@ -518,6 +474,14 @@ CALL_MSXPISAVSTD:
         LD      E,0
         JR      CALL_MSXPI3
 
+MSXPIRECV:
+MSXPISEND:
+        OR      A
+        RET
+
+; ---------------------
+; Supporting functions|
+;----------------------
 GETSTRPNT:
 ; OUT:
 ; HL = String Address
@@ -646,6 +610,65 @@ ATOHL:
 ATOHERR:
         SCF
         RET
+
+; Evaluate CALL Commands to check for optional parameters
+; Returns Buffer address in HL (or HL=0000 if parameter not found)
+; DE = address of command - after all parameters
+PARMSEVAL:
+        INC     DE
+        LD      A,(DE)
+        DEC     DE
+        CP      ','
+        JR      NZ,PARMSEVAL1
+        INC     DE
+        INC     DE
+        DEC     BC
+        DEC     BC
+PARMSEVAL1:
+; Check if a buffer address has been passed
+        PUSH    DE
+        INC     DE
+        INC     DE
+        INC     DE
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+        JR      NZ,PARMSEVAL2
+; CALL has a buffer address in this format:
+; CALL MSXPI("XXXX,COMMAND")
+; Move pointer to start of command
+        INC     DE
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        DEC     BC
+        POP     HL
+; Convert ascii chars POINTED BY DE to hex. Return value in HL
+; Flag C is set if there was an error
+        CALL    STRTOHEX
+        RET
+; CALL did not have buffer address.
+; We set this case with 00 n the stack
+PARMSEVAL2:
+;Buffer not passed in CALL, then we set adddress to 0000
+        POP     DE
+        LD      HL,0
+        OR      A
+        RET
+
+;---------------------------
+CMDS:
+ 
+; List of available instructions (as ASCIIZ) and execute address (as word)
+ 
+        DEFB	"MSXPI",0      ; Print upper case string
+        DEFW	CALL_MSXPI
+        DEFB    "MSXPISEND",0
+        DEFW    MSXPISEND
+        DEFB    "MSXPIRECV",0
+        DEFW    MSXPIRECV
+        DEFB	0               ; No more instructions
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
