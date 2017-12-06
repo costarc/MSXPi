@@ -618,6 +618,237 @@ MSXPILOADERROR:
         ld      hl,LOADERRMSG
         jp      PRINT
 
+MSXPI:
+CALL_MSXPI:
+        CALL	EVALTXTPARAM	; Evaluate text parameter
+;PUSH	HL
+        CALL    GETSTRPNT
+
+CALL_MSXPI_PARM:
+; Verify is command has STD parameters specified
+; Examples:
+; call msxpi("pdir") and
+; call mspxi("0,pdir")  -> will not print the output
+; call msxpi("1,pdir")  -> will print the output to screen
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
+        PUSH    DE
+
+        CALL    PARMSEVAL
+        JR      NC,CALL_MSXPI1
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        JR      CALL_MSXPIERR2
+CALL_MSXPI1:
+; Retrieve position with start of command to HL,
+; Store buffer address in stack
+        EX      (SP),HL
+; Save command address to stack
+        PUSH    HL
+        CALL    SENDPICMD
+        LD      E,1
+        JR      C,CALL_MSXPI2
+
+; protocol to detect result of command sent to RPi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,CALL_MSXPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,CALL_MSXPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        LD      E,1
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPISTD
+        LD      E,0
+        CP      RC_SUCCESS
+        JR      Z,CALL_MSXPISTD
+        CP      RC_SUCCNOSTD
+        JR      Z,CALL_MSXPI2
+        JR      WAITLOOP
+
+CALL_MSXPISTD:
+; Restore address of string with command
+        POP     DE
+; Verify if user wants to print STDOUT from RPi
+        INC     DE
+        LD      A,(DE)
+        CP      ','
+; User did not specify. Default is to print
+        JR      NZ,CALL_MSXPISTDOUT
+        DEC     DE
+        LD      A,(DE)
+        CP      '1'
+        JR      Z,CALL_MSXPISTDOUT
+        CP      '2'
+        JR      Z,CALL_MSXPISAVSTD
+        CALL    NOSTDOUT
+; Discard buffer addres in stack
+        POP     HL
+        LD      E,0
+        JR      CALL_MSXPI3
+
+CALL_MSXPISTDOUT:
+; Discard buffer address
+        CALL    PRINTPISTDOUT
+        LD      E,0
+        JR      CALL_MSXPI3
+
+BUFERRMSG:DB    "Buffer address invalid",13,10,0
+CALL_MSXPIBUFER:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+
+CALL_MSXPIERR:
+        LD      E,1
+
+; return to BASIC
+CALL_MSXPI2:
+; Discard address of string containing command and buffer address
+        POP     HL
+CALL_MSXPI3:
+CALL_MSXPIERR2:
+        POP     HL
+; Send RC / return code to BASIC
+CALL_MSXPI4:
+        LD      HL,ERRFLG
+        LD      A,(RAMAD3)
+        CALL    WRSLT
+;POP     HL
+        OR      A
+        RET
+
+; This routine will save the RPi data to (STREND)
+CALL_MSXPISAVSTD:
+; Retrieve buffer address from stack
+        POP     DE
+        ;CALL    DBGDE
+;Save buffer address
+        PUSH    DE
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+
+        POP     HL
+
+;Save buffer address again
+        PUSH    HL
+
+; Exchange buffer address with end of data received
+; to alow SBC and get the size of data received
+        EX      DE,HL
+        OR      A
+        SBC     HL,DE
+
+        POP     DE
+        EX      DE,HL
+
+; DE now contain size of data received
+
+;        CALL    DBGDE
+;        call    DBGHL
+; two first bytes of buffer contain size of data received.
+; Decrement by two to return only actual size of buffer
+        DEC     DE
+        DEC     DE
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+        LD      E,0
+        JR      CALL_MSXPI3
+
+;----------------------------------------
+; Call MSXPI BIOS function SENDDATABLOCK|
+;----------------------------------------
+MSXPISEND:
+; retrive CALL parameters from stack (second position in stack)
+        POP     DE
+        POP     HL
+        PUSH    HL
+        PUSH    DE
+        INC     HL
+        INC     HL
+        CALL    STRTOHEX
+        JR      NC,MSXPISEND1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        SCF
+        RET
+MSXPISEND1:
+; first two bytes in buffer must be size of buffer
+; store buffer size in BC
+        LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      D,H
+        LD      E,L
+        CALL    SENDDATABLOCK
+; skip the parameters before returning: ("xxxx") = 8 positions to skip
+        POP     DE
+        POP     HL
+        LD      BC,8
+        ADD     HL,BC
+        PUSH    HL
+        PUSH    DE
+        OR      A
+        RET
+
+;----------------------------------------
+; Call MSXPI BIOS function RECVDATABLOCK|
+;----------------------------------------
+MSXPIRECV:
+        POP     DE
+        POP     HL
+        PUSH    HL
+        PUSH    DE
+        INC     HL
+        INC     HL
+        CALL    STRTOHEX
+        JR      NC,MSXPIRECV1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        SCF
+        RET
+MSXPIRECV1:
+        LD      D,H
+        LD      E,L
+        PUSH    HL
+; Save two memory positions to store buffer size later
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+        POP     HL
+        JR      C,MSXPIRECV2
+        PUSH    HL
+; Get buffer size
+        EX      DE,HL
+        OR      A
+        SBC     HL,DE
+        POP     DE
+        EX      DE,HL
+        DEC     DE
+        DEC     DE
+; Return buffer size to BASIC in first two positions of buffer
+        LD      (HL),E
+        INC     HL
+        LD      (HL),D
+MSXPIRECV2:
+        POP     DE
+        POP     HL
+        LD      BC,8
+        ADD     HL,BC
+        PUSH    HL
+        PUSH    DE
+        OR      A
+        RET
+
 ;-----------------------
 ; call GETPOINTERS      |
 ;-----------------------
@@ -674,139 +905,9 @@ BIOSENTRYADDR:  EQU     $
         DW      SYNCH
         DW      DOWNLOADDATA
         DW      UPLOADDATA
+        DW      MSXPISEND
+        DW      MSXPIRECV
         DW      MSXPI
-
-MSXPI:
-CALL_MSXPI:
-        CALL	EVALTXTPARAM	; Evaluate text parameter
-        PUSH	HL
-        CALL    GETSTRPNT
-
-CALL_MSXPI_PARM:
-; Verify is command has STD parameters specified
-; Examples:
-; call ("0,pdir")  -> will not print the output
-; call ("pdir") and
-; call ("1,pdir")    -> will print the output to screen
-
-        INC     DE
-        LD      A,(DE)
-        DEC     DE
-        CP      ','
-        JR      NZ,CALL_MSXPI_S0
-        PUSH    DE
-        INC     DE
-        INC     DE
-        DEC     BC
-        DEC     BC
-        JR      CALL_MSXPI_S1
-
-CALL_MSXPI_S0:
-        PUSH    DE
-
-CALL_MSXPI_S1:
-; Save DE with address of string containing command
-        CALL    SENDPICMD
-        LD      E,1
-        JR      C,CALL_MSXPI1
-
-; protocol to detect result of command sent to RPi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        LD      E,1
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPISTD
-        LD      E,0
-        CP      RC_SUCCESS
-        JR      Z,CALL_MSXPISTD
-        CP      RC_SUCCNOSTD
-        JR      Z,CALL_MSXPI1
-        JR      WAITLOOP
-
-CALL_MSXPISTD:
-; Restore address of string with command
-        POP     DE
-; Verify if user wants to print STDOUT from RPi
-        INC     DE
-        LD      A,(DE)
-        CP      ','
-; User did not specify. Default is to print
-        JR      NZ,CALL_MSXPISTDOUT
-        DEC     DE
-        LD      A,(DE)
-        CP      '1'
-        JR      Z,CALL_MSXPISTDOUT
-        CP      '2'
-        JR      Z,CALL_MSXPISAVSTD
-        CALL    NOSTDOUT
-        LD      E,0
-        JR      CALL_MSXPI2
-
-CALL_MSXPISTDOUT:
-        CALL    PRINTPISTDOUT
-        LD      E,0
-        JR      CALL_MSXPI2
-
-CALL_MSXPIERR:
-        LD      E,1
-
-; return to BASIC
-CALL_MSXPI1:
-; Discard address of string containing command
-        POP     HL
-; Send RC / return code to BASIC
-CALL_MSXPI2:
-        LD      HL,ERRFLG
-        LD      A,(RAMAD3)
-        CALL    WRSLT
-        POP     HL
-        OR      A
-        RET
-
-; This routine will save the RPi data to (STREND)
-CALL_MSXPISAVSTD:
-        LD      DE,MSXPICALLBUF
-;        CALL    DBGDE
-;Save buffer address
-        PUSH    DE
-        INC     DE
-        INC     DE
-        CALL    RECVDATABLOCK
-
-        POP     HL
-
-;Save buffer address again
-        PUSH    HL
-
-; Exchange buffer address with end of data received
-; to alow SBC and get the size of data received
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-
-        POP     DE
-        EX      DE,HL
-
-; DE now contain size of data received
-
-;        CALL    DBGDE
-;        call    DBGHL
-; two first bytes of buffer contain size of data received.
-        LD      (HL),E
-        INC     HL
-        LD      (HL),D
-        LD      E,0
-        JR      CALL_MSXPI2
 
 GETSTRPNT:
 ; OUT:
@@ -887,6 +988,7 @@ CHECK_P:
         ret		z
         or		a
         ret
+
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
@@ -895,11 +997,11 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.1",13,10
         DB      "      Build "
-build:  DB      "20171023.00074"
+build:  DB      "20171206.00075"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI",13,10
+        DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI MSXPISEND MSXPIRECV",13,10
         DB      00
 
 MSXPILOADING:
@@ -931,6 +1033,12 @@ STR_CALL_CMD:
 
         DB      "GETPOINTERS",0
         DW      GETPOINTERS
+
+        DB      "MSXPISEND",0
+        DW      MSXPISEND
+
+        DB      "MSXPIRECV",0
+        DW      MSXPIRECV
 
         DB      "MSXPI",0
         DW      MSXPI
