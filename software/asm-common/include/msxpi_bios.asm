@@ -102,6 +102,7 @@ RECVDATABLOCK:
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
         scf
+        ld      a,RC_OUTOFSYNC
         ret     nz
 
 ;Get number of bytes to transfer
@@ -142,6 +143,7 @@ RECVDATABLOCK1:
 ;Return number of bytes read
 
         pop     bc
+        ld      a,RC_SUCCESS
         or      a
         ret
 
@@ -173,6 +175,7 @@ SENDDATABLOCK:
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
         scf
+        ld      a,RC_OUTOFSYNC
         ret     nz
 
 ; MSX is synced with PI, then send size of block to transfer
@@ -212,6 +215,7 @@ SENDDATABLOCK1:
 
 ; Discard de, because we want to return current memory address
         pop     af
+        ld      a,RC_SUCCESS
         or      a
         ret
 
@@ -362,7 +366,6 @@ SENDDATASIZE:
         ld      a,b
         call    PIEXCHANGEBYTE
         ret
-
 
 ;-------------------
 ; DOWNLOADDATA     |

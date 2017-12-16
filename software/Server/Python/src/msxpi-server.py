@@ -12,6 +12,7 @@ import datetime
 import time
 import glob
 import array
+import socket
 
 version = 0.1
 build   = 20171110
@@ -237,7 +238,7 @@ def senddatablock(checktimeout,buffer,initpos,datasize,sendsize):
         rc = RC_OUTOFSYNC
     else:
         if (sendsize):
-            print "senddatablock:Sending blocksize ",datasize
+            #print "senddatablock:Sending blocksize ",datasize
             piexchangebyte(NoTimeOutCheck,datasize % 256)
             piexchangebyte(NoTimeOutCheck,datasize / 256)
     
@@ -852,6 +853,16 @@ def msxdos_writesector(driveData, sectorInfo):
 
     #print "msxdos_writesector:exiting rc:",hex(rc)
 
+""" IRC Client functions starts here """
+def joinchan(chan): # join channel(s).
+    ircsock.send(bytes("JOIN "+ chan +"\n"))
+    ircmsg = ""
+    while ircmsg.find("End of /NAMES list.") == -1:
+        ircmsg = ircsock.recv(2048).decode("UTF-8")
+        ircmsg = ircmsg.strip('\n\r')
+    return ircmsg
+
+""
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -865,9 +876,9 @@ psetvar = [['PATH','/home/msxpi'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
            ['DSKTMPL','disks/msxpi_720KB_template.dsk'], \
-           ['free',''], \
-           ['free',''], \
-           ['free',''], \
+           ['IRCNICK','msxpironi'], \
+           ['IRCADDR','chat.freenode.net'], \
+           ['IRCPORT','6667'], \
            ]
 
 # Initialize disk system parameters
@@ -894,7 +905,7 @@ try:
 
         if (rc[0] == RC_SUCCESS):
             cmd = rc[1]
-            print "Received command ",cmd
+            print "Received command",cmd
             
             """ 
             MSX-DOS Driver routines 
@@ -976,6 +987,7 @@ try:
                                     pcopyindex = 0
                                     retries = 0
                                     filesize = len(buf)
+                                    print "irc conn completed"
                                     piexchangebyte(NoTimeOutCheck, RC_SUCCESS)
                                 else:
                                     print "pcopy:error reading file"
@@ -1030,6 +1042,116 @@ try:
             elif (cmd[:5] == "psend" or cmd[:5] == "PSEND"):
                 print "Pi:Sending response"
                 senddatablock(TimeOutCheck,"PSEND RECEIVED",0,14,True)
+            # IRC client code starts here
+            elif (cmd[:3] == "IRC"):
+                ircconn = False
+                print "Processing IRC commands"
+                if (cmd[4:8] == "CONN"):
+                    #try:
+                    piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                    ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    ircserver = psetvar[8][1]
+                    ircport = int(psetvar[9][1])
+                    msxpinick =  psetvar[7][1]
+                    ircsock.connect((ircserver, ircport))
+                    ircsock.send(bytes("USER "+ msxpinick +" "+ msxpinick +" "+ msxpinick + " " + msxpinick + "\n"))
+                    ircsock.send(bytes("NICK "+ msxpinick +"\n"))
+                    ircconn = 1
+                    ircmsg = 'Connected to '+psetvar[8][1]
+                    piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                    senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
+                    #except socket.error as e:
+                    #print "Error conecting to IRC:"+str(e)
+                    #senddatablock(TimeOutCheck,"FAILED",0,6,True)
+                elif (cmd[4:7] == "MSG"):
+                    if (not ircconn):
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        ircsock.send(bytes("/msg "+ cmd[5:] + "\n"))
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                elif (cmd[4:8] == "JOIN"):
+                    channel = cmd[9:]
+                    print "Joining channel",channel
+                    if (not ircconn):
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        ircsock.send(bytes("JOIN " + channel + "\n"))
+                        ircmsg = ""
+                        while ircmsg.find("End of /NAMES list.") == -1:
+                            ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+                            ircmsg = ircmsg.strip('\n\r')
+                    
+                        #ircsock.send(bytes("/names" + "\n"))
+                        #ircmsg = ircsock.recv(2048).decode("UTF-8")
+                        #ircmsg = ircmsg.strip('\n\r')
+
+                        print ircmsg
+                        #print "Truncating this messagem from IRC"
+                        #ircmsg = 'Connected to '+psetvar[8][1]
+                        ircmsg = ""
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                elif (cmd[4:8] == "READ"):
+                    if (not ircconn):
+                        print "READ..."
+                        ircmsg = ''
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        print "READ connecting..."
+                        ircmsg = ircsock.recv(2048).decode("UTF-8")
+                        ircmsg = ircmsg.strip('\n\r')
+                        print ircmsg
+                        if ircmsg.find("PING :") != -1:
+                            print "PONG"
+                            ircsock.send(bytes("PONG :pingis\n"))
+                            ircmsg = ''
+                        if ircmsg.find("PRIVMSG") != -1:
+                            name = ircmsg.split('!',1)[0][1:]
+                            ircmsg = '<' + name + '>' + ircmsg.split('PRIVMSG',1)[1].split(':',1)[1]
+                        print "READ end."
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                elif (cmd[4:8] == "PART"):
+                    if (not ircconn):
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        ircsock.send(bytes("/part\n"))
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                elif (cmd[4:8] == "QUIT"):
+                    if (not ircconn):
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        ircsock.send(bytes("/quit\n"))
+                        ircsock.close()
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                elif (cmd[4:10] == "GETRSP"):
+                    if (len(ircmsg)==0):
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                        senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
+                        ircmsg = ''
+                else:
+                    if (not ircconn):
+                        ircmsg = "PRIVMSG "+ channel +" :" + cmd[4:] +"\n"
+                        print "Sending message:",ircmsg
+                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                        ircsock.send(bytes(ircmsg))
+                        ircmsg = 'Sent.'
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                        senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
+                        ircmsg = ''
+                    else:
+                        print("IRC not initilized")
+                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
             else:
                 print "Error"
                 piexchangebyte(False,RC_FAILNOSTD)

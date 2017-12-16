@@ -464,7 +464,11 @@ MSXPISEND:
         SCF
         RET
 MSXPISEND1:
-; first two bytes in buffer must be size of buffer
+; Save buffer address to later store return code
+        PUSH    HL
+; First byte of buffer is saved to store return code
+        INC     HL
+; Next four bytes in buffer must be size of buffer (ASCII for equivalente HEX value)
 ; store buffer size in BC
         LD      C,(HL)
         INC     HL
@@ -473,6 +477,10 @@ MSXPISEND1:
         LD      D,H
         LD      E,L
         CALL    SENDDATABLOCK
+; Restore buffer address
+        POP     HL
+; Return return code in 1st buffer position
+        LD      (HL),A
         POP     HL
         OR      A
         RET
@@ -498,25 +506,34 @@ MSXPIRECV1:
         LD      D,H
         LD      E,L
         PUSH    HL
-; Save two memory positions to store buffer size later
+; Save first buffer address to store return core
         INC     DE
+; Save two memory positions to store buffer size
+        XOR     A
         INC     DE
+        LD      (DE),A
+        INC     DE
+        LD      (DE),A
         CALL    RECVDATABLOCK
+; Restore buffer address
         POP     HL
+; Store return code into 1st position in buffer
+        LD      (HL),A
         JR      C,MSXPIRECV2
-        PUSH    HL
-; Get buffer size
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-        POP     DE
-        EX      DE,HL
-        DEC     DE
-        DEC     DE
-; Return buffer size to BASIC in first two positions of buffer
-        LD      (HL),E
         INC     HL
-        LD      (HL),D
+;        PUSH    HL
+; Get buffer size
+;        EX      DE,HL
+;        OR      A
+;        SBC     HL,DE
+;        POP     DE
+;        EX      DE,HL
+;        DEC     DE
+;        DEC     DE
+; Return buffer size to BASIC in first two positions of buffer
+        LD      (HL),C
+        INC     HL
+        LD      (HL),B
 MSXPIRECV2:
         POP     HL
         OR      A
