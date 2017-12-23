@@ -1046,8 +1046,9 @@ try:
             # IRC client code starts here
             elif (cmd[:3] == "IRC"):
                 ircconn = False
-                print "Processing IRC commands"
+                print "Processing IRC commands:",cmd
                 if (cmd[4:8] == "CONN"):
+                    allchann = []
                     #try:
                     piexchangebyte(NoTimeOutCheck, RC_WAIT)
                     ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1074,27 +1075,34 @@ try:
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
                 elif (cmd[4:8] == "JOIN"):
                     channel = cmd[9:]
-                    print "Joining channel",channel
-                    if (not ircconn):
-                        piexchangebyte(NoTimeOutCheck, RC_WAIT)
-                        ircsock.send(bytes("JOIN " + channel + "\n"))
-                        ircmsg = ''
-                        while ircmsg.find("End of /NAMES list.") == -1:
-                            ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
-                            ircmsg = ircmsg.strip('\n\r')
-
-                        ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
+                    if channel in allchann:
+                        print "Already joined:",channel
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                        ircmsg = 'Already joined. Current channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                        #senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                     else:
-                        print("IRC not initilized")
-                        piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                        print "Joining channel",channel
+                        if (not ircconn):
+                            piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                            ircsock.send(bytes("JOIN " + channel + "\n"))
+                            ircmsg = ''
+                            while ircmsg.find("End of /NAMES list.") == -1:
+                                ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+                                ircmsg = ircmsg.strip('\n\r')
+
+                            ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
+                            allchann.append(channel)
+                            piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                        else:
+                            print("IRC not initilized")
+                            piexchangebyte(NoTimeOutCheck,RC_FAILED)
                 elif (cmd[4:8] == "READ"):
                     if (not ircconn):
                         ircmsg = ''
                         piexchangebyte(NoTimeOutCheck, RC_WAIT)
                         ircsock.setblocking(0);
                         try:
-                            ircmsg = ircsock.recv(2048).decode("UTF-8")
+                            ircmsg = ircsock.recv(2048) #.decode("UTF-8")
                         except socket.error, e:
                             err = e.args[0]
                             if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
@@ -1109,11 +1117,17 @@ try:
                             if ircmsg.find("PING :") != -1:
                                 ircsock.send(bytes("PONG :pingis\n"))
                                 ircmsg = ''
-                                piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                             if ircmsg.find("PRIVMSG") != -1:
-                                name = ircmsg.split('!',1)[0][1:]
-                                ircmsg = name + ' --> ' + ircmsg.split('PRIVMSG',1)[1].split(':',1)[1]
-                                piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                                ircname = ircmsg.split('!',1)[0][1:]
+                                ircchidxs = ircmsg.find('PRIVMSG')+8
+                                ircchidxe = ircmsg[ircchidxs:].find(':')
+                                ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
+                                if msxpinick in ircchann:
+                                    ircchann = 'private'
+                                ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
+                                ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
+                
+                            piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                         ircsock.setblocking(1);
                     else:
                         print("IRC not initilized")
@@ -1139,6 +1153,9 @@ try:
                     if (len(ircmsg)==0):
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                     else:
+                        if (len(ircmsg)>256):
+                            ircmsg = ircmsg[len(ircmsg)-512:]
+                        
                         piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
                         senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                         ircmsg = ''
