@@ -349,12 +349,12 @@ def prun(cmd):
             if (len(buf) == 0):
                 buf = p.stderr.read()
                 if  (len(buf) == 0):
-                    buf = str("Pi:Error running command "+cmd)
+                    buf = str("Pi:Error running command "+cmd+'\n')
             sendstdmsg(rc,buf)
         except subprocess.CalledProcessError as e:
             print "Error:",buf
             rc = RC_FAILED
-            sendstdmsg(rc,"Pi:Error\n"+buf)
+            sendstdmsg(rc,"Pi:Error\n"+buf+'\n')
 
     #print "prun:exiting rc:",hex(rc)
     return rc
@@ -409,7 +409,7 @@ def ploadr(basepath, file):
                             GPIO.setwarnings(False)
                             init_spi_bitbang()
                             GPIO.output(rdyPin, GPIO.LOW)
-                            sendstdmsg(rc,"Pi:Ok")
+                            sendstdmsg(rc,"Pi:Ok\n")
                 else:
                     print "pload:not a ROM file"
                     rc = RC_FAILED
@@ -519,7 +519,7 @@ def pcd(basepath, path):
             newpath = basepath.rsplit('/', 1)[0]
             if (newpath == ''):
                 newpath = '/'
-            sendstdmsg(rc,str(newpath))
+            sendstdmsg(rc,str(newpath+'\n'))
         else:
             #print "pcd:calling getpath"
             urlcheck = getpath(basepath, path)
@@ -530,7 +530,7 @@ def pcd(basepath, path):
                 newpath[:3] == "nfs" or \
                 newpath[:3] == "smb"):
                 rc = RC_SUCCESS
-                sendstdmsg(rc,str(newpath))
+                sendstdmsg(rc,str(newpath+'\n'))
             else:
                 newpath = str(newpath) #[:len(newpath)-1])
                 #print "newpath=",type(newpath),len(newpath)
@@ -568,7 +568,7 @@ def pset(psetvar, cmd):
                 if (psetvar[index][0] == str(cmd[1])):
                     psetvar[index][1] = str(cmd[2])
                     found = True
-                    buf = "Pi:Ok"
+                    buf = "Pi:Ok\n"
                     break
                 
             if (not found):
@@ -577,7 +577,7 @@ def pset(psetvar, cmd):
                         psetvar[index][0] = str(cmd[1])
                         psetvar[index][1] = str(cmd[2])
                         found = True
-                        buf = "Pi:Ok"
+                        buf = "Pi:Ok\n"
                         break
             if (not found):
                 rc = RC_FAILED
@@ -596,7 +596,7 @@ def readf_tobuf(fpath,buf,ftype):
         fh = open(fpath,'rb')
         buf = fh.read()
         fh.close()
-        errmgs = "Pi:OK"
+        errmgs = "Pi:OK\n"
     else:
         #print "readf_tobuf:network file:",fpath
         req = urllib2.Request(url=fpath)
@@ -720,7 +720,7 @@ def pdate():
             piexchangebyte(NoTimeOutCheck,now.minute)
             piexchangebyte(NoTimeOutCheck,now.second)
             piexchangebyte(NoTimeOutCheck,0)
-            buf = "Pi:Ok"
+            buf = "Pi:Ok\n"
             senddatablock(True,buf,0,len(buf),True)
             rc = RC_SUCCESS
         else:
@@ -877,7 +877,7 @@ psetvar = [['PATH','/home/msxpi'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
            ['DSKTMPL','disks/msxpi_720KB_template.dsk'], \
-           ['IRCNICK','msxpironi'], \
+           ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
            ]
@@ -889,6 +889,9 @@ numdrives = 0
 # Load the disk images into a memory mapped variable
 drive0Data = msxdos_inihrd(psetvar[1][1])
 drive1Data = msxdos_inihrd(psetvar[2][1])
+
+# irc
+channel = "#msxpi"
 
 appstate = st_init
 pcopystat2 = 0
@@ -1026,7 +1029,7 @@ try:
                     if (rc == ENDTRANSFER):
                         print "pcopy:ENDTRANSFER"
                         pcopystat2 = 0
-                        buf = "Pi:Ok"
+                        buf = "Pi:Ok\n"
                         senddatablock(TimeOutCheck,buf,0,len(buf),True)
                     elif (rc == RC_SUCCESS):
                         pcopyindex += 1
@@ -1046,7 +1049,7 @@ try:
             # IRC client code starts here
             elif (cmd[:3] == "IRC"):
                 ircconn = False
-                print "Processing IRC commands:",cmd
+                #print "Processing IRC commands:",cmd
                 if (cmd[4:8] == "CONN"):
                     allchann = []
                     #try:
@@ -1055,16 +1058,23 @@ try:
                     ircserver = psetvar[8][1]
                     ircport = int(psetvar[9][1])
                     msxpinick =  psetvar[7][1]
-                    ircsock.connect((ircserver, ircport))
-                    ircsock.send(bytes("USER "+ msxpinick +" "+ msxpinick +" "+ msxpinick + " " + msxpinick + "\n"))
-                    ircsock.send(bytes("NICK "+ msxpinick +"\n"))
-                    ircconn = 1
-                    ircmsg = 'Connected to '+psetvar[8][1]
-                    piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-                    senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
-                    #except socket.error as e:
-                    #print "Error conecting to IRC:"+str(e)
-                    #senddatablock(TimeOutCheck,"FAILED",0,6,True)
+                    jparm = cmd.split(' ')
+                    if (len(jparm) != 3):
+                        ircmsg = "parameters invalid"
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                    else:
+                        print jparm
+                        jnick = jparm[2]
+                        print jnick
+                        if (jnick == 'none'):
+                            jnick = msxpinick
+                        ircsock.connect((ircserver, ircport))
+                        ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
+                        ircsock.send(bytes("NICK "+ jnick +"\n"))
+                        ircconn = 1
+                        ircmsg = 'Connected to '+psetvar[8][1]
+                        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                        senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                 elif (cmd[4:7] == "MSG"):
                     if (not ircconn):
                         piexchangebyte(NoTimeOutCheck, RC_WAIT)
@@ -1074,32 +1084,38 @@ try:
                         print("IRC not initilized")
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
                 elif (cmd[4:8] == "JOIN"):
-                    channel = cmd[9:]
-                    if channel in allchann:
-                        print "Already joined:",channel
+                    jparm = cmd.split(' ')
+                    if (len(jparm) != 3):
+                        ircmsg = "parameters invalid"
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
-                        ircmsg = 'Already joined. Setting to default. Current channels:' + str(allchann).replace('bytearray(b','').replace(')','')
-                        channel = channel.strip()
-                        #senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                     else:
-                        print "Joining channel",channel
-                        if (not ircconn):
-                            piexchangebyte(NoTimeOutCheck, RC_WAIT)
-                            ircsock.send(bytes("JOIN " + channel + "\n"))
-
-                            ircmsg = ''
-                            while (ircmsg.find("End of /NAMES list.") == -1) and \
-                                  (ircmsg.find("Cannot join channel") == -1):
-                                ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
-                                ircmsg = ircmsg.strip('\n\r')
-                                
-
-                            ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
-                            allchann.append(channel)
+                        jchannel = jparm[2]
+                        if jchannel in allchann:
+                            #print "Already joined.",jchannel
                             piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                            ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                            channel = jchannel
                         else:
-                            print("IRC not initilized")
-                            piexchangebyte(NoTimeOutCheck,RC_FAILED)
+                            #print "Joining channel",jchannel
+                            if (not ircconn):
+                                piexchangebyte(NoTimeOutCheck, RC_WAIT)
+                                ircsock.send(bytes("JOIN " + jchannel + "\n"))
+                                ircmsg = ''
+                                while (ircmsg.find("End of /NAMES list.") == -1) and \
+                                      (ircmsg.find("No such channel") == -1) and \
+                                      (ircmsg.find("Nickname is already in use") == -1):
+                                    ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+                                    ircmsg = ircmsg.strip('\n\r')
+                                if (ircmsg.find("No such channel") != -1):
+                                    ircmsg = "No such channel"
+                                else:
+                                    ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
+                                    allchann.append(jchannel)
+                                    channel = jchannel
+                                piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+                            else:
+                                print("IRC not initilized")
+                                piexchangebyte(NoTimeOutCheck,RC_FAILED)
                 elif (cmd[4:8] == "READ"):
                     if (not ircconn):
                         ircmsg = ''
@@ -1171,7 +1187,6 @@ try:
                         ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
                         ircmsg = ircmsg.strip('\n\r')
                         ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
-                        print ircmsg
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                     else:
                         ircmsg = ''
@@ -1180,7 +1195,6 @@ try:
                 else:
                     if (not ircconn):
                         ircmsg = "PRIVMSG "+ channel +" :" + cmd[4:] +"\n"
-                        print "Sending message:",ircmsg
                         piexchangebyte(NoTimeOutCheck, RC_WAIT)
                         ircsock.send(bytes(ircmsg))
                         ircmsg = ''

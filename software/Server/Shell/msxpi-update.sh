@@ -42,7 +42,7 @@ TMPDIR=/tmp
 cd $TMPDIR
 rm  msxpi-monitor msxpi-server msxpi-server.py msxpi.ini  2>/dev/null
 rm  msxpi-client.bin msxpiext.bin pplay.sh pshut.sh 2>/dev/null
-rm *.msx 2>/dev/nill
+rm *.msx 2>/dev/null
 
 # Download msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-monitor
@@ -81,8 +81,8 @@ done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
 /bin/mv MSXPIUP1.BAT $MSXPIHOME/
-/bin/rm MSXPIUP1.BAT.0
-/bin/rm index.html*
+/bin/rm MSXPIUP1.BAT.0 
+/bin/rm index.html* 2>/dev/null
 /bin/chown -R pi.pi $MSXPIHOME
 
 # changes to prevent sd corruption
