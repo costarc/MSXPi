@@ -1078,17 +1078,21 @@ try:
                     if channel in allchann:
                         print "Already joined:",channel
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
-                        ircmsg = 'Already joined. Current channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                        ircmsg = 'Already joined. Setting to default. Current channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                        channel = channel.strip()
                         #senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                     else:
                         print "Joining channel",channel
                         if (not ircconn):
                             piexchangebyte(NoTimeOutCheck, RC_WAIT)
                             ircsock.send(bytes("JOIN " + channel + "\n"))
+
                             ircmsg = ''
-                            while ircmsg.find("End of /NAMES list.") == -1:
+                            while (ircmsg.find("End of /NAMES list.") == -1) and \
+                                  (ircmsg.find("Cannot join channel") == -1):
                                 ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
                                 ircmsg = ircmsg.strip('\n\r')
+                                
 
                             ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
                             allchann.append(channel)

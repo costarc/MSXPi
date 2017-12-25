@@ -4,7 +4,7 @@
 30 BUF=&HB000:gosub 10000:gosub 30000
 40 FOR I=1 TO 10: KEY(I) STOP:NEXT I
 50 INPUT "Channel name:";CH$
-1000 PRINT"Connecting to irc server..."
+1000 PRINT"Connecting to irc server.."
 1100 COM$="IRC CONN":GOSUB 50000
 1120 if RC<>E0 AND RC<>EB THEN END
 1200 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
