@@ -51,6 +51,7 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server.py
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi.ini
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-io.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
@@ -63,6 +64,7 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 /bin/mv msxpi.ini         $MSXPIHOME/
 /bin/mv msxpi-client.bin  $MSXPIHOME/
 /bin/mv msxpiext.bin      $MSXPIHOME/
+/bin/mv msxpi-io.bin      $MSXPIHOME/
 /bin/mv pplay.sh          $MSXPIHOME/
 /bin/mv pshut.sh          $MSXPIHOME/
 /bin/mv *.msx             $MSXPIHOME/

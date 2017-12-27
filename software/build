@@ -61,6 +61,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpi-io.asm     -o ./target/msxpi-io.bin
 ~/Dev/bin/z80asm -I ./asm-common/include ./NewClient/src/pcopy.com.asm    -o ./target/pcopy2.com
 
 # Update script for MSXPi Rev3/Rev4
