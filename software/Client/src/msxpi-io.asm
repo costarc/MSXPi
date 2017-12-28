@@ -43,7 +43,7 @@ TEXTTERMINATOR: equ 0
 		db	$fe
 		dw	inicio
         dw	fim
-        dw  RETURNSCP 
+        dw  RETURN
 
         org     $B000
 inicio:

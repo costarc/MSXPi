@@ -510,10 +510,10 @@ MSXPIRECV1:
         INC     DE
 ; Save two memory positions to store buffer size
         XOR     A
-        INC     DE
         LD      (DE),A
         INC     DE
         LD      (DE),A
+        INC     DE
         CALL    RECVDATABLOCK
 ; Restore buffer address
         POP     HL
