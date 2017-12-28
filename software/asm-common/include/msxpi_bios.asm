@@ -855,6 +855,7 @@ ATOHERR:
 ; Evaluate CALL Commands to check for optional parameters
 ; Returns Buffer address in HL (or HL=0000 if parameter not found)
 ; DE = address of command - after all parameters
+; BC = number of characters
 PARMSEVAL:
         INC     DE
         LD      A,(DE)

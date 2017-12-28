@@ -109,6 +109,8 @@ INIHRD_START:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
+        call    CHECK_ESC
+        ret     c
         ld      hl,PIWAITMSG
         call    PRINT
         call    PI_WAITBOOT
@@ -618,39 +620,38 @@ MSXPILOADERROR:
         ld      hl,LOADERRMSG
         jp      PRINT
 
+; Verify is command has STD parameters specified
+; Examples:
+; call mspxi("0,pdir")  -> will not print the output
+; call msxpi("1,pdir")  -> will print the output to screen
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
 MSXPI:
 CALL_MSXPI:
+; retrive CALL parameters from stack (second position in stack)
         POP     DE
         POP     HL
         PUSH    HL
         PUSH    DE
-        INC     HL
-        INC     HL
-        LD      D,H
-        LD      E,L
-        PUSH    HL
-        CALL    PRINT
-        POP     HL
-CALL_MSXPI_PARM:
-; Verify is command has STD parameters specified
-; Examples:
-; call msxpi("pdir") and
-; call mspxi("0,pdir")  -> will not print the output
-; call msxpi("1,pdir")  -> will print the output to screen
-; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
-        PUSH    DE
-
-        CALL    PARMSEVAL
-        JR      NC,CALL_MSXPI1
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        JR      CALL_MSXPIERR2
-CALL_MSXPI1:
-; Retrieve position with start of command to HL,
-; Store buffer address in stack
+        CALL    SKIPMYCMD
+        POP     DE
         EX      (SP),HL
-; Save command address to stack
+        PUSH    DE
+        EX      DE,HL
+        INC     DE
+        INC     DE
+        LD      H,D
+        LD      L,E
+        CALL    PRINT
+        CALL    PARMSEVAL
+        CALL    DBGHL
+        CALL    DBGBC
+CALL_MSXPI1:
+; Store buffer address in stack
         PUSH    HL
+; Save command address to stack
+        PUSH    DE
+        LD      H,D
+        LD      L,E
         CALL    SENDPICMD
         LD      E,1
         JR      C,CALL_MSXPI2
@@ -660,6 +661,12 @@ CALL_MSXPI1:
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,CALL_MSXPIERR
+
+CALL_MSXPIERR1:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        SCF
+        RET
 
 WAITLOOP:
         CALL    CHECK_ESC
@@ -705,7 +712,7 @@ CALL_MSXPISTDOUT:
         LD      E,0
         JR      CALL_MSXPI3
 
-BUFERRMSG:DB    "Buffer address invalid",13,10,0
+BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
 CALL_MSXPIBUFER:
         LD      HL,BUFERRMSG
         CALL    PRINT
@@ -766,6 +773,31 @@ CALL_MSXPISAVSTD:
         LD      E,0
         JR      CALL_MSXPI3
 
+; Check parameters with this format:
+; ("0,1234,command")
+; Return:
+; BC = Number of characters in command
+; HL = address after ")"
+;
+SKIPMYCMD:
+        LD      BC,$FFFF
+        INC     HL      ;Skip '('
+SKIPMYCMD1:
+        INC     HL
+        INC     BC
+        LD      A,(HL)
+;        CP      ','
+;        JR      NZ,SKIPMYCMD2
+;        LD      BC,$FFFF
+SKIPMYCMD2:
+        CP      34
+        JR      NZ,SKIPMYCMD3
+        DEC     BC
+SKIPMYCMD3:
+        CP      ')'
+        JR      NZ,SKIPMYCMD1
+        INC     HL
+        RET
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATABLOCK|
 ;----------------------------------------

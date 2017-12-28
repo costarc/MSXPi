@@ -312,9 +312,8 @@ CALL_MSXPI:
 CALL_MSXPI_PARM:
 ; Verify is command has STD parameters specified
 ; Examples:
-; call msxpi("pdir") and
-; call mspxi("0,pdir")  -> will not print the output
-; call msxpi("1,pdir")  -> will print the output to screen
+; call mspxi("0,0000,pdir")  -> will not print the output
+; call msxpi("1,0000,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
         PUSH    DE
 
