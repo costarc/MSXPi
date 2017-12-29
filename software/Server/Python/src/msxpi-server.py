@@ -15,8 +15,8 @@ import array
 import socket
 import errno
 
-version = 0.1
-build   = 20171110
+version = "0.8.2"
+build   = "20171229.00076"
 TRANSBLOCKSIZE = 1024
 
 # Pin Definitons

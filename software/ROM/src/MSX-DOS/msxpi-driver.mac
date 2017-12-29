@@ -632,42 +632,36 @@ CALL_MSXPI:
         POP     HL
         PUSH    HL
         PUSH    DE
+; Find end of command call and save in HL before returning to BASIC
         CALL    SKIPMYCMD
         POP     DE
         EX      (SP),HL
         PUSH    DE
-        EX      DE,HL
-        INC     DE
-        INC     DE
-        LD      H,D
-        LD      L,E
-        CALL    PRINT
-        CALL    PARMSEVAL
-        CALL    DBGHL
-        CALL    DBGBC
-CALL_MSXPI1:
-; Store buffer address in stack
+; put Command string in DE to parse parameters
+; ("0,1234,command")
+;   ^ DE should be pointing at flag before calling PARMSEVAL
+; Save a copy to stack
+        INC     HL
+        INC     HL
+        LD      D,H
+        LD      E,L
         PUSH    HL
-; Save command address to stack
-        PUSH    DE
+        CALL    PARMSEVAL
+        JR      C,CALL_MSXPIERR1
+CALL_MSXPI1:
+; Store buffer address in stack after CALL parameters
+        EX      (SP),HL
+        PUSH    HL
         LD      H,D
         LD      L,E
         CALL    SENDPICMD
-        LD      E,1
-        JR      C,CALL_MSXPI2
+        JR      C,CALL_MSXPIERR
 
 ; protocol to detect result of command sent to RPi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,CALL_MSXPIERR
-
-CALL_MSXPIERR1:
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        SCF
-        RET
-
 WAITLOOP:
         CALL    CHECK_ESC
         JR      C,CALL_MSXPIERR
@@ -684,6 +678,33 @@ WAITLOOP:
         CP      RC_SUCCNOSTD
         JR      Z,CALL_MSXPI2
         JR      WAITLOOP
+
+CALL_MSXPIERR1:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        SCF
+        RET
+BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
+CALL_MSXPIBUFER:
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+
+CALL_MSXPIERR:
+        LD      E,1
+
+; return to BASIC
+CALL_MSXPI2:
+; Discard address of string containing command and buffer address
+        POP     HL
+CALL_MSXPI3:
+CALL_MSXPIERR2:
+        POP     HL
+; Send RC / return code to BASIC
+CALL_MSXPI4:
+        LD      HL,ERRFLG
+        LD      A,(RAMAD3)
+        CALL    WRSLT
+        RET
 
 CALL_MSXPISTD:
 ; Restore address of string with command
@@ -711,28 +732,6 @@ CALL_MSXPISTDOUT:
         CALL    PRINTPISTDOUT
         LD      E,0
         JR      CALL_MSXPI3
-
-BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
-CALL_MSXPIBUFER:
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-
-CALL_MSXPIERR:
-        LD      E,1
-
-; return to BASIC
-CALL_MSXPI2:
-; Discard address of string containing command and buffer address
-        POP     HL
-CALL_MSXPI3:
-CALL_MSXPIERR2:
-        POP     HL
-; Send RC / return code to BASIC
-CALL_MSXPI4:
-        LD      HL,ERRFLG
-        LD      A,(RAMAD3)
-        CALL    WRSLT
-        RET
 
 ; This routine will save the RPi data to (STREND)
 CALL_MSXPISAVSTD:
@@ -786,9 +785,6 @@ SKIPMYCMD1:
         INC     HL
         INC     BC
         LD      A,(HL)
-;        CP      ','
-;        JR      NZ,SKIPMYCMD2
-;        LD      BC,$FFFF
 SKIPMYCMD2:
         CP      34
         JR      NZ,SKIPMYCMD3
@@ -796,6 +792,11 @@ SKIPMYCMD2:
 SKIPMYCMD3:
         CP      ')'
         JR      NZ,SKIPMYCMD1
+        INC     HL
+        RET
+        LD      A,(HL)
+        CP      ':'
+        RET     NZ
         INC     HL
         RET
 ;----------------------------------------
@@ -1046,9 +1047,9 @@ CHECK_P:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
-        DB      "MSXPi ROM v0.8.1",13,10
+        DB      "MSXPi ROM v0.8.2",13,10
         DB      "      Build "
-build:  DB      "20171206.00075"
+build:  DB      "20171229.00076"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
