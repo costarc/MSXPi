@@ -162,3 +162,14 @@ sudo systemctl start msxpi-monitor
 sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
+
+# WhatsUp
+sudo apt-get install python-dateutil
+sudo apt-get install python-setuptools
+sudo apt-get install python-dev
+sudo apt-get install libevent-dev
+sudo apt-get install ncurses-dev
+sudo apt-get install git
+git clone git://github.com/tgalal/yowsup.git
+cd yowsup
+sudo python setup.py install

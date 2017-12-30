@@ -16,7 +16,7 @@ import socket
 import errno
 
 version = "0.8.2"
-build   = "20171229.00076"
+build   = "20171230.00077"
 TRANSBLOCKSIZE = 1024
 
 # Pin Definitons
@@ -334,7 +334,7 @@ def secsenddata(buffer, initpos, filesize):
 
 def prun(cmd):
     rc = RC_SUCCESS
-    print "prun:starting command:",cmd,len(cmd)
+    #print "prun:starting command:",cmd,len(cmd)
     piexchangebyte(NoTimeOutCheck,RC_WAIT)
     
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
@@ -513,7 +513,7 @@ def pcd(basepath, path):
     msxbyte = piexchangebyte(False,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
         if (path == '' or path.strip() == "."):
-            sendstdmsg(rc,basepath)
+            sendstdmsg(rc,basepath+'\n')
         elif (path.strip() == ".."):
             rc = RC_SUCCESS
             newpath = basepath.rsplit('/', 1)[0]
@@ -536,7 +536,7 @@ def pcd(basepath, path):
                 #print "newpath=",type(newpath),len(newpath)
                 if (os.path.isdir(newpath)):
                     rc = RC_SUCCESS
-                    sendstdmsg(rc,newpath)
+                    sendstdmsg(rc,newpath+'\n')
                 elif (os.path.isfile(str(newpath))):
                     sendstdmsg(rc,"Pi:Error - not a folder")
                 else:
@@ -551,7 +551,7 @@ def pcd(basepath, path):
 
 def pset(psetvar, cmd):
     rc = RC_SUCCESS
-    buf = "Pi:Error\nSyntax: pset <var> <value>"
+    buf = "Pi:Error\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
 
     print "pset: Starting:",cmd
@@ -564,7 +564,7 @@ def pset(psetvar, cmd):
         cmd=cmd.split(" ")
         found = False
         if (len(cmd) == 3):
-            for index in range(0,10):
+            for index in range(0,len(psetvar)):
                 if (psetvar[index][0] == str(cmd[1])):
                     psetvar[index][1] = str(cmd[2])
                     found = True
@@ -572,7 +572,7 @@ def pset(psetvar, cmd):
                     break
                 
             if (not found):
-                for index in range(7,10):
+                for index in range(7,len(psetvar)):
                     if (psetvar[index][0] == "free"):
                         psetvar[index][0] = str(cmd[1])
                         psetvar[index][1] = str(cmd[2])
@@ -880,6 +880,16 @@ psetvar = [['PATH','/home/msxpi'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
+           ['free','free'], \
            ]
 
 # Initialize disk system parameters
@@ -1063,9 +1073,7 @@ try:
                         ircmsg = "parameters invalid"
                         piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                     else:
-                        print jparm
                         jnick = jparm[2]
-                        print jnick
                         if (jnick == 'none'):
                             jnick = msxpinick
                         ircsock.connect((ircserver, ircport))

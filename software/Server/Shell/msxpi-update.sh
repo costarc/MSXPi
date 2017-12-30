@@ -39,6 +39,8 @@ GETCMD="/usr/bin/wget --user=msxpi@retro-cpu.run --password=retro-cpu.run"
 GETCMD="/usr/bin/wget"
 TMPDIR=/tmp
 
+XTRAFILES="msxpiext.bin msxpi-io.bin"
+
 cd $TMPDIR
 rm  msxpi-monitor msxpi-server msxpi-server.py msxpi.ini  2>/dev/null
 rm  msxpi-client.bin msxpiext.bin pplay.sh pshut.sh 2>/dev/null
@@ -76,9 +78,15 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
 $GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS/
 FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | grep -v "Name" | grep -v "Parent")
+
 for FILE in $FILELIST
 do
     echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
+done
+echo "pcd $MSXPIHOME" >> MSXPIUP1.BAT.0
+for FILE in $XTRAFILES
+do
+echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
 done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
