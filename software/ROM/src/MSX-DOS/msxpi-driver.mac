@@ -100,56 +100,21 @@ INIHRD:
 ; If P is pressed during boot, MSXPi disk driver is not initialized
         call    CHECK_P
         JR      C,INIHRD_DISABLE
-        xor     a
-        ld      (DEVICE),A
-
 INIHRD_START:
         ld      a,$80
         cp      h
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        call    CHECK_ESC
-        ret     c
         ld      hl,PIWAITMSG
         call    PRINT
         call    PI_WAITBOOT
-		ret     c
-
-INIHRD_DISABLE:
-        ld      a,128
-        ld      (DEVICE),A
-        ret
-
-; Always initialize all disk drives
-; Actually, call INIHRD 4 times, but this version only implements 2 drives
-; This limitation is set in the Server App. Settig to more drives causes some MSX to hang.
-		xor 	a
-		call	DSKIO_SECTINFO
-		call	INIHRD_PI
-; Now check if user want a single drive (CTRL pressed)
-		call    CHECK_CTRL
-		ret     c
-
-; Initialize all drives
-		ld      a,1
-		call	DSKIO_SECTINFO
-		call	INIHRD_PI
-		ld      a,2
-		call	DSKIO_SECTINFO
-		call	INIHRD_PI
-        ld      a,3
-		call	DSKIO_SECTINFO
-		call	INIHRD_PI
-        ret
-
-INIHRDMSG: DB "INIHRD"	
-INIHRD_PI:
-		ld		de,INIHRDMSG
-		ld		bc,6
-		calL	SENDPICMD
+        scf
 		ret
 
+INIHRD_DISABLE:
+        pop     hl
+        ret
 ;-----------------------
 ; PI_WAITBOOT          |
 ;-----------------------
@@ -162,7 +127,7 @@ PI_WAITBOOT1:
         call    SYNCH
         ret     nc
         push    bc
-        call    CHECK_ESC
+        call    CHECK_P
         pop     bc
         ret		c
 ; Pi responded
@@ -652,58 +617,49 @@ CALL_MSXPI1:
 ; Store buffer address in stack after CALL parameters
         EX      (SP),HL
         PUSH    HL
+; At this point, HL contain buffer addres
+; stack contain address of call parameters
+; DE contain string address of command to send to RPi
         LD      H,D
         LD      L,E
         CALL    SENDPICMD
-        JR      C,CALL_MSXPIERR
+        JR      C,CALL_MSXPIERR2
 
 ; protocol to detect result of command sent to RPi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR
+        JR      NZ,CALL_MSXPIERR2
 WAITLOOP:
         CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR
+        JR      C,CALL_MSXPIERR2
         CALL    CHKPIRDY
         JR      C,WAITLOOP
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        LD      E,1
         CP      RC_FAILED
         JR      Z,CALL_MSXPISTD
-        LD      E,0
         CP      RC_SUCCESS
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCNOSTD
-        JR      Z,CALL_MSXPI2
+        JR      Z,CALL_MSXPIERR3
         JR      WAITLOOP
 
 CALL_MSXPIERR1:
+        POP     HL
         LD      HL,BUFERRMSG
         CALL    PRINT
-        SCF
         RET
 BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
-CALL_MSXPIBUFER:
-        LD      HL,BUFERRMSG
-        CALL    PRINT
 
-CALL_MSXPIERR:
-        LD      E,1
-
-; return to BASIC
-CALL_MSXPI2:
-; Discard address of string containing command and buffer address
-        POP     HL
-CALL_MSXPI3:
 CALL_MSXPIERR2:
+        LD      A,RC_CONNERR
+CALL_MSXPIERR3:
+; Store return code in buffer
         POP     HL
-; Send RC / return code to BASIC
-CALL_MSXPI4:
-        LD      HL,ERRFLG
-        LD      A,(RAMAD3)
-        CALL    WRSLT
+CALL_MSXPIERR4:
+        POP     HL
+        LD      (HL),A
         RET
 
 CALL_MSXPISTD:
@@ -722,55 +678,35 @@ CALL_MSXPISTD:
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
         CALL    NOSTDOUT
-; Discard buffer addres in stack
-        POP     HL
-        LD      E,0
-        JR      CALL_MSXPI3
+        LD      A,RC_SUCCNOSTD
+        JR      CALL_MSXPIERR4
 
 CALL_MSXPISTDOUT:
 ; Discard buffer address
         CALL    PRINTPISTDOUT
-        LD      E,0
-        JR      CALL_MSXPI3
+        LD      A,RC_SUCCNOSTD
+        JR      CALL_MSXPIERR4
 
 ; This routine will save the RPi data to (STREND)
 CALL_MSXPISAVSTD:
 ; Retrieve buffer address from stack
         POP     DE
-        ;CALL    DBGDE
+        CALL    DBGDE
 ;Save buffer address
         PUSH    DE
+; Get data area
+        INC     DE
         INC     DE
         INC     DE
         CALL    RECVDATABLOCK
-
         POP     HL
-
-;Save buffer address again
-        PUSH    HL
-
-; Exchange buffer address with end of data received
-; to alow SBC and get the size of data received
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-
-        POP     DE
-        EX      DE,HL
-
-; DE now contain size of data received
-
-;        CALL    DBGDE
-;        call    DBGHL
-; two first bytes of buffer contain size of data received.
-; Decrement by two to return only actual size of buffer
-        DEC     DE
-        DEC     DE
-        LD      (HL),E
+        LD      (HL),A
+; Return buffer size to BASIC in first two positions of buffer
         INC     HL
-        LD      (HL),D
-        LD      E,0
-        JR      CALL_MSXPI3
+        LD      (HL),C
+        INC     HL
+        LD      (HL),B
+        RET
 
 ; Check parameters with this format:
 ; ("0,1234,command")
@@ -815,7 +751,6 @@ MSXPISEND:
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
         CALL    PRINT
-        SCF
         RET
 MSXPISEND1:
 ; Save buffer address to later store return code
@@ -840,7 +775,6 @@ MSXPISEND1:
         ADD     HL,BC
         PUSH    HL
         PUSH    DE
-        OR      A
         RET
 
 ;----------------------------------------
@@ -858,7 +792,6 @@ MSXPIRECV:
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
         CALL    PRINT
-        SCF
         RET
 MSXPIRECV1:
         LD      D,H
@@ -878,15 +811,6 @@ MSXPIRECV1:
         LD      (HL),A
         JR      C,MSXPIRECV2
         INC     HL
-;        PUSH    HL
-; Get buffer size
-;        EX      DE,HL
-;        OR      A
-;        SBC     HL,DE
-;        POP     DE
-;        EX      DE,HL
-;        DEC     DE
-;        DEC     DE
 ; Return buffer size to BASIC in first two positions of buffer
         LD      (HL),C
         INC     HL
@@ -1049,7 +973,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v0.7",13,10
         DB      "MSXPi ROM v0.8.2",13,10
         DB      "      Build "
-build:  DB      "20171229.00076"
+build:  DB      "20171230.00077"
         DB      13,10
         DB      "(c) Ronivon Costa,2017",13,10,10
         DB      "Commands available:",13,10
@@ -1066,7 +990,7 @@ PIONLINE:
         DB      "Rasperry PI is online",13,10,0
 
 PIWAITMSG:
-        DB      13,10,"Waiting Pi boot. ESC to skip",13,10,0
+        DB      13,10,"Waiting Pi boot. P to skip",13,10,0
 
 ; ================================================================
 ; Table of Commands available/implemented
