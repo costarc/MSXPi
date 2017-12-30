@@ -520,15 +520,6 @@ MSXPIRECV1:
         LD      (HL),A
         JR      C,MSXPIRECV2
         INC     HL
-;        PUSH    HL
-; Get buffer size
-;        EX      DE,HL
-;        OR      A
-;        SBC     HL,DE
-;        POP     DE
-;        EX      DE,HL
-;        DEC     DE
-;        DEC     DE
 ; Return buffer size to BASIC in first two positions of buffer
         LD      (HL),C
         INC     HL
