@@ -1146,14 +1146,19 @@ try:
                                 ircsock.send(bytes("PONG :pingis\n"))
                                 ircmsg = ''
                             if ircmsg.find("PRIVMSG") != -1:
+                                print ircmsg
                                 ircname = ircmsg.split('!',1)[0][1:]
                                 ircchidxs = ircmsg.find('PRIVMSG')+8
                                 ircchidxe = ircmsg[ircchidxs:].find(':')
                                 ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
-                                if msxpinick in ircchann:
-                                    ircchann = 'private'
                                 ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
-                                ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
+                                if str(jnick) in ircchann:
+                                    msgsufx='> -> '
+                                    ircchann='pvt'
+                                else:
+                                    msgsufx='> '
+                                
+                                ircmsg = '<' + ircchann + ':' + ircname + msgsufx + ircremmsg
                 
                             piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                         ircsock.setblocking(1);
@@ -1185,7 +1190,7 @@ try:
                             ircmsg = ircmsg[len(ircmsg)-512:]
                         
                         piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-                        senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
+                        senddatablock(NoTimeOutCheck,ircmsg,0,len(ircmsg),True)
                         ircmsg = ''
                 elif (cmd[4:9] == "NAMES"):
                     if (not ircconn):

@@ -43,7 +43,7 @@ XTRAFILES="msxpiext.bin msxpi-io.bin"
 
 cd $TMPDIR
 rm  msxpi-monitor msxpi-server msxpi-server.py msxpi.ini  2>/dev/null
-rm  msxpi-client.bin msxpiext.bin pplay.sh pshut.sh 2>/dev/null
+rm  msxpi-client.bin pplay.sh pshut.sh 2>/dev/null
 rm *.msx 2>/dev/null
 
 # Download msxpi-server
@@ -52,8 +52,6 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-server.py
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi.ini
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-client.bin
-$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpiext.bin
-$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/msxpi-io.bin
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pplay.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
@@ -65,14 +63,12 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 /bin/mv msxpi-server.py   $MSXPIHOME/
 /bin/mv msxpi.ini         $MSXPIHOME/
 /bin/mv msxpi-client.bin  $MSXPIHOME/
-/bin/mv msxpiext.bin      $MSXPIHOME/
-/bin/mv msxpi-io.bin      $MSXPIHOME/
 /bin/mv pplay.sh          $MSXPIHOME/
 /bin/mv pshut.sh          $MSXPIHOME/
 /bin/mv *.msx             $MSXPIHOME/
 
 /bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor \
-               $MSXPIHOME/msxpi-server* $MSXPIHOME/*.msx
+               $MSXPIHOME/msxpi-server* $MSXPIHOME/*.msx 2>/dev/null
 
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
@@ -83,11 +79,11 @@ for FILE in $FILELIST
 do
     echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
 done
-echo "pcd $MSXPIHOME" >> MSXPIUP1.BAT.0
-for FILE in $XTRAFILES
-do
-echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
-done
+#echo "pcd $MSXPIHOME" >> MSXPIUP1.BAT.0
+#for FILE in $XTRAFILES
+#do
+#echo "pcopy $FILE $FILE" >> MSXPIUP1.BAT.0
+#done
 
 /bin/cat MSXPIUP1.BAT.0 | /usr/bin/awk 'sub("$", "\r")' > MSXPIUP1.BAT
 /bin/mv MSXPIUP1.BAT $MSXPIHOME/

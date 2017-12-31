@@ -36,7 +36,7 @@ MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
 
-ssid=YourWiFiIdx
+ssid=notNeeded
 psk=YourWiFiPassword
 
 if [[ $ssid == "YourWiFiId" ]];then
@@ -164,12 +164,12 @@ sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
 # WhatsUp
-sudo apt-get install python-dateutil
-sudo apt-get install python-setuptools
-sudo apt-get install python-dev
-sudo apt-get install libevent-dev
-sudo apt-get install ncurses-dev
-sudo apt-get install git
-git clone git://github.com/tgalal/yowsup.git
-cd yowsup
-sudo python setup.py install
+#sudo apt-get install python-dateutil
+#sudo apt-get install python-setuptools
+#sudo apt-get install python-dev
+#sudo apt-get install libevent-dev
+#sudo apt-get install ncurses-dev
+#sudo apt-get install git
+#git clone git://github.com/tgalal/yowsup.git
+#cd yowsup
+#sudo python setup.py install
