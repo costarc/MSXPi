@@ -1,5 +1,5 @@
-10 BLOAD"msxpiext.bin",r:CLS:CH$="#openmsx":NK$="* msxpi *"
-20 PRINT "MSXPi IRC Client"
+10 CLS:CH$="#openmsx":NK$="* msxpi *"
+20 PRINT "MSXPi WhatsUp Client"
 29 REM Define FN Keys and Constants
 30 BUF=&HB000:gosub 10000:gosub 30000
 40 FOR I=1 TO 10: KEY(I) STOP:NEXT I
@@ -14,7 +14,7 @@
 1220 IF RC<>E0 AND RC<>EB THEN END
 1230 COM$="IRC GETRSP":GOSUB 50000
 1260 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
-1300 ON KEY GOSUB 11000,12000,15000
+1300 REM ON KEY GOSUB 11000,12000,15000
 1310 PRINT
 1400 KEY (1) ON:KEY (2) ON:KEY (3) ON
 1410 TIME=0
@@ -23,16 +23,11 @@
 1460 COM$="IRC READ":GOSUB 50000
 1470 COM$="IRC GETRSP":GOSUB 50000:if RC=EB then goto 1400
 1480 if bs>254 then gosub 52030 else print RC$
-1500 goto 1400
-6999 REM Send command in COM$ to RPi
-7000 COM$="IRC NAMES":GOSUB 50000:CALL MSXPISEND("B000")
-7050 RETURN
-7999 REM Read buffer as string and store in RC$
-10000 KEY 1,"F1-Talk"
-10010 KEY 2,"F2-Join"
+10000 KEY 1,"F1-MSX Brasil"
+10010 KEY 2,"F2-edit"
 10020 KEY 3,"F3-Bye"
 10030 KEY 4,""
-10040 KEY 5,""
+10040 KEY 5,"Register"
 10050 KEY 6,""
 10060 KEY 7,""
 10070 KEY 8,""
@@ -42,18 +37,9 @@
 11000 m$="":print "talk:|";chr$(8);:p=4:time=0:GOSUB 20000
 11010 if m$="" then ?:return
 11020 ? NK$+" --> ";M$
-11100 COM$="IRC "+m$:gosub50000
+11100 COM$="WUP "+m$:gosub50000
 11120 return
-12000 m$="":print "Channel:|";chr$(8);:p=7:GOSUB 20000
-12010 if m$="" then ?:return
-12020 COM$="IRC JOIN "+M$:GOSUB 50000
-12030 IF RC<>E0 AND RC<>EB THEN END
-12040 COM$="IRC GETRSP":GOSUB 50000
-12050 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT""
-12060 return
-13000 return
-14000 return
-15000 COM$="IRC QUIT":gosub50000
+15000 REM
 15010 print "Bye":END
 20000 C$=inkey$:if C$<>"" then goto 20070
 20020 if time<50 then print"/";chr$(8);:goto20070

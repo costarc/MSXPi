@@ -863,6 +863,48 @@ def joinchan(chan): # join channel(s).
         ircmsg = ircmsg.strip('\n\r')
     return ircmsg
 
+def whatsup_send(msg):
+    # msg = WUP number text
+    msg = msg.replace("WUP ","")
+    wupphone = msg[:msg.index(" ")].strip()
+    wupmsg = msg[msg.index(" "):].strip()
+    wupurl = "http://localhost:8888/sendmessage?msisdn=" + wupphone + "&messagetype=T&message=" + wupmsg
+    print "whatsup:http req is:",wupurl
+    parser = MyHTMLParser()
+    try:
+        htmldata = urllib2.urlopen(wupurl.decode()).read()
+        parser = MyHTMLParser()
+        parser.feed(htmldata)
+        buf = " ".join(parser.HTMLDATA)
+        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+        rc = senddatablock(TimeOutCheck,buf,0,len(buf),True)
+    except urllib2.HTTPError as e:
+        rc = RC_FAILED
+        print "whatsup:http error "+ str(e)
+        sendstdmsg(rc,str(e))
+
+def whatsup_read():
+    """
+        #code to added when whatsup App is started,
+        # This code should be run once, and only the poll will be called in this function
+        # Whatsup messages should be written to a file, and read hre
+        import time
+        import subprocess
+        import select
+        
+        f = subprocess.Popen(['tail','-F',filename],\
+        stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        p = select.poll()
+        p.register(f.stdout)
+        """
+            
+        if p.poll(1):
+            buf = f.stdout.readline()
+            piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+            rc = senddatablock(NoTimeOutCheck,buf,0,len(buf),True)
+        else:
+            piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+
 ""
 """ ============================================================================
     msxpi-server.py
@@ -907,6 +949,7 @@ appstate = st_init
 pcopystat2 = 0
 pcopyindex = 0
 
+quit()
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print "GPIO Initialized\n"
@@ -951,7 +994,7 @@ try:
                 GPIO.cleanup()
                 ploadr(psetvar[0][1],cmd[7:])
                 init_spi_bitbang()
-                    #GPIO.output(rdyPin, GPIO.LOW)
+                #GPIO.output(rdyPin, GPIO.LOW)
             elif (cmd[:4] == "pdir" or cmd[:4] == "PDIR"):
                 pdir(psetvar[0][1],cmd[5:])
     
@@ -1146,19 +1189,14 @@ try:
                                 ircsock.send(bytes("PONG :pingis\n"))
                                 ircmsg = ''
                             if ircmsg.find("PRIVMSG") != -1:
-                                print ircmsg
                                 ircname = ircmsg.split('!',1)[0][1:]
                                 ircchidxs = ircmsg.find('PRIVMSG')+8
                                 ircchidxe = ircmsg[ircchidxs:].find(':')
                                 ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
+                                if msxpinick in ircchann:
+                                    ircchann = 'private'
                                 ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
-                                if str(jnick) in ircchann:
-                                    msgsufx='> -> '
-                                    ircchann='pvt'
-                                else:
-                                    msgsufx='> '
-                                
-                                ircmsg = '<' + ircchann + ':' + ircname + msgsufx + ircremmsg
+                                ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
                 
                             piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
                         ircsock.setblocking(1);
@@ -1190,7 +1228,7 @@ try:
                             ircmsg = ircmsg[len(ircmsg)-512:]
                         
                         piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-                        senddatablock(NoTimeOutCheck,ircmsg,0,len(ircmsg),True)
+                        senddatablock(TimeOutCheck,ircmsg,0,len(ircmsg),True)
                         ircmsg = ''
                 elif (cmd[4:9] == "NAMES"):
                     if (not ircconn):
@@ -1215,6 +1253,10 @@ try:
                     else:
                         print("IRC not initilized")
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
+            elif (cmd[:10] == "WUP GETRSP"):
+                whatsup_read(cmd[11:])
+            elif (cmd[:3] == "WUP"):
+                whatsup_send(cmd[4:])
             else:
                 print "Error"
                 piexchangebyte(False,RC_FAILNOSTD)
