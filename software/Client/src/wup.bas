@@ -1,33 +1,25 @@
-10 CLS:CH$="#openmsx":NK$="* msxpi *"
+1 clear 300,&hAFFF
+10 CLS:CH$="MSXPi-Test":NK$="* msxpi *"
 20 PRINT "MSXPi WhatsUp Client"
 29 REM Define FN Keys and Constants
 30 BUF=&HB000:gosub 10000:gosub 30000
 40 FOR I=1 TO 10: KEY(I) STOP:NEXT I
-50 INPUT "Nick name:";NI$
-60 if NI$="" then NI$="none"
-70 INPUT "Channel name:";CH$
-1000 PRINT"Connecting to irc server.."
-1100 COM$="IRC CONN "+NI$:GOSUB 50000
-1120 if RC<>E0 AND RC<>EB THEN END
-1200 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
-1210 COM$="IRC JOIN "+CH$:GOSUB 50000
-1220 IF RC<>E0 AND RC<>EB THEN END
-1230 COM$="IRC GETRSP":GOSUB 50000
-1260 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
-1300 REM ON KEY GOSUB 11000,12000,15000
+50 gosub 14000
+1300 ON KEY GOSUB 11000,12000,13000,14000,15000
 1310 PRINT
-1400 KEY (1) ON:KEY (2) ON:KEY (3) ON
+1400 KEY (1) ON:KEY (2) ON:KEY (3) ON:KEY (4) ON:KEY (5) ON
 1410 TIME=0
 1450 IF TIME < 150 THEN GOTO 1450
-1455 KEY (1) OFF:KEY (2) OFF:KEY (3) Off
-1460 COM$="IRC READ":GOSUB 50000
-1470 COM$="IRC GETRSP":GOSUB 50000:if RC=EB then goto 1400
-1480 if bs>254 then gosub 52030 else print RC$
-10000 KEY 1,"F1-MSX Brasil"
-10010 KEY 2,"F2-edit"
+1455 KEY (1) OFF:KEY (2) OFF:KEY (3) Off:KEY (4) Off:KEY (5) Off
+1460 COM$="WUP READ":GOSUB 50000
+1470 REM COM$="IRC GETRSP":GOSUB 50000:if RC=EB then goto 1400
+1480 REM if bs>254 then gosub 52030 else print RC$
+1490 GOTO 1400
+10000 KEY 1,"F1-Talk"
+10010 KEY 2,"F2-Channel"
 10020 KEY 3,"F3-Bye"
-10030 KEY 4,""
-10040 KEY 5,"Register"
+10030 KEY 4,"Connect"
+10040 KEY 5,"Disconnect"
 10050 KEY 6,""
 10060 KEY 7,""
 10070 KEY 8,""
@@ -39,8 +31,19 @@
 11020 ? NK$+" --> ";M$
 11100 COM$="WUP "+m$:gosub50000
 11120 return
-15000 REM
-15010 print "Bye":END
+12000 RETURN
+13000 REM
+13010 print "Bye":END
+14000 PRINT"Starting WhatsUp service..."
+14010 COM$="WUP CONN":GOSUB 50000
+14020 if RC<>E0 AND RC<>EB THEN END
+14030 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
+14040 return
+15000 PRINT"Shutting down WhatsUp service..."
+15010 COM$="WUP SHUT":GOSUB 50000
+15020 if RC<>E0 AND RC<>EB THEN END
+15030 if bs>254 then PR=1:gosub 52030 else print rc$:PRINT
+15040 return
 20000 C$=inkey$:if C$<>"" then goto 20070
 20020 if time<50 then print"/";chr$(8);:goto20070
 20030 if time<100 then print"-";chr$(8);:goto20070

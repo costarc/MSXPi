@@ -14,6 +14,7 @@ import glob
 import array
 import socket
 import errno
+import select
 
 version = "0.8.2"
 build   = "20171230.00077"
@@ -854,19 +855,14 @@ def msxdos_writesector(driveData, sectorInfo):
 
     #print "msxdos_writesector:exiting rc:",hex(rc)
 
-""" IRC Client functions starts here """
-def joinchan(chan): # join channel(s).
-    ircsock.send(bytes("JOIN "+ chan +"\n"))
-    ircmsg = ""
-    while ircmsg.find("End of /NAMES list.") == -1:
-        ircmsg = ircsock.recv(2048).decode("UTF-8")
-        ircmsg = ircmsg.strip('\n\r')
-    return ircmsg
-
 def whatsup_send(msg):
     # msg = WUP number text
-    msg = msg.replace("WUP ","")
+    #msg = msg.replace("WUP ","")
     wupphone = msg[:msg.index(" ")].strip()
+    for phone, name in WUPGRP.iteritems():
+        if wupphone == name:
+            wupphone = phone
+    
     wupmsg = msg[msg.index(" "):].strip()
     wupurl = "http://localhost:8888/sendmessage?msisdn=" + wupphone + "&messagetype=T&message=" + wupmsg
     print "whatsup:http req is:",wupurl
@@ -883,27 +879,27 @@ def whatsup_send(msg):
         print "whatsup:http error "+ str(e)
         sendstdmsg(rc,str(e))
 
-def whatsup_read():
-    """
-        #code to added when whatsup App is started,
-        # This code should be run once, and only the poll will be called in this function
-        # Whatsup messages should be written to a file, and read hre
-        import time
-        import subprocess
-        import select
-        
-        f = subprocess.Popen(['tail','-F',filename],\
-        stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-        p = select.poll()
-        p.register(f.stdout)
-        """
-            
-        if p.poll(1):
-            buf = f.stdout.readline()
-            piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-            rc = senddatablock(NoTimeOutCheck,buf,0,len(buf),True)
-        else:
-            piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
+def whatsup_read(f):
+    msg = f.stdout.readline()
+    if len(msg) > 1:
+        msga = msg.split(":")
+        sender = msga[0]
+        phone = msga[1]
+        text = msga[2]
+
+        if phone in WUPGRP:
+            phone = WUPGRP[phone]
+        elif phone.find("@") > 0:
+            phone = phone[:phone.index("@")]
+
+        if phone.find("-") > 0:
+            phone = phone[:phone.index("-")]+"-Group"
+
+        buf = sender+"@"+phone+":"+text
+        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+        rc = senddatablock(NoTimeOutCheck,buf,0,len(buf),True)
+    else:
+        piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
 
 ""
 """ ============================================================================
@@ -922,8 +918,8 @@ psetvar = [['PATH','/home/msxpi'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
-           ['free','free'], \
-           ['free','free'], \
+           ['WUPPH','351966764458'], \
+           ['WUPPW','D4YQDfsnY3KIgW4azGdtYDbMAO4='], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
@@ -933,6 +929,8 @@ psetvar = [['PATH','/home/msxpi'], \
            ['free','free'], \
            ['free','free'], \
            ]
+
+WUPGRP = {'none' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '-447840924680-1515184325@g.us' : 'MSXPiTest'}
 
 # Initialize disk system parameters
 sectorInfo = [0,0,0,0]
@@ -949,7 +947,6 @@ appstate = st_init
 pcopystat2 = 0
 pcopyindex = 0
 
-quit()
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print "GPIO Initialized\n"
@@ -1253,8 +1250,24 @@ try:
                     else:
                         print("IRC not initilized")
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
-            elif (cmd[:10] == "WUP GETRSP"):
-                whatsup_read(cmd[11:])
+            elif (cmd[:8] == "WUP CONN"):
+                print "Connecting to WhatsUp..."
+                cmd = "/usr/bin/python "+psetvar[10][1]+" "+psetvar[11][1]+" &"
+                print cmd
+                os.spawnl(os.P_NOWAIT, cmd)
+                wuplog="/media/ramdisk/chat-session.log"
+                wupf = subprocess.Popen(['tail','-F',wuplog],\
+                stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                wupp = select.poll()
+                wupp.register(wupf.stdout)
+                piexchangebyte(False,RC_SUCCNOSTD)
+            elif (cmd[:8] == "WUP SHUT"):
+                prun("sudo kill -9 $(ps -ef | grep 'python run.py' | grep -v grep  | awk '{print $2}')")
+            elif (cmd[:8] == "WUP READ"):
+                if wupp.poll(1):
+                    whatsup_read(wupf)
+                else:
+                    piexchangebyte(False,RC_FAILNOSTD)
             elif (cmd[:3] == "WUP"):
                 whatsup_send(cmd[4:])
             else:
