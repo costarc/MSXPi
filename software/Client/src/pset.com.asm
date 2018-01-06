@@ -32,14 +32,32 @@
 ; File history :
 ; 0.1    : Initial version.
 
-        ORG     $0100
+    ORG     $0100
 
-        LD      BC,4
-        LD      DE,MYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-        CALL    PRINTPISTDOUT
-        JP      0
+    LD      BC,4
+    LD      DE,MYCMD
+    CALL    DOSSENDPICMD
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_WAIT
+    SCF
+    RET     NZ
+WAITLOOP:
+    CALL    CHECK_ESC
+    JR      C,PRINTPIERR
+    CALL    CHKPIRDY
+    JR      C,WAITLOOP
+    ; Loop waiting download on Pi
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_FAILED
+    JR      Z,SHOWSTD
+    CP      RC_SUCCESS
+    JR      NZ,WAITLOOP
+
+SHOWSTD:
+    CALL    PRINTPISTDOUT
+    RET
 
 PRINTPIERR:
         LD      HL,PICOMMERR

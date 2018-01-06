@@ -116,6 +116,7 @@ cat <<EOF >/lib/systemd/system/msxpi-monitor.service
 Description=Monitor MSXPi Server control Process
 
 [Service]
+User=pi
 WorkingDirectory=/home/pi/msxpi
 ExecStart=/home/pi/msxpi/msxpi-monitor
 

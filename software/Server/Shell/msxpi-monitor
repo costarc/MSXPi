@@ -1,4 +1,5 @@
 #!/bin/bash
+set -x
 # 2017-11-23 : Added ramdisk setup
 # 2017-11-18 : Added switch to python or C version
 
@@ -7,10 +8,12 @@ FILELIST="senddatablock.msx uploaddata.msx secsenddata.msx pplay.sh pshut.sh"
 USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 
 if [[ $USEROOT -eq 1 ]];then
-    PREFIX=
+    PREFIX="sudo -i -u pi "
 else
-    PREFIX="sudo "
+    PREFIX=
 fi
+
+sudo kill -9 $(ps -ef | grep 'python /home/msxpi/msxpi-server.py' | grep -v grep  | awk '{print $2}')
 
 msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 if [[ $msxpisrv -eq 1 ]];then
@@ -44,7 +47,7 @@ if [[ $# -eq 1 && $R -eq 1 ]]; then
 fi
 
 echo "Restarting msxpi-server"
-$MSXPISERVER
+$MSXPISERVER &
 
 rm /home/pi/msxpi/msxpi-update*
 
@@ -84,6 +87,26 @@ if [[ $state -eq 0 ]];then
     if [[ `echo $ret | grep -c "initialisation failed"` -eq 1 ]];then
         shutdown -h now
     fi
+fi
+
+# whatsup server
+
+wupsvc=$(grep -c "1" /media/ramdisk/whatsup.state)
+if [[ $wupsvc -eq 1 ]];then
+    wupph=$(grep "WUPPH=" ${MSXPIHOME}/msxpi.ini | cut -f2 -d"=")
+    wuppw=$(grep "WUPPW=" ${MSXPIHOME}/msxpi.ini | cut -f2- -d"=")
+    wuptst=$(echo $wuppw | wc -c)
+    if [[ $wuptst -gt 10 ]];then
+        nohup /usr/bin/python /home/pi/yowsup/run.py ${wupph} ${wuppw} &
+        echo "2" > /media/ramdisk/whatsup.state
+    else
+       echo "WhatsUp service failed to start"
+    fi
+fi
+wupsvc=$(grep -c "3" /media/ramdisk/whatsup.state)
+if [[ $wupsvc -eq 1 ]];then
+    sudo kill -9 $(ps -ef | grep 'python /home/pi/yowsup/run.py' | grep -v grep  | awk '{print $2}')
+    echo "0" > /media/ramdisk/whatsup.state
 fi
 done
 

@@ -551,6 +551,7 @@ def pcd(basepath, path):
     return [rc, newpath]
 
 def pset(psetvar, cmd):
+    piexchangebyte(NoTimeOutCheck,RC_WAIT)
     rc = RC_SUCCESS
     buf = "Pi:Error\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
@@ -584,7 +585,8 @@ def pset(psetvar, cmd):
                 rc = RC_FAILED
                 buf = "Pi:Erro setting parameter"
 
-    senddatablock(True,buf,0,len(buf),True)
+    sendstdmsg(RC_FAILED,buf)
+    #senddatablock(True,buf,0,len(buf),True)
     #print "pset:Exiting rc:",hex(rc)
     return rc
 
@@ -865,20 +867,9 @@ def whatsup_send(msg):
     
     wupmsg = msg[msg.index(" "):].strip()
     wupurl = "http://localhost:8888/sendmessage?msisdn=" + wupphone + "&messagetype=T&message=" + wupmsg
+    os.system(str("/usr/bin/wget -q -O /dev/null '" + wupurl + "'"))
+    piexchangebyte(NoTimeOutCheck,RC_SUCCNOSTD)
     print "whatsup:http req is:",wupurl
-    parser = MyHTMLParser()
-    try:
-        htmldata = urllib2.urlopen(wupurl.decode()).read()
-        parser = MyHTMLParser()
-        parser.feed(htmldata)
-        buf = " ".join(parser.HTMLDATA)
-        piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-        rc = senddatablock(TimeOutCheck,buf,0,len(buf),True)
-    except urllib2.HTTPError as e:
-        rc = RC_FAILED
-        print "whatsup:http error "+ str(e)
-        sendstdmsg(rc,str(e))
-
 def whatsup_read(f):
     msg = f.stdout.readline()
     if len(msg) > 1:
@@ -930,7 +921,7 @@ psetvar = [['PATH','/home/msxpi'], \
            ['free','free'], \
            ]
 
-WUPGRP = {'none' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '-447840924680-1515184325@g.us' : 'MSXPiTest'}
+WUPGRP = {'none' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '447840924680-1515184325@g.us' : 'MSXPiTest'}
 
 # Initialize disk system parameters
 sectorInfo = [0,0,0,0]
@@ -1252,9 +1243,10 @@ try:
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
             elif (cmd[:8] == "WUP CONN"):
                 print "Connecting to WhatsUp..."
-                cmd = "/usr/bin/python "+psetvar[10][1]+" "+psetvar[11][1]+" &"
-                print cmd
-                os.spawnl(os.P_NOWAIT, cmd)
+                #cmd = "nohup /usr/bin/python /home/pi/yowsup/run.py "+psetvar[10][1]+" "+psetvar[11][1] + "&"
+                # set svc state for msxpi-monitor to pickup and process
+                os.system("echo "+psetvar[10][1]+" "+psetvar[11][1]+">/media/ramdisk/wup.config")
+                os.system("echo 1 > /media/ramdisk/whatsup.state")
                 wuplog="/media/ramdisk/chat-session.log"
                 wupf = subprocess.Popen(['tail','-F',wuplog],\
                 stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -1262,12 +1254,21 @@ try:
                 wupp.register(wupf.stdout)
                 piexchangebyte(False,RC_SUCCNOSTD)
             elif (cmd[:8] == "WUP SHUT"):
-                prun("sudo kill -9 $(ps -ef | grep 'python run.py' | grep -v grep  | awk '{print $2}')")
+                # set svc state for msxpi-monitor to pickup and process
+                os.system("echo 3 > /media/ramdisk/whatsup.state")
+                piexchangebyte(False,RC_SUCCNOSTD)
             elif (cmd[:8] == "WUP READ"):
+                piexchangebyte(NoTimeOutCheck, RC_WAIT)
                 if wupp.poll(1):
                     whatsup_read(wupf)
                 else:
                     piexchangebyte(False,RC_FAILNOSTD)
+            """elif (cmd[:9] == "WUP prun1"):
+                print "sending reg.p1"
+                prun("cat /home/msxpi/reg.p1")
+            elif (cmd[:9] == "WUP prun2"):
+                print "sending reg.p1"
+                prun("cat /home/msxpi/reg.p2")"""
             elif (cmd[:3] == "WUP"):
                 whatsup_send(cmd[4:])
             else:
@@ -1279,4 +1280,3 @@ try:
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
     print "Terminating msxpi-server"
-
