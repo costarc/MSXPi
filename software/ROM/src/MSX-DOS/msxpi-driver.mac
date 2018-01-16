@@ -587,6 +587,7 @@ MSXPILOADERROR:
 
 ; Verify is command has STD parameters specified
 ; Examples:
+; call mspxi("pdir")  -> will print the output
 ; call mspxi("0,pdir")  -> will not print the output
 ; call msxpi("1,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)

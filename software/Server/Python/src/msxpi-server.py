@@ -15,6 +15,8 @@ import array
 import socket
 import errno
 import select
+import base64
+from random import randint
 
 version = "0.8.2"
 build   = "20171230.00077"
@@ -873,11 +875,16 @@ def whatsup_send(msg):
 def whatsup_read(f):
     msg = f.stdout.readline()
     if len(msg) > 1:
+        print msg
         msga = msg.split(":")
-        sender = msga[0]
-        phone = msga[1]
-        text = msga[2]
-
+        if len(msga) >= 3:
+            sender = msga[0]
+            phone = msga[1]
+            text = ":".join(msga[2:])
+        else:
+            phone=''
+            sender=''
+            text=msg
         if phone in WUPGRP:
             phone = WUPGRP[phone]
         elif phone.find("@") > 0:
@@ -886,7 +893,10 @@ def whatsup_read(f):
         if phone.find("-") > 0:
             phone = phone[:phone.index("-")]+"-Group"
 
-        buf = sender+"@"+phone+":"+text
+        if (sender!=''):
+            buf = sender+"@"+phone+":"+text
+        else:
+            buf = text
         piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
         rc = senddatablock(NoTimeOutCheck,buf,0,len(buf),True)
     else:
@@ -921,7 +931,7 @@ psetvar = [['PATH','/home/msxpi'], \
            ['free','free'], \
            ]
 
-WUPGRP = {'none' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '447840924680-1515184325@g.us' : 'MSXPiTest'}
+WUPGRP = {'554191119326-1399041454@g.us' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '447840924680-1515184325@g.us' : 'MSXPiTest'}
 
 # Initialize disk system parameters
 sectorInfo = [0,0,0,0]
@@ -1243,6 +1253,8 @@ try:
                         piexchangebyte(NoTimeOutCheck,RC_FAILED)
             elif (cmd[:8] == "WUP CONN"):
                 print "Connecting to WhatsUp..."
+                osender=""
+                ophone=""
                 #cmd = "nohup /usr/bin/python /home/pi/yowsup/run.py "+psetvar[10][1]+" "+psetvar[11][1] + "&"
                 # set svc state for msxpi-monitor to pickup and process
                 os.system("echo "+psetvar[10][1]+" "+psetvar[11][1]+">/media/ramdisk/wup.config")
@@ -1263,12 +1275,23 @@ try:
                     whatsup_read(wupf)
                 else:
                     piexchangebyte(False,RC_FAILNOSTD)
-            """elif (cmd[:9] == "WUP prun1"):
-                print "sending reg.p1"
-                prun("cat /home/msxpi/reg.p1")
-            elif (cmd[:9] == "WUP prun2"):
-                print "sending reg.p1"
-                prun("cat /home/msxpi/reg.p2")"""
+            elif (cmd[:6] == "WUPreg"):
+                #wupfakeimei=base64.b64encode(bytes(str(randint(10**15,(10**16)-1))))+'='
+                wupfakeimei=str(randint(10**15,(10**16)-1))
+                wupsplt=cmd.split(" ")
+                os.system("echo cc="+str(wupsplt[9])+" >/home/pi/yowsup/config")
+                os.system("echo phone="+str(wupsplt[7])+" >>/home/pi/yowsup/config")
+                os.system("echo id="+wupfakeimei+" >>/home/pi/yowsup/config")
+                os.system("echo password= >>/home/pi/yowsup/config")
+                #wupcmd="cat /home/pi/yowsup/env_android.py.template | sed 's/myfakeemei/"+wupfakeimei+"/' > /home/pi/yowsup/yowsup/env/env_android.py"
+                wupcmd="/usr/bin/python /home/pi/yowsup/yowsup-cli registration --requestcode sms --config /home/pi/yowsup/config -E android"
+                print wupcmd
+                if (os.system(wupcmd) == 0):
+                    print "WUP registration successful"
+                    piexchangebyte(False,RC_SUCCNOSTD)
+                else:
+                    print "WUP registration failed"
+                    piexchangebyte(False,RC_FAILNOSTD)
             elif (cmd[:3] == "WUP"):
                 whatsup_send(cmd[4:])
             else:

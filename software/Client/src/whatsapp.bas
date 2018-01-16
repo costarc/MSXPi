@@ -1,5 +1,5 @@
 1 clear 500,&hAFFF:BUF=&HB000
-2 cc$="351":ph$="966764458":pw$=""
+2 cc$="":ph$="":pw$=""
 10 CLS:CH$="MSXPiTest":NK$="* msxpi *"
 20 PRINT "MSXPi WhatsUp Client"
 21 print "===================="
@@ -13,7 +13,7 @@
 1310 PRINT
 1400 KEY (1) ON:KEY (2) ON:KEY (3) ON:KEY (4) ON:KEY (5) ON:KEY (6) ON
 1410 TIME=0
-1450 IF TIME < 150 THEN GOTO 1450
+1450 IF TIME < 300 THEN GOTO 1450
 1455 KEY (1) OFF:KEY (2) OFF:KEY (3) Off:KEY (4) Off:KEY (5) Off:KEY (6) OFF
 1460 COM$="WUP READ":GOSUB 50000
 1470 if bs > 0 then print
@@ -76,22 +76,22 @@
 16190 if RC<>E0 AND RC<>EB THEN ?"Error. Registration request failed":END
 16200 print "You should receive a SMS with a code"
 16210 input "Type the code here:";cd$
-16220 com$="prun /usr/bin/python /home/pi/yowsup/yowsup-cli registration --register "+cd$+" --phone "+cc$+ph$+" --cc "+cc$
+16220 com$="WUPreg /usr/bin/python /home/pi/yowsup/yowsup-cli registration --register "+cd$+" --phone "+cc$+ph$+" --cc "+cc$
 16230 print "Command for MSXPi:";com$
 16240 gosub 50000:PR=1:gosub 52030
 16500 REM Now search for the password in the data returned by MSXPi
 16510 RC=PEEK(BUF):IF RC<>E0 THEN ?"Registration failed":end
 16520 sz=peek(buf+1)+256*peek(buf+2):?:?"Wait... locating your credentials..."
 16530 for i=buf+3 to buf+3+sz
-16540 if chr$(peek(i))="p" and  chr$(peek(i+1))="w" and peek(i+2) = 34 and  chr$(peek(i+3)) = ":" then goto 16600
+16540 if chr$(peek(i))="p" and  chr$(peek(i+1))="w" and peek(i+2) = 34 and  chr$(peek(i+3)) = ":" then N=I+4:goto 16600
+16545 if chr$(peek(i))="p" and  chr$(peek(i+1))="w" and chr$(peek(i+2)) = ":" then N=I+3:goto 16600
 16550 nexti:?"Error. Did not find the registration confirmation in the response"
 16560 end
 16600 REM Found start of the password
-16610 N = I + 4
-16620 IF PEEK(N) <> 34 THEN ?"Error. Did not find the registration confirmation in the response": END
+16610 REM
 16630 P$=""
 16640 for m = N+1 to N+35
-16650 P=PEEK(M):IF P=34 THEN GOTO 16700
+16650 P=PEEK(M):IF P=34 or P=32  or P=10 or P=13 THEN GOTO 16700
 16660 PW$=PW$+CHR$(P)
 16670 NEXT M:?"Error. Did not find the registration confirmation in the response"
 16680 END
@@ -106,7 +106,7 @@
 16820 ? "save ";chr$(34);"wup.bas";chr$(34);",a"
 16830 ? "run"
 16840 end
-16900 com$="pset set WUPPH "+CC$+PH$:GOSUB50000:? "... ";
+16900 com$="pset set WUPPH "CC$+PH$:GOSUB50000:? "... ";
 16910 COM$="pset set WUPPW "+PW$:GOSUB50000
 16920 return
 20000 C$=inkey$:if C$<>"" then goto 20070
