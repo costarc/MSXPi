@@ -1,4 +1,4 @@
-10 BLOAD"msxpiext.bin",r:CLS:CH$="#openmsx":NK$="* msxpi *"
+10 CLS:CH$="#openmsx":NK$="* msxpi *"
 20 PRINT "MSXPi IRC Client"
 29 REM Define FN Keys and Constants
 30 BUF=&HB000:gosub 10000:gosub 30000

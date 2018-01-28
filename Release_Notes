@@ -35,7 +35,7 @@ List of features
 - BASIC client with command interpreter to use the interface
 - CPLD and JTAG for logic reprogramming
 - EPROM socketed to allow removal for updates using an EPROM programmer
-- Two 16K EPRON banks switched by jumper (can have two different ROM versions on same EPROM)
+- Two 16K EPROM banks switched by jumper (can have two different ROM versions on same EPROM)
 - Compatible with all RPi models
 
 
