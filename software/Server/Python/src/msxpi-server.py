@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.8.2"
-build   = "20171230.00077"
+build   = "20180128.00077"
 TRANSBLOCKSIZE = 1024
 
 # Pin Definitons
@@ -347,7 +347,7 @@ def prun(cmd):
     else:
         cmd = cmd.replace('::','|')
         try:
-            p = Popen(str(cmd), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
             if (len(buf) == 0):
                 buf = p.stderr.read()
@@ -370,7 +370,6 @@ def ploadr(basepath, file):
     if (msxbyte[1]==SENDNEXT):
         if (file.strip() <> ''):
             fpath = getpath(basepath, file)
-            
             # local file?
             if (fpath[0] < 2):
                 try:
@@ -427,6 +426,22 @@ def ploadr(basepath, file):
                        
     #print "pload:Exiting with rc = ",hex(rc)
     return rc
+
+def ploadbin(basepath, path):
+    file = path.decode().strip()
+    if os.path.isfile(file):
+        rc = RC_SUCCESS
+        fpath = getpath(basepath, file)
+        print "ploadbin:Calling ploadbin.msx "
+        GPIO.cleanup()
+        cmd = "sudo " + RAMDISK + "/ploadbin.msx " + fpath[1]
+        p = subprocess.call(cmd.decode(), shell=True)
+        GPIO.setwarnings(False)
+        init_spi_bitbang()
+        GPIO.output(rdyPin, GPIO.LOW)
+    else:
+        print("file not found")
+        piexchangebyte(NoTimeOutCheck,ABORT)
 
 def getpath(basepath, path):
     path=path.strip().rstrip(' \t\r\n\0')
@@ -736,37 +751,33 @@ def pdate():
     #print "pdate:Exiting with rc=",hex(rc)
     return rc
 
-def pwifi(cmd,wifissid,wifipass):
+def pwifi(cmd1,wifissid,wifipass):
     rc = RC_FAILED
-
+    cmd=cmd1.decode().strip()
+    #print(cmd,len(cmd))
     if (len(cmd)==0):
-        sendstdmsg(rc,"Pi:Error\nSyntax: pwifi display | set")
-    elif (cmd[:1] == "d" or cmd[:1] == "D"):
-        prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+        #print("Pi:Error\nSyntax: pwifi display | set")
+        prun("echo Syntax: pwifi display \| set")
     elif (cmd[:1] == "s" or cmd[:1] == "S"):
         buf = "country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
         buf = buf + "\tssid=\"" + wifissid
         buf = buf + "\"\n\tpsk=\"" + wifipass
         buf = buf + "\"\n}\n"
 
-        subprocess.check_output("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak".split(" "))
-        try:
-            f = open(RAMDISK + "/wpa_supplicant.conf","w")
-            f.write(buf)
-            f.close()
-            subprocess.check_output("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf".split(" "))
-            cmd = cmd.strip().split(" ")
-            if (len(cmd) == 2 and cmd[1] == "wlan1"):
-                prun("sudo ifdown wlan1 && sleep 1 && sudo ifup wlan1")
-            else:
-                prun("sudo ifdown wlan0 && sleep 1 && sudo ifup wlan0")
-        except:
-            print "Error writting supplicant file"
-            subprocess.check_output("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf.bak /etc/wpa_supplicant/wpa_supplicant.conf".split(" "))
-            sendstdmsg(rc,"Pi:Error writing /etc/wpa_supplicant/wpa_supplicant.conf")
-
+        os.system("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak")
+        f = open(RAMDISK + "/wpa_supplicant.conf","w")
+        f.write(buf)
+        f.close()
+        os.system("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf")
+        cmd = cmd.strip().split(" ")
+        if (len(cmd) == 2 and cmd[1] == "wlan1"):
+            prun("sudo ifdown wlan1 && sleep 1 && sudo ifup wlan1")
+        else:
+            prun("sudo ifdown wlan0 && sleep 1 && sudo ifup wlan0")
         rc = RC_SUCCESS
-
+    else:
+        prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+    
     print "pwifi:Exiting with rc=",hex(rc)
     return rc
 
@@ -986,13 +997,17 @@ try:
             elif (cmd[:3] == "FMT"):
                 piexchangebyte(NoTimeOutCheck,RC_UNDEFINED)
             elif (cmd[:4] == "prun" or cmd[:4] == "PRUN"):
-                print "Command:",cmd
                 prun(cmd[5:])
+            elif (cmd[:8] == "ploadrom" or cmd[:8] == "PLOADROM"):
+                GPIO.cleanup()
+                ploadr(psetvar[0][1],cmd[9:])
+                init_spi_bitbang()
             elif (cmd[:6] == "ploadr" or cmd[:6] == "PLOADR"):
                 GPIO.cleanup()
                 ploadr(psetvar[0][1],cmd[7:])
                 init_spi_bitbang()
-                #GPIO.output(rdyPin, GPIO.LOW)
+            elif (cmd[:8] == "ploadbin" or cmd[:6] == "PLOADBIN"):
+                ploadbin(psetvar[0][1],cmd[9:])
             elif (cmd[:4] == "pdir" or cmd[:4] == "PDIR"):
                 pdir(psetvar[0][1],cmd[5:])
     
@@ -1006,7 +1021,7 @@ try:
 
             elif (cmd[:3] == "SYN" or \
                   cmd[:9] == "chkpiconn" or \
-                  cmd[:9] == "chkpiconn"):
+                  cmd[:9] == "CHKPICONN"):
                 piexchangebyte(TimeOutCheck,READY)
 
             elif (cmd[:5] == "pcopy" or cmd[:5] == "PCOPY"):

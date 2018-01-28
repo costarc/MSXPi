@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 0.8.2                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.8.2  : Commands ported to support Python version
 ; 0.8.1  : Client now uses protocol-v2.
 ; 0.7    : Revised to sync with other component´s verisons
 ; 0.6d   : Changed header of Client to: <size><exec address><rom binary>
@@ -89,6 +90,39 @@ CMDNOTFOUND:
 ; MSX PI Interface Front-End Commands start here
 ; ================================================================
 
+PSET:
+PWIFI:
+PCD:
+DIRPROG:
+RUNPICMD:
+        DEC     BC
+        CALL    SENDPICMD
+        JP      C,PRINTPIERR
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCNOSTD
+        JR      NZ,WAITLOOP
+        RET
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
 ;-----------------------
 ; CLS                  |
 ;-----------------------
@@ -125,23 +159,83 @@ HELP:
             RET
 
 LOADROMPROG:
-            CALL    SENDPICMD
-            JP      C,LOADPROGERR
-            CALL    LOADROM
-            JP      C,LOADPROGERR
+        CALL    SENDPICMD
+        JP      C,LOADPROGERR
+; wait RPi to load the program
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+
+WAITLOOPL1:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
+        CALL    CHKPIRDY
+        JR      C,WAITLOOPL1
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_FAILED
+        JR      Z,PRTSTD
+        CP      RC_SUCCESS
+        JR      Z,PRTSTD
+        CP      RC_SUCCNOSTD
+        JR      NZ,WAITLOOPL1
+
+LOADREADY:
+        LD      HL,LOADPROGRESS
+        CALL    PRINT
+        CALL    LOADROM
+
 LOADROMPROG1:
-            PUSH    AF
-            CALL    PRINTPISTDOUT
-            CALL    PRINTNLINE
-            POP     AF
-            CP      ENDTRANSFER
-            RET     NZ
-            ;JP      $0000
-            LD      A,(SLOTRAM1)
-            LD      H,40h ; b01000000 = page 1
-            CALL    ENASLT
-            LD      HL,($4002)
-            JP      (HL)
+        CALL    PIEXCHANGEBYTE
+        PUSH    HL
+        PUSH    AF
+        CALL    PRINTPISTDOUT
+        POP     AF
+        POP     HL
+        CP      ENDTRANSFER
+        LD      A,(SLOTRAM1)
+        LD      H,40h ; b01000000 = page 1
+        CALL    ENASLT
+        LD      HL,($4002)
+        JP      (HL)
+PRTSTD:
+        CALL    PRINTPISTDOUT
+        JP      PRINTNLINE
+
+;-----------------------
+; LOADROM              |
+;-----------------------
+LOADROM:
+; Will load the ROM directly on the destiantion page in $4000
+; Might be slower, but that is what we have so far...
+;Get number of bytes to transfer
+        LD      A,STARTTRANSFER
+        CALL    PIEXCHANGEBYTE
+        RET     C
+        CP      STARTTRANSFER
+        SCF
+        RET     NZ
+        LD      A,(SLOTRAM1)
+        LD      H,40h ; b01000000 = page 1
+        CALL    ENASLT
+        LD      DE,$4000
+        CALL    RECVDATABLOCK
+        JR      C,LOADPROGERR
+; File load successfully.
+; Return C reseted, and A = filetype
+LOADROMEND:
+        LD      HL,($4002)    ; ROM exec address
+        LD      A,ENDTRANSFER
+        OR      A             ;Reset C flag
+        RET
+
+LOADPROGERR:
+        LD      HL,LOADPROGERRMSG
+        CALL    PRINT
+        SCF
+        RET
 
 ; OTHER ERROR
 PRINTPARMERR:
@@ -151,124 +245,9 @@ PRINTPARMERR0:
             RET
 
 ;-----------------------
-; LOADROM              |
-;-----------------------
-LOADROM:
-; Will load the ROM directly on the destiantion page in $4000
-; Might be slower, but that is what we have so far...
-;Get number of bytes to transfer
-            LD      A,STARTTRANSFER
-            CALL    PIEXCHANGEBYTE
-            RET     C
-            CP      STARTTRANSFER
-            SCF
-            CCF
-            RET     NZ
-            CALL    READDATASIZE
-            LD      HL,$4000
-LOADROM0:
-            PUSH    BC
-            PUSH    HL
-            LD      DE,$9000
-
-; LOAD1BLOCK READ 1 BLOCK OF DATA FROM PI
-; AND RETURN IN BC THE ACTUAL NUMBER OF BYTES
-
-            LD      A,GLOBALRETRIES
-LOADROMRETRY:
-; retries
-            PUSH    AF
-            CALL    RECVDATABLOCK
-            JR      NC,LOADROM1
-            POP     AF
-            DEC     A
-            JR      NZ,LOADROMRETRY
-            LD      A,ABORT
-            POP     HL
-            POP     BC
-            OR      A
-            RET
-
-LOADROM1:
-            LD      A,'.'
-            CALL    CHPUT
-            POP     AF
-            LD      DE,$9000
-;Get rom address to write
-            POP     HL
-            PUSH    BC
-            CALL    LOADTOROM
-            POP     BC
-            EX      (SP),HL
-
-;DE now contain ROM address
-            SBC     HL,BC
-            JR      C,LOADROMEND
-            JR      Z,LOADROMEND
-            LD      B,H
-            LD      C,L
-            POP     HL
-            JR      LOADROM0
-
-LOADTOROM:
-            LD      A,(SLOTRAM1)
-LOADTOROM0:
-            PUSH    AF
-            PUSH    BC
-            PUSH    DE
-            LD      B,A
-            LD      A,(DE)
-            LD      E,A
-            LD      A,B
-            CALL    WRSLT
-            POP     DE
-            POP     BC
-            INC     HL
-            INC     DE
-            DEC     BC
-            LD      A,B
-            OR      C
-            JR      Z,LOADTOROM1
-            POP     AF
-            JR      LOADTOROM0
-LOADTOROM1:
-            POP     AF
-            RET
-
-; File load successfully.
-; Return C reseted, and A = filetype
-LOADROMEND:
-            POP     HL          ;Discard next rom address, not needed anymore
-            LD      A,ENDTRANSFER
-            CALL    PIEXCHANGEBYTE
-            CP      ENDTRANSFER
-            SCF
-            CCF
-            RET     NZ
-            LD      HL,$4002    ; ROM exec address
-            LD      A,(SLOTRAM1)
-            PUSH    AF
-            CALL    RDSLT
-            LD      E,A
-            POP     AF
-            PUSH    DE
-            INC     HL
-            CALL    RDSLT
-            POP     HL
-            LD      H,A
-            LD      A,ENDTRANSFER
-            OR      A               ;Reset C flag
-            EI
-            RET
-
-LOADPROGERR:
-            LD      HL,LOADPROGERRMSG
-            JP      PRINT
-
-LOADPROGERRMSG:
-            DB      "Error loading file",13,10,0
 
 LOADBINPRG:
+            DEC     BC
             CALL    SENDPICMD
             JP      C,LOADPROGERR
             CALL    LOADBINPROG
@@ -294,23 +273,6 @@ RESETPROG:
         LD      DE,CHKPICONNSTR
         CALL    CHKPICONN
         RET
-
-
-DIRPROG:
-TYPEPROG:
-RUNPICMD:
-            CALL    SENDPICMD
-            JP      C,PRINTPIERR
-            LD      A,SENDNEXT
-            CALL    PIEXCHANGEBYTE
-            CALL    PRINTPISTDOUT
-            CALL    PRINTNLINE
-            RET
-
-PRINTPIERR:
-
-            LD      HL,PICOMMERR
-            JP      PRINT
 
 GETPOINTERPRG:
             DB      "GETPOINTER "
@@ -371,54 +333,58 @@ NOT_READY:  DB      0AFH
 
 TITLE:
             DB      "MSXPi Hardware Interface v0.7",13,10
-            DB      "MSXPi Cloud OS (Client) v0.8.1",13,10
-            DB      "(c) Ronivon C. Costa,2017",13,10
+            DB      "MSXPi Cloud OS (Client) v0.8.2",13,10
+            DB      "(c) Ronivon C. Costa,2017-2018",13,10
             DB      "TYPE HELP for available commands",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
-HLPTXT:     DB      "BASIC CHKPICONN CLS PDIR HELP PLOADBIN PLOADROM PTYPE #(Pi command) PRESET",13,10,0
-;DB      "CD",34,"<url>|dir",34," DIR "
-;DB      "LOAD ",34,"<url>|file",34,"<,R>  "
-;DB      "PIPOWEROFF PWD SET WIFI",13,10
-            DB      00
+HLPTXT:     DB      "BASIC CHKPICONN CLS PCD PDIR HELP PLOADBIN PLOADR PRUN PRESET PSET PWIFI",13,10,TEXTTERMINATOR
 
+            DB      00
 
 PROMPT:
-            DB      "CMD:",0
+            DB      "CMD:",TEXTTERMINATOR
 
 LOADERRMSG:
             DB      "Error "
 LOADMSG:
             DB      "Loading a program from Raspbery PI ",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 FNOTFOUND:
             DB      "File not Found.",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 PICOMMERR:
             DB      "Communication Error",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 NOCMDMSG:
             DB      "Command not found",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 PARMERRMSG: DB      "Syntax error in command",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 PIOFFLINE:  DB      "Raspberry PI not responding",13,10
             DB      "Verify if server App is running",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 PIONLINE:   DB      "Rasperry PI is online",13,10
-            DB      00
+            DB      TEXTTERMINATOR
 
 PIAPPMSG:   DB      "Rasperry PI App internal status is "
-            DB      00
+            DB      TEXTTERMINATOR
 
 MSGPAUSE:   DB      "Enter..."
-            DB      00
+            DB      TEXTTERMINATOR
+
+LOADPROGERRMSG:
+            DB      "Error loading file",13,10,TEXTTERMINATOR
+
+
+LOADPROGRESS:
+            DB      "Loading game...",TEXTTERMINATOR
 
 ; ==================================================================
 ; TABLE OF COMMANDS IMPLEMENTED IN THIS FRONT-END
@@ -427,46 +393,53 @@ MSGPAUSE:   DB      "Enter..."
 COMMANDLIST:
 
 RUNPICMDSTR:
-            DB      "#",0
+            DB      "prun",TEXTTERMINATOR
             DW      RUNPICMD
 
 CLSSTR:
-            DB      "CLS",0
+            DB      "CLS",TEXTTERMINATOR
             DW      CLS
 
 EXITSTR:
 
-            DB      "BASIC",0
+            DB      "BASIC",TEXTTERMINATOR
             DW      EXIT
 
 HELPSTR:
-            DB      "HELP",0
+            DB      "HELP",TEXTTERMINATOR
             DW      HELP
+
 LOADROMSTR:
-            DB      "PLOADROM",0
+            DB      "PLOADR",TEXTTERMINATOR
             DW      LOADROMPROG
 
 LOADBINSTR:
-            DB      "PLOADBIN",0
+            DB      "PLOADBIN",TEXTTERMINATOR
             DW      LOADBINPRG
 
 CHKPICONNSTR:
-            DB      "CHKPICONN",0
+            DB      "CHKPICONN",TEXTTERMINATOR
             DW      CHKPICONN
 
 RESETSTR:
-            DB      "PRESET",0
+            DB      "PRESET",TEXTTERMINATOR
             DW      RESETPROG
 
-MORESTR:
-            DB      "PTYPE",0
-            DW      TYPEPROG
-
 DIRSTR:
-            DB      "PDIR",0
+            DB      "PDIR",TEXTTERMINATOR
             DW      DIRPROG
 
-ENDOFCMDS:  DB      00
+PCDCMDSTR:
+            DB      "PCD",TEXTTERMINATOR
+            DW      PCD
+
+            DB      "PSET",TEXTTERMINATOR
+            DW      PSET
+
+            DB      "PWIFI",TEXTTERMINATOR
+            DW      PWIFI
+
+ENDOFCMDS:  DB      TEXTTERMINATOR
 
 ; ==================================================================
 ; VARIABLES AND BUFFERS USED IN THIS FRONT-END

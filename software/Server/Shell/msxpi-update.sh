@@ -57,6 +57,9 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/pshut.sh
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/senddatablock.msx
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/secsenddata.msx
 $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/ploadbin.msx
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/layer.py
+$GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/env_android.py
 
 /bin/mv msxpi-monitor     $MSXPIHOME/
 /bin/mv msxpi-server      $MSXPIHOME/
@@ -66,6 +69,8 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 /bin/mv pplay.sh          $MSXPIHOME/
 /bin/mv pshut.sh          $MSXPIHOME/
 /bin/mv *.msx             $MSXPIHOME/
+/bin/mv layer.py          /home/pi/yowsup/
+/bin/mv env_android.py    /home/pi/yowsup/yowsup/env/
 
 /bin/chmod 755 $MSXPIHOME/*.sh $MSXPIHOME/msxpi-monitor \
                $MSXPIHOME/msxpi-server* $MSXPIHOME/*.msx 2>/dev/null
@@ -73,7 +78,7 @@ $GETCMD --append-output=/tmp/msxpi_error.log $FILESERVER/uploaddata.msx
 # Create the update .bat to run from MSX-DOS
 echo "pcd $FILESERVER/MSXPi-DOS" > MSXPIUP1.BAT.0
 $GETCMD -o /tmp/msxpi_error.log $FILESERVER/MSXPi-DOS/
-FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | grep -v "Name" | grep -v "Parent")
+FILELIST=$(/bin/cat index.html |/bin/grep "a href="| /usr/bin/cut -f6 -d">"|/usr/bin/cut -f1 -d"<" | /bin/grep -v "DS_Store" | /bin/grep -v "Name" | /bin/grep -v "Parent" | /bin/grep -v -i "pcopy.com")
 
 for FILE in $FILELIST
 do

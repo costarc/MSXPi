@@ -141,18 +141,22 @@ wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/senddatablock.c
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/uploaddata.c
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/secsenddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/ploadbin.c
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Python/src/msxpi-server.py
 cc -Wall -pthread -o msxpi-server      msxpi-server.c  -lpigpio -lrt -lcurl
 cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
 cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
 cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
+cc -Wall -pthread -o ploadbin.msx      ploadbin.c      -lpigpio -lrt -lcurl
 mv msxpi-server *.msx $MSXPIHOME/
 chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
 
 cd $MSXPIHOME/disks/
 rm -f msxpiboot.dsk msxpitools.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk -O msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk  -O msxpiboot.dsk
 wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpitools.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk  -O msxpiboot-dos1.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpiboot-dos2.dsk
 
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor

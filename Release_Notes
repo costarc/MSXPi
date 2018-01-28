@@ -1,0 +1,49 @@
+MSXPi v0.8.2 Release Notes
+==========================
+
+
+This version contains all improvements made to all software components. There are changes to the ROM, BIOS, CALL commands, MSXPi-Client and MSX-DOS commands.
+The server is officially written in Python, and the C version won't be updated anymore - support will still be available.
+
+What can be done with MSXPi
+---------------------------
+
+The MSXPi interface is fully open source, and anyone can develop more applications.
+Currently available functionalities and applications:
+
+- Update of MSX-DOS date and time at boot time
+- Config RPi wifi
+- Run commands on RPi and see output on MSX screen
+- Access RPi sd card: list and copy files, load .roms and .bin programs.
+- Access Internet: list and copy files, load .roms and .bin programs.
+- Use disk images on RPi sd card and boot from them into MSX-DOS
+- Play music files on RP, control volume and music loops
+- Connect to IRC and chat
+- Connect to WhatsUp and chat. Client allows also to register the phone on WhatsUp (experimental, do no user your main whatsUp phone).
+
+
+List of features
+----------------
+
+- Server written in Python
+- Mass transfer performed by C external program, for better performance
+- Online updates to all software from a http repository
+- Demonstration clients for IRC and WhatsApp, functional.
+- Support for both access to SD card on RPi, and remote network files - can list, copy files, run rooms
+- MSX-DOS commands to use the interface
+- CALL commands to use the interface from BASIC
+- BASIC client with command interpreter to use the interface
+- CPLD and JTAG for logic reprogramming
+- EPROM socketed to allow removal for updates using an EPROM programmer
+- Two 16K EPRON banks switched by jumper (can have two different ROM versions on same EPROM)
+- Compatible with all RPi models
+
+
+Known Bugs
+----------
+
+Problem: Occasionally, there might happen that some commands get out of sync. This can be identified by screen being filled with dots.
+Workaround: This happens more frequently when lots of reads and writes are happening, such as when running msxpiupd.bat. Try running the command again. If RPi does not recover, then reboot RPi.
+
+Problem: Sometimes commands returns "Communication Error".
+Workaround: Run PRESET and PDIR, sometimes it recovers from the problem. If it does not, restart RPi.

@@ -476,7 +476,7 @@ LOADBINPROG:
         call    PIEXCHANGEBYTE
         cp      STARTTRANSFER
         scf
-        ccf
+; why this here?? ->        ccf
         ret     nz
 
 ; get filesize from PI and put in bc
