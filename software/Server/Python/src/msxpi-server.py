@@ -992,6 +992,8 @@ try:
                 if (numdrives<2):
                     numdrives += 1
             elif(cmd[:6] == "DRIVES"):
+                if numdrives == 0:
+                    numdrives = 2
                 piexchangebyte(NoTimeOutCheck,numdrives)
                 numdrives = 0
             elif (cmd[:3] == "FMT"):

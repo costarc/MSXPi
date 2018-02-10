@@ -5,7 +5,7 @@ export PI=192.168.1.11
 export HW="8b"
 export REV="7"
 export ROMBANK1=./target/msxpi-dos_16k.rom
-export ROMBANK2=~/Public/msx/galaga.rom   
+export ROMBANK2=./target/msxpi-dos_16k.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 
 if [[ "$HW" == "8b" ]];then
