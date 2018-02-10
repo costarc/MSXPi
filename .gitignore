@@ -5,3 +5,12 @@
 *.bak
 .DS_Store
 software/zout/**
+*.lck
+*.qws
+*.rpt
+*.summary
+*.flock
+*.cdb
+*.hdb
+*.db_info
+*.tmw_info
