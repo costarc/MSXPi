@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.8.2"
-build   = "20180128.00077"
+build   = "20200221.00077"
 TRANSBLOCKSIZE = 1024
 
 # Pin Definitons
@@ -573,8 +573,6 @@ def pset(psetvar, cmd):
     buf = "Pi:Error\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
 
-    print "pset: Starting:",cmd
-    #pset display
     if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
         s = str(psetvar)
         buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
@@ -588,8 +586,9 @@ def pset(psetvar, cmd):
                     psetvar[index][1] = str(cmd[2])
                     found = True
                     buf = "Pi:Ok\n"
+                    rc_text = psetvar[index][0];
                     break
-                
+
             if (not found):
                 for index in range(7,len(psetvar)):
                     if (psetvar[index][0] == "free"):
@@ -597,15 +596,19 @@ def pset(psetvar, cmd):
                         psetvar[index][1] = str(cmd[2])
                         found = True
                         buf = "Pi:Ok\n"
+                        rc_text = psetvar[index][0];
                         break
+
             if (not found):
                 rc = RC_FAILED
+                rc_text = '';
                 buf = "Pi:Erro setting parameter"
 
     sendstdmsg(RC_FAILED,buf)
     #senddatablock(True,buf,0,len(buf),True)
     #print "pset:Exiting rc:",hex(rc)
-    return rc
+    rc_text = psetvar[index][0];
+    return rc,rc_text
 
 
 def readf_tobuf(fpath,buf,ftype):
@@ -922,7 +925,7 @@ def whatsup_read(f):
 
 psetvar = [['PATH','/home/msxpi'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/msxpitools.dsk'], \
+           ['DRIVE1','disks/50dicas.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
@@ -1019,7 +1022,11 @@ try:
                     psetvar[0][1] = str(newpath[1])
                    
             elif (cmd[:4] == "pset" or cmd[:4] == "PSET"):
-                pset(psetvar,cmd[5:])
+                rc, rc_text = pset(psetvar,cmd[5:])
+                if (rc_text  == "DRIVE0"):
+                    drive0Data = msxdos_inihrd(psetvar[1][1]);
+                if (rc_text  == "DRIVE1"):
+                    drive1Data = msxdos_inihrd(psetvar[2][1]);
 
             elif (cmd[:3] == "SYN" or \
                   cmd[:9] == "chkpiconn" or \
