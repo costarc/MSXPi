@@ -96,7 +96,7 @@ architecture rtl of MSXInterface is
 begin
 
 	LED <= not SPI_RDY_s;
-	WAIT_n <= '0' when SPI_RDY_s = '1' and MSXPIVer(3) = '1' else 'Z';
+	WAIT_n <= '0' when SPI_en_s = '1' and MSXPIVer(3) = '1' else 'Z';
 	
 	readoper   <= not (IORQ_n or RD_n);
 	writeoper  <= not (IORQ_n or WR_n);
