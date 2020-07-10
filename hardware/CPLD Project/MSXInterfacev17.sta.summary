@@ -3,19 +3,19 @@ TimeQuest Timing Analyzer Summary
 ------------------------------------------------------------
 
 Type  : Setup 'SPI_SCLK'
-Slack : -16.200
-TNS   : -350.900
+Slack : -16.100
+TNS   : -351.100
 
 Type  : Hold 'SPI_SCLK'
 Slack : 5.800
 TNS   : 0.000
 
 Type  : Recovery 'SPI_SCLK'
-Slack : -13.900
-TNS   : -83.900
+Slack : -14.000
+TNS   : -84.700
 
 Type  : Removal 'SPI_SCLK'
-Slack : 6.800
+Slack : 6.900
 TNS   : 0.000
 
 Type  : Minimum Pulse Width 'SPI_SCLK'

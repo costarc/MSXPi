@@ -51,7 +51,7 @@ PORT (
 	IORQ_n	: IN STD_LOGIC;
 	RD_n		: IN STD_LOGIC;
 	WR_n		: IN STD_LOGIC;
-	BUSDIR	: OUT STD_LOGIC;
+	WAIT_n	: OUT STD_LOGIC;
 	--
 	SPI_CS	: OUT STD_LOGIC;
 	SPI_SCLK	: IN STD_LOGIC;
@@ -66,7 +66,7 @@ END MSXInterface;
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
+		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "1000";
 		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
 		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
 		constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -96,7 +96,7 @@ architecture rtl of MSXInterface is
 begin
 
 	LED <= not SPI_RDY_s;
-	BUSDIR <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
+	WAIT_n <= '0' when SPI_RDY_s = '1' and MSXPIVer(3) = '1' else 'Z';
 	
 	readoper   <= not (IORQ_n or RD_n);
 	writeoper  <= not (IORQ_n or WR_n);
