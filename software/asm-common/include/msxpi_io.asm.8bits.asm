@@ -81,11 +81,15 @@ CHKPIRDYOK:
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
+            in      a,(CONTROL_PORT2)
+            cp      08h ; MSXPi with support to /wait ?
+            jr      nc,PIREADBYTE1    ;yes, does support /wait
+
+PIREADBYTE0:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
             xor     a                   ; do not use xor to preserve c flag state
             out     (CONTROL_PORT1),a    ; send read command to the interface
-;in      a,(DATA_PORT1)
             call    CHKPIRDY            ;wait interface transfer data to pi and
                                         ; pi app processing
                                         ; no ret c is required here, because in a,(7) does not reset c flag
@@ -98,7 +102,11 @@ PIREADBYTE1:
 ;-----------------------
 PIWRITEBYTE:
             push    af
+            in      a,(CONTROL_PORT2)
+            cp      08h ; MSXPi with support to /wait ?
+            jr      nc,PIWRITEBYTE1    ;yes, does support /wait
             call    CHKPIRDY
+PIWRITEBYTE1:
             pop     af
             out     (DATA_PORT1),a       ; send data, or command
             ret
@@ -108,7 +116,6 @@ PIWRITEBYTE:
 ;-----------------------
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
-            call    CHKPIRDY
-            in      a,(DATA_PORT1)       ; read byte
+            call    PIREADBYTE
             ret
 
