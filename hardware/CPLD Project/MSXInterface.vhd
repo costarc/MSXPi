@@ -42,7 +42,7 @@
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
-use work.msxpi_package.all;
+--use work.msxpi_package.all;
 
 ENTITY MSXInterface IS
 PORT ( 
@@ -63,21 +63,32 @@ PORT (
 );
 END MSXInterface;
 
-library ieee;
-use ieee.std_logic_1164.all;
-package msxpi_package is
-		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "1000";
-		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
-		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
-		constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
-		constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
-		constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-		constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
-		constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
-		constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
-end msxpi_package;
+--library ieee;
+--use ieee.std_logic_1164.all;
+--package msxpi_package is
+--		constant	MSXPIVer	: STD_LOGIC_VECTOR(3 DOWNTO 0) := "0100";
+--		constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
+--		constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+--		constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
+--		constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
+--		constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
+--		constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+--		constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
+--		constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
+--end msxpi_package;
 
 architecture rtl of MSXInterface is
+
+	constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0100";
+	constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
+	constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+	constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
+	constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
+	constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
+	constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+	constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
+	constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
+
 	type fsm_type is (idle, prepare, transferring);
 	signal spi_state	: fsm_type := idle;
 	

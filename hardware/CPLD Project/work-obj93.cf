@@ -1,0 +1,7 @@
+v 4
+file . "MSXInterface_tb.vhd" "9dae758558e2bccc83be301150c0a22206ae456d" "20200711114437.415":
+  entity msxinterface_tb at 1( 0) + 0 on 41;
+  architecture tb of msxinterface_tb at 8( 127) + 0 on 42;
+file . "MSXInterface.vhd" "7beb6e838b1e8edbc2a3cca88a47650e1ae3a292" "20200711114437.230":
+  entity msxinterface at 42( 1813) + 0 on 39;
+  architecture rtl of msxinterface at 80( 3008) + 0 on 40;
