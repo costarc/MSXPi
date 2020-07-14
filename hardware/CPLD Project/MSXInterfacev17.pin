@@ -66,7 +66,7 @@ GND+                         : 2         :        :                   :         
 VCCINT                       : 3         : power  :                   : 3.3V    :           :                
 A[7]                         : 4         : input  : 3.3-V LVTTL       :         :           : Y              
 SPI_MOSI                     : 5         : output : 3.3-V LVTTL       :         :           : Y              
-WAIT_n                       : 6         : output : 3.3-V LVTTL       :         :           : N              
+WAIT_n                       : 6         : output : 3.3-V LVTTL       :         :           : Y              
 TDI                          : 7         : input  : 3.3-V LVTTL       :         :           : N              
 LED                          : 8         : output : 3.3-V LVTTL       :         :           : Y              
 D[0]                         : 9         : bidir  : 3.3-V LVTTL       :         :           : Y              

@@ -38,7 +38,7 @@ set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 set_global_assignment -name AUTO_PARALLEL_EXPANDERS OFF
 set_global_assignment -name SYNTH_TIMING_DRIVEN_SYNTHESIS OFF
 set_global_assignment -name OPTIMIZE_MULTI_CORNER_TIMING ON
-set_global_assignment -name STATE_MACHINE_PROCESSING "MINIMAL BITS"
+set_global_assignment -name STATE_MACHINE_PROCESSING "ONE-HOT"
 set_global_assignment -name SAFE_STATE_MACHINE ON
 set_global_assignment -name LIMIT_AHDL_INTEGERS_TO_32_BITS ON
 set_global_assignment -name ALM_REGISTER_PACKING_EFFORT HIGH
@@ -76,4 +76,4 @@ set_location_assignment PIN_34 -to SPI_SCLK
 set_global_assignment -name MAX7000_DEVICE_IO_STANDARD "3.3-V LVTTL"
 set_location_assignment PIN_12 -to SPI_RDY
 set_location_assignment PIN_8 -to LED
-set_location_assignment PIN_6 -to BUSDIR
+set_location_assignment PIN_6 -to WAIT_n
