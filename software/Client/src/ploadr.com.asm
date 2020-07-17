@@ -39,25 +39,20 @@ LOADROMPROG:
         LD      DE,LOADROMCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-; wait RPi to load the program
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,PRINTPIERR
+
 WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        IN      A,(CONTROL_PORT1)
+        OR      A
+        JR      NZ,WAITLOOP
+
+  ;  check return code
+        CALL    PIREADBYTE
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
         CP      RC_SUCCNOSTD
         JR      Z,LOADREADY
         CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
+        JR      NZ,PRINTPIERR
 LOADREADY:
 
         LD      HL,LOADPROGRESS
@@ -65,7 +60,7 @@ LOADREADY:
         CALL    LOADROM
 
 LOADROMPROG1:
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         PUSH    HL
         PUSH    AF
         CALL    PRINTPISTDOUT
@@ -89,15 +84,9 @@ PRINTPIERR:
 ; LOADROM              |
 ;-----------------------
 LOADROM:
-; Will load the ROM directly on the destiantion page in $4000
+; Will load the ROM directly on the destination page in $4000
 ; Might be slower, but that is what we have so far...
 ;Get number of bytes to transfer
-        LD      A,STARTTRANSFER
-        CALL    PIEXCHANGEBYTE
-        RET     C
-        CP      STARTTRANSFER
-        SCF
-        RET     NZ
         LD      DE,$4000
         CALL    RECVDATABLOCK
         JR      C,LOADPROGERR

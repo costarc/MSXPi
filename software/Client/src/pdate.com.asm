@@ -54,76 +54,47 @@
 ; Communication error?
         JR      C,PRINTPIERR
 
-; -------------------------------------------------
-; Sync protocol. You should not have to change this
-; -------------------------------------------------
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-
 WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-
-; Command successful, then we need to read the data
-; sent by RPi. No stdout.
-        CP      RC_SUCCNOSTD
-        JR      Z,MYCOMMAND
-
-; There is data plus stdout to show
-        CP      RC_SUCCESS
+        IN      A,(CONTROL_PORT1)
+        OR      A
         JR      NZ,WAITLOOP
-        CALL    MYCOMMAND
-        JP      PRINTPISTDOUT
 
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
-
+        CALL    PDATE
+        CALL    PRINTPISTDOUT
+        RET
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
 ; --------------------------------
-MYCOMMAND:
+PDATE:
 ; set date
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+
+        CALL    PIREADBYTE
         LD      L,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      H,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      D,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      E,A
         LD      C,$2B
         CALL    BDOS
 
 ; set time
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      H,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      L,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      D,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      E,A
         LD      C,$2D
         CALL    BDOS
         RET
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
 
 ; Replace with your command name here
 CMDSTR:  DB      "PDATE"

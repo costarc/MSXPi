@@ -39,32 +39,14 @@
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
 
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCNOSTD
-        JR      NZ,WAITLOOP
-        RET
+        CALL    PIREADBYTE
+        JP      PRINTPISTDOUT
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-DIRCMD: DB      "PDIR",0
+DIRCMD: DB      "PDIR"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"

@@ -46,12 +46,6 @@ DOSSENDPICMD:
 ; now check if there are parameters in the command line
         ld      hl,$80
         ld      a,(hl)
-;push    de
-;ld      d,0
-;ld      e,a
-;call    DBGDE
-;pop     de
-        ld      a,(hl)
         ld      b,a
         or      a
         jr      z,DOSSEND1

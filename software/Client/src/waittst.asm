@@ -78,19 +78,39 @@
         ORG     $0100
 
         LD      HL,MYCOMMAND
+        LD      BC,MYCOMMAND_END - MYCOMMAND
+        LD      A,C
+        OUT     (DATA_PORT1),A
+        LD      A,B
+        OUT     (DATA_PORT1),A
 L1:
-        IN      A,(CONTROL_PORT1)
-        OR      A
-        JR      NZ,L1
         LD      A,(HL)
-        OR      A
-        RET     Z
         OUT     (DATA_PORT1),A
         INC     HL
-        JR      L1
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,L1
+L2:
+        IN      A,(DATA_PORT1)
+        LD      C,A
+        IN      A,(DATA_PORT1)
+        LD      B,A
+        DEC     BC
+L3:
+        IN      A,(DATA_PORT1)
+        PUSH    BC
+        CALL    PUTCHAR
+        POP     BC
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,L3
+        RET
 
+MYCOMMAND:  DB      "GBT"
+MYCOMMAND_END:
 
-MYCOMMAND:  DB      "GABARITO"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
             DB      0

@@ -38,27 +38,8 @@ ORG     $0100
     LD      DE,MYCMD
     CALL    DOSSENDPICMD
 
-    LD      A,SENDNEXT
-    CALL    PIEXCHANGEBYTE
-    CP      RC_WAIT
-    SCF
-    RET     NZ
-WAITLOOP:
-    CALL    CHECK_ESC
-    JR      C,PRINTPIERR
-    CALL    CHKPIRDY
-    JR      C,WAITLOOP
-    ; Loop waiting download on Pi
-    LD      A,SENDNEXT
-    CALL    PIEXCHANGEBYTE
-    CP      RC_FAILED
-    JR      Z,SHOWSTD
-    CP      RC_SUCCESS
-    JR      NZ,WAITLOOP
-
-SHOWSTD:
-    CALL    PRINTPISTDOUT
-    RET
+    CALL    PIREADBYTE
+    JP      PRINTPISTDOUT
 
 PRINTPIERR:
     LD      HL,PICOMMERR

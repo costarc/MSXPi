@@ -84,7 +84,6 @@ CHKPIRDYOK:
 ;-----------------------
 PIREADBYTE:
             di                          ; disable interrupts in case /wait is too long
-            call    CHKPIRDY
             in      a,(DATA_PORT1)      ; read byte
             ei
             ret                         ; return in a the byte received
@@ -94,7 +93,6 @@ PIREADBYTE:
 ;-----------------------
 PIWRITEBYTE:
             di
-            call    CHKPIRDY
             out     (DATA_PORT1),a       ; send data, or command
             ei
             ret

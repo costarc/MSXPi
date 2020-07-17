@@ -82,7 +82,6 @@ SENDPICMD:
 ; Save flag C which tells if extra error information is required
 		call    SENDDATABLOCK
         ret
-        RET
 
 ;-----------------------
 ; RECVDATABLOCK        |
@@ -99,14 +98,13 @@ SENDPICMD:
 ;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
 RECVDATABLOCK:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        scf
-        ld      a,RC_OUTOFSYNC
-        ret     nz
-
 ;Get number of bytes to transfer
+        PUSH    BC
+        ld      a,b
+        call    PRINTNUMBER
+        ld      a,c
+        CALL    PRINTNUMBER
+        POP     BC
         call    READDATASIZE
 
 ; CLEAR CRC and save block size
@@ -116,8 +114,7 @@ RECVDATABLOCK:
 
 RECVDATABLOCK1:
 ; send info that msx is in transfer mode
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         ld      (de),a
         xor     h
         ld      h,a
@@ -172,29 +169,7 @@ RECVDATABLOCK_CRCERROR:
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 SENDDATABLOCK:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        scf
-        ld      a,RC_OUTOFSYNC
-        ret     nz
-
-; MSX is synced with PI, then send size of block to transfer
-        push    bc
-        ld      a,b
-        call    PRINTNUMBER
-        ld      a,c
-        call    PRINTNUMBER
-        pop     bc
-        ld      a,c
-        call    PIWRITEBYTE
-        ld      a,b
-        call    PIWRITEBYTE
-        ld      a,b
-        call    PRINTNUMBER
-        ld      a,c
-        call    PRINTNUMBER
-        pop     bc
+        call    SENDDATASIZE
 ; clear H to calculate CRC using simple xor oepration
         ld      h,0
         push    de
@@ -237,7 +212,7 @@ SENDDATABLOCK_CRCERROR:
         scf
         ret
 
-; Return de to original value and flag error
+; Return the original value and flag error
 SENDDATABLOCK_OFFSYNC:
         ld      a,RC_OUTOFSYNC
         scf
@@ -363,19 +338,17 @@ SECSENDDATAEND:
         ret
 
 READDATASIZE:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         ld      c,a
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         ld      b,a
         ret
 
 SENDDATASIZE:
         ld      a,c
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         ld      a,b
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         ret
 
 ;-------------------
@@ -648,21 +621,13 @@ PRINTNUM1:
 
 PRINTPISTDOUT:
         push    af
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        jr      z,PRINTPI0
-        pop     af
-        scf
-        ret
 PRINTPI0:
         call    READDATASIZE
         pop     af
         push    hl
         ld      h,0
 PRINTPI1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         ld      l,a
         xor     h
         ld      h,a
@@ -684,21 +649,13 @@ PRINTPI2:
 
 NOSTDOUT:
         push    af
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        jr      z,NOSTDOUT0
-        pop     af
-        scf
-        ret
 NOSTDOUT0:
         call    READDATASIZE
         pop     af
         push    hl
         ld      h,0
 NOSTDOUT1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         xor     h
         ld      h,a
         dec     bc
