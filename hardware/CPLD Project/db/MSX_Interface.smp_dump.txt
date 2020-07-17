@@ -1,7 +1,6 @@
 
 State Machine - |MSXInterface|spi_state
-Name spi_state.terminate spi_state.transferring spi_state.idle spi_state.prepare 
-spi_state.prepare 0 0 0 0 
-spi_state.idle 0 0 1 1 
-spi_state.transferring 0 1 0 1 
-spi_state.terminate 1 0 0 1 
+Name spi_state.transferring spi_state.idle spi_state.prepare 
+spi_state.prepare 0 0 0 
+spi_state.idle 0 1 1 
+spi_state.transferring 1 0 1 

@@ -93,6 +93,7 @@ def tick_sclk():
     GPIO.output(sclkPin, GPIO.LOW)
 
 def SPI_MASTER_transfer_byte(byte_out):
+    print("Transfer starting")
     byte_in = 0
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
@@ -107,9 +108,11 @@ def SPI_MASTER_transfer_byte(byte_out):
     
         GPIO.output(sclkPin, GPIO.LOW)
 
-    tick_sclk()
-    #time.sleep(1)
+    #time.sleep(2)
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
+    print "transfer_byte:received",bin(byte_in),":",chr(byte_in)
+    GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(rdyPin, GPIO.HIGH)
     return byte_in
 
 def piexchangebyte(mypibyte):
@@ -945,18 +948,20 @@ pcopystat2 = 0
 pcopyindex = 0
 
 init_spi_bitbang()
-GPIO.output(rdyPin, GPIO.HIGH)
 GPIO.output(rdyPin, GPIO.LOW)
 GPIO.output(rdyPin, GPIO.HIGH)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
-GPIO.add_event_detect(csPin, GPIO.FALLING, callback=piexchangebyte)
+#GPIO.add_event_detect(csPin, GPIO.FALLING, callback=piexchangebyte)
 
 try:
-    while True:
-        pass
-        #piexchangebyte(0xab)
+    while True:    
+        print("?")
+        while(GPIO.input(csPin)):
+            pass
+
+        SPI_MASTER_transfer_byte(0xab)
 
 except KeyboardInterrupt:
     GPIO.output(rdyPin, GPIO.LOW)

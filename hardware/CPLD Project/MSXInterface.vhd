@@ -82,8 +82,8 @@ architecture rtl of MSXInterface is
 	constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
 	constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 
-	type fsm_type is (idle, prepare, transferring, terminate);
-	signal spi_state	: fsm_type := idle;
+	type fsm_type is (start,transferring);
+	signal state : fsm_type := start;
 	
 	signal readoper	   : std_logic;
 	signal writeoper	   : std_logic;
@@ -100,21 +100,19 @@ architecture rtl of MSXInterface is
 	
 begin
 
-	LED <= start_fsm;
-	SPI_CS <= not start_fsm;
+    LED <= start_fsm;
+    SPI_CS <= not start_fsm;
     WAIT_n <= wait_n_s;
 	
-	readoper   <= not (IORQ_n or RD_n);
-	writeoper  <= not (IORQ_n or WR_n);
-	--spi_en     <= '1' when (writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) or
+    readoper   <= not (IORQ_n or RD_n);
+    writeoper  <= not (IORQ_n or WR_n);
+    --spi_en     <= '1' when (writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) or
     --                        (readoper = '1' and A = DATAPORT1 and MSXPIVer(3) = '1') else '0';
-	spi_en <= '1' when ((writeoper = '1' or readoper = '1') and A = DATAPORT1) else '0';
+    spi_en <= '1' when ((writeoper = '1' or readoper = '1') and A = DATAPORT1) else '0';
 	
 	
 	--RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
 	--MSXPIVer <= D(3 downto 0) when writeoper = '1' and A = CTRLPORT2 else MSXPIVer;
-	
-	D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
 
 	D <= "0000000" & SPI_RDY when (readoper = '1' and A = CTRLPORT1) else  	
 	     D_buff_pi when readoper = '1' and A = DATAPORT1 else
@@ -127,39 +125,33 @@ begin
     process(spi_en, SPI_RDY)
     begin
         if (SPI_RDY = '0') then
-    	    start_fsm <= '0';
-    		wait_n_s <= 'Z';
+    	      start_fsm <= '0';
+    		   wait_n_s <= 'Z';
         elsif (rising_edge(spi_en)) then
-    		wait_n_s <= '0';
-    	    start_fsm <= '1';
+		      D_buff_msx <= D;
+    		   wait_n_s <= '0';
+    	      start_fsm <= '1';
     	 end if;
     end process;
 
-    spi:process(SPI_SCLK,start_fsm)
+	 process(start_fsm,spi_en,SPI_SCLK)
+	 begin
+	     if (start_fsm = '0') then
+		      state <= start;
+			elsif rising_edge(SPI_SCLK) then
+			    state <= transferring;
+			end if;
+	 end process;
+	 
+    process(SPI_SCLK)
     begin
-    	if (start_fsm = '1' and spi_state = idle) then
-    		spibitcount_s <= 0;
-    		spi_state <= prepare;
-    	elsif rising_edge(SPI_SCLK) then
-    		case spi_state is
-    			when idle =>
-    				spi_state <= idle;
-    			when prepare  =>
-    				D_buff_msx_r <= D_buff_msx;
-    				spi_state <= transferring;
-    			when transferring =>
-    				D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
-    				SPI_MOSI <= D_buff_msx_r(7);
-    				D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
-    				spibitcount_s <= spibitcount_s + 1;
-    				if spibitcount_s > 6 then
-    				    spi_state <= terminate;
-    				end if;
-    			when terminate =>
-    			    spi_state <= idle;
-    		end case;
-    	end if;
-    	
+	     if (state = start) then
+		      D_buff_msx_r <= D_buff_msx;
+        elsif rising_edge(SPI_SCLK) then
+            D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+            SPI_MOSI <= D_buff_msx_r(7);
+            D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
+        end if;
     end process;
 end rtl;
 
