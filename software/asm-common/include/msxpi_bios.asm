@@ -82,6 +82,7 @@ SENDPICMD:
 ; Save flag C which tells if extra error information is required
 		call    SENDDATABLOCK
         ret
+        RET
 
 ;-----------------------
 ; RECVDATABLOCK        |
@@ -179,11 +180,21 @@ SENDDATABLOCK:
         ret     nz
 
 ; MSX is synced with PI, then send size of block to transfer
+        push    bc
+        ld      a,b
+        call    PRINTNUMBER
+        ld      a,c
+        call    PRINTNUMBER
+        pop     bc
         ld      a,c
         call    PIWRITEBYTE
         ld      a,b
         call    PIWRITEBYTE
-
+        ld      a,b
+        call    PRINTNUMBER
+        ld      a,c
+        call    PRINTNUMBER
+        pop     bc
 ; clear H to calculate CRC using simple xor oepration
         ld      h,0
         push    de

@@ -60,12 +60,13 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
+            push    af
             push    bc
             ld      bc,0ffffh
 CHKPIRDY0:
             in      a,(CONTROL_PORT1); verify spirdy register on the msxinterface
-            or        a
-            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
+            or      a
+            jr      z,CHKPIRDYOK    ; rdy signal is zero, RPi is alive
                                     ; for next command/byte
             dec     bc              ; pi not ready, wait a little bit
             ld      a,b
@@ -75,31 +76,16 @@ CHKPIRDYNOTOK:
             scf
 CHKPIRDYOK:
             pop     bc
+            pop     af
             ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            di
-            ;call    CHKPIRDY
-            ;jr      c,PIREADBYTE1
-            xor     a                   ; do not use xor to preserve c flag state
-            out     (CONTROL_PORT1),a    ; send read command to the interface
-            ;in      a,(DATA_PORT1)
-            ;call    CHKPIRDY            ;wait interface transfer data to pi and
-                                        ; pi app processing
-                                        ; no ret c is required here, because in a,(7) does not reset c flag
-PIREADBYTE1:
-            push af
-            ld a,'<'
-            call PUTCHAR
-            pop af
-            in      a,(DATA_PORT1)       ; read byte
-            push af
-            ld a,'>'
-            call PUTCHAR
-            pop af
+            di                          ; disable interrupts in case /wait is too long
+            call    CHKPIRDY
+            in      a,(DATA_PORT1)      ; read byte
             ei
             ret                         ; return in a the byte received
 
@@ -108,9 +94,7 @@ PIREADBYTE1:
 ;-----------------------
 PIWRITEBYTE:
             di
-            ;push    af
-            ;call    CHKPIRDY
-            ;pop     af
+            call    CHKPIRDY
             out     (DATA_PORT1),a       ; send data, or command
             ei
             ret
@@ -121,6 +105,3 @@ PIWRITEBYTE:
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
             jr      PIREADBYTE
-            ;call    CHKPIRDY
-            in      a,(DATA_PORT1)       ; read byte
-            ret

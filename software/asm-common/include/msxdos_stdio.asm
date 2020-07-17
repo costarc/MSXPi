@@ -98,9 +98,7 @@ DOSSEND1:
         pop     bc
         inc     bc
         ld      de,FULLCMD
-        di
         call    SENDPICMD
-        ei
         ret
 
 PUTCHAR:

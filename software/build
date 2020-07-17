@@ -62,6 +62,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpi-io.asm     -o ./target/msxpi-io.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/waittst.asm     -o ./target/waittst.com
 
 # Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT

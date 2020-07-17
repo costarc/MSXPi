@@ -89,18 +89,23 @@ architecture rtl of MSXInterface is
     signal D_buff_msx_r_s : std_logic_vector(7 downto 0);
     signal wait_n_s       : std_logic := 'Z';
     signal rpi_enabled_s  : std_logic := '0';
-    
+    signal msxpi_status_s : std_logic_vector(1 downto 0);
+	 
 begin
 
-    LED <= rpi_enabled_s;
+    LED    <= rpi_enabled_s;
     SPI_CS <= not rpi_enabled_s;
     WAIT_n <= wait_n_s;
     
-    readoper_s  <= not (IORQ_n or RD_n);
+    msxpi_status_s <= "00" when SPI_MISO = '1' and rpi_enabled_s = '0' else
+	                   "01" when SPI_MISO = '0' else
+						    "10";
+						  
+	 readoper_s  <= not (IORQ_n or RD_n);
     writeoper_s <= not (IORQ_n or WR_n);
     rpi_en_s    <= '1' when (A = DATAPORT and (writeoper_s = '1' or readoper_s = '1')) else '0';
 
-    D <= "0000000" & SPI_MISO when (readoper_s = '1' and A = CTRLPORT1) else   
+    D <= "000000" & msxpi_status_s when (readoper_s = '1' and A = CTRLPORT1) else   
         D_buff_pi_s when readoper_s = '1' and A = DATAPORT else
         "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
         "ZZZZZZZZ";

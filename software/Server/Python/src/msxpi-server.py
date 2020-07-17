@@ -82,15 +82,13 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
 def tick_sclk():
     GPIO.output(sclkPin, GPIO.HIGH)
-    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(sclkPin, GPIO.LOW)
-    #time.sleep(SPI_SCLK_LOW_TIME)
 
 def SPI_MASTER_transfer_byte(byte_out):
     #print "transfer_byte:sending",hex(byte_out)
@@ -102,16 +100,14 @@ def SPI_MASTER_transfer_byte(byte_out):
         else:
             GPIO.output(misoPin, GPIO.LOW)
 
-        GPIO.output(sclkPin, GPIO.HIGH)
-        #time.sleep(SPI_SCLK_HIGH_TIME)
-        
+        GPIO.output(sclkPin, GPIO.HIGH)        
         if GPIO.input(mosiPin):
             byte_in |= bit
     
         GPIO.output(sclkPin, GPIO.LOW)
-        #time.sleep(SPI_SCLK_LOW_TIME)
 
-    tick_sclk()
+    GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(rdyPin, GPIO.HIGH)
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
@@ -120,7 +116,6 @@ def piexchangebyte(checktimeout,mypibyte):
     timeout = False
     rc = RC_SUCCESS
     
-    GPIO.output(rdyPin, GPIO.HIGH)
     #GPIO.wait_for_edge(csPin, GPIO.FALLING)
     if (checktimeout):
         while(GPIO.input(csPin)):
@@ -128,15 +123,14 @@ def piexchangebyte(checktimeout,mypibyte):
                 timeout = True
     else:
         while(GPIO.input(csPin)):
-            ()
+            pass
 
     mymsxbyte = SPI_MASTER_transfer_byte(mypibyte)
-    GPIO.output(rdyPin, GPIO.LOW)
 
     if (timeout):
         rc = RC_TIMEOUT
 
-    #print "piexchangebyte: received:",hex(mymsxbyte)
+    print "piexchangebyte: received:",hex(mymsxbyte)
     return [rc,mymsxbyte]
 
 def sendstdmsg(rc, message):
@@ -158,16 +152,16 @@ def recvdatablock(timeoutFlag):
         dsM = piexchangebyte(NoTimeOutCheck,SENDNEXT)
         datasize = dsL[1] + 256 * dsM[1]
         
-        #print "recvdatablock:Received blocksize =",datasize
+        print "recvdatablock:Received blocksize =",datasize
         while(datasize>bytecounter and rc == RC_SUCCESS):
             mymsxbyte = piexchangebyte(TimeOutCheck,SENDNEXT)
             if (mymsxbyte[0] == RC_SUCCESS):
-                #print "recvdatablock:Received byte:",chr(mymsxbyte[1])
+                print "recvdatablock:Received byte:",chr(mymsxbyte[1])
                 buffer.append(mymsxbyte[1])
                 crc ^= mymsxbyte[1]
                 bytecounter += 1
             else:
-                #print "recvdatablock:Error during transfer"
+                print "recvdatablock:Error during transfer"
                 rc = RC_TIMEOUT
 
     if (rc == RC_SUCCESS):
@@ -178,7 +172,7 @@ def recvdatablock(timeoutFlag):
         #else:
             #print "recvdatablock:CRC verified"
 
-    #print "recvdatablock:exiting with rc = ",hex(rc)
+    print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
 def secrecvdata(buffer,initbytepos):
@@ -964,6 +958,8 @@ pcopyindex = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
+GPIO.output(rdyPin, GPIO.HIGH)
+GPIO.output(misoPin, GPIO.HIGH)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 

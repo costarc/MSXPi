@@ -4,47 +4,47 @@ TimeQuest Timing Analyzer Summary
 
 Type  : Setup 'SPI_SCLK'
 Slack : -19.700
-TNS   : -156.500
+TNS   : -157.400
 
 Type  : Setup 'A[0]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[1]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[2]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[3]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[4]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[5]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[6]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'A[7]'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'IORQ_n'
-Slack : -12.900
-TNS   : -103.200
+Slack : -13.000
+TNS   : -103.300
 
 Type  : Setup 'RD_n'
-Slack : -9.000
-TNS   : -72.000
+Slack : -9.100
+TNS   : -72.100
 
 Type  : Hold 'RD_n'
 Slack : 1.900
@@ -92,7 +92,7 @@ TNS   : 0.000
 
 Type  : Recovery 'SPI_SCLK'
 Slack : -13.900
-TNS   : -110.500
+TNS   : -110.600
 
 Type  : Removal 'SPI_SCLK'
 Slack : 6.700
