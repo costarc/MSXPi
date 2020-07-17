@@ -950,6 +950,7 @@ pcopyindex = 0
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 GPIO.output(rdyPin, GPIO.HIGH)
+GPIO.output(misoPin, GPIO.HIGH)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
@@ -961,9 +962,14 @@ try:
         while(GPIO.input(csPin)):
             pass
 
-        SPI_MASTER_transfer_byte(0xab)
+        SPI_MASTER_transfer_byte(0xaa)
+        GPIO.output(misoPin, GPIO.LOW)
+        time.sleep(5)
+        GPIO.output(misoPin, GPIO.HIGH)
+
 
 except KeyboardInterrupt:
     GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(misoPin, GPIO.LOW)
     GPIO.cleanup() # cleanup all GPIO
     print "Terminating msxpi-server"
