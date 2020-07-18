@@ -90,12 +90,12 @@ def tick_sclk():
     GPIO.output(sclkPin, GPIO.HIGH)
     GPIO.output(sclkPin, GPIO.LOW)
 
-def send_byte(byte_out):
+def send_byte(byte_out,rdyPinStatusOnExit=GPIO.LOW):
 
     GPIO.output(misoPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
         pass
-    GPIO.output(misoPin, GPIO.LOW)
+    GPIO.output(misoPin, rdyPinStatusOnExit)
     #print("transfer_byte:sending",hex(byte_out))
 
     tick_sclk()
@@ -107,18 +107,17 @@ def send_byte(byte_out):
         GPIO.output(sclkPin, GPIO.HIGH)    
         GPIO.output(sclkPin, GPIO.LOW)
 
+    # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
-    GPIO.output(rdyPin, GPIO.HIGH)
-    #time.sleep(0.5)
-    GPIO.output(misoPin, GPIO.HIGH)
+    GPIO.output(rdyPin, GPIO.HIGH) 
 
-def receive_byte():
+def receive_byte(rdyPinStatusOnExit=GPIO.LOW):
     byte_in = 0
 
     GPIO.output(misoPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
         pass
-    GPIO.output(misoPin, GPIO.LOW)
+    GPIO.output(misoPin, rdyPinStatusOnExit)
 
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
@@ -127,10 +126,9 @@ def receive_byte():
             byte_in |= bit
         GPIO.output(sclkPin, GPIO.LOW)
 
+    # tick rdyPin once to flag to MSXPi that transfer is completed
     GPIO.output(rdyPin, GPIO.LOW)
     GPIO.output(rdyPin, GPIO.HIGH)
-    #time.sleep(0.5)
-    GPIO.output(misoPin, GPIO.HIGH)
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
@@ -160,6 +158,7 @@ def piexchangebyte(checktimeout,byte_out):
 
         GPIO.output(sclkPin, GPIO.LOW)
 
+    # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
     GPIO.output(rdyPin, GPIO.HIGH)
     #print("piexchangebyte: recv ",hex(byte_in))
@@ -988,7 +987,6 @@ try:
 
         if (rc[0] == RC_SUCCESS):
             cmd = rc[1]
-            print "Received command",cmd
             """ 
             MSX-DOS Driver routines 
             """

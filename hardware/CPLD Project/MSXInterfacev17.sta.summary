@@ -3,88 +3,8 @@ TimeQuest Timing Analyzer Summary
 ------------------------------------------------------------
 
 Type  : Setup 'SPI_SCLK'
-Slack : -19.700
-TNS   : -157.400
-
-Type  : Setup 'A[0]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[1]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[2]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[3]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[4]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[5]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[6]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'A[7]'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'IORQ_n'
-Slack : -13.000
-TNS   : -103.300
-
-Type  : Setup 'RD_n'
-Slack : -9.100
-TNS   : -72.100
-
-Type  : Hold 'RD_n'
-Slack : 1.900
-TNS   : 0.000
-
-Type  : Hold 'A[0]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[1]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[2]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[3]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[4]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[5]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[6]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'A[7]'
-Slack : 5.800
-TNS   : 0.000
-
-Type  : Hold 'IORQ_n'
-Slack : 5.800
-TNS   : 0.000
+Slack : -15.900
+TNS   : -151.800
 
 Type  : Hold 'SPI_SCLK'
 Slack : 5.800
@@ -92,10 +12,10 @@ TNS   : 0.000
 
 Type  : Recovery 'SPI_SCLK'
 Slack : -13.900
-TNS   : -110.600
+TNS   : -83.900
 
 Type  : Removal 'SPI_SCLK'
-Slack : 6.700
+Slack : 6.800
 TNS   : 0.000
 
 Type  : Minimum Pulse Width 'SPI_SCLK'
@@ -104,42 +24,42 @@ TNS   : -119.000
 
 Type  : Minimum Pulse Width 'A[0]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[1]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[2]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[3]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[4]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[5]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[6]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'A[7]'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'IORQ_n'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 Type  : Minimum Pulse Width 'RD_n'
 Slack : -3.500
-TNS   : -70.000
+TNS   : -14.000
 
 ------------------------------------------------------------
