@@ -34,66 +34,43 @@
 TEXTTERMINATOR: EQU     '$'
 BDOS:           EQU     5
 DOSSENDPICMD:
-; Copy our command to the buffer
-        ld      hl,FULLCMD
-        ex      de,hl
-        push    bc
-;CALL    DBGHL
-;CALL    DBGDE
-;CALL    DBGBC
-        ldir
+; check if there are parameters in the command line
+; Input Parameters:
+;  HL = Address of the command
+;  BC = Number of chars in the command 
 
-; now check if there are parameters in the command line
+        push    bc
+        ld      de,FULLCMD
+        ldir
         ld      hl,$80
         ld      a,(hl)
-        ld      b,a
-        or      a
-        jr      z,DOSSEND1
-
-DOSSENDPICMD0:
-; b contain number of chars passed as arguments in the command
         inc     hl
-        call    EATSPACES
-        jr      c,DOSSEND1
-
-; save number of characters in B
-        push    bc
-
-; there are parameters - have to concatenate to our buffer
-DOSSENDPICMD1:
-        ld      a,32
-        ld      (de),a
-        inc     de
-DOSSENDPICMD2:
+        or      a
+        jr      z,SENDCMD  ;There are no parameters, send the command to MSXPi
+        ld      b,a
+        call    EATSPACES  ; send number of chars in A
+        jr      c,SENDCMD  ; found only spaces after command name
+        pop     af         ; discard original command size
+moveparms:
         ld      a,(hl)
         ld      (de),a
-;call    PUTCHAR
         inc     hl
         inc     de
-        djnz    DOSSENDPICMD2
+        djnz    moveparms
 
-; now get number of chars in command line arguments
-        pop     hl
-        ld      l,h
-        ld      h,0
-
-; then get number of chars in our command
-        pop     bc
-
-; and calc the total size of the command line to send to RPi
-        add     hl,bc
-        ld      b,h
+; calc the total size of the command line to send to RPi
+        ld      hl,FULLCMD
+        or      a       ; reset carry so won't affect subtraction
+        ex      de,hl   ; De contain start address, then need to exchange place with DE
+        sbc     hl,de   ; to apply a subtraction and get final command size
+        ld      b,h     ; load size in BC for senddatablock function
         ld      c,l
-        push    bc
-
-DOSSEND1:
-        ld      a,0
-        ld      (de),a
-        pop     bc
-        inc     bc
-        ld      de,FULLCMD
-        call    SENDPICMD
-        ret
+        jr      SENDCMD1
+SENDCMD:
+        pop    bc
+SENDCMD1:
+        ld     hl,FULLCMD
+        jp     SENDDATABLOCK
 
 PUTCHAR:
         push    bc
@@ -107,9 +84,9 @@ PUTCHAR:
         pop     bc
         ret
 
-EATSPACES:
+EATSPACES:    
         ld      a,(hl)
-        cp      32
+        cp      ' '
         jr      nz,EATSPACEEND
         inc     hl
         djnz    EATSPACES
@@ -118,7 +95,6 @@ EATSPACES:
 EATSPACEEND:
         or      a
         ret
-;INCLUDE "debug.asm"
 FULLCMD:equ     $
         ds      256
 

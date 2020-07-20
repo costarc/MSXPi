@@ -37,9 +37,9 @@ ORG     $0100
     LD      BC,4
     LD      DE,MYCMD
     CALL    DOSSENDPICMD
-
-    CALL    PIREADBYTE
-    JP      PRINTPISTDOUT
+    JR      C,PRINTPIERR
+    CALL    PIREADBYTE     ;Read return code but ignores it since we will 
+    JP      PRINTPISTDOUT  ;print either the error message, or data
 
 PRINTPIERR:
     LD      HL,PICOMMERR

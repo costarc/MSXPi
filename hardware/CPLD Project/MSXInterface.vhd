@@ -104,7 +104,7 @@ begin
     writeoper_s <= not (IORQ_n or WR_n);
     rpi_en_s    <= '1' when (A = DATAPORT and (writeoper_s = '1' or readoper_s = '1')) else '0';
 
-    D <= "0000000" & SPI_MISO when (readoper_s = '1' and A = CTRLPORT1) else   
+    D <= "0000000" & (not SPI_MISO) when (readoper_s = '1' and A = CTRLPORT1) else   
          D_buff_pi_s when readoper_s = '1' and A = DATAPORT else
          "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
          "ZZZZZZZZ";

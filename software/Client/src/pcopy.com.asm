@@ -68,7 +68,7 @@ DSKBLOCKSIZE:   EQU 1
         RET     NZ
 WAITLOOP:
         CALL    CHECK_ESC
-        LD      A,RC_ESCAPE
+        LD      A,RC_PROGERROR
         JR      C,PRINTPIERR
         CALL    CHKPIRDY
         JR      C,WAITLOOP

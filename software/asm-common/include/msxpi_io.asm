@@ -60,6 +60,11 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
+      in    a,(CONTROL_PORT1)
+      or    a
+      jr    nz,CHKPIRDY
+      ret
+      
             push    af
             push    bc
             ld      bc,0ffffh

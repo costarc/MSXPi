@@ -70,89 +70,65 @@ SYNCH:
 CHKPICMD:   DB      "SYN",0
 
 ;-----------------------
-; SENDPICMD            |
-;-----------------------
-; Send a command to Raspberry Pi
-; Input:
-;   de = should contain the command string
-;   bc = number of bytes in the command string
-; Output:
-;   Flag C set if there was a communication error
-SENDPICMD:
-; Save flag C which tells if extra error information is required
-		call    SENDDATABLOCK
-        ret
-
-;-----------------------
 ; RECVDATABLOCK        |
 ;-----------------------
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
 ; Input:
-;   de = memory address to write the received data
+;   hl = memory address to write the received data
 ; Output:
 ;   Flag C set if error
 ;   A = error code
-;   de = Original address if routine finished in error,
-;   de = Next current address to write data when terminated successfully
+;   hl = Original address if routine finished in error,
+;   hl = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
 RECVDATABLOCK:
 ;Get number of bytes to transfer
-        PUSH    BC
-        ld      a,b
-        call    PRINTNUMBER
-        ld      a,c
-        CALL    PRINTNUMBER
-        POP     BC
         call    READDATASIZE
 
 ; CLEAR CRC and save block size
-        ld      h,0
+        ld      d,0
         push    bc
-        push    de
+        push    hl
 
 RECVDATABLOCK1:
-; send info that msx is in transfer mode
         call    PIREADBYTE
-        ld      (de),a
-        xor     h
-        ld      h,a
-        inc     de
+        ld      (hl),a
+        xor     d
+        ld      d,a
+        inc     hl
 		dec     bc
         ld      a,b
         or      c
         jr      nz,RECVDATABLOCK1
 
-; Now exchange CRC
+; Now send the CRC
 
-        ld      a,h
-        call    PIEXCHANGEBYTE
+        ld      a,d
+        call    PIWRITEBYTE
 
-; Compare CRC received with CRC calcualted
+; And read the Return Code back
 
-        cp      h
-        jr      nz,RECVDATABLOCK_CRCERROR
+        CALL    PIREADBYTE
+        CP      RC_SUCCESS
+        jr      nz,RECVDATABLOCK_EXIT_ERR
 
-; Discard de, because we want to return current memory address
-
-        pop     af
+; Discard HL in stack, because we want to return current memory address in HL
+        pop     bc
 
 ;Return number of bytes read
-
         pop     bc
-        ld      a,RC_SUCCESS
-        or      a
         ret
 
 ; Return de to original value and flag error
-RECVDATABLOCK_CRCERROR:
-        pop     de
+RECVDATABLOCK_EXIT_ERR:
+        pop     hl
         pop     bc
-        ld      a,RC_CRCERROR
         scf
         ret
 
+SENDPICMD:
 ;-------------------
 ; SENDDATABLOCK    |
 ;-------------------
@@ -161,60 +137,52 @@ RECVDATABLOCK_CRCERROR:
 ; This routine expects PI to send SENDNEXT control byte
 ; Input:
 ;   bc = number of byets to send
-;   de = memory to start reading data
+;   hl = memory to start reading data
 ; Output:
 ;   Flag C set if error
 ;   A = error code
-;   de = Original address if routine finished in error,
-;   de = Next current address to read if finished successfully
+;   hl = Original address if routine finished in error,
+;   hl = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 SENDDATABLOCK:
         call    SENDDATASIZE
-; clear H to calculate CRC using simple xor oepration
-        ld      h,0
-        push    de
+; clear D to calculate CRC using simple xor oepration
+        ld      d,0
+        push    hl
 
 ; loop sending bytes until bc is zero
 SENDDATABLOCK1:
-        ld      a,(de)
-        ld      l,a
-        xor     h
-        ld      h,a
-        ld      a,l
+        ld      a,(hl)
+        ld      e,a
+        xor     d
+        ld      d,a
+        ld      a,e
         call    PIWRITEBYTE
-        inc     de
+        inc     hl
         dec     bc
         ld      a,b
         or      c
         jr      nz,SENDDATABLOCK1
 
 ; Finished sending block of data
-; Now exchange CRC
+; Now send CRC
+        ld      a,d
+        call    PIWRITEBYTE
 
-        ld      a,h
-        call    PIEXCHANGEBYTE
+; And read the Return Code back
+        CALL    PIREADBYTE
+        CP      RC_SUCCESS
+        jr      nz,SENDDATABLOCK_EXIT_ERR
 
-; Compare CRC received with CRC calcualted
-
-        cp      h
-        jr      nz,SENDDATABLOCK_CRCERROR
-
-; Discard de, because we want to return current memory address
+; Discard de, because we want to return current memory address in HL
         pop     af
         ld      a,RC_SUCCESS
         or      a
         ret
 
 ; Return de to original value and flag error
-SENDDATABLOCK_CRCERROR:
-        pop     de
-        ld      a,RC_CRCERROR
-        scf
-        ret
-
-; Return the original value and flag error
-SENDDATABLOCK_OFFSYNC:
-        ld      a,RC_OUTOFSYNC
+SENDDATABLOCK_EXIT_ERR:
+        pop     hl
         scf
         ret
 
@@ -402,7 +370,6 @@ DOWNLOADDATA:
 ; Because of that, we now read back the actual block size that should be read
 
         call    READDATASIZE
-;       call    DBGBC
 
 RETRYLOOP:
 
@@ -620,18 +587,15 @@ PRINTNUM1:
         ret
 
 PRINTPISTDOUT:
-        push    af
 PRINTPI0:
         call    READDATASIZE
-        pop     af
-        push    hl
-        ld      h,0
+        ld      d,0
 PRINTPI1:
         call    PIREADBYTE
-        ld      l,a
-        xor     h
-        ld      h,a
-        ld      a,l
+        ld      e,a
+        xor     d
+        ld      d,a
+        ld      a,e
         cp      10
         jr      nz,PRINTPI2
         call    PUTCHAR
@@ -642,9 +606,9 @@ PRINTPI2:
         ld      a,b
         or      c
         jr      nz,PRINTPI1
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        pop     hl
+        ld      a,d           ; send crc
+        call    PIWRITEBYTE
+        call    PIREADBYTE    ; receive return code, but ignore it.
         ret
 
 NOSTDOUT:
@@ -896,7 +860,6 @@ slotatual:
         DB      00
 subsatual:
         DB      00
-
 
 
 

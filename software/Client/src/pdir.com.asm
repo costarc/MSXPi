@@ -32,21 +32,18 @@
 ; File history :
 ; 0.1    : Initial version.
 
-        ORG     $0100
-
-        LD      BC,4
-        LD      DE,DIRCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
-        CALL    PIREADBYTE
-        JP      PRINTPISTDOUT
+        org     $0100
+        ld      bc,COMMAND_END - COMMAND
+        ld      hl,COMMAND
+        call    DOSSENDPICMD
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        jp      PRINTPISTDOUT
 
 PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
-
-DIRCMD: DB      "PDIR"
+        ld      hl,PICOMMERR
+        jp      PRINT
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
@@ -55,4 +52,10 @@ INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+
+COMMAND:     DB      "PDIR"
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $
+
+
 
