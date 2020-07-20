@@ -539,7 +539,7 @@ def PDIR(path):
     print("pdir:starting ",path)
 
     send_byte(RC_WAIT)
-    GPIO.output(misoPin, GPIO.HIGH)
+    GPIO.output(misoPin, GPIO.LOW)
     rc = RC_SUCCESS
 
     # basepath is global variable
