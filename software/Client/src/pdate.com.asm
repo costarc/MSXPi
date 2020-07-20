@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,8 +31,9 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-;
-;     Parameters:    C = 2BH (_SDATE)
+; 1.0    : For MSXPi interface with /buswait support
+
+;Parameters:    C = 2BH (_SDATE)
 ;HL = Year 1980...2079
 ;D = Month (1=Jan...12=Dec)
 ;E = Date (1...31)
@@ -47,18 +48,13 @@
 ;Results:       A = 00H if time was valid
 
 ; Start of command - You may not need to change this
-        ORG     $0100
-        LD      DE,CMDSTR
-        LD      BC,CMDSTREND-CMDSTR
-        CALL    DOSSENDPICMD
-; Communication error?
-        JR      C,PRINTPIERR
-
-WAITLOOP:
-        IN      A,(CONTROL_PORT1)
-        OR      A
-        JR      NZ,WAITLOOP
-
+        org     $0100
+        ld      bc,COMMAND_END - COMMAND
+        ld      hl,COMMAND
+        call    DOSSENDPICMD
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
         CALL    PDATE
         CALL    PRINTPISTDOUT
         RET
@@ -97,8 +93,13 @@ PRINTPIERR:
         JP      PRINT
 
 ; Replace with your command name here
-CMDSTR:  DB      "PDATE"
-CMDSTREND:  EQU $
+COMMAND:     DB      "PDATE"
+
+; --------------------------------
+; Do not change from this point.
+; --------------------------------
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $
 
 ; --------------------------------------
 ; End of your command

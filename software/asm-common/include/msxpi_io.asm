@@ -60,8 +60,6 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-      ld    a,'.'
-      call  PUTCHAR
       in    a,(CONTROL_PORT1)
       or    a
       jr    nz,CHKPIRDY

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 1.0    : For MSXPi interface with /buswait support
 
         org     $0100
         ld      bc,COMMAND_END - COMMAND

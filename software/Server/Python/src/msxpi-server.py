@@ -450,26 +450,6 @@ def pplay(cmd):
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
-def pdate():
-    rc = RC_FAILED
-
-    now = datetime.datetime.now()
-
-    send_byte(now.year & 0xff)
-    send_byte(now.year >>8)
-    send_byte(now.month)
-    send_byte(now.day)
-    send_byte(now.hour)
-    send_byte(now.minute)
-    send_byte(now.second)
-    send_byte(0)
-    buf = "Pi:Ok\n"
-    senddatablock(True,buf,0,len(buf),True)
-    rc = RC_SUCCESS
-
-    #print "pdate:Exiting with rc=",hex(rc)
-    return rc
-
 def pwifi(cmd1,wifissid,wifipass):
     rc = RC_FAILED
     cmd=cmd1.decode().strip()
@@ -579,6 +559,22 @@ def PDIR(path):
 
     print "pdir:exiting rc:",hex(rc)
     return rc
+
+def PDATE(parms=''):
+    return pdate()
+
+def pdate(parms=''):
+    now = datetime.datetime.now()
+    send_byte(RC_SUCCESS)
+    send_byte(now.year & 0xff)
+    send_byte(now.year >>8)
+    send_byte(now.month)
+    send_byte(now.day)
+    send_byte(now.hour)
+    send_byte(now.minute)
+    send_byte(now.second)
+    send_byte(0)
+    return sendstdmsg(RC_SUCCESS,'Pi:Ok\n')
 
 ""
 """ ============================================================================
