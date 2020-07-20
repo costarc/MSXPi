@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 1.0                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,30 +31,29 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 1.0    : For MSXPi interface with /buswait support
 
-ORG     $0100
-
-    LD      BC,4
-    LD      DE,MYCMD
-    CALL    DOSSENDPICMD
-    JR      C,PRINTPIERR
-    CALL    PIREADBYTE     ;Read return code but ignores it since we will 
-    JP      PRINTPISTDOUT  ;print either the error message, or data
+        org     $0100
+        ld      bc,COMMAND_END - COMMAND
+        ld      hl,COMMAND
+        call    DOSSENDPICMD
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        jp      PRINTPISTDOUT
 
 PRINTPIERR:
-    LD      HL,PICOMMERR
-    CALL    PRINT
-    JP      0
-
-MYCMD:
-    DB      "PRUN"
+        ld      hl,PICOMMERR
+        jp      PRINT
 
 PICOMMERR:
-    DB      "Communication Error",13,10,"$"
+        DB      "Communication Error",13,10,"$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-
+COMMAND:     DB      "prun"
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $

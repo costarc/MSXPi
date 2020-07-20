@@ -43,7 +43,8 @@
 -- 0101: Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44
 -- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
 -- 0111: Rev.4 batch, EPM3064ALC-44 (First public release)
--- 1000: Rev.4 or later with /WAIT mod, or PCB Rev.8, with EPROM, EPM3064ALC-44
+-- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84, not released
+-- 1001: Rev.4 or later with /Wait mod, with EPROM, EPM3064ALC-44
 --
 -- ----------------------------------------------------------------------------------
 library ieee ;
@@ -71,7 +72,7 @@ END MSXInterface;
 
 architecture rtl of MSXInterface is
 
-    constant MSXPIVer   : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1000";
+    constant MSXPIVer   : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
     constant DATAPORT   : STD_LOGIC_VECTOR(7 downto 0) := x"5A";
     constant CTRLPORT1  : STD_LOGIC_VECTOR(7 downto 0) := x"5B";
     constant CTRLPORT2  : STD_LOGIC_VECTOR(7 downto 0) := x"5C";
@@ -144,4 +145,3 @@ begin
         end if;
     end process;
 end rtl;
-

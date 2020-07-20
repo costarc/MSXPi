@@ -132,9 +132,10 @@ def receive_byte():
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
-def sendstdmsg(rc, message):
+def sendstdmsg(message):
     print("sendstdmsg:sending data:")
-    GPIO.output(misoPin, GPIO.LOW)
+    print("===> GPIO.output(misoPin, GPIO.LOW): is this needed here??")
+    #GPIO.output(misoPin, GPIO.LOW)
     return senddatablock(message,0,len(message),True)
 
 def recvdatablock(sizelimit=65535):
@@ -224,7 +225,7 @@ def ploadr(basepath, file):
             except IOError as e:
                 rc = RC_FAILED
                 print "Error opening file:",e
-                sendstdmsg(rc,"Pi:" + str(e))
+                sendstdmsg("Pi:" + str(e))
         #Remote file
         else:
             try:
@@ -232,11 +233,11 @@ def ploadr(basepath, file):
             except urllib2.HTTPError as e:
                 rc = RC_FAILED
                 print "ploadr:http error "+ str(e)
-                sendstdmsg(rc,"Pi:" + str(e))
+                sendstdmsg("Pi:" + str(e))
             except:
                 rc = RC_FAILED
                 print "ploadr:http unknow error"
-                sendstdmsg(rc,"Pi:Error unknow downloading file")
+                sendstdmsg("Pi:Error unknow downloading file")
         if (rc == RC_SUCCESS):
             print("ploadr:Found rom - checking contents")
             if (buf[0]=='A' and buf[1]=='B'):
@@ -254,15 +255,15 @@ def ploadr(basepath, file):
                 init_spi_bitbang()
                 GPIO.output(rdyPin, GPIO.HIGH)
                 GPIO.output(misoPin, GPIO.LOW)
-                sendstdmsg(rc,"Pi:Ok\n")
+                sendstdmsg("Pi:Ok\n")
             else:
                 print "pload:not a ROM file"
                 rc = RC_FAILED
-                sendstdmsg(rc,"Pi:Error - not a ROM file")
+                sendstdmsg("Pi:Error - not a ROM file")
     else:
         print "pload:syntax error in command"
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
+        sendstdmsg("Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
                    
     #print "pload:Exiting with rc = ",hex(rc)
     return rc
@@ -314,13 +315,13 @@ def pcd(basepath, path):
     #print "pcd:starting basepath:path=",basepath + ":" + path
 
     if (path == '' or path.strip() == "."):
-        sendstdmsg(rc,basepath+'\n')
+        sendstdmsg(basepath+'\n')
     elif (path.strip() == ".."):
         rc = RC_SUCCESS
         newpath = basepath.rsplit('/', 1)[0]
         if (newpath == ''):
             newpath = '/'
-        sendstdmsg(rc,str(newpath+'\n'))
+        sendstdmsg(str(newpath+'\n'))
     else:
         #print "pcd:calling getpath"
         urlcheck = getpath(basepath, path)
@@ -331,17 +332,17 @@ def pcd(basepath, path):
             newpath[:3] == "nfs" or \
             newpath[:3] == "smb"):
             rc = RC_SUCCESS
-            sendstdmsg(rc,str(newpath+'\n'))
+            sendstdmsg(str(newpath+'\n'))
         else:
             newpath = str(newpath) #[:len(newpath)-1])
             #print "newpath=",type(newpath),len(newpath)
             if (os.path.isdir(newpath)):
                 rc = RC_SUCCESS
-                sendstdmsg(rc,newpath+'\n')
+                sendstdmsg(newpath+'\n')
             elif (os.path.isfile(str(newpath))):
-                sendstdmsg(rc,"Pi:Error - not a folder")
+                sendstdmsg("Pi:Error - not a folder")
             else:
-                sendstdmsg(rc,"Pi:Error - path not found")
+                sendstdmsg("Pi:Error - path not found")
     
     #print "pcd:newpath =",newpath
     #print "pcd:Exiting rc:",hex(rc)
@@ -426,30 +427,6 @@ def readf_tobuf(fpath,buf,ftype):
     #print "readf_tobuf:Exiting with rc:",hex(rc)
     return [rc, errmgs, buffer]
 
-def pplay(cmd):
-    rc = RC_SUCCESS
-    
-    cmd = "bash " + RAMDISK + "/pplay.sh PPLAY "+cmd+" >" + RAMDISK + "/msxpi.tmp"
-    cmd = str(cmd)
-    
-    #print "pplay:starting command:len:",cmd,len(cmd)
-
-    piexchangebyte(NoTimeOutCheck,RC_WAIT)
-    try:
-        p = subprocess.call(cmd, shell=True)
-        buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
-        if (buf == RC_FAILED):
-            sendstdmsg(RC_SUCCESS,"Pi:Ok\n")
-        else:
-            sendstdmsg(rc,buf)
-    except subprocess.CalledProcessError as e:
-        print "pplay:Error:",p
-        rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Error\n"+str(e))
-    
-    #print "pplay:exiting rc:",hex(rc)
-    return rc
-
 def pwifi(cmd1,wifissid,wifipass):
     rc = RC_FAILED
     cmd=cmd1.decode().strip()
@@ -502,11 +479,11 @@ def PRUN(cmd):
                 if  (len(buf) == 0):
                     buf = str("Pi:Error running command "+cmd+'\n')
             print("prun:calling sendstdmsg")
-            sendstdmsg(rc,buf)
+            sendstdmsg(buf)
         except subprocess.CalledProcessError as e:
             print "Error:",buf
             rc = RC_FAILED
-            sendstdmsg(rc,"Pi:Error\n"+buf+'\n')
+            sendstdmsg("Pi:Error\n"+buf+'\n')
 
     print "prun:exiting rc:",hex(rc)
     return rc
@@ -553,7 +530,7 @@ def PDIR(path):
             except urllib2.HTTPError as e:
                 rc = RC_FAILED
                 print "pdir:http error "+ str(e)
-                sendstdmsg(rc,str(e))
+                sendstdmsg(str(e))
     except Exception as e:
         sendstdmsg(RC_FAILED,'pdir:'+str(e))
 
@@ -575,6 +552,34 @@ def pdate(parms=''):
     send_byte(now.second)
     send_byte(0)
     return sendstdmsg(RC_SUCCESS,'Pi:Ok\n')
+
+def pplay(parms):
+
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
+    rc = RC_SUCCESS
+    
+    cmd = "bash " + RAMDISK + "/pplay.sh PPLAY "+parms+" >" + RAMDISK + "/msxpi.tmp"
+    cmd = str(cmd)
+    
+    print "pplay:starting command:len:",cmd,len(cmd)
+
+    try:
+        p = subprocess.call(cmd, shell=True)
+        buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
+        print("==> Should test for equality or for difference??")
+        if (buf == RC_FAILED):
+            sendstdmsg("Pi:Ok\n")
+        else:
+            sendstdmsg(buf)
+    except subprocess.CalledProcessError as e:
+        print "pplay:Error:",p
+        rc = RC_FAILED
+        sendstdmsg("Pi:Error\n"+str(e))
+    
+    #print "pplay:exiting rc:",hex(rc)
+    return rc
 
 ""
 """ ============================================================================

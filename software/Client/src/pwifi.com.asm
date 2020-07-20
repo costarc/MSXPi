@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,55 +31,29 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 1.0    : For MSXPi interface with /buswait support
 
-        ORG     $0100
-
-        LD      BC,5
-        LD      DE,MYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JR      Z,EXITSTDOUT
-        CP      RC_WAIT
-        SCF
-        RET     NZ
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JR      Z,EXITSTDOUT
-        CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
-
-EXITSTDOUT:
-        CALL    PRINTPISTDOUT
-        JP      0
+        org     $0100
+        ld      bc,COMMAND_END - COMMAND
+        ld      hl,COMMAND
+        call    DOSSENDPICMD
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        jp      PRINTPISTDOUT
 
 PRINTPIERR:
-        LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
-
-MYCMD:  DB      "PWIFI"
+        ld      hl,PICOMMERR
+        jp      PRINT
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
-
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-
-
-
+COMMAND:     DB      "pwifi"
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $

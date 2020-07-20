@@ -4,7 +4,7 @@
 ;|                                                                           |
 ;| Version : 1.0                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -54,9 +54,6 @@ INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-COMMAND:     DB      "PDIR"
+COMMAND:     DB      "pdir"
 COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
 COMMAND_END: EQU $
-
-
-

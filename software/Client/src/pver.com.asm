@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 1.0    : For MSXPi interface with /buswait support
 
         ORG     $0100
 
@@ -43,11 +44,13 @@
         LD      A,9
         JR      DESCHWVER
 ; Print msxpi-server version
-;        LD      DE,MYCMD
-;        LD      BC,MYCMDEND - MYCMD
-;        CALL    DOSSENDPICMD
-;        JP      C,PRINTPIERR
-;        CALL    PRINTPISTDOUT
+;        ld      bc,COMMAND_END - COMMAND
+;        ld      hl,COMMAND
+;        call    DOSSENDPICMD
+;        call    PIREADBYTE    ; read return code
+;        cp      RC_WAIT
+;        call    z,CHKPIRDY
+;        call    PRINTPISTDOUT
 
 ; Print MSXPi ROM version
 ;        CALL    SEARCHMSXPISLOT
@@ -96,6 +99,7 @@ iftable:
         dw      ifv6
         dw      ifv7
         dw      ifv8
+        dw      ifv9
         dw      ifukn
 
 ifv1:   DB      "(0001) Wired up prototype, without EPROM,EPM3064ALC-44","$"
@@ -105,13 +109,10 @@ ifv4:   DB      "(0100) Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits 
 ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44","$"
 ifv6:   DB      "(0110) Wired up prototype, with EPROM, EPM7128SLC-84","$"
 ifv7:   DB      "(0111) General Release Rev.4, EPM3064ALC-44","$"
-ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84","$"
+ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84 (not released)","$"
+ifv9:   DB      "(1001) Modded v0.7 to support /Wait signal. EPM3064ALC-44","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
-
-MYCMD:  EQU     $
-        DB      "PVER"
-MYCMDEND:EQU    $
 
 HWVER:  DB      "Interface version:"
         DB      TEXTTERMINATOR
@@ -132,6 +133,6 @@ INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-
-
-
+COMMAND:     DB      "pdir"
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $

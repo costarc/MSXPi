@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,24 +31,24 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 1.0    : For MSXPi interface with /buswait support
 
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
 
-        ORG     $0100
+; Send command to RPi
+        org     $0100
+        ld      bc,COMMAND_END - COMMAND
+        ld      hl,COMMAND
+        call    DOSSENDPICMD
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        call    COPYFILE
+        call    PRINTPISTDOUT
+        ret
 
-        LD      BC,5
-        LD      DE,PCOPYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
-; SYNC TO RECEIVE FILENAME
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        LD      HL,PICOMMERR
-        JR      C,PRINTERRMSG
-        CP      SENDNEXT
-        JR      NZ,EXITSTDOUT
+COPYFILE:
 
         CALL    INIFCB
 
@@ -354,8 +354,6 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-PCOPYCMD:   DB      "PCOPY"
-LOADROMCMD: DB      "PLOADROM"
 FNTITLE:    DB      "Saving file:$"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PIUNKNERR:  DB      "Unknown error",13,10,"$"
@@ -374,5 +372,10 @@ INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+
+COMMAND:     DB      "pcopy"
+COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
+COMMAND_END: EQU $
+             DS  128
 
 DMA:     EQU    $
