@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 1.0    : I/O re-written to support /wait signal
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -69,6 +70,13 @@ SYNCH:
 
 CHKPICMD:   DB      "SYN",0
 
+RECVDATABLOCK_OLD:
+        push    hl
+        ex      de,hl   ; Received CMD address in DE, but need it in HL
+        call    RECVDATABLOCK
+        ex      de,hl
+        pop     hl
+        ret
 ;-----------------------
 ; RECVDATABLOCK        |
 ;-----------------------
@@ -141,7 +149,14 @@ RECVDATABLOCK_EXIT_ERR:
         scf
         ret
 
+SENDDATABLOCK_OLD:
 SENDPICMD:
+        push    hl
+        ex      de,hl   ; Received CMD address in DE, but need it in HL
+        call    SENDDATABLOCK
+        ex      de,hl
+        pop     hl
+        ret
 ;-------------------
 ; SENDDATABLOCK    |
 ;-------------------

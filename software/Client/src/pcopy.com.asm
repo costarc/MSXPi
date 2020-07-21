@@ -31,7 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 1.0    : For MSXPi interface with /buswait support
+; 1.0    : For MSXPi interface with /wait support
 
 DSKBLOCKSIZE:   EQU 1
 

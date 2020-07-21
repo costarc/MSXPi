@@ -486,8 +486,9 @@ def prun(cmd):
     rc = RC_SUCCESS
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
-    
+    #print("prun:running command")
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
+        send_byte(RC_FAILED)
         sendstdmsg("Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
@@ -495,21 +496,24 @@ def prun(cmd):
         try:
             p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
+            #print("prun:command lengh (hex):",hex(len(buf)))
             if (len(buf) == 0):
                 buf = p.stderr.read()
                 if  (len(buf) == 0):
                     buf = str("Pi:Error running command "+cmd+'\n')
+            send_byte(RC_SUCCESS)
             sendstdmsg(buf)
         except subprocess.CalledProcessError as e:
             print "Error:",buf
             rc = RC_FAILED
+            end_byte(RC_FAILED)
             sendstdmsg("Pi:Error\n"+buf+'\n')
 
     #print "prun:exiting rc:",hex(rc)
     return rc
 
 def pdir(path):
-    #print("pdir:starting ",path)
+    print("pdir:starting ",path)
 
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
@@ -522,7 +526,7 @@ def pdir(path):
     try:
         urlcheck = getpath(basepath, path)
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            #print ("pdir:filesystem access:",urlcheck[1].decode())
+            print ("pdir:filesystem access:",urlcheck[1].decode())
             if (path.strip() == '*'):
                 prun('ls -l ' + urlcheck[1])
             elif ('*' in path):

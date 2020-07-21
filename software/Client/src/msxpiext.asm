@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 1.0                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,7 +30,9 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 1.0    : I/O re-written to support /wait signal
 ; 0.1    : initial version
+;
 TEXTTERMINATOR: EQU     0
 BDOS:           EQU     $F37D
 
@@ -310,9 +312,9 @@ CALL_MSXPI:
         CALL    GETSTRPNT
 
 CALL_MSXPI_PARM:
-; Verify is command has STD parameters specified
+; Verify if command has parameters specified
 ; Examples:
-; call mspxi("0,0000,pdir")  -> will not print the output
+; call msxpi("0,0000,pdir")  -> will not print the output
 ; call msxpi("1,0000,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
         PUSH    DE
@@ -321,30 +323,29 @@ CALL_MSXPI_PARM:
         JR      NC,CALL_MSXPI1
         LD      HL,BUFERRMSG
         CALL    PRINT
-        JR      CALL_MSXPIERR2
+        JP      CALL_MSXPIERR2
 CALL_MSXPI1:
 ; Retrieve position with start of command to HL,
 ; Store buffer address in stack
         EX      (SP),HL
 ; Save command address to stack
+; BC contain lenght of the commands
         PUSH    HL
-        CALL    SENDPICMD
+        CALL    SENDDATABLOCK_OLD
         LD      E,1
-        JR      C,CALL_MSXPI2
-
+        JP      C,CALL_MSXPI2
+        
 ; protocol to detect result of command sent to RPi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR
+        call    PIREADBYTE
+        cp      RC_WAIT
+        jp      nz,CALL_MSXPIERR
+        call    z,CHKPIRDY
+        call    PIREADBYTE
+        cp      RC_WAIT
+        jr      nz,CALL_MSXPI_RC
+        call    PIREADBYTE
 
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+CALL_MSXPI_RC:
         LD      E,1
         CP      RC_FAILED
         JR      Z,CALL_MSXPISTD
@@ -353,7 +354,9 @@ WAITLOOP:
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCNOSTD
         JR      Z,CALL_MSXPI2
-        JR      WAITLOOP
+        LD      HL,txt_undef
+        call    PRINT
+        jr      CALL_MSXPI2
 
 CALL_MSXPISTD:
 ; Restore address of string with command
@@ -382,7 +385,9 @@ CALL_MSXPISTDOUT:
         LD      E,0
         JR      CALL_MSXPI3
 
-BUFERRMSG:DB    "Buffer address invalid",13,10,0
+  
+txt_undef: db "Unexpected return code",13,10,0
+BUFERRMSG: DB    "Buffer address invalid",13,10,0
 CALL_MSXPIBUFER:
         LD      HL,BUFERRMSG
         CALL    PRINT
@@ -415,7 +420,7 @@ CALL_MSXPISAVSTD:
         PUSH    DE
         INC     DE
         INC     DE
-        CALL    RECVDATABLOCK
+        CALL    RECVDATABLOCK_OLD
 
         POP     HL
 
@@ -475,7 +480,7 @@ MSXPISEND1:
         INC     HL
         LD      D,H
         LD      E,L
-        CALL    SENDDATABLOCK
+        CALL    SENDDATABLOCK_OLD
 ; Restore buffer address
         POP     HL
 ; Return return code in 1st buffer position
@@ -513,7 +518,7 @@ MSXPIRECV1:
         INC     DE
         LD      (DE),A
         INC     DE
-        CALL    RECVDATABLOCK
+        CALL    RECVDATABLOCK_OLD
 ; Restore buffer address
         POP     HL
 ; Store return code into 1st position in buffer

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 1.0                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 1.0    : I/O procotol rewritten to support /wait signal on the MSXPi
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -60,9 +61,15 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
+      push  bc
+      ld    b,0
+CHKPIRDY_DELAY:
+      djnz  CHKPIRDY_DELAY
+      pop   bc
+CHKPIRDY_POLL_RPI:
       in    a,(CONTROL_PORT1)
       or    a
-      jr    nz,CHKPIRDY
+      jr    nz,CHKPIRDY_POLL_RPI
       ret
 
 ;-----------------------
