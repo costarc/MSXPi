@@ -64,34 +64,30 @@ CHKPIRDY:
       or    a
       jr    nz,CHKPIRDY
       ret
-      
-            push    af
-            push    bc
-            ld      bc,0ffffh
-CHKPIRDY0:
-            in      a,(CONTROL_PORT1); verify spirdy register on the msxinterface
-            or      a
-            jr      z,CHKPIRDYOK    ; rdy signal is zero, RPi is alive
-                                    ; for next command/byte
-            dec     bc              ; pi not ready, wait a little bit
-            ld      a,b
-            or      c
-            jr      nz,CHKPIRDY0
-CHKPIRDYNOTOK:
-            scf
-CHKPIRDYOK:
-            pop     bc
-            pop     af
-            ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            di                          ; disable interrupts in case /wait is too long
+            ;di                          ; disable interrupts in case /wait is too long
+            call    CHKPIRDY
             in      a,(DATA_PORT1)      ; read byte
-            ei
+            ;ei
             ret                         ; return in a the byte received
+
+;-----------------------
+; PIWRITEBYTE          |
+;-----------------------
+PIWRITEBYTE:
+            ;di
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT1),a       ; send data, or command
+            ;ei
+            ret
+
+; an attempt to address the transmission errors when RPi signals floast too much
 PIREADBYTESEC:
             push   hl
 PIREADBYTESEC0:
@@ -111,16 +107,8 @@ PIREADBYTESEC_OK:
             ld     a,l
             pop    hl
             ret
-            
-;-----------------------
-; PIWRITEBYTE          |
-;-----------------------
-PIWRITEBYTE:
-            di
-            out     (DATA_PORT1),a       ; send data, or command
-            ei
-            ret
 
+; an attempt to address the transmission errors when RPi signals floast too much
 PIWRITEBYTESEC:
             push   af
             call   PIWRITEBYTE

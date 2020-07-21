@@ -96,6 +96,9 @@ begin
     LED    <= rpi_enabled_s;
     SPI_CS <= not rpi_enabled_s;
     WAIT_n <= wait_n_s;
+
+    --WAIT_n <= '0' when state = transferring else
+	--           '0' when SPI_MISO = '0' else 'Z';
     
 	 --   msxpi_status_s <= "00" when SPI_MISO = '1' and rpi_enabled_s = '0' else
      --                  "01" when SPI_MISO = '0' and rpi_enabled_s = '0' else

@@ -107,8 +107,6 @@ def send_byte(byte_out):
     GPIO.output(misoPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
         pass
-    GPIO.output(misoPin, GPIO.LOW)
-    #print("transfer_byte:sending",hex(byte_out))
 
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
@@ -117,13 +115,12 @@ def send_byte(byte_out):
         else:
             GPIO.output(misoPin, GPIO.LOW)
         GPIO.output(sclkPin, GPIO.HIGH)
-        #time.sleep(SPI_SCLK_HIGH_TIME)
         GPIO.output(sclkPin, GPIO.LOW)
 
     # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
-    #time.sleep(SPI_SCLK_HIGH_TIME)
-    GPIO.output(rdyPin, GPIO.HIGH) 
+    GPIO.output(rdyPin, GPIO.HIGH)
+    GPIO.output(misoPin, GPIO.LOW)
 
 def receive_byte_sec():
     rc = RESEND
@@ -145,21 +142,19 @@ def receive_byte():
     GPIO.output(misoPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
         pass
-    GPIO.output(misoPin, GPIO.LOW)
 
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-        GPIO.output(sclkPin, GPIO.HIGH)   
-        #time.sleep(SPI_SCLK_HIGH_TIME)     
+        GPIO.output(sclkPin, GPIO.HIGH)    
         if GPIO.input(mosiPin):
             byte_in |= bit
         GPIO.output(sclkPin, GPIO.LOW)
 
     # tick rdyPin once to flag to MSXPi that transfer is completed
     GPIO.output(rdyPin, GPIO.LOW)
-    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(rdyPin, GPIO.HIGH)
-    #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
+    GPIO.output(misoPin, GPIO.LOW)
+
     return byte_in
 
 def sendstdmsg(message):
@@ -223,15 +218,13 @@ def senddatablock(buf,initpos,blocksize):
         # Receive the CRC calculated by the MSX 
         msxcrc = receive_byte()
         if (msxcrc != crc):
-            #print("senddatablock:wrong crc")
+            print("senddatablock:wrong crc")
             rc = RC_CRCERROR
-    except (RuntimeError, TypeError, NameError):
-        rc = RC_PROGERROR
 
-    try:
         # Send the Return code for MSX
         #print("senddatablock:Sending RC",hex(rc))
         send_byte(rc)
+
     except (RuntimeError, TypeError, NameError):
         rc = RC_PROGERROR
 
@@ -376,7 +369,9 @@ def pcd(basepath, path):
     return [rc, newpath]
 
 def pset(psetvar, cmd):
-    piexchangebyte(NoTimeOutCheck,RC_WAIT)
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
     rc = RC_SUCCESS
     buf = "Pi:Error\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
@@ -455,9 +450,12 @@ def readf_tobuf(fpath,buf,ftype):
     return [rc, errmgs, buffer]
 
 def pwifi(cmd1,wifissid,wifipass):
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
     rc = RC_FAILED
     cmd=cmd1.decode().strip()
-    #print(cmd,len(cmd))
+
     if (len(cmd)==0):
         #print("Pi:Error\nSyntax: pwifi display | set")
         prun("echo Syntax: pwifi display \| set")
@@ -596,7 +594,7 @@ def pplay(parms):
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
-def file_upload(buf,blocksize=16384):
+def file_upload(buf,blocksize=512):
 
     fileidx = 0
     prevfileidx = 0
@@ -605,33 +603,34 @@ def file_upload(buf,blocksize=16384):
 
     while (fileidx < filesize):
         GPIO.output(misoPin, GPIO.LOW)
+
         if blocksize > filesize - fileidx:
             thisblocksize = filesize - fileidx
         else:
             thisblocksize = blocksize
-        
-        print("file_upload:fileidx is ",fileidx)
-        print("file_upload:thisblocksize is ",thisblocksize)
 
-        while receive_byte() != STARTTRANSFER:
-            send_byte(STARTTRANSFER)  
-
-        send_byte(SENDNEXT) 
-
-        senddatablock(buf,fileidx,thisblocksize)
+        #print("file_upload:sending STARTTRANSFER")
+        send_byte(STARTTRANSFER)
+        #print("file_upload:sending block:",thisblocksize)
+        rc = senddatablock(buf,fileidx,thisblocksize)
+        #print("file_upload: senddatablock returned:",hex(rc))
         #print(buf[fileidx:fileidx+thisblocksize]),
         # if block transmitted without errors, get next block
         # otherwise keep the previous index to resend block
-        rc = receive_byte()
-        print("received rc = ",hex(rc))
-        if rc == SENDNEXT:
-            print("file_upload:next block ",fileidx)
+        msxcmd = receive_byte()
+        #print("Received MSX command: ",hex(msxcmd))
+        if msxcmd == SENDNEXT:
             fileidx += thisblocksize
-        else:
+            #print("file_upload:next block ",fileidx)
+            if fileidx >= filesize:
+                #print("file_upload:sending ENDTRANSFER")
+                send_byte(ENDTRANSFER)
+        elif msxcmd == RESEND:
+            #fileidx += thisblocksize
             print("file_upload:resending bad block")
-    
-    print("file_upload:sending ENDTRANSFER")
-    send_byte(ENDTRANSFER)
+        else:
+            print("file_upload:Out of sync")
+
 
 def dos83format(fname):
     name = '        '
@@ -710,29 +709,29 @@ def pcopy(parms):
 
 def ptest(parms=False):
     print("ptest:starting reception test")
-    send_byte_sec(RC_SUCCESS)
+    send_byte(RC_SUCCESS)
 
     errors = 0
     n = 0
 
-    for i in range(0,65536):
-        dsL = receive_byte_sec()
-        dsM = receive_byte_sec()
+    for i in range(0,65535):
+        dsL = receive_byte()
+        dsM = receive_byte()
         m = dsL + 256 * dsM
         if m != n:
             errors += 1
         
-        print(n,m)
+        #print(n,m)
         #time.sleep(0.005)
 
         n += 1
+    print("Receiving errors:",errors)
 
     print("ptest:starting transmission test")
-    for i in range(0,65536):
-        send_byte_sec((i) % 256)
-        send_byte_sec((i) / 256)
+    for i in range(0,65535):
+        send_byte((i) % 256)
+        send_byte((i) / 256)
 
-    print("Receiving errors:",errors)
 
 ""
 """ ============================================================================
@@ -755,23 +754,21 @@ def receivecommand():
     #print("calling recvdatablock")
     return recvdatablock(128)
 
-a = 0
-
 try:
     while True:
-        #receive_byte_sec()
-        print "st_recvcmd: waiting command"
+        print("st_recvcmd: waiting command")
         rc = receivecommand()
-        #print "Received command",rc
+        #print("Received command",rc)
 
-        #if a==1:
         if (rc[0] == RC_SUCCESS):
             try:
                 cmd = str(rc[1].split()[0])
+                parms = str(rc[1][len(cmd)+1:])
+                print("Received:",cmd,parms)
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
-                globals()[cmd](str(rc[1][len(cmd)+1:]))
+                globals()[cmd](parms)
             except Exception, e:
                 print(e)
 

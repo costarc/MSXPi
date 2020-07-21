@@ -52,6 +52,8 @@ COPYFILE:
         jr      c,FOPENERR
         call    SETFILEFCB
         call    GETFILE
+        ld      hl,txt_commerr
+        call    c,PRINT
         call    CLOSEFILE
         ret
 
@@ -67,9 +69,6 @@ PREP_FCB:
         ld      hl,FILEFCB
 PREP_FCB1:
         call    PIREADBYTE
-        push    af
-        call    PUTCHAR
-        pop     af
         ld      (hl),a
         inc     hl
         djnz    PREP_FCB1
@@ -79,31 +78,42 @@ PREP_FCB1:
 ; it will use blocks size fixed on the RPi side
 ; Each block is written to disk after download
 GETFILE:
-        call    CHKPIRDY
-        ld      a,STARTTRANSFER
-        call    PIWRITEBYTE
-        ;LD      A,'.'
-        ;sCALL    PUTCHAR
-        call    PIREADBYTE
-        cp      SENDNEXT
-        jr      nz,GETFILE
 
+        LD      A,'.'
+        CALL    PUTCHAR
+        call    PIREADBYTE
+        cp      ENDTRANSFER
+        scf
+        ccf
+        ret     z
+        cp     STARTTRANSFER
+        jr     z,GETFILEWRITE
+        scf
+        ret 
 GETFILEWRITE:
 ; Buffer where data is stored during transfer, and also DMA for disk access
         ld      hl,DMA
         call    RECVDATABLOCK
-        ld      a,RESEND
-        jr      c,GETFILESENDRC
+        jr      c,GETFILESENDRCERR
 
 ; Set HL with the number of bytes transfered, DE with the DMA adress
 ; When the RECVATABLOCK routine ends, BC number of bytes transfered
 
+GETFILESAVE:
+        ld      a,b
+        or      c
+        ret     z       ; file transfer completed
         ld      h,b
         ld      l,c
         call    DSKWRITEBLK
         ld      a,SENDNEXT
+        call    PIWRITEBYTE
+        jr      GETFILE 
 
-GETFILESENDRC:
+GETFILESENDRCERR:
+        ld      a,'!'
+        call    PUTCHAR
+        ld      a,RESEND
         call    PIWRITEBYTE
         jr      GETFILE 
 
@@ -169,6 +179,8 @@ RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
 
+FILEFCB:    ds     40
+
 INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
@@ -179,6 +191,4 @@ COMMAND:     DB      "pcopy"
 COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
 COMMAND_END: EQU $
              DS  128
-
-FILEFCB:    ds     40
 DMA:     EQU    $

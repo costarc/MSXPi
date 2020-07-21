@@ -33,26 +33,12 @@
 ; 0.1    : Initial version.
 ; 1.0    : For MSXPi interface with /buswait support
 
-;Parameters:    C = 2BH (_SDATE)
-;HL = Year 1980...2079
-;D = Month (1=Jan...12=Dec)
-;E = Date (1...31)
-;Results:       A = 00H if date was valid
-;FFH if date was invalid
-;
-;Parameters:    C = 2DH (_STIME)
-;H = Hours (0...23)
-;L = Minutes (0...59)
-;D = Seconds (0...59)
-;E = Centiseconds (ignored)
-;Results:       A = 00H if time was valid
-
 ; Start of command - You may not need to change this
         org     $0100
         ld      bc,COMMAND_END - COMMAND
         ld      hl,COMMAND
         call    DOSSENDPICMD
-        call    PIREADBYTESEC    ; read return code
+        call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
         CALL    PTEST
@@ -64,9 +50,11 @@ PTEST:
        ld      de,0
 LOOP:
        ld      a,e
-       call    PIWRITEBYTESEC
+       call    PIWRITEBYTE
+       ;call    waitrpi
        ld      a,d
-       call    PIWRITEBYTESEC
+       call    PIWRITEBYTE
+       ;call    waitrpi
        inc     de
        ld      a,d
        or      e
@@ -79,12 +67,14 @@ PTEST_RECV:
        ld      hl,0
        ld      de,0
 LOOP_RECV:
-       call    PIREADBYTESEC
+       call    PIREADBYTE
+       ;call    waitrpi
        cp      l
        jr      z,LOOP1
        inc     de
 LOOP1:
-       call    PIREADBYTESEC
+       call    PIREADBYTE
+       ;call    waitrpi
        cp      h
        jr      z,LOOP2
        inc     de
@@ -100,6 +90,14 @@ LOOP2:
        call    PRINTNUMBER
        ld      a,E
        call    PRINTNUMBER
+       ret
+
+waitrpi:
+       push   bc
+       ld     b,0
+waitpi2:
+       djnz   waitpi2
+       pop    bc
        ret
 
 txt_send: DB      "Errors sending:$"
