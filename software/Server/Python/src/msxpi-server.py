@@ -21,6 +21,7 @@ from random import randint
 version = "1.0"
 build   = "20200720.00000"
 TRANSBLOCKSIZE = 1024
+CRC = 0xAA
 
 # Pin Definitons
 csPin   = 21
@@ -29,8 +30,8 @@ mosiPin = 16
 misoPin = 12
 rdyPin  = 25
 
-SPI_SCLK_LOW_TIME = 0.001
-SPI_SCLK_HIGH_TIME = 0.001
+SPI_SCLK_LOW_TIME = 0.0001
+SPI_SCLK_HIGH_TIME = 0.0001
 
 GLOBALRETRIES       =    5
 SPI_INT_TIME        =    3000
@@ -42,6 +43,7 @@ SYNCTRANSFTIMEOUT   =    3
 STARTTRANSFER       = 0xA0
 SENDNEXT            = 0xA1
 ENDTRANSFER         = 0xA2
+RESEND              = 0XA3
 READY               = 0xAA
 ABORT               = 0xAD
 WAIT                = 0xAE
@@ -88,7 +90,17 @@ def init_spi_bitbang():
 
 def tick_sclk():
     GPIO.output(sclkPin, GPIO.HIGH)
+    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(sclkPin, GPIO.LOW)
+    #time.sleep(SPI_SCLK_LOW_TIME)
+
+def send_byte_sec(byte_out):
+    rc = RESEND
+    while rc != ENDTRANSFER:
+        send_byte(byte_out)
+        send_byte(byte_out^CRC)
+        rc =receive_byte()
+
 
 def send_byte(byte_out):
 
@@ -104,12 +116,28 @@ def send_byte(byte_out):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
             GPIO.output(misoPin, GPIO.LOW)
-        GPIO.output(sclkPin, GPIO.HIGH)    
+        GPIO.output(sclkPin, GPIO.HIGH)
+        #time.sleep(SPI_SCLK_HIGH_TIME)
         GPIO.output(sclkPin, GPIO.LOW)
 
     # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
+    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(rdyPin, GPIO.HIGH) 
+
+def receive_byte_sec():
+    rc = RESEND
+    while rc == RESEND:
+        b1 = receive_byte()
+        b2 = receive_byte()
+
+        if b1^CRC == b2:
+            rc = ENDTRANSFER
+            send_byte(ENDTRANSFER)
+        else:
+            send_byte(RESEND)
+
+    return b1
 
 def receive_byte():
     byte_in = 0
@@ -121,22 +149,21 @@ def receive_byte():
 
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-        GPIO.output(sclkPin, GPIO.HIGH)        
+        GPIO.output(sclkPin, GPIO.HIGH)   
+        #time.sleep(SPI_SCLK_HIGH_TIME)     
         if GPIO.input(mosiPin):
             byte_in |= bit
         GPIO.output(sclkPin, GPIO.LOW)
 
     # tick rdyPin once to flag to MSXPi that transfer is completed
     GPIO.output(rdyPin, GPIO.LOW)
+    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(rdyPin, GPIO.HIGH)
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
 def sendstdmsg(message):
-    print("sendstdmsg:sending data:")
-    print("===> GPIO.output(misoPin, GPIO.LOW): is this needed here??")
-    #GPIO.output(misoPin, GPIO.LOW)
-    return senddatablock(message,0,len(message),True)
+    return senddatablock(message,0,len(message))
 
 def recvdatablock(sizelimit=65535):
     buf = bytearray()
@@ -147,16 +174,16 @@ def recvdatablock(sizelimit=65535):
         # Read blocksize to transfer
         dsL = receive_byte()
         dsM = receive_byte()
-        datasize = dsL + 256 * dsM
+        blocksize = dsL + 256 * dsM
         
-        if datasize <= sizelimit:
+        if blocksize <= sizelimit:
             rc = RC_SUCCESS
-            print "recvdatablock:Received blocksize =",datasize
-            while(datasize>0):
+            #print("recvdatablock:Received blocksize =",blocksize)
+            while(blocksize>0):
                 mymsxbyte = receive_byte()
                 buf.append(mymsxbyte)
                 crc ^= mymsxbyte
-                datasize = datasize - 1
+                blocksize = blocksize - 1
 
             # Receive the CRC calculated by the MSX 
             msxcrc = receive_byte()
@@ -164,46 +191,46 @@ def recvdatablock(sizelimit=65535):
                 rc = RC_CRCERROR
     except (RuntimeError, TypeError, NameError):
         rc = RC_PROGERROR
-        print("Error (1):",hex(rc))
+        print("Error:",hex(rc))
 
     try:
         # Send the Return code for MSX
         send_byte(rc)
     except (RuntimeError, TypeError, NameError):
-        print("Error (2):",hex(rc))
+        print("Error:",hex(rc))
         rc = RC_PROGERROR
 
-    print "recvdatablock:exiting with rc = ",hex(rc)
+    #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buf]
 
-def senddatablock(buf,initpos,datasize,sendsize):
+def senddatablock(buf,initpos,blocksize):
     bytecounter = 0
     crc = 0
     rc = RC_SUCCESS
 
     try:
-        send_byte((datasize) % 256)
-        send_byte((datasize) / 256)
-        print("senddatablock: datasize is ", datasize)
-        while(datasize > 0):
+        send_byte((blocksize) % 256)
+        send_byte((blocksize) / 256)
+        #print("senddatablock: blocksize is ", blocksize)
+        while(blocksize > 0):
             byte_out = ord(buf[initpos+bytecounter])
             send_byte(byte_out)
             crc ^= byte_out
             bytecounter += 1
-            datasize = datasize - 1
+            blocksize = blocksize - 1
 
-        print("senddatablock:Expecting to read CRC")
+        #print("senddatablock:Expecting to read CRC")
         # Receive the CRC calculated by the MSX 
         msxcrc = receive_byte()
         if (msxcrc != crc):
-            print("senddatablock:wrong crc")
+            #print("senddatablock:wrong crc")
             rc = RC_CRCERROR
     except (RuntimeError, TypeError, NameError):
         rc = RC_PROGERROR
 
     try:
         # Send the Return code for MSX
-        print("senddatablock:Sending RC",hex(rc))
+        #print("senddatablock:Sending RC",hex(rc))
         send_byte(rc)
     except (RuntimeError, TypeError, NameError):
         rc = RC_PROGERROR
@@ -385,8 +412,8 @@ def pset(psetvar, cmd):
                 rc_text = '';
                 buf = "Pi:Erro setting parameter"
 
-    sendstdmsg(RC_FAILED,buf)
-    #senddatablock(True,buf,0,len(buf),True)
+    sendstdmsg(buf)
+    #senddatablock(True,buf,0,len(buf))
     #print "pset:Exiting rc:",hex(rc)
     rc_text = psetvar[index][0];
     return rc,rc_text
@@ -458,16 +485,12 @@ def pwifi(cmd1,wifissid,wifipass):
     return rc
 
 def prun(cmd):
-    return PRUN(cmd)
-
-def PRUN(cmd):
     rc = RC_SUCCESS
-    print("prun:starting command:",cmd)
-    #piexchangebyte(NoTimeOutCheck,RC_WAIT)
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
     
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        print "prun:syntax error"
-        sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
+        sendstdmsg("Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
         cmd = cmd.replace('::','|')
@@ -478,22 +501,17 @@ def PRUN(cmd):
                 buf = p.stderr.read()
                 if  (len(buf) == 0):
                     buf = str("Pi:Error running command "+cmd+'\n')
-            print("prun:calling sendstdmsg")
             sendstdmsg(buf)
         except subprocess.CalledProcessError as e:
             print "Error:",buf
             rc = RC_FAILED
             sendstdmsg("Pi:Error\n"+buf+'\n')
 
-    print "prun:exiting rc:",hex(rc)
+    #print "prun:exiting rc:",hex(rc)
     return rc
 
-
-def pdir(cmdline):
-    return PDIR(cmdline)
-
-def PDIR(path):
-    print("pdir:starting ",path)
+def pdir(path):
+    #print("pdir:starting ",path)
 
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
@@ -506,7 +524,7 @@ def PDIR(path):
     try:
         urlcheck = getpath(basepath, path)
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            print ("pdir:filesystem access:",urlcheck[1].decode())
+            #print ("pdir:filesystem access:",urlcheck[1].decode())
             if (path.strip() == '*'):
                 prun('ls -l ' + urlcheck[1])
             elif ('*' in path):
@@ -518,7 +536,7 @@ def PDIR(path):
             else:
                 prun('ls -l ' + urlcheck[1])
         else:
-            print "pdir:network access:"+urlcheck[1].decode()
+            #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
             try:
                 htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
@@ -526,19 +544,16 @@ def PDIR(path):
                 parser.feed(htmldata)
                 buf = " ".join(parser.HTMLDATA)
                 piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
-                rc = senddatablock(buf,0,len(buf),True)
+                rc = senddatablock(buf,0,len(buf))
             except urllib2.HTTPError as e:
                 rc = RC_FAILED
                 print "pdir:http error "+ str(e)
                 sendstdmsg(str(e))
     except Exception as e:
-        sendstdmsg(RC_FAILED,'pdir:'+str(e))
+        sendstdmsg('pdir:'+str(e))
 
-    print "pdir:exiting rc:",hex(rc)
+    #print "pdir:exiting rc:",hex(rc)
     return rc
-
-def PDATE(parms=''):
-    return pdate()
 
 def pdate(parms=''):
     now = datetime.datetime.now()
@@ -551,7 +566,7 @@ def pdate(parms=''):
     send_byte(now.minute)
     send_byte(now.second)
     send_byte(0)
-    return sendstdmsg(RC_SUCCESS,'Pi:Ok\n')
+    return sendstdmsg('Pi:Ok\n')
 
 def pplay(parms):
 
@@ -581,6 +596,144 @@ def pplay(parms):
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
+def file_upload(buf,blocksize=16384):
+
+    fileidx = 0
+    prevfileidx = 0
+    
+    filesize = len(buf)
+
+    while (fileidx < filesize):
+        GPIO.output(misoPin, GPIO.LOW)
+        if blocksize > filesize - fileidx:
+            thisblocksize = filesize - fileidx
+        else:
+            thisblocksize = blocksize
+        
+        print("file_upload:fileidx is ",fileidx)
+        print("file_upload:thisblocksize is ",thisblocksize)
+
+        while receive_byte() != STARTTRANSFER:
+            send_byte(STARTTRANSFER)  
+
+        send_byte(SENDNEXT) 
+
+        senddatablock(buf,fileidx,thisblocksize)
+        #print(buf[fileidx:fileidx+thisblocksize]),
+        # if block transmitted without errors, get next block
+        # otherwise keep the previous index to resend block
+        rc = receive_byte()
+        print("received rc = ",hex(rc))
+        if rc == SENDNEXT:
+            print("file_upload:next block ",fileidx)
+            fileidx += thisblocksize
+        else:
+            print("file_upload:resending bad block")
+    
+    print("file_upload:sending ENDTRANSFER")
+    send_byte(ENDTRANSFER)
+
+def dos83format(fname):
+    name = '        '
+    ext = '   '
+
+    finfo = fname.split('.')
+
+    name = str(finfo[0]).ljust(8)
+    if len(finfo) == 2:
+        ext = str(finfo[1]).ljust(3)
+    
+    #print("dos83format:",name+ext)
+
+    return name+ext
+
+
+def ini_fcb(fname):
+    #print("init_fcb:",fname)
+
+    fpath = fname.split(':')
+    if len(fpath) == 1:
+        msxfile = str(fpath[0])
+        msxdrive = 0
+    else:
+        msxfile = str(fpath[1])
+        drvletter = str(fpath[0]).upper()
+        msxdrive = ord(drvletter) - 64
+
+    #convert filename to 8.3 format using all 11 positions required for the FCB
+    msxfcbfname = dos83format(msxfile)
+
+    #print("Drive, Filename:",msxdrive,msxfcbfname)
+
+    # send FCB structure to MSX
+    send_byte(msxdrive)
+    for i in range(0,11):
+        send_byte(ord(msxfcbfname[i]))
+        #print(msxfcbfname[i]),
+    
+
+def pcopy(parms):
+
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+    #print("pcopy:",parms)
+
+    try:
+    
+        fileinfo = parms.split()
+
+        if len(fileinfo) == 1:
+            fname_rpi = str(fileinfo[0])
+            fname_msx_0 = fname_rpi.split('/')
+            fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
+        elif len(fileinfo) == 2:
+            fname_rpi = str(fileinfo[0])
+            fname_msx = str(fileinfo[1])
+        else:
+            print("Pi:Command line parametrs invalid.")
+            send_byte(RC_FAILED)
+            sendstdmsg("Pi:Command line parametrs invalid.")
+
+
+        #print("Pi:Reading file ",fname_rpi)
+
+        with open(fname_rpi, mode='rb') as f:
+            buf = f.read()
+        
+        ini_fcb(fname_msx)
+        rc = file_upload(buf)
+
+    except Exception as e:
+        print("pcopy:",e)
+        send_byte(RC_FAILED)
+        sendstdmsg("Pi:"+e)    
+
+def ptest(parms=False):
+    print("ptest:starting reception test")
+    send_byte_sec(RC_SUCCESS)
+
+    errors = 0
+    n = 0
+
+    for i in range(0,65536):
+        dsL = receive_byte_sec()
+        dsM = receive_byte_sec()
+        m = dsL + 256 * dsM
+        if m != n:
+            errors += 1
+        
+        print(n,m)
+        #time.sleep(0.005)
+
+        n += 1
+
+    print("ptest:starting transmission test")
+    for i in range(0,65536):
+        send_byte_sec((i) % 256)
+        send_byte_sec((i) / 256)
+
+    print("Receiving errors:",errors)
+
 ""
 """ ============================================================================
     msxpi-server.py
@@ -598,16 +751,20 @@ print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
 def receivecommand():
-    #return [RC_SUCCESS,"pdir"]
-    print("calling recvdatablock")
+    #return [RC_SUCCESS,"pcopy /home/msxpi/TEST.TXT B:TEST.ABC"]
+    #print("calling recvdatablock")
     return recvdatablock(128)
+
+a = 0
 
 try:
     while True:
+        #receive_byte_sec()
         print "st_recvcmd: waiting command"
         rc = receivecommand()
-        print "Received command",rc
+        #print "Received command",rc
 
+        #if a==1:
         if (rc[0] == RC_SUCCESS):
             try:
                 cmd = str(rc[1].split()[0])

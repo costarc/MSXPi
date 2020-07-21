@@ -33,7 +33,6 @@
 ; 0.1    : Initial version.
 ; 1.0    : For MSXPi interface with /buswait support
 
-DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
 
 ; Send command to RPi
@@ -45,262 +44,68 @@ DSKBLOCKSIZE:   EQU 1
         cp      RC_WAIT
         call    z,CHKPIRDY
         call    COPYFILE
-        call    PRINTPISTDOUT
         ret
 
 COPYFILE:
+        call    PREP_FCB
+        call    OPENFILEW
+        jr      c,FOPENERR
+        call    SETFILEFCB
+        call    GETFILE
+        call    CLOSEFILE
+        ret
 
-        CALL    INIFCB
+FOPENERR:
+        ld      a,RC_FAILED
+        call    PIWRITEBYTE
+        ld      hl,txt_fopenerr
+        jp      PRINT
 
-; READ FILENAME
-        CALL    READPARMS
-        JR      C,PRINTPIERR
-
-; Sync to wait Pi download the file
-; Since a network transfer my get delayed, this routine
-; will loop waiting RC_SUCCESS until Pi responds
-; Loop can be interrupted by ESC
-
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        SCF
-        RET     NZ
-WAITLOOP:
-        CALL    CHECK_ESC
-        LD      A,RC_PROGERROR
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JR      Z,EXITSTDOUT
-        CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
-
-        CALL    PRINTFNAME
-
-        CALL    OPENFILEW
-
-        CALL    SETFILEFCB
-
-        CALL    GETFILE
-        JR      C,PRINTPIERR
-
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
-
-        CALL    CLOSEFILE
-
-        JP      0
-
-EXITSTDOUT:
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
-        jp      0
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        CP      RC_CONNERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PICRCERR
-        CP      RC_CRCERROR
-        JR      Z,PRINTERRMSG
-        LD      HL,DSKERR
-        CP      RC_DSKIOERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PIUNKNERR
-PRINTERRMSG:
-        CALL    PRINT
-        JP      0
-
-FILEERR:
-        LD      A,RC_FAILED
-        CALL    PIEXCHANGEBYTE
-        LD      HL,PRINTPIERR
-        CALL    PRINT
-        JP      0
-
-PRINTFNAME:
-        LD      HL,FNTITLE
-        CALL    PRINT
-        LD      HL,FILEFCB
-        ld      a,(HL)
-        INC     HL
-        OR      A
-        JR      Z,PRINTFNAME2
-        CP      1
-        LD      A,'A'
-        JR      Z,PRINTFNAME1
-        LD      A,'B'
-PRINTFNAME1:
-        CALL    PUTCHAR
-        LD      A,':'
-        CALL    PUTCHAR
-PRINTFNAME2:
-        LD      B,8
-        CALL    PLOOP
-        LD      A,'.'
-        CALL    PUTCHAR
-        LD      B,3
-        CALL    PLOOP
-        CALL    PRINTNLINE
-        RET
-PLOOP:
-        LD      A,(HL)
-        CALL    PUTCHAR
-        INC     HL
-        DJNZ    PLOOP
-        RET
+PREP_FCB:
+        call    INIFCB
+        ld      b,12
+        ld      hl,FILEFCB
+PREP_FCB1:
+        call    PIREADBYTE
+        push    af
+        call    PUTCHAR
+        pop     af
+        ld      (hl),a
+        inc     hl
+        djnz    PREP_FCB1
+        ret
 
 ; This routime will read the whole file from Pi
-; it will use blocks size DSKNUMREGISTERS (because disk block is 1)
+; it will use blocks size fixed on the RPi side
 ; Each block is written to disk after download
 GETFILE:
-DSKREADBLK:
+        call    CHKPIRDY
+        ld      a,STARTTRANSFER
+        call    PIWRITEBYTE
+        ;LD      A,'.'
+        ;sCALL    PUTCHAR
+        call    PIREADBYTE
+        cp      SENDNEXT
+        jr      nz,GETFILE
 
-; SEND COMMAND TO TRANSFER NEXT BLOCK
-        LD      BC,5
-        LD      DE,PCOPYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
-        LD      A,'.'
-        CALL    PUTCHAR
-
-; BLOCK SIZE TO USE
-        LD      BC,DSKNUMREGISTERS
-
+GETFILEWRITE:
 ; Buffer where data is stored during transfer, and also DMA for disk access
-        LD      DE,DMA
+        ld      hl,DMA
+        call    RECVDATABLOCK
+        ld      a,RESEND
+        jr      c,GETFILESENDRC
 
-; READ ONE BLOCK OF DATA AND STORE IN THE DMA
+; Set HL with the number of bytes transfered, DE with the DMA adress
+; When the RECVATABLOCK routine ends, BC number of bytes transfered
 
-; A = 1 Tells the download routine to show dots or every 256 bytes transfered
-; The routine rturns C set is there was a communication error
-        LD      A,0
-        CALL    DOWNLOADDATA
-        RET     C
+        ld      h,b
+        ld      l,c
+        call    DSKWRITEBLK
+        ld      a,SENDNEXT
 
-; The routine return A = status code,
-; ENDTRANSFER means the transfer ended.
-; Note that the last block of data was transferd in the previous call,
-; which means tht in this call (the last call) there will never be data to save.
-        CP      ENDTRANSFER
-        RET     Z
-
-; The routine returned SUCCESS, this means the block of data was transferred,
-; Also means there may be more data, and another call is needed (fater saving this block)
-; If the STATUS code is something else, set flag C and terminate the routine with error
-        CP      RC_SUCCESS
-        SCF
-        RET     NZ
-
-; Set HL with the number of bytes transfered.
-; This is needed because the last block may be smaller than DSKNUMREGISTERS,
-; And this math below will make sure only the actual number of bytes are written to disk.
-; When the DOWNLOADDATA routine ends, DE contain the DMA + number of bytes transfered
-; Also, clearing Carry with "OR A" "is required or the math may be incorrect.
-        LD      HL,DMA
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-        CALL    DSKWRITEBLK
-        JR      DSKREADBLK
-
-READPARMS:
-VERDRIVE:
-; READ FILENAME
-        LD      DE,DMA
-        CALL    RECVDATABLOCK
-        PUSH    AF
-        XOR     A
-        LD      (DE),A
-        POP     AF
-        RET     C
-        LD      HL,DMA+1
-        LD      A,(HL)
-        DEC     HL
-        CP      ":"
-        JR      Z,GETDRIVEID
-        XOR     A
-
-; This function will fill the FCB with a valid filename
-; Longer filenames are truncated yo 8.3 format.
-
-GET_NAME:
-READPARMS0:
-        LD      DE,FILEFCB
-        LD      (DE),A
-        INC     DE
-        LD      B,8
-READPARMS1:
-        LD      A,(HL)
-        CP      "."
-        JR      Z,FILLNAME
-        CP      0
-        JR      Z,FILLNAMEEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1
-
-GET_EXT:
-        LD      B,3
-        LD      A,(HL)
-        INC     HL
-        CP      0
-        JR      Z,FILLEXT
-        CP      "."
-        JR      Z,READPARMS1B
-        DEC     HL
-READPARMS1B:
-        LD      A,(HL)
-        CP      0
-        JR      Z,FILLEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1B
-        RET
-
-FILLNAMEEXT:
-        INC     B
-        INC     B
-        INC     B
-        JR      FILLEXT
-
-FILLNAME:
-        LD      A,$20
-FILLNAME0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLNAME0
-        JR      GET_EXT
-
-FILLEXT:
-        LD      A,$20
-FILLEXT0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLEXT0
-        RET
-
-GETDRIVEID:
-READPARMS3:
-        LD      A,(HL)
-        LD      B,'A'
-        CP      'a'
-        JR      C,READPARMS4
-        LD      B,'a'
-READPARMS4:
-        SUB     B
-        ADD     1
-        INC     HL
-        INC     HL
-        JR      GET_NAME
+GETFILESENDRC:
+        call    PIWRITEBYTE
+        jr      GETFILE 
 
 OPENFILEW:
         LD      DE,FILEFCB
@@ -354,19 +159,16 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-FNTITLE:    DB      "Saving file:$"
-PICOMMERR:  DB      "Communication Error",13,10,"$"
-PIUNKNERR:  DB      "Unknown error",13,10,"$"
-PICRCERR:   DB      "CRC Error",13,10,"$"
-DSKERR:     DB      "DISK IO ERROR",13,10,"$"
-LOADPROGERRMSG: DB  "Error download file from network",13,10,10
-FOPENERR:   DB      "Error opening file",13,10,"$"
-PARMSERR:   DB      "Invalid parameters",13,10,"$"
-USERESCAPE: DB      "Cancelled",13,10,"$"
+txt_fopenerr:  DB      "Error opening file",13,10,"$"
+
+txt_savingfile:    DB "Saving file:$"
+txt_diskerror:     DB "DISK IO ERROR",13,10,"$"
+txt_commerr:       DB "Communication Error with Raspberry Pi",13,10,"$"
+
 RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
-FILEFCB:    ds     40
+
 INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
@@ -378,4 +180,5 @@ COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after th
 COMMAND_END: EQU $
              DS  128
 
+FILEFCB:    ds     40
 DMA:     EQU    $

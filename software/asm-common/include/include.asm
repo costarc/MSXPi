@@ -6,10 +6,12 @@ BUSYRETRIES:    EQU 2
 GLOBALRETRIES:  EQU 5
 MAXRETRIES:     EQU 10
 RESET:          EQU $FF
+CRC:            equ $AA
 
 STARTTRANSFER:  EQU $A0
 SENDNEXT:       EQU $A1
 ENDTRANSFER:    EQU $A2
+RESEND:         EQU $A3
 READY:          EQU $AA
 ABORT:          EQU $AD
 BUSY:           EQU $AE

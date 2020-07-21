@@ -86,7 +86,7 @@ CHKPICMD:   DB      "SYN",0
 RECVDATABLOCK:
 ;Get number of bytes to transfer
         call    READDATASIZE
-
+        
 ; CLEAR CRC and save block size
         ld      d,0
         push    bc

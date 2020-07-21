@@ -92,7 +92,26 @@ PIREADBYTE:
             in      a,(DATA_PORT1)      ; read byte
             ei
             ret                         ; return in a the byte received
-
+PIREADBYTESEC:
+            push   hl
+PIREADBYTESEC0:
+            call   PIREADBYTE
+            ld     l,a
+            xor    CRC
+            ld     h,a
+            call   PIREADBYTE
+            cp     h
+            jr     z,PIREADBYTESEC_OK
+            ld     a,RESEND
+            call   PIWRITEBYTE
+            jr     PIREADBYTESEC0
+PIREADBYTESEC_OK:
+            ld     a,ENDTRANSFER
+            call   PIWRITEBYTESEC
+            ld     a,l
+            pop    hl
+            ret
+            
 ;-----------------------
 ; PIWRITEBYTE          |
 ;-----------------------
@@ -100,6 +119,20 @@ PIWRITEBYTE:
             di
             out     (DATA_PORT1),a       ; send data, or command
             ei
+            ret
+
+PIWRITEBYTESEC:
+            push   af
+            call   PIWRITEBYTE
+            xor    CRC
+            call   PIWRITEBYTE
+            call   PIREADBYTE
+            cp     ENDTRANSFER
+            jr     z,PIWRITEBYTESEC_OK
+            pop    af
+            jr     PIWRITEBYTESEC
+PIWRITEBYTESEC_OK:
+            pop    af
             ret
 
 ;-----------------------

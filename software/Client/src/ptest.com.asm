@@ -33,29 +33,85 @@
 ; 0.1    : Initial version.
 ; 1.0    : For MSXPi interface with /buswait support
 
+;Parameters:    C = 2BH (_SDATE)
+;HL = Year 1980...2079
+;D = Month (1=Jan...12=Dec)
+;E = Date (1...31)
+;Results:       A = 00H if date was valid
+;FFH if date was invalid
+;
+;Parameters:    C = 2DH (_STIME)
+;H = Hours (0...23)
+;L = Minutes (0...59)
+;D = Seconds (0...59)
+;E = Centiseconds (ignored)
+;Results:       A = 00H if time was valid
+
+; Start of command - You may not need to change this
         org     $0100
         ld      bc,COMMAND_END - COMMAND
         ld      hl,COMMAND
         call    DOSSENDPICMD
-        call    PIREADBYTE    ; read return code
+        call    PIREADBYTESEC    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
-        call    PIREADBYTE    ; pdir uses prun command, therefore there need
-                              ; to read the RC byte twice
-        jp      PRINTPISTDOUT
+        CALL    PTEST
+        RET
 
-PRINTPIERR:
-        ld      hl,PICOMMERR
-        jp      PRINT
+PTEST:
+       ld      hl,txt_testsend
+       call    PRINT
+       ld      de,0
+LOOP:
+       ld      a,e
+       call    PIWRITEBYTESEC
+       ld      a,d
+       call    PIWRITEBYTESEC
+       inc     de
+       ld      a,d
+       or      e
+       jr      nz,LOOP
 
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
+PTEST_RECV:
+       ld      hl,txt_testrecv
+       call    PRINT
+
+       ld      hl,0
+       ld      de,0
+LOOP_RECV:
+       call    PIREADBYTESEC
+       cp      l
+       jr      z,LOOP1
+       inc     de
+LOOP1:
+       call    PIREADBYTESEC
+       cp      h
+       jr      z,LOOP2
+       inc     de
+LOOP2:
+       inc     hl
+       ld      a,h
+       or      l
+       jr      nz,LOOP_RECV
+       
+       ld      hl,txt_recv
+       call    PRINT
+       ld      a,D
+       call    PRINTNUMBER
+       ld      a,E
+       call    PRINTNUMBER
+       ret
+
+txt_send: DB      "Errors sending:$"
+txt_recv: DB      "Errors receiving:$"
+txt_testsend: DB "Testing Transmission",13,10,"$"
+txt_testrecv: DB "Testing reception",13,10,"$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-COMMAND:     DB      "pdir"
+COMMAND:     DB      "ptest"
 COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
 COMMAND_END: EQU $
