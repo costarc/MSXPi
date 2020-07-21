@@ -640,10 +640,7 @@ PRINTPI2:
         ret
 
 NOSTDOUT:
-        push    af
-NOSTDOUT0:
         call    READDATASIZE
-        pop     af
         push    hl
         ld      h,0
 NOSTDOUT1:

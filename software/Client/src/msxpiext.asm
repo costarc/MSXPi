@@ -375,7 +375,7 @@ CALL_MSXPISTD:
         JR      Z,CALL_MSXPISAVSTD
         CALL    NOSTDOUT
 ; Discard buffer addres in stack
-        POP     HL
+        ;POP     HL
         LD      E,0
         JR      CALL_MSXPI3
 
@@ -448,7 +448,7 @@ CALL_MSXPISAVSTD:
         INC     HL
         LD      (HL),D
         LD      E,0
-        JR      CALL_MSXPI3
+        JR      CALL_MSXPI4; CALL_MSXPI3
 
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATABLOCK|
