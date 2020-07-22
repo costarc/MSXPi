@@ -91,6 +91,7 @@ SECLEN		equ	512		; Size of biggest sector
 
 ; Remark: This i called twice. I distinguish the 1st and 2nd verifyig reggister A.
 ; A = #40 in first call, and #80 in second all.
+INIHRDMSG: DB "INIHRD"
 INIHRD:
 ; If P is pressed during boot, MSXPi disk driver is not initialized
         call    CHECK_P
@@ -103,8 +104,10 @@ INIHRD_START:
         call    PRINT
         ld      hl,PIWAITMSG
         call    PRINT
-        call    PI_WAITBOOT
-        scf
+        ld      de,INIHRDMSG
+        ld      bc,6
+        call    SENDDATABLOCK_DE
+        call    PIREADBYTE
 		ret
 
 INIHRD_DISABLE:
@@ -119,6 +122,9 @@ PI_WAITBOOT:
 PI_WAITBOOT1:
         ld      a,'.'
         call    CHPUT
+        call    CHKPIRDY
+        or      a
+        ret
         call    SYNCH
         ret     nc
         push    bc
@@ -151,7 +157,10 @@ DRIVES:
 		ld		de,DRIVESMSG
 		ld		bc,6
 		call	SENDDATABLOCK_DE
-		call	PIREADBYTE
+        call    PIREADBYTE
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        call    PIREADBYTE ; read drive info
 ; Is it zero? MSXDOS1 dont like it.
         ld      l,1
         jr      c,DRIVES2
@@ -198,6 +207,7 @@ INIENV:
 DOS_RSEC:   DB      "RDS",0
 DOS_WSEC:   DB      "WRS",0
 DSKIO:
+        di
         jr		nc,DSKIO_READ
 
 DSKIO_WRITE:
@@ -205,24 +215,25 @@ DSKIO_WRITE:
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
-        push    bc
         push    hl
+        push    bc
         call    DSKIO_SECTINFO
-        jr      c,DSKIO_ERR
+        ;jr      c,DSKIO_ERRW
         ld      de,DOS_WSEC
         ld      bc,3
         call    SENDDATABLOCK_DE
-        jr      c,DSKIO_ERR
-
+        ;jr      c,DSKIO_ERR
+        call    PIREADBYTE
+        cp      RC_WAIT
+        call    z,CHKPIRDY
 ; source address to read sector data and number of sectors
-        pop     de
         pop     bc
-
+        pop     hl
 ; will write one sector at a time
 DSKIO_WRITE1:
         push    bc
         ld      bc,512
-        call    SENDDATABLOCK_DE
+        call    WRITESECTOR
         pop     bc
         jr      c,DSKIO_ERR1
         djnz    DSKIO_WRITE1
@@ -236,28 +247,29 @@ DSKIO_WRITE1:
 DSKIO_READ:
         cp      4
         jr      nc,DSKIO_ERR1
-        di
 
 ; save destination address only
-        push    bc
         push    hl
         call    DSKIO_SECTINFO
-        jr      c,DSKIO_ERR
+        ;jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
         ld      bc,3
         call    SENDDATABLOCK_DE
-        jr      c,DSKIO_ERR
-        pop     de
-        call    RECVDATABLOCK_OLD
-        pop     bc
+        call    PIREADBYTE
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        pop     hl
+        call    READSECTOR
         jr      c,DSKIO_ERR1
+        or      a   ; reset C flag
         ei
         ret
 
+DSKIO_ERRW:
+        pop    bc
 
 DSKIO_ERR:
         pop     hl
-        pop     bc
 DSKIO_ERR1:
         ld      a,12
         scf
@@ -277,43 +289,34 @@ DSKIO_SECTINFO:
         LD      de,DOS_SECINFO
         LD      bc,3
         call    SENDDATABLOCK_DE
+        call    PIREADBYTE
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+
         pop     hl
         pop     de
         pop     bc
-        jr		nc,DSKIO_SECTINFO1
-        pop     af
-        scf
-        ret
 
 DSKIO_SECTINFO1:
-; synchronize communication with MSX
-; send device number
 
+        ; send device number
 		pop     af
         call    PIWRITEBYTE
 
 ; send number of sectors to read/write
-
 		ld      a,b
         call    PIWRITEBYTE
 
 ; send media decriptor
-
         ld      a,c
         call    PIWRITEBYTE
 
 ; send logical sectornumber (initial sector number)
-
 		ld      a,e
         call    PIWRITEBYTE
         ld      a,d
         call    PIWRITEBYTE
-        call    PIREADBYTE
-        cp      RC_SUCCESS
-        scf 
-        ccf
-        ret    z
-        scf
+        or      a
         ret
 
 DSKIORDMSG:
@@ -966,6 +969,53 @@ CHECK_P:
         ret		z
         or		a
         ret
+
+READSECTOR:
+        push   af
+        push   bc
+        push   de
+        push   hl
+        ld     b,3
+READSECTOR0:
+        push   bc
+        push   hl
+        call   RECVDATABLOCK
+        pop    hl
+        pop    bc
+        jr     nc,SECTOR_IO_SUCCESS
+        djnz   READSECTOR0
+
+SECTOR_IO_ERR:
+        pop    hl
+        pop    de
+        pop    bc
+        pop    af
+        scf
+        ret
+
+SECTOR_IO_SUCCESS:
+        pop    hl
+        pop    de
+        pop    bc
+        pop    af
+        or     a
+        ret
+
+WRITESECTOR:
+        push   af
+        push   bc
+        push   de
+        push   hl
+        ld     b,3
+WRITESECTOR0:
+        push   bc
+        push   hl
+        call   SENDDATABLOCK
+        pop    hl
+        pop    bc
+        jr     nc,SECTOR_IO_SUCCESS
+        djnz   WRITESECTOR0
+        jr     SECTOR_IO_ERR
 
 ; ================================================================
 ; Text messages used in the loader

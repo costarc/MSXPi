@@ -75,10 +75,6 @@ st_shutdown         =    99
 NoTimeOutCheck      = False
 TimeOutCheck        = True
 
-MSXPIHOME = "/home/msxpi"
-RAMDISK = "/media/ramdisk"
-TMPFILE = RAMDISK + "/msxpi.tmp"
-
 def init_spi_bitbang():
 # Pin Setup:
     GPIO.setmode(GPIO.BCM)
@@ -737,6 +733,8 @@ def irc(cmd):
         allchann = []
         #try:
         send_byte(RC_WAIT)
+        GPIO.output(misoPin, GPIO.LOW)
+
         ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         jparm = cmd.split(' ')
         if (len(jparm) != 3):
@@ -759,6 +757,8 @@ def irc(cmd):
         print("irc:MSG")
         if (not ircconn):
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
+
             ircsock.send(bytes("/msg "+ cmd[5:] + "\n"))
             send_byte(RC_SUCCESS)
         else:
@@ -781,6 +781,7 @@ def irc(cmd):
                 #print "Joining channel",jchannel
                 if (not ircconn):
                     send_byte(RC_WAIT)
+                    GPIO.output(misoPin, GPIO.LOW)
                     ircsock.send(bytes("JOIN " + jchannel + "\n"))
                     ircmsg = ''
                     while (ircmsg.find("End of /NAMES list.") == -1) and \
@@ -803,6 +804,7 @@ def irc(cmd):
         if (not ircconn):
             ircmsg = ''
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
             ircsock.setblocking(0);
             try:
                 ircmsg = ircsock.recv(2048) #.decode("UTF-8")
@@ -839,6 +841,7 @@ def irc(cmd):
         print("irc:PART")
         if (not ircconn):
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
             ircsock.send(bytes("/part\n"))
             send_byte(RC_SUCCNOSTD)
         else:
@@ -848,6 +851,7 @@ def irc(cmd):
         print("irc:QUIT")
         if (not ircconn):
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
             ircsock.send(bytes("/quit\n"))
             ircsock.close()
             send_byte(RC_SUCCNOSTD)
@@ -869,6 +873,7 @@ def irc(cmd):
         print("irc:NAMES")
         if (not ircconn):
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
             ircsock.send(bytes("NAMES " + channel + "\n"))
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
@@ -884,6 +889,7 @@ def irc(cmd):
         if (not ircconn):
             ircmsg = "PRIVMSG "+ channel +" :" + cmd[4:] +"\n"
             send_byte(RC_WAIT)
+            GPIO.output(misoPin, GPIO.LOW)
             ircsock.send(bytes(ircmsg))
             ircmsg = ''
             send_byte(RC_SUCCNOSTD)
@@ -916,6 +922,140 @@ def ptest(parms=False):
         send_byte((i) % 256)
         send_byte((i) / 256)
 
+# MSX-DOS Support 
+# ---------------
+
+def syn(parms=''):
+    return RC_SUCCESS
+
+def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
+    #print "msxdos_inihrd:Starting"
+    size = os.path.getsize(filename)
+    if (size>0):
+        fd = os.open(filename, os.O_RDWR)
+        rc = mmap.mmap(fd, size, access=access)
+    else:
+        rc = RC_FAILED
+
+    return rc
+
+def drives(parms=''):
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
+    global numdrives
+
+    if numdrives == 0:
+        numdrives = 2
+    send_byte(numdrives)
+    numdrives = 0
+
+def inihrd(init='False'):
+    if init != False:
+        send_byte(RC_WAIT)
+        GPIO.output(misoPin, GPIO.LOW)
+
+    print("inihrd:starting")
+    global numdrives,sectorInfo,drive0Data,drive1Data
+
+    if (numdrives<2):
+        numdrives += 1
+
+    # Initialize disk system parameters
+    sectorInfo = [0,0,0,0]
+    numdrives = 0
+
+    # Load the disk images into a memory mapped variable
+    drive0Data = msxdos_inihrd('/home/msxpi/disks/msxpiboot.dsk')
+    drive1Data = msxdos_inihrd('/home/msxpi/disks/50dicas.dsk')
+
+    print("inihrd:exiting")
+
+def sct(parms=''):
+
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
+    print("rds:starting")
+    global sectorInfo
+
+    print("sct: Starting with sectorInfo:",sectorInfo)
+
+    sectorInfo[0] = receive_byte()
+    sectorInfo[1] = receive_byte()
+    sectorInfo[2] = receive_byte()
+    byte_lsb = receive_byte()
+    byte_msb = receive_byte()
+    sectorInfo[3] = byte_lsb + 256 * byte_msb
+    
+    print "sct:deviceNumber=",sectorInfo[0]
+    print "sct:sectors=",sectorInfo[1]
+    print "sct:mediaDescriptor=",sectorInfo[2]
+    print "sct:initialSector=",sectorInfo[3]
+
+# ---------------
+
+def rds(parms=''):
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
+    print("rds:starting")
+    global drive0Data,drive1Data,sectorInfo
+
+    if sectorInfo[0] == 0:
+        driveData = drive0Data
+    else:
+        driveData = drive1Data
+
+    initbytepos = sectorInfo[3]*512
+    finalbytepos = (initbytepos + sectorInfo[1]*512)
+    print "rds:Total bytes to transfer:",finalbytepos-initbytepos
+    for t in range(0,3):
+        rc = senddatablock(driveData,initbytepos,finalbytepos-initbytepos)
+        print("rds:senddatablock rc is ",hex(rc))
+        if rc == RC_SUCCESS:
+            break
+
+    #print "msxdos_readsector:exiting rc:",hex(rc)
+
+def wrs(parms=''):
+    send_byte(RC_WAIT)
+    GPIO.output(misoPin, GPIO.LOW)
+
+    global drive0Data,drive1Data,sectorInfo
+    
+    if sectorInfo[0] == 0:
+        driveData = drive0Data
+    else:
+        driveData = drive1Data
+
+    rc = RC_SUCCESS
+
+    #print "msxdos_writesector:Starting"
+    #print "msxdos_readsector:Starting with sectorInfo=",sectorInfo
+    #print "msxdos_readsector:deviceNumber=",sectorInfo[0]
+    #print "msxdos_readsector:numsectors=",sectorInfo[1]
+    #print "msxdos_readsector:mediaDescriptor=",sectorInfo[2]
+    #print "msxdos_readsector:initialSector=",sectorInfo[3]
+    initbytepos = sectorInfo[3]*512
+                                 
+    index = 0
+    sectorcount = sectorInfo[1]
+    # Read data from MSX
+    while(sectorcount and rc == RC_SUCCESS):
+        #print "Sectors to write:",sectorcount
+        for t in range(0,3):
+            rc = recvdatablock()
+            print("rds:recvdatablock rc is ",hex(rc))
+            if rc == RC_SUCCESS:
+                driveData[index+initbytepos:index+initbytepos+len(rc[1])] = str(rc[1])
+                index += 512
+                sectorcount -= 1
+                break
+
+            rc = RC_FAILED
+
+    #print "msxdos_writesector:exiting rc:",hex(rc)
 
 ""
 """ ============================================================================
@@ -925,6 +1065,13 @@ def ptest(parms=False):
 """
 
 basepath = '/home/msxpi'
+MSXPIHOME = "/home/msxpi"
+RAMDISK = "/media/ramdisk"
+TMPFILE = RAMDISK + "/msxpi.tmp"
+numdrives = 0
+sectorInfo = []
+drive0Data = ''
+drive1Data = ''
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
@@ -933,9 +1080,12 @@ GPIO.output(misoPin, GPIO.LOW)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
+inihrd(False)
+
 def receivecommand():
-    #return [RC_SUCCESS,"IRC CONN #msxpi"]
+    #return [RC_SUCCESS,"SCT"]
     return recvdatablock(128)
+
 
 try:
     while True:
