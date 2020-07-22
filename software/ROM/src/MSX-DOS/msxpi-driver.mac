@@ -971,51 +971,39 @@ CHECK_P:
         ret
 
 READSECTOR:
-        push   af
-        push   bc
-        push   de
-        push   hl
-        ld     b,3
+        ld     b,3      ; 3 attempts to tranfer the  sector
 READSECTOR0:
         push   bc
         push   hl
         call   RECVDATABLOCK
         pop    hl
         pop    bc
-        jr     nc,SECTOR_IO_SUCCESS
+        ret    nc             ; success
         djnz   READSECTOR0
-
 SECTOR_IO_ERR:
-        pop    hl
-        pop    de
-        pop    bc
-        pop    af
         scf
         ret
 
-SECTOR_IO_SUCCESS:
-        pop    hl
-        pop    de
-        pop    bc
-        pop    af
-        or     a
-        ret
-
 WRITESECTOR:
-        push   af
-        push   bc
-        push   de
-        push   hl
-        ld     b,3
+        ld     b,3    ; 3 attemtps to transfers sector
 WRITESECTOR0:
         push   bc
         push   hl
         call   SENDDATABLOCK
-        pop    hl
-        pop    bc
         jr     nc,SECTOR_IO_SUCCESS
+        pop    hl                    ; there was error, resend sector
+        pop    bc
         djnz   WRITESECTOR0
-        jr     SECTOR_IO_ERR
+        scf
+        ret
+
+SECTOR_IO_SUCCESS:
+        pop    bc ; actually discard HL on top of stack
+        pop    bc ; restore original block size
+                  ; at this point, HL contain next address in transfer buffer
+                  ; and will return it to calling function
+        or     a
+        ret
 
 ; ================================================================
 ; Text messages used in the loader

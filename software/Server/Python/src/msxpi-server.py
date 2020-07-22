@@ -188,10 +188,10 @@ def recvdatablock(sizelimit=65535):
         # Send the Return code for MSX
         send_byte(rc)
     except (RuntimeError, TypeError, NameError):
-        print("Error:",hex(rc))
         rc = RC_PROGERROR
+        print("Error:",hex(rc))
 
-    #print "recvdatablock:exiting with rc = ",hex(rc)
+    print("recvdatablock:exiting with rc = ",hex(rc))
     return [rc,buf]
 
 def senddatablock(buf,initpos,blocksize):
@@ -979,7 +979,7 @@ def sct(parms=''):
     print("rds:starting")
     global sectorInfo
 
-    print("sct: Starting with sectorInfo:",sectorInfo)
+    #print("sct: Starting with sectorInfo:",sectorInfo)
 
     sectorInfo[0] = receive_byte()
     sectorInfo[1] = receive_byte()
@@ -988,10 +988,10 @@ def sct(parms=''):
     byte_msb = receive_byte()
     sectorInfo[3] = byte_lsb + 256 * byte_msb
     
-    print "sct:deviceNumber=",sectorInfo[0]
-    print "sct:sectors=",sectorInfo[1]
-    print "sct:mediaDescriptor=",sectorInfo[2]
-    print "sct:initialSector=",sectorInfo[3]
+    #print "sct:deviceNumber=",sectorInfo[0]
+    #print "sct:sectors=",sectorInfo[1]
+    #print "sct:mediaDescriptor=",sectorInfo[2]
+    #print "sct:initialSector=",sectorInfo[3]
 
 # ---------------
 
@@ -999,7 +999,7 @@ def rds(parms=''):
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
 
-    print("rds:starting")
+    #print("rds:starting")
     global drive0Data,drive1Data,sectorInfo
 
     if sectorInfo[0] == 0:
@@ -1009,18 +1009,20 @@ def rds(parms=''):
 
     initbytepos = sectorInfo[3]*512
     finalbytepos = (initbytepos + sectorInfo[1]*512)
-    print "rds:Total bytes to transfer:",finalbytepos-initbytepos
+    #print "rds:Total bytes to transfer:",finalbytepos-initbytepos
     for t in range(0,3):
         rc = senddatablock(driveData,initbytepos,finalbytepos-initbytepos)
-        print("rds:senddatablock rc is ",hex(rc))
+        #print("rds:senddatablock rc is ",hex(rc))
         if rc == RC_SUCCESS:
             break
 
     #print "msxdos_readsector:exiting rc:",hex(rc)
 
 def wrs(parms=''):
+    print("wrs:starting")
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
+
 
     global drive0Data,drive1Data,sectorInfo
     
@@ -1046,7 +1048,7 @@ def wrs(parms=''):
         #print "Sectors to write:",sectorcount
         for t in range(0,3):
             rc = recvdatablock()
-            print("rds:recvdatablock rc is ",hex(rc))
+            print("rds:recvdatablock returned")
             if rc == RC_SUCCESS:
                 driveData[index+initbytepos:index+initbytepos+len(rc[1])] = str(rc[1])
                 index += 512
