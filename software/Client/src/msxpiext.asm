@@ -331,7 +331,7 @@ CALL_MSXPI1:
 ; Save command address to stack
 ; BC contain lenght of the commands
         PUSH    HL
-        CALL    SENDDATABLOCK_OLD
+        CALL    SENDDATABLOCK_DE
         LD      E,1
         JP      C,CALL_MSXPI2
         
@@ -480,7 +480,7 @@ MSXPISEND1:
         INC     HL
         LD      D,H
         LD      E,L
-        CALL    SENDDATABLOCK_OLD
+        CALL    SENDDATABLOCK_DE
 ; Restore buffer address
         POP     HL
 ; Return return code in 1st buffer position

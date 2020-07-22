@@ -150,9 +150,8 @@ DRIVES:
 		push    de
 		ld		de,DRIVESMSG
 		ld		bc,6
-		call	SENDPICMD
-		ld		a,SENDNEXT
-		call	PIEXCHANGEBYTE
+		call	SENDDATABLOCK_DE
+		call	PIREADBYTE
 ; Is it zero? MSXDOS1 dont like it.
         ld      l,1
         jr      c,DRIVES2
@@ -212,7 +211,7 @@ DSKIO_WRITE:
         jr      c,DSKIO_ERR
         ld      de,DOS_WSEC
         ld      bc,3
-        call    SENDPICMD
+        call    SENDDATABLOCK_DE
         jr      c,DSKIO_ERR
 
 ; source address to read sector data and number of sectors
@@ -223,7 +222,7 @@ DSKIO_WRITE:
 DSKIO_WRITE1:
         push    bc
         ld      bc,512
-        call    SECSENDDATA
+        call    SENDDATABLOCK_DE
         pop     bc
         jr      c,DSKIO_ERR1
         djnz    DSKIO_WRITE1
@@ -246,10 +245,10 @@ DSKIO_READ:
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
         ld      bc,3
-        call    SENDPICMD
+        call    SENDDATABLOCK_DE
         jr      c,DSKIO_ERR
         pop     de
-        call    SECRECVDATA
+        call    RECVDATABLOCK_OLD
         pop     bc
         jr      c,DSKIO_ERR1
         ei
@@ -277,7 +276,7 @@ DSKIO_SECTINFO:
         push    hl
         LD      de,DOS_SECINFO
         LD      bc,3
-        call    SENDPICMD
+        call    SENDDATABLOCK_DE
         pop     hl
         pop     de
         pop     bc
@@ -288,37 +287,33 @@ DSKIO_SECTINFO:
 
 DSKIO_SECTINFO1:
 ; synchronize communication with MSX
-
-	ld		a,SENDNEXT
-	call	PIEXCHANGEBYTE
-	cp		SENDNEXT
-	jr		z,DSKIO_SECTINFO2
-	pop		af
-	scf
-	ret
-
-DSKIO_SECTINFO2:
 ; send device number
 
 		pop     af
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
 
 ; send number of sectors to read/write
 
 		ld      a,b
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
 
 ; send media decriptor
 
         ld      a,c
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
 
 ; send logical sectornumber (initial sector number)
 
 		ld      a,e
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         ld      a,d
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
+        call    PIREADBYTE
+        cp      RC_SUCCESS
+        scf 
+        ccf
+        ret    z
+        scf
         ret
 
 DSKIORDMSG:
@@ -438,15 +433,17 @@ DSKFMT:
         push    af
         ld      bc,3
         ld      de,DSKFMTCMD
-        call    SENDPICMD
+        call    SENDDATABLOCK_DE
         pop     af
-        call    PIEXCHANGEBYTE
+        call    PIWRITEBYTE
         pop     de
         ld      a,d
-        call    PIEXCHANGEBYTE
-        ld      a,ENDOFTRANSFER
-        call    PIEXCHANGEBYTE
-        cp      ENDOFTRANSFER
+        call    PIWRITEBYTE
+        call    PIREADBYTE    ; read return code
+        cp      RC_WAIT
+        call    z,CHKPIRDY
+        call    PIREADBYTE
+        cp      RC_SUCCESS
         ret     Z
         scf
         ld      a,10
@@ -554,17 +551,15 @@ LOADCLIENTCMD: DB "ploadbin msxpi-client.bin",0
 MSXPILOAD:
         ld      hl,MSXPILOADING
         call    PRINT
-        ld      a,RESET
-        call    SENDIFCMD
 
 ; Send command LOADROM to Pi
         ld      bc,25
         ld      de,LOADCLIENTCMD
-        call    SENDPICMD
+        call    SENDDATABLOCK_DE
         jr		c,MSXPILOADERROR
         call    LOADBINPROG
         jp      c,MSXPILOADERROR
-        call    PIEXCHANGEBYTE
+        call    PIREADBYTE
         cp      ENDOFTRANSFER
         jr      nz,MSXPILOADERR
         push    hl
@@ -618,35 +613,39 @@ CALL_MSXPI1:
 ; DE contain string address of command to send to RPi
         LD      H,D
         LD      L,E
-        CALL    SENDPICMD
+        CALL    SENDDATABLOCK_DE
         JR      C,CALL_MSXPIERR2
 
 ; protocol to detect result of command sent to RPi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR2
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR2
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        call    PIREADBYTE
+        cp      RC_WAIT
+        jp      nz,CALL_MSXPIERR
+        call    z,CHKPIRDY
+        call    PIREADBYTE
+        cp      RC_WAIT
+        jr      nz,CALL_MSXPI_RC
+        call    PIREADBYTE
+
+CALL_MSXPI_RC:
+        LD      E,1
         CP      RC_FAILED
         JR      Z,CALL_MSXPISTD
+        LD      E,0
         CP      RC_SUCCESS
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCNOSTD
-        JR      Z,CALL_MSXPIERR3
-        JR      WAITLOOP
+        JR      Z,CALL_MSXPI2
+        LD      HL,txt_undef
+        call    PRINT
+        jr      CALL_MSXPI2
 
-CALL_MSXPIERR1:
+CALL_MSXPIERR:
+        LD      E,1
+
+; return to BASIC
+CALL_MSXPI2:
+; Discard address of string containing command and buffer address
         POP     HL
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        RET
-BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
 
 CALL_MSXPIERR2:
         LD      A,RC_CONNERR
@@ -687,14 +686,14 @@ CALL_MSXPISTDOUT:
 CALL_MSXPISAVSTD:
 ; Retrieve buffer address from stack
         POP     DE
-        CALL    DBGDE
+        ;CALL    DBGDE
 ;Save buffer address
         PUSH    DE
 ; Get data area
         INC     DE
         INC     DE
         INC     DE
-        CALL    RECVDATABLOCK
+        CALL    RECVDATABLOCK_OLD
         POP     HL
         LD      (HL),A
 ; Return buffer size to BASIC in first two positions of buffer
@@ -703,6 +702,13 @@ CALL_MSXPISAVSTD:
         INC     HL
         LD      (HL),B
         RET
+
+CALL_MSXPIERR1:
+        POP     HL
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        RET
+BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
 
 ; Check parameters with this format:
 ; ("0,1234,command")
@@ -761,7 +767,7 @@ MSXPISEND1:
         INC     HL
         LD      D,H
         LD      E,L
-        CALL    SENDDATABLOCK
+        CALL    SENDDATABLOCK_DE
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
         POP     HL
         LD      (HL),A
@@ -801,7 +807,7 @@ MSXPIRECV1:
         INC     DE
         LD      (DE),A
         INC     DE
-        CALL    RECVDATABLOCK
+        CALL    RECVDATABLOCK_OLD
         POP     HL
 ; Store return code into 1st position in buffer
         LD      (HL),A
@@ -966,12 +972,12 @@ CHECK_P:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi Hardware Interface v0.7",13,10
-        DB      "MSXPi ROM v0.8.2",13,10
+        DB      13,10,"MSXPi Hardware Interface v0.7 with /buswait support",13,10
+        DB      "MSXPi ROM v1,0",13,10
         DB      "      Build "
-build:  DB      "20171230.00077"
+build:  DB      "20200722.00077"
         DB      13,10
-        DB      "(c) Ronivon Costa,2017",13,10,10
+        DB      "(c) Ronivon Costa,2020",13,10,10
         DB      "Commands available:",13,10
         DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI MSXPISEND MSXPIRECV",13,10
         DB      00
@@ -987,6 +993,8 @@ PIONLINE:
 
 PIWAITMSG:
         DB      13,10,"Waiting Pi boot. P to skip",13,10,0
+
+txt_undef: db "Unexpected return code",13,10,0
 
 ; ================================================================
 ; Table of Commands available/implemented

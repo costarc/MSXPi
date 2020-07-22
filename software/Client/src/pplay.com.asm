@@ -40,6 +40,7 @@
         call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
+        call    PIREADBYTE    ; read return code after RPi processing
         jp      PRINTPISTDOUT
 
 PRINTPIERR:

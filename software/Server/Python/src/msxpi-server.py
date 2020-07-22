@@ -335,12 +335,14 @@ def pcd(basepath, path):
     #print "pcd:starting basepath:path=",basepath + ":" + path
 
     if (path == '' or path.strip() == "."):
+        send_byte(rc)
         sendstdmsg(basepath+'\n')
     elif (path.strip() == ".."):
         rc = RC_SUCCESS
         newpath = basepath.rsplit('/', 1)[0]
         if (newpath == ''):
             newpath = '/'
+        send_byte(rc)
         sendstdmsg(str(newpath+'\n'))
     else:
         #print "pcd:calling getpath"
@@ -352,16 +354,20 @@ def pcd(basepath, path):
             newpath[:3] == "nfs" or \
             newpath[:3] == "smb"):
             rc = RC_SUCCESS
+            send_byte(rc)
             sendstdmsg(str(newpath+'\n'))
         else:
             newpath = str(newpath) #[:len(newpath)-1])
             #print "newpath=",type(newpath),len(newpath)
             if (os.path.isdir(newpath)):
                 rc = RC_SUCCESS
+                send_byte(rc)
                 sendstdmsg(newpath+'\n')
             elif (os.path.isfile(str(newpath))):
+                send_byte(rc)
                 sendstdmsg("Pi:Error - not a folder")
             else:
+                send_byte(rc)
                 sendstdmsg("Pi:Error - path not found")
     
     #print "pcd:newpath =",newpath
@@ -585,14 +591,16 @@ def pplay(parms):
     try:
         p = subprocess.call(cmd, shell=True)
         buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
-        print("==> Should test for equality or for difference??")
         if (buf == RC_FAILED):
-            sendstdmsg("Pi:Ok\n")
+            send_byte(RC_FAILED)
+            sendstdmsg("Pi:Error opening file\n")
         else:
+            end_byte(rc)
             sendstdmsg(buf)
     except subprocess.CalledProcessError as e:
         print "pplay:Error:",p
         rc = RC_FAILED
+        send_byte(rc)
         sendstdmsg("Pi:Error\n"+str(e))
     
     #print "pplay:exiting rc:",hex(rc)
@@ -711,6 +719,178 @@ def pcopy(parms):
         send_byte(RC_FAILED)
         sendstdmsg("Pi:"+e)    
 
+def irc(cmd):
+    
+    global ircsock,allchann,ircmsg
+
+    cmd = 'IRC '+cmd
+    ircserver = 'chat.freenode.net'
+    ircport = 6667
+    channel = "#msx"
+    msxpinick =  'msxpi'
+
+    ircconn = False
+    print "Processing IRC commands:",cmd
+    print(cmd[4:8])
+    if (cmd[4:8] == "CONN"):
+        print("irc:CONN")
+        allchann = []
+        #try:
+        send_byte(RC_WAIT)
+        ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        jparm = cmd.split(' ')
+        if (len(jparm) != 3):
+            ircmsg = "parameters invalid"
+            send_byte(RC_SUCCNOSTD)
+            print(ircmsg)
+        else:
+            jnick = jparm[2]
+            if (jnick == 'none'):
+                jnick = msxpinick
+            ircsock.connect((ircserver, ircport))
+            ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
+            ircsock.send(bytes("NICK "+ jnick +"\n"))
+            ircconn = 1
+            ircmsg = 'Connected to '+ircserver
+            send_byte(RC_SUCCESS)
+            senddatablock(ircmsg,0,len(ircmsg))
+            print("irc:CONN -exit = ",ircmsg)
+    elif (cmd[4:7] == "MSG"):
+        print("irc:MSG")
+        if (not ircconn):
+            send_byte(RC_WAIT)
+            ircsock.send(bytes("/msg "+ cmd[5:] + "\n"))
+            send_byte(RC_SUCCESS)
+        else:
+            print("IRC not initilized")
+            send_byte(RC_FAILED)
+    elif (cmd[4:8] == "JOIN"):
+        print("irc:JOIN")
+        jparm = cmd.split(' ')
+        if (len(jparm) != 3):
+            ircmsg = "parameters invalid"
+            send_byte(RC_SUCCNOSTD)
+        else:
+            jchannel = jparm[2]
+            if jchannel in allchann:
+                #print "Already joined.",jchannel
+                send_byte(RC_SUCCNOSTD)
+                ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                channel = jchannel
+            else:
+                #print "Joining channel",jchannel
+                if (not ircconn):
+                    send_byte(RC_WAIT)
+                    ircsock.send(bytes("JOIN " + jchannel + "\n"))
+                    ircmsg = ''
+                    while (ircmsg.find("End of /NAMES list.") == -1) and \
+                          (ircmsg.find("No such channel") == -1) and \
+                          (ircmsg.find("Nickname is already in use") == -1):
+                        ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+                        ircmsg = ircmsg.strip('\n\r')
+                    if (ircmsg.find("No such channel") != -1):
+                        ircmsg = "No such channel"
+                    else:
+                        ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
+                        allchann.append(jchannel)
+                        channel = jchannel
+                    send_byte(RC_SUCCNOSTD)
+                else:
+                    print("IRC not initilized")
+                    send_byte(RC_FAILED)
+    elif (cmd[4:8] == "READ"):
+        print("irc:READ")
+        if (not ircconn):
+            ircmsg = ''
+            send_byte(RC_WAIT)
+            ircsock.setblocking(0);
+            try:
+                ircmsg = ircsock.recv(2048) #.decode("UTF-8")
+            except socket.error, e:
+                err = e.args[0]
+                if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                    ircmsg = ''
+                    send_byte(RC_SUCCNOSTD)
+                else:
+                    print "Socket error"
+                    ircmsg = ''
+                    send_byte(RC_FAILNOSTD)
+            else:
+                ircmsg = ircmsg.strip('\n\r')
+                if ircmsg.find("PING :") != -1:
+                    ircsock.send(bytes("PONG :pingis\n"))
+                    ircmsg = ''
+                if ircmsg.find("PRIVMSG") != -1:
+                    ircname = ircmsg.split('!',1)[0][1:]
+                    ircchidxs = ircmsg.find('PRIVMSG')+8
+                    ircchidxe = ircmsg[ircchidxs:].find(':')
+                    ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
+                    if msxpinick in ircchann:
+                        ircchann = 'private'
+                    ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
+                    ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
+    
+                send_byte(RC_SUCCNOSTD)
+            ircsock.setblocking(1);
+        else:
+            print("IRC not initilized")
+            send_byte(RC_FAILED)
+    elif (cmd[4:8] == "PART"):
+        print("irc:PART")
+        if (not ircconn):
+            send_byte(RC_WAIT)
+            ircsock.send(bytes("/part\n"))
+            send_byte(RC_SUCCNOSTD)
+        else:
+            print("IRC not initilized")
+            send_byte(RC_FAILED)
+    elif (cmd[4:8] == "QUIT"):
+        print("irc:QUIT")
+        if (not ircconn):
+            send_byte(RC_WAIT)
+            ircsock.send(bytes("/quit\n"))
+            ircsock.close()
+            send_byte(RC_SUCCNOSTD)
+        else:
+            print("IRC not initilized")
+            send_byte(RC_FAILED)
+    elif (cmd[4:10] == "GETRSP"):
+        print("irc:GETRSP")
+        if (len(ircmsg)==0):
+            send_byte(RC_SUCCNOSTD)
+        else:
+            if (len(ircmsg)>256):
+                ircmsg = ircmsg[len(ircmsg)-512:]
+            
+            send_byte(RC_SUCCESS)
+            senddatablock(ircmsg,0,len(ircmsg))
+            ircmsg = ''
+    elif (cmd[4:9] == "NAMES"):
+        print("irc:NAMES")
+        if (not ircconn):
+            send_byte(RC_WAIT)
+            ircsock.send(bytes("NAMES " + channel + "\n"))
+            ircmsg = ''
+            ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+            ircmsg = ircmsg.strip('\n\r')
+            ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
+            send_byte(RC_SUCCNOSTD)
+        else:
+            ircmsg = ''
+            print("IRC not initilized")
+            send_byte(RC_FAILNOSTD)
+    else:
+        print("irc:others (else)")
+        if (not ircconn):
+            ircmsg = "PRIVMSG "+ channel +" :" + cmd[4:] +"\n"
+            send_byte(RC_WAIT)
+            ircsock.send(bytes(ircmsg))
+            ircmsg = ''
+            send_byte(RC_SUCCNOSTD)
+        else:
+            print("IRC not initilized")
+            send_byte(RC_FAILED)
+
 def ptest(parms=False):
     print("ptest:starting reception test")
     send_byte(RC_SUCCESS)
@@ -754,8 +934,7 @@ print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
 
 def receivecommand():
-    #return [RC_SUCCESS,"pcopy /home/msxpi/TEST.TXT B:TEST.ABC"]
-    #print("calling recvdatablock")
+    #return [RC_SUCCESS,"IRC CONN #msxpi"]
     return recvdatablock(128)
 
 try:
@@ -766,7 +945,7 @@ try:
 
         if (rc[0] == RC_SUCCESS):
             try:
-                cmd = str(rc[1].split()[0])
+                cmd = str(rc[1].split()[0]).lower()
                 parms = str(rc[1][len(cmd)+1:])
                 print("Received:",cmd,parms)
                 # Executes the command (first word in the string)

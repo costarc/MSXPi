@@ -41,7 +41,8 @@
         cp      RC_WAIT
         call    z,CHKPIRDY
         call    PIREADBYTE    ; pdir uses prun command, therefore there need
-                              ; to read the RC byte twice
+                              ; to read the RC_WAIT again
+        call    PIREADBYTE    ; and read the RC from prun processing
         jp      PRINTPISTDOUT
 
 PRINTPIERR:

@@ -40,6 +40,8 @@
         call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
+        call    PIREADBYTE    ; read return code (uses prun, needs to read its rc)
+        call    PIREADBYTE    ; read return code (uses prun, needs to read its rc)
         jp      PRINTPISTDOUT
 
 PRINTPIERR:

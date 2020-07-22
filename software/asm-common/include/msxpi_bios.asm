@@ -149,7 +149,7 @@ RECVDATABLOCK_EXIT_ERR:
         scf
         ret
 
-SENDDATABLOCK_OLD:
+SENDDATABLOCK_DE:
 SENDPICMD:
         push    hl
         ex      de,hl   ; Received CMD address in DE, but need it in HL
