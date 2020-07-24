@@ -617,9 +617,9 @@ def file_upload(buf,blocksize=512):
         else:
             thisblocksize = blocksize
 
-        #print("file_upload:sending STARTTRANSFER")
+        print("file_upload:sending STARTTRANSFER")
         send_byte(STARTTRANSFER)
-        #print("file_upload:sending block:",thisblocksize)
+        print("file_upload:sending block:",thisblocksize)
         rc = senddatablock(buf,fileidx,thisblocksize)
         #print("file_upload: senddatablock returned:",hex(rc))
         #print(buf[fileidx:fileidx+thisblocksize]),
@@ -629,7 +629,7 @@ def file_upload(buf,blocksize=512):
         #print("Received MSX command: ",hex(msxcmd))
         if msxcmd == SENDNEXT:
             fileidx += thisblocksize
-            #print("file_upload:next block ",fileidx)
+            print("file_upload:next block ",fileidx)
             if fileidx >= filesize:
                 #print("file_upload:sending ENDTRANSFER")
                 send_byte(ENDTRANSFER)
@@ -656,7 +656,7 @@ def dos83format(fname):
 
 
 def ini_fcb(fname):
-    #print("init_fcb:",fname)
+    print("init_fcb:",fname)
 
     fpath = fname.split(':')
     if len(fpath) == 1:
@@ -676,7 +676,7 @@ def ini_fcb(fname):
     send_byte(msxdrive)
     for i in range(0,11):
         send_byte(ord(msxfcbfname[i]))
-        #print(msxfcbfname[i]),
+        print(msxfcbfname[i]),
     
 
 def pcopy(parms):
@@ -702,7 +702,7 @@ def pcopy(parms):
             sendstdmsg("Pi:Command line parametrs invalid.")
 
 
-        #print("Pi:Reading file ",fname_rpi)
+        print("Pi:Reading file ",fname_rpi)
 
         with open(fname_rpi, mode='rb') as f:
             buf = f.read()
