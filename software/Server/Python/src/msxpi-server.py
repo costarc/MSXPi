@@ -370,9 +370,11 @@ def pcd(basepath, path):
     #print "pcd:Exiting rc:",hex(rc)
     return [rc, newpath]
 
-def pset(psetvar, cmd):
+def pset(cmd):
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
+
+    global psetvar,wifissid,wifipass
 
     rc = RC_SUCCESS
     buf = "Pi:Error\nSyntax: pset set <var> <value>"
@@ -451,9 +453,11 @@ def readf_tobuf(fpath,buf,ftype):
     #print "readf_tobuf:Exiting with rc:",hex(rc)
     return [rc, errmgs, buffer]
 
-def pwifi(cmd1,wifissid,wifipass):
+def pwifi(cmd1):
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
+
+    global wifissid,wifipass
 
     rc = RC_FAILED
     cmd=cmd1.decode().strip()
@@ -508,7 +512,7 @@ def prun(cmd):
         except subprocess.CalledProcessError as e:
             print "Error:",buf
             rc = RC_FAILED
-            end_byte(RC_FAILED)
+            send_byte(RC_FAILED)
             sendstdmsg("Pi:Error\n"+buf+'\n')
 
     #print "prun:exiting rc:",hex(rc)
