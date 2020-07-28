@@ -1,6 +1,10 @@
 MSXPi v1.0 Rev. 0 Release Notes
 ===============================
-This release constain changes only to the schematics, and CPLD logic. The full list of changes are:
+This release constain changes only to the schematics, and CPLD logic. No changes were done to the software.
+
+Disclaimer: Please be advised that this release was not proof-tested. I made the changes to the schematic following the previous proved release v0.7 rev7, but I did not send for fabrication. Validate the schematic yourself before fabricating large quantities.
+
+The full list of changes are:
 
 - Schematic ported to Kicad (no longer using Eagle)
 - Schematics was updated to supporgt the /Wait signal
