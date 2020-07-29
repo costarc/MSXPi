@@ -1,3 +1,23 @@
+MSXPi v1.0 Rev. 0 Release Notes
+===============================
+This release constain changes only to the schematics, and CPLD logic. No changes were done to the software.
+
+Disclaimer: Please be advised that this release was not proof-tested. I made the changes to the schematic following the previous proved release v0.7 rev7, but I did not send for fabrication. Validate the schematic yourself before fabricating large quantities.
+
+The full list of changes are:
+
+- Schematic ported to Kicad (no longer using Eagle)
+- Schematics was updated to supporgt the /Wait signal
+- CPLD logic update to drive /Wait to tri-state (to avoid MSX to freeze)
+- LED is driven by the SPI_CS signal (needed that CPLD pin for the /Wait signal)
+- Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
+- Added pull-up resistors for all Raspbery Pins used in the design
+- Added by-pass capacitors for all CIs.
+
+Note that software was not update or changed for this release, therefore /Wait feature is not being used.
+The changes in the schematic are to (try) to fix RPi issue with floating signals. I noticed that the signals were floating randomly, causing unstable and unpredictable behaviour in the MSXPi.
+
+
 MSXPi v0.8.2 Release Notes
 ==========================
 
