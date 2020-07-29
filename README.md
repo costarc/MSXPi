@@ -1,3 +1,5 @@
+Note: This branch is RIP, not all commands are working, and there are stabilityh issues with the transfers. For any of this to work, a mod is necessary in the MSXPi interface: connect /wait signal to CPLD pin 11 (this pin is currently connected to /busdir via a jumper).
+
 MSXPi has two main branches:
 
 master - current working stable release. This contains code for the branch under development, in a more mature state, but may not contain most current tools. 
