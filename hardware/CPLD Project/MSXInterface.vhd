@@ -89,8 +89,10 @@ architecture rtl of MSXInterface is
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
     signal rpi_enabled_s  : std_logic := '0';
-    signal msxpi_status_s : std_logic;
-	 
+    --signal msxpi_status_s : std_logic;
+	
+	signal D_buff_pi_debug_s    : std_logic_vector(7 downto 0);
+	
 begin
 
     LED    <= rpi_enabled_s;
@@ -138,13 +140,22 @@ begin
     -- Convert MSX data to serial / RPi serial to paralell
     -- Send bits to RPi in serial mode, receive RPi bits and latches
     process(SPI_SCLK)
+	variable mosi_debug: std_logic_vector(7 downto 0);
     begin
          if (state = start) then
             D_buff_msx_s <= D;
         elsif rising_edge(SPI_SCLK) then
             D_buff_pi_s <= D_buff_pi_s(6 downto 0) & SPI_MISO;
             SPI_MOSI <= D_buff_msx_s(7);
-            D_buff_msx_s(7 downto 1) <= D_buff_msx_s(6 downto 0);
+			
+			-- debug
+			mosi_debug := mosi_debug(6 downto 0) & D_buff_msx_s(7);
+			--
+			
+            D_buff_msx_s(7 downto 1) <= D_buff_msx_s(6 downto 0);			
         end if;
+		
+		D_buff_pi_debug_s <= mosi_debug;
+		
     end process;
 end rtl;
