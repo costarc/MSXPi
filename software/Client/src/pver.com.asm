@@ -110,7 +110,7 @@ ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44","$"
 ifv6:   DB      "(0110) Wired up prototype, with EPROM, EPM7128SLC-84","$"
 ifv7:   DB      "(0111) General Release Rev.4, EPM3064ALC-44","$"
 ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84 (not released)","$"
-ifv9:   DB      "(1001) Modded v0.7 to support /Wait signal. EPM3064ALC-44","$"
+ifv9:   DB      "(1001) General Release Verson 1.0 with support to /Wait signal. EPM3064ALC-44","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
 

@@ -44,7 +44,7 @@
 -- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
 -- 0111: Rev.4 batch, EPM3064ALC-44 (First public release)
 -- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84, not released
--- 1001: Rev.4 or later with /Wait mod, with EPROM, EPM3064ALC-44
+-- 1001: Version 1 Rev.0 with /Wait support, with EPROM, EPM3064ALC-44
 --
 -- ----------------------------------------------------------------------------------
 library ieee ;
@@ -126,7 +126,7 @@ begin
     end process;
 
     -- Initialize serial/paralell process
-    process(rpi_enabled_s,rpi_en_s,SPI_SCLK)
+    process(rpi_enabled_s,SPI_SCLK)
     begin
         if (rpi_enabled_s = '0') then
             state <= start;
@@ -135,7 +135,7 @@ begin
         end if;
     end process;
     
-    -- Convert MSX data to serial / RPi serial to paralell
+    -- Convert MSX data to serial / RPi serial to parallel
     -- Send bits to RPi in serial mode, receive RPi bits and latches
     process(SPI_SCLK)
     begin
