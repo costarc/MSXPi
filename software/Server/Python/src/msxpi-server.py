@@ -324,52 +324,6 @@ class MyHTMLParser(HTMLParser):
         self.NEWATTRS = []
         self.HTMLDATA = []
 
-def pcd(basepath, path):
-    rc = RC_FAILED
-    newpath = basepath
-    
-    #print "pcd:starting basepath:path=",basepath + ":" + path
-
-    if (path == '' or path.strip() == "."):
-        send_byte(rc)
-        sendstdmsg(basepath+'\n')
-    elif (path.strip() == ".."):
-        rc = RC_SUCCESS
-        newpath = basepath.rsplit('/', 1)[0]
-        if (newpath == ''):
-            newpath = '/'
-        send_byte(rc)
-        sendstdmsg(str(newpath+'\n'))
-    else:
-        #print "pcd:calling getpath"
-        urlcheck = getpath(basepath, path)
-        newpath = urlcheck[1]
-        #print "pcd:getpath returned:",newpath
-        if (newpath[:4] == "http" or \
-            newpath[:3] == "ftp" or \
-            newpath[:3] == "nfs" or \
-            newpath[:3] == "smb"):
-            rc = RC_SUCCESS
-            send_byte(rc)
-            sendstdmsg(str(newpath+'\n'))
-        else:
-            newpath = str(newpath) #[:len(newpath)-1])
-            #print "newpath=",type(newpath),len(newpath)
-            if (os.path.isdir(newpath)):
-                rc = RC_SUCCESS
-                send_byte(rc)
-                sendstdmsg(newpath+'\n')
-            elif (os.path.isfile(str(newpath))):
-                send_byte(rc)
-                sendstdmsg("Pi:Error - not a folder")
-            else:
-                send_byte(rc)
-                sendstdmsg("Pi:Error - path not found")
-    
-    #print "pcd:newpath =",newpath
-    #print "pcd:Exiting rc:",hex(rc)
-    return [rc, newpath]
-
 def pset(cmd):
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
@@ -519,7 +473,7 @@ def prun(cmd):
     return rc
 
 def pdir(path):
-    print("pdir:starting ",path)
+    #print("pdir:starting ",path)
 
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
@@ -532,7 +486,7 @@ def pdir(path):
     try:
         urlcheck = getpath(basepath, path)
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            print ("pdir:filesystem access:",urlcheck[1].decode())
+            #print ("pdir:filesystem access:",urlcheck[1].decode())
             if (path.strip() == '*'):
                 prun('ls -l ' + urlcheck[1])
             elif ('*' in path):
@@ -544,6 +498,7 @@ def pdir(path):
             else:
                 prun('ls -l ' + urlcheck[1])
         else:
+            send_byte(RC_WAIT)
             #print "pdir:network access:"+urlcheck[1].decode()
             parser = MyHTMLParser()
             try:
@@ -551,17 +506,73 @@ def pdir(path):
                 parser = MyHTMLParser()
                 parser.feed(htmldata)
                 buf = " ".join(parser.HTMLDATA)
-                piexchangebyte(NoTimeOutCheck,RC_SUCCESS)
+                send_byte(RC_SUCCESS)
+                if len(buf) == 0:
+                    buf = 'Empty directory'
                 rc = senddatablock(buf,0,len(buf))
             except urllib2.HTTPError as e:
                 rc = RC_FAILED
                 print "pdir:http error "+ str(e)
+                send_byte(rc)
                 sendstdmsg(str(e))
     except Exception as e:
+        send_byte(RC_FAILED)
+        print "pdir:http error "+ str(e)
         sendstdmsg('pdir:'+str(e))
 
     #print "pdir:exiting rc:",hex(rc)
     return rc
+
+def pcd(path=''):
+    send_byte(RC_WAIT)
+
+    global basepath
+    newpath = ''
+    rc = RC_FAILED
+    
+    #print "pcd:starting basepath:path=",basepath + ":" + path
+
+    if (path == '' or path.strip() == "."):
+        send_byte(RC_SUCCESS)
+        sendstdmsg(basepath+'\n')
+    elif (path.strip() == ".."):
+        rc = RC_SUCCESS
+        basepath = basepath.rsplit('/', 1)[0]
+        if (basepath == ''):
+            basepath = '/'
+        send_byte(rc)
+        sendstdmsg(str(basepath+'\n'))
+    else:
+        #print "pcd:calling getpath"
+        urlcheck = getpath(basepath, path)
+        newpath = urlcheck[1]
+        #print "pcd:getpath returned:",newpath
+        if (newpath[:4] == "http" or \
+            newpath[:3] == "ftp" or \
+            newpath[:3] == "nfs" or \
+            newpath[:3] == "smb"):
+            basepath = newpath
+            rc = RC_SUCCESS
+            send_byte(rc)
+            sendstdmsg(str(newpath+'\n'))
+        else:
+            newpath = str(newpath) #[:len(newpath)-1])
+            #print "newpath=",type(newpath),len(newpath)
+            if (os.path.isdir(newpath)):
+                basepath = newpath
+                rc = RC_SUCCESS
+                send_byte(rc)
+                sendstdmsg(newpath+'\n')
+            elif (os.path.isfile(str(newpath))):
+                send_byte(rc)
+                sendstdmsg("Pi:Error - not a folder")
+            else:
+                send_byte(rc)
+                sendstdmsg("Pi:Error - path not found")
+    
+    #print "pcd:newpath =",newpath
+    #print "pcd:Exiting rc:",hex(rc)
+    return [rc, newpath]
 
 def pdate(parms=''):
     now = datetime.datetime.now()

@@ -61,11 +61,11 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-      push  bc
-      ld    b,0
+      ;push  bc
+      ;ld    b,0
 CHKPIRDY_DELAY:
-      djnz  CHKPIRDY_DELAY
-      pop   bc
+      ;djnz  CHKPIRDY_DELAY
+      ;pop   bc
 CHKPIRDY_POLL_RPI:
       in    a,(CONTROL_PORT1)
       or    a
