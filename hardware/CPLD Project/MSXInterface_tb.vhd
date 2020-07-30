@@ -65,58 +65,100 @@ begin
 		wr_n_s <= 'U';
 		rd_n_s <= 'U';
 		iorq_n_s <= 'U';
+		rpi_rdy_s <= '0';
 		wait for 10 fs;
-		
-		a_s <= x"56";
-		d_s <= x"78";
+		rpi_rdy_s <= '1';
+		spi_miso_s <= '0';
+		wait for 10 fs;
+				
+		a_s <= x"5A";
+		d_s <= x"BC";
 		wr_n_s <= '0';
 		rd_n_s <= '1';
 		iorq_n_s <= '0';
 		wait for 10 fs;
 		
-		rpi_rdy_s <= '1';
+		spi_miso_s <= '1';
 		wait for 10 fs;
 
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_clk_s <= '0';	
+		wait for 10 fs;
+		
+		-- read 8 bits of data from RPi
+		-- simulate RPi taking its time to prepare data
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '1';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '0';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '1';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '0';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '1';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '0';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '1';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		spi_clk_s <= '1';
+		wait for 10 fs;
+		spi_miso_s <= '0';
+		spi_clk_s <= '0';
+		wait for 10 fs;
+
+		rpi_rdy_s <= '0';
+		spi_miso_s <= '0';
+		wait for 10 fs;
+		rpi_rdy_s <= '1';
+
+		wait for 10 fs;
+		wr_n_s <= '1';
+		rd_n_s <= '1';	
+		iorq_n_s <= '1';
+		
+		wait for 50 fs;
+		
 	-- Send data to RPi
 	-- 8 bits for address, 8 bits for data, wr, rd, iorq = 19 bits
 	-- Start transfer cycle
 
+		wait for 10 fs;
+		wr_n_s <= '1';
+		iorq_n_s <= '0';
+		rd_n_s <= '0';	
+		
 		spi_mosi_s <= '1';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
@@ -134,130 +176,48 @@ begin
 		spi_clk_s <= '0';
 		wait for 10 fs;
 
+		spi_mosi_s <= '0';
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
 		wait for 10 fs;
 
+		spi_mosi_s <= '1';
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
 		wait for 10 fs;
 
+		spi_mosi_s <= '0';
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
 		wait for 10 fs;
 
+		spi_mosi_s <= '1';
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
 		wait for 10 fs;
 
+		spi_mosi_s <= '0';
 		spi_clk_s <= '1';
 		wait for 10 fs;
 		spi_clk_s <= '0';
 		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		-- finished send MSX bus
-		-- now read 8 bits of data from RPi
-		-- simulate RPi taking its time to prepare data
-		wait for 50 fs;
-
-		-- read 8 bits data
-		spi_miso_s <= '1';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
+	
+		rpi_rdy_s <= '0';
 		spi_miso_s <= '0';
-		spi_clk_s <= '1';
 		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '1';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '0';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '1';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '0';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '1';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_miso_s <= '0';
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		-- simulate MSX receiveing data and reseting control signals
-		wr_n_s <= '1';
-		iorq_n_s <= '1';
 		rpi_rdy_s <= '1';
 
-		spi_clk_s <= '1';
 		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
-		spi_clk_s <= '1';
-		wait for 10 fs;
-		spi_clk_s <= '0';
-		wait for 10 fs;
-
+		wr_n_s <= '1';
+		iorq_n_s <= '1';
+		rd_n_s <= '1';	
+		
+		wait for 50 fs;
+		
 		wait;
 
 	end process;
