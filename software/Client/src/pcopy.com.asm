@@ -43,8 +43,9 @@ DSKBLOCKSIZE:   EQU 1
         call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
-        call    COPYFILE
-        ret
+        call    PIREADBYTE 
+        cp      RC_SUCCESS
+        jp      nz,PRINTPISTDOUT
 
 COPYFILE:
         call    PREP_FCB

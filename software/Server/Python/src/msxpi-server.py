@@ -226,64 +226,6 @@ def senddatablock(buf,initpos,blocksize):
 
     return rc
 
-def ploadr(basepath, file):
-    rc = RC_SUCCESS
-
-    print("ploadr: checking file path")
-    if (file.strip() <> ''):
-        fpath = getpath(basepath, file)
-        # local file?
-        if (fpath[0] < 2):
-            try:
-                fh = open(str(fpath[1]), 'rb')
-                buf = fh.read()
-                fh.close()
-            except IOError as e:
-                rc = RC_FAILED
-                print "Error opening file:",e
-                sendstdmsg("Pi:" + str(e))
-        #Remote file
-        else:
-            try:
-                buf = urllib2.urlopen(fpath[1].decode()).read()
-            except urllib2.HTTPError as e:
-                rc = RC_FAILED
-                print "ploadr:http error "+ str(e)
-                sendstdmsg("Pi:" + str(e))
-            except:
-                rc = RC_FAILED
-                print "ploadr:http unknow error"
-                sendstdmsg("Pi:Error unknow downloading file")
-        if (rc == RC_SUCCESS):
-            print("ploadr:Found rom - checking contents")
-            if (buf[0]=='A' and buf[1]=='B'):
-                fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-                fh.write(buf)
-                fh.flush()
-                fh.close()
-                send_byte(RC_SUCCNOSTD)
-                print "ploadr:Calling senddatablock.msx "
-                GPIO.cleanup()
-                cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp"
-                print(cmd)
-                p = subprocess.call(cmd, shell=True)
-                GPIO.setwarnings(False)
-                init_spi_bitbang()
-                GPIO.output(rdyPin, GPIO.HIGH)
-                GPIO.output(misoPin, GPIO.LOW)
-                sendstdmsg("Pi:Ok\n")
-            else:
-                print "pload:not a ROM file"
-                rc = RC_FAILED
-                sendstdmsg("Pi:Error - not a ROM file")
-    else:
-        print "pload:syntax error in command"
-        rc = RC_FAILED
-        sendstdmsg("Pi:Missing parameters.\nSyntax:\nploadrom file|url <A:>|<B:>file")
-                   
-    #print "pload:Exiting with rc = ",hex(rc)
-    return rc
-
 def getpath(basepath, path):
     path=path.strip().rstrip(' \t\r\n\0')
     if  path.startswith('/'):
@@ -372,7 +314,7 @@ def pset(cmd):
     return rc,rc_text
 
 
-def readf_tobuf(fpath,buf,ftype):
+def readf_tobuf(fpath,ftype):
     buffer = bytearray()
     rc = RC_SUCCESS
     if (ftype < 2):
@@ -382,12 +324,12 @@ def readf_tobuf(fpath,buf,ftype):
         fh.close()
         errmgs = "Pi:OK\n"
     else:
-        #print "readf_tobuf:network file:",fpath
+        print "readf_tobuf:network file:",fpath
         req = urllib2.Request(url=fpath)
         
         try:
             getf = urllib2.urlopen(req)
-            #print "http code:",getf.getcode()
+            print "http code:",getf.getcode()
             
             if (getf.getcode() == 200):
                 buffer = getf.read()
@@ -395,8 +337,8 @@ def readf_tobuf(fpath,buf,ftype):
                 errmgs = "Pi:Success"
             else:
                 errmgs = "Pi:http error "+str(getf.getcode())
-                #print "info:",getf.info()
-                #print "http code:",getf.getcode()
+                print "info:",getf.info()
+                print "http code:",getf.getcode()
         except urllib2.URLError as e:
             rc = RC_FAILED
             errmgs = "Pi:" + str(e)
@@ -404,7 +346,7 @@ def readf_tobuf(fpath,buf,ftype):
             rc = RC_FAILED
             errmgs = "Pi:Error accessing network file"
 
-    #print "readf_tobuf:Exiting with rc:",hex(rc)
+    print "readf_tobuf:Exiting with rc:",hex(rc)
     return [rc, errmgs, buffer]
 
 def pwifi(cmd1):
@@ -634,6 +576,7 @@ def file_upload(buf,blocksize=512):
 
         print("file_upload:sending STARTTRANSFER")
         send_byte(STARTTRANSFER)
+
         print("file_upload:sending block:",thisblocksize)
         rc = senddatablock(buf,fileidx,thisblocksize)
         #print("file_upload: senddatablock returned:",hex(rc))
@@ -694,42 +637,84 @@ def ini_fcb(fname):
         print(msxfcbfname[i]),
     
 
-def pcopy(parms):
+def pcopy(path=''):
+
+    global basepath
 
     send_byte(RC_WAIT)
     GPIO.output(misoPin, GPIO.LOW)
     #print("pcopy:",parms)
 
-    try:
-    
-        fileinfo = parms.split()
+    if (path.startswith('http') or \
+        path.startswith('ftp') or \
+        path.startswith('nfs') or \
+        path.startswith('smb') or \
+        path.startswith('/')):
+        fileinfo = path
+    elif path == '':
+        fileinfo = basepath
+    else: 
+        fileinfo = basepath+'/'+path
 
-        if len(fileinfo) == 1:
-            fname_rpi = str(fileinfo[0])
-            fname_msx_0 = fname_rpi.split('/')
-            fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
-        elif len(fileinfo) == 2:
-            fname_rpi = str(fileinfo[0])
-            fname_msx = str(fileinfo[1])
-        else:
-            print("Pi:Command line parametrs invalid.")
-            send_byte(RC_FAILED)
-            sendstdmsg("Pi:Command line parametrs invalid.")
+    fileinfo = fileinfo.split()
 
+    print("fileinfo, Types = ",fileinfo,type(basepath),type(path))
 
-        print("Pi:Reading file ",fname_rpi)
-
-        with open(fname_rpi, mode='rb') as f:
-            buf = f.read()
-        
-        ini_fcb(fname_msx)
-        rc = file_upload(buf)
-
-    except Exception as e:
-        print("pcopy:",e)
+    if len(fileinfo) == 1:
+        fname_rpi = str(fileinfo[0])
+        fname_msx_0 = fname_rpi.split('/')
+        fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
+    elif len(fileinfo) == 2:
+        fname_rpi = str(fileinfo[0])
+        fname_msx = str(fileinfo[1])
+    else:
+        print("Pi:Command line parametrs invalid.")
         send_byte(RC_FAILED)
-        sendstdmsg("Pi:"+e)    
+        sendstdmsg("Pi:Command line parametrs invalid.")
 
+    print("Pi:Reading:",basepath,"/",fname_rpi)
+
+    urlcheck = getpath(basepath, path)
+    # basepath 0 local filesystem
+    if (urlcheck[0] == 0 or urlcheck[0] == 1):
+        try:
+            with open(fname_rpi, mode='rb') as f:
+                buf = f.read()
+            
+            send_byte(RC_SUCCESS)
+            ini_fcb(fname_msx)
+            file_upload(buf)
+
+        except Exception as e:
+            print("pcopy:",e)
+            send_byte(RC_FAILED)
+            sendstdmsg("Pi:"+str(e)) 
+
+    else:
+        # basepath is network
+        print("pcopy:urlcheck[1]:",fname_rpi)
+        try:
+            parser = MyHTMLParser()
+            #creds = base64.encodestring('%s:%s' % (username, password)).replace('anonymous', 'anonymous@mail.com')
+            #parser.add_header("Authorization", "Basic %s" % creds)
+            htmldata = urllib2.urlopen(fname_rpi.decode()).read()
+            parser = MyHTMLParser()
+            parser.feed(htmldata)
+            buf = " ".join(parser.HTMLDATA)
+
+            if len(buf) == 0:
+                buf = 'Pi:Empty directory\n'
+                send_byte(RC_FAILED)
+            else:
+                send_byte(RC_SUCCESS)  
+                ini_fcb(fname_msx)
+                file_upload(buf)
+    
+        except Exception as e:
+            print "pcopy:http error "+ str(e)
+            send_byte(RC_FAILED)
+            sendstdmsg("Pi:"+str(e))
+   
 def irc(cmd):
     
     global ircsock,allchann,ircmsg
