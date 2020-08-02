@@ -609,6 +609,5 @@ INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "basic_stdio.asm"
-INCLUDE "debug.asm"
 
 fim:    equ $

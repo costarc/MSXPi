@@ -80,53 +80,63 @@ TMPFILE = RAMDISK + "/msxpi.tmp"
 def init_spi_bitbang():
 # Pin Setup:
     GPIO.setmode(GPIO.BCM)
-    #GPIO.setup(csPin, GPIO.IN)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    #GPIO.setup(mosiPin, GPIO.IN)
     GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
 def tick_sclk():
     GPIO.output(sclkPin, GPIO.HIGH)
+    #time.sleep(SPI_SCLK_HIGH_TIME)
     GPIO.output(sclkPin, GPIO.LOW)
+    #time.sleep(SPI_SCLK_LOW_TIME)
 
-def SPI_MASTER_transfer_byte(byte_out):
-    print("Transfer starting")
-    byte_in = 0
+def send_byte(byte_out):
+
+    GPIO.output(misoPin, GPIO.HIGH)
+    while(GPIO.input(csPin)):
+        pass
+
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
         if (byte_out & bit):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
             GPIO.output(misoPin, GPIO.LOW)
-
         GPIO.output(sclkPin, GPIO.HIGH)
-        if GPIO.input(mosiPin):
-            byte_in |= bit
-    
         GPIO.output(sclkPin, GPIO.LOW)
 
-    #time.sleep(2)
-    #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
-    print "transfer_byte:received",bin(byte_in),":",chr(byte_in)
+    # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
     GPIO.output(rdyPin, GPIO.HIGH)
+    GPIO.output(misoPin, GPIO.LOW)
+
+def receive_byte():
+    byte_in = 0
+
+    GPIO.output(misoPin, GPIO.HIGH)
+    print("misoHIGH")
+    while(GPIO.input(csPin)):
+        pass
+
+    tick_sclk()
+    for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
+        GPIO.output(sclkPin, GPIO.HIGH)    
+        if GPIO.input(mosiPin):
+            byte_in |= bit
+        GPIO.output(sclkPin, GPIO.LOW)
+
+    # tick rdyPin once to flag to MSXPi that transfer is completed
+    GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(rdyPin, GPIO.HIGH)
+    GPIO.output(misoPin, GPIO.LOW)
+    print("misoLOW")
+
     return byte_in
 
-def piexchangebyte(mypibyte):
-    #while(GPIO.input(csPin)):
-    #    pass
-    mymsxbyte = SPI_MASTER_transfer_byte(mypibyte)
-    print "piexchangebyte: received:",hex(mymsxbyte)
-    GPIO.output(rdyPin, GPIO.LOW)
-    GPIO.output(rdyPin, GPIO.HIGH)
-    return [RC_SUCCESS,mymsxbyte]
-
-def sendstdmsg(rc, message):
-    piexchangebyte(NoTimeOutCheck,rc)
-    return senddatablock(TimeOutCheck,message,0,len(message),True)
+def sendstdmsg(message):
+    return senddatablock(message,0,len(message))
 
 def recvdatablock(timeoutFlag):
     buffer = bytearray()
@@ -950,22 +960,15 @@ pcopyindex = 0
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 GPIO.output(rdyPin, GPIO.HIGH)
-GPIO.output(misoPin, GPIO.HIGH)
+GPIO.output(misoPin, GPIO.LOW)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
-
-#GPIO.add_event_detect(csPin, GPIO.FALLING, callback=piexchangebyte)
 
 try:
     while True:    
         print("?")
-        while(GPIO.input(csPin)):
-            pass
-
-        SPI_MASTER_transfer_byte(0xaa)
-        GPIO.output(misoPin, GPIO.LOW)
-        time.sleep(5)
-        GPIO.output(misoPin, GPIO.HIGH)
+        b = receive_byte()
+        print(hex(b),chr(b))
 
 
 except KeyboardInterrupt:

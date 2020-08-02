@@ -61,11 +61,11 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-      ;push  bc
-      ;ld    b,0
+      push  bc
+      ld    b,0
 CHKPIRDY_DELAY:
-      ;djnz  CHKPIRDY_DELAY
-      ;pop   bc
+      djnz  CHKPIRDY_DELAY
+      pop   bc
 CHKPIRDY_POLL_RPI:
       in    a,(CONTROL_PORT1)
       or    a
@@ -76,22 +76,22 @@ CHKPIRDY_POLL_RPI:
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            ;di                          ; disable interrupts in case /wait is too long
+            di                          ; disable interrupts in case /wait is too long
             call    CHKPIRDY
             in      a,(DATA_PORT1)      ; read byte
-            ;ei
+            ei
             ret                         ; return in a the byte received
 
 ;-----------------------
 ; PIWRITEBYTE          |
 ;-----------------------
 PIWRITEBYTE:
-            ;di
+            di
             push    af
             call    CHKPIRDY
             pop     af
             out     (DATA_PORT1),a       ; send data, or command
-            ;ei
+            ei
             ret
 
 ; an attempt to address the transmission errors when RPi signals floast too much
@@ -136,3 +136,5 @@ PIWRITEBYTESEC_OK:
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
             jr      PIREADBYTE
+
+INCLUDE "debug.asm"

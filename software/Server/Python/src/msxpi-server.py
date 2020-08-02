@@ -43,7 +43,7 @@ SYNCTRANSFTIMEOUT   =    3
 STARTTRANSFER       = 0xA0
 SENDNEXT            = 0xA1
 ENDTRANSFER         = 0xA2
-RESEND              = 0XA3
+RESEND              = 0xA3
 READY               = 0xAA
 ABORT               = 0xAD
 WAIT                = 0xAE
@@ -197,12 +197,11 @@ def recvdatablock(sizelimit=65535):
 def senddatablock(buf,initpos,blocksize):
     bytecounter = 0
     crc = 0
-    rc = RC_SUCCESS
 
     try:
         send_byte((blocksize) % 256)
         send_byte((blocksize) / 256)
-        #print("senddatablock: blocksize is ", blocksize)
+        print("senddatablock: blocksize is ", blocksize)
         while(blocksize > 0):
             byte_out = ord(buf[initpos+bytecounter])
             send_byte(byte_out)
@@ -213,12 +212,13 @@ def senddatablock(buf,initpos,blocksize):
         #print("senddatablock:Expecting to read CRC")
         # Receive the CRC calculated by the MSX 
         msxcrc = receive_byte()
+        rc = RC_SUCCESS
+        print("senddatablock:CRC calculated,received:",hex(crc),hex(msxcrc))
         if (msxcrc != crc):
-            print("senddatablock:wrong crc")
             rc = RC_CRCERROR
 
         # Send the Return code for MSX
-        #print("senddatablock:Sending RC",hex(rc))
+        print("senddatablock:Sending rc to MSX",hex(rc))
         send_byte(rc)
 
     except (RuntimeError, TypeError, NameError):
@@ -559,7 +559,7 @@ def pplay(parms):
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
-def file_upload(buf,blocksize=512):
+def file_upload(buf,blocksize=8192):
 
     fileidx = 0
     prevfileidx = 0
@@ -567,6 +567,7 @@ def file_upload(buf,blocksize=512):
     filesize = len(buf)
 
     while (fileidx < filesize):
+        send_byte(RC_WAIT)
         GPIO.output(misoPin, GPIO.LOW)
 
         if blocksize > filesize - fileidx:
@@ -579,23 +580,24 @@ def file_upload(buf,blocksize=512):
 
         print("file_upload:sending block:",thisblocksize)
         rc = senddatablock(buf,fileidx,thisblocksize)
-        #print("file_upload: senddatablock returned:",hex(rc))
+        print("file_upload: senddatablock returned:",hex(rc))
         #print(buf[fileidx:fileidx+thisblocksize]),
         # if block transmitted without errors, get next block
         # otherwise keep the previous index to resend block
         msxcmd = receive_byte()
-        #print("Received MSX command: ",hex(msxcmd))
+        print("Received MSX command: ",hex(msxcmd))
         if msxcmd == SENDNEXT:
             fileidx += thisblocksize
             print("file_upload:next block ",fileidx)
             if fileidx >= filesize:
-                #print("file_upload:sending ENDTRANSFER")
+                print("file_upload:sending ENDTRANSFER")
                 send_byte(ENDTRANSFER)
-        elif msxcmd == RESEND:
+        elif msxcmd == RESEND or msxcmd == RC_CRCERROR:
             #fileidx += thisblocksize
             print("file_upload:resending bad block")
         else:
             print("file_upload:Out of sync")
+            break
 
 
 def dos83format(fname):
@@ -897,14 +899,25 @@ def irc(cmd):
             print("IRC not initilized")
             send_byte(RC_FAILED)
 
-def ptest(parms=False):
-    print("ptest:starting reception test")
+def ptest(parms=0):
+    print("ptest:starting reception test:",parms)
     send_byte(RC_SUCCESS)
 
     errors = 0
     n = 0
 
-    for i in range(0,65535):
+    if int(parms) == 0:
+        countto = 255
+    else:
+        countto = int(parms)
+
+    print("Testing data transfer for %s bytes",countto)
+
+    send_byte((countto) % 256)
+    send_byte((countto) / 256)
+
+    for i in range(0,countto):
+
         dsL = receive_byte()
         dsM = receive_byte()
         m = dsL + 256 * dsM
@@ -915,10 +928,13 @@ def ptest(parms=False):
         #time.sleep(0.005)
 
         n += 1
+
     print("Receiving errors:",errors)
+    send_byte((errors) % 256)
+    send_byte((errors) / 256)
 
     print("ptest:starting transmission test")
-    for i in range(0,65535):
+    for i in range(0,countto):
         send_byte((i) % 256)
         send_byte((i) / 256)
 
@@ -1087,7 +1103,6 @@ inihrd(False)
 def receivecommand():
     #return [RC_SUCCESS,"SCT"]
     return recvdatablock(128)
-
 
 try:
     while True:

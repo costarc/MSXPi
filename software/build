@@ -40,8 +40,8 @@ fi
 
 ~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
 
-~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
+#~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+#[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
 
 # MSX-DOS commands
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com

@@ -89,10 +89,16 @@ GETFILE:
         ret     z
         cp     STARTTRANSFER
         jr     z,GETFILEWRITE
+        cp     RC_WAIT
+        jr     z,GETFILE1
+        call   PRINTNUMBER
         scf
         ret 
+GETFILE1:
+        call    CHKPIRDY
 GETFILEWRITE:
 ; Buffer where data is stored during transfer, and also DMA for disk access
+
         ld      hl,DMA
         call    RECVDATABLOCK
         jr      c,GETFILESENDRCERR
@@ -178,11 +184,8 @@ txt_commerr:       DB "Communication Error with Raspberry Pi",13,10,"$"
 
 RUNOPTION:  db  0
 SAVEOPTION: db  0
-REGINDEX:   dw  0
+REGINDEX:   dw  0            
 
-FILEFCB:    ds     40
-
-INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
@@ -192,4 +195,6 @@ COMMAND:     DB      "pcopy"
 COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
 COMMAND_END: EQU $
              DS  128
+FILEFCB:    ds     40
+
 DMA:     EQU    $

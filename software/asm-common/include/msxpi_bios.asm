@@ -97,9 +97,7 @@ RECVDATABLOCK:
         ld      a,b
         or      c
         scf
-        ccf
         ret     z
-        
 ; CLEAR CRC and save block size
         ld      d,0   ; crc
         push    bc
@@ -124,13 +122,8 @@ RECVDATABLOCK1:
 ; And read the Return Code back
 
         CALL    PIREADBYTE
-        CP      RC_CRCERROR
-        jr      z,RECVDATABLOCK_EXIT_ERR
-        cp      RC_SUCCESS
-        jr      z,RECVDATABLOCK2
-        ld      a,RC_FAILED
-        scf
-        ret
+        CP      RC_SUCCESS
+        jr      nz,RECVDATABLOCK_EXIT_ERR
 
 RECVDATABLOCK2:
 ; Discard HL in stack, because we want to return current memory address in HL
@@ -138,8 +131,6 @@ RECVDATABLOCK2:
 ;Return number of bytes read
         pop     bc
         or      a
-        scf
-        ccf
         ret
 
 ; Return de to original value and flag error
@@ -201,7 +192,6 @@ SENDDATABLOCK1:
         CALL    PIREADBYTE
         CP      RC_SUCCESS
         jr      nz,SENDDATABLOCK_EXIT_ERR
-
 ; Discard de, because we want to return current memory address in HL
         pop     af
         ld      a,RC_SUCCESS
@@ -885,6 +875,4 @@ slotatual:
         DB      00
 subsatual:
         DB      00
-
-
 
