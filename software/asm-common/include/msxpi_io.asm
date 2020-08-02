@@ -62,7 +62,7 @@ SENDIFCMD:
 ;-----------------------
 CHKPIRDY:
       push  bc
-      ld    b,0
+      ld    b,128
 CHKPIRDY_DELAY:
       djnz  CHKPIRDY_DELAY
       pop   bc

@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "1.0"
-build   = "20200720.00000"
+build   = "20200802.00000"
 TRANSBLOCKSIZE = 1024
 CRC = 0xAA
 
@@ -559,7 +559,7 @@ def pplay(parms):
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
-def file_upload(buf,blocksize=8192):
+def file_upload(buf,blocksize=512):
 
     fileidx = 0
     prevfileidx = 0
@@ -567,8 +567,6 @@ def file_upload(buf,blocksize=8192):
     filesize = len(buf)
 
     while (fileidx < filesize):
-        send_byte(RC_WAIT)
-        GPIO.output(misoPin, GPIO.LOW)
 
         if blocksize > filesize - fileidx:
             thisblocksize = filesize - fileidx
@@ -906,7 +904,7 @@ def ptest(parms=0):
     errors = 0
     n = 0
 
-    if int(parms) == 0:
+    if parms == '' or int(parms) == 0:
         countto = 255
     else:
         countto = int(parms)
@@ -937,6 +935,7 @@ def ptest(parms=0):
     for i in range(0,countto):
         send_byte((i) % 256)
         send_byte((i) / 256)
+
 
 # MSX-DOS Support 
 # ---------------

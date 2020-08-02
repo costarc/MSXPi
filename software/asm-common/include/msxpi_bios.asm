@@ -543,6 +543,9 @@ CHECKBUSY3:
 ;-----------------------
 PRINT:
         push    af
+        push    bc
+        push    de
+PRINT0:
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
         jr      Z,PRINTEXIT
@@ -557,9 +560,10 @@ PRINT:
 PRINT1:
         call	PUTCHAR		;put a character
         INC     hl
-        pop     af
-        jr      PRINT
+        jr      PRINT0
 PRINTEXIT:
+        pop     de
+        pop     bc
         pop     af
         ret
 
@@ -574,6 +578,8 @@ PRINTNLINE:
 ; PRINTNUMBER          |
 ;-----------------------
 PRINTNUMBER:
+        push    af
+        push    bc
         push    de
         ld      e,a
         push    de
@@ -588,6 +594,8 @@ PRINTNUMBER:
         AND     0FH
         call    PRINTDIGIT
         pop     de
+        pop     bc
+        pop     af
         ret
 
 PRINTDIGIT:

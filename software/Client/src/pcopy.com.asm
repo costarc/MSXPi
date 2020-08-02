@@ -52,7 +52,7 @@ COPYFILE:
         call    OPENFILEW
         jr      c,FOPENERR
         call    SETFILEFCB
-        call    GETFILE
+        call    FILE_DOWNLOAD
         ld      hl,txt_commerr
         call    c,PRINT
         call    CLOSEFILE
@@ -78,7 +78,7 @@ PREP_FCB1:
 ; This routime will read the whole file from Pi
 ; it will use blocks size fixed on the RPi side
 ; Each block is written to disk after download
-GETFILE:
+FILE_DOWNLOAD:
 
         LD      A,'.'
         CALL    PUTCHAR
@@ -89,18 +89,16 @@ GETFILE:
         ret     z
         cp     STARTTRANSFER
         jr     z,GETFILEWRITE
-        cp     RC_WAIT
-        jr     z,GETFILE1
         call   PRINTNUMBER
         scf
         ret 
-GETFILE1:
-        call    CHKPIRDY
+
 GETFILEWRITE:
 ; Buffer where data is stored during transfer, and also DMA for disk access
 
         ld      hl,DMA
         call    RECVDATABLOCK
+        CALL    DBGAF
         jr      c,GETFILESENDRCERR
 
 ; Set HL with the number of bytes transfered, DE with the DMA adress
@@ -115,14 +113,14 @@ GETFILESAVE:
         call    DSKWRITEBLK
         ld      a,SENDNEXT
         call    PIWRITEBYTE
-        jr      GETFILE 
+        jr      FILE_DOWNLOAD 
 
 GETFILESENDRCERR:
         ld      a,'!'
         call    PUTCHAR
         ld      a,RESEND
         call    PIWRITEBYTE
-        jr      GETFILE 
+        jr      FILE_DOWNLOAD 
 
 OPENFILEW:
         LD      DE,FILEFCB
