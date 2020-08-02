@@ -76,8 +76,6 @@ architecture rtl of MSXInterface is
     constant CTRLPORT1  : STD_LOGIC_VECTOR(7 downto 0) := x"5B";
     constant CTRLPORT2  : STD_LOGIC_VECTOR(7 downto 0) := x"5C";
 
-    
-    
     type fsm_type is (start,transferring);
     signal state : fsm_type := start;
     
@@ -88,12 +86,15 @@ architecture rtl of MSXInterface is
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
     signal rpi_enabled_s  : std_logic := '0';
+    signal msxpiserver    : std_logic := '0';
 	 
 begin
 
-    LED    <= rpi_enabled_s;
+    LED    <= not rpi_enabled_s;
     SPI_CS <= not rpi_enabled_s;
-    WAIT_n <= wait_n_s;
+    WAIT_n <= 'Z' when msxpiserver = '0' else
+              wait_n_s when rpi_en_s = '1' else
+				  SPI_MISO;
 
     readoper_s  <= not (IORQ_n or RD_n);
     writeoper_s <= not (IORQ_n or WR_n);
@@ -103,6 +104,17 @@ begin
          D_buff_pi_s when readoper_s = '1' and A = DATAPORT else
          "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
          "ZZZZZZZZ";
+
+    -- This process detects when msxpi-server component has initialized
+    -- If it has not started, /wait signal should not be enabled to allow MSX to start
+    -- Once it has ticked one time, we know msxpi-server has started,
+    -- then /wait can start to be driven by that rpi_rdy signal.
+    process(SPI_RDY)
+    begin
+        if (rising_edge(SPI_RDY)) then
+            msxpiserver <= '1';
+         end if;
+    end process;
 
     -- Triggers the interface
     process(rpi_en_s, SPI_RDY)
