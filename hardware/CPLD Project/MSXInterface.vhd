@@ -58,15 +58,14 @@ PORT (
     IORQ_n      : IN STD_LOGIC;
     RD_n        : IN STD_LOGIC;
     WR_n        : IN STD_LOGIC;
+    BUSDIR_n    : OUT STD_LOGIC;
     WAIT_n      : OUT STD_LOGIC;
     --
     SPI_CS      : OUT STD_LOGIC;
     SPI_SCLK    : IN STD_LOGIC;
     SPI_MOSI    : OUT STD_LOGIC;
     SPI_MISO    : IN STD_LOGIC;
-    SPI_RDY     : IN STD_LOGIC;
-    --
-    LED         : OUT STD_LOGIC);
+    SPI_RDY     : IN STD_LOGIC);
 END MSXInterface;
 
 architecture rtl of MSXInterface is
@@ -90,12 +89,14 @@ architecture rtl of MSXInterface is
 	 
 begin
 
-    LED    <= not rpi_enabled_s;
     SPI_CS <= not rpi_enabled_s;
-    WAIT_n <= 'Z' when msxpiserver = '0' else
-              wait_n_s when rpi_en_s = '1' else
-				  SPI_MISO;
+    BUSDIR_n <= '0' when (readoper_s = '1' and (A = CTRLPORT1 or A = CTRLPORT2 or A = DATAPORT)) 
+	        else '1';
+    WAIT_n <= 'Z' when msxpiserver = '0'
+         else wait_n_s when rpi_en_s = '1'
+         else SPI_MISO;
 
+						
     readoper_s  <= not (IORQ_n or RD_n);
     writeoper_s <= not (IORQ_n or WR_n);
     rpi_en_s    <= '1' when (A = DATAPORT and (writeoper_s = '1' or readoper_s = '1')) else '0';
