@@ -43,15 +43,16 @@ DSKBLOCKSIZE:   EQU 1
         call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
-        call    COPYFILE
-        ret
+        call    PIREADBYTE 
+        cp      RC_SUCCESS
+        jp      nz,PRINTPISTDOUT
 
 COPYFILE:
         call    PREP_FCB
         call    OPENFILEW
         jr      c,FOPENERR
         call    SETFILEFCB
-        call    GETFILE
+        call    FILE_DOWNLOAD
         ld      hl,txt_commerr
         call    c,PRINT
         call    CLOSEFILE
@@ -77,7 +78,7 @@ PREP_FCB1:
 ; This routime will read the whole file from Pi
 ; it will use blocks size fixed on the RPi side
 ; Each block is written to disk after download
-GETFILE:
+FILE_DOWNLOAD:
 
         LD      A,'.'
         CALL    PUTCHAR
@@ -88,12 +89,16 @@ GETFILE:
         ret     z
         cp     STARTTRANSFER
         jr     z,GETFILEWRITE
+        call   PRINTNUMBER
         scf
         ret 
+
 GETFILEWRITE:
 ; Buffer where data is stored during transfer, and also DMA for disk access
+
         ld      hl,DMA
         call    RECVDATABLOCK
+        CALL    DBGAF
         jr      c,GETFILESENDRCERR
 
 ; Set HL with the number of bytes transfered, DE with the DMA adress
@@ -108,14 +113,14 @@ GETFILESAVE:
         call    DSKWRITEBLK
         ld      a,SENDNEXT
         call    PIWRITEBYTE
-        jr      GETFILE 
+        jr      FILE_DOWNLOAD 
 
 GETFILESENDRCERR:
         ld      a,'!'
         call    PUTCHAR
         ld      a,RESEND
         call    PIWRITEBYTE
-        jr      GETFILE 
+        jr      FILE_DOWNLOAD 
 
 OPENFILEW:
         LD      DE,FILEFCB
@@ -177,11 +182,8 @@ txt_commerr:       DB "Communication Error with Raspberry Pi",13,10,"$"
 
 RUNOPTION:  db  0
 SAVEOPTION: db  0
-REGINDEX:   dw  0
+REGINDEX:   dw  0            
 
-FILEFCB:    ds     40
-
-INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
@@ -191,4 +193,6 @@ COMMAND:     DB      "pcopy"
 COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
 COMMAND_END: EQU $
              DS  128
+FILEFCB:    ds     40
+
 DMA:     EQU    $

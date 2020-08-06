@@ -1064,7 +1064,7 @@ STR_CALL_CMD:
 ENDOFCMDS:
         DB      00
 
-INCLUDE debug.asm
+;INCLUDE debug.asm
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm
 INCLUDE basic_stdio.asm

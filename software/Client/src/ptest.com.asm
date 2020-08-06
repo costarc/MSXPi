@@ -41,55 +41,65 @@
         call    PIREADBYTE    ; read return code
         cp      RC_WAIT
         call    z,CHKPIRDY
+        CALL    READDATASIZE
         CALL    PTEST
         RET
 
 PTEST:
+       push    bc
        ld      hl,txt_testsend
+       call    PRINT
+       call    DBGBC
+       ld      hl,txt_bytes
        call    PRINT
        ld      de,0
 LOOP:
        ld      a,e
        call    PIWRITEBYTE
-       ;call    waitrpi
        ld      a,d
        call    PIWRITEBYTE
-       ;call    waitrpi
        inc     de
-       ld      a,d
-       or      e
+       dec     bc
+       ld      a,b
+       or      c
        jr      nz,LOOP
 
+       call    READDATASIZE
+       ld      hl,txt_senderr
+       call    PRINT
+       call    DBGBC
+       call    PRINTNLINE
+
 PTEST_RECV:
+       pop     bc
        ld      hl,txt_testrecv
        call    PRINT
-
+       call    DBGBC
+       ld      hl,txt_bytes
+       call    PRINT
        ld      hl,0
        ld      de,0
 LOOP_RECV:
        call    PIREADBYTE
-       ;call    waitrpi
        cp      l
        jr      z,LOOP1
        inc     de
 LOOP1:
        call    PIREADBYTE
-       ;call    waitrpi
        cp      h
        jr      z,LOOP2
        inc     de
 LOOP2:
        inc     hl
-       ld      a,h
-       or      l
+       dec     bc
+       ld      a,b
+       or      c
        jr      nz,LOOP_RECV
        
-       ld      hl,txt_recv
+       ld      hl,txt_recverr
        call    PRINT
-       ld      a,D
-       call    PRINTNUMBER
-       ld      a,E
-       call    PRINTNUMBER
+       call    DBGDE
+       call    PRINTNLINE
        ret
 
 waitrpi:
@@ -100,10 +110,11 @@ waitpi2:
        pop    bc
        ret
 
-txt_send: DB      "Errors sending:$"
-txt_recv: DB      "Errors receiving:$"
-txt_testsend: DB "Testing Transmission",13,10,"$"
-txt_testrecv: DB "Testing reception",13,10,"$"
+txt_senderr: DB      "Errors sending:$"
+txt_recverr: DB      "Errors receiving:$"
+txt_testsend: DB "Sending $"
+txt_bytes: DB " Bytes",13,10,"$"
+txt_testrecv: DB "Receiving $"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

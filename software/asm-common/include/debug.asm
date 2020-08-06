@@ -32,6 +32,12 @@
 ; File history :
 ; 0.1    : initial version
 
+DBGAF:
+        PUSH    AF
+        CALL    PRINTNUMBER
+        POP     AF
+        RET
+
 DBGBC:
         PUSH    AF
         LD      A,B

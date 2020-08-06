@@ -44,13 +44,12 @@
 -- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
 -- 0111: Rev.4 batch, EPM3064ALC-44 (First public release)
 -- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84, not released
--- 1001: Rev.4 or later with /Wait mod, with EPROM, EPM3064ALC-44
+-- 1001: Version 1 Rev.0 with /Wait support, with EPROM, EPM3064ALC-44
 --
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
---use work.msxpi_package.all;
 
 ENTITY MSXInterface IS
 PORT ( 
@@ -59,15 +58,14 @@ PORT (
     IORQ_n      : IN STD_LOGIC;
     RD_n        : IN STD_LOGIC;
     WR_n        : IN STD_LOGIC;
+    BUSDIR_n    : OUT STD_LOGIC;
     WAIT_n      : OUT STD_LOGIC;
     --
     SPI_CS      : OUT STD_LOGIC;
     SPI_SCLK    : IN STD_LOGIC;
     SPI_MOSI    : OUT STD_LOGIC;
     SPI_MISO    : IN STD_LOGIC;
-    SPI_RDY     : IN STD_LOGIC;
-    --
-    LED         : OUT STD_LOGIC);
+    SPI_RDY     : IN STD_LOGIC);
 END MSXInterface;
 
 architecture rtl of MSXInterface is
@@ -77,8 +75,6 @@ architecture rtl of MSXInterface is
     constant CTRLPORT1  : STD_LOGIC_VECTOR(7 downto 0) := x"5B";
     constant CTRLPORT2  : STD_LOGIC_VECTOR(7 downto 0) := x"5C";
 
-    
-    
     type fsm_type is (start,transferring);
     signal state : fsm_type := start;
     
@@ -89,23 +85,18 @@ architecture rtl of MSXInterface is
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
     signal rpi_enabled_s  : std_logic := '0';
-    --signal msxpi_status_s : std_logic;
-	
-	signal D_buff_pi_debug_s    : std_logic_vector(7 downto 0);
-	
+    signal msxpiserver    : std_logic := '0';
+	 
 begin
 
-    LED    <= rpi_enabled_s;
     SPI_CS <= not rpi_enabled_s;
-    WAIT_n <= wait_n_s;
+    BUSDIR_n <= '0' when (readoper_s = '1' and (A = CTRLPORT1 or A = CTRLPORT2 or A = DATAPORT)) 
+	        else '1';
+    WAIT_n <= 'Z' when msxpiserver = '0'
+         else wait_n_s when rpi_en_s = '1'
+         else SPI_MISO;
 
-    --WAIT_n <= '0' when state = transferring else
-	--           '0' when SPI_MISO = '0' else 'Z';
-    
-	 --   msxpi_status_s <= "00" when SPI_MISO = '1' and rpi_enabled_s = '0' else
-     --                  "01" when SPI_MISO = '0' and rpi_enabled_s = '0' else
-     --                       "10";
-
+						
     readoper_s  <= not (IORQ_n or RD_n);
     writeoper_s <= not (IORQ_n or WR_n);
     rpi_en_s    <= '1' when (A = DATAPORT and (writeoper_s = '1' or readoper_s = '1')) else '0';
@@ -114,6 +105,17 @@ begin
          D_buff_pi_s when readoper_s = '1' and A = DATAPORT else
          "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
          "ZZZZZZZZ";
+
+    -- This process detects when msxpi-server component has initialized
+    -- If it has not started, /wait signal should not be enabled to allow MSX to start
+    -- Once it has ticked one time, we know msxpi-server has started,
+    -- then /wait can start to be driven by that rpi_rdy signal.
+    process(SPI_RDY)
+    begin
+        if (rising_edge(SPI_RDY)) then
+            msxpiserver <= '1';
+         end if;
+    end process;
 
     -- Triggers the interface
     process(rpi_en_s, SPI_RDY)
@@ -128,7 +130,7 @@ begin
     end process;
 
     -- Initialize serial/paralell process
-    process(rpi_enabled_s,rpi_en_s,SPI_SCLK)
+    process(rpi_enabled_s,SPI_SCLK)
     begin
         if (rpi_enabled_s = '0') then
             state <= start;
@@ -137,25 +139,16 @@ begin
         end if;
     end process;
     
-    -- Convert MSX data to serial / RPi serial to paralell
+    -- Convert MSX data to serial / RPi serial to parallel
     -- Send bits to RPi in serial mode, receive RPi bits and latches
     process(SPI_SCLK)
-	variable mosi_debug: std_logic_vector(7 downto 0);
     begin
          if (state = start) then
             D_buff_msx_s <= D;
         elsif rising_edge(SPI_SCLK) then
             D_buff_pi_s <= D_buff_pi_s(6 downto 0) & SPI_MISO;
             SPI_MOSI <= D_buff_msx_s(7);
-			
-			-- debug
-			mosi_debug := mosi_debug(6 downto 0) & D_buff_msx_s(7);
-			--
-			
-            D_buff_msx_s(7 downto 1) <= D_buff_msx_s(6 downto 0);			
+            D_buff_msx_s(7 downto 1) <= D_buff_msx_s(6 downto 0);
         end if;
-		
-		D_buff_pi_debug_s <= mosi_debug;
-		
     end process;
 end rtl;
