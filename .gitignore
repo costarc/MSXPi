@@ -1,6 +1,4 @@
 *.bin
-*.rom
-*.com
 *.swp
 *.bak
 .DS_Store
