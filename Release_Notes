@@ -12,7 +12,7 @@ On the software side, only changes are the addition of new commands to rewrite t
 - at28prot.com: Enable write protection on the EEPROM
 
 As of now, to write the EEPROM, the following sequence should be performed:
-1. run at28unpro
+1. run at28unpr
 2. run at28c256
 3. run at28prot
 
