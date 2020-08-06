@@ -51,16 +51,14 @@ PORT (
 	IORQ_n	: IN STD_LOGIC;
 	RD_n		: IN STD_LOGIC;
 	WR_n		: IN STD_LOGIC;
+	WAIT_n	: OUT STD_LOGIC;
 	BUSDIR	: OUT STD_LOGIC;
 	--
 	SPI_CS	: OUT STD_LOGIC;
 	SPI_SCLK	: IN STD_LOGIC;
 	SPI_MOSI	: OUT STD_LOGIC;
 	SPI_MISO	: IN STD_LOGIC;
-	SPI_RDY  : IN STD_LOGIC;
-	--
-	LED		: OUT STD_LOGIC
-);
+	SPI_RDY  : IN STD_LOGIC);
 END MSXInterface;
 
 library ieee;
@@ -95,7 +93,7 @@ architecture rtl of MSXInterface is
 	
 begin
 
-	LED <= not SPI_RDY_s;
+	WAIT_n <= 'Z';
 	BUSDIR <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
 	
 	readoper   <= not (IORQ_n or RD_n);
