@@ -63,14 +63,13 @@ PORT (
     SPI_SCLK    : IN STD_LOGIC;
     SPI_MOSI    : OUT STD_LOGIC;
     SPI_MISO    : IN STD_LOGIC;
-    SPI_RDY     : IN STD_LOGIC
-);
+    SPI_RDY     : IN STD_LOGIC);
 END MSXInterface;
 
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1000";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -98,9 +97,7 @@ architecture rtl of MSXInterface is
 begin
 
     WAIT_n <= 'Z';
-    -- LED <= not SPI_RDY_s;
     BUSDIR_n <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
-    
     readoper   <= not (IORQ_n or RD_n);
     writeoper  <= not (IORQ_n or WR_n);
     spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
@@ -109,11 +106,8 @@ begin
     -- SPI_en_s = '1' means SPI is busy
     -- SPI_RDY  = '1' means Pi is Busy
     SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
-    
     RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
-    
     D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
-
     D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else     
          D_buff_pi when readoper = '1' and A = DATAPORT1 else
           "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 

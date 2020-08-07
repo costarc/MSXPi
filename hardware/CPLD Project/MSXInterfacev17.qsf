@@ -75,5 +75,6 @@ set_location_assignment PIN_34 -to SPI_SCLK
 
 set_global_assignment -name MAX7000_DEVICE_IO_STANDARD "3.3-V LVTTL"
 set_location_assignment PIN_12 -to SPI_RDY
-set_location_assignment PIN_8 -to WAIT
-set_location_assignment PIN_6 -to BUSDIR
+set_location_assignment PIN_6 -to BUSDIR_n
+set_location_assignment PIN_8 -to WAIT_n
+
