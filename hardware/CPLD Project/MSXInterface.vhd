@@ -42,7 +42,8 @@
 -- 0101: Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44
 -- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
 -- 0111: Rev.4 batch, EPM3064ALC-44
--- 1000: V1.0 Rev.0, with EPROM and support to /Wait signal, EPM3064ALC-44
+-- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
+-- 1001: General Release V1.0 Rev 1, EEPROM AT28C256, EPM7128SLC-84
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
