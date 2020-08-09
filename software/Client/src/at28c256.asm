@@ -995,7 +995,7 @@ wait_eeprom0:
     txt_help: db "Command line options: at28c256 </h | /i> </s /f file.rom>",13,10,13,10
     db "/h Show this help",13,10
     db "/s <slot number>",13,10
-    db "/i Show initial 24 byets of the slot cartridge",13,10
+    db "/i Show initial 24 bytes of the slot cartridge",13,10
     db "/f File name with extension, for example game.rom",13,10,0
 
 parms_table:    

@@ -1,4 +1,8 @@
+<<<<<<< HEAD:hardware/Schematic/MSXPi_v1.0_Rev1/MSXPi1.pro
 update=07/08/2020 01:39:47
+=======
+update=08/08/2020 18:54:25
+>>>>>>> d0c52a4c0bc8a731a0fd5ea8aba296ebf662537e:hardware/Schematic/MSXPi_v1.1_Rev0/MSXPi1.pro
 version=1
 last_client=kicad
 [general]
