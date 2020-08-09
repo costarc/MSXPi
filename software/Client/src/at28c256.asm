@@ -130,21 +130,22 @@ RAMAD3:         EQU     $F344       ; slotid DOS ram page 3
                                 ; if could not find the cartridge, exit with error message
     ld      hl,txt_ramnotfound
     jp      c,print
-                                ; Found writable memory therefore can continue 
+write:
+
+                                ; Found writable memory (or received slot number
+                                ; from CLI) therefore can continue 
                                 ; writing the ROM into the eeprom
     push    af
-    ld      hl,txt_ramfound
-    call    print
-    pop     af
-    push    af
-    call    PRINTNUMBER
-    call    PRINTNEWLINE
     ld      hl,txt_ffound
     call    print
-    pop     af                  ; slot with ram is in (thisslt)
+    ld      hl,txt_writingflash
+    call    print
+    pop     af
+    call    PRINTNUMBER
+    call    PRINTNEWLINE
+
                                 ; read filename passed with DOS command line
                                 ; and update fcb with filename
-write:
     ld      a,(thisslt)
     call    disable_w_prot
     call    openfile
@@ -962,12 +963,12 @@ wait_eeprom0:
     txt_ramfound:  db "Found writable memory in slot ",0
     txt_newline:   db 13,10,0
     txt_ramnotfound: db "EEPROM not found",13,10,0
-    txt_writingflash: db "Writing to EEPROM on slot ",0
+    txt_writingflash: db "Writing file to EEPROM in slot ",0
     txt_completed: db "Completed.",13,10,0
     txt_nofn: db "Filename is empty or not valid",13,10,0
     txt_fileopenerr: db "Error opening file",13,10,0
     txt_fnotfound: db "File not found",13,10,0
-    txt_ffound: db "Reading file",13,10,0
+    txt_ffound: db "Reading file from disk",13,10,0
     txt_err_reading: db "Error reading data from file",13,10,0
     txt_endoffile: db "End of file",13,10,0
     txt_noparams: db "No command line parameters passed",13,10,0
@@ -994,7 +995,7 @@ wait_eeprom0:
     txt_help: db "Command line options: at28c256 </h | /i> </s /f file.rom>",13,10,13,10
     db "/h Show this help",13,10
     db "/s <slot number>",13,10
-    db "/i Show initial 256 byets of the slot cartridge",13,10
+    db "/i Show initial 24 bytes of the slot cartridge",13,10
     db "/f File name with extension, for example game.rom",13,10,0
 
 parms_table:    
