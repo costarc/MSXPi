@@ -649,7 +649,7 @@ def readf_tobuf(fpath,buf,ftype):
 def pplay(cmd):
     rc = RC_SUCCESS
     
-    cmd = "bash " + RAMDISK + "/pplay.sh PPLAY "+cmd+" >" + RAMDISK + "/msxpi.tmp"
+    cmd = "bash " + RAMDISK + "/pplay.sh " + " PPLAY "+psetvar[0][1]+ " "+cmd+" >" + RAMDISK + "/msxpi.tmp"
     cmd = str(cmd)
     
     #print "pplay:starting command:len:",cmd,len(cmd)
