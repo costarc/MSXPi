@@ -96,7 +96,7 @@ iftable:
         dw      ifv6
         dw      ifv7
         dw      ifv8
-		dw      ifv9
+        dw      ifv9
         dw      ifukn
 
 ifv1:   DB      "(0001) Wired up prototype, without EPROM,EPM3064ALC-44","$"

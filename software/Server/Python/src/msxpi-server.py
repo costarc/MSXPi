@@ -18,8 +18,8 @@ import select
 import base64
 from random import randint
 
-version = "0.8.2"
-build   = "20200221.00077"
+version = "0.9.0"
+build   = "20200810.00000"
 TRANSBLOCKSIZE = 1024
 
 # Pin Definitons
@@ -394,7 +394,7 @@ def ploadr(basepath, file):
                     sendstdmsg(rc,"Pi:Error unknow downloading file")
             if (rc == RC_SUCCESS):
                 #print "ploadr:checking rom"
-                if (buf[0]=='A' and buf[1]=='B'):
+                if (buf[0]=='A' and buf[1]=='B' and len(buf) <= 32768):
                     fh = open(RAMDISK+'/msxpi.tmp', 'wb')
                     fh.write(buf)
                     fh.flush()
@@ -413,9 +413,9 @@ def ploadr(basepath, file):
                             GPIO.output(rdyPin, GPIO.LOW)
                             sendstdmsg(rc,"Pi:Ok\n")
                 else:
-                    print "pload:not a ROM file"
+                    print "pload:Not a valid 8/16/32KB ROM file"
                     rc = RC_FAILED
-                    sendstdmsg(rc,"Pi:Error - not a ROM file")
+                    sendstdmsg(rc,"Pi:Error - Not a valid 8/16/32KB ROM file")
         else:
             print "pload:syntax error in command"
             rc = RC_FAILED
