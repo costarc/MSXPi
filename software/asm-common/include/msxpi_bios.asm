@@ -89,6 +89,8 @@ SENDPICMD:
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
+; It will return with return code ENDTRANSFER when
+;    size of block = zero
 ; Input:
 ;   de = memory address to write the received data
 ; Output:
@@ -107,15 +109,22 @@ RECVDATABLOCK:
 
 ;Get number of bytes to transfer
         call    READDATASIZE
-
+        ld      a,b
+        or      c
+        ld      a,ENDTRANSFER
+        ret     z
+        inc     bc
 ; CLEAR CRC and save block size
         ld      h,0
-        push    bc
         push    de
+; Get number of attempts
+        call    PIEXCHANGEBYTE
+        ld      l,a     ; number of attempts
 
+RECVDATABLOCK0:
+        push    bc      ; blocksize        
 RECVDATABLOCK1:
 ; send info that msx is in transfer mode
-        ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         ld      (de),a
         xor     h
@@ -136,21 +145,23 @@ RECVDATABLOCK1:
         cp      h
         jr      nz,RECVDATABLOCK_CRCERROR
 
-; Discard de, because we want to return current memory address
-
-        pop     af
-
-;Return number of bytes read
-
+;Return number of bytes read 8
         pop     bc
+; Discard de, because we want to return current memory address
+        pop     af
         ld      a,RC_SUCCESS
         or      a
         ret
 
 ; Return de to original value and flag error
 RECVDATABLOCK_CRCERROR:
-        pop     de
-        pop     bc
+        pop     bc             ; restore blocksize
+        ld      a,l            ; get number of attemps
+        dec     a
+        ld      l,a
+        or      a
+        jr      nz,RECVDATABLOCK0  ; try again
+        pop     de                 ; restore original address in DE
         ld      a,RC_CRCERROR
         scf
         ret
@@ -418,7 +429,6 @@ DOWNLOADDATA:
 ; Because of that, we now read back the actual block size that should be read
 
         call    READDATASIZE
-;       call    DBGBC
 
 RETRYLOOP:
 
@@ -446,6 +456,10 @@ READDLOOP2:
         ld      (de),a
         xor     h
         ld      h,a
+        ;
+        ld      a,(DE)
+        call    PUTCHAR
+        ;
         inc     de
         dec     bc
         ld      a,b
@@ -636,17 +650,17 @@ PRINTNUM1:
         ret
 
 PRINTPISTDOUT:
-        push    af
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
-        jr      z,PRINTPI0
-        pop     af
-        scf
-        ret
+        ld      a,RC_OUTOFSYNC
+        ret     nz
 PRINTPI0:
         call    READDATASIZE
-        pop     af
+        ld      a,b
+        or      c
+        ret     z
+        call    PIEXCHANGEBYTE    ; read block size, but will not use it
         push    hl
         ld      h,0
 PRINTPI1:
@@ -666,34 +680,6 @@ PRINTPI2:
         ld      a,b
         or      c
         jr      nz,PRINTPI1
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        pop     hl
-        ret
-
-NOSTDOUT:
-        push    af
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        jr      z,NOSTDOUT0
-        pop     af
-        scf
-        ret
-NOSTDOUT0:
-        call    READDATASIZE
-        pop     af
-        push    hl
-        ld      h,0
-NOSTDOUT1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        xor     h
-        ld      h,a
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,NOSTDOUT1
         ld      a,h
         call    PIEXCHANGEBYTE
         pop     hl

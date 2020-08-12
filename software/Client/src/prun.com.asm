@@ -41,22 +41,9 @@ ORG     $0100
     LD      A,SENDNEXT
     CALL    PIEXCHANGEBYTE
     CP      RC_WAIT
-    SCF
-    RET     NZ
-WAITLOOP:
-    CALL    CHECK_ESC
-    JR      C,PRINTPIERR
-    CALL    CHKPIRDY
-    JR      C,WAITLOOP
-    ; Loop waiting download on Pi
+    JR      NZ,PRINTPIERR
     LD      A,SENDNEXT
     CALL    PIEXCHANGEBYTE
-    CP      RC_FAILED
-    JR      Z,SHOWSTD
-    CP      RC_SUCCESS
-    JR      NZ,WAITLOOP
-
-SHOWSTD:
     CALL    PRINTPISTDOUT
     RET
 

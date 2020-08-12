@@ -38,28 +38,14 @@
         LD      DE,DIRCMD
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
+        JR      Z,WAIT_LOOP
 
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCNOSTD
-        JR      NZ,WAITLOOP
-        RET
-
+        JP      PRINTPISTDOUT
+ 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT

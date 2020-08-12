@@ -43,22 +43,10 @@
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCNOSTD
-        JR      NZ,WAITLOOP
-        RET
+        JP      PRINTPISTDOUT
+
 
 PRINTPIERR:
         LD      HL,PICOMMERR

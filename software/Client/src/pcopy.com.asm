@@ -38,47 +38,22 @@ DSKBLOCKSIZE:   EQU 1
         ORG     $0100
 
         LD      BC,5
-        LD      DE,PCOPYCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
 
-; SYNC TO RECEIVE FILENAME
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        LD      HL,PICOMMERR
-        JR      C,PRINTERRMSG
-        CP      SENDNEXT
-        JR      NZ,EXITSTDOUT
-
+        CP      RC_WAIT
+        JR      NZ,PRINTPIERR
+        CALL    CHKPIRDY
+        CALL    PIREADBYTE
+        CP      RC_SUCCESS
+        JP      NZ,EXITSTDOUT
         CALL    INIFCB
 
 ; READ FILENAME
         CALL    READPARMS
         JR      C,PRINTPIERR
-
-; Sync to wait Pi download the file
-; Since a network transfer my get delayed, this routine
-; will loop waiting RC_SUCCESS until Pi responds
-; Loop can be interrupted by ESC
-
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        SCF
-        RET     NZ
-WAITLOOP:
-        CALL    CHECK_ESC
-        LD      A,RC_ESCAPE
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JR      Z,EXITSTDOUT
-        CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
 
         CALL    PRINTFNAME
 
@@ -161,12 +136,6 @@ PLOOP:
 GETFILE:
 DSKREADBLK:
 
-; SEND COMMAND TO TRANSFER NEXT BLOCK
-        LD      BC,5
-        LD      DE,PCOPYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
         LD      A,'.'
         CALL    PUTCHAR
 
@@ -211,96 +180,15 @@ DSKREADBLK:
         JR      DSKREADBLK
 
 READPARMS:
-VERDRIVE:
-; READ FILENAME
-        LD      DE,DMA
-        CALL    RECVDATABLOCK
-        PUSH    AF
-        XOR     A
-        LD      (DE),A
-        POP     AF
-        RET     C
-        LD      HL,DMA+1
-        LD      A,(HL)
-        DEC     HL
-        CP      ":"
-        JR      Z,GETDRIVEID
-        XOR     A
-
-; This function will fill the FCB with a valid filename
-; Longer filenames are truncated yo 8.3 format.
-
-GET_NAME:
-READPARMS0:
+; READ FILENAME DIRECTLY INTO THE FCB AREA
         LD      DE,FILEFCB
+        LD      B,12
+READPARMS0:
+        CALL    PIREADBYTE
         LD      (DE),A
         INC     DE
-        LD      B,8
-READPARMS1:
-        LD      A,(HL)
-        CP      "."
-        JR      Z,FILLNAME
-        CP      0
-        JR      Z,FILLNAMEEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1
-
-GET_EXT:
-        LD      B,3
-        LD      A,(HL)
-        INC     HL
-        CP      0
-        JR      Z,FILLEXT
-        CP      "."
-        JR      Z,READPARMS1B
-        DEC     HL
-READPARMS1B:
-        LD      A,(HL)
-        CP      0
-        JR      Z,FILLEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1B
+        DJNZ    READPARMS0
         RET
-
-FILLNAMEEXT:
-        INC     B
-        INC     B
-        INC     B
-        JR      FILLEXT
-
-FILLNAME:
-        LD      A,$20
-FILLNAME0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLNAME0
-        JR      GET_EXT
-
-FILLEXT:
-        LD      A,$20
-FILLEXT0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLEXT0
-        RET
-
-GETDRIVEID:
-READPARMS3:
-        LD      A,(HL)
-        LD      B,'A'
-        CP      'a'
-        JR      C,READPARMS4
-        LD      B,'a'
-READPARMS4:
-        SUB     B
-        ADD     1
-        INC     HL
-        INC     HL
-        JR      GET_NAME
 
 OPENFILEW:
         LD      DE,FILEFCB
@@ -354,8 +242,7 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-PCOPYCMD:   DB      "PCOPY"
-LOADROMCMD: DB      "PLOADROM"
+COMMAND:    DB      "PCOPY"
 FNTITLE:    DB      "Saving file:$"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PIUNKNERR:  DB      "Unknown error",13,10,"$"
@@ -369,6 +256,7 @@ RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
 FILEFCB:    ds     40
+
 INCLUDE "debug.asm"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
@@ -376,3 +264,5 @@ INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
 DMA:     EQU    $
+
+
