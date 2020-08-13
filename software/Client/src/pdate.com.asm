@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,8 +31,9 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Changes to supoprt new transfer logic
 ;
-;     Parameters:    C = 2BH (_SDATE)
+;Parameters:    C = 2BH (_SDATE)
 ;HL = Year 1980...2079
 ;D = Month (1=Jan...12=Dec)
 ;E = Date (1...31)
@@ -47,51 +48,28 @@
 ;Results:       A = 00H if time was valid
 
 ; Start of command - You may not need to change this
+
         ORG     $0100
-        LD      DE,CMDSTR
-        LD      BC,CMDSTREND-CMDSTR
+
+        LD      BC,5
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-; Communication error?
         JR      C,PRINTPIERR
 
-; -------------------------------------------------
-; Sync protocol. You should not have to change this
-; -------------------------------------------------
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
 
-; Command successful, then we need to read the data
-; sent by RPi. No stdout.
-        CP      RC_SUCCNOSTD
-        JR      Z,MYCOMMAND
-
-; There is data plus stdout to show
-        CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
-        CALL    MYCOMMAND
+        CALL    SETCLOCK
         JP      PRINTPISTDOUT
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
 
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
 ; --------------------------------
-MYCOMMAND:
+SETCLOCK:
 ; set date
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
@@ -125,9 +103,12 @@ MYCOMMAND:
         CALL    BDOS
         RET
 
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
 ; Replace with your command name here
-CMDSTR:  DB      "PDATE"
-CMDSTREND:  EQU $
+COMMAND:  DB      "PDATE"
 
 ; --------------------------------------
 ; End of your command

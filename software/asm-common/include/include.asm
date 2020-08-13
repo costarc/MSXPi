@@ -75,3 +75,4 @@ ERRFLG:         EQU     $F414
 HIMEM:          EQU     $FC4A
 MSXPICALLBUF:   EQU     $E3D8
 
+DMA:     EQU    $

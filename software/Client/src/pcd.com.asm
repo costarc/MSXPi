@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Changes to supoprt new transfer logic
 
         ORG     $0100
 

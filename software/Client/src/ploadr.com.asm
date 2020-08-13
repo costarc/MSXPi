@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,33 +31,23 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9    : Rewritten to support new block download logic
 
         ORG     $0100
-
-LOADROMPROG:
         LD      BC,6
-        LD      DE,LOADROMCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-; wait RPi to load the program
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
         CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCNOSTD
-        JR      Z,LOADREADY
         CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
+        JP      NZ,EXITSTDOUT
+
 LOADREADY:
 
         LD      HL,LOADPROGRESS
@@ -65,14 +55,6 @@ LOADREADY:
         CALL    LOADROM
 
 LOADROMPROG1:
-        CALL    PIEXCHANGEBYTE
-        PUSH    HL
-        PUSH    AF
-        CALL    PRINTPISTDOUT
-        POP     AF
-        POP     HL
-        CP      ENDTRANSFER
-;        JP      NZ,0
 
         PUSH    HL
         LD      HL,0
@@ -92,20 +74,22 @@ LOADROM:
 ; Will load the ROM directly on the destiantion page in $4000
 ; Might be slower, but that is what we have so far...
 ;Get number of bytes to transfer
-        LD      A,STARTTRANSFER
-        CALL    PIEXCHANGEBYTE
+        LD      DE,$4000
+LOADROM0:
+        LD      A,'.'
+        CALL    PUTCHAR
+        CALL    RECVDATABLOCK
         RET     C
-        CP      STARTTRANSFER
+        CP      ENDTRANSFER
+        JR      Z,LOADROMEND
+        CP      RC_SUCCESS
         SCF
         RET     NZ
-        LD      DE,$4000
-        CALL    RECVDATABLOCK
-        JR      C,LOADPROGERR
+        JR      LOADROM0
 ; File load successfully.
 ; Return C reseted, and A = filetype
 LOADROMEND:
-        LD      HL,($4002)    ; ROM exec address
-        LD      A,ENDTRANSFER
+        LD      HL,($4002)    ;ROM exec address
         OR      A             ;Reset C flag
         RET
 
@@ -115,7 +99,12 @@ LOADPROGERR:
         SCF
         RET
 
-LOADROMCMD:
+EXITSTDOUT:
+        CALL    PRINTNLINE
+        CALL    PRINTPISTDOUT
+        jp      0
+
+COMMAND:
         DB      "PLOADR"
 
 PICOMMERR:

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.9    : Simplification of block transfers routines.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -38,8 +39,6 @@
 ;           of the calling function, which might opt to do something else.
 ; 0.6c   : Initial version commited to git
 ;
-
-; Inlude file for other sources in the project
 
 ;-----------------------
 ; SYNCH                |
@@ -106,14 +105,13 @@ RECVDATABLOCK:
         scf
         ld      a,RC_OUTOFSYNC
         ret     nz
-
 ;Get number of bytes to transfer
         call    READDATASIZE
         ld      a,b
         or      c
         ld      a,ENDTRANSFER
         ret     z
-        inc     bc
+
 ; CLEAR CRC and save block size
         ld      h,0
         push    de
@@ -124,6 +122,7 @@ RECVDATABLOCK:
 RECVDATABLOCK0:
         push    bc      ; blocksize        
 RECVDATABLOCK1:
+
 ; send info that msx is in transfer mode
         call    PIEXCHANGEBYTE
         ld      (de),a
@@ -685,6 +684,34 @@ PRINTPI2:
         pop     hl
         ret
 
+NOSTDOUT:
+        push    af
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        jr      z,NOSTDOUT0
+        pop     af
+        scf
+        ret
+NOSTDOUT0:
+        call    READDATASIZE
+        pop     af
+        push    hl
+        ld      h,0
+NOSTDOUT1:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        xor     h
+        ld      h,a
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,NOSTDOUT1
+        ld      a,h
+        call    PIEXCHANGEBYTE
+        pop     hl
+        ret
+        
 SEARCHMSXPISLOT:
         di
         call    RSLREG
@@ -914,7 +941,6 @@ slotatual:
         DB      00
 subsatual:
         DB      00
-
 
 
 

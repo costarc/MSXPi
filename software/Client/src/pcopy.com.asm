@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Changes to supoprt new transfer logic
 
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
@@ -41,7 +42,7 @@ DSKBLOCKSIZE:   EQU 1
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
         JR      C,PRINTPIERR
-
+        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
         JR      NZ,PRINTPIERR
@@ -49,6 +50,7 @@ DSKBLOCKSIZE:   EQU 1
         CALL    PIREADBYTE
         CP      RC_SUCCESS
         JP      NZ,EXITSTDOUT
+
         CALL    INIFCB
 
 ; READ FILENAME
@@ -63,9 +65,6 @@ DSKBLOCKSIZE:   EQU 1
 
         CALL    GETFILE
         JR      C,PRINTPIERR
-
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
 
         CALL    CLOSEFILE
 
@@ -139,20 +138,12 @@ DSKREADBLK:
         LD      A,'.'
         CALL    PUTCHAR
 
-; BLOCK SIZE TO USE
-        LD      BC,DSKNUMREGISTERS
-
 ; Buffer where data is stored during transfer, and also DMA for disk access
         LD      DE,DMA
 
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
-
-; A = 1 Tells the download routine to show dots or every 256 bytes transfered
-; The routine rturns C set is there was a communication error
-        LD      A,0
-        CALL    DOWNLOADDATA
+        CALL    RECVDATABLOCK
         RET     C
-
 ; The routine return A = status code,
 ; ENDTRANSFER means the transfer ended.
 ; Note that the last block of data was transferd in the previous call,
@@ -167,16 +158,13 @@ DSKREADBLK:
         SCF
         RET     NZ
 
-; Set HL with the number of bytes transfered.
-; This is needed because the last block may be smaller than DSKNUMREGISTERS,
-; And this math below will make sure only the actual number of bytes are written to disk.
-; When the DOWNLOADDATA routine ends, DE contain the DMA + number of bytes transfered
-; Also, clearing Carry with "OR A" "is required or the math may be incorrect.
-        LD      HL,DMA
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-        CALL    DSKWRITEBLK
+; Set HL with the number of bytes received
+
+        LD      H,B
+        LD      L,C
+        LD      DE,FILEFCB
+        LD      C,$26
+        CALL    BDOS
         JR      DSKREADBLK
 
 READPARMS:
@@ -198,13 +186,6 @@ OPENFILEW:
         RET     Z
 ; Error opening file
         SCF
-        RET
-
-
-DSKWRITEBLK:
-        LD      DE,FILEFCB
-        LD      C,$26
-        CALL    BDOS
         RET
 
 INIFCB:
@@ -257,12 +238,11 @@ SAVEOPTION: db  0
 REGINDEX:   dw  0
 FILEFCB:    ds     40
 
-INCLUDE "debug.asm"
-INCLUDE "include.asm"
+;INCLUDE "debug.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+INCLUDE "include.asm"
 
-DMA:     EQU    $
 
 

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,29 +31,22 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Update code to supoprt new v0.9 logic
 
     ORG     $0100
 
     LD      BC,4
-    LD      DE,MYCMD
+    LD      DE,COMMAND
     CALL    DOSSENDPICMD
+
     LD      A,SENDNEXT
     CALL    PIEXCHANGEBYTE
     CP      RC_WAIT
-    SCF
-    RET     NZ
-WAITLOOP:
-    CALL    CHECK_ESC
-    JR      C,PRINTPIERR
-    CALL    CHKPIRDY
-    JR      C,WAITLOOP
-    ; Loop waiting download on Pi
+    JR      NZ,PRINTPIERR
     LD      A,SENDNEXT
     CALL    PIEXCHANGEBYTE
-    CP      RC_FAILED
-    JR      Z,SHOWSTD
-    CP      RC_SUCCESS
-    JR      NZ,WAITLOOP
+    CALL    PRINTPISTDOUT
+    RET
 
 SHOWSTD:
     CALL    PRINTPISTDOUT
@@ -61,10 +54,9 @@ SHOWSTD:
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
 
-MYCMD:  DB      "PSET"
+COMMAND:DB      "PSET"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"

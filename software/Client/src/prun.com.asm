@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,11 +31,12 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Changes to supoprt new transfer logic
 
 ORG     $0100
 
     LD      BC,4
-    LD      DE,MYCMD
+    LD      DE,COMMAND
     CALL    DOSSENDPICMD
 
     LD      A,SENDNEXT
@@ -48,11 +49,10 @@ ORG     $0100
     RET
 
 PRINTPIERR:
-    LD      HL,PICOMMERR
-    CALL    PRINT
-    JP      0
+        LD      HL,PICOMMERR
+        JP      PRINT
 
-MYCMD:
+COMMAND:
     DB      "PRUN"
 
 PICOMMERR:

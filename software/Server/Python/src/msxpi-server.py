@@ -20,7 +20,7 @@ from random import randint
 
 version = "0.9.0"
 build   = "20200810.00001"
-BLKSIZE = 1024
+BLKSIZE = 8192
 
 # Pin Definitons
 csPin   = 21
@@ -169,25 +169,24 @@ def senddatablock(buf,blocksize,blocknumber,attempts=1):
     bufsize = len(buf)
     bufpos = blocksize*blocknumber
 
-    
     if (blocksize <= bufsize - bufpos):
         thisblocksize = blocksize
     else:
-        thisblocksize = bufsize < bufpos
-
-    if thisblocksize <= 0:
-        thisblocksize = 0
+        thisblocksize = bufsize - bufpos
+        if thisblocksize < 0:
+            thisblocksize = 0
 
     msxbyte = piexchangebyte(SENDNEXT)
+
     if (msxbyte != SENDNEXT):
         print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte)
         return RC_OUTOFSYNC
     else:
         piexchangebyte(thisblocksize % 256)
         piexchangebyte(thisblocksize / 256)
-        if blocksize == 0:
+        if thisblocksize == 0:
             return ENDTRANSFER
-    
+
     piexchangebyte(attempts)
 
     while (attempts > 0 and rc != RC_SUCCESS):
@@ -195,18 +194,22 @@ def senddatablock(buf,blocksize,blocknumber,attempts=1):
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            crc ^= pibyte
+            #print(bytecounter,bufpos+bytecounter,chr(pibyte))
+            if bufpos != 2:
+                crc ^= pibyte
             bytecounter += 1
 
         attempts -= 1
 
         msxcrc = piexchangebyte(crc)
-        #print "senddatablock:CRC local:remote = ",crc,":",mymsxbyte[1]
+        #print("senddatablock:CRC RPi:MSX = ",crc,msxcrc)
         if (msxcrc != crc):
             rc = RC_CRCERROR
+            print("RC_CRCERROR")
         else:
             rc = RC_SUCCESS
     
+    #print("senddatablock exit:",hex(rc))
     return rc 
 
 
@@ -309,12 +312,11 @@ def ini_fcb(fname):
     piexchangebyte(msxdrive)
     for i in range(0,11):
         piexchangebyte(ord(msxfcbfname[i]))
-        print(msxfcbfname[i]),
 
 def prun(cmd):
     piexchangebyte(RC_WAIT)
     rc = RC_SUCCESS
-    
+
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         print "prun:syntax error"
         sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
@@ -400,7 +402,7 @@ def pcd(path):
             #print "pcd:calling getpath"
             urlcheck = getpath(basepath, path)
             newpath = urlcheck[1]
-            print "pcd:getpath returned:",newpath
+
             if (newpath[:4] == "http" or \
                 newpath[:3] == "ftp" or \
                 newpath[:3] == "nfs" or \
@@ -409,8 +411,7 @@ def pcd(path):
                 psetvar[0][1] = newpath
                 sendstdmsg(rc,str(newpath+'\n'))
             else:
-                newpath = str(newpath) #[:len(newpath)-1])
-                print "newpath=",type(newpath),len(newpath)
+                newpath = str(newpath)
                 if (os.path.isdir(newpath)):
                     psetvar[0][1] = newpath
                     sendstdmsg(rc,newpath+'\n')
@@ -424,15 +425,14 @@ def pcd(path):
 
     return [rc, newpath]
 
-def pcopy(path=''):
+def pcopy(path='',inifcb=True):
     piexchangebyte(RC_WAIT)
-    print("pcopy function")
+
     buf = ''
     rc = RC_SUCCESS
 
     global psetvar
     basepath = psetvar[0][1]
-    pcopyindex = 0
     
     if (path.startswith('http') or \
         path.startswith('ftp') or \
@@ -447,8 +447,6 @@ def pcopy(path=''):
 
     fileinfo = fileinfo.split()
 
-    print("fileinfo, Types = ",fileinfo,type(basepath),type(path))
-
     if len(fileinfo) == 1:
         fname_rpi = str(fileinfo[0])
         fname_msx_0 = fname_rpi.split('/')
@@ -461,14 +459,13 @@ def pcopy(path=''):
         sendstdmsg(RC_FAILED,"Pi:Command line parametrs invalid.")
         return RC_FAILED
 
-    print("Pi:Reading:",basepath,"/",fname_rpi)
-
     urlcheck = getpath(basepath, path)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
         try:
             with open(fname_rpi, mode='rb') as f:
                 buf = f.read()
+            filesize = len(buf)
  
         except Exception as e:
             print("pcopy:",str(e))
@@ -476,38 +473,180 @@ def pcopy(path=''):
             return RC_FAILED
 
     else:
-        # basepath is network
-        print("pcopy:urlcheck[1]:",fname_rpi)
         try:
-            parser = MyHTMLParser()
-            #creds = base64.encodestring('%s:%s' % (username, password)).replace('anonymous', 'anonymous@mail.com')
-            #parser.add_header("Authorization", "Basic %s" % creds)
-            htmldata = urllib2.urlopen(fname_rpi.decode()).read()
-            parser = MyHTMLParser()
-            parser.feed(htmldata)
-            buf = " ".join(parser.HTMLDATA)
-    
+            urlhandler = urllib2.urlopen(fname_rpi)
+            #print("pcopy:urlopen rc:",urlhandler.getcode())
+            buf = urlhandler.read()
+            filesize = len(buf)
+            
         except Exception as e:
+            rc = RC_FAILED
             print "pcopy:http error "+ str(e)
             sendstdmsg(RC_FAILED,"Pi:"+str(e))
-
+    
     if rc == RC_SUCCESS:
         if filesize == 0:
             sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
         else:
-            msxbyte = piexchangebyte(RC_SUCCESS)
-            ini_fcb(fname_msx)         
+            if inifcb:
+                msxbyte = piexchangebyte(RC_SUCCESS)
+                ini_fcb(fname_msx)
+            else:
+                if filesize > 32768:
+                    return RC_INVALIDDATASIZE
+
+                msxbyte = piexchangebyte(RC_SUCCESS)
+
             blocknumber = 0   
             while (rc == RC_SUCCESS):
-                #cmd = "sudo " + RAMDISK + "/uploaddata.msx " + RAMDISK + "/msxpi.tmp " + str(filesize) + " " + str(pcopyindex) + " " + str(GLOBALRETRIES)
-                #rc = subprocess.call(cmd, shell=True)
-                #init_spi_bitbang()
-                #GPIO.output(rdyPin, GPIO.LOW)
-                #print "pcopy:received from bufsend.c:",hex(rc) 
-                rc = senddatablock(buf,BLKSIZE,blocknumber,attempts=5)
+                rc = senddatablock(buf,BLKSIZE,blocknumber,attempts=1)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
     return rc
+
+def ploadr(path=''):
+    rc = pcopy(path,False)
+    if rc == RC_INVALIDDATASIZE:
+        sendstdmsg(rc,"Pi:Error - Not valid 8/16/32KB ROM")
+
+def pdate(parms = ''):
+    msxbyte = piexchangebyte(RC_WAIT)
+
+    rc = RC_FAILED
+    
+    if (msxbyte == SENDNEXT):
+        now = datetime.datetime.now()
+
+        msxbyte = piexchangebyte(RC_SUCCESS)
+        if (msxbyte == SENDNEXT):
+            piexchangebyte(now.year & 0xff)
+            piexchangebyte(now.year >>8)
+            piexchangebyte(now.month)
+            piexchangebyte(now.day)
+            piexchangebyte(now.hour)
+            piexchangebyte(now.minute)
+            piexchangebyte(now.second)
+            piexchangebyte(0)
+            buf = "Pi:Ok\n"
+            senddatablock(buf,len(buf),0,1)
+            rc = RC_SUCCESS
+        else:
+            print "pdate:out of sync in SENDNEXT"
+    else:
+        print "pdate:out of sync in RC_WAIT"
+
+    return rc
+
+def pplay(cmd):
+    rc = RC_SUCCESS
+    
+    cmd = "bash " + RAMDISK + "/pplay.sh " + " PPLAY "+psetvar[0][1]+ " "+cmd+" >" + RAMDISK + "/msxpi.tmp"
+    cmd = str(cmd)
+    
+    #print "pplay:starting command:len:",cmd,len(cmd)
+
+    piexchangebyte(RC_WAIT)
+    try:
+        p = subprocess.call(cmd, shell=True)
+        buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
+        if (buf == RC_FAILED):
+            sendstdmsg(RC_SUCCESS,"Pi:Ok\n")
+        else:
+            sendstdmsg(rc,buf)
+    except subprocess.CalledProcessError as e:
+        print "pplay:Error:",p
+        rc = RC_FAILED
+        sendstdmsg(rc,"Pi:Error\n"+str(e))
+    
+    #print "pplay:exiting rc:",hex(rc)
+    return rc
+
+def pset(cmd=''):
+    piexchangebyte(RC_WAIT)
+
+    global psetvar
+    
+    rc = RC_SUCCESS
+    buf = "Pi:Error\nSyntax: pset set <var> <value>"
+    cmd = cmd.strip()
+
+    if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
+        s = str(psetvar)
+        buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
+    
+    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+        cmd=cmd.split(" ")
+        found = False
+        if (len(cmd) == 3):
+            for index in range(0,len(psetvar)):
+                if (psetvar[index][0] == str(cmd[1])):
+                    psetvar[index][1] = str(cmd[2])
+                    found = True
+                    buf = "Pi:Ok\n"
+                    rc_text = psetvar[index][0];
+                    break
+
+            if (not found):
+                for index in range(7,len(psetvar)):
+                    if (psetvar[index][0] == "free"):
+                        psetvar[index][0] = str(cmd[1])
+                        psetvar[index][1] = str(cmd[2])
+                        found = True
+                        buf = "Pi:Ok\n"
+                        rc_text = psetvar[index][0];
+                        break
+
+            if (not found):
+                rc = RC_FAILED
+                rc_text = '';
+                buf = "Pi:Erro setting parameter"
+        else:
+            rc = RC_FAILED
+            
+    sendstdmsg(rc,buf)
+
+    return rc
+
+def pwifi(parms=''):
+    piexchangebyte(RC_WAIT)
+
+    global psetvar
+    wifissid = psetvar[4][1]
+    wifipass = psetvar[5][1]
+    rc = RC_SUCCESS
+    cmd=parms.decode().strip()
+
+    if (len(cmd)==0):
+        sendstdmsg(RC_FAILED,"Pi:Syntax error.\nUsage: pwifi display | set")
+        return RC_FAILED
+
+    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+        buf = "country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
+        buf = buf + "\tssid=\"" + wifissid
+        buf = buf + "\"\n\tpsk=\"" + wifipass
+        buf = buf + "\"\n}\n"
+
+        os.system("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak")
+        f = open(RAMDISK + "/wpa_supplicant.conf","w")
+        f.write(buf)
+        f.close()
+        os.system("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf")
+        cmd = cmd.strip().split(" ")
+        if (len(cmd) == 2 and cmd[1] == "wlan1"):
+            prun("sudo ifdown wlan1 && sleep 1 && sudo ifup wlan1")
+        else:
+            prun("sudo ifdown wlan0 && sleep 1 && sudo ifup wlan0")
+        rc = RC_SUCCESS
+    else:
+        prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+    
+    return rc
+
+def pver(parms=''):
+    piexchangebyte(RC_WAIT)
+    global version,build
+    ver = "MSXPi Server Version "+version+" Build "+build
+    sendstdmsg(RC_SUCCESS,ver)
 
 """ ============================================================================
     msxpi-server.py
@@ -550,10 +689,6 @@ drive1Data = msxdos_inihrd(psetvar[2][1])
 # irc
 channel = "#msxpi"
 
-appstate = st_init
-pcopystat2 = 0
-pcopyindex = 0
-
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print "GPIO Initialized\n"
@@ -574,7 +709,7 @@ try:
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd](parms)
             except Exception, e:
-                print(e)
+                print("Command exception:"+str(e))
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
