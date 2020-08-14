@@ -120,7 +120,7 @@ def piexchangebyte(byte_out):
     
     GPIO.output(rdyPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
-        ()
+        pass
 
     byte_in = SPI_MASTER_transfer_byte(byte_out)
     GPIO.output(rdyPin, GPIO.LOW)
