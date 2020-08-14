@@ -33,28 +33,34 @@
 ; 0.1    : Initial version.
 ; 0.9.0  : Update code to supoprt new v0.9 logic
 
-    ORG     $0100
+        ORG     $0100
 
-    LD      BC,4
-    LD      DE,COMMAND
-    CALL    DOSSENDPICMD
+        LD      BC,4
 
-    LD      A,SENDNEXT
-    CALL    PIEXCHANGEBYTE
-    CP      RC_WAIT
-    JR      NZ,PRINTPIERR
-    LD      A,SENDNEXT
-    CALL    PIEXCHANGEBYTE
-    CALL    PRINTPISTDOUT
-    RET
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
 
-SHOWSTD:
-    CALL    PRINTPISTDOUT
-    RET
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 COMMAND:DB      "PSET"
 

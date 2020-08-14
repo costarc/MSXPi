@@ -41,15 +41,38 @@ DSKBLOCKSIZE:   EQU 1
         LD      BC,5
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
+
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
+        JR      NZ,WAIT_RELEASED
         CALL    CHKPIRDY
-        CALL    PIREADBYTE
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JP      NZ,EXITSTDOUT
+        JR      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        CP      RC_CONNERR
+        JR      Z,PRINTERRMSG
+        LD      HL,PICRCERR
+        CP      RC_CRCERROR
+        JR      Z,PRINTERRMSG
+        LD      HL,DSKERR
+        CP      RC_DSKIOERR
+        JR      Z,PRINTERRMSG
+        LD      HL,PIUNKNERR
+PRINTERRMSG:
+        CALL    PRINT
+        JP      0
+
+MAINPROGRAM:
 
         CALL    INIFCB
 
@@ -74,21 +97,6 @@ EXITSTDOUT:
         CALL    PRINTNLINE
         CALL    PRINTPISTDOUT
         jp      0
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        CP      RC_CONNERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PICRCERR
-        CP      RC_CRCERROR
-        JR      Z,PRINTERRMSG
-        LD      HL,DSKERR
-        CP      RC_DSKIOERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PIUNKNERR
-PRINTERRMSG:
-        CALL    PRINT
-        JP      0
 
 FILEERR:
         LD      A,RC_FAILED

@@ -57,8 +57,8 @@ RC_FAILED           =    0xE7
 RC_CONNERR          =    0xE8
 RC_WAIT             =    0xE9
 RC_READY            =    0xEA
-RC_SUCCNOSTD        =    0XEB
-RC_FAILNOSTD        =    0XEC
+RC_SUCCNOSTD        =    0xEB
+RC_FAILNOSTD        =    0xEC
 RC_ESCAPE           =    0xED
 RC_UNDEFINED        =    0xEF
 
@@ -194,9 +194,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=1):
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            #print(bytecounter,bufpos+bytecounter,chr(pibyte))
-            if bufpos != 2:
-                crc ^= pibyte
+            crc ^= pibyte
             bytecounter += 1
 
         attempts -= 1
@@ -465,6 +463,7 @@ def pcopy(path='',inifcb=True):
         try:
             with open(fname_rpi, mode='rb') as f:
                 buf = f.read()
+
             filesize = len(buf)
  
         except Exception as e:
@@ -496,7 +495,6 @@ def pcopy(path='',inifcb=True):
                     return RC_INVALIDDATASIZE
 
                 msxbyte = piexchangebyte(RC_SUCCESS)
-
             blocknumber = 0   
             while (rc == RC_SUCCESS):
                 rc = senddatablock(buf,BLKSIZE,blocknumber,attempts=1)
@@ -507,7 +505,7 @@ def pcopy(path='',inifcb=True):
 def ploadr(path=''):
     rc = pcopy(path,False)
     if rc == RC_INVALIDDATASIZE:
-        sendstdmsg(rc,"Pi:Error - Not valid 8/16/32KB ROM")
+        sendstdmsg(RC_FAILED,"Pi:Error - Not valid 8/16/32KB ROM")
 
 def pdate(parms = ''):
     msxbyte = piexchangebyte(RC_WAIT)
@@ -602,7 +600,7 @@ def pset(cmd=''):
                 buf = "Pi:Erro setting parameter"
         else:
             rc = RC_FAILED
-            
+
     sendstdmsg(rc,buf)
 
     return rc
@@ -616,11 +614,11 @@ def pwifi(parms=''):
     rc = RC_SUCCESS
     cmd=parms.decode().strip()
 
-    if (len(cmd)==0):
-        sendstdmsg(RC_FAILED,"Pi:Syntax error.\nUsage: pwifi display | set")
-        return RC_FAILED
+    if (cmd[:2] == "/h"):
+        sendstdmsg(RC_FAILED,"Pi:Usage:\npwifi display | set")
+        return RC_SUCCESS
 
-    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+    if (cmd[:1] == "s" or cmd[:1] == "S"):
         buf = "country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
         buf = buf + "\tssid=\"" + wifissid
         buf = buf + "\"\n\tpsk=\"" + wifipass
@@ -647,6 +645,135 @@ def pver(parms=''):
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+build
     sendstdmsg(RC_SUCCESS,ver)
+
+def template(parms=''):
+    piexchangebyte(RC_WAIT)
+
+    """ Do something that takes time, for example, opening and parsing a file
+    ; or loading something from the network or internet.
+    """
+    time.sleep(2)
+
+    """
+    Next step is to return a rc (Return Code) to MSX
+    Since this template only returns a string to MSX,
+    we using the function sendstdmsg(<return code><string>) because
+    it will:
+      1) send the RC to msx (first parameter)
+      2) send the text (second parameter)
+    """
+
+    if parms == '':
+        sendstdmsg(RC_FAILED,"Pi:No parameters passed")
+    else:
+        sendstdmsg(RC_SUCCESS,"Pi:Received paramter(s):"+parms)
+
+def irc(cmd=''):
+    piexchangebyte(RC_WAIT)
+
+    global allchann,psetvar,channel,ircsock
+    ircserver = psetvar[8][1]
+    ircport = int(psetvar[9][1])
+    msxpinick =  psetvar[7][1]
+
+    rc = RC_SUCCESS
+    cmd = cmd.lower()
+
+    try:
+        if cmd[:4] == 'conn':       
+            ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            jparm = cmd.split(' ')
+            jnick = jparm[1]
+            if (jnick == 'none'):
+                jnick = msxpinick
+            ircsock.connect((ircserver, ircport))
+            ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
+            ircsock.send(bytes("NICK "+ jnick +"\n"))
+            ircmsg = 'Connected to '+psetvar[8][1]
+            sendstdmsg(rc,ircmsg)
+        elif cmd[:3] == "msg":
+            print("msg:sending msg ",cmd[:4])
+            ircsock.send(bytes("PRIVMSG "+ channel +" :" + cmd[4:] +"\n"))
+            sendstdmsg(RC_SUCCNOSTD,"Pi:Ok\n")
+        elif cmd[:4] == 'join':
+            jparm = cmd.split(' ')
+            jchannel = jparm[1]
+            if jchannel in allchann:
+                ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
+                channel = jchannel
+            else:
+                ircsock.send(bytes("JOIN " + jchannel + "\n"))
+                ircmsg = ''
+                while (ircmsg.find("End of /NAMES list.") == -1) and \
+                      (ircmsg.find("No such channel") == -1) and \
+                      (ircmsg.find("Nickname is already in use") == -1):
+                    ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+                    ircmsg = ircmsg.strip('\n\r')
+
+                if (ircmsg.find("No such channel") != -1):
+                    ircmsg = "No such channel"
+                else:
+                    ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
+                    allchann.append(jchannel)
+                    channel = jchannel
+
+            sendstdmsg(RC_SUCCESS,ircmsg)
+
+        elif cmd[:4] == 'read':
+            ircmsg = 'Pi:Error'
+            ircsock.setblocking(0);
+            try:
+                ircmsg = ircsock.recv(2048)
+                ircmsg = ircmsg.strip('\n\r')
+                if ircmsg.find("PING :") != -1:
+                    ircsock.send(bytes("PONG :pingis\n"))
+                    ircmsg = 'Pi:Ping\n'
+                    rc = RC_SUCCNOSTD
+                if ircmsg.find("PRIVMSG") != -1:
+                    ircname = ircmsg.split('!',1)[0][1:]
+                    ircchidxs = ircmsg.find('PRIVMSG')+8
+                    ircchidxe = ircmsg[ircchidxs:].find(':')
+                    ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
+                    if msxpinick in ircchann:
+                        ircchann = 'private'
+                    ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
+                    ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
+                    rc = RC_SUCCESS
+
+            except socket.error, e:
+                err = e.args[0]
+                if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                    ircmsg = 'Pi:no new messages'
+                    rc = RC_SUCCNOSTD
+                else:
+                    print "Socket error"
+                    ircmsg = 'Pi:irc Socket error\n'
+                    rc = RC_FAILED
+  
+            ircsock.setblocking(1);
+            sendstdmsg(rc,ircmsg)
+
+        elif cmd[:5] == 'names':
+            ircsock.send(bytes("NAMES " + channel + "\n"))
+            ircmsg = ''
+            ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
+            ircmsg = ircmsg.strip('\n\r')
+            ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
+            sendstdmsg(RC_SUCCESS,ircmsg)
+        elif cmd[:4] == 'quit':
+            ircsock.send(bytes("/quit\n"))
+            ircsock.close()
+            sendstdmsg(RC_SUCCESS,"Pi:leaving room\n")
+        elif cmd[:4] == 'part':
+            ircsock.send(bytes("/part\n"))
+            ircsock.close()
+            sendstdmsg(RC_SUCCESS,"Pi:leaving room\n")
+        else:
+            print("irc:no valid command received")
+            sendstdmsg(rc,"Pi:No valid command received")
+    except Exception as e:
+            print("irc:Caught exception"+str(e))
+            sendstdmsg(rc,"Pi:"+str(e))
 
 """ ============================================================================
     msxpi-server.py
@@ -688,6 +815,7 @@ drive1Data = msxdos_inihrd(psetvar[2][1])
 
 # irc
 channel = "#msxpi"
+allchann = []
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)

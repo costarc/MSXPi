@@ -38,23 +38,28 @@
         LD      BC,5
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
+
 WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      Z,WAIT_LOOP
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        
+WAIT_RELEASED:
+
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
+        JP      Z,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 COMMAND:DB      "PWIFI"
 

@@ -942,5 +942,38 @@ slotatual:
 subsatual:
         DB      00
 
+DBGBC:
+        PUSH    AF
+        LD      A,B
+        CALL    PRINTNUMBER
+        LD      A,C
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
+
+DBGDE:
+        PUSH    AF
+        LD      A,D
+        CALL    PRINTNUMBER
+        LD      A,E
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
+
+DBGHL:
+        PUSH    AF
+        LD      A,H
+        CALL    PRINTNUMBER
+        LD      A,L
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
+
 
 

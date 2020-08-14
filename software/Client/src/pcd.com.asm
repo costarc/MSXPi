@@ -36,28 +36,35 @@
         ORG     $0100
 
         LD      BC,3
-        LD      DE,DIRCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
 
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        JP      PRINTPISTDOUT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
-        CALL    PRINT
-        JP      0
+        JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 PICOMMERR:
     DB      "Communication Error",13,10,"$"
 
-DIRCMD: DB      "PCD"
+COMMAND: DB      "PCD"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

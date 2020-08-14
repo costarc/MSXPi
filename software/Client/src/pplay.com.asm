@@ -38,31 +38,31 @@
         LD      BC,5
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
 
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-
+        JR      NZ,WAIT_RELEASED
         CALL    CHKPIRDY
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
 
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
-
         CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
+        JP      Z,MAINPROGRAM
 
         CP      RC_SUCCNOSTD
         RET     Z
 
-        RET
-
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 PICOMMERR:
     DB      "Communication Error",13,10,"$"

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,8 @@
 ;
 ; File history :
 ; 0.1    : initial version
+; 0.9.0  : Changes to supoprt new transfer logic
+
 TEXTTERMINATOR: EQU     0
 BDOS:           EQU     $F37D
 
@@ -410,7 +412,6 @@ CALL_MSXPI4:
 CALL_MSXPISAVSTD:
 ; Retrieve buffer address from stack
         POP     DE
-        ;CALL    DBGDE
 ;Save buffer address
         PUSH    DE
         INC     DE
@@ -433,8 +434,6 @@ CALL_MSXPISAVSTD:
 
 ; DE now contain size of data received
 
-;        CALL    DBGDE
-;        call    DBGHL
 ; two first bytes of buffer contain size of data received.
 ; Decrement by two to return only actual size of buffer
         DEC     DE
@@ -604,6 +603,5 @@ INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "basic_stdio.asm"
-INCLUDE "debug.asm"
 
 fim:    equ $

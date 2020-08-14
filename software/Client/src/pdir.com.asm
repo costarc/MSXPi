@@ -36,22 +36,32 @@
         ORG     $0100
 
         LD      BC,4
-        LD      DE,DIRCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
+
 WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      Z,WAIT_LOOP
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
-        JP      PRINTPISTDOUT
- 
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
+
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-DIRCMD: DB      "PDIR",0
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
+
+COMMAND: DB      "PDIR",0
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"

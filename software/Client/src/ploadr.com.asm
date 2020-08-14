@@ -34,21 +34,31 @@
 ; 0.9    : Rewritten to support new block download logic
 
         ORG     $0100
+
         LD      BC,6
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
+
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
+        JR      NZ,WAIT_RELEASED
         CALL    CHKPIRDY
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_SUCCESS
-        JP      NZ,EXITSTDOUT
+        JR      WAIT_LOOP
 
-LOADREADY:
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
 
         LD      HL,LOADPROGRESS
         CALL    PRINT
@@ -62,10 +72,6 @@ LOADROMPROG1:
         CALL    ENASLT
         POP     HL
         JP      (HL)
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
 
 ;-----------------------
 ; LOADROM              |
