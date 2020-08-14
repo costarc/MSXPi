@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v0.8.1 (2017,2018);
+; MSXPi Driver v0.9.1 (2017,2020);
 ;
 ; DOS 1.x kernel
 ;
@@ -4854,7 +4854,7 @@ A5BA0:	ld	sp,0C200H
 	call	A5F86
 	defb	13,10
     defb    "Disk BASIC version 1.0",13,10
-    defb    "MSXPi Driver v0.8.2",13,10,0
+    defb    "MSXPi Driver v0.9.1",13,10,0
 	ld	hl,M.4173
 	push	hl			; after the RUN command completes
 	ld	hl,BUF+9
