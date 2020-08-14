@@ -95,6 +95,7 @@ SENDPICMD:
 ; Output:
 ;   Flag C set if error
 ;   A = error code
+;   BC = number of bytes received, 0 if finished transfer
 ;   de = Original address if routine finished in error,
 ;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
