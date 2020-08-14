@@ -38,8 +38,6 @@ if [[ $1 == "-vs" || $2 == "-vs" || $3 == "-vs" ]];then
    ../../add-build-id.sh -vs
 fi
 
-~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
-
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
 
@@ -57,8 +55,8 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm     -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpi-io.asm     -o ./target/msxpi-io.bin
 
 # Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT

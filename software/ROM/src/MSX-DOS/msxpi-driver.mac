@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 0.9.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v0.8.1 (2017,2018)
+; MSXPi Driver v0.9.1 (2017,2020)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -60,6 +60,7 @@ CALBAS	EQU     0159H
 CHRGTR  EQU     04666H
 CHPUT   EQU     0A2H
 D.F34D	EQU     0F34DH
+DEVICE  EQU     0FD99H
 
 ; symbols which can be used from the kernel
 
@@ -95,25 +96,62 @@ SECLEN		equ	512		; Size of biggest sector
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 
 ; Remark: This i called twice. I distinguish the 1st and 2nd verifyig reggister A.
-; A = #40 in first call, and #80 in second all.
+; A = #40 in first call, and #80 in second all.;
+;
 INIHRD:
-; If P is pressed during boot, MSXPi disk driver is not initialized
-        call    CHECK_P
-        JR      C,INIHRD_DISABLE
-INIHRD_START:
         ld      a,$80
         cp      h
         ret     z
+
         ld      hl,MSXPIVERSION
         call    PRINT
         ld      hl,PIWAITMSG
         call    PRINT
-        call    PI_WAITBOOT
-        scf
-		ret
 
-INIHRD_DISABLE:
-        pop     hl
+; If P is pressed during boot, MSXPi disk driver is not initialized
+        call    CHECK_P
+        ld      a,0
+        jr      c,INIHRD_START
+
+        call    PI_WAITBOOT
+        ld      a,0
+        jr      c,INIHRD_START
+        ld      a,b
+        or      a
+        jr      z,INIHRD_FAIL1
+        ld      a,1
+        
+INIHRD_START:
+        push    af
+        ld      bc,7
+        ld      de,DOS_INI
+        call    SENDPICMD         ; Send sector write command "WRS"
+
+INIHRD_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,INIHRD_RELEASED
+        call    CHKPIRDY
+        JR      INIHRD_LOOP
+INIHRD_RELEASED:
+        cp      RC_FAILED
+        jr      z,INIHRD_FAIL
+        cp      RC_SUCCESS
+        jr      nz,INIHRD_FAIL
+        pop     af
+        call    PIEXCHANGEBYTE      ; send msxdosboot flag
+        call    PIEXCHANGEBYTE      ; read return code
+        cp      RC_SUCCESS
+        scf
+		ret     z
+        ccf
+        ret
+
+INIHRD_FAIL:
+       pop     af
+INIHRD_FAIL1:
+        or      a
         ret
 ;-----------------------
 ; PI_WAITBOOT          |
@@ -133,9 +171,11 @@ PI_WAITBOOT1:
 ; Pi responded
         djnz    PI_WAITBOOT1
 ; Pi did not respond
-        scf
         ret
 
+; START OF -----------------------------
+; MSXPi v1.0.0 DRIVES Routine          |
+;---------------------------------------
 ; DRIVES
 ;
 ; Input: 	F	Zx set if to return physical drives
@@ -146,31 +186,13 @@ PI_WAITBOOT1:
 ;
 ; Remark:	DOS1 does not handle L=0 correctly. It hangs the computer upon boot if L = 0.
 ; During boot this is called twice, with BC = FB21 and then BC = FB23.
-; This
 
-DRIVESMSG: DB  "DRIVES"
 DRIVES:
-    	push    af
-		push	bc
-		push    de
-		ld		de,DRIVESMSG
-		ld		bc,6
-		call	SENDPICMD
-		ld		a,SENDNEXT
-		call	PIEXCHANGEBYTE
-; Is it zero? MSXDOS1 dont like it.
-        ld      l,1
-        jr      c,DRIVES2
-		or		a
-		jr		nz,DRIVES1
-		ld		a,1
-DRIVES1:
-        ld      l,a
-DRIVES2:
-		pop		de
-		pop		bc
-		pop		af
-		ret
+        ld     l,1
+        ret
+; END OF -------------------------------
+; MSXPi v1.0.0 DRIVES Routine          |
+;---------------------------------------
 
 ; INIENV
 ;
@@ -184,7 +206,9 @@ DRIVES2:
 INIENV:
         ret
 
-;
+; START OF -----------------------------
+; MSXPi v1.0.0 DSKIO Routine           |
+;---------------------------------------
 ; DSKIO
 ;
 ; Input: 	A	Drivenumber
@@ -199,81 +223,151 @@ INIENV:
 ;		A	if error, errorcode
 ;		B	if error, remaining sectors
 ; Changed:	af,bc,de,hl,IX,IY may be affected
-
-
-DOS_RSEC:   DB      "RDS",0
-DOS_WSEC:   DB      "WRS",0
+;
 DSKIO:
         jr		nc,DSKIO_READ
+; END OF -------------------------------
+; MSXPi v1.0.0 DSKIO Routine           |
+;---------------------------------------
 
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+;--------------------------------------
 DSKIO_WRITE:
         cp      4
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
-        push    bc
-        push    hl
-        call    DSKIO_SECTINFO
+        ;push    bc               ; need to save this ?
+        push    hl                ; save buffer address
+        call    DSKIO_SECTINFO    ; Send sector info
+                                  ; Receives back the block size 
+                                  ; (sectors * 512)
         jr      c,DSKIO_ERR
+        push    bc                ; Save block size
+        ld      bc,7
         ld      de,DOS_WSEC
-        ld      bc,3
-        call    SENDPICMD
-        jr      c,DSKIO_ERR
+        call    SENDPICMD         ; Send sector write command "WRS"
+        pop     bc                ; number of bytes to transfer
+        pop     de                ; buffer with data to read
+        jr      c,DSKIO_ERR1
 
 ; source address to read sector data and number of sectors
-        pop     de
-        pop     bc
 
-; will write one sector at a time
-DSKIO_WRITE1:
-        push    bc
-        ld      bc,512
-        call    SECSENDDATA
-        pop     bc
+DSKIO_WRITE_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_WRITE_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_WRITE_LOOP
+DSKIO_WRITE_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_ERR1
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
+
+        call    SENDDATABLOCK     ; Send the sectors (write to disk
         jr      c,DSKIO_ERR1
-        djnz    DSKIO_WRITE1
-        or      a
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
         ei
         ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+;--------------------------------------
 
-; ----------------
-; DSKIO_READ     |
-;-----------------
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_READ Routine     |
+;--------------------------------------
+; DSKIO
+;
+; Input:    A   Drivenumber
+;       F   Cx reset for read
+;           Cx set for write
+;       B   number of sectors
+;       C   Media descriptor
+;       de  logical sectornumber
+;       hl  transfer address
+; Output:   F   Cx set for error
+;           Cx reset for ok
+;       A   if error, errorcode
+;       B   if error, remaining sectors
+; Changed:  af,bc,de,hl,IX,IY may be affected
+;
 DSKIO_READ:
         cp      4
         jr      nc,DSKIO_ERR1
         di
 
-; save destination address only
-        push    bc
-        push    hl
-        call    DSKIO_SECTINFO
+; save destination address HL in the stack
+; save number of sectors BC in the stack
+;
+        ;push    bc              ; do we need to save secotr info?
+        push    hl               ; address to save sectors data
+        call    DSKIO_SECTINFO   ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
-        ld      bc,3
-        call    SENDPICMD
-        jr      c,DSKIO_ERR
+        ld      bc,7
+        call    SENDPICMD        ; Send read sector command "RDS"
         pop     de
-        call    SECRECVDATA
-        pop     bc
         jr      c,DSKIO_ERR1
+DSKIO_READ_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_READ_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_READ_LOOP
+DSKIO_READ_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_ERR1
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
+        call    RECVDATABLOCK    ; Receive the data (sectors)
+        ; pop     bc             ; do we need to save secotr info?
+        jr      c,DSKIO_ERR1
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
         ei
         ret
-
-
 DSKIO_ERR:
         pop     hl
-        pop     bc
+        ;pop     bc
 DSKIO_ERR1:
         ld      a,12
         scf
         ei
         ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_READ Routine     |
+;--------------------------------------
 
-;-----------------------
-; DSKIO_SECTINFO       |
-;-----------------------
-DOS_SECINFO:    DB  "SCT",0
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+;--------------------------------------
+; DSKIO
+;
+; Input:    A   Drivenumber
+;       F   Cx reset for read
+;           Cx set for write
+;       B   number of sectors
+;       C   Media descriptor
+;       de  logical sectornumber
+;       hl  transfer address
+; Output:   F   Cx set for error
+;           Cx reset for ok
+;       A   if error, errorcode
+;       B   if error, remaining sectors
+; Changed:  af,bc,de,hl,IX,IY may be affected
+;
 
 DSKIO_SECTINFO:
         push    af
@@ -281,50 +375,66 @@ DSKIO_SECTINFO:
         push    de
         push    hl
         LD      de,DOS_SECINFO
-        LD      bc,3
+        LD      bc,7
         call    SENDPICMD
+        jr		c,DSKIO_SEC_ERR
+
+DSKIO_SECTINFO_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_SECTINFO_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_SECTINFO_LOOP
+DSKIO_SECTINFO_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_SEC_ERR
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_SEC_ERR
+
         pop     hl
         pop     de
         pop     bc
-        jr		nc,DSKIO_SECTINFO1
         pop     af
-        scf
-        ret
 
-DSKIO_SECTINFO1:
-; synchronize communication with MSX
-
-	ld		a,SENDNEXT
-	call	PIEXCHANGEBYTE
-	cp		SENDNEXT
-	jr		z,DSKIO_SECTINFO2
-	pop		af
-	scf
-	ret
-
-DSKIO_SECTINFO2:
 ; send device number
-
-		pop     af
         call    PIEXCHANGEBYTE
 
 ; send number of sectors to read/write
-
 		ld      a,b
         call    PIEXCHANGEBYTE
 
 ; send media decriptor
-
         ld      a,c
         call    PIEXCHANGEBYTE
 
 ; send logical sectornumber (initial sector number)
-
 		ld      a,e
         call    PIEXCHANGEBYTE
         ld      a,d
         call    PIEXCHANGEBYTE
+
+; new to version 1.0.0 : read back number of bytes 
+; calculated as 512 * number of sectors
+        call    READDATASIZE
+
+; read return code
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        ret     z
+        scf
         ret
+
+DSKIO_SEC_ERR:
+        pop     hl
+        pop     de
+        pop     bc
+        pop     af
+        scf
+        ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+;--------------------------------------
 
 DSKIORDMSG:
     DB      "DSKIO READ ERROR",13,10,0
@@ -437,22 +547,8 @@ ChoiceStr:	db	13,10
 ;			Cx reset for ok
 ;		A	if error, errorcode
 ; Changed:	af,bc,de,hl,IX,IY may be affected
-DSKFMTCMD:DB    "FMT",0
+
 DSKFMT:
-        push    de
-        push    af
-        ld      bc,3
-        ld      de,DSKFMTCMD
-        call    SENDPICMD
-        pop     af
-        call    PIEXCHANGEBYTE
-        pop     de
-        ld      a,d
-        call    PIEXCHANGEBYTE
-        ld      a,ENDOFTRANSFER
-        call    PIEXCHANGEBYTE
-        cp      ENDOFTRANSFER
-        ret     Z
         scf
         ld      a,10
         ret
@@ -550,41 +646,9 @@ MSXPISTATUS:
 PRINTSTATUSMSG:
         jp      PRINT
 
-;-----------------------
-; call MSXPILOAD       |
-;-----------------------
-; Load the client to the memory address in the headers
-
-LOADCLIENTCMD: DB "ploadbin msxpi-client.bin",0
-MSXPILOAD:
-        ld      hl,MSXPILOADING
-        call    PRINT
-        ld      a,RESET
-        call    SENDIFCMD
-
-; Send command LOADROM to Pi
-        ld      bc,25
-        ld      de,LOADCLIENTCMD
-        call    SENDPICMD
-        jr		c,MSXPILOADERROR
-        call    LOADBINPROG
-        jp      c,MSXPILOADERROR
-        call    PIEXCHANGEBYTE
-        cp      ENDOFTRANSFER
-        jr      nz,MSXPILOADERR
-        push    hl
-        call    MSXPILOADERR
-        pop     hl
-        jp      (hl)
-MSXPILOADERR:
-        call    PRINTPISTDOUT
-        ret
-
-LOADERRMSG:     DB "Error loading file",13,10,0
-MSXPILOADERROR:
-        ld      hl,LOADERRMSG
-        jp      PRINT
-
+;--------------------------------------------------------------------
+; Call MSXPI BIOS function                                          |
+;--------------------------------------------------------------------
 ; Verify is command has STD parameters specified
 ; Examples:
 ; call mspxi("pdir")  -> will print the output
@@ -859,11 +923,8 @@ GETPOINTERSEXIT:
 BIOSENTRYADDR:  EQU     $
         DW      MSXPIVER
         DW      MSXPISTATUS
-        DW      MSXPILOAD
         DW      RECVDATABLOCK
         DW      SENDDATABLOCK
-        DW      SECRECVDATA
-        DW      SECSENDDATA
         DW      READDATASIZE
         DW      SENDDATASIZE
         DW      CHKPIRDY
@@ -872,15 +933,12 @@ BIOSENTRYADDR:  EQU     $
         DW      PIEXCHANGEBYTE
         DW      SENDIFCMD
         DW      SENDPICMD
-        DW      CHECKBUSY
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
         DW      SYNCH
-        DW      DOWNLOADDATA
-        DW      UPLOADDATA
         DW      MSXPISEND
         DW      MSXPIRECV
         DW      MSXPI
@@ -970,14 +1028,14 @@ CHECK_P:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi Hardware Interface v0.7",13,10
-        DB      "MSXPi ROM v0.8.2",13,10
+        DB      13,10,"MSXPi Hardware Interface v1.1",13,10
+        DB      "MSXPi ROM v0.9.1",13,10
         DB      "      Build "
-build:  DB      "20171230.00077"
+build:  DB      "20200814.00000"
         DB      13,10
-        DB      "(c) Ronivon Costa,2017",13,10,10
+        DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI MSXPISEND MSXPIRECV",13,10
+        DB      "MSXPISTATUS MSXPIVER MSXPI MSXPISEND MSXPIRECV",13,10
         DB      00
 
 MSXPILOADING:
@@ -1001,9 +1059,6 @@ STR_CALL_CMD:
         DB      "MSXPIVER",0
         DW      MSXPIVER
 
-        DB      "MSXPILOAD",0
-        DW      MSXPILOAD
-
         DB      "MSXPISTATUS",0
         DW      MSXPISTATUS
 
@@ -1021,6 +1076,13 @@ STR_CALL_CMD:
 
 ENDOFCMDS:
         DB      00
+
+DOS_INI:    DB  "DOS INI",0
+DOS_RSEC:   DB  "DOS RDS",0
+DOS_WSEC:   DB  "DOS WRS",0
+DOS_SECINFO:DB  "DOS SCT",0
+DOS_DRV:    DB  "DOS DRV",0
+DOS_FMT:    DB  "DOS FMT",0
 
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm

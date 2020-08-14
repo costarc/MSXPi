@@ -18,8 +18,8 @@ import select
 import base64
 from random import randint
 
-version = "0.9.0"
-build   = "20200810.00001"
+version = "0.9.1"
+build   = "20200814.00000"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -775,6 +775,121 @@ def irc(cmd=''):
             print("irc:Caught exception"+str(e))
             sendstdmsg(rc,"Pi:"+str(e))
 
+def dos(parms=''):
+
+    global driveData,sectorInfo,msxdos1boot
+    rc = RC_SUCCESS
+
+    if parms[:3] == 'INI': 
+
+        piexchangebyte(RC_SUCCESS)
+        iniflag = piexchangebyte(SENDNEXT)
+
+        if iniflag == 1:
+            print("parms: enabling msxdos1boot")
+            msxdos1boot = True
+            # Initialize disk system parameters
+            global sectorInfo
+            global numdrives
+            sectorInfo = [0,0,0,0]
+            numdrives = 0
+
+            # Load the disk images into a memory mapped variable
+            global drive0Data
+            global drive1Data
+            drive0Data = msxdos_inihrd(psetvar[1][1])
+            drive1Data = msxdos_inihrd(psetvar[2][1])
+
+        else:
+            print("parms: disabling msxdos1boot")
+            msxdos1boot = False
+
+        piexchangebyte(RC_SUCCESS)
+
+    else:
+        if msxdos1boot: 
+            piexchangebyte(RC_WAIT)
+        else:
+            piexchangebyte(RC_FAILED)
+            return
+
+        if parms[:3] == 'RDS': 
+        
+            initdataindex = sectorInfo[3]*512
+            blocksize = sectorInfo[1]*512
+
+            print "dos_rds:deviceNumber=",sectorInfo[0]
+            print "dos_rds:mediaDescriptor=",sectorInfo[2]
+            print "dos_rds:numsectors=",sectorInfo[1]
+            print "dos_rds:initialSector=",sectorInfo[3]
+            print "dos_rds:blocksize=",blocksize
+
+            if sectorInfo[0] == 0 or sectorInfo[0] == 1:
+                buf = drive0Data[initdataindex:initdataindex+blocksize]
+            else:
+                buf = drive1Data[initdataindex:initdataindex+blocksize]
+
+            piexchangebyte(RC_SUCCESS)
+
+            rc = senddatablock(buf,blocksize,0,1)
+            if rc != RC_SUCCESS:
+                rc = RC_FAILED
+            
+            piexchangebyte(rc)
+
+
+        elif parms[:3] == 'WRS':  
+            initdataindex = sectorInfo[3]*512
+            blocksize = sectorInfo[1]*512
+
+            print "dos_wrs:deviceNumber=",sectorInfo[0]
+            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
+            print "dos_wrs:numsectors=",sectorInfo[1]
+            print "dos_wrs:initialSector=",sectorInfo[3]
+            print "dos_wrs:blocksize=",blocksize
+
+            piexchangebyte(RC_SUCCESS)
+
+            datainfo = recvdatablock()
+            if datainfo[0] == RC_SUCCESS:
+                if sectorInfo[0] == 0 or sectorInfo[0] == 1:
+                    drive0Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
+                else:
+                    drive1Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
+            else:
+                rc = RC_FAILED
+
+            piexchangebyte(rc)
+                  
+        elif parms[:3] == 'SCT': 
+            initdataindex = sectorInfo[3]*512
+            blocksize = sectorInfo[1]*512
+
+            piexchangebyte(RC_SUCCESS)
+
+            sectorInfo[0] = piexchangebyte(SENDNEXT)
+            sectorInfo[1] = piexchangebyte(SENDNEXT)
+            sectorInfo[2] = piexchangebyte(SENDNEXT)
+            byte_lsb = piexchangebyte(SENDNEXT)
+            byte_msb = piexchangebyte(SENDNEXT)
+            sectorInfo[3] = byte_lsb + 256 * byte_msb
+
+            blocknumber = sectorInfo[1] * 512
+            piexchangebyte(blocknumber % 256)
+            piexchangebyte(blocknumber / 256)
+
+            print "dos_sct:deviceNumber=",sectorInfo[0]
+            print "dos_sct:mediaDescriptor=",sectorInfo[2]
+            print "dos_sct:numsectors=",sectorInfo[1]
+            print "dos_sct:initialSector=",sectorInfo[3]
+            print "dos_sct:blocksize=",blocksize
+
+            piexchangebyte(rc)
+
+        else:
+            print("DOS Command invalid:",parms)
+            piexchangebyte(RC_FAILED)
+
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -805,17 +920,12 @@ psetvar = [['PATH','/home/msxpi'], \
 
 WUPGRP = {'554191119326-1399041454@g.us' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '447840924680-1515184325@g.us' : 'MSXPiTest'}
 
-# Initialize disk system parameters
-sectorInfo = [0,0,0,0]
-numdrives = 0
-
-# Load the disk images into a memory mapped variable
-drive0Data = msxdos_inihrd(psetvar[1][1])
-drive1Data = msxdos_inihrd(psetvar[2][1])
-
 # irc
 channel = "#msxpi"
 allchann = []
+
+# msxdos
+msxdos1boot = True
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)

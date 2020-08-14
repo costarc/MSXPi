@@ -306,6 +306,9 @@ CALLHAND:
         PUSH	DE
         RET
 
+;--------------------------------------------------------------------
+; Call MSXPI BIOS function                                          |
+;--------------------------------------------------------------------
 CALL_MSXPI:
         CALL	EVALTXTPARAM	; Evaluate text parameter
         PUSH	HL
