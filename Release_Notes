@@ -1,6 +1,9 @@
 MSXPi v1.0 Release Notes
 ========================
-This release has some major changes to the hardware only:
+This release has some major changes to the hardware and softwar components.
+
+On the hardware side:
+
 - Replaced the EPROM 27C256 by AT28C256 EEPROM (Electronically erasable/rewritable)
 - Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
 - Schematics was updated to supporgt the /wait signal
@@ -10,21 +13,21 @@ This release has some major changes to the hardware only:
 - Added pull-up resistors for all Raspbery Pins used in the design
 - Added by-pass capacitors for all CIs.
 
+On the software side:
+
+- The server component was mostly rewritten to be more modular
+- Every command now can be implemented in a self-contained function inside msxpi-server.py
+- No changes are needed in the main loop of the program
+- Main data trasnfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
+- Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
+- All clients reqritten based on a simple and better communication logic
+- Addition of new program AT28C256.COM to write roms to the new EEPROM in the interface
+
 Other non functional changes includes a new design using KiCad 5 instead of Eagle, some more jumpers to support new EEPROM features.
 
-On the software side, only changes are the addition of new commands to rewrite the EEPROM:
-- at28c256.com: will write any rom up to 32KB to the EEPROM
-- at28unprot.com: Disable write protection on the EEPROM
-- at28prot.com: Enable write protection on the EEPROM
-
-As of now, to write the EEPROM, the following sequence should be performed:
-1. run at28unpr
-2. run at28c256
-3. run at28prot
-
-Note that you may need to specify the slot number where the MSXPi is plugged - this is a limitation of the design, that does not allow EEPROM identification for locate the slot.
-
-All other software componentes (msxpi-server,msc-dos commands, etc) are unchanged.
+Limitations and bugs
+- To write a rom to the eeprom, you may need to specify the slot number where the MSXPi is plugged - there is not, currently, an automated and failsafe method to detect on whaat slot the epprom is connected.
+- The CPLD logic and softwares are not benefiting of the /wait signal (future improvement)
 
 MSXPi v0.8.2 Release Notes
 ==========================
