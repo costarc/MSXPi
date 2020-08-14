@@ -45,7 +45,6 @@ DOSSENDPICMD:
 ; now check if there are parameters in the command line
         ld      hl,$80
         ld      a,(hl)
-        ld      a,(hl)
         ld      b,a
         or      a
         jr      z,DOSSEND1
@@ -75,7 +74,7 @@ DOSSENDPICMD2:
         pop     hl
         ld      l,h
         ld      h,0
-
+        inc     hl
 ; then get number of chars in our command
         pop     bc
 
@@ -86,10 +85,10 @@ DOSSENDPICMD2:
         push    bc
 
 DOSSEND1:
-        ld      a,0
-        ld      (de),a
+        ;ld      a,0
+        ;ld      (de),a
         pop     bc
-        inc     bc
+        ;inc     bc
         ld      de,FULLCMD
         di
         call    SENDPICMD

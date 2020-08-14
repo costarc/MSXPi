@@ -44,18 +44,15 @@ fi
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
 
 # MSX-DOS commands
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm     -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadrom.com.asm -o ./target/ploadrom.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psetdisk.com.asm -o ./target/psetdisk.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pnewdisk.com.asm -o ./target/pnewdisk.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com

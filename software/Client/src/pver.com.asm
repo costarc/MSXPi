@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.                                                            |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Updated code to support new v0.9 logic
 
         ORG     $0100
 
@@ -38,33 +39,34 @@
         LD      HL,HWVER
         CALL    PRINT
         IN      A,(CONTROL_PORT2)
-        CP      10
-        JR      C,DESCHWVER
-        LD      A,9
-        JR      DESCHWVER
+        CALL    DESCHWVER
+
 ; Print msxpi-server version
-;        LD      DE,MYCMD
-;        LD      BC,MYCMDEND - MYCMD
-;        CALL    DOSSENDPICMD
-;        JP      C,PRINTPIERR
-;        CALL    PRINTPISTDOUT
+        LD      BC,4
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
 
-; Print MSXPi ROM version
-;        CALL    SEARCHMSXPISLOT
-;        JR      NC,PVERHWNF
-;load slot number into IY
-;        PUSH    AF
-;        POP     IY
-; address to call (MSXPIVER)
-; This function will print the full boot messages in the screen
-;        LD      IX,$7607
-;        CALL    CALSLT
-;        JP      0
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
-PVERHWNF:
-;        LD      HL,PVERHWNFSTR
-;        CALL    PRINT
-;        JP      0
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 DESCHWVER:
         ld      hl,iftable
@@ -107,13 +109,11 @@ ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44","$"
 ifv6:   DB      "(0110) Wired up prototype, with EPROM, EPM7128SLC-84","$"
 ifv7:   DB      "(0111) General Release Rev.4, EPM3064ALC-44","$"
 ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84","$"
-ifv9:   DB      "(1001) General Release V1.0 Rev 1, EEPROM AT28C256, EPM7128SLC-84","$"
+ifv9:   DB      "(1001) General Release V1.1 Rev 0, EEPROM AT28C256, EPM7128SLC-84","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
 
-MYCMD:  EQU     $
-        DB      "PVER"
-MYCMDEND:EQU    $
+COMMAND:DB      "PVER"
 
 HWVER:  DB      "Interface version:"
         DB      TEXTTERMINATOR

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,43 +31,43 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Updates code to suport v0.9 logic
 
         ORG     $0100
 
         LD      BC,23
-        LD      DE,MYCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
 
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,PRINTPIERR
-
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,PRINTPIERR
+        JR      NZ,WAIT_RELEASED
         CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JP      Z,PRINTPISTDOUT
+        JP      Z,MAINPROGRAM
+
         CP      RC_SUCCNOSTD
-        JR      NZ,WAITLOOP
-        RET
+        RET     Z
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
+
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
 
-MYCMD: DB      "PRUN amixer set PCM -- "
+COMMAND: DB      "PRUN amixer set PCM -- "
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"

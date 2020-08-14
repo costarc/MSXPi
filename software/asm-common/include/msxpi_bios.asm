@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.9    : Simplification of block transfers routines.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -38,8 +39,6 @@
 ;           of the calling function, which might opt to do something else.
 ; 0.6c   : Initial version commited to git
 ;
-
-; Inlude file for other sources in the project
 
 ;-----------------------
 ; SYNCH                |
@@ -89,6 +88,8 @@ SENDPICMD:
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
+; It will return with return code ENDTRANSFER when
+;    size of block = zero
 ; Input:
 ;   de = memory address to write the received data
 ; Output:
@@ -104,18 +105,25 @@ RECVDATABLOCK:
         scf
         ld      a,RC_OUTOFSYNC
         ret     nz
-
 ;Get number of bytes to transfer
         call    READDATASIZE
+        ld      a,b
+        or      c
+        ld      a,ENDTRANSFER
+        ret     z
 
 ; CLEAR CRC and save block size
         ld      h,0
-        push    bc
         push    de
+; Get number of attempts
+        call    PIEXCHANGEBYTE
+        ld      l,a     ; number of attempts
 
+RECVDATABLOCK0:
+        push    bc      ; blocksize        
 RECVDATABLOCK1:
+
 ; send info that msx is in transfer mode
-        ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         ld      (de),a
         xor     h
@@ -136,21 +144,23 @@ RECVDATABLOCK1:
         cp      h
         jr      nz,RECVDATABLOCK_CRCERROR
 
-; Discard de, because we want to return current memory address
-
-        pop     af
-
-;Return number of bytes read
-
+;Return number of bytes read 8
         pop     bc
+; Discard de, because we want to return current memory address
+        pop     af
         ld      a,RC_SUCCESS
         or      a
         ret
 
 ; Return de to original value and flag error
 RECVDATABLOCK_CRCERROR:
-        pop     de
-        pop     bc
+        pop     bc             ; restore blocksize
+        ld      a,l            ; get number of attemps
+        dec     a
+        ld      l,a
+        or      a
+        jr      nz,RECVDATABLOCK0  ; try again
+        pop     de                 ; restore original address in DE
         ld      a,RC_CRCERROR
         scf
         ret
@@ -418,7 +428,6 @@ DOWNLOADDATA:
 ; Because of that, we now read back the actual block size that should be read
 
         call    READDATASIZE
-;       call    DBGBC
 
 RETRYLOOP:
 
@@ -446,6 +455,10 @@ READDLOOP2:
         ld      (de),a
         xor     h
         ld      h,a
+        ;
+        ld      a,(DE)
+        call    PUTCHAR
+        ;
         inc     de
         dec     bc
         ld      a,b
@@ -636,17 +649,17 @@ PRINTNUM1:
         ret
 
 PRINTPISTDOUT:
-        push    af
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
-        jr      z,PRINTPI0
-        pop     af
-        scf
-        ret
+        ld      a,RC_OUTOFSYNC
+        ret     nz
 PRINTPI0:
         call    READDATASIZE
-        pop     af
+        ld      a,b
+        or      c
+        ret     z
+        call    PIEXCHANGEBYTE    ; read block size, but will not use it
         push    hl
         ld      h,0
 PRINTPI1:
@@ -698,7 +711,7 @@ NOSTDOUT1:
         call    PIEXCHANGEBYTE
         pop     hl
         ret
-
+        
 SEARCHMSXPISLOT:
         di
         call    RSLREG
@@ -929,6 +942,38 @@ slotatual:
 subsatual:
         DB      00
 
+DBGBC:
+        PUSH    AF
+        LD      A,B
+        CALL    PRINTNUMBER
+        LD      A,C
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
+
+DBGDE:
+        PUSH    AF
+        LD      A,D
+        CALL    PRINTNUMBER
+        LD      A,E
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
+
+DBGHL:
+        PUSH    AF
+        LD      A,H
+        CALL    PRINTNUMBER
+        LD      A,L
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     AF
+        RET
 
 
 

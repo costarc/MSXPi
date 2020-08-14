@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9.0  : Changes to supoprt new transfer logic
 
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
@@ -38,68 +39,23 @@ DSKBLOCKSIZE:   EQU 1
         ORG     $0100
 
         LD      BC,5
-        LD      DE,PCOPYCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
 
-; SYNC TO RECEIVE FILENAME
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        LD      HL,PICOMMERR
-        JR      C,PRINTERRMSG
-        CP      SENDNEXT
-        JR      NZ,EXITSTDOUT
-
-        CALL    INIFCB
-
-; READ FILENAME
-        CALL    READPARMS
-        JR      C,PRINTPIERR
-
-; Sync to wait Pi download the file
-; Since a network transfer my get delayed, this routine
-; will loop waiting RC_SUCCESS until Pi responds
-; Loop can be interrupted by ESC
-
+WAIT_LOOP:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        SCF
-        RET     NZ
-WAITLOOP:
-        CALL    CHECK_ESC
-        LD      A,RC_ESCAPE
-        JR      C,PRINTPIERR
+        JR      NZ,WAIT_RELEASED
         CALL    CHKPIRDY
-        JR      C,WAITLOOP
-; Loop waiting download on Pi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
         CP      RC_FAILED
-        JR      Z,EXITSTDOUT
+        JP      Z,PRINTPISTDOUT
         CP      RC_SUCCESS
-        JR      NZ,WAITLOOP
-
-        CALL    PRINTFNAME
-
-        CALL    OPENFILEW
-
-        CALL    SETFILEFCB
-
-        CALL    GETFILE
-        JR      C,PRINTPIERR
-
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
-
-        CALL    CLOSEFILE
-
-        JP      0
-
-EXITSTDOUT:
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
-        jp      0
+        JR      Z,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
@@ -115,6 +71,32 @@ PRINTPIERR:
 PRINTERRMSG:
         CALL    PRINT
         JP      0
+
+MAINPROGRAM:
+
+        CALL    INIFCB
+
+; READ FILENAME
+        CALL    READPARMS
+        JR      C,PRINTPIERR
+
+        CALL    PRINTFNAME
+
+        CALL    OPENFILEW
+
+        CALL    SETFILEFCB
+
+        CALL    GETFILE
+        JR      C,PRINTPIERR
+
+        CALL    CLOSEFILE
+
+        JP      0
+
+EXITSTDOUT:
+        CALL    PRINTNLINE
+        CALL    PRINTPISTDOUT
+        jp      0
 
 FILEERR:
         LD      A,RC_FAILED
@@ -161,29 +143,15 @@ PLOOP:
 GETFILE:
 DSKREADBLK:
 
-; SEND COMMAND TO TRANSFER NEXT BLOCK
-        LD      BC,5
-        LD      DE,PCOPYCMD
-        CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
-
         LD      A,'.'
         CALL    PUTCHAR
-
-; BLOCK SIZE TO USE
-        LD      BC,DSKNUMREGISTERS
 
 ; Buffer where data is stored during transfer, and also DMA for disk access
         LD      DE,DMA
 
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
-
-; A = 1 Tells the download routine to show dots or every 256 bytes transfered
-; The routine rturns C set is there was a communication error
-        LD      A,0
-        CALL    DOWNLOADDATA
+        CALL    RECVDATABLOCK
         RET     C
-
 ; The routine return A = status code,
 ; ENDTRANSFER means the transfer ended.
 ; Note that the last block of data was transferd in the previous call,
@@ -198,109 +166,25 @@ DSKREADBLK:
         SCF
         RET     NZ
 
-; Set HL with the number of bytes transfered.
-; This is needed because the last block may be smaller than DSKNUMREGISTERS,
-; And this math below will make sure only the actual number of bytes are written to disk.
-; When the DOWNLOADDATA routine ends, DE contain the DMA + number of bytes transfered
-; Also, clearing Carry with "OR A" "is required or the math may be incorrect.
-        LD      HL,DMA
-        EX      DE,HL
-        OR      A
-        SBC     HL,DE
-        CALL    DSKWRITEBLK
+; Set HL with the number of bytes received
+
+        LD      H,B
+        LD      L,C
+        LD      DE,FILEFCB
+        LD      C,$26
+        CALL    BDOS
         JR      DSKREADBLK
 
 READPARMS:
-VERDRIVE:
-; READ FILENAME
-        LD      DE,DMA
-        CALL    RECVDATABLOCK
-        PUSH    AF
-        XOR     A
-        LD      (DE),A
-        POP     AF
-        RET     C
-        LD      HL,DMA+1
-        LD      A,(HL)
-        DEC     HL
-        CP      ":"
-        JR      Z,GETDRIVEID
-        XOR     A
-
-; This function will fill the FCB with a valid filename
-; Longer filenames are truncated yo 8.3 format.
-
-GET_NAME:
-READPARMS0:
+; READ FILENAME DIRECTLY INTO THE FCB AREA
         LD      DE,FILEFCB
+        LD      B,12
+READPARMS0:
+        CALL    PIREADBYTE
         LD      (DE),A
         INC     DE
-        LD      B,8
-READPARMS1:
-        LD      A,(HL)
-        CP      "."
-        JR      Z,FILLNAME
-        CP      0
-        JR      Z,FILLNAMEEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1
-
-GET_EXT:
-        LD      B,3
-        LD      A,(HL)
-        INC     HL
-        CP      0
-        JR      Z,FILLEXT
-        CP      "."
-        JR      Z,READPARMS1B
-        DEC     HL
-READPARMS1B:
-        LD      A,(HL)
-        CP      0
-        JR      Z,FILLEXT
-        LD      (DE),A
-        INC     HL
-        INC     DE
-        DJNZ    READPARMS1B
+        DJNZ    READPARMS0
         RET
-
-FILLNAMEEXT:
-        INC     B
-        INC     B
-        INC     B
-        JR      FILLEXT
-
-FILLNAME:
-        LD      A,$20
-FILLNAME0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLNAME0
-        JR      GET_EXT
-
-FILLEXT:
-        LD      A,$20
-FILLEXT0:
-        LD      (DE),A
-        INC     DE
-        DJNZ    FILLEXT0
-        RET
-
-GETDRIVEID:
-READPARMS3:
-        LD      A,(HL)
-        LD      B,'A'
-        CP      'a'
-        JR      C,READPARMS4
-        LD      B,'a'
-READPARMS4:
-        SUB     B
-        ADD     1
-        INC     HL
-        INC     HL
-        JR      GET_NAME
 
 OPENFILEW:
         LD      DE,FILEFCB
@@ -310,13 +194,6 @@ OPENFILEW:
         RET     Z
 ; Error opening file
         SCF
-        RET
-
-
-DSKWRITEBLK:
-        LD      DE,FILEFCB
-        LD      C,$26
-        CALL    BDOS
         RET
 
 INIFCB:
@@ -354,8 +231,7 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-PCOPYCMD:   DB      "PCOPY"
-LOADROMCMD: DB      "PLOADROM"
+COMMAND:    DB      "PCOPY"
 FNTITLE:    DB      "Saving file:$"
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PIUNKNERR:  DB      "Unknown error",13,10,"$"
@@ -369,10 +245,12 @@ RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
 FILEFCB:    ds     40
-INCLUDE "debug.asm"
-INCLUDE "include.asm"
+
+;INCLUDE "debug.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
+INCLUDE "include.asm"
 
-DMA:     EQU    $
+
+
