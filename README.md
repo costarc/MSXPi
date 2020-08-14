@@ -5,7 +5,7 @@ Many resources are implemented, such as access to network drives, internet, disk
 
 MSXPi v1.0 Release Notes
 ========================
-This release has some major changes to the hardware and softwar components.
+This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
