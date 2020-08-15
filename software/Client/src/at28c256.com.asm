@@ -982,10 +982,8 @@ wait_eeprom0:
     txt_credits: db "AT28C256 EEPROM Programmer for MSX",13,10
     db "(c) Ronivon Costa, 2020",13,10,13,10,0
     txt_advice: db 13,10
-    db "Write process completed",13,10
-    db "==> ATTENTION <==",13,10
-    db "Switch off the MSX immediately, remove the interface, then remove the /wr jumper"
-    db 13,10,0
+    db "Write process completed",13,10,0
+
     txt_sdp:    db "To force disabling the AT28C256 Software Data Protction (SDP),",13,10
     db "call this program passing the slot as parameter.",13,10
     db "Must specify two digits for the slot, as for example:",13,10
