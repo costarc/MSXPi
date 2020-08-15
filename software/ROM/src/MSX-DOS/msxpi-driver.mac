@@ -700,32 +700,21 @@ CALL_MSXPI1:
         CALL    SENDPICMD
         JR      C,CALL_MSXPIERR2
 
-; protocol to detect result of command sent to RPi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR2
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR2
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+CALL_MSXPI_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,CALL_MSXPI_RELEASED
+        call    CHKPIRDY
+        JR      CALL_MSXPI_LOOP
+
+CALL_MSXPI_RELEASED: 
         CP      RC_FAILED
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCESS
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCNOSTD
         JR      Z,CALL_MSXPIERR3
-        JR      WAITLOOP
-
-CALL_MSXPIERR1:
-        POP     HL
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        RET
-BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
 
 CALL_MSXPIERR2:
         LD      A,RC_CONNERR
@@ -735,6 +724,12 @@ CALL_MSXPIERR3:
 CALL_MSXPIERR4:
         POP     HL
         LD      (HL),A
+        RET
+
+CALL_MSXPIERR1:
+        POP     HL
+        LD      HL,BUFERRMSG
+        CALL    PRINT
         RET
 
 CALL_MSXPISTD:
@@ -1041,7 +1036,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v1.1",13,10
         DB      "MSXPi ROM v0.9.1",13,10
         DB      "      Build "
-build:  DB      "20200814.00000"
+build:  DB      "20200815.00000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
@@ -1059,6 +1054,10 @@ PIONLINE:
 
 PIWAITMSG:
         DB      13,10,"Waiting Pi boot. P to skip",13,10,0
+
+BUFERRMSG:
+        DB    "Parameters or Buffer address invalid",13,10,0
+
 
 ; ================================================================
 ; Table of Commands available/implemented

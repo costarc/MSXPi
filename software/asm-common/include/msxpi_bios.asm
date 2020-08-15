@@ -47,27 +47,54 @@
 SYNCH:
             push    bc
             push    de
+            in      a,(CONTROL_PORT2)
+            cp      9
+            jr      nc,SYNCH1
             ld      a,RESET
             call    SENDIFCMD
+SYNCH1:
             call    CHKPIRDY
             ld      bc,4
-            ld      de,CHKPICMD
+            ld      de,PINGCMD
             call    SENDPICMD
             pop     de
             pop     bc
             ret     c
             call    PIEXCHANGEBYTE
             ret     c
-            cp      RC_SUCCESS
+            cp      RC_SUCCNOSTD
             ret     z
-            cp      RC_FAILED
-            scf
-            ret     z
-            cp      SENDNEXT
-            jr      nz, SYNCH
+            call    PRECONN
+            jr      c,SYNCH
             ret
 
-CHKPICMD:   DB      "PING",0
+; Restore communication with Pi by sending ABORT commands
+; Until RPi responds with READY.
+
+PRECONN:
+        CALL    TRYABORT
+        LD      BC,4
+        LD      DE,PINGCMD
+        CALL    SENDPICMD
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_SUCCNOSTD
+        JR      NZ,PRECONN
+        RET
+
+TRYABORT:
+        LD      A,ABORT
+        CALL    PIEXCHANGEBYTE
+        CP      READY
+        JR      NZ,TRYABORT
+        RET
+
+PRECON_ERR:
+        EI
+        SCF
+        RET
+
+PINGCMD: DB      "ping",0
 
 ;-----------------------
 ; SENDPICMD            |

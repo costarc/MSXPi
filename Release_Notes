@@ -28,6 +28,7 @@ Other non functional changes includes a new design using KiCad 5 instead of Eagl
 Limitations and bugs
 - To write a rom to the eeprom, you may need to specify the slot number where the MSXPi is plugged - there is not, currently, an automated and failsafe method to detect on whaat slot the epprom is connected.
 - The CPLD logic and softwares are not benefiting of the /wait signal (future improvement)
+- When booted from the MSX-DOS1 on Raspberry Pi disk image, the command PCOPY.COM cannot copy files from remote locations.
 
 MSXPi v0.8.2 Release Notes
 ==========================
