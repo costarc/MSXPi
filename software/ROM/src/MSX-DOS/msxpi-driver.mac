@@ -108,10 +108,20 @@ INIHRD:
         ld      hl,PIWAITMSG
         call    PRINT
 
-; If P is pressed during boot, MSXPi disk driver is not initialized
+; give some time for the user to view the credits, and press P to skip MSX-DOS1
+        ld      bc,0
+INIHRD_INITLOOP:
+        push    bc
         call    CHECK_P
+        pop     bc
         ld      a,0
         jr      c,INIHRD_START
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,INIHRD_INITLOOP
+
+; If P is pressed during boot, MSXPi disk driver is not initialized
 
         call    PI_WAITBOOT
         ld      a,0
@@ -125,7 +135,7 @@ INIHRD_START:
         push    af
         ld      bc,7
         ld      de,DOS_INI
-        call    SENDPICMD         ; Send sector write command "WRS"
+        call    SENDPICMD
 
 INIHRD_LOOP:
         ld      a,SENDNEXT
@@ -149,7 +159,7 @@ INIHRD_RELEASED:
         ret
 
 INIHRD_FAIL:
-       pop     af
+        pop     af
 INIHRD_FAIL1:
         or      a
         ret
