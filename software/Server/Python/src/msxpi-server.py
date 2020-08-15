@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200814.00000"
+build   = "20200815.00000"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -897,7 +897,47 @@ def dos(parms=''):
             piexchangebyte(RC_FAILED)
 
 def ping(parms=''):
-    piexchangebyte(RC_SUCCESS)
+    piexchangebyte(RC_SUCCNOSTD)
+
+def resync():
+    print("resync:looping")
+    msxbyte = piexchangebyte(READY)
+    while (msxbyte != ABORT):
+        msxbyte = piexchangebyte(READY)
+    return
+
+def recvcmd(cmdlength=128):
+    buffer = bytearray()
+    bytecounter = 0
+    crc = 0
+    rc = RC_SUCCESS
+    
+    msxbyte = piexchangebyte(SENDNEXT)
+    if (msxbyte != SENDNEXT):
+        print("recvcmd:Out of sync with MSX:",hex(msxbyte))
+        rc = RC_OUTOFSYNC
+    else:
+        dsL = piexchangebyte(SENDNEXT)
+        dsM = piexchangebyte(SENDNEXT)
+        datasize = dsL + 256 * dsM
+        
+        if datasize > cmdlength:
+            print("recvcmd:Error - Command too long")
+            return [RC_INVALIDCOMMAND,datasize]
+
+        #print "recvdatablock:Received blocksize =",datasize
+        while(datasize>bytecounter):
+            msxbyte = piexchangebyte(SENDNEXT)
+            buffer.append(msxbyte)
+            crc ^= msxbyte
+            bytecounter += 1
+
+        msxcrc = piexchangebyte(crc)
+        if (msxcrc != crc):
+            rc = RC_CRCERROR
+
+    #print "recvdatablock:exiting with rc = ",hex(rc)
+    return [rc,buffer]
 
 """ ============================================================================
     msxpi-server.py
@@ -927,14 +967,14 @@ psetvar = [['PATH','/home/msxpi'], \
            ['free','free'], \
            ]
 
-WUPGRP = {'554191119326-1399041454@g.us' : 'MSXBr', '447840924680-1486475091@g.us' :'MSXPi', '447840924680-1515184325@g.us' : 'MSXPiTest'}
-
 # irc
 channel = "#msxpi"
 allchann = []
 
 # msxdos
 msxdos1boot = True
+
+errcount = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
@@ -944,10 +984,11 @@ print "Starting MSXPi Server Version ",version,"Build",build
 try:
     while True:
         print("st_recvcmd: waiting command")
-        rc = recvdatablock()
+        rc = recvcmd()
         print"Received command",rc[1]
 
         if (rc[0] == RC_SUCCESS):
+            err = 0
             try:
                 cmd = str(rc[1].split()[0]).lower()
                 parms = str(rc[1][len(cmd)+1:])
@@ -956,7 +997,14 @@ try:
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd](parms)
             except Exception, e:
-                print("Command exception:"+str(e))
+                errcount += 1
+                print("Exception - Server Error Count:",errcount,str(e))
+        elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
+            resync()
+
+        else:
+            errcount += 1
+            print("Server Error Count:",errcount)
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
