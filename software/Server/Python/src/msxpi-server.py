@@ -726,7 +726,7 @@ def irc(cmd=''):
                 ircmsg = ircsock.recv(2048)
                 ircmsg = ircmsg.strip('\n\r')
                 if ircmsg.find("PING :") != -1:
-                    ircsock.send(bytes("PONG :pingis\n"))
+                    ircsock.send(bytes("PONG :ping\n"))
                     ircmsg = 'Pi:Ping\n'
                     rc = RC_SUCCNOSTD
                 if ircmsg.find("PRIVMSG") != -1:
@@ -777,8 +777,7 @@ def irc(cmd=''):
 
 def dos(parms=''):
 
-    global driveData,sectorInfo,msxdos1boot
-    rc = RC_SUCCESS
+    global msxdos1boot
 
     if parms[:3] == 'INI': 
 
@@ -786,22 +785,21 @@ def dos(parms=''):
         iniflag = piexchangebyte(SENDNEXT)
 
         if iniflag == 1:
-            print("parms: enabling msxdos1boot")
+            print("DOS: Enabling MSX-DOS1")
+
             msxdos1boot = True
+            global sectorInfo,numdrivesM,drive0Data,drive1Data
+
             # Initialize disk system parameters
-            global sectorInfo
-            global numdrives
             sectorInfo = [0,0,0,0]
             numdrives = 0
 
             # Load the disk images into a memory mapped variable
-            global drive0Data
-            global drive1Data
             drive0Data = msxdos_inihrd(psetvar[1][1])
             drive1Data = msxdos_inihrd(psetvar[2][1])
 
         else:
-            print("parms: disabling msxdos1boot")
+            #print("parms: disabling msxdos1boot")
             msxdos1boot = False
 
         piexchangebyte(RC_SUCCESS)
@@ -813,16 +811,20 @@ def dos(parms=''):
             piexchangebyte(RC_FAILED)
             return
 
+        rc = RC_SUCCESS
+
         if parms[:3] == 'RDS': 
         
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
+            """
             print "dos_rds:deviceNumber=",sectorInfo[0]
             print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:numsectors=",sectorInfo[1]
             print "dos_rds:initialSector=",sectorInfo[3]
             print "dos_rds:blocksize=",blocksize
+            """
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 buf = drive0Data[initdataindex:initdataindex+blocksize]
@@ -842,11 +844,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
+            """
             print "dos_wrs:deviceNumber=",sectorInfo[0]
             print "dos_wrs:mediaDescriptor=",sectorInfo[2]
             print "dos_wrs:numsectors=",sectorInfo[1]
             print "dos_wrs:initialSector=",sectorInfo[3]
             print "dos_wrs:blocksize=",blocksize
+            """
 
             piexchangebyte(RC_SUCCESS)
 
@@ -878,17 +882,22 @@ def dos(parms=''):
             piexchangebyte(blocknumber % 256)
             piexchangebyte(blocknumber / 256)
 
+            """
             print "dos_sct:deviceNumber=",sectorInfo[0]
             print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:numsectors=",sectorInfo[1]
             print "dos_sct:initialSector=",sectorInfo[3]
             print "dos_sct:blocksize=",blocksize
+            """
 
             piexchangebyte(rc)
 
         else:
             print("DOS Command invalid:",parms)
             piexchangebyte(RC_FAILED)
+
+def ping(parms=''):
+    piexchangebyte(RC_SUCCESS)
 
 """ ============================================================================
     msxpi-server.py

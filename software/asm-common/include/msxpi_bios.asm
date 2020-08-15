@@ -50,7 +50,7 @@ SYNCH:
             ld      a,RESET
             call    SENDIFCMD
             call    CHKPIRDY
-            ld      bc,3
+            ld      bc,4
             ld      de,CHKPICMD
             call    SENDPICMD
             pop     de
@@ -58,16 +58,16 @@ SYNCH:
             ret     c
             call    PIEXCHANGEBYTE
             ret     c
-            cp      READY
+            cp      RC_SUCCESS
             ret     z
-            cp      ABORT
+            cp      RC_FAILED
             scf
             ret     z
             cp      SENDNEXT
             jr      nz, SYNCH
             ret
 
-CHKPICMD:   DB      "SYN",0
+CHKPICMD:   DB      "PING",0
 
 ;-----------------------
 ; SENDPICMD            |
