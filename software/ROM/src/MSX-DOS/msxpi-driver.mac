@@ -109,7 +109,7 @@ INIHRD:
         call    PRINT
 
 ; give some time for the user to view the credits, and press P to skip MSX-DOS1
-        ld      bc,0
+        ld      bc,40000
 INIHRD_INITLOOP:
         push    bc
         call    CHECK_P
