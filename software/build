@@ -57,7 +57,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm     -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm     -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preconn.com.asm     -o ./target/preconn.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psynch.com.asm     -o ./target/psynch.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
 # Update script for MSXPi Rev3/Rev4
