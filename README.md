@@ -22,11 +22,14 @@ On the software side:
 
 - The server component was mostly rewritten to be more modular
 - Every command now can be implemented in a self-contained function inside msxpi-server.py
-- No changes are needed in the main loop of the program
-- Main data trasnfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
+- No changes are needed in the main loop of the program when new featuers or commandss are added
+- Main data transfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
 - Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
-- All clients reqritten based on a simple and better communication logic
+- All clients rewritten based on a simple and better communication logic
 - Addition of new program AT28C256.COM to write roms to the new EEPROM in the interface
+- Many improvements and bug fixes
+- More stable softwre architecture
+
 
 Other non functional changes includes a new design using KiCad 5 instead of Eagle, some more jumpers to support new EEPROM features.
 
