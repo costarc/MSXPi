@@ -19,8 +19,8 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200815.00000"
-BLKSIZE = 8192
+build   = "20200817.00000"
+BLKSIZE = 1024
 
 # Pin Definitons
 csPin   = 21
@@ -161,9 +161,8 @@ def sendstdmsg(rc, message):
     piexchangebyte(rc)
     senddatablock(message,len(message),0,1)
 
-def senddatablock(buf,blocksize,blocknumber,attempts=1):
+def senddatablock(buf,blocksize,blocknumber,attempts=10):
 
-    crc = 0
     rc = RC_FAILED
     
     bufsize = len(buf)
@@ -190,6 +189,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=1):
     piexchangebyte(attempts)
 
     while (attempts > 0 and rc != RC_SUCCESS):
+        crc = 0
         bytecounter = 0
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
@@ -207,24 +207,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=1):
         else:
             rc = RC_SUCCESS
     
-    #print("senddatablock exit:",hex(rc))
     return rc 
-
-
-#   senddatablockC(TimeOutCheck,buffer,index+initpos,blocksize,True)
-def senddatablockC(flag1,buf,initpos,size,flag2):
-    print("senddatablock:starting")
-    fh = open(RAMDISK+'/msxpi.tmp', 'wb')
-    fh.write(buf[initpos:initpos+size])
-    fh.flush()
-    fh.close()
-    print "senddatablockC:Calling senddatablock.msx:",initpos,size
-    cmd = "sudo " + RAMDISK + "/senddatablock.msx " + RAMDISK + "/msxpi.tmp"
-    rc = subprocess.call(cmd, shell=True)
-    init_spi_bitbang()
-    GPIO.output(rdyPin, GPIO.LOW)
-    print "Exiting senddatablockC:call returned:",hex(rc)
-    return rc
 
 def getpath(basepath, path):
 
@@ -453,7 +436,6 @@ def pcopy(path='',inifcb=True):
         fname_rpi = str(fileinfo[0])
         fname_msx = str(fileinfo[1])
     else:
-        print("Pi:Command line parametrs invalid.")
         sendstdmsg(RC_FAILED,"Pi:Command line parametrs invalid.")
         return RC_FAILED
 
@@ -467,7 +449,6 @@ def pcopy(path='',inifcb=True):
             filesize = len(buf)
  
         except Exception as e:
-            print("pcopy:",str(e))
             sendstdmsg(RC_FAILED,"Pi:"+str(e)+'\n') 
             return RC_FAILED
 
@@ -480,7 +461,6 @@ def pcopy(path='',inifcb=True):
             
         except Exception as e:
             rc = RC_FAILED
-            print "pcopy:http error "+ str(e)
             sendstdmsg(RC_FAILED,"Pi:"+str(e))
     
     if rc == RC_SUCCESS:
@@ -497,7 +477,7 @@ def pcopy(path='',inifcb=True):
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber,attempts=1)
+                rc = senddatablock(buf,BLKSIZE,blocknumber,20)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
     return rc
@@ -552,7 +532,6 @@ def pplay(cmd):
         else:
             sendstdmsg(rc,buf)
     except subprocess.CalledProcessError as e:
-        print "pplay:Error:",p
         rc = RC_FAILED
         sendstdmsg(rc,"Pi:Error\n"+str(e))
     
@@ -985,7 +964,7 @@ try:
     while True:
         print("st_recvcmd: waiting command")
         rc = recvcmd()
-        print"Received command",rc[1]
+        print"Received:",rc[1]
 
         if (rc[0] == RC_SUCCESS):
             err = 0
@@ -998,13 +977,11 @@ try:
                 globals()[cmd](parms)
             except Exception, e:
                 errcount += 1
-                print("Exception - Server Error Count:",errcount,str(e))
         elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
             resync()
 
         else:
             errcount += 1
-            print("Server Error Count:",errcount)
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
