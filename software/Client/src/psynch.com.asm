@@ -34,15 +34,15 @@
 ; 0.9.0  : Changes to supoprt new transfer logic
 
         ORG     $0100
-        CALL    PRECONN
-        LD      HL,PICOMM_ERROR
+        CALL    PSYNCH
+        LD      HL,PSYNCH_ERROR
         JP      C,PRINT
-        LD      HL,PICOMM_RESTORED
+        LD      HL,PSYNCH_RESTORED
         JP      PRINT
 
-PICOMM_RESTORED:
+PSYNCH_RESTORED:
     DB      "Communication restored",13,10,"$"
-PICOMM_ERROR:
+PSYNCH_ERROR:
     DB      "Could not restore communication ",13,10,"$"
 
 INCLUDE "include.asm"

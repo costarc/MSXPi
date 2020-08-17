@@ -64,14 +64,13 @@ SYNCH1:
             ret     c
             cp      RC_SUCCNOSTD
             ret     z
-            call    PRECONN
-            jr      c,SYNCH
+            call    PSYNCH
             ret
 
 ; Restore communication with Pi by sending ABORT commands
 ; Until RPi responds with READY.
 
-PRECONN:
+PSYNCH:
         CALL    TRYABORT
         LD      BC,4
         LD      DE,PINGCMD
@@ -79,7 +78,7 @@ PRECONN:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_SUCCNOSTD
-        JR      NZ,PRECONN
+        JR      NZ,PSYNCH
         RET
 
 TRYABORT:
@@ -354,6 +353,8 @@ PRINTNUM1:
         ret
 
 PRINTPISTDOUT:
+        ld      e,0
+PRINTPISTDOUT0:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -363,8 +364,9 @@ PRINTPI0:
         call    READDATASIZE
         ld      a,b
         or      c
+        ld      a,ENDTRANSFER
         ret     z
-        call    PIEXCHANGEBYTE    ; read block size, but will not use it
+        call    PIEXCHANGEBYTE    ; read attempts, but will not use it
         push    hl
         ld      h,0
 PRINTPI1:
@@ -373,6 +375,9 @@ PRINTPI1:
         ld      l,a
         xor     h
         ld      h,a
+        ld      a,e
+        cp      $ff
+        jr      z,PRINTPI3          ; nostdout - not printing to screen
         ld      a,l
         cp      10
         jr      nz,PRINTPI2
@@ -380,41 +385,25 @@ PRINTPI1:
         ld      a,13
 PRINTPI2:
         call    PUTCHAR
+PRINTPI3:
         dec     bc
         ld      a,b
         or      c
         jr      nz,PRINTPI1
         ld      a,h
         call    PIEXCHANGEBYTE
+        cp      h
         pop     hl
+        ld      a,RC_SUCCESS
+        ret     z
+        ld      a,RC_FAILED
         ret
 
 NOSTDOUT:
-        push    af
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        jr      z,NOSTDOUT0
-        pop     af
-        scf
-        ret
-NOSTDOUT0:
-        call    READDATASIZE
-        pop     af
-        push    hl
-        ld      h,0
-NOSTDOUT1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        xor     h
-        ld      h,a
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,NOSTDOUT1
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        pop     hl
+        push    de
+        ld      e,$ff
+        call    PRINTPISTDOUT0
+        pop     de
         ret
         
 SEARCHMSXPISLOT:
@@ -572,19 +561,50 @@ ATOHERR:
 
 ; Evaluate CALL Commands to check for optional parameters
 ; Returns Buffer address in HL (or HL=0000 if parameter not found)
-; DE = address of command - after all parameters
-; BC = number of characters
+; Input:
+;  DE = Call full command (after the ")
+; Output:
+;  A = Outout type (as below cases)
+;  DE = Point to start of command to send to RPi (pdir in the case below)
+;  HL = Address of buffer to store data if stdout = 2
+;
+; Cases:
+; call mspxi("pdir")  -> will print the output
+; call mspxi("0,pdir")  -> will not print the output
+; call msxpi("1,pdir")  -> will print the output to screen
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
+; 
+;PRINTTST:
+;       LD A,(HL)
+;       CALL PUTCHAR
+;       INC HL
+;       DJNZ PRINTTST
+;       RET
 PARMSEVAL:
+;
+;        push    DE
+;        push    bc
+;        EX DE,HL
+;        CALL PRINTTST
+;        pop     bc
+;        POP     DE
+;
+
         INC     DE
         LD      A,(DE)
         DEC     DE
         CP      ','
-        JR      NZ,PARMSEVAL1
+        LD      A,'1'
+        JR      NZ,PARMSEVAL1      ; no output device privided, USE DEFAULT
+        LD      A,(DE)
+        PUSH    AF                 ; save output device
         INC     DE
         INC     DE
-        DEC     BC
-        DEC     BC
+        DEC     B
+        DEC     B
+        POP     AF
 PARMSEVAL1:
+        PUSH    AF
 ; Check if a buffer address has been passed
         PUSH    DE
         INC     DE
@@ -593,28 +613,31 @@ PARMSEVAL1:
         INC     DE
         LD      A,(DE)
         CP      ','
-        JR      NZ,PARMSEVAL2
+        JR      NZ,PARMSEVAL2       ; no buffer address provided
+
 ; CALL has a buffer address in this format:
 ; CALL MSXPI("XXXX,COMMAND")
 ; Move pointer to start of command
-        INC     DE
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
+        INC     DE                  ; Point to command (pdir)
+        DEC     B                   ;
+        DEC     B
+        DEC     B
+        DEC     B
+        DEC     B
         POP     HL
-; Convert ascii chars POINTED BY DE to hex. Return value in HL
+; Convert ascii chars pointed by HL to hex. Return value in HL
 ; Flag C is set if there was an error
         CALL    STRTOHEX
+        POP     AF
         RET
+
 ; CALL did not have buffer address.
 ; We set this case with 00 n the stack
 PARMSEVAL2:
+        POP     DE 
+        POP     AF
 ;Buffer not passed in CALL, then we set adddress to 0000
-        POP     DE
         LD      HL,0
-        OR      A
         RET
 
 ; -------------------------------------------------------------

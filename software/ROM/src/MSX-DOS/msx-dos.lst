@@ -1,0 +1,4 @@
+msxpi-driver.mac line 59: Duplicate label: CALBAS
+msxpi-driver.mac line 60: Duplicate label: CHRGTR
+msxpi-driver.mac line 61: Duplicate label: CHPUT
+msxpi-driver.mac line 63: Duplicate label: DEVICE
