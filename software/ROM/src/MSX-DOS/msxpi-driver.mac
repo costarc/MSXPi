@@ -56,12 +56,6 @@ RC_SUCCESS     EQU $E0
 RC_CRCERROR    EQU $E2
 RC_OUTOFSYNC   EQU $E5
 
-CALBAS	EQU     0159H
-CHRGTR  EQU     04666H
-CHPUT   EQU     0A2H
-D.F34D	EQU     0F34DH
-DEVICE  EQU     0FD99H
-
 ; symbols which can be used from the kernel
 
 ; errorcodes used by DSKIO, DSKCHG and GETDPB
