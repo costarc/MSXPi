@@ -129,6 +129,31 @@ def piexchangebyte(byte_out=0):
     #print "piexchangebyte: received:",hex(mymsxbyte)
     return byte_in
 
+# Using CRC code from :
+# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
+crc_poly = 0x1021
+def crcinit(c):
+    crc = 0
+    c = c << 8
+    for j in range(8):
+        if (crc ^ c) & 0x8000:
+            crc = (crc << 1) ^ crc_poly
+        else:
+            crc = crc << 1
+        c = c << 1
+    return crc
+
+crctab = [ crcinit(i) for i in range(256) ]
+
+def crc16(crc, c):
+    cc = 0xff & c
+
+    tmp = (crc >> 8) ^ cc
+    crc = (crc << 8) ^ crctab[tmp & 0xff]
+    crc = crc & 0xffff
+
+    return crc
+
 def recvdatablock():
     buffer = bytearray()
     bytecounter = 0
@@ -157,35 +182,6 @@ def recvdatablock():
 
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
-
-# Using CRC code from :
-# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
-crc_poly = 0x1021
-def crcinit(c):
-    crc = 0
-    c = c << 8
-    for j in range(8):
-        if (crc ^ c) & 0x8000:
-            crc = (crc << 1) ^ crc_poly
-        else:
-            crc = crc << 1
-        c = c << 1
-    return crc
-
-crctab = [ crcinit(i) for i in range(256) ]
-
-def crc16(crc, c):
-    cc = 0xff & c
-
-    tmp = (crc >> 8) ^ cc
-    crc = (crc << 8) ^ crctab[tmp & 0xff]
-    crc = crc & 0xffff
-
-    return crc
-
-def sendstdmsg(rc, message):
-    piexchangebyte(rc)
-    senddatablock(message,len(message),0,1)
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
@@ -242,6 +238,27 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
     return rc 
 
+def sendstdmsg(rc, message):
+    piexchangebyte(rc)
+    senddatablock(message,len(message),0,1)
+
+# create a subclass and override the handler methods
+class MyHTMLParser(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+    def handle_starttag(self, tag, attrs):
+        self.NEWTAGS.append(tag)
+        self.NEWATTRS.append(attrs)
+    def handle_data(self, data):
+        self.HTMLDATA.append(data)
+    def clean(self):
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+        
 def getpath(basepath, path):
 
     path=path.strip().rstrip(' \t\r\n\0')
@@ -265,23 +282,6 @@ def getpath(basepath, path):
         newpath = basepath + "/" + path
 
     return [urltype, newpath]
-
-# create a subclass and override the handler methods
-class MyHTMLParser(HTMLParser):
-    def __init__(self):
-        self.reset()
-        self.NEWTAGS = []
-        self.NEWATTRS = []
-        self.HTMLDATA = []
-    def handle_starttag(self, tag, attrs):
-        self.NEWTAGS.append(tag)
-        self.NEWATTRS.append(attrs)
-    def handle_data(self, data):
-        self.HTMLDATA.append(data)
-    def clean(self):
-        self.NEWTAGS = []
-        self.NEWATTRS = []
-        self.HTMLDATA = []
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
     #print "msxdos_inihrd:Starting"
