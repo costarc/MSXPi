@@ -387,13 +387,10 @@ PRINTPI0:
         ret     z
         call    PIEXCHANGEBYTE    ; read attempts, but will not use it
         push    hl
-        ld      h,0
 PRINTPI1:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         ld      l,a
-        xor     h
-        ld      h,a
         ld      a,e
         cp      $ff
         jr      z,PRINTPI3          ; nostdout - not printing to screen
@@ -409,13 +406,10 @@ PRINTPI3:
         ld      a,b
         or      c
         jr      nz,PRINTPI1
-        ld      a,h
         call    PIEXCHANGEBYTE
-        cp      h
+        call    PIEXCHANGEBYTE
         pop     hl
         ld      a,RC_SUCCESS
-        ret     z
-        ld      a,RC_FAILED
         ret
 
 NOSTDOUT:
