@@ -20,7 +20,7 @@ from random import randint
 import crc16
 
 version = "0.9.1"
-build   = "20200817.00000"
+build   = "20200818.00000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -33,13 +33,13 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       =    25
-SPI_INT_TIME        =    3000
-PIWAITTIMEOUTOTHER  =    120     # seconds
-PIWAITTIMEOUTBIOS   =    60      # seconds
-SYNCTIMEOUT         =    5
-BYTETRANSFTIMEOUT   =    5
-SYNCTRANSFTIMEOUT   =    3
+GLOBALRETRIES       = 5
+SPI_INT_TIME        = 3000
+PIWAITTIMEOUTOTHER  = 120     # seconds
+PIWAITTIMEOUTBIOS   = 60      # seconds
+SYNCTIMEOUT         = 5
+BYTETRANSFTIMEOUT   = 5
+SYNCTRANSFTIMEOUT   = 3
 STARTTRANSFER       = 0xA0
 SENDNEXT            = 0xA1
 ENDTRANSFER         = 0xA2
@@ -188,7 +188,9 @@ def sendstdmsg(rc, message):
     senddatablock(message,len(message),0,1)
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
- 
+    
+    global GLOBALRETRIES
+
     rc = RC_FAILED
     
     bufsize = len(buf)
@@ -223,15 +225,15 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
             crc = crc16(crc,pibyte)
             bytecounter += 1
 
-        attempts -= 1
-
         msxcrcL = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
+            attempts = attempts - 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
             msxcrcH = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
+                attempts = attempts - 1
                 rc = RC_CRCERROR
                 print("RC_CRCERROR. Remaining attempts:",attempts)
 
@@ -443,7 +445,7 @@ def pcopy(path='',inifcb=True):
     buf = ''
     rc = RC_SUCCESS
 
-    global psetvar
+    global psetvar,GLOBALRETRIES
     basepath = psetvar[0][1]
     
     if (path.startswith('http') or \
@@ -508,9 +510,13 @@ def pcopy(path='',inifcb=True):
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber,GLOBALRETRIES)
+                rc = senddatablock(buf,BLKSIZE,blocknumber)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
+
+            if rc != RC_SUCCESS:
+                print("pcopy:Exiting with rc:",hex(rc))
+
     return rc
 
 def ploadr(path=''):
@@ -537,7 +543,7 @@ def pdate(parms = ''):
             piexchangebyte(now.second)
             piexchangebyte(0)
             buf = "Pi:Ok\n"
-            senddatablock(buf,len(buf),0,1)
+            senddatablock(buf,len(buf),0)
             rc = RC_SUCCESS
         else:
             print "pdate:out of sync in SENDNEXT"
@@ -843,7 +849,7 @@ def dos(parms=''):
 
             piexchangebyte(RC_SUCCESS)
 
-            rc = senddatablock(buf,blocksize,0,1)
+            rc = senddatablock(buf,blocksize,0)
             if rc != RC_SUCCESS:
                 rc = RC_FAILED
             
