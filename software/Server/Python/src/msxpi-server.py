@@ -33,7 +33,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       =    5
+GLOBALRETRIES       =    25
 SPI_INT_TIME        =    3000
 PIWAITTIMEOUTOTHER  =    120     # seconds
 PIWAITTIMEOUTBIOS   =    60      # seconds
@@ -116,7 +116,7 @@ def SPI_MASTER_transfer_byte(byte_out):
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
-def piexchangebyte(byte_out):
+def piexchangebyte(byte_out=0):
     rc = RC_SUCCESS
     
     GPIO.output(rdyPin, GPIO.HIGH)
@@ -158,30 +158,37 @@ def recvdatablock():
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
-def crc16(parms=''):
+# Using CRC code from :
+# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
+crc_poly = 0x1021
+def crcinit(c):
+    crc = 0
+    c = c << 8
+    for j in range(8):
+        if (crc ^ c) & 0x8000:
+            crc = (crc << 1) ^ crc_poly
+        else:
+            crc = crc << 1
+        c = c << 1
+    return crc
 
-    piexchangebyte(RC_WAIT)
-    piexchangebyte(RC_SUCCESS)
-    crc = '0xffff'
+crctab = [ crcinit(i) for i in range(256) ]
 
-    msxbyte = piexchangebyte(0x00)
-    crc = crc16.crc16xmodem(msxbyte, crc)
-    msxbyte = piexchangebyte(0x00)
-    crc = crc16.crc16xmodem(msxbyte, crc)
+def crc16(crc, c):
+    cc = 0xff & c
 
-    l = piexchangebyte(crc % 256)
-    m = piexchangebyte(crc / 256)
+    tmp = (crc >> 8) ^ cc
+    crc = (crc << 8) ^ crctab[tmp & 0xff]
+    crc = crc & 0xffff
 
-    print("Calculated CRC: %s / Received CRC: %s",crc,l+m*256)
-
+    return crc
 
 def sendstdmsg(rc, message):
     piexchangebyte(rc)
     senddatablock(message,len(message),0,1)
 
-def senddatablock(buf,blocksize,blocknumber,attempts=10):
-    pritn("senddatablock")
-
+def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
+ 
     rc = RC_FAILED
     
     bufsize = len(buf)
@@ -208,17 +215,15 @@ def senddatablock(buf,blocksize,blocknumber,attempts=10):
     piexchangebyte(attempts)
 
     while (attempts > 0 and rc != RC_SUCCESS):
-        crc = '0xffff'
+        crc = 0xffff
         bytecounter = 0
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            crc = crc16.crc16xmodem(str(pibyte), crc)
+            crc = crc16(crc,pibyte)
             bytecounter += 1
 
         attempts -= 1
-
-        print(crc,type(crc))
 
         msxcrcL = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
