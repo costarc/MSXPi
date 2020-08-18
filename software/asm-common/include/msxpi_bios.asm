@@ -95,6 +95,31 @@ PRECON_ERR:
 
 PINGCMD: DB      "ping",0
 
+; Input:
+; A = byte to calculate CRC
+; HL' = Current CRC 
+; Output:
+; HL' = CRC
+; 
+CRC16:
+        exx
+        xor     h
+        ld      h,a
+        ld      b,8
+rotate16:
+        add     hl,hl ; 11t - rotate crc left one
+        jr      nc, nextbit16 ; 12/7t - only xor polyonimal if msb set
+        ld      a,h ; 4t
+        xor     $10 ; 7t - high byte with $10
+        ld      h,a ; 4t
+        ld      a,l ; 4t
+        xor     $21 ; 7t - low byte with $21
+        ld      l,a ; 4t - hl now xor $1021
+nextbit16:
+        djnz rotate16 ; 13/8t - loop over 8 bits
+        exx
+        ret
+
 ;-----------------------
 ; SENDPICMD            |
 ;-----------------------
@@ -156,22 +181,7 @@ RECVDATABLOCK1:
 ; send info that msx is in transfer mode
         call    PIEXCHANGEBYTE
         ld      (de),a
-        exx
-        xor     h
-        ld      h,a
-        ld      b,8
-rotate16:
-        add     hl,hl ; 11t - rotate crc left one
-        jr      nc, nextbit16 ; 12/7t - only xor polyonimal if msb set
-        ld      a,h ; 4t
-        xor     $10 ; 7t - high byte with $10
-        ld      h,a ; 4t
-        ld      a,l ; 4t
-        xor     $21 ; 7t - low byte with $21
-        ld      l,a ; 4t - hl now xor $1021
-nextbit16:
-        djnz rotate16 ; 13/8t - loop over 8 bits
-        exx
+        call    CRC16
         inc     de
 		dec     bc
         ld      a,b
@@ -371,9 +381,27 @@ PRINTNUM1:
         call    PUTCHAR
         ret
 
+
+; =================================================================
+; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
+; Inputs: (PRINTPISTDOUT0)
+;  E = 0 - Print data to screen
+;      $ff - Do not print
+; Output:
+; HL' = CRC16
+; A = Return Code (RC_SUCCESS or RC_CRCERROR)
+;
+; Changes: AF,BC,E,L,HL',BC'
+; =================================================================
 PRINTPISTDOUT:
         ld      e,0
+
 PRINTPISTDOUT0:
+    ; CLEAR CRC and save block size
+        exx
+        ld      hl,$ffff
+        exx
+PRINTPISTDOUT1:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -386,10 +414,12 @@ PRINTPI0:
         ld      a,ENDTRANSFER
         ret     z
         call    PIEXCHANGEBYTE    ; read attempts, but will not use it
-        push    hl
 PRINTPI1:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
+        push    af
+        call    CRC16
+        pop     af
         ld      l,a
         ld      a,e
         cp      $ff
@@ -406,10 +436,23 @@ PRINTPI3:
         ld      a,b
         or      c
         jr      nz,PRINTPI1
+
+; Now exchange CRC
+        exx
+        ld      a,l
         call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,PRINTPI4
+        ld      a,h
         call    PIEXCHANGEBYTE
-        pop     hl
+        cp      h
+        jr      nz,PRINTPI4
         ld      a,RC_SUCCESS
+        jr      PRINTPI5
+PRINTPI4: 
+        ld      a,RC_CRCERROR
+PRINTPI5:
+        exx
         ret
 
 NOSTDOUT:

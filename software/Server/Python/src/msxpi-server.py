@@ -223,13 +223,13 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
 
         msxcrcL = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
-            attempts = attempts - 1
+            attempts -= 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
             msxcrcH = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
-                attempts = attempts - 1
+                attempts -= 1
                 rc = RC_CRCERROR
                 print("RC_CRCERROR. Remaining attempts:",attempts)
 
