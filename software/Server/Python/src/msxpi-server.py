@@ -228,12 +228,12 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
         msxcrcL = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
             rc = RC_CRCERROR
-            print("RC_CRCERROR")
+            print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
             msxcrcH = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
                 rc = RC_CRCERROR
-                print("RC_CRCERROR")
+                print("RC_CRCERROR. Remaining attempts:",attempts)
 
             else:
                 rc = RC_SUCCESS
@@ -508,7 +508,7 @@ def pcopy(path='',inifcb=True):
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber,20)
+                rc = senddatablock(buf,BLKSIZE,blocknumber,GLOBALRETRIES)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
     return rc
