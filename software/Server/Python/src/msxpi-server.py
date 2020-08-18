@@ -17,6 +17,7 @@ import errno
 import select
 import base64
 from random import randint
+import crc16
 
 version = "0.9.1"
 build   = "20200817.00000"
@@ -157,11 +158,29 @@ def recvdatablock():
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
+def crc16(parms=''):
+
+    piexchangebyte(RC_WAIT)
+    piexchangebyte(RC_SUCCESS)
+    crc = '0xffff'
+
+    msxbyte = piexchangebyte(0x00)
+    crc = crc16.crc16xmodem(msxbyte, crc)
+    msxbyte = piexchangebyte(0x00)
+    crc = crc16.crc16xmodem(msxbyte, crc)
+
+    l = piexchangebyte(crc % 256)
+    m = piexchangebyte(crc / 256)
+
+    print("Calculated CRC: %s / Received CRC: %s",crc,l+m*256)
+
+
 def sendstdmsg(rc, message):
     piexchangebyte(rc)
     senddatablock(message,len(message),0,1)
 
 def senddatablock(buf,blocksize,blocknumber,attempts=10):
+    pritn("senddatablock")
 
     rc = RC_FAILED
     
@@ -189,23 +208,30 @@ def senddatablock(buf,blocksize,blocknumber,attempts=10):
     piexchangebyte(attempts)
 
     while (attempts > 0 and rc != RC_SUCCESS):
-        crc = 0
+        crc = '0xffff'
         bytecounter = 0
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            crc ^= pibyte
+            crc = crc16.crc16xmodem(str(pibyte), crc)
             bytecounter += 1
 
         attempts -= 1
 
-        msxcrc = piexchangebyte(crc)
-        #print("senddatablock:CRC RPi:MSX = ",crc,msxcrc)
-        if (msxcrc != crc):
+        print(crc,type(crc))
+
+        msxcrcL = piexchangebyte(crc % 256)
+        if msxcrcL != crc % 256:
             rc = RC_CRCERROR
             print("RC_CRCERROR")
         else:
-            rc = RC_SUCCESS
+            msxcrcH = piexchangebyte(crc / 256)
+            if msxcrcH != crc / 256:
+                rc = RC_CRCERROR
+                print("RC_CRCERROR")
+
+            else:
+                rc = RC_SUCCESS
     
     return rc 
 

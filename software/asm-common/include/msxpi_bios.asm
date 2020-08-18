@@ -148,14 +148,30 @@ RECVDATABLOCK:
 RECVDATABLOCK0:
         push    bc      ; blocksize   
 ; CLEAR CRC and save block size
-        ld      h,0     
+        exx
+        ld      hl,$ffff
+        exx
 RECVDATABLOCK1:
 
 ; send info that msx is in transfer mode
         call    PIEXCHANGEBYTE
         ld      (de),a
+        exx
         xor     h
         ld      h,a
+        ld      b,8
+rotate16:
+        add     hl,hl ; 11t - rotate crc left one
+        jr      nc, nextbit16 ; 12/7t - only xor polyonimal if msb set
+        ld      a,h ; 4t
+        xor     $10 ; 7t - high byte with $10
+        ld      h,a ; 4t
+        ld      a,l ; 4t
+        xor     $21 ; 7t - low byte with $21
+        ld      l,a ; 4t - hl now xor $1021
+nextbit16:
+        djnz rotate16 ; 13/8t - loop over 8 bits
+        exx
         inc     de
 		dec     bc
         ld      a,b
@@ -163,16 +179,18 @@ RECVDATABLOCK1:
         jr      nz,RECVDATABLOCK1
 
 ; Now exchange CRC
-
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,RECVDATABLOCK_CRCERROR
         ld      a,h
         call    PIEXCHANGEBYTE
-
-; Compare CRC received with CRC calcualted
-
         cp      h
         jr      nz,RECVDATABLOCK_CRCERROR
+        exx
 
-;Return number of bytes read 8
+;Return number of bytes read
         pop     bc
 ; Discard de, because we want to return current memory address
         pop     af
@@ -182,6 +200,7 @@ RECVDATABLOCK1:
 
 ; Return de to original value and flag error
 RECVDATABLOCK_CRCERROR:
+        exx
         pop     bc             ; restore blocksize
         ld      a,l            ; get number of attemps
         dec     a
@@ -482,22 +501,7 @@ ATOHERR:
 ; call msxpi("1,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
 ; 
-;PRINTTST:
-;       LD A,(HL)
-;       CALL PUTCHAR
-;       INC HL
-;       DJNZ PRINTTST
-;       RET
 PARMSEVAL:
-;
-;        push    DE
-;        push    bc
-;        EX DE,HL
-;        CALL PRINTTST
-;        pop     bc
-;        POP     DE
-;
-
         INC     DE
         LD      A,(DE)
         DEC     DE
