@@ -17,7 +17,6 @@ import errno
 import select
 import base64
 from random import randint
-import crc16
 
 version = "0.9.1"
 build   = "20200818.00000"
@@ -342,13 +341,13 @@ def prun(cmd):
             p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
             if len(buf) == 0:
-                buf = "Pi:Command did not return any output.\n"
+                buf = "Pi:No output"
 
             sendstdmsg(rc,buf)
 
         except Exception as e:
             rc = RC_FAILED
-            sendstdmsg(rc,"Pi:Error running the command.\n"+str(e)+'\n')
+            sendstdmsg(rc,"Pi:"+str(e)+'\n')
 
     #print "prun:exiting rc:",hex(rc)
     return rc
@@ -360,36 +359,40 @@ def pdir(path):
     rc = RC_SUCCESS
     #print "pdir:starting"
 
-    if (msxbyte == SENDNEXT):
-        urlcheck = getpath(basepath, path)
-        if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            if (path.strip() == '*'):
-                prun('ls -l ' + urlcheck[1])
-            elif ('*' in path):
-                numChilds = path.count('/')
-                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
-                if (fileDesc == '' or len(fileDesc) == 0):
-                    fileDesc = '.'
-                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+    try:
+        if (msxbyte == SENDNEXT):
+            urlcheck = getpath(basepath, path)
+            if (urlcheck[0] == 0 or urlcheck[0] == 1):
+                if (path.strip() == '*'):
+                    prun('ls -l ' + urlcheck[1])
+                elif ('*' in path):
+                    numChilds = path.count('/')
+                    fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
+                    if (fileDesc == '' or len(fileDesc) == 0):
+                        fileDesc = '.'
+                    prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+                else:
+                    prun('ls -l ' + urlcheck[1])
             else:
-                prun('ls -l ' + urlcheck[1])
-        else:
-            parser = MyHTMLParser()
-            try:
-                htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
                 parser = MyHTMLParser()
-                parser.feed(htmldata)
-                buf = " ".join(parser.HTMLDATA)
-                piexchangebyte(RC_SUCCESS)
-                rc = senddatablock(buf,len(buf),0,1)
+                try:
+                    htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
+                    parser = MyHTMLParser()
+                    parser.feed(htmldata)
+                    buf = " ".join(parser.HTMLDATA)
+                    piexchangebyte(RC_SUCCESS)
+                    rc = senddatablock(buf,len(buf),0,1)
 
-            except urllib2.HTTPError as e:
-                rc = RC_FAILED
-                print "pdir:http error "+ str(e)
-                sendstdmsg(rc,str(e))
-    else:
-        rc = RC_FAILNOSTD
-        print "pdir:out of sync in RC_WAIT"
+                except urllib2.HTTPError as e:
+                    rc = RC_FAILED
+                    print "pdir:http error "+ str(e)
+                    sendstdmsg(rc,str(e))
+        else:
+            rc = RC_FAILNOSTD
+            print "pdir:out of sync in RC_WAIT"
+    except Exception as e:
+        print("pdir:"+str(e))
+        sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     #print "pdir:exiting rc:",hex(rc)
     return rc
@@ -403,39 +406,43 @@ def pcd(path):
     
     #print "pcd:starting basepath:path=",basepath + ":" + path
 
-    if (msxbyte == SENDNEXT):
-        if (path == '' or path.strip() == "."):
-            sendstdmsg(rc,basepath+'\n')
-        elif (path.strip() == ".."):
-            newpath = basepath.rsplit('/', 1)[0]
-            if (newpath == ''):
-                newpath = '/'
-            psetvar[0][1] = newpath
-            sendstdmsg(rc,str(newpath+'\n'))
-        else:
-            #print "pcd:calling getpath"
-            urlcheck = getpath(basepath, path)
-            newpath = urlcheck[1]
-
-            if (newpath[:4] == "http" or \
-                newpath[:3] == "ftp" or \
-                newpath[:3] == "nfs" or \
-                newpath[:3] == "smb"):
-                rc = RC_SUCCESS
+    try:
+        if (msxbyte == SENDNEXT):
+            if (path == '' or path.strip() == "."):
+                sendstdmsg(rc,basepath+'\n')
+            elif (path.strip() == ".."):
+                newpath = basepath.rsplit('/', 1)[0]
+                if (newpath == ''):
+                    newpath = '/'
                 psetvar[0][1] = newpath
                 sendstdmsg(rc,str(newpath+'\n'))
             else:
-                newpath = str(newpath)
-                if (os.path.isdir(newpath)):
+                #print "pcd:calling getpath"
+                urlcheck = getpath(basepath, path)
+                newpath = urlcheck[1]
+
+                if (newpath[:4] == "http" or \
+                    newpath[:3] == "ftp" or \
+                    newpath[:3] == "nfs" or \
+                    newpath[:3] == "smb"):
+                    rc = RC_SUCCESS
                     psetvar[0][1] = newpath
-                    sendstdmsg(rc,newpath+'\n')
-                elif (os.path.isfile(str(newpath))):
-                    sendstdmsg(RC_FAILED,"Pi:Error - not a folder")
+                    sendstdmsg(rc,str(newpath+'\n'))
                 else:
-                    sendstdmsg(RC_FAILED,"Pi:Error - path not found")
-    else:
-        rc = RC_FAILNOSTD
-        print "pcd:out of sync in RC_WAIT"
+                    newpath = str(newpath)
+                    if (os.path.isdir(newpath)):
+                        psetvar[0][1] = newpath
+                        sendstdmsg(rc,newpath+'\n')
+                    elif (os.path.isfile(str(newpath))):
+                        sendstdmsg(RC_FAILED,"Pi:Error - not a folder")
+                    else:
+                        sendstdmsg(RC_FAILED,"Pi:Error - path not found")
+        else:
+            rc = RC_FAILNOSTD
+            print "pcd:out of sync in RC_WAIT"
+    except Exception as e:
+        print("pcd:"+str(e))
+        sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     return [rc, newpath]
 
@@ -542,7 +549,7 @@ def pdate(parms = ''):
             piexchangebyte(now.minute)
             piexchangebyte(now.second)
             piexchangebyte(0)
-            buf = "Pi:Ok\n"
+            buf = "Pi:Ok"
             senddatablock(buf,len(buf),0)
             rc = RC_SUCCESS
         else:
@@ -570,7 +577,7 @@ def pplay(cmd):
             sendstdmsg(rc,buf)
     except subprocess.CalledProcessError as e:
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Error\n"+str(e))
+        sendstdmsg(rc,"Pi:"+str(e))
     
     #print "pplay:exiting rc:",hex(rc)
     return rc
@@ -581,7 +588,7 @@ def pset(cmd=''):
     global psetvar
     
     rc = RC_SUCCESS
-    buf = "Pi:Error\nSyntax: pset set <var> <value>"
+    buf = "Pi:\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
 
     if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
@@ -613,7 +620,7 @@ def pset(cmd=''):
             if (not found):
                 rc = RC_FAILED
                 rc_text = '';
-                buf = "Pi:Erro setting parameter"
+                buf = "Pi:Error setting parameter"
         else:
             rc = RC_FAILED
 
@@ -906,7 +913,7 @@ def dos(parms=''):
             print "dos_sct:blocksize=",blocksize
             """
 
-            piexchangebyte(rc)
+            piexchangebyte(RC_SUCCESS)
 
         else:
             print("DOS Command invalid:",parms)

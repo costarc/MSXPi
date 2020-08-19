@@ -41,37 +41,12 @@
 ; 0.6c   : Initial version commited to git
 ;
 
-;-----------------------
-; SYNCH                |
-;-----------------------
-SYNCH:
-            push    bc
-            push    de
-            in      a,(CONTROL_PORT2)
-            cp      9
-            jr      nc,SYNCH1
-            ld      a,RESET
-            call    SENDIFCMD
-SYNCH1:
-            call    CHKPIRDY
-            ld      bc,4
-            ld      de,PINGCMD
-            call    SENDPICMD
-            pop     de
-            pop     bc
-            ret     c
-            call    PIEXCHANGEBYTE
-            ret     c
-            cp      RC_SUCCNOSTD
-            ret     z
-            call    PSYNCH
-            ret
-
 ; Restore communication with Pi by sending ABORT commands
 ; Until RPi responds with READY.
 
-PSYNCH:
+PSYNCH:  
         CALL    TRYABORT
+        RET     C
         LD      BC,4
         LD      DE,PINGCMD
         CALL    SENDPICMD
@@ -82,6 +57,8 @@ PSYNCH:
         RET
 
 TRYABORT:
+        ;CALL    CHECK_P
+        ;RET     C
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY

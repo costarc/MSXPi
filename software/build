@@ -42,7 +42,6 @@ fi
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
 
 # MSX-DOS commands
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/crc16.com.asm     -o ./target/crc16.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm     -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
@@ -58,7 +57,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm     -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm     -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psynch.com.asm     -o ./target/psynch.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm     -o ./target/psync.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
 # Update script for MSXPi Rev3/Rev4
