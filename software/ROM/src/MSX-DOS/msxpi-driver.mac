@@ -127,6 +127,7 @@ INIHRD_INITLOOP:
         
 INIHRD_START:
         push    af
+        call    PSYNCH
         ld      bc,7
         ld      de,DOS_INI
         call    SENDPICMD
@@ -164,14 +165,14 @@ PI_WAITBOOT:
         ld      b,10
 
 PI_WAITBOOT1:
-        ld      a,'.'
-        call    CHPUT
-        call    SYNCH
-        ret     nc
         push    bc
         call    CHECK_P
+        ret     c
+        ld      a,'.'
+        call    CHPUT
+        call    PSYNCH
         pop     bc
-        ret		c
+        ret     z
 ; Pi responded
         djnz    PI_WAITBOOT1
 ; Pi did not respond
@@ -957,6 +958,7 @@ CHECK_CTRL:
         ret
 
 CHECK_P:
+        push    bc
         ld      b,4
         in      a,(0AAh)
         and     11110000b
@@ -967,6 +969,7 @@ CHECK_P:
         bit     5,a
         ret     z
         or      a
+        pop     bc
         ret
 
 BIOSENTRYADDR:  EQU     $
@@ -991,7 +994,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      SYNCH
         DW      PSYNCH
 
 ; ================================================================

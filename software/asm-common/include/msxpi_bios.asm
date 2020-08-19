@@ -41,37 +41,12 @@
 ; 0.6c   : Initial version commited to git
 ;
 
-;-----------------------
-; SYNCH                |
-;-----------------------
-SYNCH:
-            push    bc
-            push    de
-            in      a,(CONTROL_PORT2)
-            cp      9
-            jr      nc,SYNCH1
-            ld      a,RESET
-            call    SENDIFCMD
-SYNCH1:
-            call    CHKPIRDY
-            ld      bc,4
-            ld      de,PINGCMD
-            call    SENDPICMD
-            pop     de
-            pop     bc
-            ret     c
-            call    PIEXCHANGEBYTE
-            ret     c
-            cp      RC_SUCCNOSTD
-            ret     z
-            call    PSYNCH
-            ret
-
 ; Restore communication with Pi by sending ABORT commands
 ; Until RPi responds with READY.
 
-PSYNCH:
+PSYNCH:  
         CALL    TRYABORT
+        RET     C
         LD      BC,4
         LD      DE,PINGCMD
         CALL    SENDPICMD
@@ -82,6 +57,8 @@ PSYNCH:
         RET
 
 TRYABORT:
+        ;CALL    CHECK_P
+        ;RET     C
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY
@@ -94,6 +71,31 @@ PRECON_ERR:
         RET
 
 PINGCMD: DB      "ping",0
+
+; Input:
+; A = byte to calculate CRC
+; HL' = Current CRC 
+; Output:
+; HL' = CRC
+; 
+CRC16:
+        exx
+        xor     h
+        ld      h,a
+        ld      b,8
+rotate16:
+        add     hl,hl ; 11t - rotate crc left one
+        jr      nc, nextbit16 ; 12/7t - only xor polyonimal if msb set
+        ld      a,h ; 4t
+        xor     $10 ; 7t - high byte with $10
+        ld      h,a ; 4t
+        ld      a,l ; 4t
+        xor     $21 ; 7t - low byte with $21
+        ld      l,a ; 4t - hl now xor $1021
+nextbit16:
+        djnz rotate16 ; 13/8t - loop over 8 bits
+        exx
+        ret
 
 ;-----------------------
 ; SENDPICMD            |
@@ -148,14 +150,15 @@ RECVDATABLOCK:
 RECVDATABLOCK0:
         push    bc      ; blocksize   
 ; CLEAR CRC and save block size
-        ld      h,0     
+        exx
+        ld      hl,$ffff
+        exx
 RECVDATABLOCK1:
 
 ; send info that msx is in transfer mode
         call    PIEXCHANGEBYTE
         ld      (de),a
-        xor     h
-        ld      h,a
+        call    CRC16
         inc     de
 		dec     bc
         ld      a,b
@@ -163,16 +166,18 @@ RECVDATABLOCK1:
         jr      nz,RECVDATABLOCK1
 
 ; Now exchange CRC
-
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,RECVDATABLOCK_CRCERROR
         ld      a,h
         call    PIEXCHANGEBYTE
-
-; Compare CRC received with CRC calcualted
-
         cp      h
         jr      nz,RECVDATABLOCK_CRCERROR
+        exx
 
-;Return number of bytes read 8
+;Return number of bytes read
         pop     bc
 ; Discard de, because we want to return current memory address
         pop     af
@@ -182,6 +187,7 @@ RECVDATABLOCK1:
 
 ; Return de to original value and flag error
 RECVDATABLOCK_CRCERROR:
+        exx
         pop     bc             ; restore blocksize
         ld      a,l            ; get number of attemps
         dec     a
@@ -352,9 +358,27 @@ PRINTNUM1:
         call    PUTCHAR
         ret
 
+
+; =================================================================
+; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
+; Inputs: (PRINTPISTDOUT0)
+;  E = 0 - Print data to screen
+;      $ff - Do not print
+; Output:
+; HL' = CRC16
+; A = Return Code (RC_SUCCESS or RC_CRCERROR)
+;
+; Changes: AF,BC,E,L,HL',BC'
+; =================================================================
 PRINTPISTDOUT:
         ld      e,0
+
 PRINTPISTDOUT0:
+    ; CLEAR CRC and save block size
+        exx
+        ld      hl,$ffff
+        exx
+PRINTPISTDOUT1:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -367,14 +391,13 @@ PRINTPI0:
         ld      a,ENDTRANSFER
         ret     z
         call    PIEXCHANGEBYTE    ; read attempts, but will not use it
-        push    hl
-        ld      h,0
 PRINTPI1:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
+        push    af
+        call    CRC16
+        pop     af
         ld      l,a
-        xor     h
-        ld      h,a
         ld      a,e
         cp      $ff
         jr      z,PRINTPI3          ; nostdout - not printing to screen
@@ -390,13 +413,23 @@ PRINTPI3:
         ld      a,b
         or      c
         jr      nz,PRINTPI1
+
+; Now exchange CRC
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,PRINTPI4
         ld      a,h
         call    PIEXCHANGEBYTE
         cp      h
-        pop     hl
+        jr      nz,PRINTPI4
         ld      a,RC_SUCCESS
-        ret     z
-        ld      a,RC_FAILED
+        jr      PRINTPI5
+PRINTPI4: 
+        ld      a,RC_CRCERROR
+PRINTPI5:
+        exx
         ret
 
 NOSTDOUT:
@@ -482,22 +515,7 @@ ATOHERR:
 ; call msxpi("1,pdir")  -> will print the output to screen
 ; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
 ; 
-;PRINTTST:
-;       LD A,(HL)
-;       CALL PUTCHAR
-;       INC HL
-;       DJNZ PRINTTST
-;       RET
 PARMSEVAL:
-;
-;        push    DE
-;        push    bc
-;        EX DE,HL
-;        CALL PRINTTST
-;        pop     bc
-;        POP     DE
-;
-
         INC     DE
         LD      A,(DE)
         DEC     DE

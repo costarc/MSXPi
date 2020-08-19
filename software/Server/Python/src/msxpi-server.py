@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200817.00000"
+build   = "20200818.00000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -32,13 +32,13 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       =    5
-SPI_INT_TIME        =    3000
-PIWAITTIMEOUTOTHER  =    120     # seconds
-PIWAITTIMEOUTBIOS   =    60      # seconds
-SYNCTIMEOUT         =    5
-BYTETRANSFTIMEOUT   =    5
-SYNCTRANSFTIMEOUT   =    3
+GLOBALRETRIES       = 10
+SPI_INT_TIME        = 3000
+PIWAITTIMEOUTOTHER  = 120     # seconds
+PIWAITTIMEOUTBIOS   = 60      # seconds
+SYNCTIMEOUT         = 5
+BYTETRANSFTIMEOUT   = 5
+SYNCTRANSFTIMEOUT   = 3
 STARTTRANSFER       = 0xA0
 SENDNEXT            = 0xA1
 ENDTRANSFER         = 0xA2
@@ -115,7 +115,7 @@ def SPI_MASTER_transfer_byte(byte_out):
     #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
     return byte_in
 
-def piexchangebyte(byte_out):
+def piexchangebyte(byte_out=0):
     rc = RC_SUCCESS
     
     GPIO.output(rdyPin, GPIO.HIGH)
@@ -127,6 +127,31 @@ def piexchangebyte(byte_out):
 
     #print "piexchangebyte: received:",hex(mymsxbyte)
     return byte_in
+
+# Using CRC code from :
+# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
+crc_poly = 0x1021
+def crcinit(c):
+    crc = 0
+    c = c << 8
+    for j in range(8):
+        if (crc ^ c) & 0x8000:
+            crc = (crc << 1) ^ crc_poly
+        else:
+            crc = crc << 1
+        c = c << 1
+    return crc
+
+crctab = [ crcinit(i) for i in range(256) ]
+
+def crc16(crc, c):
+    cc = 0xff & c
+
+    tmp = (crc >> 8) ^ cc
+    crc = (crc << 8) ^ crctab[tmp & 0xff]
+    crc = crc & 0xffff
+
+    return crc
 
 def recvdatablock():
     buffer = bytearray()
@@ -157,11 +182,9 @@ def recvdatablock():
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
-def sendstdmsg(rc, message):
-    piexchangebyte(rc)
-    senddatablock(message,len(message),0,1)
-
-def senddatablock(buf,blocksize,blocknumber,attempts=10):
+def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
+    
+    global GLOBALRETRIES
 
     rc = RC_FAILED
     
@@ -189,26 +212,52 @@ def senddatablock(buf,blocksize,blocknumber,attempts=10):
     piexchangebyte(attempts)
 
     while (attempts > 0 and rc != RC_SUCCESS):
-        crc = 0
+        crc = 0xffff
         bytecounter = 0
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            crc ^= pibyte
+            crc = crc16(crc,pibyte)
             bytecounter += 1
 
-        attempts -= 1
-
-        msxcrc = piexchangebyte(crc)
-        #print("senddatablock:CRC RPi:MSX = ",crc,msxcrc)
-        if (msxcrc != crc):
+        msxcrcL = piexchangebyte(crc % 256)
+        if msxcrcL != crc % 256:
+            attempts -= 1
             rc = RC_CRCERROR
-            print("RC_CRCERROR")
+            print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
-            rc = RC_SUCCESS
+            msxcrcH = piexchangebyte(crc / 256)
+            if msxcrcH != crc / 256:
+                attempts -= 1
+                rc = RC_CRCERROR
+                print("RC_CRCERROR. Remaining attempts:",attempts)
+
+            else:
+                rc = RC_SUCCESS
     
     return rc 
 
+def sendstdmsg(rc, message):
+    piexchangebyte(rc)
+    senddatablock(message,len(message),0,1)
+
+# create a subclass and override the handler methods
+class MyHTMLParser(HTMLParser):
+    def __init__(self):
+        self.reset()
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+    def handle_starttag(self, tag, attrs):
+        self.NEWTAGS.append(tag)
+        self.NEWATTRS.append(attrs)
+    def handle_data(self, data):
+        self.HTMLDATA.append(data)
+    def clean(self):
+        self.NEWTAGS = []
+        self.NEWATTRS = []
+        self.HTMLDATA = []
+        
 def getpath(basepath, path):
 
     path=path.strip().rstrip(' \t\r\n\0')
@@ -232,23 +281,6 @@ def getpath(basepath, path):
         newpath = basepath + "/" + path
 
     return [urltype, newpath]
-
-# create a subclass and override the handler methods
-class MyHTMLParser(HTMLParser):
-    def __init__(self):
-        self.reset()
-        self.NEWTAGS = []
-        self.NEWATTRS = []
-        self.HTMLDATA = []
-    def handle_starttag(self, tag, attrs):
-        self.NEWTAGS.append(tag)
-        self.NEWATTRS.append(attrs)
-    def handle_data(self, data):
-        self.HTMLDATA.append(data)
-    def clean(self):
-        self.NEWTAGS = []
-        self.NEWATTRS = []
-        self.HTMLDATA = []
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
     #print "msxdos_inihrd:Starting"
@@ -309,13 +341,13 @@ def prun(cmd):
             p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
             if len(buf) == 0:
-                buf = "Pi:Command did not return any output.\n"
+                buf = "Pi:No output"
 
             sendstdmsg(rc,buf)
 
         except Exception as e:
             rc = RC_FAILED
-            sendstdmsg(rc,"Pi:Error running the command.\n"+str(e)+'\n')
+            sendstdmsg(rc,"Pi:"+str(e)+'\n')
 
     #print "prun:exiting rc:",hex(rc)
     return rc
@@ -327,36 +359,40 @@ def pdir(path):
     rc = RC_SUCCESS
     #print "pdir:starting"
 
-    if (msxbyte == SENDNEXT):
-        urlcheck = getpath(basepath, path)
-        if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            if (path.strip() == '*'):
-                prun('ls -l ' + urlcheck[1])
-            elif ('*' in path):
-                numChilds = path.count('/')
-                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
-                if (fileDesc == '' or len(fileDesc) == 0):
-                    fileDesc = '.'
-                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+    try:
+        if (msxbyte == SENDNEXT):
+            urlcheck = getpath(basepath, path)
+            if (urlcheck[0] == 0 or urlcheck[0] == 1):
+                if (path.strip() == '*'):
+                    prun('ls -l ' + urlcheck[1])
+                elif ('*' in path):
+                    numChilds = path.count('/')
+                    fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
+                    if (fileDesc == '' or len(fileDesc) == 0):
+                        fileDesc = '.'
+                    prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
+                else:
+                    prun('ls -l ' + urlcheck[1])
             else:
-                prun('ls -l ' + urlcheck[1])
-        else:
-            parser = MyHTMLParser()
-            try:
-                htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
                 parser = MyHTMLParser()
-                parser.feed(htmldata)
-                buf = " ".join(parser.HTMLDATA)
-                piexchangebyte(RC_SUCCESS)
-                rc = senddatablock(buf,len(buf),0,1)
+                try:
+                    htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
+                    parser = MyHTMLParser()
+                    parser.feed(htmldata)
+                    buf = " ".join(parser.HTMLDATA)
+                    piexchangebyte(RC_SUCCESS)
+                    rc = senddatablock(buf,len(buf),0,1)
 
-            except urllib2.HTTPError as e:
-                rc = RC_FAILED
-                print "pdir:http error "+ str(e)
-                sendstdmsg(rc,str(e))
-    else:
-        rc = RC_FAILNOSTD
-        print "pdir:out of sync in RC_WAIT"
+                except urllib2.HTTPError as e:
+                    rc = RC_FAILED
+                    print "pdir:http error "+ str(e)
+                    sendstdmsg(rc,str(e))
+        else:
+            rc = RC_FAILNOSTD
+            print "pdir:out of sync in RC_WAIT"
+    except Exception as e:
+        print("pdir:"+str(e))
+        sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     #print "pdir:exiting rc:",hex(rc)
     return rc
@@ -370,39 +406,43 @@ def pcd(path):
     
     #print "pcd:starting basepath:path=",basepath + ":" + path
 
-    if (msxbyte == SENDNEXT):
-        if (path == '' or path.strip() == "."):
-            sendstdmsg(rc,basepath+'\n')
-        elif (path.strip() == ".."):
-            newpath = basepath.rsplit('/', 1)[0]
-            if (newpath == ''):
-                newpath = '/'
-            psetvar[0][1] = newpath
-            sendstdmsg(rc,str(newpath+'\n'))
-        else:
-            #print "pcd:calling getpath"
-            urlcheck = getpath(basepath, path)
-            newpath = urlcheck[1]
-
-            if (newpath[:4] == "http" or \
-                newpath[:3] == "ftp" or \
-                newpath[:3] == "nfs" or \
-                newpath[:3] == "smb"):
-                rc = RC_SUCCESS
+    try:
+        if (msxbyte == SENDNEXT):
+            if (path == '' or path.strip() == "."):
+                sendstdmsg(rc,basepath+'\n')
+            elif (path.strip() == ".."):
+                newpath = basepath.rsplit('/', 1)[0]
+                if (newpath == ''):
+                    newpath = '/'
                 psetvar[0][1] = newpath
                 sendstdmsg(rc,str(newpath+'\n'))
             else:
-                newpath = str(newpath)
-                if (os.path.isdir(newpath)):
+                #print "pcd:calling getpath"
+                urlcheck = getpath(basepath, path)
+                newpath = urlcheck[1]
+
+                if (newpath[:4] == "http" or \
+                    newpath[:3] == "ftp" or \
+                    newpath[:3] == "nfs" or \
+                    newpath[:3] == "smb"):
+                    rc = RC_SUCCESS
                     psetvar[0][1] = newpath
-                    sendstdmsg(rc,newpath+'\n')
-                elif (os.path.isfile(str(newpath))):
-                    sendstdmsg(RC_FAILED,"Pi:Error - not a folder")
+                    sendstdmsg(rc,str(newpath+'\n'))
                 else:
-                    sendstdmsg(RC_FAILED,"Pi:Error - path not found")
-    else:
-        rc = RC_FAILNOSTD
-        print "pcd:out of sync in RC_WAIT"
+                    newpath = str(newpath)
+                    if (os.path.isdir(newpath)):
+                        psetvar[0][1] = newpath
+                        sendstdmsg(rc,newpath+'\n')
+                    elif (os.path.isfile(str(newpath))):
+                        sendstdmsg(RC_FAILED,"Pi:Error - not a folder")
+                    else:
+                        sendstdmsg(RC_FAILED,"Pi:Error - path not found")
+        else:
+            rc = RC_FAILNOSTD
+            print "pcd:out of sync in RC_WAIT"
+    except Exception as e:
+        print("pcd:"+str(e))
+        sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     return [rc, newpath]
 
@@ -412,7 +452,7 @@ def pcopy(path='',inifcb=True):
     buf = ''
     rc = RC_SUCCESS
 
-    global psetvar
+    global psetvar,GLOBALRETRIES
     basepath = psetvar[0][1]
     
     if (path.startswith('http') or \
@@ -477,9 +517,13 @@ def pcopy(path='',inifcb=True):
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber,20)
+                rc = senddatablock(buf,BLKSIZE,blocknumber)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
+
+            if rc != RC_SUCCESS:
+                print("pcopy:Exiting with rc:",hex(rc))
+
     return rc
 
 def ploadr(path=''):
@@ -505,8 +549,8 @@ def pdate(parms = ''):
             piexchangebyte(now.minute)
             piexchangebyte(now.second)
             piexchangebyte(0)
-            buf = "Pi:Ok\n"
-            senddatablock(buf,len(buf),0,1)
+            buf = "Pi:Ok"
+            senddatablock(buf,len(buf),0)
             rc = RC_SUCCESS
         else:
             print "pdate:out of sync in SENDNEXT"
@@ -533,7 +577,7 @@ def pplay(cmd):
             sendstdmsg(rc,buf)
     except subprocess.CalledProcessError as e:
         rc = RC_FAILED
-        sendstdmsg(rc,"Pi:Error\n"+str(e))
+        sendstdmsg(rc,"Pi:"+str(e))
     
     #print "pplay:exiting rc:",hex(rc)
     return rc
@@ -544,7 +588,7 @@ def pset(cmd=''):
     global psetvar
     
     rc = RC_SUCCESS
-    buf = "Pi:Error\nSyntax: pset set <var> <value>"
+    buf = "Pi:\nSyntax: pset set <var> <value>"
     cmd = cmd.strip()
 
     if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
@@ -576,7 +620,7 @@ def pset(cmd=''):
             if (not found):
                 rc = RC_FAILED
                 rc_text = '';
-                buf = "Pi:Erro setting parameter"
+                buf = "Pi:Error setting parameter"
         else:
             rc = RC_FAILED
 
@@ -812,7 +856,7 @@ def dos(parms=''):
 
             piexchangebyte(RC_SUCCESS)
 
-            rc = senddatablock(buf,blocksize,0,1)
+            rc = senddatablock(buf,blocksize,0)
             if rc != RC_SUCCESS:
                 rc = RC_FAILED
             
@@ -869,7 +913,7 @@ def dos(parms=''):
             print "dos_sct:blocksize=",blocksize
             """
 
-            piexchangebyte(rc)
+            piexchangebyte(RC_SUCCESS)
 
         else:
             print("DOS Command invalid:",parms)

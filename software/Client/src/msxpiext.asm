@@ -615,7 +615,7 @@ GETPOINTERSEXIT:
 ;-----------------------
 ; call MSXPISYNCH      |
 ;-----------------------
-_MSXPISYNCH:
+_MSXPISYNC:
     PUSH    HL
     CALL    PSYNCH
     LD      HL,PSYNCH_ERROR
@@ -634,7 +634,7 @@ BIOSENTRYADDR:  EQU     $
         DW      _MSXPI
         DW      _MSXPISEND
         DW      _MSXPIRECV
-        DW      _MSXPISYNCH
+        DW      _MSXPISYNC
         DW      RECVDATABLOCK
         DW      SENDDATABLOCK
         DW      READDATASIZE
@@ -650,7 +650,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      SYNCH
         DW      PSYNCH
 
 ; ================================================================
@@ -661,7 +660,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi Hardware Interface v1.1",13,10
         DB      "MSXPi ROM v0.9.1",13,10
         DB      "      Build "
-build:  DB      "20200817.00000"
+build:  DB      "20200819.00000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
@@ -704,8 +703,8 @@ CALL_TABLE:
         DB      "MSXPIRECV",0
         DW      _MSXPIRECV
 
-        DB      "MSXPISYNCH",0
-        DW      _MSXPISYNCH
+        DB      "MSXPISYNC",0
+        DW      _MSXPISYNC
 
         DB      "MSXPI",0
         DW      _MSXPI
