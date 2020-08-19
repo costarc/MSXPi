@@ -57,8 +57,14 @@ PSYNCH:
         RET
 
 TRYABORT:
-        ;CALL    CHECK_P
-        ;RET     C
+        CALL    CHECK_P
+        RET     C
+        LD      A,E
+        CP      $1
+        JR      NZ,TRYABORT0
+        LD      A,'.'
+        CALL    PUTCHAR
+TRYABORT0:
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY
@@ -573,6 +579,7 @@ PARMSEVAL2:
 ; protocol to allow user to ESCAPE from a blocked state
 ; when Pi stops responding MSX for some reason.
 ; Note that this routine must be called by you in your code.
+; Output: Cy = 1 if pressed, 0 otherwise
 ; -------------------------------------------------------------
 CHECK_ESC:
         LD      B,7
@@ -586,6 +593,24 @@ CHECK_ESC:
         SCF
 CHECK_ESC_END:
         RET
+
+;----------------------------------------------------------------
+; Read the keyboard matrix to see if P is pressed
+
+CHECK_P:
+        push    bc
+        ld      b,4
+        in      a,(0AAh)
+        and     11110000b
+        or      b
+        out     (0AAh),a
+        in      a,(0A9h)
+        scf
+        bit     5,a
+        ret     z
+        or      a
+        pop     bc
+        ret
 
 TESTMSXPISTR:
         DB      'MSXPi'
