@@ -44,7 +44,7 @@
 ; Restore communication with Pi by sending ABORT commands
 ; Until RPi responds with READY.
 
-PSYNCH:  
+PSYNC:  
         CALL    TRYABORT
         RET     C
         LD      BC,4
@@ -53,27 +53,26 @@ PSYNCH:
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_SUCCNOSTD
-        JR      NZ,PSYNCH
+        JR      NZ,PSYNC
         RET
 
 TRYABORT:
         CALL    CHECK_P
         RET     C
-        LD      A,E
-        CP      $1
-        JR      NZ,TRYABORT0
-        LD      A,'.'
-        CALL    PUTCHAR
-TRYABORT0:
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY
+        RET     Z
+        CP      SENDNEXT
         JR      NZ,TRYABORT
-        RET
-
-PRECON_ERR:
-        EI
-        SCF
+        LD      A,1
+        CALL    PIEXCHANGEBYTE
+        XOR     A
+        CALL    PIEXCHANGEBYTE
+        LD      A,'X'
+        CALL    PIEXCHANGEBYTE
+        CALL    PIEXCHANGEBYTE
+        OR      A
         RET
 
 PINGCMD: DB      "ping",0

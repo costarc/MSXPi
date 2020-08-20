@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200818.00000"
+build   = "20200820.000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -799,19 +799,23 @@ def irc(cmd=''):
             sendstdmsg(rc,"Pi:"+str(e))
 
 def dos(parms=''):
+    piexchangebyte(RC_WAIT)
 
-    global msxdos1boot
+    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+    rc = RC_SUCCESS
 
     if parms[:3] == 'INI': 
 
         piexchangebyte(RC_SUCCESS)
-        iniflag = piexchangebyte(SENDNEXT)
+        print (parms)
 
-        if iniflag == 1:
+        iniflag = parms[4:5]
+        print(iniflag)
+
+        if iniflag == '1':
             print("DOS: Enabling MSX-DOS1")
 
             msxdos1boot = True
-            global sectorInfo,numdrivesM,drive0Data,drive1Data
 
             # Initialize disk system parameters
             sectorInfo = [0,0,0,0]
@@ -827,97 +831,86 @@ def dos(parms=''):
 
         piexchangebyte(RC_SUCCESS)
 
-    else:
-        if msxdos1boot: 
-            piexchangebyte(RC_WAIT)
+
+    elif parms[:3] == 'RDS': 
+    
+        initdataindex = sectorInfo[3]*512
+        blocksize = sectorInfo[1]*512
+
+        print "dos_rds:deviceNumber=",sectorInfo[0]
+        print "dos_rds:numsectors=",sectorInfo[1]
+        print "dos_rds:mediaDescriptor=",sectorInfo[2]
+        print "dos_rds:initialSector=",sectorInfo[3]
+        print "dos_rds:blocksize=",blocksize
+
+        if sectorInfo[0] == 0 or sectorInfo[0] == 1:
+            buf = drive0Data[initdataindex:initdataindex+blocksize]
         else:
-            piexchangebyte(RC_FAILED)
-            return
+            buf = drive1Data[initdataindex:initdataindex+blocksize]
 
-        rc = RC_SUCCESS
+        piexchangebyte(RC_SUCCESS)
 
-        if parms[:3] == 'RDS': 
+        rc = senddatablock(buf,blocksize,0)
+        if rc != RC_SUCCESS:
+            rc = RC_FAILED
         
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
+        print("RDS:",hex(rc))
+        piexchangebyte(rc)
 
-            """
-            print "dos_rds:deviceNumber=",sectorInfo[0]
-            print "dos_rds:mediaDescriptor=",sectorInfo[2]
-            print "dos_rds:numsectors=",sectorInfo[1]
-            print "dos_rds:initialSector=",sectorInfo[3]
-            print "dos_rds:blocksize=",blocksize
-            """
 
+    elif parms[:3] == 'WRS':  
+        initdataindex = sectorInfo[3]*512
+        blocksize = sectorInfo[1]*512
+
+        """
+        print "dos_wrs:deviceNumber=",sectorInfo[0]
+        print "dos_wrs:numsectors=",sectorInfo[1]
+        print "dos_wrs:mediaDescriptor=",sectorInfo[2]
+        print "dos_wrs:initialSector=",sectorInfo[3]
+        print "dos_wrs:blocksize=",blocksize
+        """
+
+        piexchangebyte(RC_SUCCESS)
+
+        datainfo = recvdatablock()
+        if datainfo[0] == RC_SUCCESS:
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-                buf = drive0Data[initdataindex:initdataindex+blocksize]
+                drive0Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
             else:
-                buf = drive1Data[initdataindex:initdataindex+blocksize]
-
-            piexchangebyte(RC_SUCCESS)
-
-            rc = senddatablock(buf,blocksize,0)
-            if rc != RC_SUCCESS:
-                rc = RC_FAILED
-            
-            piexchangebyte(rc)
-
-
-        elif parms[:3] == 'WRS':  
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
-
-            """
-            print "dos_wrs:deviceNumber=",sectorInfo[0]
-            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
-            print "dos_wrs:numsectors=",sectorInfo[1]
-            print "dos_wrs:initialSector=",sectorInfo[3]
-            print "dos_wrs:blocksize=",blocksize
-            """
-
-            piexchangebyte(RC_SUCCESS)
-
-            datainfo = recvdatablock()
-            if datainfo[0] == RC_SUCCESS:
-                if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-                    drive0Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
-                else:
-                    drive1Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
-            else:
-                rc = RC_FAILED
-
-            piexchangebyte(rc)
-                  
-        elif parms[:3] == 'SCT': 
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
-
-            piexchangebyte(RC_SUCCESS)
-
-            sectorInfo[0] = piexchangebyte(SENDNEXT)
-            sectorInfo[1] = piexchangebyte(SENDNEXT)
-            sectorInfo[2] = piexchangebyte(SENDNEXT)
-            byte_lsb = piexchangebyte(SENDNEXT)
-            byte_msb = piexchangebyte(SENDNEXT)
-            sectorInfo[3] = byte_lsb + 256 * byte_msb
-
-            blocknumber = sectorInfo[1] * 512
-            piexchangebyte(blocknumber % 256)
-            piexchangebyte(blocknumber / 256)
-
-            """
-            print "dos_sct:deviceNumber=",sectorInfo[0]
-            print "dos_sct:mediaDescriptor=",sectorInfo[2]
-            print "dos_sct:numsectors=",sectorInfo[1]
-            print "dos_sct:initialSector=",sectorInfo[3]
-            print "dos_sct:blocksize=",blocksize
-            """
-
-            piexchangebyte(RC_SUCCESS)
-
+                drive1Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
         else:
-            print("DOS Command invalid:",parms)
-            piexchangebyte(RC_FAILED)
+            rc = RC_FAILED
+
+        piexchangebyte(rc)
+              
+    elif parms[:3] == 'SCT':
+        initdataindex = sectorInfo[3]*512
+        blocksize = sectorInfo[1]*512
+
+        piexchangebyte(RC_SUCCESS)
+
+        sectorInfo[0] = piexchangebyte(SENDNEXT)
+        sectorInfo[1] = piexchangebyte(SENDNEXT)
+        sectorInfo[2] = piexchangebyte(SENDNEXT)
+        byte_lsb = piexchangebyte(SENDNEXT)
+        byte_msb = piexchangebyte(SENDNEXT)
+        sectorInfo[3] = byte_lsb + 256 * byte_msb
+
+        blocksize = sectorInfo[1] * 512
+        piexchangebyte(blocksize % 256)
+        piexchangebyte(blocksize / 256)
+
+        print "dos_sct:deviceNumber=",sectorInfo[0]
+        print "dos_sct:numsectors=",sectorInfo[1]
+        print "dos_sct:mediaDescriptor=",sectorInfo[2]
+        print "dos_sct:initialSector=",sectorInfo[3]
+        print "dos_sct:blocksize=",blocksize
+
+        piexchangebyte(RC_SUCCESS)
+
+    else:
+        print("DOS Command invalid:",parms)
+        piexchangebyte(RC_FAILED)
 
 def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
@@ -1006,26 +999,26 @@ print "Starting MSXPi Server Version ",version,"Build",build
 
 try:
     while True:
-        print("st_recvcmd: waiting command")
-        rc = recvcmd()
-        print"Received:",rc[1]
+        try:
+            print("st_recvcmd: waiting command")
+            rc = recvcmd()
+            print"Received:",rc[1]
 
-        if (rc[0] == RC_SUCCESS):
-            err = 0
-            try:
+            if (rc[0] == RC_SUCCESS):
+                err = 0
+
                 cmd = str(rc[1].split()[0]).lower()
                 parms = str(rc[1][len(cmd)+1:])
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd](parms)
-            except Exception, e:
+            elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
+                resync()
                 errcount += 1
-        elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
-            resync()
-
-        else:
+        except Exception as e:
             errcount += 1
+            print("cmd:"+str(e))
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
