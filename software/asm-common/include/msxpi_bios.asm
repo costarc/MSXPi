@@ -148,12 +148,12 @@ RECVDATABLOCK:
         ld      a,ENDTRANSFER
         ret     z
 
-        push    de
 ; Get number of attempts
         call    PIEXCHANGEBYTE
         ld      l,a     ; number of attempts
 
 RECVDATABLOCK0:
+        push    de
         push    bc      ; blocksize   
 ; CLEAR CRC and save block size
         exx
@@ -195,12 +195,12 @@ RECVDATABLOCK1:
 RECVDATABLOCK_CRCERROR:
         exx
         pop     bc             ; restore blocksize
+        pop     de             ; restore original buffer address
         ld      a,l            ; get number of attemps
         dec     a
         ld      l,a
         or      a
         jr      nz,RECVDATABLOCK0  ; try again
-        pop     de                 ; restore original address in DE
         ld      a,RC_CRCERROR
         scf
         ret
