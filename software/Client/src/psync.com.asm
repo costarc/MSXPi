@@ -34,15 +34,15 @@
 ; 0.9.0  : Changes to supoprt new transfer logic
 
         ORG     $0100
-        CALL    PSYNCH
-        LD      HL,PSYNCH_ERROR
+        CALL    PSYNC
+        LD      HL,PSYNC_ERROR
         JP      C,PRINT
-        LD      HL,PSYNCH_RESTORED
+        LD      HL,PSYNC_RESTORED
         JP      PRINT
 
-PSYNCH_RESTORED:
+PSYNC_RESTORED:
     DB      "Communication restored",13,10,"$"
-PSYNCH_ERROR:
+PSYNC_ERROR:
     DB      "Could not restore communication ",13,10,"$"
 
 INCLUDE "include.asm"

@@ -613,16 +613,16 @@ GETPOINTERSEXIT:
         ret
 
 ;-----------------------
-; call MSXPISYNCH      |
+; call MSXPISYNC       |
 ;-----------------------
 _MSXPISYNC:
     PUSH    HL
-    CALL    PSYNCH
-    LD      HL,PSYNCH_ERROR
-    JR      C,_MSXPSYNCH_EXIT
-    LD      HL,PSYNCH_RESTORED
+    CALL    PSYNC
+    LD      HL,PSYNC_ERROR
+    JR      C,_MSXPSYNC_EXIT
+    LD      HL,PSYNC_RESTORED
 
-_MSXPSYNCH_EXIT:
+_MSXPSYNC_EXIT:
     CALL    PRINT
     POP     HL
     OR      A
@@ -650,21 +650,20 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      PSYNCH
+        DW      PSYNC
 
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi Hardware Interface v1.1",13,10
-        DB      "MSXPi ROM v0.9.1",13,10
-        DB      "      Build "
-build:  DB      "20200819.00000"
+        DB      "MSXPi ROM v0.9.1 "
+build:  DB      "20200820.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNCH MSXPIVER ",13,10
+        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10
+        DB       "Press P to boot MSXPi DOS",13,10
         DB      00
 
 PIOFFLINE:
@@ -679,10 +678,10 @@ PIWAITMSG:
 BUFERRMSG:
         DB    "Parameters or Buffer address invalid",13,10,0
 
-PSYNCH_RESTORED:
+PSYNC_RESTORED:
         DB    "Communication restored",13,10,0
 
-PSYNCH_ERROR:
+PSYNC_ERROR:
         DB    "Could not restore communication ",13,10,0
 
 ;---------------------------

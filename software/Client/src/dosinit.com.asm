@@ -76,7 +76,9 @@
 ; The actual command is defined in "COMMAND:  DB  "TEMPLATE"
 ; at the end of this file.
 ; -------------------------------------------------------------
-        LD      BC,7
+        LD      A,($82)
+        LD      (COMMAND + 8),A
+        LD      BC,9
         LD      DE,COMMAND
         CALL    DOSSENDPICMD
 
@@ -129,18 +131,11 @@ PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:                         ; Sequence line 6
-        LD      A,($82)
-        CP      '1'
-        LD      A,1
-        JR      Z,SETINIT
-        LD      A,0
-SETINIT:
-        CALL    PIEXCHANGEBYTE
+MAINPROGRAM:
         CALL    PIEXCHANGEBYTE
         RET
 
-COMMAND:  DB      "DOS INI",0
+COMMAND:  DB      "DOS INI ",0,0
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
 

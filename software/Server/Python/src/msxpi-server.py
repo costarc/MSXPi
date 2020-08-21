@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200818.00000"
+build   = "20200820.000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -521,9 +521,6 @@ def pcopy(path='',inifcb=True):
                 if rc == RC_SUCCESS:
                     blocknumber += 1
 
-            if rc != RC_SUCCESS:
-                print("pcopy:Exiting with rc:",hex(rc))
-
     return rc
 
 def ploadr(path=''):
@@ -799,52 +796,47 @@ def irc(cmd=''):
             sendstdmsg(rc,"Pi:"+str(e))
 
 def dos(parms=''):
+    piexchangebyte(RC_WAIT)
 
-    global msxdos1boot
+    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+    rc = RC_SUCCESS
 
-    if parms[:3] == 'INI': 
+    try:
+        if parms[:3] == 'INI': 
 
-        piexchangebyte(RC_SUCCESS)
-        iniflag = piexchangebyte(SENDNEXT)
+            piexchangebyte(RC_SUCCESS)
 
-        if iniflag == 1:
-            print("DOS: Enabling MSX-DOS1")
+            iniflag = parms[4:5]
 
-            msxdos1boot = True
-            global sectorInfo,numdrivesM,drive0Data,drive1Data
+            if iniflag == '1':
+                print("DOS: Enabling MSX-DOS1")
 
-            # Initialize disk system parameters
-            sectorInfo = [0,0,0,0]
-            numdrives = 0
+                msxdos1boot = True
 
-            # Load the disk images into a memory mapped variable
-            drive0Data = msxdos_inihrd(psetvar[1][1])
-            drive1Data = msxdos_inihrd(psetvar[2][1])
+                # Initialize disk system parameters
+                sectorInfo = [0,0,0,0]
+                numdrives = 0
 
-        else:
-            #print("parms: disabling msxdos1boot")
-            msxdos1boot = False
+                # Load the disk images into a memory mapped variable
+                drive0Data = msxdos_inihrd(psetvar[1][1])
+                drive1Data = msxdos_inihrd(psetvar[2][1])
 
-        piexchangebyte(RC_SUCCESS)
+            else:
+                #print("parms: disabling msxdos1boot")
+                msxdos1boot = False
 
-    else:
-        if msxdos1boot: 
-            piexchangebyte(RC_WAIT)
-        else:
-            piexchangebyte(RC_FAILED)
-            return
+            piexchangebyte(RC_SUCCESS)
 
-        rc = RC_SUCCESS
 
-        if parms[:3] == 'RDS': 
+        elif parms[:3] == 'RDS': 
         
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
             """
             print "dos_rds:deviceNumber=",sectorInfo[0]
-            print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:numsectors=",sectorInfo[1]
+            print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:initialSector=",sectorInfo[3]
             print "dos_rds:blocksize=",blocksize
             """
@@ -869,8 +861,8 @@ def dos(parms=''):
 
             """
             print "dos_wrs:deviceNumber=",sectorInfo[0]
-            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
             print "dos_wrs:numsectors=",sectorInfo[1]
+            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
             print "dos_wrs:initialSector=",sectorInfo[3]
             print "dos_wrs:blocksize=",blocksize
             """
@@ -888,9 +880,10 @@ def dos(parms=''):
 
             piexchangebyte(rc)
                   
-        elif parms[:3] == 'SCT': 
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
+        elif parms[:3] == 'SCT':
+            if msxdos1boot != True:
+                piexchangebyte(RC_FAILED)
+                return
 
             piexchangebyte(RC_SUCCESS)
 
@@ -901,23 +894,23 @@ def dos(parms=''):
             byte_msb = piexchangebyte(SENDNEXT)
             sectorInfo[3] = byte_lsb + 256 * byte_msb
 
-            blocknumber = sectorInfo[1] * 512
-            piexchangebyte(blocknumber % 256)
-            piexchangebyte(blocknumber / 256)
+            blocksize = sectorInfo[1] * 512
+            piexchangebyte(blocksize % 256)
+            piexchangebyte(blocksize / 256)
 
             """
             print "dos_sct:deviceNumber=",sectorInfo[0]
-            print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:numsectors=",sectorInfo[1]
+            print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:initialSector=",sectorInfo[3]
             print "dos_sct:blocksize=",blocksize
             """
 
             piexchangebyte(RC_SUCCESS)
 
-        else:
-            print("DOS Command invalid:",parms)
-            piexchangebyte(RC_FAILED)
+    except Exception as e:
+        print("DOS:"+str(e))
+        piexchangebyte(RC_FAILED)
 
 def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
@@ -1006,26 +999,26 @@ print "Starting MSXPi Server Version ",version,"Build",build
 
 try:
     while True:
-        print("st_recvcmd: waiting command")
-        rc = recvcmd()
-        print"Received:",rc[1]
+        try:
+            print("st_recvcmd: waiting command")
+            rc = recvcmd()
+            print"Received:",rc[1]
 
-        if (rc[0] == RC_SUCCESS):
-            err = 0
-            try:
+            if (rc[0] == RC_SUCCESS):
+                err = 0
+
                 cmd = str(rc[1].split()[0]).lower()
                 parms = str(rc[1][len(cmd)+1:])
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd](parms)
-            except Exception, e:
+            elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
+                resync()
                 errcount += 1
-        elif (rc[0] == RC_INVALIDCOMMAND or rc[0] == RC_OUTOFSYNC):
-            resync()
-
-        else:
+        except Exception as e:
             errcount += 1
+            print("cmd:"+str(e))
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO

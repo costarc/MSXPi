@@ -61,7 +61,7 @@ SENDIFCMD:
 ;-----------------------
 CHKPIRDY:
             push    bc
-            ld      bc,0ffffh
+            ld      bc,$ffff
 CHKPIRDY0:
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
             or       a

@@ -99,81 +99,40 @@ INIHRD:
 
         ld      hl,MSXPIVERSION
         call    PRINT
-        ld      hl,PIWAITMSG
-        call    PRINT
 
-; give some time for the user to view the credits, and press P to skip MSX-DOS1
-        ld      bc,40000
-INIHRD_INITLOOP:
+; give some time for the user to view the credits, and press P start MSXPi MSX-DOS1
+        ld      bc,45000
+INIHRD_WAIT:
         push    bc
-        call    CHECK_P
+        ld      a,4
+        call    SNSMAT
+        bit     5,a
         pop     bc
-        ld      a,0
-        jr      c,INIHRD_START
+        jr      z,INIHRD_BOOT
         dec     bc
         ld      a,b
         or      c
-        jr      nz,INIHRD_INITLOOP
-
-; If P is pressed during boot, MSXPi disk driver is not initialized
-
-        call    PI_WAITBOOT
-        ld      a,0
-        jr      c,INIHRD_START
-        ld      a,b
+        jr      nz,INIHRD_WAIT
         or      a
-        jr      z,INIHRD_FAIL1
-        ld      a,1
+        ret
         
-INIHRD_START:
-        push    af
-        ld      e,1
-        call    PSYNCH
-        ld      bc,7
+INIHRD_BOOT:
+        call    PSYNC
+        ld      bc,9
         ld      de,DOS_INI
         call    SENDPICMD
-
-INIHRD_LOOP:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      RC_WAIT
-        jr      NZ,INIHRD_RELEASED
-        call    CHKPIRDY
-        JR      INIHRD_LOOP
-INIHRD_RELEASED:
-        cp      RC_FAILED
-        jr      z,INIHRD_FAIL
-        cp      RC_SUCCESS
-        jr      nz,INIHRD_FAIL
-        pop     af
-        call    PIEXCHANGEBYTE      ; send msxdosboot flag
-        call    PIEXCHANGEBYTE      ; read return code
-        cp      RC_SUCCESS
+        jr      NZ,INIHRD_FAILED
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE     
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
         scf
-		ret     z
-        ccf
         ret
-
-INIHRD_FAIL:
-        pop     af
-INIHRD_FAIL1:
-        or      a
-        ret
-;-----------------------
-; PI_WAITBOOT          |
-;-----------------------
-PI_WAITBOOT:
-        ld      b,10
-
-PI_WAITBOOT1:
-        push    bc
-        ld      e,1
-        call    PSYNCH
-        pop     bc
-        ret     z
-; Pi responded
-        djnz    PI_WAITBOOT1
-; Pi did not respond
+INIHRD_FAILED:
+        or     a
         ret
 
 ; START OF -----------------------------
@@ -377,7 +336,7 @@ DSKIO_SECTINFO:
         push    bc
         push    de
         push    hl
-        LD      de,DOS_SECINFO
+        LD      de,DOS_SECI
         LD      bc,7
         call    SENDPICMD
         jr		c,DSKIO_SEC_ERR
@@ -922,16 +881,16 @@ GETPOINTERSEXIT:
         ret
 
 ;-----------------------
-; call MSXPISYNCH      |
+; call MSXPISYNC       |
 ;-----------------------
-_MSXPISYNCH:
+_MSXPISYNC:
     PUSH    HL
-    CALL    PSYNCH
-    LD      HL,PSYNCH_ERROR
-    JR      C,_MSXPSYNCH_EXIT
-    LD      HL,PSYNCH_RESTORED
+    CALL    PSYNC
+    LD      HL,PSYNC_ERROR
+    JR      C,_MSXPSYNC_EXIT
+    LD      HL,PSYNC_RESTORED
 
-_MSXPSYNCH_EXIT:
+_MSXPSYNC_EXIT:
     CALL    PRINT
     POP     HL
     OR      A
@@ -943,7 +902,7 @@ BIOSENTRYADDR:  EQU     $
         DW      _MSXPI
         DW      _MSXPISEND
         DW      _MSXPIRECV
-        DW      _MSXPISYNCH
+        DW      _MSXPISYNC
         DW      RECVDATABLOCK
         DW      SENDDATABLOCK
         DW      READDATASIZE
@@ -959,21 +918,20 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      PSYNCH
+        DW      PSYNC
 
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi Hardware Interface v1.1",13,10
-        DB      "MSXPi ROM v0.9.1",13,10
-        DB      "      Build "
-build:  DB      "20200817.00000"
+        DB      "MSXPi ROM v0.9.1 "
+build:  DB      "20200820.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNCH MSXPIVER ",13,10
+        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10
+        DB       "Press P to boot MSXPi DOS",13,10
         DB      00
 
 PIOFFLINE:
@@ -988,10 +946,10 @@ PIWAITMSG:
 BUFERRMSG:
         DB    "Parameters or Buffer address invalid",13,10,0
 
-PSYNCH_RESTORED:
+PSYNC_RESTORED:
         DB    "Communication restored",13,10,0
 
-PSYNCH_ERROR:
+PSYNC_ERROR:
         DB    "Could not restore communication ",13,10,0
 
 
@@ -1016,8 +974,8 @@ CALL_TABLE:
         DB      "MSXPIRECV",0
         DW      _MSXPIRECV
 
-        DB      "MSXPISYNCH",0
-        DW      _MSXPISYNCH
+        DB      "MSXPISYNC",0
+        DW      _MSXPISYNC
 
         DB      "MSXPI",0
         DW      _MSXPI
@@ -1025,10 +983,10 @@ CALL_TABLE:
 ENDOFCMDS:
         DB      00
 
-DOS_INI:    DB  "DOS INI",0
+DOS_INI:    DB  "DOS INI 1",0
 DOS_RSEC:   DB  "DOS RDS",0
 DOS_WSEC:   DB  "DOS WRS",0
-DOS_SECINFO:DB  "DOS SCT",0
+DOS_SECI:   DB  "DOS SCT",0
 DOS_DRV:    DB  "DOS DRV",0
 DOS_FMT:    DB  "DOS FMT",0
 
