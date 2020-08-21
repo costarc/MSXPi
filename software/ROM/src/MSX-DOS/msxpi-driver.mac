@@ -104,9 +104,11 @@ INIHRD:
         ld      bc,45000
 INIHRD_WAIT:
         push    bc
-        call    CHECK_P
+        ld      a,4
+        call    SNSMAT
+        bit     5,a
         pop     bc
-        jr      c,INIHRD_BOOT
+        jr      z,INIHRD_BOOT
         dec     bc
         ld      a,b
         or      c
@@ -115,7 +117,7 @@ INIHRD_WAIT:
         ret
         
 INIHRD_BOOT:
-        ;call    PSYNC
+        call    PSYNC
         ld      bc,9
         ld      de,DOS_INI
         call    SENDPICMD
@@ -127,8 +129,6 @@ INIHRD_BOOT:
         call    PIEXCHANGEBYTE     
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
-        ;cp     RC_SUCCESS
-        ;jr     nz,INIHRD_FAILED              
         scf
         ret
 INIHRD_FAILED:

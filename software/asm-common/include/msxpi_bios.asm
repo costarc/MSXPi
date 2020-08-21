@@ -57,8 +57,10 @@ PSYNC:
         RET
 
 TRYABORT:
-        CALL    CHECK_P
-        RET     C
+        LD      A,4
+        CALL    SNSMAT
+        BIT     5,A
+        RET     Z
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY
@@ -570,46 +572,6 @@ PARMSEVAL2:
 ;Buffer not passed in CALL, then we set adddress to 0000
         LD      HL,0
         RET
-
-; -------------------------------------------------------------
-; CHECK_ESC
-; -------------------------------------------------------------
-; This routine is required by the communication
-; protocol to allow user to ESCAPE from a blocked state
-; when Pi stops responding MSX for some reason.
-; Note that this routine must be called by you in your code.
-; Output: Cy = 1 if pressed, 0 otherwise
-; -------------------------------------------------------------
-CHECK_ESC:
-        LD      B,7
-        IN      A,($AA)
-        AND     11110000b
-        OR      B
-        OUT     ($AA),A
-        IN      A,($A9)
-        BIT     2,A
-        JR      NZ,CHECK_ESC_END
-        SCF
-CHECK_ESC_END:
-        RET
-
-;----------------------------------------------------------------
-; Read the keyboard matrix to see if P is pressed
-
-CHECK_P:
-        push    bc
-        ld      b,4
-        in      a,(0AAh)
-        and     11110000b
-        or      b
-        out     (0AAh),a
-        in      a,(0A9h)
-        scf
-        bit     5,a
-        ret     z
-        or      a
-        pop     bc
-        ret
 
 TESTMSXPISTR:
         DB      'MSXPi'
