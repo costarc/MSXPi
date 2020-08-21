@@ -881,6 +881,9 @@ def dos(parms=''):
             piexchangebyte(rc)
                   
         elif parms[:3] == 'SCT':
+            if msxdos1boot != True:
+                piexchangebyte(RC_FAILED)
+                return
 
             piexchangebyte(RC_SUCCESS)
 
