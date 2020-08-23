@@ -1,3 +1,11 @@
+MSXPi v1.0 Build 20200822.000 Release Notes
+===========================================
+- Fixed bug in datatransfer retries
+- Fixed bug in MSX-DOS inihrd routine
+- Changes to boot messages and CALL help messages
+- Added new bios.asm /bios.rom. Now EPROM Bank 1 contains only BIOS, Bank 2 contains MSX-DOS1 and BIOS. Switch using jumpers A14 (Bank1) / A15 (Bank2)
+
+
 MSXPi v1.0 Release Notes
 ========================
 This release has some major changes to the hardware and softwar components.
