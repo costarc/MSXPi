@@ -5,7 +5,7 @@ export PI=192.168.1.77
 export HW="8b"
 export REV="7"
 export ROMBANK1=./target/msxpidos.rom
-export ROMBANK2=./target/msxpidos.rom
+export ROMBANK2=./target/bios.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 
 if [[ "$HW" == "8b" ]];then
@@ -59,6 +59,7 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm     -o ./target/at28c256.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm     -o ./target/psync.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/bios.asm    -o ./target/bios.rom
 
 # Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT

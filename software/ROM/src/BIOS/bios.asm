@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 0.9.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,281 +31,63 @@
 ;
 ; File history :
 ; 0.1    : initial version
-; 0.9.0  : Changes to supoprt new transfer logic
+; 0.9.1  : Changes to supoprt new transfer logic
 
-TEXTTERMINATOR: EQU     0
-BDOS:           EQU     $F37D
+TEXTTERMINATOR: EQU 0
+BDOS:           EQU $F37D
+PageSize:       EQU $4000   ; 16kB
 
-;---------------------------
-; ROM installer
-;---------------------------
-		db	$fe
-		dw	inicio
-        dw	fim-romprog+rotina+1
-        dw  inicio
+        org     $4000
+; ### ROM header ###
 
-        org     $b000
+    db "AB"     ; ID for auto-executable ROM
+    dw 0000     ; Main program execution address - no used becuase it is CALL handler
+    dw CALLHAND ; STATEMENT
+    dw 0        ; DEVICE
+    dw 0        ; TEXT
+    dw 0,0,0    ; Reserved
 
-inicio:
-        jr      inicio0
-returncode:
-        db      0
-inicio0:
-        ld      hl,msgstart
-        call    localprint
-
-        ld      c,040H
-        call    PG1RAMSEARCH
-
-        ei
-
-        ld      hl,msgramnf
-        jr      c,printmsg
-
-instcall:
-
-        push    af
-        call    ramcheck
-        pop     af
-
-        ld      hl,msgramnf
-        jr      nz,printmsg
-
-        push    af
-        ld      hl,msgdoing
-        call    localprint
-        pop     af
-
-        push    af
-        call    relocprog
-        pop     af
-
-        and     %00000011
-        ld      hl,SLTATR
-        ld      de,16
-        or      a
-        jr      z,setcall2
-        ld      b,a
-
-setcall1:
-        add     hl,de
-        djnz    setcall1
-
-setcall2:
-        xor     a
-        set     5,a
-        inc     hl
-        ld      (hl),a
-
-        ld      hl,msgcallhlp
-        call    localprint
-
-; Reserve RAM for MSXPI commands
-        ld      hl,MSXPICALLBUF
-        ld      (HIMEM),hl
-        ret
-
-printmsg:
-        call    localprint
-        ret
-
-
-
-relocprog:
-        ld de, rotina
-        ld hl, romprog
-        ld bc, fim-romprog+1
-
-relocprog1:
-        push    af
-        push    bc
-        push    de
-        push    hl
-        ld      c,a
-        ld      a,(de)
-        ld      e,a
-        ld      a,c
-        call    WRSLT
-        pop     hl
-        pop     de
-        pop     bc
-        pop     af
-        inc     hl
-        inc     de
-        dec     bc
-        push    af
-        ld      a,b
-        or      c
-        jr      z,relocfinish
-        pop     af
-        jr      relocprog1
-
-    relocfinish:
-        pop     af
-        ret
-
-msgstart:   db      "Search for ram in $4000",13,10,0
-msgramnf:   db      "ram not found",13,10,0
-msgdoing:   db      "Installing MSXPi extension...",13,10,0
-msgcallhlp: db      "Installed. Use ",13,10
-            db      "CALL MSXPI(",$22,"<option,><buffer,><commmand>",$22,") to run MSXPi Commands",13,10
-            db      "CALL MSXPISEND(",$22,"<buffer>",$22,") to send data to RPi",13,10
-            db      "CALL MSXPIRECV(",$22,"<buffer>",$22,") to read data from RPi",13,10
-            db      "flag: 0=no screen output, 1=screen output(default), 2=store output in buffer", 13,10
-            db      "buffer = valid hexadecimal number (4 digits)"
-            db      13,10,0
-
-ramcheck:
-        push    af
-        ld      e,$aa
-        ld      hl,$4000
-        call    WRSLT
-        pop     af
-        ld      hl,$4000
-        call    RDSLT
-        cp      $aa     ;set Z flag if found ram
-        ret
-
-localprint:
-        ld      a,(hl)
-		or      a
-		ret     z
-		call	CHPUT
-		inc     hl
-		jr      localprint
-
-
-PG1RAMSEARCH:
-        LD      HL,EXPTBL
-        LD      B,4
-        XOR     A
-PG1RAMSEARCH1:
-        AND     03H
-        OR      (HL)
-PG1RAMSEARCH2:
-        PUSH    BC
-        PUSH    HL
-        LD      H,C
-PG1RAMSEARCH3:
-        LD      L,10H
-PG1RAMSEARCH4:
-        PUSH    AF
-        CALL    RDSLT
-        CPL
-        LD      E,A
-        POP     AF
-        PUSH    DE
-        PUSH    AF
-        CALL    WRSLT
-        POP     AF
-        POP     DE
-        PUSH    AF
-        PUSH    DE
-        CALL    RDSLT
-        POP     BC
-        LD      B,A
-        LD      A,C
-        CPL
-        LD      E,A
-        POP     AF
-        PUSH    AF
-        PUSH    BC
-        CALL    WRSLT
-        POP     BC
-        LD      A,C
-        CP      B
-        JR      NZ,PG1RAMSEARCH6
-        POP     AF
-        DEC     L
-        JR      NZ,PG1RAMSEARCH4
-        INC     H
-        INC     H
-        INC     H
-        INC     H
-        LD      C,A
-        LD      A,H
-        CP      40H
-        JR      Z,PG1RAMSEARCH5
-        CP      80H
-        LD      A,C
-        JR      NZ,PG1RAMSEARCH3
-PG1RAMSEARCH5:
-        LD      A,C
-        POP     HL
-        POP     HL
-        RET
-	
-PG1RAMSEARCH6:
-        POP     AF
-        POP     HL
-        POP     BC
-        AND     A
-        JP      P,PG1RAMSEARCH7
-        ADD     A,4
-        CP      90H
-        JR      C,PG1RAMSEARCH2
-PG1RAMSEARCH7:
-        INC     HL
-        INC     A
-        DJNZ    PG1RAMSEARCH1
-        SCF
-        RET
-
-;---------------------------
-
-rotina:
-
-        org	$4000
-
-romprog:
-
-; ROM-file header
- 
-        DEFW    $4241,0,CALLHAND,0,0,0,0,0
- 
- 
 ;---------------------------
  
 ; General BASIC CALL-instruction handler
 CALLHAND:
  
-        PUSH    HL
-        LD	HL,CALL_TABLE	        ; Table with "_" instructions
+    PUSH    HL
+    LD  HL,CALL_TABLE         ; Table with "_" instructions
 .CHKCMD:
-        LD	DE,PROCNM
-.LOOP1:
-        LD	A,(DE)
-        CP	(HL)
-        JR	NZ,.TONEXTCMD	; Not equal
-        INC	DE
-        INC	HL
-        AND	A
-        JR	NZ,.LOOP1	; No end of instruction name, go checking
-        LD	E,(HL)
-        INC	HL
-        LD	D,(HL)
-        POP	HL		; routine address
-        CALL	GETPREVCHAR
-        CALL	.CALLDE		; Call routine
-        AND	A
-        RET
+    LD  DE,PROCNM
+.LOOP:  LD  A,(DE)
+    CP  (HL)
+    JR  NZ,.TONEXTCMD   ; Not equal
+    INC DE
+    INC HL
+    AND A
+    JR  NZ,.LOOP    ; No end of instruction name, go checking
+    LD  E,(HL)
+    INC HL
+    LD  D,(HL)
+    POP HL      ; routine address
+    CALL    GETPREVCHAR
+    CALL    .CALLDE     ; Call routine
+    AND A
+    RET
  
 .TONEXTCMD:
-        LD	C,0FFH
-        XOR	A
-        CPIR			; Skip to end of instruction name
-        INC	HL
-        INC	HL		; Skip address
-        CP	(HL)
-        JR	NZ,.CHKCMD	; Not end of table, go checking
-        POP	HL
+    LD  C,0FFH
+    XOR A
+    CPIR            ; Skip to end of instruction name
+    INC HL
+    INC HL      ; Skip address
+    CP  (HL)
+    JR  NZ,.CHKCMD  ; Not end of table, go checking
+    POP HL
         SCF
-        RET
+    RET
  
 .CALLDE:
-        PUSH	DE
-        RET
-
+    PUSH    DE
+    RET
+  
 GETSTRPNT:
 ; OUT:
 ; HL = String Address
@@ -360,7 +142,7 @@ SYNTAX_ERROR:
         LD      E,2
     LD  IX,ERRHAND  ; Call the Basic error handler
     JP  CALBAS
-
+ 
 ;================================================================
 ; call Commands start here
 ; ================================================================
@@ -394,6 +176,7 @@ PRINTSTATUSMSG:
         call      PRINT
         POP       HL
         ret
+
 
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
@@ -662,7 +445,8 @@ build:  DB      "20200822.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10
+        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10,0
+MSXPISKP:
         DB       "Press P to boot MSXPi DOS",13,10
         DB      00
 
@@ -684,7 +468,11 @@ PSYNC_RESTORED:
 PSYNC_ERROR:
         DB    "Could not restore communication ",13,10,0
 
-;---------------------------
+
+; ================================================================
+; Table of Commands available/implemented
+; ================================================================
+
 CALL_TABLE:
 
         DB      "MSXPIVER",0
@@ -713,7 +501,8 @@ ENDOFCMDS:
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
 INCLUDE "basic_stdio.asm"
+INCLUDE "msxpi_io.asm"
 
-fim:    equ $
+ds PageSize - ($ - 4000h),255   
+
