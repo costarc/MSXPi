@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSX Software for Cartridge AT28C256 32K EEPROM                            |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 1.1                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2020 Ronivon Candido Costa (ronivon@outlook.com)            |
 ;|                                                                           |
@@ -35,6 +35,7 @@
 ; File history :
 ; 1.0  - 27/06/2020 : initial version
 ;        05/08/2020 : Revised version
+; 1.1  - 24/08/2020 : Improved parsing of filename
 ;
 ; Note on this code:
 ; This version does not identify the AT28C256 automatically.
@@ -138,6 +139,9 @@ write:
     push    af
     ld      hl,txt_ffound
     call    print
+    ld      hl,fcb+1
+    call    PRINTFCBFNAME
+    call    PRINTNEWLINE
     ld      hl,txt_writingflash
     call    print
     pop     af
@@ -146,18 +150,14 @@ write:
 
                                 ; read filename passed with DOS command line
                                 ; and update fcb with filename
-    ld      a,(thisslt)
+    call    enable_eeprom_slots
     call    disable_w_prot
+    call    restore_ram_slots
     call    openfile
     cp      $ff
     jp      z, fnotfounderr 
     call    setdma
-    ld      a,(thisslt)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)
-    ld      h,$80
-    call    ENASLT
+    call    enable_eeprom_slots
     ld      de,$4000
     ld      (curraddr),de
 writeeeprom:
@@ -192,18 +192,37 @@ writeeeprom0:
     cp      1                       ; 1 = this was last record.
     jr      z,endofreading   
     jr      writeeeprom
+
 endofreading:
+    call    enable_w_prot
+    call    restore_ram_slots
+
+    ld      a,(data_option_p)
+    cp      1
+    call    z,param_p_patch_rom
+    
+    ld      hl,txt_advice
+    call    print
+
+    ei
+    ret
+
+enable_eeprom_slots:
+    ld      a,(thisslt)
+    ld      h,$40
+    call    ENASLT
+    ld      a,(thisslt)
+    ld      h,$80
+    call    ENASLT
+    ret
+
+restore_ram_slots:
     ld      a,(RAMAD1)
     ld      h,$40
     call    ENASLT
     ld      a,(RAMAD2)
     ld      h,$80
     call    ENASLT
-    ld      a,(thisslt)
-    call    enable_w_prot
-    ld      hl,txt_advice
-    call    print
-    ei
     ret
 
     ; Search for the EEPROM
@@ -397,6 +416,27 @@ PRINTNEWLINE:
     pop      hl
     ret
 
+;-------------------------------------------
+; print file name from FCB properly parsed |
+;-------------------------------------------
+PRINTFCBFNAME:
+    ld       b,8
+    call     PRINTFCBFNAME2
+    ld       a,'.'
+    call     PUTCHAR
+    ld       b,3
+    call     PRINTFCBFNAME2
+    ret
+PRINTFCBFNAME2:
+    ld       a,(hl)
+    inc      hl
+    cp       ' '
+    jr       z,PRINTFCBFNAME3
+    call     PUTCHAR
+PRINTFCBFNAME3:
+    djnz     PRINTFCBFNAME2
+    ret
+
 resetfcb:
     ex    af,af'
     exx
@@ -478,15 +518,15 @@ parseargs:
     pop     hl
 parse_next:
     call    space_skip
-    ret     c
+    jr      c,parse_filename
     inc     hl
     ld      de,parms_table
     call    table_inspect
-    ret     c
+    jr      c,parse_filename
     ld      a,(parm_found)
     or      a
     jr      nz,parse_checkendofparms
-    pop     hl                          ; get form stack the address of the routine
+    pop     hl                          ; get the address of the routine
                                         ; for this parameter
     ld      de,parse_checkendofparms
     push    de
@@ -494,6 +534,275 @@ parse_next:
 parse_checkendofparms:
     ld      hl,(parm_address)
     jr      parse_next
+	
+; After parsing is complete for all options, run another check to check
+; if filename was provided without the "/f" option. However, /if "/f" had
+; already been provided, will simply ignore en exit this routine.
+parse_filename:
+    ld      a,(data_option_f)
+    cp      $ff
+    ret     nz
+    ld      hl,$80
+    ld      a,(hl)
+    cp      2
+    ret     c
+parse_filename1:
+    inc     hl
+    ld      a,(hl)
+    or      a
+    jr      nz,parse_filename1
+parse_filename2:
+    dec     hl
+    ld      a,(hl)
+    cp      ' ' 
+    jr      nz,parse_filename2
+    inc     hl
+    ld      (parm_address),hl
+    xor      a
+    ld      (parm_found),a
+    jp      param_f
+
+
+; ================================================================================
+; table_inspect: get next parameters in the buffer and verify if it is valid
+; then return the address of the routine to process the parameter
+;
+; Inputs:
+; HL = address of buffer with parameters to parse, teminated in zero
+; Outputs:
+; HL = address of the buffer updated
+; Stack = address of the routine for the parameter
+; 
+
+table_inspect:
+    ld      a,$ff
+    ld      (parm_index),a
+    ld      (parm_found),a
+table_inspect0:
+    push    hl                       ; save the address of the parameters
+table_inspect1:
+    ld      a,(hl)
+    cp      ' '
+    jr      z,table_inspect_cmp
+    or      a
+    jr      z,table_inspect_cmp
+    ld      c,a
+    ld      a,(de)
+    cp      c
+    jr      nz,table_inspect_next   ; not this parameters, get next in the table
+    inc     hl
+    inc     de
+    jr      table_inspect1
+table_inspect_cmp:
+    ld      a,(de)
+    or      a
+    jr      nz,table_inspect_next   ; not this parameters, check next in the table
+    inc     de
+    pop     af                      ; discard HL to keep current arrgs index
+    xor     a
+    ld      (parm_found),a
+    ld      a,(de)
+    ld      c,a
+    inc     de
+    ld      a,(de)
+    ld      b,a
+    pop     de                      ; get ret address out of the stack temporarily
+    push    bc                      ; push the routine address in the stack
+    push    de                      ; push the return addres of this routine back in the stack
+    ld      (parm_address),hl
+    scf
+    ccf
+    ret
+
+table_inspect_next:
+    ld      a,(de)
+    inc     de
+    or      a
+    jr      nz,table_inspect_next
+    ld      a,(parm_index)
+    inc     a
+    ld      (parm_index),a    ; this index will tell which parameter was found
+    pop     hl
+    inc     de
+    inc     de
+    ld      a,(de)
+    or      a
+    jr      nz,table_inspect0
+    scf
+    ret
+
+; Skip spaces in the args.
+; Inputs: 
+; HL = memory address to start testing
+;
+; Outputs:
+; HL = updated memory address 
+; Flac C: set if found end of string (zero)
+;
+space_skip:
+    ld      a,(hl)
+    or      a
+    scf
+    ret     z
+    cp      ' '
+    scf
+    ccf
+    ret     nz
+    inc     hl
+    jr      space_skip
+
+; ==================================================================
+; Atmel AT28C256 Programming code
+; routinefor SDP (software data protection) available in the eeprom.
+; ==================================================================
+; Enable write-protection
+enable_w_prot:
+    ld      a, $AA
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    ld      a, $55
+    ld      ($6AAA),a     ; 0x2AAA + 0x4000
+    ld      a, $A0
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    call    waitforwrite
+    ret
+
+; Disable write-protection
+disable_w_prot:
+    ld      a,$AA
+    ld      ($9555),a 
+    ld      a,$55
+    ld      ($6AAA),a 
+    ld      a,$80
+    ld      ($9555),a 
+    ld      a,$AA
+    ld      ($9555),a 
+    ld      a,$55
+    ld      ($6AAA),a 
+    ld      a,$20
+    ld      ($9555),a
+    call    waitforwrite
+    ret
+
+; Search for the EEPROM
+search_eeprom_for_future_improvement:
+    di
+    call    sigslot
+    cp      $FF
+    jr      z,search_eeprom_end
+    ld      h,$40
+    call    ENASLT
+    ld      a,(thisslt)
+    ld      h,$80
+    call    ENASLT
+
+    call   save_tested_bytes      ; savem the address used to enable SDP
+    call   disable_w_prot
+    ;                             ; re-enable current slot for the memory tests
+    ld      a,(thisslt)
+    ld      h,$40
+    call    ENASLT
+    ld      a,(thisslt)
+    ld      h,$80
+    call    ENASLT
+    ;
+    call   compare_with_sdp_bytes   ; compare ram with the sdp control bytes
+    jr     z,restore_bytes          ; if same, the ram is not ATC28C256 
+                                    ; the memory was not overwritten by sdp control bytes
+    call   test_for_ram             ; Now test if can write to the memory
+                                    ; since we potentially disabled SDP
+    jr     z,restore_slots          ; found the eeprom 
+                                    ; otherwise continue looking
+restore_bytes:
+    call   restore_tested_bytes     ; this slot is not AT28C256
+    jp     search_eeprom            ; test next slot
+
+restore_slots:
+    ld      a,(RAMAD1)
+    ld      h,$40
+    call    ENASLT
+    ld      a,(RAMAD2)
+    ld      h,$80
+    call    ENASLT
+    ei
+    ret 
+search_eeprom_end:
+    call     restore_slots
+    scf
+    ret
+
+save_tested_bytes:
+    ld     a,($9555)
+    ld     (eeprom_saved_bytes),a
+    ld     a,($6AAA)
+    ld     (eeprom_saved_bytes + 1),a
+    ret
+restore_tested_bytes:
+    ld     a,(eeprom_saved_bytes)
+    ld     ($9555),a
+    ld     a,(eeprom_saved_bytes + 1)
+    ld     ($6AAA),a
+    ret
+compare_with_sdp_bytes:
+    ld     hl,eeprom_saved_bytes
+    ld     a,($9555)
+    cp     (hl)
+    ret    z
+    inc    hl
+    ld     a,($6AAA)
+    cp     (hl)
+    ret
+
+; write 'ATC' to address $4000,4001,4002
+; Restore the original values before exiting the routine
+; C flag set if written value was not verified (that is, not RAM)
+;
+test_for_ram:
+    ld      hl,$4000
+    ld      a,(hl)
+    ld      b,a
+    ld      a,'A'
+    ld      (hl),a
+    inc     hl
+    ld      a,(hl)
+    ld      c,a
+    ld      a,'T'
+    ld      (hl),a
+    inc     hl
+    ld      a,(hl)
+    ld      d,a
+    ld      a,'C'
+    ld      (hl),a
+    call    wait_eeprom
+    ld      a,d
+    cp      (hl)
+    ret     nz
+    dec     hl
+    ld      a,c
+    cp      (hl)
+    ret     nz
+    dec     hl
+    ld      a,b
+    cp      (hl)
+    ret
+
+wait_eeprom:
+    push    bc
+    ld      bc,300
+wait_eeprom0:
+    push    af
+    push    bc
+    push    de
+    push    hl
+    pop     hl
+    pop     de
+    pop     bc
+    pop     af
+    dec     bc
+    ld      a,b
+    or      c
+    jr      nz,wait_eeprom0
+    pop     bc
+    ret
 
 param_h:
     xor     a
@@ -693,308 +1002,97 @@ showcontent0:
     call    PRINTNEWLINE
     ret
 
-; ================================================================================
-; table_inspect: get next parameters in the buffer and verify if it is valid
-; then return the address of the routine to process the parameter
-;
-; Inputs:
-; HL = address of buffer with parameters to parse, teminated in zero
-; Outputs:
-; HL = address of the buffer updated
-; Stack = address of the routine for the parameter
-; 
-
-table_inspect:
-    ld      a,$ff
-    ld      (parm_index),a
-    ld      (parm_found),a
-table_inspect0:
-    push    hl                       ; save the address of the parameters
-table_inspect1:
-    ld      a,(hl)
-    cp      ' '
-    jr      z,table_inspect_cmp
-    or      a
-    jr      z,table_inspect_cmp
-    ld      c,a
-    ld      a,(de)
-    cp      c
-    jr      nz,table_inspect_next   ; not this parameters, get next in the table
-    inc     hl
-    inc     de
-    jr      table_inspect1
-table_inspect_cmp:
-    ld      a,(de)
-    or      a
-    jr      nz,table_inspect_next   ; not this parameters, check next in the table
-    inc     de
-    pop     af                      ; discard HL to keep current arrgs index
-    xor     a
-    ld      (parm_found),a
-    ld      a,(de)
-    ld      c,a
-    inc     de
-    ld      a,(de)
-    ld      b,a
-    pop     de                      ; get ret address out of the stack temporarily
-    push    bc                      ; push the routine address in the stack
-    push    de                      ; push the return addres of this routine back in the stack
-    ld      (parm_address),hl
-    scf
-    ccf
+param_p:
+    ld     a,1
+    ld     (data_option_p),a
     ret
 
-table_inspect_next:
-    ld      a,(de)
-    inc     de
-    or      a
-    jr      nz,table_inspect_next
-    ld      a,(parm_index)
-    inc     a
-    ld      (parm_index),a    ; this index will tell which parameter was found
-    pop     hl
-    inc     de
-    inc     de
-    ld      a,(de)
-    or      a
-    jr      nz,table_inspect0
-    scf
-    ret
+param_p_patch_rom:
+    ld     hl,txt_patching_rom
+    call   print
 
-; Skip spaces in the args.
-; Inputs: 
-; HL = memory address to start testing
-;
-; Outputs:
-; HL = updated memory address 
-; Flac C: set if found end of string (zero)
-;
-space_skip:
-    ld      a,(hl)
-    or      a
-    scf
-    ret     z
-    cp      ' '
-    scf
-    ccf
-    ret     nz
-    inc     hl
-    jr      space_skip
-
-; ==================================================================
-; Atmel AT28C256 Programming code
-; routinefor SDP (software data protection) available in the eeprom.
-; ==================================================================
-; Enable write-protection
-enable_w_prot:
-    push    af
-    ld      h,$40
-    call    ENASLT
-    pop     af
-    ld      h,$80
-    call    ENASLT
-    ld      a, $AA
-    ld      ($9555),a     ; 0x5555 + 0x4000
-    ld      a, $55
-    ld      ($6AAA),a     ; 0x2AAA + 0x4000
-    ld      a, $A0
-    ld      ($9555),a     ; 0x5555 + 0x4000
-    call    waitforwrite
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(RAMAD2)
-    ld      h,$80
-    call    ENASLT
-    ret
-
-; Disable write-protection
-disable_w_prot:
-    push    af
-    ld      h,$40
-    call    ENASLT
-    pop     af
-    ld      h,$80
-    call    ENASLT
-    ld      a,$AA
-    ld      ($9555),a 
-    ld      a,$55
-    ld      ($6AAA),a 
-    ld      a,$80
-    ld      ($9555),a 
-    ld      a,$AA
-    ld      ($9555),a 
-    ld      a,$55
-    ld      ($6AAA),a 
-    ld      a,$20
-    ld      ($9555),a
-    call    waitforwrite
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(RAMAD2)
-    ld      h,$80
-    call    ENASLT
-    ret
-
-; Search for the EEPROM
-search_eeprom_for_future_improvement:
-    di
-    call    sigslot
-    cp      $FF
-    jr      z,search_eeprom_end
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)
-    ld      h,$80
-    call    ENASLT
-
-    call   save_tested_bytes      ; savem the address used to enable SDP
+    call   wait_eeprom
+    call   enable_eeprom_slots
     call   disable_w_prot
-    ;                             ; re-enable current slot for the memory tests
-    ld      a,(thisslt)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)
-    ld      h,$80
-    call    ENASLT
-    ;
-    call   compare_with_sdp_bytes   ; compare ram with the sdp control bytes
-    jr     z,restore_bytes          ; if same, the ram is not ATC28C256 
-                                    ; the memory was not overwritten by sdp control bytes
-    call   test_for_ram             ; Now test if can write to the memory
-                                    ; since we potentially disabled SDP
-    jr     z,restore_slots          ; found the eeprom 
-                                    ; otherwise continue looking
-restore_bytes:
-    call   restore_tested_bytes     ; this slot is not AT28C256
-    jp     search_eeprom            ; test next slot
+    call   wait_eeprom
 
-restore_slots:
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(RAMAD2)
-    ld      h,$80
-    call    ENASLT
-    ei
-    ret 
-search_eeprom_end:
-    call     restore_slots
-    scf
-    ret
+    ld     hl,($4002)
+    ld     (param_p_jump + 1),hl
+    ld     hl,$8000 - (parap_p_end - param_p_patch)
+    LD     ($4002),hl
 
-save_tested_bytes:
-    ld     a,($9555)
-    ld     (eeprom_saved_bytes),a
-    ld     a,($6AAA)
-    ld     (eeprom_saved_bytes + 1),a
-    ret
-restore_tested_bytes:
-    ld     a,(eeprom_saved_bytes)
-    ld     ($9555),a
-    ld     a,(eeprom_saved_bytes + 1)
-    ld     ($6AAA),a
-    ret
-compare_with_sdp_bytes:
-    ld     hl,eeprom_saved_bytes
-    ld     a,($9555)
-    cp     (hl)
-    ret    z
+    call   wait_eeprom
+    call   wait_eeprom
+
+    ld     bc,parap_p_end - param_p_patch
+    ld     hl,param_p_patch
+    ld     de,$8000 - (parap_p_end - param_p_patch)
+param_p_patch_rom_wloop:
+    ld     a,(hl)
+    ld     (de),a
     inc    hl
-    ld     a,($6AAA)
-    cp     (hl)
-    ret
+    inc    de
+    dec    bc
+    ld     a,b
+    or     c
+    jr     nz,param_p_patch_rom_wloop
 
-; write 'ATC' to address $4000,4001,4002
-; Restore the original values before exiting the routine
-; C flag set if written value was not verified (that is, not RAM)
-;
-test_for_ram:
-    ld      hl,$4000
-    ld      a,(hl)
-    ld      b,a
-    ld      a,'A'
-    ld      (hl),a
-    inc     hl
-    ld      a,(hl)
-    ld      c,a
-    ld      a,'T'
-    ld      (hl),a
-    inc     hl
-    ld      a,(hl)
-    ld      d,a
-    ld      a,'C'
-    ld      (hl),a
     call    wait_eeprom
-    ld      a,d
-    cp      (hl)
-    ret     nz
-    dec     hl
-    ld      a,c
-    cp      (hl)
-    ret     nz
-    dec     hl
-    ld      a,b
-    cp      (hl)
+    call    enable_w_prot
+    call    restore_ram_slots
     ret
 
-wait_eeprom:
-    push    bc
-    ld      bc,300
-wait_eeprom0:
-    push    af
-    push    bc
-    push    de
-    push    hl
-    pop     hl
-    pop     de
-    pop     bc
-    pop     af
-    dec     bc
-    ld      a,b
-    or      c
-    jr      nz,wait_eeprom0
-    pop     bc
-    ret
+param_p_patch:
+    ld    a,7
+    call  $0141
+    bit   2,a
+    ret   z
+param_p_jump:
+    jp    $0000
 
-    txt_slot: db "Slot ",0
-    txt_ramsearch: db "Searching for EEPROM",13,10,0
-    txt_ramfound:  db "Found writable memory in slot ",0
-    txt_newline:   db 13,10,0
-    txt_ramnotfound: db "EEPROM not found",13,10,0
-    txt_writingflash: db "Writing file to EEPROM in slot ",0
-    txt_completed: db "Completed.",13,10,0
-    txt_nofn: db "Filename is empty or not valid",13,10,0
-    txt_fileopenerr: db "Error opening file",13,10,0
-    txt_fnotfound: db "File not found",13,10,0
-    txt_ffound: db "Reading file from disk",13,10,0
-    txt_err_reading: db "Error reading data from file",13,10,0
-    txt_endoffile: db "End of file",13,10,0
-    txt_noparams: db "No command line parameters passed",13,10,0
-    txt_parm_f: db "Filename:",13,10,0
-    txt_exit: db "Returning to MSX-DOS",13,10,0
-    txt_needfname: db "File name not specified",13,10,0
-    txt_unprotecting: db "Disabling AT28C256 Software Data Protection on slot:",0
-    txt_protecting: db "Enabling AT28C256 Software Data Protection on slot:",0
-    txt_param_dx_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /dx",13,10,0
-    txt_param_ex_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /ex",13,10,0
-    txt_credits: db "AT28C256 EEPROM Programmer for MSX",13,10
-    db "(c) Ronivon Costa, 2020",13,10,13,10,0
-    txt_advice: db 13,10
-    db "Write process completed",13,10,0
+parap_p_end: equ $
 
-    txt_sdp:    db "To force disabling the AT28C256 Software Data Protction (SDP),",13,10
-    db "call this program passing the slot as parameter.",13,10
-    db "Must specify two digits for the slot, as for example:",13,10
-    db "at28csdp 01",13,10,13,10
-    db "Afterwards, you can use verrom.com to verify if the SDP was correctly disable.",13,10,0
-    txt_invparms: db "Invalid parameters",13,10
-    txt_help: db "Command line options: at28c256 </h | /i> </s /f file.rom>",13,10,13,10
-    db "/h Show this help",13,10
-    db "/s <slot number>",13,10
-    db "/i Show initial 24 bytes of the slot cartridge",13,10
-    db "/f File name with extension, for example game.rom",13,10,0
+ROM_NEW_INIT: EQU $400A
+
+txt_slot: db "Slot ",0
+txt_ramsearch: db "Searching for EEPROM",13,10,0
+txt_ramfound:  db "Found writable memory in slot ",0
+txt_newline:   db 13,10,0
+txt_ramnotfound: db "EEPROM not found",13,10,0
+txt_writingflash: db "Writing file to EEPROM in slot ",0
+txt_completed: db "Completed.",13,10,0
+txt_nofn: db "Filename is empty or not valid",13,10,0
+txt_fileopenerr: db "Error opening file",13,10,0
+txt_fnotfound: db "File not found",13,10,0
+txt_ffound: db "Reading file from disk:",0
+txt_err_reading: db "Error reading data from file",13,10,0
+txt_endoffile: db "End of file",13,10,0
+txt_noparams: db "No command line parameters passed",13,10,0
+txt_parm_f: db "Filename:",13,10,0
+txt_exit: db "Returning to MSX-DOS",13,10,0
+txt_needfname: db "File name not specified",13,10,0
+txt_unprotecting: db "Disabling AT28C256 Software Data Protection on slot:",0
+txt_protecting: db "Enabling AT28C256 Software Data Protection on slot:",0
+txt_param_dx_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /dx",13,10,0
+txt_param_ex_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /ex",13,10,0
+txt_patching_rom: DB 13,10,"Patching ROM. Use ESC to bypass ROM boot",13,10,0
+txt_credits: db "AT28C256 EEPROM Programmer for MSX v1.1",13,10
+db "(c) Ronivon Costa, 2020",13,10,13,10,0
+txt_advice: db 13,10
+db "Write process completed",13,10,0
+
+txt_sdp:    db "To force disabling the AT28C256 Software Data Protction (SDP),",13,10
+db "call this program passing the slot as parameter.",13,10
+db "Must specify two digits for the slot, as for example:",13,10
+db "at28csdp 01",13,10,13,10
+db "Afterwards, you can use verrom.com to verify if the SDP was correctly disable.",13,10,0
+txt_invparms: db "Invalid parameters",13,10
+txt_help: db "Command line options: at28c256 </h | /i> | </s <slot> </f> file.rom>",13,10,13,10
+db "/h Show this help",13,10
+db "/s <slot number>",13,10
+db "/i Show initial 24 bytes of the slot cartridge",13,10
+db "/p Patch rom to skip boot when pressing ESC (Dangerous)",13,10
+db "/f File name with extension, for example game.rom",13,10,0
 
 parms_table:    
     db "h",0
@@ -1005,6 +1103,8 @@ parms_table:
     dw param_i
     db "s",0
     dw param_s
+    db "p",0
+    dw param_p
     db "f",0
     dw param_f
     db 0                ; end of table. this byte is mandatory to be zero
@@ -1015,6 +1115,7 @@ parm_found:     db $ff
 ignorerc:       db $ff
 data_option_s:  db $ff
 data_option_f:  db $ff,0,0,0,0,0,0,0,0,0,0,0,0
+data_option_p:  db $ff
 parm_address:   dw 0000
 curraddr:       dw 0000
 eeprom_saved_bytes:  db 0,0,0
