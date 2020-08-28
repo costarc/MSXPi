@@ -5,6 +5,8 @@ Many resources are implemented, such as access to network drives, internet, disk
 
 MSXPi v1.0 Release Notes
 ========================
+>> Please use branch "release/v1.0" for MSXPi versions from 0.7 up to v1.0 Rev 0" <<
+
 This release has some major changes to the hardware and software components.
 
 On the hardware side:
