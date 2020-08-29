@@ -9,7 +9,6 @@ This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Replaced the EPROM 27C256 by AT28C256 EEPROM (Electronically erasable/rewritable)
 - Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
 - Schematics was updated to supporgt the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
