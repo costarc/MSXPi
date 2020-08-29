@@ -7,6 +7,3 @@ The easier way to start is to download a MSXPi SD CARD image for the Raspberry P
 https://github.com/costarc/MSXPi/tree/release/v0.8.2/software/target
 
 To prepare the Raspberry Pi from a vanilla Raspbian image, follow the README.install in the link above.
-
-Thanks and hope you enjoy.
-Roni
