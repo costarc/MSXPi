@@ -1,0 +1,9 @@
+Please refer to the project’s documentation:
+
+https://github.com/costarc/MSXPi/tree/release/v1.0/documents
+
+The easier way to start is to download a MSXPi SD CARD image for the Raspberry Pi, which can be found under:
+
+https://github.com/costarc/MSXPi/tree/release/v1.0/software/target
+
+To prepare the Raspberry Pi from a vanilla Raspbian image, follow the README.install in the link above.
