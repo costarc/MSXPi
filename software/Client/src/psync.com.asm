@@ -34,11 +34,45 @@
 ; 0.9.0  : Changes to supoprt new transfer logic
 
         ORG     $0100
-        CALL    PSYNC
+        CALL    PSYNC_LOCAL
         LD      HL,PSYNC_ERROR
-        JP      C,PRINT
+        JP      C,PRINT   
         LD      HL,PSYNC_RESTORED
         JP      PRINT
+
+PSYNC_LOCAL:  
+        CALL    TRYABORT_L
+        RET     C
+        LD      BC,4
+        LD      DE,PINGCMD
+        CALL    SENDPICMD
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        RET
+
+TRYABORT_L:
+        CALL    CHECK_ESC
+        RET     C
+        LD      A,ABORT
+        CALL    PIEXCHANGEBYTE
+        CP      READY
+        JR      NZ,TRYABORT_L
+        OR      A
+        RET
+
+ CHECK_ESC:
+        LD      B,7
+        IN      A,($AA)
+        AND     11110000b
+        OR      B
+        OUT     ($AA),A
+        IN      A,($A9)
+        BIT     2,A
+        JR      NZ,CHECK_ESC_END
+        SCF
+CHECK_ESC_END:
+        RET
+
 
 PSYNC_RESTORED:
     DB      "Communication restored",13,10,"$"
