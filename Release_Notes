@@ -1,3 +1,6 @@
+Please refer to https://github.com/costarc/MSXPi for more documentation and updates.
+
+
 MSXPi v1.0 Build 20200822.000 Release Notes
 ===========================================
 - Fixed bug in datatransfer retries
@@ -77,13 +80,3 @@ List of features
 - EPROM socketed to allow removal for updates using an EPROM programmer
 - Two 16K EPROM banks switched by jumper (can have two different ROM versions on same EPROM)
 - Compatible with all RPi models
-
-
-Known Bugs
-----------
-
-Problem: Occasionally, there might happen that some commands get out of sync. This can be identified by screen being filled with dots.
-Workaround: This happens more frequently when lots of reads and writes are happening, such as when running msxpiupd.bat. Try running the command again. If RPi does not recover, then reboot RPi.
-
-Problem: Sometimes commands returns "Communication Error".
-Workaround: Run PRESET and PDIR, sometimes it recovers from the problem. If it does not, restart RPi.
