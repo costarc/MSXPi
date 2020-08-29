@@ -45,7 +45,7 @@
 ; Until RPi responds with READY.
 
 PSYNC:  
-        CALL    TRYABORT
+        CALL    TRYRESTORE
         RET     C
         LD      BC,4
         LD      DE,PINGCMD
@@ -56,17 +56,13 @@ PSYNC:
         JR      NZ,PSYNC
         RET
 
-TRYABORT:
-        LD      A,4
-        CALL    SNSMAT
-        BIT     5,A
-        RET     Z
+TRYRESTORE:
         LD      A,ABORT
         CALL    PIEXCHANGEBYTE
         CP      READY
         RET     Z
         CP      SENDNEXT
-        JR      NZ,TRYABORT
+        JR      NZ,TRYRESTORE
         LD      A,1
         CALL    PIEXCHANGEBYTE
         XOR     A
