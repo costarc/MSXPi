@@ -2,7 +2,7 @@
 
   (general
     (thickness 1.6)
-    (drawings 29)
+    (drawings 30)
     (tracks 1471)
     (zones 0)
     (modules 48)
@@ -34,7 +34,7 @@
   )
 
   (setup
-    (last_trace_width 0.5)
+    (last_trace_width 0.25)
     (user_trace_width 0.3)
     (user_trace_width 0.35)
     (user_trace_width 0.4)
@@ -2266,7 +2266,7 @@
     )
   )
 
-  (module MyFootprints:DIP254P1524X482-28 (layer F.Cu) (tedit 5EF30F17) (tstamp 5F2D2716)
+  (module MyFootprints:DIP254P1524X482-28 (layer F.Cu) (tedit 5EF30F17) (tstamp 5F4FBA7C)
     (at 133.35 111.506 270)
     (path /5F2D70DA)
     (fp_text reference AT28C256 (at -8.382 -15.748 180) (layer F.SilkS)
@@ -3850,6 +3850,9 @@
     )
   )
 
+  (gr_text https://github.com/costarc/MSXPi (at 148.844 83.566) (layer B.SilkS)
+    (effects (font (size 1.5 1.5) (thickness 0.3)) (justify mirror))
+  )
   (gr_text MSXPi (at 151.384 117.348) (layer F.SilkS)
     (effects (font (size 6 5) (thickness 1.2)))
   )
