@@ -97,16 +97,12 @@ architecture rtl of MSXInterface is
 	 signal msxbusbuf_s    : std_logic_vector(16 downto 0);
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
-    --signal msxpiserver    : std_logic := '0';
+    signal msxpiserver    : std_logic := '0';
     signal msxpi_state    : std_logic := '0';
     
 begin
 
-    -- For PCB v1.0 and newer
-    --WAIT_n <= wait_n_s;
-	 
-	 -- For PCB v0.7
-    WAIT_n <= 'Z';
+    WAIT_n <= wait_n_s when msxpiserver = '1' else 'Z';
 	 
     -- SPI_CS <= not rpi_enabled_s;
 	 SPI_CS <= not msxpi_state;
@@ -126,12 +122,12 @@ begin
     -- If it has not started, /wait signal should not be enabled to allow MSX to start
     -- Once it has ticked one time, we know msxpi-server has started,
     -- then /wait can start to be driven by that rpi_rdy signal.
-    --process(SPI_RDY)
-    --begin
-    --    if (rising_edge(SPI_RDY)) then
-    --        msxpiserver <= '1';
-    --     end if;
-    --end process;
+    process(SPI_RDY)
+    begin
+        if (rising_edge(SPI_RDY)) then
+            msxpiserver <= '1';
+         end if;
+    end process;
 
     -- Triggers the interface
     process(rpi_en_s, SPI_RDY)

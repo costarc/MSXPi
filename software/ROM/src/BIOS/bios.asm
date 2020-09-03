@@ -426,7 +426,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PIREADBYTE
         DW      PIWRITEBYTE
         DW      PIEXCHANGEBYTE
-        DW      SENDIFCMD
         DW      SENDPICMD
         DW      PRINT
         DW      PRINTNLINE

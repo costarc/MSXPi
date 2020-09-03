@@ -130,7 +130,7 @@ def piexchangebyte(byte_out):
 
     # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
-    time.sleep(0.001)
+    #time.sleep(0.001)
     GPIO.output(rdyPin, GPIO.HIGH)
     GPIO.output(misoPin, GPIO.LOW)
 
@@ -339,7 +339,8 @@ def ini_fcb(fname):
     piexchangebyte(msxdrive)
     for i in range(0,11):
         piexchangebyte(ord(msxfcbfname[i]))
-        print("Sending:",msxfcbfname[i])
+        print(msxfcbfname[i]),
+    print""
 
 def prun(cmd):
     piexchangebyte(RC_WAIT)

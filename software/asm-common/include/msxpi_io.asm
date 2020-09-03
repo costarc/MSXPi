@@ -52,24 +52,10 @@
 ; ==================================================================
 
 ;-----------------------
-; SENDIFCMD            |
-;-----------------------
-SENDIFCMD:
-            out     (CONTROL_PORT1),a  ; Send data, or command
-            ret
-
-;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            push    bc
-            ld      bc,100
-CHKPIRDY0:
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,CHKPIRDY0
-            pop     bc
+            nop                        ; 1 cycle to allow interface to catch up
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
             or      a
             jr      nz,CHKPIRDY       ; rdy signal is zero, pi app fsm is ready
