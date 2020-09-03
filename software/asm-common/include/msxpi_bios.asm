@@ -413,8 +413,6 @@ PRINTPISTDOUT0:
         call    PIEXCHANGEBYTE
         ld      l,a     ; number of attempts
         call    CRC16
-        push    de
-        push    bc      ; blocksize 
 
 PRINTPI1:
         ld      a,SENDNEXT
