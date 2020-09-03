@@ -339,6 +339,7 @@ def ini_fcb(fname):
     piexchangebyte(msxdrive)
     for i in range(0,11):
         piexchangebyte(ord(msxfcbfname[i]))
+        print("Sending:",msxfcbfname[i])
 
 def prun(cmd):
     piexchangebyte(RC_WAIT)

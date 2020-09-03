@@ -31,6 +31,7 @@
 ;
 ; File history :
 ; 1.0    : New logic for CPLD and re-write of bios
+;        : Compatible with pcb v0.7 and v1.0 and more recent.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -61,14 +62,14 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            ;push    bc
-            ;ld      bc,32000
+            push    bc
+            ld      bc,100
 CHKPIRDY0:
-            ;dec     bc
-            ;ld      a,b
-            ;or      c
-            ;jr      nz,CHKPIRDY0
-            ;pop     bc
+            dec     bc
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+            pop     bc
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
             or      a
             jr      nz,CHKPIRDY       ; rdy signal is zero, pi app fsm is ready
@@ -82,7 +83,9 @@ PIREADBYTE:
             in      a,(CONTROL_PORT2)
             cp      9
             call    c,CHKPIRDY
+            di
             in      a,(DATA_PORT1)     ; read byte
+            ei
             ret                        ; return in a the byte received
 
 ;-----------------------
@@ -94,7 +97,9 @@ PIWRITEBYTE:
             cp      9
             call    c,CHKPIRDY
             pop     af
+            di
             out     (DATA_PORT1),a     ; send data, or command
+            ei
             ret
 
 ;-----------------------
