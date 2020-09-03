@@ -1,3 +1,4 @@
+cd ..
 rm  -rf hardware/CPLD\ Project/db
 rm  -rf hardware/CPLD\ Project/output_files
 rm  -rf hardware/CPLD\ Project/incremental_db
@@ -18,3 +19,5 @@ rm  hardware/CPLD\ Project/*.cf
 rm  hardware/CPLD\ Project/*.pin
 git add .
 git status
+cd -
+

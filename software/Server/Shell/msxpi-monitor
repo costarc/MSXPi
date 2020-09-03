@@ -32,9 +32,10 @@ if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
         fi
         echo y | ${OSCMDPREFIX}/sbin/mke2fs -q -m 0 /dev/ramdisk 1m
         ${OSCMDPREFIX}/bin/mount /dev/ramdisk /media/ramdisk
-        ${OSCMDPREFIX}chown pi.pi /media/ramdisk
     fi
 fi
+
+${OSCMDPREFIX}chown -R pi.pi /media/ramdisk
 
 for file in $FILELIST
 do

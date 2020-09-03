@@ -32,31 +32,29 @@
  ;
  ; File history :
  ; 0.1 2017/11/18
- ; Compile with:
- ; gcc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt
  */
 
+#include <stdio.h>
 #include <pigpio.h>
 #include <stdlib.h>
 #include <errno.h>   // for errno
 #include <limits.h>  // for INT_MAX
 #include <time.h>
 #include <stdbool.h>
-#include <stdio.h>
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20200717.00000"
+#define build "20171106.00087"
 
 #define HOMEPATH "/home/pi/msxpi"
 
 /* GPIO pin numbers used in this program */
 
-#define csPin    21
-#define sclkPin  20
-#define mosiPin  16
-#define misoPin  12
-#define rdyPin   25
+#define cs    21
+#define sclk  20
+#define mosi  16
+#define miso  12
+#define rdy   25
 
 #define SPI_SCLK_LOW_TIME 0
 #define SPI_SCLK_HIGH_TIME 0
@@ -162,24 +160,24 @@ struct doubleRCtype {
 };
 
 void init_spi_bitbang(void) {
-    gpioSetMode(csPin, PI_INPUT);
-    gpioSetMode(sclkPin, PI_OUTPUT);
-    gpioSetMode(mosiPin, PI_INPUT);
-    gpioSetMode(misoPin, PI_OUTPUT);
-    gpioSetMode(rdyPin, PI_OUTPUT);
-    gpioSetPullUpDown(csPin, PI_PUD_UP);
-    gpioSetPullUpDown(mosiPin, PI_PUD_UP);
+    gpioSetMode(cs, PI_INPUT);
+    gpioSetMode(sclk, PI_OUTPUT);
+    gpioSetMode(mosi, PI_INPUT);
+    gpioSetMode(miso, PI_OUTPUT);
+    gpioSetMode(rdy, PI_OUTPUT);
+    gpioSetPullUpDown(cs, PI_PUD_UP);
+    gpioSetPullUpDown(mosi, PI_PUD_DOWN);
 }
 
 void write_MISO(unsigned char bit) {
-    gpioWrite(misoPin, bit);
+    gpioWrite(miso, bit);
 }
 
 void tick_sclk(void) {
-    gpioWrite(sclkPin,HIGH);
-    //gpioDelay(SPI_SCLK_HIGH_TIME);
-    gpioWrite(sclkPin,LOW);
-    //gpioDelay(SPI_SCLK_LOW_TIME);
+    gpioWrite(sclk,HIGH);
+    gpioDelay(SPI_SCLK_HIGH_TIME);
+    gpioWrite(sclk,LOW);
+    gpioDelay(SPI_SCLK_LOW_TIME);
 }
 
 // This is where the SPI protocol is implemented.
@@ -189,55 +187,6 @@ void tick_sclk(void) {
 // It is tightely linked to the register-shift implementation in the CPLD,
 // If something changes there, it must have changes here so the protocol will match.
 
-void send_byte(unsigned char byte_out) {
-    unsigned char bit;
-
-    gpioWrite(misoPin,HIGH);
-    while (gpioRead(csPin) == HIGH) 
-        { }
-
-    gpioWrite(misoPin,LOW);
-    tick_sclk();
-    for (bit = 0x80; bit; bit >>= 1) {
-        write_MISO((byte_out & bit) ? HIGH : LOW);
-        gpioWrite(sclkPin,HIGH);
-        gpioWrite(sclkPin,LOW);
-    }
-    gpioWrite(rdyPin,LOW);
-    gpioWrite(rdyPin,HIGH);
-    gpioWrite(misoPin,HIGH);
-
-
-}
-
-unsigned char receive_byte() {
-    unsigned char bit;
-    unsigned char byte_in = 0;
-    unsigned rdbit;
-
-    gpioWrite(misoPin,HIGH);
-    while (gpioRead(csPin) == HIGH) 
-        { }
-
-    gpioWrite(misoPin,LOW);
-
-    tick_sclk();
-    for (bit = 0x80; bit; bit >>= 1) {
-        gpioWrite(sclkPin,HIGH);
-        rdbit = gpioRead(mosiPin);
-        if (rdbit == HIGH)
-            byte_in |= bit;
-
-        gpioWrite(sclkPin,LOW);
-    }
-
-    gpioWrite(rdyPin,LOW);
-    gpioWrite(rdyPin,HIGH);
-    gpioWrite(misoPin,HIGH);
-    return byte_in;
-
-}
-
 unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     unsigned char byte_in = 0;
     unsigned char bit;
@@ -246,13 +195,13 @@ unsigned char SPI_MASTER_transfer_byte(unsigned char byte_out) {
     tick_sclk();
     for (bit = 0x80; bit; bit >>= 1) {
         write_MISO((byte_out & bit) ? HIGH : LOW);
-        gpioWrite(sclkPin,HIGH);
+        gpioWrite(sclk,HIGH);
         gpioDelay(SPI_SCLK_HIGH_TIME);
-        rdbit = gpioRead(mosiPin);
+        rdbit = gpioRead(mosi);
         if (rdbit == HIGH)
             byte_in |= bit;
         
-        gpioWrite(sclkPin,LOW);
+        gpioWrite(sclk,LOW);
         gpioDelay(SPI_SCLK_LOW_TIME);
     }
     tick_sclk();
@@ -263,8 +212,8 @@ struct doubleRCtype piexchangebyte(bool CHECKTIMEOUT, unsigned char pibyte) {
     struct doubleRCtype ret;
     time_t t = time(NULL) + BYTETRANSFTIMEOUT;
     ret.rc = RC_SUCCESS;
-    gpioWrite(rdyPin,HIGH);
-    while (gpioRead(csPin) == HIGH) {
+    gpioWrite(rdy,HIGH);
+    while (gpioRead(cs) == HIGH) {
         if (CHECKTIMEOUT)
             if (time(NULL) >= t) {
                 ret.rc = RC_TIMEOUT;
@@ -275,7 +224,7 @@ struct doubleRCtype piexchangebyte(bool CHECKTIMEOUT, unsigned char pibyte) {
     if (ret.rc == RC_SUCCESS)
         ret.byte = SPI_MASTER_transfer_byte(pibyte);
     
-    gpioWrite(rdyPin,LOW);
+    gpioWrite(rdy,LOW);
     return ret;
 }
 
@@ -298,30 +247,35 @@ struct doubleRCtype piexchangebyte(bool CHECKTIMEOUT, unsigned char pibyte) {
  Return code will contain the result of the oepration.
  */
 int senddatablock(char *buffer, int datasize, bool sendsize) {
-    int bytecounter = 0;
-    unsigned char byte_out,crc;
-    struct doubleRCtype msxdata;
     
-    // send block size if requested by caller.
-    fprintf(stderr, "senddatablock.c: sending block size: %d\n",datasize);
-    send_byte((datasize - 1) % 256); 
-    send_byte((datasize - 1) / 256);
+    int bytecounter = 0;
+    unsigned char pibyte,crc;
+    struct doubleRCtype msxdata;
 
-    fprintf(stderr, "senddatablock.c: looping through data\n");
-    while(datasize > bytecounter) {
-        byte_out = *(buffer + bytecounter);
-        send_byte(byte_out);
-        if (msxdata.rc == RC_SUCCESS) {
-            crc ^= byte_out;
-            bytecounter++;
+    msxdata = piexchangebyte(true,SENDNEXT);
+    
+    if (msxdata.byte != SENDNEXT) {
+        msxdata.rc = RC_OUTOFSYNC;
+    } else {
+        // send block size if requested by caller.
+        if (sendsize)
+            piexchangebyte(true,datasize % 256); piexchangebyte(true,datasize / 256);
+
+        while(datasize > bytecounter && msxdata.rc == RC_SUCCESS) {
+            pibyte = *(buffer + bytecounter);
+            msxdata = piexchangebyte(true,pibyte);
+            if (msxdata.rc == RC_SUCCESS) {
+                crc ^= pibyte;
+                bytecounter++;
+            }
+        }
+        if(msxdata.rc == RC_SUCCESS) {
+            msxdata = piexchangebyte(true,crc);
+            if (msxdata.byte != crc)
+                printf("senddatablock.c:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,msxdata.byte);
         }
     }
-    msxdata = piexchangebyte(true,crc);
-    if (msxdata.byte != crc) {
-        fprintf(stderr, "senddatablock.c:CRC ERROR CRC: %x different than MSX CRC: %x\n",crc,msxdata.byte);
-    }
-
-    fprintf(stderr, "senddatablock.c:exiting with rc = %x\n",msxdata.rc);
+    printf("senddatablock.c:exiting with rc = %x\n",msxdata.rc);
     return msxdata.rc;
 }
 
@@ -331,57 +285,49 @@ int main(int argc, char *argv[]){
     unsigned long fileLen;
     int rc;
     
-
     if (argc != 2){
         fprintf(stderr, "wrong number of arguments\n");
         return 0;
     }
-
-    fprintf(stderr, "gpioInitialise\n");    
+    
     if (gpioInitialise() < 0){
         fprintf(stderr, "pigpio initialisation failed\n");
         return 0;
     }
     
     //open file and read to buffer
-    fprintf(stderr, "fopen file\n");
     file = fopen(argv[1], "rb");
     if (!file)
     {
-        fprintf(stderr, "Unable to open file %s\n", argv[1]);
+        fprintf(stderr, "Unable to open file %s", argv[1]);
         return 0;
     }
 
     //Get file length
-    fprintf(stderr, "fseek in file\n");
     fseek(file, 0L, SEEK_END);
     fileLen=ftell(file);
     rewind(file);
     
     //Allocate memory
-    fprintf(stderr, "malloc\n");
     buffer = malloc(sizeof(unsigned char) * fileLen + 1);
     
     if (!buffer)
     {
-        fprintf(stderr, "Memory allocation error!\n");
+        fprintf(stderr, "Memory allocation error!");
         fclose(file);
         return 0;
     }
     
-    fprintf(stderr, "fread to buffer\n");
     fread(buffer,fileLen,1,file);
     fclose(file);
     
-    fprintf(stderr, "senddatablock.c: ready to transfer\n");
     // Send the buffer to MSX
     init_spi_bitbang();
-    gpioWrite(rdyPin,HIGH);
-    gpioWrite(misoPin,HIGH);
+    gpioWrite(rdy,LOW);
     rc = senddatablock(buffer,fileLen,true);
     free(buffer);
-    gpioWrite(rdyPin,LOW);
+    gpioWrite(rdy,LOW);
     gpioTerminate();
-    fprintf(stderr, "senddatablock.c: Exiting with rc = %x\n",rc);
+    printf("senddatablock.c: Exiting with rc = %x\n",rc);
     return rc;
 }

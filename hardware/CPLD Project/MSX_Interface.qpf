@@ -18,14 +18,13 @@
 #
 # Quartus II 64-Bit
 # Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
-# Date created = 06:11:40  July 20, 2020
+# Date created = 03:26:01  February 10, 2017
 #
 # -------------------------------------------------------------------------- #
 
 QUARTUS_VERSION = "13.0"
-DATE = "06:11:40  July 20, 2020"
+DATE = "03:26:01  February 10, 2017"
 
 # Revisions
 
-PROJECT_REVISION = "MSXPInterface10"
 PROJECT_REVISION = "MSXInterfacev17"

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,16 +30,15 @@
 ;|===========================================================================|
 ;
 ; File history :
-; 1.0    : I/O procotol rewritten to support /wait signal on the MSXPi
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
 ; 0.7    : Replaced CHKPIRDY retries to $FFFF
 ;          Removed the RESET when PI is not responding. This is now responsability
-;           of the calling function, which might opt to do something else.
+;          of the calling function, which might opt to do something else.
 ; 0.6c   : Initial version commited to git
 ;
-
+;
 ; Inlude file for other sources in the project
 ;
 ; ==================================================================
@@ -54,80 +53,42 @@
 ; SENDIFCMD            |
 ;-----------------------
 SENDIFCMD:
-            out     (CONTROL_PORT1),a       ; Send data, or command
+            out     (CONTROL_PORT1),a  ; Send data, or command
             ret
 
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-      push  bc
-      ld    b,128
-CHKPIRDY_DELAY:
-      djnz  CHKPIRDY_DELAY
-      pop   bc
-CHKPIRDY_POLL_RPI:
-      in    a,(CONTROL_PORT1)
-      or    a
-      jr    nz,CHKPIRDY_POLL_RPI
-      ret
+            push    bc
+            ld      bc,$ffff
+CHKPIRDY0:
+            in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
+            or       a
+            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
+                                       ; for next command/byte
+            dec     bc                 ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+CHKPIRDYNOTOK:
+            scf
+CHKPIRDYOK:
+            pop     bc
+            ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            di                          ; disable interrupts in case /wait is too long
-            call    CHKPIRDY
-            in      a,(DATA_PORT1)      ; read byte
-            ei
-            ret                         ; return in a the byte received
+            in      a,(DATA_PORT1)     ; read byte
+            ret                        ; return in a the byte received
 
 ;-----------------------
 ; PIWRITEBYTE          |
 ;-----------------------
 PIWRITEBYTE:
-            di
-            push    af
-            call    CHKPIRDY
-            pop     af
-            out     (DATA_PORT1),a       ; send data, or command
-            ei
-            ret
-
-; an attempt to address the transmission errors when RPi signals floast too much
-PIREADBYTESEC:
-            push   hl
-PIREADBYTESEC0:
-            call   PIREADBYTE
-            ld     l,a
-            xor    CRC
-            ld     h,a
-            call   PIREADBYTE
-            cp     h
-            jr     z,PIREADBYTESEC_OK
-            ld     a,RESEND
-            call   PIWRITEBYTE
-            jr     PIREADBYTESEC0
-PIREADBYTESEC_OK:
-            ld     a,ENDTRANSFER
-            call   PIWRITEBYTESEC
-            ld     a,l
-            pop    hl
-            ret
-
-; an attempt to address the transmission errors when RPi signals floast too much
-PIWRITEBYTESEC:
-            push   af
-            call   PIWRITEBYTE
-            xor    CRC
-            call   PIWRITEBYTE
-            call   PIREADBYTE
-            cp     ENDTRANSFER
-            jr     z,PIWRITEBYTESEC_OK
-            pop    af
-            jr     PIWRITEBYTESEC
-PIWRITEBYTESEC_OK:
-            pop    af
+            out     (DATA_PORT1),a     ; send data, or command
             ret
 
 ;-----------------------
@@ -135,6 +96,6 @@ PIWRITEBYTESEC_OK:
 ;-----------------------
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
-            jr      PIREADBYTE
+            in      a,(DATA_PORT2)
+            ret
 
-INCLUDE "debug.asm"

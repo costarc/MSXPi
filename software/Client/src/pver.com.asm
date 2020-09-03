@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 0.9.                                                            |
 ;|                                                                           |
-;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,7 +31,7 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 1.0    : For MSXPi interface with /buswait support
+; 0.9.0  : Updated code to support new v0.9 logic
 
         ORG     $0100
 
@@ -39,35 +39,34 @@
         LD      HL,HWVER
         CALL    PRINT
         IN      A,(CONTROL_PORT2)
-        CP      10
-        JR      C,DESCHWVER
-        LD      A,9
-        JR      DESCHWVER
+        CALL    DESCHWVER
+
 ; Print msxpi-server version
-;        ld      bc,COMMAND_END - COMMAND
-;        ld      hl,COMMAND
-;        call    DOSSENDPICMD
-;        call    PIREADBYTE    ; read return code
-;        cp      RC_WAIT
-;        call    z,CHKPIRDY
-;        call    PRINTPISTDOUT
+        LD      BC,4
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
 
-; Print MSXPi ROM version
-;        CALL    SEARCHMSXPISLOT
-;        JR      NC,PVERHWNF
-;load slot number into IY
-;        PUSH    AF
-;        POP     IY
-; address to call (MSXPIVER)
-; This function will print the full boot messages in the screen
-;        LD      IX,$7607
-;        CALL    CALSLT
-;        JP      0
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
-PVERHWNF:
-;        LD      HL,PVERHWNFSTR
-;        CALL    PRINT
-;        JP      0
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
 
 DESCHWVER:
         ld      hl,iftable
@@ -108,11 +107,13 @@ ifv3:   DB      "(0011) Limited 10-samples PCB, with EPROM, EPM3064ALC-44","$"
 ifv4:   DB      "(0100) Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits mode","$"
 ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44","$"
 ifv6:   DB      "(0110) Wired up prototype, with EPROM, EPM7128SLC-84","$"
-ifv7:   DB      "(0111) General Release Rev.4, EPM3064ALC-44","$"
-ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84 (not released)","$"
-ifv9:   DB      "(1001) General Release Verson 1.0 with support to /Wait signal. EPM3064ALC-44","$"
+ifv7:   DB      "(0111) General Release v0.7 Rev.4 - Rev.7, EPM3064ALC-44","$"
+ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84","$"
+ifv9:   DB      "(1001) General Release V1.1, EPM3064ALC44-10, EEPROM AT28C256","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
+
+COMMAND:DB      "PVER"
 
 HWVER:  DB      "Interface version:"
         DB      TEXTTERMINATOR
@@ -133,6 +134,6 @@ INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-COMMAND:     DB      "pdir"
-COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
-COMMAND_END: EQU $
+
+
+

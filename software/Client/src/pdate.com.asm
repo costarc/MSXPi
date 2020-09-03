@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
-;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,8 +31,8 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 1.0    : For MSXPi interface with /buswait support
-
+; 0.9.0  : Changes to supoprt new transfer logic
+;
 ;Parameters:    C = 2BH (_SDATE)
 ;HL = Year 1980...2079
 ;D = Month (1=Jan...12=Dec)
@@ -48,49 +48,76 @@
 ;Results:       A = 00H if time was valid
 
 ; Start of command - You may not need to change this
-        org     $0100
-        ld      bc,COMMAND_END - COMMAND
-        ld      hl,COMMAND
-        call    DOSSENDPICMD
-        call    PIREADBYTE    ; read return code
-        cp      RC_WAIT
-        call    z,CHKPIRDY
-        CALL    PDATE
-        CALL    PRINTPISTDOUT
-        RET
+
+        ORG     $0100
+
+        LD      BC,5
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
+
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
+
+        CALL    SETCLOCK
+        JP      PRINTPISTDOUT
+
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
 ; --------------------------------
-PDATE:
+SETCLOCK:
 ; set date
-
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      L,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      H,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      D,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      E,A
         LD      C,$2B
         CALL    BDOS
 
 ; set time
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      H,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      L,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      D,A
-        CALL    PIREADBYTE
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         LD      E,A
         LD      C,$2D
         CALL    BDOS
         RET
 
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
+; Replace with your command name here
+COMMAND:  DB      "PDATE"
 
 ; --------------------------------------
 ; End of your command
@@ -105,6 +132,6 @@ INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-COMMAND:     DB      "pdate"
-COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
-COMMAND_END: EQU $
+
+
+

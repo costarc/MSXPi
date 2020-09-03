@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,7 +30,8 @@
 ;|===========================================================================|
 ;
 ; File history :
-; 1.0    : I/O re-written to support /wait signal
+; 0.9    : Simplification of block transfers routines.
+;          Removed some deprecated routines.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -40,114 +41,181 @@
 ; 0.6c   : Initial version commited to git
 ;
 
-; Inlude file for other sources in the project
+; Restore communication with Pi by sending ABORT commands
+; Until RPi responds with READY.
 
-;-----------------------
-; SYNCH                |
-;-----------------------
-SYNCH:
-            push    bc
-            push    de
-            ld      a,RESET
-            call    SENDIFCMD
-            call    CHKPIRDY
-            ld      bc,3
-            ld      de,CHKPICMD
-            call    SENDPICMD
-            pop     de
-            pop     bc
-            ret     c
-            call    PIEXCHANGEBYTE
-            ret     c
-            cp      READY
-            ret     z
-            cp      ABORT
-            scf
-            ret     z
-            cp      SENDNEXT
-            jr      nz, SYNCH
-            ret
+PSYNC:  
+        CALL    TRYABORT
+        RET     C
+        LD      BC,4
+        LD      DE,PINGCMD
+        CALL    SENDPICMD
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_SUCCNOSTD
+        JR      NZ,PSYNC
+        RET
 
-CHKPICMD:   DB      "SYN",0
+TRYABORT:
+        LD      A,4
+        CALL    SNSMAT
+        BIT     5,A
+        RET     Z
+        LD      A,STARTTRANSFER
+        CALL    PIEXCHANGEBYTE
+        CP      READY
+        RET     Z
+        CP      SENDNEXT
+        JR      NZ,TRYABORT
+        LD      A,1
+        CALL    PIEXCHANGEBYTE
+        XOR     A
+        CALL    PIEXCHANGEBYTE
+        LD      A,'X'
+        CALL    PIEXCHANGEBYTE
+        CALL    PIEXCHANGEBYTE
+        OR      A
+        RET
 
-RECVDATABLOCK_OLD:
-        push    hl
-        ex      de,hl   ; Received CMD address in DE, but need it in HL
-        call    RECVDATABLOCK
-        ex      de,hl
-        pop     hl
+PINGCMD: DB      "ping",0
+
+RESYNC:
+        LD      A,STARTTRANSFER
+        CALL    PIEXCHANGEBYTE
+        CP      READY
+        JR      NZ,RESYNC
+        RET
+
+; Input:
+; A = byte to calculate CRC
+; HL' = Current CRC 
+; Output:
+; HL' = CRC
+; 
+CRC16:
+        exx
+        xor     h
+        ld      h,a
+        ld      b,8
+rotate16:
+        add     hl,hl ; 11t - rotate crc left one
+        jr      nc, nextbit16 ; 12/7t - only xor polyonimal if msb set
+        ld      a,h ; 4t
+        xor     $10 ; 7t - high byte with $10
+        ld      h,a ; 4t
+        ld      a,l ; 4t
+        xor     $21 ; 7t - low byte with $21
+        ld      l,a ; 4t - hl now xor $1021
+nextbit16:
+        djnz rotate16 ; 13/8t - loop over 8 bits
+        exx
         ret
+
+;-----------------------
+; SENDPICMD            |
+;-----------------------
+; Send a command to Raspberry Pi
+; Input:
+;   de = should contain the command string
+;   bc = number of bytes in the command string
+; Output:
+;   Flag C set if there was a communication error
+SENDPICMD:
+; Save flag C which tells if extra error information is required
+		call    SENDDATABLOCK
+        ret
+
 ;-----------------------
 ; RECVDATABLOCK        |
 ;-----------------------
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
+; It will return with return code ENDTRANSFER when
+;    size of block = zero
 ; Input:
-;   hl = memory address to write the received data
+;   de = memory address to write the received data
 ; Output:
 ;   Flag C set if error
 ;   A = error code
-;   hl = Original address if routine finished in error,
-;   hl = Next current address to write data when terminated successfully
+;   BC = number of bytes received, 0 if finished transfer
+;   de = Original address if routine finished in error,
+;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
 RECVDATABLOCK:
+        call    RESYNC
+
+RECVDATABLOCK0:
+
+; CLEAR CRC and save block size
+
+        exx
+        ld      hl,$ffff
+        exx
+
 ;Get number of bytes to transfer
         call    READDATASIZE
         ld      a,b
         or      c
-        scf
+        ld      a,ENDTRANSFER
         ret     z
-; CLEAR CRC and save block size
-        ld      d,0   ; crc
-        push    bc
-        push    hl
+        ld      a,c
+        call    CRC16
+        ld      a,b
+        call    CRC16
+; Get number of attempts
+        call    PIEXCHANGEBYTE
+        ld      l,a     ; number of attempts
+        call    CRC16
+        push    de
+        push    bc      ; blocksize 
 
 RECVDATABLOCK1:
-        call    PIREADBYTE
-        ld      (hl),a
-        xor     d
-        ld      d,a
-        inc     hl
+
+; send info that msx is in transfer mode
+        call    PIEXCHANGEBYTE
+        ld      (de),a
+        call    CRC16
+        inc     de
 		dec     bc
         ld      a,b
         or      c
         jr      nz,RECVDATABLOCK1
 
-; Now send the CRC
+; Now exchange CRC
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,RECVDATABLOCK_CRCERROR
+        ld      a,h
+        call    PIEXCHANGEBYTE
+        cp      h
+        jr      nz,RECVDATABLOCK_CRCERROR
+        exx
 
-        ld      a,d
-        call    PIWRITEBYTE
-
-; And read the Return Code back
-
-        CALL    PIREADBYTE
-        CP      RC_SUCCESS
-        jr      nz,RECVDATABLOCK_EXIT_ERR
-
-RECVDATABLOCK2:
-; Discard HL in stack, because we want to return current memory address in HL
-        pop     bc
 ;Return number of bytes read
         pop     bc
+; Discard de, because we want to return current memory address
+        pop     af
+        ld      a,RC_SUCCESS
         or      a
         ret
 
 ; Return de to original value and flag error
-RECVDATABLOCK_EXIT_ERR:
-        pop     hl
-        pop     bc
+RECVDATABLOCK_CRCERROR:
+        exx
+        pop     bc             ; restore blocksize
+        pop     de             ; restore original buffer address
+        ld      a,l            ; get number of attemps
+        dec     a
+        ld      l,a
+        or      a
+        jr      nz,RECVDATABLOCK  ; try again
+        ld      a,RC_CRCERROR
         scf
         ret
 
-SENDDATABLOCK_DE:
-SENDPICMD:
-        push    hl
-        ex      de,hl   ; Received CMD address in DE, but need it in HL
-        call    SENDDATABLOCK
-        ex      de,hl
-        pop     hl
-        ret
 ;-------------------
 ; SENDDATABLOCK    |
 ;-------------------
@@ -156,386 +224,89 @@ SENDPICMD:
 ; This routine expects PI to send SENDNEXT control byte
 ; Input:
 ;   bc = number of byets to send
-;   hl = memory to start reading data
+;   de = memory to start reading data
 ; Output:
 ;   Flag C set if error
 ;   A = error code
-;   hl = Original address if routine finished in error,
-;   hl = Next current address to read if finished successfully
+;   de = Original address if routine finished in error,
+;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 SENDDATABLOCK:
-        call    SENDDATASIZE
-; clear D to calculate CRC using simple xor oepration
-        ld      d,0
-        push    hl
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      SENDNEXT
+        scf
+        ld      a,RC_OUTOFSYNC
+        ret     nz
+
+; MSX is synced with PI, then send size of block to transfer
+        ld      a,c
+        call    PIWRITEBYTE
+        ld      a,b
+        call    PIWRITEBYTE
+
+; clear H to calculate CRC using simple xor oepration
+        ld      h,0
+        push    de
 
 ; loop sending bytes until bc is zero
 SENDDATABLOCK1:
-        ld      a,(hl)
-        ld      e,a
-        xor     d
-        ld      d,a
-        ld      a,e
+        ld      a,(de)
+        ld      l,a
+        xor     h
+        ld      h,a
+        ld      a,l
         call    PIWRITEBYTE
-        inc     hl
+        inc     de
         dec     bc
         ld      a,b
         or      c
         jr      nz,SENDDATABLOCK1
 
 ; Finished sending block of data
-; Now send CRC
-        ld      a,d
-        call    PIWRITEBYTE
+; Now exchange CRC
 
-; And read the Return Code back
-        CALL    PIREADBYTE
-        CP      RC_SUCCESS
-        jr      nz,SENDDATABLOCK_EXIT_ERR
-; Discard de, because we want to return current memory address in HL
+        ld      a,h
+        call    PIEXCHANGEBYTE
+
+; Compare CRC received with CRC calcualted
+
+        cp      h
+        jr      nz,SENDDATABLOCK_CRCERROR
+
+; Discard de, because we want to return current memory address
         pop     af
         ld      a,RC_SUCCESS
         or      a
         ret
 
 ; Return de to original value and flag error
-SENDDATABLOCK_EXIT_ERR:
-        pop     hl
-        scf
-        ret
-
-;-------------------
-; SECRECVDATA      |
-;-------------------
-; 21/03/2017
-; Read data in 512 bytes blocks
-; This routine expects PI to send SENDNEXT control byte
-; Input:
-;   de = memory address to store data
-; Output:
-;   Flag C set if error
-; -------------------------------------------------------------
-SECRECVDATA:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        scf
-        ret     nz
-
-;Get number of bytes to transfer
-        call    READDATASIZE
-
-SECRECVDATA0:
-; save remaining bytes qty
-        push    bc
-        ld      a,GLOBALRETRIES
-SECRECVDATARETRY:
-; retries
-        push    af
-        push    de
-        call    RECVDATABLOCK
-        jr      nc,SECRECVDATA1
+SENDDATABLOCK_CRCERROR:
         pop     de
-        pop     af
-        dec     a
-        jr      nz,SECRECVDATARETRY
-
-SECRECVDATAERR:
-        pop     af
+        ld      a,RC_CRCERROR
         scf
         ret
 
-SECRECVDATA1:
-        pop     af
-        pop     af
-;get remaining bytes to transfer
-        pop     hl
-        ld      bc,512
-        sbc     hl,bc
-        jr      c,SECRECVDATAEND
-        jr      z,SECRECVDATAEND
-        ld      b,h
-        ld      c,l
-        jr      SECRECVDATA0
-
-; File load successfully.
-; Return C reseted, and A = filetype
-SECRECVDATAEND:
-        or      a               ;reset c flag
-        ret
-
-;-------------------
-; SECSENDDATA      |
-;-------------------
-; 21/03/2017
-; Read data in 512 bytes blocks
-; This routine expects PI to send SENDNEXT control byte
-; Input:
-;   bc = total number of bytes to send
-;   de = memory address to read data
-; Output:
-;   Flag C set if error
-; -------------------------------------------------------------
-SECSENDDATA:
-        call    CHECKBUSY
-        ret     c
-
-;Get number of bytes to transfer
-        call    SENDDATASIZE
-        ret     c
-
-SECSENDDATA0:
-; save remaining bytes qty
-        push    bc
-        ld      a,GLOBALRETRIES
-SECSENDDATARETRY:
-; retries
-        push    af
-        push    de
-        call    SENDDATABLOCK
-        jr      nc,SECSENDDATA1
-        pop     de
-        pop     af
-        dec     a
-        jr      nz,SECSENDDATARETRY
-
-SECSENDDATAERR:
-        pop     af
+; Return de to original value and flag error
+SENDDATABLOCK_OFFSYNC:
+        ld      a,RC_OUTOFSYNC
         scf
-        ret
-
-SECSENDDATA1:
-        pop     af
-        pop     af
-;get remaining bytes to transfer
-        pop     hl
-        ld      bc,512
-        sbc     hl,bc
-        jr      c,SECSENDDATAEND
-        jr      z,SECSENDDATAEND
-        ld      b,h
-        ld      c,l
-        jr      SECSENDDATA0
-
-; File load successfully.
-; Return C reseted, and A = filetype
-SECSENDDATAEND:
-        or      a               ;reset c flag
         ret
 
 READDATASIZE:
-        call    PIREADBYTE
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
         ld      c,a
-        call    PIREADBYTE
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
         ld      b,a
         ret
 
 SENDDATASIZE:
         ld      a,c
-        call    PIWRITEBYTE
-        ld      a,b
-        call    PIWRITEBYTE
-        ret
-
-;-------------------
-; DOWNLOADDATA     |
-;-------------------
-; Load data using configurable block size.
-; Every call will read next block until data ends.
-; Input:
-;   A  = 1 to show dots for every 256 bytes
-;   BC = block size to transfer
-;   DE = Buffer to store data
-; Output:
-;   Flag C: Set if occurred and error during transfer,such as CRC
-;        Z: Set if end of data
-;           Unset if there is still data
-;        A: Error code
-;           A = error code, or
-;           A = RC_SUCCESS - block transfered, there is more data
-;           A = ENDTRANSFER - end of transfer, no more data.
-;
-; Modifies: AF,BC,DE,HL
-;
-DOWNLOADDATA:
-; save option to show dots
-        ld      l,a
-
-; Synch start of transfer
-        ld      a,STARTTRANSFER
-        call    PIEXCHANGEBYTE
-        ret     c
-        cp      ENDTRANSFER
-        ret     z
-        cp      STARTTRANSFER
-; Inexpected control code received.
-        ret     nz
-; Pi was not expecting this, then error
-
-; now send block size
-        ld      a,c
         call    PIEXCHANGEBYTE
         ld      a,b
         call    PIEXCHANGEBYTE
-
-; And received Pi info if there is still data or if data has ended
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      ENDTRANSFER
-        ret     z
-
-; Maybe the remaining data size is smaller than a block.
-; Because of that, we now read back the actual block size that should be read
-
-        call    READDATASIZE
-
-RETRYLOOP:
-
-; Initialize crc checker
-        ld      h,0
-
-; start rading the data
-READDLOOP:
-        ld      a,l
-        or      a
-        jr      z,READDLOOP2
-        inc     a
-        or      a
-        jr      nz,READDLOOP1
-        inc     a
-        ld      l,a
-        ld      a,"."
-        call    PUTCHAR
-        jr      READDLOOP2
-READDLOOP1:
-        ld      l,a
-READDLOOP2:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      (de),a
-        xor     h
-        ld      h,a
-        inc     de
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,READDLOOP
-; now exchange CRC with Pi
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        cp      h
-        ld      a,RC_SUCCESS
-        ret     z
-        ld      a,RC_CRCERROR
-        ret
-
-;-------------------
-; UPLOADDATA     |
-;-------------------
-; TO-DO
-UPLOADDATA:
-        ret
-
-;-------------------
-; LOADBINPROG      |
-;-------------------
-; Load a .bin program in BASIC environment
-LOADBINPROG:
-        ld      a,STARTTRANSFER
-        call    PIEXCHANGEBYTE
-        cp      STARTTRANSFER
-        scf
-; why this here?? ->        ccf
-        ret     nz
-
-; get filesize from PI and put in bc
-        call    READDATASIZE
-
-; Read file header and check if it is BASIC binary program
-        ld      a,SENDNEXT
-       	call    PIEXCHANGEBYTE
-
-; Read start address
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      e,a
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      d,a
-
-; Discard END address
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-
-; Read EXEC address
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      l,a
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        ld      h,a
-        push    hl
-        call    LOADBINBLOCKS
-        pop     hl
-        ret
-
-;Read 512 bytes at a time
-LOADBINBLOCKS:
-        push    bc
-        ld      a,GLOBALRETRIES
-LOADBINRETRY:
-        push    af
-        call    RECVDATABLOCK
-        jr      nc,LOADBIN1
-        pop     af
-        dec     a
-        jr      nz,LOADBINRETRY
-        pop     bc
-        ld      a,RC_CRCERROR
-        ret
-
-LOADBIN1:
-		ld      a,'.'
-        call    PUTCHAR
-        pop     af
-
-; Restore number of bytes left
-        pop     hl
-
-        sbc     hl,bc
-        jr      c,LOADBINEND
-        jr      z,LOADBINEND
-        ld      b,h
-        ld      c,l
-        jr      LOADBINBLOCKS
-LOADBINEND:
-        ld      a,ENDTRANSFER
-        call    PIEXCHANGEBYTE
-        cp      ENDTRANSFER
-        ret     z
-        ld      a,RC_OUTOFSYNC
-        SCF
-        ret
-
-CHECKBUSY:
-        push    bc
-        ld      b,BUSYRETRIES
-CHECKBUSY1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        jr      z,CHECKBUSY3
-        cp      ABORT
-        jr      z,CHECKBUSY2
-        ld      a,RESET
-        call    SENDIFCMD
-        djnz    CHECKBUSY1
-CHECKBUSY2:
-        SCF
-CHECKBUSY3:
-        pop     bc
         ret
 
 ;-----------------------
@@ -543,9 +314,6 @@ CHECKBUSY3:
 ;-----------------------
 PRINT:
         push    af
-        push    bc
-        push    de
-PRINT0:
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
         jr      Z,PRINTEXIT
@@ -560,10 +328,9 @@ PRINT0:
 PRINT1:
         call	PUTCHAR		;put a character
         INC     hl
-        jr      PRINT0
+        pop     af
+        jr      PRINT
 PRINTEXIT:
-        pop     de
-        pop     bc
         pop     af
         ret
 
@@ -578,8 +345,6 @@ PRINTNLINE:
 ; PRINTNUMBER          |
 ;-----------------------
 PRINTNUMBER:
-        push    af
-        push    bc
         push    de
         ld      e,a
         push    de
@@ -594,8 +359,6 @@ PRINTNUMBER:
         AND     0FH
         call    PRINTDIGIT
         pop     de
-        pop     bc
-        pop     af
         ret
 
 PRINTDIGIT:
@@ -612,140 +375,95 @@ PRINTNUM1:
         call    PUTCHAR
         ret
 
+
+; =================================================================
+; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
+; Inputs: (PRINTPISTDOUT0)
+;  E = 0 - Print data to screen
+;      $ff - Do not print
+; Output:
+; HL' = CRC16
+; A = Return Code (RC_SUCCESS or RC_CRCERROR)
+;
+; Changes: AF,BC,E,L,HL',BC'
+; =================================================================
 PRINTPISTDOUT:
-PRINTPI0:
+        call    RESYNC
+        
+        ld      e,0
+
+PRINTPISTDOUT0:
+; CLEAR CRC and save block size
+
+        exx
+        ld      hl,$ffff
+        exx
+
+;Get number of bytes to transfer
         call    READDATASIZE
-        ld      d,0
+        ld      a,b
+        or      c
+        ld      a,ENDTRANSFER
+        ret     z
+        ld      a,c
+        call    CRC16
+        ld      a,b
+        call    CRC16
+; Get number of attempts
+        call    PIEXCHANGEBYTE
+        ld      l,a     ; number of attempts
+        call    CRC16
+        push    de
+        push    bc      ; blocksize 
+
 PRINTPI1:
-        call    PIREADBYTE
-        ld      e,a
-        xor     d
-        ld      d,a
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        push    af
+        call    CRC16
+        pop     af
+        ld      l,a
         ld      a,e
+        cp      $ff
+        jr      z,PRINTPI3          ; nostdout - not printing to screen
+        ld      a,l
         cp      10
         jr      nz,PRINTPI2
         call    PUTCHAR
         ld      a,13
 PRINTPI2:
         call    PUTCHAR
+PRINTPI3:
         dec     bc
         ld      a,b
         or      c
         jr      nz,PRINTPI1
-        ld      a,d           ; send crc
-        call    PIWRITEBYTE
-        call    PIREADBYTE    ; receive return code, but ignore it.
+
+; Now exchange CRC
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,PRINTPI4
+        ld      a,h
+        call    PIEXCHANGEBYTE
+        cp      h
+        jr      nz,PRINTPI4
+        ld      a,RC_SUCCESS
+        jr      PRINTPI5
+PRINTPI4: 
+        ld      a,RC_CRCERROR
+PRINTPI5:
+        exx
         ret
 
 NOSTDOUT:
-        call    READDATASIZE
-        push    hl
-        ld      h,0
-NOSTDOUT1:
-        call    PIREADBYTE
-        xor     h
-        ld      h,a
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,NOSTDOUT1
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        pop     hl
-        ret
-
-SEARCHMSXPISLOT:
-        di
-        call    RSLREG
-        ld      (confatual),a
-        CALL    PRINTNUMBER
-        OR      A
-        RET
-        xor     a
-        ld      hl,EXPTBL
-        ld      b,4
-loopbusca:
-        ld      (slotatual),a
-        ld      (subsatual),a
-        bit     7,(hl)
-        jr      nz,slotsecund
-        call    TESTMSXPI
-        jr      c,fimbusca
-loopbus_1:
-        inc     hl
-        ld      a,(slotatual)
-        inc     a
-        djnz    loopbusca
-naoachou:
-        ld      a,(confatual)
-        call    WSLREG
-        ei
-        and     a
-        ret
-fimbusca:
-        ld      a,(confatual)
-        call    WSLREG
-        ld      a,(subsatual)
-        ei
-        scf
-        ret
-slotsecund:
-        push    bc
-        push    hl
-        ld      e,0
-        ld      b,4
-slotsec_1:
-        ld      a,e
-        rla
-        rla
-        and     $0C
-        ld      e,a
-        ld      a,(slotatual)
-        and     $03
-        or      e
-        set     7,a
-        ld      (subsatual),a
-        call    TESTMSXPI
-        jr      c,fimslotsec
-        inc     e
-        djnz    slotsec_1
-fimslotsec:
-        pop     hl
-        pop     bc
-        jp      nc,loopbus_1
-        jr      fimbusca
-
-TESTMSXPI:
-        push    bc
         push    de
-        push    hl
-        ld      hl,$7716
-        ld      de,TESTMSXPISTR
-        ld      bc,5
-TESTMSXPIL:
-        ld      a,(subsatual)
-        call    RDSLT
-        ex      de,hl
-        cpi
-; BC < 0 means found MSXPi in this slot
-        jr      c,TESTMSXPIFOUND
-
-; Z is set, means (hl) = a
-; test next character
-        jr      nz,TESTMSXPINOTFOUND
-        inc     de
-        ex      de,hl
-        jr      TESTMSXPIL
-
-; did not found MSXPi in this slot
-TESTMSXPINOTFOUND:
-        or      a
-TESTMSXPIFOUND:
-        pop     hl
+        ld      e,$ff
+        call    PRINTPISTDOUT0
         pop     de
-        pop     bc
-        ei
         ret
+        
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer HL to hex
         PUSH    DE
@@ -809,19 +527,35 @@ ATOHERR:
 
 ; Evaluate CALL Commands to check for optional parameters
 ; Returns Buffer address in HL (or HL=0000 if parameter not found)
-; DE = address of command - after all parameters
-; BC = number of characters
+; Input:
+;  DE = Call full command (after the ")
+; Output:
+;  A = Outout type (as below cases)
+;  DE = Point to start of command to send to RPi (pdir in the case below)
+;  HL = Address of buffer to store data if stdout = 2
+;
+; Cases:
+; call mspxi("pdir")  -> will print the output
+; call mspxi("0,pdir")  -> will not print the output
+; call msxpi("1,pdir")  -> will print the output to screen
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
+; 
 PARMSEVAL:
         INC     DE
         LD      A,(DE)
         DEC     DE
         CP      ','
-        JR      NZ,PARMSEVAL1
+        LD      A,'1'
+        JR      NZ,PARMSEVAL1      ; no output device privided, USE DEFAULT
+        LD      A,(DE)
+        PUSH    AF                 ; save output device
         INC     DE
         INC     DE
-        DEC     BC
-        DEC     BC
+        DEC     B
+        DEC     B
+        POP     AF
 PARMSEVAL1:
+        PUSH    AF
 ; Check if a buffer address has been passed
         PUSH    DE
         INC     DE
@@ -830,49 +564,31 @@ PARMSEVAL1:
         INC     DE
         LD      A,(DE)
         CP      ','
-        JR      NZ,PARMSEVAL2
+        JR      NZ,PARMSEVAL2       ; no buffer address provided
+
 ; CALL has a buffer address in this format:
 ; CALL MSXPI("XXXX,COMMAND")
 ; Move pointer to start of command
-        INC     DE
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
-        DEC     BC
+        INC     DE                  ; Point to command (pdir)
+        DEC     B                   ;
+        DEC     B
+        DEC     B
+        DEC     B
+        DEC     B
         POP     HL
-; Convert ascii chars POINTED BY DE to hex. Return value in HL
+; Convert ascii chars pointed by HL to hex. Return value in HL
 ; Flag C is set if there was an error
         CALL    STRTOHEX
+        POP     AF
         RET
+
 ; CALL did not have buffer address.
 ; We set this case with 00 n the stack
 PARMSEVAL2:
+        POP     DE 
+        POP     AF
 ;Buffer not passed in CALL, then we set adddress to 0000
-        POP     DE
         LD      HL,0
-        OR      A
-        RET
-
-; -------------------------------------------------------------
-; CHECK_ESC
-; -------------------------------------------------------------
-; This routine is required by the communication
-; protocol to allow user to ESCAPE from a blocked state
-; when Pi stops responding MSX for some reason.
-; Note that this routine must be called by you in your code.
-; -------------------------------------------------------------
-CHECK_ESC:
-        LD      B,7
-        IN      A,($AA)
-        AND     11110000b
-        OR      B
-        OUT     ($AA),A
-        IN      A,($A9)
-        BIT     2,A
-        JR      NZ,CHECK_ESC_END
-        SCF
-CHECK_ESC_END:
         RET
 
 TESTMSXPISTR:
@@ -883,4 +599,7 @@ slotatual:
         DB      00
 subsatual:
         DB      00
+
+
+
 

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8                                                             |
+;| Version : 0.9                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,43 +31,40 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
+; 0.9    : Rewritten to support new block download logic
 
         ORG     $0100
 
-LOADROMPROG:
         LD      BC,6
-        LD      DE,LOADROMCMD
+        LD      DE,COMMAND
         CALL    DOSSENDPICMD
-        JR      C,PRINTPIERR
 
-WAITLOOP:
-        IN      A,(CONTROL_PORT1)
-        OR      A
-        JR      NZ,WAITLOOP
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
 
-  ;  check return code
-        CALL    PIREADBYTE
+WAIT_RELEASED:
+
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCNOSTD
-        JR      Z,LOADREADY
         CP      RC_SUCCESS
-        JR      NZ,PRINTPIERR
-LOADREADY:
+        JP      Z,MAINPROGRAM
+
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
 
         LD      HL,LOADPROGRESS
         CALL    PRINT
         CALL    LOADROM
 
 LOADROMPROG1:
-        CALL    PIREADBYTE
-        PUSH    HL
-        PUSH    AF
-        CALL    PRINTPISTDOUT
-        POP     AF
-        POP     HL
-        CP      ENDTRANSFER
-;        JP      NZ,0
 
         PUSH    HL
         LD      HL,0
@@ -76,25 +73,29 @@ LOADROMPROG1:
         POP     HL
         JP      (HL)
 
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
-
 ;-----------------------
 ; LOADROM              |
 ;-----------------------
 LOADROM:
-; Will load the ROM directly on the destination page in $4000
+; Will load the ROM directly on the destiantion page in $4000
 ; Might be slower, but that is what we have so far...
 ;Get number of bytes to transfer
         LD      DE,$4000
+LOADROM0:
+        LD      A,'.'
+        CALL    PUTCHAR
         CALL    RECVDATABLOCK
-        JR      C,LOADPROGERR
+        RET     C
+        CP      ENDTRANSFER
+        JR      Z,LOADROMEND
+        CP      RC_SUCCESS
+        SCF
+        RET     NZ
+        JR      LOADROM0
 ; File load successfully.
 ; Return C reseted, and A = filetype
 LOADROMEND:
-        LD      HL,($4002)    ; ROM exec address
-        LD      A,ENDTRANSFER
+        LD      HL,($4002)    ;ROM exec address
         OR      A             ;Reset C flag
         RET
 
@@ -104,7 +105,12 @@ LOADPROGERR:
         SCF
         RET
 
-LOADROMCMD:
+EXITSTDOUT:
+        CALL    PRINTNLINE
+        CALL    PRINTPISTDOUT
+        jp      0
+
+COMMAND:
         DB      "PLOADR"
 
 PICOMMERR:

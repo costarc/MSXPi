@@ -1,22 +1,44 @@
-MSXPi v1.0 Rev. 0 Release Notes
-===============================
-This release constain changes only to the schematics, and CPLD logic. No changes were done to the software.
+Please refer to https://github.com/costarc/MSXPi for more documentation and updates.
 
-Disclaimer: Please be advised that this release was not proof-tested. I made the changes to the schematic following the previous proved release v0.7 rev7, but I did not send for fabrication. Validate the schematic yourself before fabricating large quantities.
 
-The full list of changes are:
+MSXPi v1.0 Build 20200822.000 Release Notes
+===========================================
+- Fixed bug in datatransfer retries
+- Fixed bug in MSX-DOS inihrd routine
+- Changes to boot messages and CALL help messages
+- Added new bios.asm /bios.rom. Now EPROM Bank 1 contains only BIOS, Bank 2 contains MSX-DOS1 and BIOS. Switch using jumpers A14 (Bank1) / A15 (Bank2)
 
-- Schematic ported to Kicad (no longer using Eagle)
-- Schematics was updated to supporgt the /Wait signal
-- CPLD logic update to drive /Wait to tri-state (to avoid MSX to freeze)
-- LED is driven by the SPI_CS signal (needed that CPLD pin for the /Wait signal)
+
+MSXPi v1.0 Release Notes
+========================
+This release has some major changes to the hardware and softwar components.
+
+On the hardware side:
+
+- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tri-state)
+- Schematics was updated to supporgt the /wait signal
+- CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
+- LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
 - Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
 - Added pull-up resistors for all Raspbery Pins used in the design
 - Added by-pass capacitors for all CIs.
 
-Note that software was not update or changed for this release, therefore /Wait feature is not being used.
-The changes in the schematic are to (try) to fix RPi issue with floating signals. I noticed that the signals were floating randomly, causing unstable and unpredictable behaviour in the MSXPi.
+On the software side:
 
+- The server component was mostly rewritten to be more modular
+- Every command now can be implemented in a self-contained function inside msxpi-server.py
+- No changes are needed in the main loop of the program
+- Main data trasnfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
+- Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
+- All clients reqritten based on a simple and better communication logic
+- Addition of new program AT28C256.COM to write roms to the new EEPROM in the interface
+
+Other non functional changes includes a new design using KiCad 5 instead of Eagle, some more jumpers to support new EEPROM features.
+
+Limitations and bugs
+- To write a rom to the eeprom, you may need to specify the slot number where the MSXPi is plugged - there is not, currently, an automated and failsafe method to detect on whaat slot the epprom is connected.
+- The CPLD logic and softwares are not benefiting of the /wait signal (future improvement)
+- When booted from the MSX-DOS1 on Raspberry Pi disk image, the command PCOPY.COM cannot copy files from remote locations.
 
 MSXPi v0.8.2 Release Notes
 ==========================
@@ -57,13 +79,3 @@ List of features
 - EPROM socketed to allow removal for updates using an EPROM programmer
 - Two 16K EPROM banks switched by jumper (can have two different ROM versions on same EPROM)
 - Compatible with all RPi models
-
-
-Known Bugs
-----------
-
-Problem: Occasionally, there might happen that some commands get out of sync. This can be identified by screen being filled with dots.
-Workaround: This happens more frequently when lots of reads and writes are happening, such as when running msxpiupd.bat. Try running the command again. If RPi does not recover, then reboot RPi.
-
-Problem: Sometimes commands returns "Communication Error".
-Workaround: Run PRESET and PDIR, sometimes it recovers from the problem. If it does not, restart RPi.

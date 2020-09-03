@@ -43,8 +43,8 @@
 #include <stdbool.h>
 
 #define TZ (0)
-#define version "0.8.1"
-#define build "20171106.00087"
+#define version "0.9.0"
+#define build "20200812.00000"
 
 #define HOMEPATH "/home/pi/msxpi"
 

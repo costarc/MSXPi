@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                             |
+;| Version : 0.9.0                                                           |
 ;|                                                                           |
-;| Copyright (c) 2015-2020 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,29 +31,48 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 1.0    : For MSXPi interface with /buswait support
+; 0.9.0  : Update code to supoprt new v0.9 logic
 
-        org     $0100
-        ld      bc,COMMAND_END - COMMAND
-        ld      hl,COMMAND
-        call    DOSSENDPICMD
-        call    PIREADBYTE    ; read return code
-        cp      RC_WAIT
-        call    z,CHKPIRDY
-        jp      PRINTPISTDOUT
+        ORG     $0100
+
+        LD      BC,4
+
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
+
+WAIT_LOOP:
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        CP      RC_WAIT
+        JR      NZ,WAIT_RELEASED
+        CALL    CHKPIRDY
+        JR      WAIT_LOOP
+
+WAIT_RELEASED:
+
+        CP      RC_FAILED
+        JP      Z,PRINTPISTDOUT
+        CP      RC_SUCCESS
+        JP      Z,MAINPROGRAM
 
 PRINTPIERR:
-        ld      hl,PICOMMERR
-        jp      PRINT
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+MAINPROGRAM:
+        JP      PRINTPISTDOUT
+
+COMMAND:DB      "PSET"
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
+
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
-COMMAND:     DB      "pset"
-COMMAND_SPC: DB " " ; Do not remove this space, do not add code or data after this buffer.
-COMMAND_END: EQU $
+
+
+
