@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.2"
-build   = "20200903.000"
+build = "20200903.009"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -935,7 +935,6 @@ def resync():
     print("resync:looping")
     msxbyte,busa,buswr = piexchangebyte(READY)
     while (msxbyte != STARTTRANSFER):
-        print(hex(msxbyte))
         msxbyte,busa,buswr = piexchangebyte(READY)
     return
 
