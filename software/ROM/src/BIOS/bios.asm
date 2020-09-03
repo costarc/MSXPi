@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.1                                                           |
+;| Version : 0.9.2                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,7 +31,7 @@
 ;
 ; File history :
 ; 0.1    : initial version
-; 0.9.1  : Changes to supoprt new transfer logic
+; 0.9    : Changes to supoprt new transfer logic
 
 TEXTTERMINATOR: EQU 0
 BDOS:           EQU $F37D
@@ -439,8 +439,8 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      "MSXPi ROM v0.9.1 "
-build:  DB      "20200822.000"
+        DB      "MSXPi ROM v0.9.2 "
+build:  DB      "20200903.009"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10

@@ -78,7 +78,7 @@
 
 #define TZ (0)
 #define version "0.8.1"
-#define build "20171229.00088"
+#define build "20171106.00087"
 
 //#define V07SUPPORT
 #define DISKIMGPATH "/home/pi/msxpi/disks"
