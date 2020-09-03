@@ -75,7 +75,7 @@ END MSXInterface;
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
