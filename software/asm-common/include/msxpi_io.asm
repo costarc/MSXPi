@@ -62,6 +62,12 @@ CHKPIRDY:
                                        ; for next command/byte
             ret
 
+; These routines are the MSXPi BIOS. 
+; The routines will check the MSXPi Interface version before transfering data.
+; For versions 0.7 (ID 8 and lower) where /wait is not supported, the routine 
+; will run chkpirdy to poll when RPi is ready.
+; On versions 1.0 and more recent (ID 9 on higher) the /wait is enabled
+; by the interface, therefore no need to check status.
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
