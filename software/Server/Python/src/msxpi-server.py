@@ -935,7 +935,6 @@ def resync():
     print("resync:looping")
     msxbyte,busa,buswr = piexchangebyte(READY)
     while (msxbyte != STARTTRANSFER):
-        print(hex(msxbyte))
         msxbyte,busa,buswr = piexchangebyte(READY)
     return
 
