@@ -75,7 +75,7 @@ END MSXInterface;
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -97,14 +97,14 @@ architecture rtl of MSXInterface is
 	 signal msxbusbuf_s    : std_logic_vector(16 downto 0);
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
-    signal rpi_enabled_s  : std_logic := '0';
-    signal msxpiserver    : std_logic := '0';
-    signal msxpi_state    : std_logic := '1';
+    --signal msxpiserver    : std_logic := '0';
+    signal msxpi_state    : std_logic := '0';
     
 begin
 
     WAIT_n <= wait_n_s;
-    SPI_CS <= not rpi_enabled_s;
+    -- SPI_CS <= not rpi_enabled_s;
+	 SPI_CS <= not msxpi_state;
     BUSDIR_n <= '0' when (readoper_s = '1' and (A = CTRLPORT1 or A = CTRLPORT2 or A = DATAPORT1)) else '1';
 
     readoper_s   <= not (IORQ_n or RD_n);
@@ -112,7 +112,7 @@ begin
 
     rpi_en_s    <= '1' when (A = DATAPORT1 and (writeoper_s = '1' or readoper_s = '1')) else '0';
 
-    D <= "0000000" & rpi_enabled_s when (readoper_s = '1' and A = CTRLPORT1) else     
+    D <= "0000000" & msxpi_state when (readoper_s = '1' and A = CTRLPORT1) else     
          D_buff_pi_s when readoper_s = '1' and (A = DATAPORT1 or A = DATAPORT2) else
           "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
           "ZZZZZZZZ";
@@ -121,35 +121,33 @@ begin
     -- If it has not started, /wait signal should not be enabled to allow MSX to start
     -- Once it has ticked one time, we know msxpi-server has started,
     -- then /wait can start to be driven by that rpi_rdy signal.
-    process(SPI_RDY)
-    begin
-        if (rising_edge(SPI_RDY)) then
-            msxpiserver <= '1';
-         end if;
-    end process;
+    --process(SPI_RDY)
+    --begin
+    --    if (rising_edge(SPI_RDY)) then
+    --        msxpiserver <= '1';
+    --     end if;
+    --end process;
 
     -- Triggers the interface
     process(rpi_en_s, SPI_RDY)
     begin
         if (SPI_RDY = '0') then
-            rpi_enabled_s <= '0';
+            msxpi_state <= '0';
             wait_n_s <= 'Z';
         elsif (rising_edge(rpi_en_s)) then
             wait_n_s <= '0';
-            rpi_enabled_s <= '1';
+            msxpi_state <= '1';
 				msxbusbuf_s <= WR_n & A & D;
          end if;
     end process;
 
     -- Initialize serial/paralell process
-    process(rpi_enabled_s,SPI_SCLK)
+    process(msxpi_state,SPI_SCLK)
     begin
-        if (rpi_enabled_s = '0') then
+        if (msxpi_state = '0') then
             state <= start;
-            msxpi_state <= '0';
         elsif rising_edge(SPI_SCLK) then
             state <= transferring;
-            msxpi_state <= '1';
         end if;
     end process;
     

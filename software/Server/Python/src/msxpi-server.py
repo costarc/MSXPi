@@ -130,7 +130,7 @@ def piexchangebyte(byte_out):
 
     # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
-    #time.sleep(0.001)
+    time.sleep(0.001)
     GPIO.output(rdyPin, GPIO.HIGH)
     GPIO.output(misoPin, GPIO.LOW)
 

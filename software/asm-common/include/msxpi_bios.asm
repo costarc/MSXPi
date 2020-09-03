@@ -32,6 +32,8 @@
 ; File history :
 ; 0.9    : Simplification of block transfers routines.
 ;          Removed some deprecated routines.
+;          Using crc16 for error check.
+;          Retries implemented and configurable on the server side.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
