@@ -75,7 +75,7 @@ END MSXInterface;
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -94,11 +94,12 @@ architecture rtl of MSXInterface is
     signal writeoper_s    : std_logic;
     signal rpi_en_s       : std_logic;
     signal msxbus_s       : std_logic_vector(16 downto 0);
+	 signal msxbusbuf_s    : std_logic_vector(16 downto 0);
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
     signal rpi_enabled_s  : std_logic := '0';
     signal msxpiserver    : std_logic := '0';
-    signal msxpi_state    : std_logic := '0';
+    signal msxpi_state    : std_logic := '1';
     
 begin
 
@@ -111,7 +112,7 @@ begin
 
     rpi_en_s    <= '1' when (A = DATAPORT1 and (writeoper_s = '1' or readoper_s = '1')) else '0';
 
-    D <= "0000000" & msxpi_state when (readoper_s = '1' and A = CTRLPORT1) else     
+    D <= "0000000" & rpi_enabled_s when (readoper_s = '1' and A = CTRLPORT1) else     
          D_buff_pi_s when readoper_s = '1' and (A = DATAPORT1 or A = DATAPORT2) else
           "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
           "ZZZZZZZZ";
@@ -136,6 +137,7 @@ begin
         elsif (rising_edge(rpi_en_s)) then
             wait_n_s <= '0';
             rpi_enabled_s <= '1';
+				msxbusbuf_s <= WR_n & A & D;
          end if;
     end process;
 
@@ -156,7 +158,7 @@ begin
     process(SPI_SCLK)
     begin
          if (state = start) then
-            msxbus_s <= WR_n & A & D;
+            msxbus_s <= msxbusbuf_s;
         elsif rising_edge(SPI_SCLK) then
             D_buff_pi_s <= D_buff_pi_s(6 downto 0) & SPI_MISO;
             SPI_MOSI <= msxbus_s(16);

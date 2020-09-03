@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 1.0                                                          |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,6 +30,7 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 1.0    : New logic for CPLD and re-write of bios
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -60,27 +61,27 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            push    bc
-            ld      bc,$ffff
+            ;push    bc
+            ;ld      bc,32000
 CHKPIRDY0:
+            ;dec     bc
+            ;ld      a,b
+            ;or      c
+            ;jr      nz,CHKPIRDY0
+            ;pop     bc
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
-            or       a
-            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
+            or      a
+            jr      nz,CHKPIRDY       ; rdy signal is zero, pi app fsm is ready
                                        ; for next command/byte
-            dec     bc                 ; pi not ready, wait a little bit
-            ld      a,b
-            or      c
-            jr      nz,CHKPIRDY0
-CHKPIRDYNOTOK:
-            scf
-CHKPIRDYOK:
-            pop     bc
             ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
+            in      a,(CONTROL_PORT2)
+            cp      9
+            call    c,CHKPIRDY
             in      a,(DATA_PORT1)     ; read byte
             ret                        ; return in a the byte received
 
@@ -88,6 +89,11 @@ PIREADBYTE:
 ; PIWRITEBYTE          |
 ;-----------------------
 PIWRITEBYTE:
+            push    af
+            in      a,(CONTROL_PORT2)
+            cp      9
+            call    c,CHKPIRDY
+            pop     af
             out     (DATA_PORT1),a     ; send data, or command
             ret
 
@@ -96,6 +102,9 @@ PIWRITEBYTE:
 ;-----------------------
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
-            in      a,(DATA_PORT2)
+            in      a,(CONTROL_PORT2)
+            cp      9
+            call    c,CHKPIRDY
+            in      a,(DATA_PORT2)     ; read byte
             ret
 
