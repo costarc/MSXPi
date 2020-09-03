@@ -3,6 +3,12 @@ MSXPi is a hardware interface and software solution to allow MSX computers to co
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
 
+MSXPi v1.0.1 Release Notes
+==========================
+- CPLD Logic logic re-written to save space in the cpld. 
+- Implemented support for 8 bits bus transfer - RPi now received WR_n , Port Address, Data.
+- Fixed bugs in code, and added support for interfaces with or without /wait enabled.
+
 MSXPi v1.0 Release Notes
 ========================
 This release has some major changes to the hardware and software components.
