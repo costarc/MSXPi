@@ -75,7 +75,7 @@ END MSXInterface;
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -102,7 +102,12 @@ architecture rtl of MSXInterface is
     
 begin
 
-    WAIT_n <= wait_n_s;
+    -- For PCB v1.0 and newer
+    --WAIT_n <= wait_n_s;
+	 
+	 -- For PCB v0.7
+    WAIT_n <= 'Z';
+	 
     -- SPI_CS <= not rpi_enabled_s;
 	 SPI_CS <= not msxpi_state;
     BUSDIR_n <= '0' when (readoper_s = '1' and (A = CTRLPORT1 or A = CTRLPORT2 or A = DATAPORT1)) else '1';
