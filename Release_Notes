@@ -8,6 +8,8 @@ Major release with support for the new interface v1.1. for this reason, includes
 - Implemented support for 17 bits bus transfer - RPi now receives MSX WR_n, Port Address and Data (17 bits total).
 - Fixed bugs in code, and added support for interfaces with or without /wait enabled.
 
+Known bugs: The MSXPi-DOS drivers are very bugged, and it's use is not recommended at this time. Recommend usage is to use MSXPi commands from another MSX-DOS2 disk.
+
 MSXPi v1.0 Build 20200822.000 Release Notes
 ===========================================
 - Fixed bug in datatransfer retries
