@@ -7,13 +7,12 @@ MSXPi v1.0 Release Notes
 ========================
 >> Please use branch "release/v1.0" for MSXPi versions from 0.7 up to v1.0 Rev 0" <<
 
-This release has some major changes to the hardware and software components.
+This release has some major changes to the hardware and software components. Even though new features are added, I made an effort to keep it compatible with the v0.7 designs, thus allowing for this softwre release to be used also with the previous interfaces.
 
 On the hardware side:
 
-- Replaced the EPROM 27C256 by AT28C256 EEPROM (Electronically erasable/rewritable)
 - Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
-- Schematics was updated to supporgt the /wait signal
+- Schematics was updated to supporgt the /wait signal (future use)
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
 - Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
