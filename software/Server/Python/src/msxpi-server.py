@@ -18,8 +18,8 @@ import select
 import base64
 from random import randint
 
-version = "0.9.2"
-build = "20200904.010"
+version = "1.0.0"
+build = "20200904.000"
 BLKSIZE = 8192
 
 # Pin Definitons
