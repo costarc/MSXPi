@@ -130,8 +130,7 @@ MSXPi project is structured around three directories:
     /documents - documentation
 
 The branches are structured as follows:
-
-
+```
 ----/software 
     |---- 
     |    | 
@@ -185,3 +184,4 @@ The branches are structured as follows:
     |         /Fabrication
     |
 ----/Documentation
+```
