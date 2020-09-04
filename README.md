@@ -51,9 +51,12 @@ MSXPi v1.1 Release Notes
 ==========================
 Major release with support for the new interface v1.1. for this reason, includes big changes to the software and cpld logic.
 
+- Replaced the EPROM 27C256 by EEPROM AT28C256 (re-writable from MSX-DOS)
 - CPLD Logic logic re-written to save space in the cpld and add features.
 - Implemented support for 17 bits bus transfer - RPi now receives MSX WR_n, Port Address and Data (17 bits total).
 - Fixed bugs in code, and added support for interfaces with or without /wait enabled.
+- Addition of new program AT28C256.COM to write roms to the new EEPROM directly from the MSX-DOS
+
 
 MSXPi v1.0 Release Notes
 ========================
@@ -61,7 +64,7 @@ This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
+- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tri-state)
 - Schematics was updated to supporgt the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
@@ -77,12 +80,11 @@ On the software side:
 - Main data transfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
 - Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
 - All clients rewritten based on a simple and better communication logic
-- Addition of new program AT28C256.COM to write roms to the new EEPROM in the interface
 - Many improvements and bug fixes
 - More stable softwre architecture
 
 
-Other non functional changes includes a new design using KiCad 5 instead of Eagle, some more jumpers to support new EEPROM features.
+Other non functional changes includes a new design using KiCad 5 instead of Eagle.
 
 Limitations and bugs
 - To write a rom to the eeprom, you may need to specify the slot number where the MSXPi is plugged - there is not, currently, an automated and failsafe method to detect on whaat slot the epprom is connected.
