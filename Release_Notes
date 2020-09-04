@@ -1,5 +1,12 @@
 Please refer to https://github.com/costarc/MSXPi for more documentation and updates.
 
+MSXPi v1.1 Release Notes
+==========================
+Major release with support for the new interface v1.1. for this reason, includes big changes to the software and cpld logic.
+
+- CPLD Logic logic re-written to save space in the cpld and add features.
+- Implemented support for 17 bits bus transfer - RPi now receives MSX WR_n, Port Address and Data (17 bits total).
+- Fixed bugs in code, and added support for interfaces with or without /wait enabled.
 
 MSXPi v1.0 Build 20200822.000 Release Notes
 ===========================================
@@ -11,7 +18,7 @@ MSXPi v1.0 Build 20200822.000 Release Notes
 
 MSXPi v1.0 Release Notes
 ========================
-This release has some major changes to the hardware and softwar components.
+This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
