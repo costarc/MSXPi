@@ -131,57 +131,58 @@ MSXPi project is structured around three directories:
 
 The branches are structured as follows:
 ```
-----/software 
-    |---- 
-    |    | 
-    |    /asm-common
-    |    |----
-    |    |    |
-    |    |    /include
-    |    |    
-    |    |
-    |    /ROM
-    |    |----
-    |    |    |
-    |    |    /src
-    |    |    |----
-    |    |         |
-    |    |         /MSX-DOS
-    |    |         |
-    |    |         |--/BIOS
-    |    |
-    |    |
-    |    /Client
-    |    |----
-    |    |    |
-    |    |    /src
-    |    |
-    |    /Server
-    |    |----
-    |         |
-    |         /Python
-    |         |----
-    |         |    |
-    |         |    /include
-    |         |    |
-    |         |    /src
-    |         |
-    |         /c (deprecated)
-    |         |----
-    |              |
-    |              /include
-    |              |
-    |              /src
-    |          
-----/hardware 
-    |---- 
-    |    | 
-    |    /CPLD Project
-    |    |
-    |    /Schematic
-    |    |----
-    |         |
-    |         /Fabrication
-    |
-----/Documentation
-```
+MSXPi
+|-------/software 
+|       |---- 
+|       |    | 
+|       |    /asm-common
+|       |    |----
+|       |    |    |
+|       |    |    /include
+|       |    |    
+|       |    |
+|       |    /ROM
+|       |    |----
+|       |    |    |
+|       |    |    /src
+|       |    |    |----
+|       |    |         |
+|       |    |         /MSX-DOS
+|       |    |         |
+|       |    |         |--/BIOS
+|       |    |
+|       |    |
+|       |    /Client
+|       |    |----
+|       |    |    |
+|       |    |    /src
+|       |    |
+|       |    /Server
+|       |    |----
+|       |         |
+|       |         /Python
+|       |         |----
+|       |         |    |
+|       |         |    /include
+|       |         |    |
+|       |         |    /src
+|       |         |
+|       |         /c (deprecated)
+|       |         |----
+|       |              |
+|       |              /include
+|       |              |
+|       |              /src
+|       |          
+|-------/hardware 
+|       |---- 
+|       |    | 
+|       |    /CPLD Project
+|       |    |
+|       |    /Schematic
+|       |    |----
+|       |         |
+|       |         /Fabrication
+|       |
+|-------/Documentation
+``
