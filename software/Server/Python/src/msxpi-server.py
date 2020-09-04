@@ -394,7 +394,6 @@ def pdir(path):
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
-    print "pdir:starting"
 
     try:
         if (msxbyte == SENDNEXT):
@@ -872,13 +871,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
-            
+            '''
             print "dos_rds:deviceNumber=",sectorInfo[0]
             print "dos_rds:numsectors=",sectorInfo[1]
             print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:initialSector=",sectorInfo[3]
             print "dos_rds:blocksize=",blocksize
-            
+            '''
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 buf = drive0Data[initdataindex:initdataindex+blocksize]
@@ -937,13 +936,13 @@ def dos(parms=''):
             piexchangebyte(blocksize % 256)
             piexchangebyte(blocksize / 256)
 
-            
+            '''
             print "dos_sct:deviceNumber=",sectorInfo[0]
             print "dos_sct:numsectors=",sectorInfo[1]
             print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:initialSector=",sectorInfo[3]
             print "dos_sct:blocksize=",blocksize
-            
+            '''
 
             piexchangebyte(RC_SUCCESS)
 
@@ -955,45 +954,11 @@ def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
 
 def resync():
-    print("sync")
+    #print("sync")
     msxbyte,busa,buswr = piexchangebyte(READY)
     while (msxbyte != STARTTRANSFER):
-        print(hex(msxbyte))
         msxbyte,busa,buswr = piexchangebyte(READY)
     return
-
-def recvcmd(cmdlength=128):
-    buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
-    
-    msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        print("recvcmd:Out of sync with MSX:",hex(msxbyte))
-        rc = RC_OUTOFSYNC
-    else:
-        dsL,busa,buswr = piexchangebyte(SENDNEXT)
-        dsM,busa,buswr = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
-        
-        if datasize > cmdlength:
-            print("recvcmd:Error - Command too long")
-            return [RC_INVALIDCOMMAND,datasize]
-
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
-            msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
-            buffer.append(msxbyte)
-            crc ^= msxbyte
-            bytecounter += 1
-
-        msxcrc,busa,buswr = piexchangebyte(crc)
-        if (msxcrc != crc):
-            rc = RC_CRCERROR
-
-    #print "recvdatablock:exiting with rc = ",hex(rc)
-    return [rc,buffer]
 
 def ptest():
     global ptestcnt
