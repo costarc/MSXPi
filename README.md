@@ -3,17 +3,22 @@ MSXPi is a hardware interface and software solution to allow MSX computers to co
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
 
+The code is release in branches as they achieve an acceptable maturity level. Use of of the "release/vn.m" branches that is more appropriate to your interface.
+
+release/v1.0   => New software architecture for all interfaces from v0.7 up to v1.0. Server and client software was re-written to support a new transfer protocol. More modular and easier to expand, consist of the basis for all future updates.
+
+release/v0.8.2 => Original and stable code for all interfaces v0.7. Can be used without need to reprogram the CPLD.
+
+
 MSXPi v1.0 Release Notes
 ========================
->> Please use branch "release/v1.0" for MSXPi versions from 0.7 up to v1.0 Rev 0" <<
+>> Please use branch release/v1.0 for MSXPi versions from 0.7 up to v1.0 Rev 0
 
 This release has some major changes to the hardware and software components. Even though new features are added, I made an effort to keep it compatible with the v0.7 designs, thus allowing for this softwre release to be used also with the previous interfaces.
 
 On the hardware side:
 
-- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
-- Schematics was updated to supporgt the /wait signal (future use)
-- CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
+- Added support to /wait signal in the interface (for future use)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
 - Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
 - Added pull-up resistors for all Raspbery Pins used in the design
