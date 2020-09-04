@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.2                                                           |
+;| Version : 1.0.0                                                      |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v0.9 (2017,2020)
+; MSXPi Driver v1.0.0 (2017,2020)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
