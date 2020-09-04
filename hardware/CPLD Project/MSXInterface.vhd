@@ -94,7 +94,7 @@ architecture rtl of MSXInterface is
     signal writeoper_s    : std_logic;
     signal rpi_en_s       : std_logic;
     signal msxbus_s       : std_logic_vector(16 downto 0);
-	 signal msxbusbuf_s    : std_logic_vector(16 downto 0);
+    signal msxbusbuf_s    : std_logic_vector(16 downto 0);
     signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
     signal wait_n_s       : std_logic := 'Z';
     signal msxpiserver    : std_logic := '0';
