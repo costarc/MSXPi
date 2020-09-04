@@ -3,7 +3,7 @@ MSXPi is a hardware interface and software solution to allow MSX computers to co
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
 
-The code is release in branches as they achieve an acceptable maturity level. Use of of the "release/vn.m" branches that is more appropriate to your interface.
+The code is release in branches as they achieve an acceptable maturity level. Use of of the "release/version" branches that is more appropriate to your interface.
 
 release/v1.0   => New software architecture for all interfaces from v0.7 up to v1.0. Server and client software was re-written to support a new transfer protocol. More modular and easier to expand, consist of the basis for all future updates.
 
