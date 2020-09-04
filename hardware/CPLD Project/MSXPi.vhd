@@ -55,7 +55,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.msxpi_package.all;
 
-ENTITY MSXInterface IS
+ENTITY MSXPi IS
 PORT ( 
     D           : INOUT STD_LOGIC_VECTOR(7 DOWNTO 0);
     A           : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
@@ -70,12 +70,12 @@ PORT (
     SPI_MOSI    : OUT STD_LOGIC;
     SPI_MISO    : IN STD_LOGIC;
     SPI_RDY     : IN STD_LOGIC);
-END MSXInterface;
+END MSXPi;
 
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -86,7 +86,7 @@ package msxpi_package is
         constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 end msxpi_package;
 
-architecture rtl of MSXInterface is
+architecture behaviour of MSXPi is
     type fsm_type is (start,transferring);
     signal state : fsm_type := start;
     
@@ -164,5 +164,5 @@ begin
             msxbus_s(16 downto 1) <= msxbus_s(15 downto 0);
         end if;
     end process;
-end rtl;
+end behaviour;
 
