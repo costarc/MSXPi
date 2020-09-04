@@ -18,9 +18,9 @@ import select
 import base64
 from random import randint
 
-version = "0.9.1"
-build   = "20200820.000"
-BLKSIZE = 1024
+version = "1.0.0"
+build = "20200904.000"
+BLKSIZE = 8192
 
 # Pin Definitons
 csPin   = 21
@@ -82,7 +82,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
@@ -92,41 +92,51 @@ def tick_sclk():
     GPIO.output(sclkPin, GPIO.LOW)
     #time.sleep(SPI_SCLK_LOW_TIME)
 
-def SPI_MASTER_transfer_byte(byte_out):
-    #print "transfer_byte:sending",hex(byte_out)
-    byte_in = 0
+def piexchangebyte(byte_out):
+    
+    GPIO.output(misoPin, GPIO.HIGH)
+    while(GPIO.input(csPin)):
+        pass
+
     tick_sclk()
+
+    # Read WR_n signal
+    GPIO.output(sclkPin, GPIO.HIGH)
+    #time.sleep(0.001)
+    buswr = GPIO.input(mosiPin)
+    GPIO.output(sclkPin, GPIO.LOW)
+
+    # Read A bus
+    busa = 0
+    for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
+        GPIO.output(sclkPin, GPIO.HIGH)
+        #time.sleep(0.001)
+        if GPIO.input(mosiPin):
+            busa |= bit
+        GPIO.output(sclkPin, GPIO.LOW)
+
+    # Read / Send D bus
+    busd = 0
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
         if (byte_out & bit):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
             GPIO.output(misoPin, GPIO.LOW)
-
         GPIO.output(sclkPin, GPIO.HIGH)
-        #time.sleep(SPI_SCLK_HIGH_TIME)
-        
+        #time.sleep(0.001)
         if GPIO.input(mosiPin):
-            byte_in |= bit
-    
+            busd |= bit
         GPIO.output(sclkPin, GPIO.LOW)
-        #time.sleep(SPI_SCLK_LOW_TIME)
 
-    tick_sclk()
-    #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
-    return byte_in
-
-def piexchangebyte(byte_out=0):
-    rc = RC_SUCCESS
-    
-    GPIO.output(rdyPin, GPIO.HIGH)
-    while(GPIO.input(csPin)):
-        pass
-
-    byte_in = SPI_MASTER_transfer_byte(byte_out)
+    # tick rdyPin once to flag to MSXPi that data is in the GPIO pins
     GPIO.output(rdyPin, GPIO.LOW)
+    #time.sleep(0.001)
+    GPIO.output(rdyPin, GPIO.HIGH)
+    GPIO.output(misoPin, GPIO.LOW)
 
-    #print "piexchangebyte: received:",hex(mymsxbyte)
-    return byte_in
+    #print("A,D,IO",hex(busa),hex(busd),buswr)
+
+    return busd,busa,buswr
 
 # Using CRC code from :
 # https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
@@ -153,39 +163,60 @@ def crc16(crc, c):
 
     return crc
 
-def recvdatablock():
+def recvdatablock(attempts=GLOBALRETRIES):
+
     buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
-    
-    msxbyte = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        print("recvdatablock:Out of sync with MSX")
-        rc = RC_OUTOFSYNC
-    else:
-        dsL = piexchangebyte(SENDNEXT)
-        dsM = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
+    rc = RC_FAILED
         
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
-            msxbyte = piexchangebyte(SENDNEXT)
+    #print "recvdatablock:Received blocksize =",datasize
+    
+    resync()
+
+    while (attempts > 0 and rc != RC_SUCCESS):
+        crc = 0xffff
+
+        dsL,busa,buswr = piexchangebyte(SENDNEXT)
+        dsM,busa,buswr = piexchangebyte(SENDNEXT)
+        thisblocksize = dsL + 256 * dsM
+
+        if thisblocksize == 0:
+            return ENDTRANSFER
+
+        piexchangebyte(attempts)
+
+        crc = crc16(crc,dsL)
+        crc = crc16(crc,dsM)
+        crc = crc16(crc,attempts)
+
+        bytecounter = 0
+        while(bytecounter < thisblocksize):
+            msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
             buffer.append(msxbyte)
-            crc ^= msxbyte
+            crc = crc16(crc,msxbyte)
             bytecounter += 1
 
-        msxcrc = piexchangebyte(crc)
-        if (msxcrc != crc):
+        msxcrcL,busa,buswr = piexchangebyte(crc % 256)
+        if msxcrcL != crc % 256:
+            attempts -= 1
             rc = RC_CRCERROR
+            print("RC_CRCERROR. Remaining attempts:",attempts)
+            resync()
+        else:
+            msxcrcH,busa,buswr = piexchangebyte(crc / 256)
+            if msxcrcH != crc / 256:
+                attempts -= 1
+                rc = RC_CRCERROR
+                print("RC_CRCERROR. Remaining attempts:",attempts)
+                resync()
+
+            else:
+                rc = RC_SUCCESS
 
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
-    global GLOBALRETRIES
-
     rc = RC_FAILED
     
     bufsize = len(buf)
@@ -198,21 +229,23 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
         if thisblocksize < 0:
             thisblocksize = 0
 
-    msxbyte = piexchangebyte(SENDNEXT)
+    resync()
 
-    if (msxbyte != SENDNEXT):
-        print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte)
-        return RC_OUTOFSYNC
-    else:
+    while (attempts > 0 and rc != RC_SUCCESS):
+
+        crc = 0xffff
+
         piexchangebyte(thisblocksize % 256)
         piexchangebyte(thisblocksize / 256)
         if thisblocksize == 0:
             return ENDTRANSFER
+    
+        piexchangebyte(attempts)
+        
+        crc = crc16(crc,thisblocksize % 256)
+        crc = crc16(crc,thisblocksize / 256)
+        crc = crc16(crc,attempts)
 
-    piexchangebyte(attempts)
-
-    while (attempts > 0 and rc != RC_SUCCESS):
-        crc = 0xffff
         bytecounter = 0
         while(bytecounter < thisblocksize):
             pibyte = ord(buf[bufpos+bytecounter])
@@ -220,17 +253,19 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
             crc = crc16(crc,pibyte)
             bytecounter += 1
 
-        msxcrcL = piexchangebyte(crc % 256)
+        msxcrcL,busa,buswr = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
             attempts -= 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
+            resync()
         else:
-            msxcrcH = piexchangebyte(crc / 256)
+            msxcrcH,busa,buswr = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
                 attempts -= 1
                 rc = RC_CRCERROR
                 print("RC_CRCERROR. Remaining attempts:",attempts)
+                resync()
 
             else:
                 rc = RC_SUCCESS
@@ -325,6 +360,8 @@ def ini_fcb(fname):
     piexchangebyte(msxdrive)
     for i in range(0,11):
         piexchangebyte(ord(msxfcbfname[i]))
+        print(msxfcbfname[i]),
+    print""
 
 def prun(cmd):
     piexchangebyte(RC_WAIT)
@@ -353,11 +390,10 @@ def prun(cmd):
     return rc
 
 def pdir(path):
-    msxbyte = piexchangebyte(RC_WAIT)
+    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
-    #print "pdir:starting"
 
     try:
         if (msxbyte == SENDNEXT):
@@ -398,7 +434,7 @@ def pdir(path):
     return rc
 
 def pcd(path):    
-    msxbyte = piexchangebyte(RC_WAIT)
+    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
     rc = RC_SUCCESS
     global psetvar
     basepath = psetvar[0][1]
@@ -508,13 +544,13 @@ def pcopy(path='',inifcb=True):
             sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
         else:
             if inifcb:
-                msxbyte = piexchangebyte(RC_SUCCESS)
+                msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
                 ini_fcb(fname_msx)
             else:
                 if filesize > 32768:
                     return RC_INVALIDDATASIZE
 
-                msxbyte = piexchangebyte(RC_SUCCESS)
+                msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
                 rc = senddatablock(buf,BLKSIZE,blocknumber)
@@ -529,14 +565,14 @@ def ploadr(path=''):
         sendstdmsg(RC_FAILED,"Pi:Error - Not valid 8/16/32KB ROM")
 
 def pdate(parms = ''):
-    msxbyte = piexchangebyte(RC_WAIT)
+    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
 
     rc = RC_FAILED
     
     if (msxbyte == SENDNEXT):
         now = datetime.datetime.now()
 
-        msxbyte = piexchangebyte(RC_SUCCESS)
+        msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
         if (msxbyte == SENDNEXT):
             piexchangebyte(now.year & 0xff)
             piexchangebyte(now.year >>8)
@@ -801,6 +837,8 @@ def dos(parms=''):
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
     rc = RC_SUCCESS
 
+    print("dos:",parms)
+
     try:
         if parms[:3] == 'INI': 
 
@@ -833,13 +871,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
-            """
+            '''
             print "dos_rds:deviceNumber=",sectorInfo[0]
             print "dos_rds:numsectors=",sectorInfo[1]
             print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:initialSector=",sectorInfo[3]
             print "dos_rds:blocksize=",blocksize
-            """
+            '''
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 buf = drive0Data[initdataindex:initdataindex+blocksize]
@@ -887,24 +925,24 @@ def dos(parms=''):
 
             piexchangebyte(RC_SUCCESS)
 
-            sectorInfo[0] = piexchangebyte(SENDNEXT)
-            sectorInfo[1] = piexchangebyte(SENDNEXT)
-            sectorInfo[2] = piexchangebyte(SENDNEXT)
-            byte_lsb = piexchangebyte(SENDNEXT)
-            byte_msb = piexchangebyte(SENDNEXT)
+            sectorInfo[0],busa,buswr = piexchangebyte(SENDNEXT)
+            sectorInfo[1],busa,buswr = piexchangebyte(SENDNEXT)
+            sectorInfo[2],busa,buswr = piexchangebyte(SENDNEXT)
+            byte_lsb,busa,buswr = piexchangebyte(SENDNEXT)
+            byte_msb,busa,buswr = piexchangebyte(SENDNEXT)
             sectorInfo[3] = byte_lsb + 256 * byte_msb
 
             blocksize = sectorInfo[1] * 512
             piexchangebyte(blocksize % 256)
             piexchangebyte(blocksize / 256)
 
-            """
+            '''
             print "dos_sct:deviceNumber=",sectorInfo[0]
             print "dos_sct:numsectors=",sectorInfo[1]
             print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:initialSector=",sectorInfo[3]
             print "dos_sct:blocksize=",blocksize
-            """
+            '''
 
             piexchangebyte(RC_SUCCESS)
 
@@ -916,44 +954,21 @@ def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
 
 def resync():
-    print("resync:looping")
-    msxbyte = piexchangebyte(READY)
-    while (msxbyte != ABORT):
-        msxbyte = piexchangebyte(READY)
+    #print("sync")
+    msxbyte,busa,buswr = piexchangebyte(READY)
+    while (msxbyte != STARTTRANSFER):
+        msxbyte,busa,buswr = piexchangebyte(READY)
     return
 
-def recvcmd(cmdlength=128):
-    buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
-    
-    msxbyte = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        print("recvcmd:Out of sync with MSX:",hex(msxbyte))
-        rc = RC_OUTOFSYNC
-    else:
-        dsL = piexchangebyte(SENDNEXT)
-        dsM = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
-        
-        if datasize > cmdlength:
-            print("recvcmd:Error - Command too long")
-            return [RC_INVALIDCOMMAND,datasize]
+def ptest():
+    global ptestcnt
+    byte_in,busa,buswr = piexchangebyte(ptestcnt)
+    print(hex(byte_in),chr(byte_in),bin(byte_in),"A=",hex(busa),"WR_n=",buswr)
+    ptestcnt += 1
+    if ptestcnt == 256:
+        ptestcnt = 0
 
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
-            msxbyte = piexchangebyte(SENDNEXT)
-            buffer.append(msxbyte)
-            crc ^= msxbyte
-            bytecounter += 1
-
-        msxcrc = piexchangebyte(crc)
-        if (msxcrc != crc):
-            rc = RC_CRCERROR
-
-    #print "recvdatablock:exiting with rc = ",hex(rc)
-    return [rc,buffer]
+    return [RC_FAILED,'']
 
 """ ============================================================================
     msxpi-server.py
@@ -994,15 +1009,22 @@ errcount = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
+GPIO.output(rdyPin, GPIO.HIGH)
+GPIO.output(misoPin, GPIO.LOW)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
+
+ptestcnt = 0
+
+#dos("INI 1")
 
 try:
     while True:
         try:
             print("st_recvcmd: waiting command")
-            rc = recvcmd()
+            rc = recvdatablock()
             print"Received:",rc[1]
+            #rc = ptest()
 
             if (rc[0] == RC_SUCCESS):
                 err = 0

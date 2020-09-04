@@ -1,3 +1,15 @@
+Please refer to https://github.com/costarc/MSXPi for more documentation and updates.
+
+MSXPi v1.1 Release Notes
+==========================
+Major release with support for the new interface v1.1. for this reason, includes big changes to the software and cpld logic.
+
+- CPLD Logic logic re-written to save space in the cpld and add features.
+- Implemented support for 17 bits bus transfer - RPi now receives MSX WR_n, Port Address and Data (17 bits total).
+- Fixed bugs in code, and added support for interfaces with or without /wait enabled.
+
+Known bugs: The MSXPi-DOS drivers are very bugged, and it's use is not recommended at this time. Recommend usage is to use MSXPi commands from another MSX-DOS2 disk.
+
 MSXPi v1.0 Build 20200822.000 Release Notes
 ===========================================
 - Fixed bug in datatransfer retries
@@ -8,12 +20,11 @@ MSXPi v1.0 Build 20200822.000 Release Notes
 
 MSXPi v1.0 Release Notes
 ========================
-This release has some major changes to the hardware and softwar components.
+This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Replaced the EPROM 27C256 by AT28C256 EEPROM (Electronically erasable/rewritable)
-- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
+- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tri-state)
 - Schematics was updated to supporgt the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
@@ -77,13 +88,3 @@ List of features
 - EPROM socketed to allow removal for updates using an EPROM programmer
 - Two 16K EPROM banks switched by jumper (can have two different ROM versions on same EPROM)
 - Compatible with all RPi models
-
-
-Known Bugs
-----------
-
-Problem: Occasionally, there might happen that some commands get out of sync. This can be identified by screen being filled with dots.
-Workaround: This happens more frequently when lots of reads and writes are happening, such as when running msxpiupd.bat. Try running the command again. If RPi does not recover, then reboot RPi.
-
-Problem: Sometimes commands returns "Communication Error".
-Workaround: Run PRESET and PDIR, sometimes it recovers from the problem. If it does not, restart RPi.

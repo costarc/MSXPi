@@ -14,7 +14,7 @@
 
 
 # The default values for assignments are stored in the file
-#		MSXInterfacev17_assignment_defaults.qdf
+#		MSXPIV11_assignment_defaults.qdf
 # If this file doesn't exist, and for assignments not listed, see file
 #		assignment_defaults.qdf
 
@@ -24,13 +24,12 @@
 
 set_global_assignment -name FAMILY MAX3000A
 set_global_assignment -name DEVICE "EPM3064ALC44-10"
-set_global_assignment -name TOP_LEVEL_ENTITY MSXInterface
+set_global_assignment -name TOP_LEVEL_ENTITY MSXPi
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "13.0 SP1"
-set_global_assignment -name PROJECT_CREATION_TIME_DATE "14:34:16  FEBRUARY 01, 2017"
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "08:21:56  SEPTEMBER 04, 2020"
 set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
 set_global_assignment -name USE_GENERATED_PHYSICAL_CONSTRAINTS OFF -section_id eda_palace
 
-set_global_assignment -name VHDL_FILE MSXInterface.vhd
 set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE AREA
 set_global_assignment -name OPTIMIZE_HOLD_TIMING OFF
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
@@ -78,3 +77,5 @@ set_location_assignment PIN_12 -to SPI_RDY
 set_location_assignment PIN_6 -to BUSDIR_n
 set_location_assignment PIN_8 -to WAIT_n
 
+
+set_global_assignment -name VHDL_FILE MSXPi.vhd

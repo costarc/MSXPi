@@ -33,15 +33,19 @@
 ; 0.1    : Initial version.
 
         ORG     $0100
-
-
-        xor     a
+        ld      b,0
+        di
 loop:
-        and     a
-        jp      m,ism
-        add     a,1
-        or      a
-        jr      nz,loop
+        ld     a,b
+        push   bc
+        call   PIEXCHANGEBYTE
+        call   PRINTNUMBER
+        pop    bc
+        inc    b
+        ld     a,b
+        or     a
+        jr     nz,loop
+        ei
         ret
 ism:
         call    PRINTNUMBER

@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 *.bin
+=======
+>>>>>>> dev
 *.swp
 *.bak
 .DS_Store
@@ -10,5 +13,6 @@ software/zout/**
 *.flock
 *.cdb
 *.hdb
+*.cdf
 *.db_info
 *.tmw_info
