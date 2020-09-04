@@ -149,7 +149,7 @@ MSXPi
 |       |    |         |
 |       |    |         /MSX-DOS
 |       |    |         |
-|       |    |         |--/BIOS
+|       |    |         /BIOS
 |       |    |
 |       |    |
 |       |    /Client
@@ -163,14 +163,14 @@ MSXPi
 |       |         /Python
 |       |         |----
 |       |         |    |
-|       |         |    /include
-|       |         |    |
 |       |         |    /src
 |       |         |
-|       |         /c (deprecated)
+|       |         /Shell
+|       |         |
+|       |         /systemd
+|       |         |
+|       |         /C (deprecated)
 |       |         |----
-|       |              |
-|       |              /include
 |       |              |
 |       |              /src
 |       |          
