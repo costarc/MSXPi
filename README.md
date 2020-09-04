@@ -29,11 +29,15 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 1. Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 2. Setup MSX with the client side software (MSX SD Card or disk)
 
+
 * Step 1: The easier way to setup the Raspberry Pi is to download the SD CARD image from a MSXPi release - latest image for release v0.8.2 and v1.0 can be found under: https://github.com/costarc/MSXPi/releases/download/v1.0.20200822.000/MSXPiv1.0Rev0_SDCard_Image.zip
 
-The login user and password are the default for Raspbian:
+The login user and password are the default for Raspbian: 
+
 user: pi
+
 password: raspberry
+
 
 * Step 2: Copy all MSXPi commands form the /software/target to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
@@ -91,20 +95,26 @@ MSXPi Branching strategy and Other information
 MSXPi Project is organized in a series of branches.
 Here is what you need to know to choose the right branch for your interface:
 
+
 Interfaces v0.7 (without reprogramming the CPLD) => use release branch 0.8.2 (release/v0.8.2)
+
 Interfaces v0.7 (if you can reprogram the CPLD)  => use any release branch 1.0.n (release/v1.0.n)
+
 Interfaces v1.0 (without reprogramming the CPLD) => use release branch 1.0 (release/v1.0)
+
 Interfaces v1.0 (if you can reprogram the CPLD)  => use release branch 1.0.1 (release/v1.0.1)
+
 Interfaces v1.1 => use release/v1.1. You can also use "master" or "dev", but those may be unstable.
 
+
 In general, development and distribution of code follows this process:
+
 
 dev --> master --> release
 
 dev - current devlopment branch. This is where latest tools are developed and tested. Code here might change overnight, and even several times a day. Things may nor work properly, so if you want something more usable, go to the master branch or dev_0.7. 
 
 master - current working stable release. This contains code for the branch under development, in a more mature state, but may not contain most current tools. 
-
 
 release/version - contains a major release, which should not change frequently but may receive fixes or important improvements over time.
 
@@ -120,6 +130,7 @@ MSXPi project is structured around three directories:
     /documents - documentation
 
 The branches are structured as follows:
+
 
 ----/software 
     |---- 
