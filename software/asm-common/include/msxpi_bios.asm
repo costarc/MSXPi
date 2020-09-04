@@ -124,7 +124,7 @@ nextbit16:
 ;   Flag C set if there was a communication error
 SENDPICMD:
 ; Save flag C which tells if extra error information is required
-		call    SENDDATABLOCK
+        call    SENDDATABLOCK
         ret
 
 ;-----------------------
@@ -179,7 +179,7 @@ RECVDATABLOCK1:
         ld      (de),a
         call    CRC16
         inc     de
-		dec     bc
+	dec     bc
         ld      a,b
         or      c
         jr      nz,RECVDATABLOCK1
@@ -204,7 +204,6 @@ RECVDATABLOCK1:
         or      a
         ret
 
-; Return de to original value and flag error
 RECVDATABLOCK_CRCERROR:
         exx
         pop     bc             ; restore blocksize
@@ -234,29 +233,38 @@ RECVDATABLOCK_CRCERROR:
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
 SENDDATABLOCK:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        scf
-        ld      a,RC_OUTOFSYNC
-        ret     nz
+        call   RESYNC
 
-; MSX is synced with PI, then send size of block to transfer
-        ld      a,c
-        call    PIWRITEBYTE
+; CLEAR CRC and save block size
+
+        exx
+        ld      hl,$ffff
+        exx
+
+;Get number of bytes to transfer
+        call    SENDDATASIZE
         ld      a,b
-        call    PIWRITEBYTE
+        or      c
+        ld      a,ENDTRANSFER
+        ret     z
+        ld      a,c
+        call    CRC16
+        ld      a,b
+        call    CRC16
 
-; clear H to calculate CRC using simple xor oepration
-        ld      h,0
-        push    de
+; Get number of attempts
+        call    PIEXCHANGEBYTE
+        ld      l,a     ; number of attempts
+        call    CRC16
+
+        push    de      ; buffer address
+        push    bc      ; blocksize 
 
 ; loop sending bytes until bc is zero
 SENDDATABLOCK1:
         ld      a,(de)
         ld      l,a
-        xor     h
-        ld      h,a
+        call    CRC16
         ld      a,l
         call    PIWRITEBYTE
         inc     de
@@ -267,24 +275,33 @@ SENDDATABLOCK1:
 
 ; Finished sending block of data
 ; Now exchange CRC
-
+        exx
+        ld      a,l
+        call    PIEXCHANGEBYTE
+        cp      l
+        jr      nz,SENDDATABLOCK_CRCERROR
         ld      a,h
         call    PIEXCHANGEBYTE
-
-; Compare CRC received with CRC calcualted
-
         cp      h
         jr      nz,SENDDATABLOCK_CRCERROR
+        exx
 
 ; Discard de, because we want to return current memory address
-        pop     af
+        pop     bc
+        pop     af    ; discard DE to return current buffer address
         ld      a,RC_SUCCESS
         or      a
         ret
 
-; Return de to original value and flag error
 SENDDATABLOCK_CRCERROR:
-        pop     de
+        exx
+        pop     bc             ; restore blocksize
+        pop     de             ; restore original buffer address
+        ld      a,l            ; get number of attemps
+        dec     a
+        ld      l,a
+        or      a
+        jr      nz,SENDDATABLOCK ; try again
         ld      a,RC_CRCERROR
         scf
         ret

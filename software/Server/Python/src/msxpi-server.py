@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.2"
-build = "20200903.009"
+build = "20200904.010"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -163,39 +163,60 @@ def crc16(crc, c):
 
     return crc
 
-def recvdatablock():
+def recvdatablock(attempts=GLOBALRETRIES):
+
     buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
+    rc = RC_FAILED
+        
+    #print "recvdatablock:Received blocksize =",datasize
     
-    msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        print("recvdatablock:Out of sync with MSX")
-        rc = RC_OUTOFSYNC
-    else:
+    resync()
+
+    while (attempts > 0 and rc != RC_SUCCESS):
+        crc = 0xffff
+
         dsL,busa,buswr = piexchangebyte(SENDNEXT)
         dsM,busa,buswr = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
-        
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
+        thisblocksize = dsL + 256 * dsM
+
+        if thisblocksize == 0:
+            return ENDTRANSFER
+
+        piexchangebyte(attempts)
+
+        crc = crc16(crc,dsL)
+        crc = crc16(crc,dsM)
+        crc = crc16(crc,attempts)
+
+        bytecounter = 0
+        while(bytecounter < thisblocksize):
             msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
             buffer.append(msxbyte)
-            crc ^= msxbyte
+            crc = crc16(crc,msxbyte)
             bytecounter += 1
 
-        msxcrc,busa,buswr = piexchangebyte(crc)
-        if (msxcrc != crc):
+        msxcrcL,busa,buswr = piexchangebyte(crc % 256)
+        if msxcrcL != crc % 256:
+            attempts -= 1
             rc = RC_CRCERROR
+            print("RC_CRCERROR. Remaining attempts:",attempts)
+            resync()
+        else:
+            msxcrcH,busa,buswr = piexchangebyte(crc / 256)
+            if msxcrcH != crc / 256:
+                attempts -= 1
+                rc = RC_CRCERROR
+                print("RC_CRCERROR. Remaining attempts:",attempts)
+                resync()
+
+            else:
+                rc = RC_SUCCESS
 
     #print "recvdatablock:exiting with rc = ",hex(rc)
     return [rc,buffer]
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
-    global GLOBALRETRIES
-
     rc = RC_FAILED
     
     bufsize = len(buf)
@@ -373,7 +394,7 @@ def pdir(path):
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
-    #print "pdir:starting"
+    print "pdir:starting"
 
     try:
         if (msxbyte == SENDNEXT):
@@ -817,6 +838,8 @@ def dos(parms=''):
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
     rc = RC_SUCCESS
 
+    print("dos:",parms)
+
     try:
         if parms[:3] == 'INI': 
 
@@ -849,13 +872,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
-            """
+            
             print "dos_rds:deviceNumber=",sectorInfo[0]
             print "dos_rds:numsectors=",sectorInfo[1]
             print "dos_rds:mediaDescriptor=",sectorInfo[2]
             print "dos_rds:initialSector=",sectorInfo[3]
             print "dos_rds:blocksize=",blocksize
-            """
+            
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 buf = drive0Data[initdataindex:initdataindex+blocksize]
@@ -914,13 +937,13 @@ def dos(parms=''):
             piexchangebyte(blocksize % 256)
             piexchangebyte(blocksize / 256)
 
-            """
+            
             print "dos_sct:deviceNumber=",sectorInfo[0]
             print "dos_sct:numsectors=",sectorInfo[1]
             print "dos_sct:mediaDescriptor=",sectorInfo[2]
             print "dos_sct:initialSector=",sectorInfo[3]
             print "dos_sct:blocksize=",blocksize
-            """
+            
 
             piexchangebyte(RC_SUCCESS)
 
@@ -932,9 +955,10 @@ def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
 
 def resync():
-    print("resync:looping")
+    print("sync")
     msxbyte,busa,buswr = piexchangebyte(READY)
     while (msxbyte != STARTTRANSFER):
+        print(hex(msxbyte))
         msxbyte,busa,buswr = piexchangebyte(READY)
     return
 
@@ -1027,11 +1051,13 @@ print "Starting MSXPi Server Version ",version,"Build",build
 
 ptestcnt = 0
 
+#dos("INI 1")
+
 try:
     while True:
         try:
             print("st_recvcmd: waiting command")
-            rc = recvcmd()
+            rc = recvdatablock()
             print"Received:",rc[1]
             #rc = ptest()
 
