@@ -1016,7 +1016,7 @@ print "Starting MSXPi Server Version ",version,"Build",build
 
 ptestcnt = 0
 
-#dos("INI 1")
+dos("INI 1")
 
 try:
     while True:
