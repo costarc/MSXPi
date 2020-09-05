@@ -53,7 +53,7 @@ PSYNC_LOCAL:
 TRYABORT_L:
         CALL    CHECK_ESC
         RET     C
-        LD      A,ABORT
+        LD      A,STARTTRANSFER
         CALL    PIEXCHANGEBYTE
         CP      READY
         JR      NZ,TRYABORT_L

@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "0.9.1"
-build   = "20200820.000"
+build = "20200905.001"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -121,6 +121,25 @@ def piexchangebyte(byte_out=0):
     GPIO.output(rdyPin, GPIO.HIGH)
     while(GPIO.input(csPin)):
         pass
+
+    byte_in = SPI_MASTER_transfer_byte(byte_out)
+    GPIO.output(rdyPin, GPIO.LOW)
+
+    #print "piexchangebyte: received:",hex(mymsxbyte)
+    return byte_in
+
+def piexchangebytewithtimeout(byte_out=0,twait=5):
+    rc = RC_SUCCESS
+    
+    t0 = time.time()
+    GPIO.output(rdyPin, GPIO.HIGH)
+    while((GPIO.input(csPin)) and (time.time() - t0) < twait):
+        pass
+
+    t1 = time.time()
+
+    if ((t1 - t0) > twait):
+        return ABORT
 
     byte_in = SPI_MASTER_transfer_byte(byte_out)
     GPIO.output(rdyPin, GPIO.LOW)
@@ -916,10 +935,10 @@ def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
 
 def resync():
-    print("resync:looping")
-    msxbyte = piexchangebyte(READY)
+    print("sync")
+    msxbyte = piexchangebytewithtimeout(READY,2)
     while (msxbyte != ABORT):
-        msxbyte = piexchangebyte(READY)
+        msxbyte = piexchangebytewithtimeout(READY,2)
     return
 
 def recvcmd(cmdlength=128):
@@ -996,6 +1015,8 @@ init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
+
+dos("INI 1")
 
 try:
     while True:
