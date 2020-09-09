@@ -30,7 +30,7 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 2. Setup MSX with the client side software (MSX SD Card or disk)
 
 
-* Step 1: The easier way to setup the Raspberry Pi is to download the SD CARD image from a MSXPi release - latest image for release v0.8.2 and v1.0 can be found under: https://github.com/costarc/MSXPi/releases/download/v1.0.20200822.000/MSXPiv1.0Rev0_SDCard_Image.zip
+* Step 1: The easier way to setup the Raspberry Pi is to download the SD CARD image from a MSXPi release - latest image for release v0.8.2 and v1.0 can be found under: https://github.com/costarc/MSXPi/releases/download/v1.0.1.20200905.001/MSXPiv1.0Rev0_b20200905.001_SDCard_img.zip
 
 The login user and password are the default for Raspbian: 
 
