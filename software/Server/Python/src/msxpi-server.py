@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "1.0.0"
-build = "20200905.001"
+build = "20200910.000"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -92,11 +92,41 @@ def tick_sclk():
     GPIO.output(sclkPin, GPIO.LOW)
     #time.sleep(SPI_SCLK_LOW_TIME)
 
-def piexchangebyte(byte_out):
+# Using CRC code from :
+# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
+crc_poly = 0x1021
+def crcinit(c):
+    crc = 0
+    c = c << 8
+    for j in range(8):
+        if (crc ^ c) & 0x8000:
+            crc = (crc << 1) ^ crc_poly
+        else:
+            crc = crc << 1
+        c = c << 1
+    return crc
+
+crctab = [ crcinit(i) for i in range(256) ]
+
+def crc16(crc, c):
+    cc = 0xff & c
+
+    tmp = (crc >> 8) ^ cc
+    crc = (crc << 8) ^ crctab[tmp & 0xff]
+    crc = crc & 0xffff
+
+    return crc
     
+def piexchangebyte(byte_out,twait=60):
+    
+    t0 = time.time()
     GPIO.output(misoPin, GPIO.HIGH)
-    while(GPIO.input(csPin)):
+    while((GPIO.input(csPin)) and (time.time() - t0) < twait):
         pass
+
+    t1 = time.time()
+    if ((t1 - t0) > twait):
+        return ABORT,None,None,None
 
     tick_sclk()
 
@@ -136,32 +166,7 @@ def piexchangebyte(byte_out):
 
     #print("A,D,IO",hex(busa),hex(busd),buswr)
 
-    return busd,busa,buswr
-
-# Using CRC code from :
-# https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
-crc_poly = 0x1021
-def crcinit(c):
-    crc = 0
-    c = c << 8
-    for j in range(8):
-        if (crc ^ c) & 0x8000:
-            crc = (crc << 1) ^ crc_poly
-        else:
-            crc = crc << 1
-        c = c << 1
-    return crc
-
-crctab = [ crcinit(i) for i in range(256) ]
-
-def crc16(crc, c):
-    cc = 0xff & c
-
-    tmp = (crc >> 8) ^ cc
-    crc = (crc << 8) ^ crctab[tmp & 0xff]
-    crc = crc & 0xffff
-
-    return crc
+    return RC_SUCCESS,busd,busa,buswr
 
 def recvdatablock(attempts=GLOBALRETRIES):
 
@@ -175,8 +180,8 @@ def recvdatablock(attempts=GLOBALRETRIES):
     while (attempts > 0 and rc != RC_SUCCESS):
         crc = 0xffff
 
-        dsL,busa,buswr = piexchangebyte(SENDNEXT)
-        dsM,busa,buswr = piexchangebyte(SENDNEXT)
+        rc_x,dsL,busa,buswr = piexchangebyte(SENDNEXT)
+        rc_x,dsM,busa,buswr = piexchangebyte(SENDNEXT)
         thisblocksize = dsL + 256 * dsM
 
         if thisblocksize == 0:
@@ -190,19 +195,19 @@ def recvdatablock(attempts=GLOBALRETRIES):
 
         bytecounter = 0
         while(bytecounter < thisblocksize):
-            msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,msxbyte,busa,buswr = piexchangebyte(SENDNEXT)
             buffer.append(msxbyte)
             crc = crc16(crc,msxbyte)
             bytecounter += 1
 
-        msxcrcL,busa,buswr = piexchangebyte(crc % 256)
+        rc_x,msxcrcL,busa,buswr = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
             attempts -= 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
             resync()
         else:
-            msxcrcH,busa,buswr = piexchangebyte(crc / 256)
+            rc_x,msxcrcH,busa,buswr = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
                 attempts -= 1
                 rc = RC_CRCERROR
@@ -253,14 +258,14 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
             crc = crc16(crc,pibyte)
             bytecounter += 1
 
-        msxcrcL,busa,buswr = piexchangebyte(crc % 256)
+        rc_x,msxcrcL,busa,buswr = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
             attempts -= 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
             resync()
         else:
-            msxcrcH,busa,buswr = piexchangebyte(crc / 256)
+            rc_x,msxcrcH,busa,buswr = piexchangebyte(crc / 256)
             if msxcrcH != crc / 256:
                 attempts -= 1
                 rc = RC_CRCERROR
@@ -390,7 +395,7 @@ def prun(cmd):
     return rc
 
 def pdir(path):
-    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
+    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
@@ -434,7 +439,7 @@ def pdir(path):
     return rc
 
 def pcd(path):    
-    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
+    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
     rc = RC_SUCCESS
     global psetvar
     basepath = psetvar[0][1]
@@ -544,13 +549,13 @@ def pcopy(path='',inifcb=True):
             sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
         else:
             if inifcb:
-                msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+                rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
                 ini_fcb(fname_msx)
             else:
                 if filesize > 32768:
                     return RC_INVALIDDATASIZE
 
-                msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+                rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
             while (rc == RC_SUCCESS):
                 rc = senddatablock(buf,BLKSIZE,blocknumber)
@@ -565,14 +570,14 @@ def ploadr(path=''):
         sendstdmsg(RC_FAILED,"Pi:Error - Not valid 8/16/32KB ROM")
 
 def pdate(parms = ''):
-    msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
+    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
 
     rc = RC_FAILED
     
     if (msxbyte == SENDNEXT):
         now = datetime.datetime.now()
 
-        msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+        rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
         if (msxbyte == SENDNEXT):
             piexchangebyte(now.year & 0xff)
             piexchangebyte(now.year >>8)
@@ -925,11 +930,11 @@ def dos(parms=''):
 
             piexchangebyte(RC_SUCCESS)
 
-            sectorInfo[0],busa,buswr = piexchangebyte(SENDNEXT)
-            sectorInfo[1],busa,buswr = piexchangebyte(SENDNEXT)
-            sectorInfo[2],busa,buswr = piexchangebyte(SENDNEXT)
-            byte_lsb,busa,buswr = piexchangebyte(SENDNEXT)
-            byte_msb,busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,sectorInfo[0],busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,sectorInfo[1],busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,sectorInfo[2],busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,byte_lsb,busa,buswr = piexchangebyte(SENDNEXT)
+            rc_x,byte_msb,busa,buswr = piexchangebyte(SENDNEXT)
             sectorInfo[3] = byte_lsb + 256 * byte_msb
 
             blocksize = sectorInfo[1] * 512
@@ -955,14 +960,14 @@ def ping(parms=''):
 
 def resync():
     #print("sync")
-    msxbyte,busa,buswr = piexchangebyte(READY)
+    rc_x,msxbyte,busa,buswr = piexchangebyte(READY,2)
     while (msxbyte != STARTTRANSFER):
-        msxbyte,busa,buswr = piexchangebyte(READY)
+        rc_x,msxbyte,busa,buswr = piexchangebyte(READY,2)
     return
 
 def ptest():
     global ptestcnt
-    byte_in,busa,buswr = piexchangebyte(ptestcnt)
+    rc_x,byte_in,busa,buswr = piexchangebyte(ptestcnt)
     print(hex(byte_in),chr(byte_in),bin(byte_in),"A=",hex(busa),"WR_n=",buswr)
     ptestcnt += 1
     if ptestcnt == 256:
