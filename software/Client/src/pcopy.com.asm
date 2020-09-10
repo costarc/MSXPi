@@ -141,7 +141,13 @@ PLOOP:
 ; it will use blocks size DSKNUMREGISTERS (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
+        XOR     A           ; will send PCOPY commands to read next block
+        LD      ($80),A     ; No need for the CLI parameters
+
 DSKREADBLK:
+        LD      BC,5
+        LD      DE,COMMAND
+        CALL    DOSSENDPICMD
 
         LD      A,'.'
         CALL    PUTCHAR

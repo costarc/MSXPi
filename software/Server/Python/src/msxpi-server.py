@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "1.0.0"
-build = "20200910.000"
+build = "20200910.001"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -76,6 +76,10 @@ TimeOutCheck        = True
 MSXPIHOME = "/home/msxpi"
 RAMDISK = "/media/ramdisk"
 TMPFILE = RAMDISK + "/msxpi.tmp"
+
+# used by pcopy
+blocknumber = -1
+buf = ''
 
 def init_spi_bitbang():
 # Pin Setup:
@@ -490,77 +494,85 @@ def pcd(path):
 def pcopy(path='',inifcb=True):
     piexchangebyte(RC_WAIT)
 
-    buf = ''
     rc = RC_SUCCESS
 
-    global psetvar,GLOBALRETRIES
+    global GLOBALRETRIES,BLKSIZE,psetvar,blocknumber,buf
+
     basepath = psetvar[0][1]
     
-    if (path.startswith('http') or \
-        path.startswith('ftp') or \
-        path.startswith('nfs') or \
-        path.startswith('smb') or \
-        path.startswith('/')):
-        fileinfo = path
-    elif path == '':
-        fileinfo = basepath
-    else: 
-        fileinfo = basepath+'/'+path
+    if blocknumber == -1:
+        if (path.startswith('http') or \
+            path.startswith('ftp') or \
+            path.startswith('nfs') or \
+            path.startswith('smb') or \
+            path.startswith('/')):
+            fileinfo = path
+        elif path == '':
+            fileinfo = basepath
+        else: 
+            fileinfo = basepath+'/'+path
 
-    fileinfo = fileinfo.split()
+        fileinfo = fileinfo.split()
 
-    if len(fileinfo) == 1:
-        fname_rpi = str(fileinfo[0])
-        fname_msx_0 = fname_rpi.split('/')
-        fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
-    elif len(fileinfo) == 2:
-        fname_rpi = str(fileinfo[0])
-        fname_msx = str(fileinfo[1])
-    else:
-        sendstdmsg(RC_FAILED,"Pi:Command line parametrs invalid.")
-        return RC_FAILED
-
-    urlcheck = getpath(basepath, path)
-    # basepath 0 local filesystem
-    if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        try:
-            with open(fname_rpi, mode='rb') as f:
-                buf = f.read()
-
-            filesize = len(buf)
- 
-        except Exception as e:
-            sendstdmsg(RC_FAILED,"Pi:"+str(e)+'\n') 
+        if len(fileinfo) == 1:
+            fname_rpi = str(fileinfo[0])
+            fname_msx_0 = fname_rpi.split('/')
+            fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
+        elif len(fileinfo) == 2:
+            fname_rpi = str(fileinfo[0])
+            fname_msx = str(fileinfo[1])
+        else:
+            sendstdmsg(RC_FAILED,"Pi:Command line parametrs invalid.")
             return RC_FAILED
 
-    else:
-        try:
-            urlhandler = urllib2.urlopen(fname_rpi)
-            #print("pcopy:urlopen rc:",urlhandler.getcode())
-            buf = urlhandler.read()
-            filesize = len(buf)
-            
-        except Exception as e:
-            rc = RC_FAILED
-            sendstdmsg(RC_FAILED,"Pi:"+str(e))
-    
-    if rc == RC_SUCCESS:
-        if filesize == 0:
-            sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
-        else:
-            if inifcb:
-                rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
-                ini_fcb(fname_msx)
-            else:
-                if filesize > 32768:
-                    return RC_INVALIDDATASIZE
+        urlcheck = getpath(basepath, path)
+        # basepath 0 local filesystem
+        if (urlcheck[0] == 0 or urlcheck[0] == 1):
+            try:
+                with open(fname_rpi, mode='rb') as f:
+                    buf = f.read()
 
-                rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
-            blocknumber = 0   
-            while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber)
-                if rc == RC_SUCCESS:
-                    blocknumber += 1
+                filesize = len(buf)
+     
+            except Exception as e:
+                sendstdmsg(RC_FAILED,"Pi:"+str(e)+'\n') 
+                return RC_FAILED
+
+        else:
+            try:
+                urlhandler = urllib2.urlopen(fname_rpi)
+                #print("pcopy:urlopen rc:",urlhandler.getcode())
+                buf = urlhandler.read()
+                filesize = len(buf)
+                
+            except Exception as e:
+                rc = RC_FAILED
+                sendstdmsg(RC_FAILED,"Pi:"+str(e))
+        
+        if rc == RC_SUCCESS:
+            if filesize == 0:
+                sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
+                return RC_FAILED
+            else:
+                if inifcb:
+                    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+                    ini_fcb(fname_msx)
+                else:
+                    if filesize > 32768:
+                        return RC_INVALIDDATASIZE
+
+                    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+
+        # All set to transfer first block in next pcopy call, makes blocknumber = 0
+        blocknumber += 1
+
+    else:
+        print("pcopy:block",blocknumber)
+        rc = senddatablock(buf,BLKSIZE,blocknumber)
+        if rc == RC_SUCCESS:
+            blocknumber += 1
+        else:
+            blocknumber = -1
 
     return rc
 
@@ -1011,6 +1023,7 @@ allchann = []
 msxdos1boot = True
 
 errcount = 0
+ptestcnt = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
@@ -1018,8 +1031,6 @@ GPIO.output(rdyPin, GPIO.HIGH)
 GPIO.output(misoPin, GPIO.LOW)
 print "GPIO Initialized\n"
 print "Starting MSXPi Server Version ",version,"Build",build
-
-ptestcnt = 0
 
 #dos("INI 1")
 
