@@ -31,9 +31,8 @@ This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Replaced the EPROM 27C256 by AT28C256 EEPROM (Electronically erasable/rewritable)
 - Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
-- Schematics was updated to supporgt the /wait signal
+- Schematics was updated to support the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
 - Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
@@ -48,7 +47,6 @@ On the software side:
 - Main data transfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
 - Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
 - All clients rewritten based on a simple and better communication logic
-- Addition of new program AT28C256.COM to write roms to the new EEPROM in the interface
 - Many improvements and bug fixes
 - More stable softwre architecture
 
