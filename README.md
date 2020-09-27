@@ -78,60 +78,60 @@ MSXPi project is structured around three directories:
 The /software branch has this structure:
 
 
-MSXPi
-|-------/software 
-|       |---- 
-|       |    | 
-|       |    /asm-common
-|       |    |----
-|       |    |    |
-|       |    |    /include
-|       |    |    
-|       |    |
-|       |    /ROM
-|       |    |----
-|       |    |    |
-|       |    |    /src
-|       |    |    |----
-|       |    |         |
-|       |    |         /MSX-DOS
-|       |    |         |
-|       |    |         /BIOS
-|       |    |
-|       |    |
-|       |    /Client
-|       |    |----
-|       |    |    |
-|       |    |    /src
-|       |    |
-|       |    /Server
-|       |    |----
-|       |         |
-|       |         /Python
-|       |         |----
-|       |         |    |
-|       |         |    /src
-|       |         |
-|       |         /Shell
-|       |         |
-|       |         /systemd
-|       |         |
-|       |         /C (deprecated)
-|       |         |----
-|       |              |
-|       |              /src
-|       |          
-|-------/hardware 
-|       |---- 
-|       |    | 
-|       |    /CPLD Project
-|       |    |
-|       |    /Schematic
-|       |    |----
-|       |         |
-|       |         /Fabrication
-|       |
-|-------/Documentation
+    MSXPi
+    |-------/software 
+    |       |---- 
+    |       |    | 
+    |       |    /asm-common
+    |       |    |----
+    |       |    |    |
+    |       |    |    /include
+    |       |    |    
+    |       |    |
+    |       |    /ROM
+    |       |    |----
+    |       |    |    |
+    |       |    |    /src
+    |       |    |    |----
+    |       |    |         |
+    |       |    |         /MSX-DOS
+    |       |    |         |
+    |       |    |         /BIOS
+    |       |    |
+    |       |    |
+    |       |    /Client
+    |       |    |----
+    |       |    |    |
+    |       |    |    /src
+    |       |    |
+    |       |    /Server
+    |       |    |----
+    |       |         |
+    |       |         /Python
+    |       |         |----
+    |       |         |    |
+    |       |         |    /src
+    |       |         |
+    |       |         /Shell
+    |       |         |
+    |       |         /systemd
+    |       |         |
+    |       |         /C (deprecated)
+    |       |         |----
+    |       |              |
+    |       |              /src
+    |       |          
+    |-------/hardware 
+    |       |---- 
+    |       |    | 
+    |       |    /CPLD Project
+    |       |    |
+    |       |    /Schematic
+    |       |    |----
+    |       |         |
+    |       |         /Fabrication
+    |       |
+    |-------/Documentation
 
 
 
