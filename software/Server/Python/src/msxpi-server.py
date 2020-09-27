@@ -165,7 +165,6 @@ def crc16(crc, c):
 
 def recvdatablock(attempts=GLOBALRETRIES):
 
-    buffer = bytearray()
     rc = RC_FAILED
         
     #print "recvdatablock:Received blocksize =",datasize
@@ -173,6 +172,9 @@ def recvdatablock(attempts=GLOBALRETRIES):
     resync()
 
     while (attempts > 0 and rc != RC_SUCCESS):
+        
+        buffer = bytearray()
+
         crc = 0xffff
 
         dsL,busa,buswr = piexchangebyte(SENDNEXT)
