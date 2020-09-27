@@ -3,6 +3,25 @@ MSXPi is a hardware interface and software solution to allow MSX computers to co
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
 
+Quick Start Guide
+=================
+
+Please refer to the full documentation under "documents" folder for detailed setup procedure.
+
+There are two main steps to setup MSXPi, once you choose the correct branch for your interface:
+
+Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
+Setup MSX with the client side software (MSX SD Card or disk)
+Step 1: The easier way to setup the Raspberry Pi is to download the SD CARD image from a MSXPi release - latest image for interface release v0.8.2 and v1.0 can be found under: https://github.com/costarc/MSXPi/releases/download/v1.0.1.20200905.001/MSXPiv1.0Rev0_b20200905.001_SDCard_vhd.zip
+
+The login user and password are the default for Raspbian:
+
+user: pi
+
+password: raspberry
+
+Step 2: Copy all MSXPi commands from the https://github.com/costarc/MSXPi/releases/tag/v1.0.1.20200905.001/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
+
 MSXPi v1.0 Release Notes
 ========================
 This release has some major changes to the hardware and software components.
