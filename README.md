@@ -74,38 +74,64 @@ MSXPi project is structured around three directories:
     /hardware  - electric schematics, cpld design files
     /documents - documentation
 
+
 The /software branch has this structure:
 
 
-    /software 
-    |---- 
-    |    | 
-    |    /asm-common
-    |    |----
-    |    |    |
-    |    |    /include
-    |    |    
-    |    |
-    |    /ROM
-    |    |----
-    |    |    |
-    |    |    /src
-    |    |
-    |    /Client
-    |    |----
-    |    |    |
-    |    |    /src
-    |    |
-    |    /Server
-    |    |----
-    |         |
-    |         /c
-    |         |
-    |         |----
-    |         |    |
-    |         |    /include
-    |         |    |
-    |         |    /src
-    |         |
+MSXPi
+|-------/software 
+|       |---- 
+|       |    | 
+|       |    /asm-common
+|       |    |----
+|       |    |    |
+|       |    |    /include
+|       |    |    
+|       |    |
+|       |    /ROM
+|       |    |----
+|       |    |    |
+|       |    |    /src
+|       |    |    |----
+|       |    |         |
+|       |    |         /MSX-DOS
+|       |    |         |
+|       |    |         /BIOS
+|       |    |
+|       |    |
+|       |    /Client
+|       |    |----
+|       |    |    |
+|       |    |    /src
+|       |    |
+|       |    /Server
+|       |    |----
+|       |         |
+|       |         /Python
+|       |         |----
+|       |         |    |
+|       |         |    /src
+|       |         |
+|       |         /Shell
+|       |         |
+|       |         /systemd
+|       |         |
+|       |         /C (deprecated)
+|       |         |----
+|       |              |
+|       |              /src
+|       |          
+|-------/hardware 
+|       |---- 
+|       |    | 
+|       |    /CPLD Project
+|       |    |
+|       |    /Schematic
+|       |    |----
+|       |         |
+|       |         /Fabrication
+|       |
+|-------/Documentation
+
 
 
