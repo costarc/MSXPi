@@ -25,11 +25,11 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 The login user and password are the default for Raspbian: 
 
 user: pi
-
 password: raspberry
 
 
 * Step 2: Copy all MSXPi commands form the /software/target to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
+All software to copy for you MSX SD CARD can be found under https://github.com/costarc/MSXPi/releases/tag/v1.0.1.20200905.001/
 
 Jumpers:
 A14 - MSX detects MSXPi BIOS and continue to BASIC (MSX-DOS if other IDE interface is connected).
