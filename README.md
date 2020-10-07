@@ -41,6 +41,12 @@ password: raspberry
 
 * Step 2: Copy all MSXPi commands form the /software/target to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
+Jumpers:
+A14 - MSX detects MSXPi BIOS and continue to BASIC (MSX-DOS if other IDE interface is connected).
+A15 - MSX detects MSXPI BIOS. If user press P, boots from MSXPi-DOS. Otherwise proceeds with MSX boot.
+
+In either jumper setup, the MSXPi BIOS is available to use from BASIC. Type "CALL MSXPIVER" for a list of commands.
+
 
 Relese Notes
 ============
