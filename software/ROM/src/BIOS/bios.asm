@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.1                                                           |
+;| Version : 1.0.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -440,8 +440,8 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      "MSXPi ROM v0.9.1 "
-build:  DB      "20200820.000"
+        DB      "MSXPi ROM v1.0.0 "
+build:  DB      "20201015.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10

@@ -99,17 +99,19 @@ iftable:
         dw      ifv7
         dw      ifv8
         dw      ifv9
+        dw      ifvA
         dw      ifukn
 
-ifv1:   DB      "(0001) Wired up prototype, without EPROM,EPM3064ALC-44","$"
-ifv2:   DB      "(0010) Semi-wired up prototype, with EPROM, EPM3064ATC-44","$"
-ifv3:   DB      "(0011) Limited 10-samples PCB, with EPROM, EPM3064ALC-44","$"
-ifv4:   DB      "(0100) Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits mode","$"
-ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44","$"
-ifv6:   DB      "(0110) Wired up prototype, with EPROM, EPM7128SLC-84","$"
-ifv7:   DB      "(0111) General Release Rev.4, EPM3064ALC-44","$"
+ifv1:   DB      "(0001) Wired up prototype, EPM3064ALC-44","$"
+ifv2:   DB      "(0010) Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44","$"
+ifv3:   DB      "(0011) Limited 10-samples PCB, EPROM 27C256, EPM3064ALC-44","$"
+ifv4:   DB      "(0100) Limited 1 sample PCB, EPROM 27C256, EPM3064ALC-44, 4 bits mode","$"
+ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM 27C256, EPM3064ALC-44","$"
+ifv6:   DB      "(0110) Wired up prototype, EPROM 27C256, EPM7128SLC-84","$"
+ifv7:   DB      "(0111) General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44","$"
 ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84","$"
-ifv9:   DB      "(1001) General Release V1.1 Rev 0, EEPROM AT28C256, EPM7128SLC-84","$"
+ifv9:   DB      "(1001) General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44","$"
+ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
 
