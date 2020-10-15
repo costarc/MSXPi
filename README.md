@@ -23,7 +23,7 @@ user: pi
 
 password: raspberry
 
-Step 2: Copy all MSXPi commands from the https://github.com/costarc/MSXPi/releases/tag/v1.0.1.20200905.001/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
+Step 2: Copy all MSXPi commands from the latest release - https://github.com/costarc/MSXPi/releases/tag/v1.0.0.20201015.000/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
 MSXPi v1.0 Release Notes
 ========================
