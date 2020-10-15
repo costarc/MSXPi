@@ -35,22 +35,23 @@
 -- LED now is drived by SPI_CS signal
 ----------------------------------------------------------------------------------
 -- MSXPI Versions:
--- 0001: Wired up prototype, without EPROM,EPM3064ALC-44
--- 0010: Semi-wired up prototype, with EPROM, EPM3064ATC-44
--- 0011: Limited 10-samples PCB, with EPROM, EPM3064ALC-44
--- 0100: Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits mode.
--- 0101: Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44
--- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
--- 0111: Rev.4 batch, EPM3064ALC-44
--- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
--- 1001: General Release V1.0 Rev 1, EEPROM AT28C256, EPM3064ALC-44
+-- 0001: Wired up prototype, EPM3064ALC-44
+-- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
+-- 0011: Limited 10-samples PCB, EPROM 27C256, EPM3064ALC-44
+-- 0100: Limited 1 sample PCB, EPROM 27C256, EPM3064ALC-44, 4 bits mode.
+-- 0101: Limited 10 samples PCB Rev.3, EPROM 27C256, EPM3064ALC-44
+-- 0110: Wired up prototype, EPROM 27C256, EPM7128SLC-84
+-- 0111: General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44
+-- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
+-- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
+-- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
 use work.msxpi_package.all;
 
-ENTITY MSXInterface IS
+ENTITY MSXPi IS
 PORT ( 
     D           : INOUT STD_LOGIC_VECTOR(7 DOWNTO 0);
     A           : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
@@ -65,12 +66,12 @@ PORT (
     SPI_MOSI    : OUT STD_LOGIC;
     SPI_MISO    : IN STD_LOGIC;
     SPI_RDY     : IN STD_LOGIC);
-END MSXInterface;
+END MSXPi;
 
 library ieee;
 use ieee.std_logic_1164.all;
 package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "0111";
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
         constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
         constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
         constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -81,7 +82,7 @@ package msxpi_package is
         constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 end msxpi_package;
 
-architecture rtl of MSXInterface is
+architecture rtl of MSXPi is
     type fsm_type is (idle, prepare, transferring);
     signal spi_state    : fsm_type := idle;
     signal readoper     : std_logic;
@@ -146,4 +147,3 @@ begin
 
 end process;
 end rtl;
-
