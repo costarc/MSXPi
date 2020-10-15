@@ -49,9 +49,9 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm     -o ./target/dosinit.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm     -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm     -o ./target/psync.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm    -o ./target/psync.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
 
