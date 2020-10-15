@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0.0                                                      |
+;| Version : 1.0.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.0.0 (2017,2020)
+; MSXPi Driver v0.9.1 (2017,2020)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -913,6 +913,7 @@ BIOSENTRYADDR:  EQU     $
         DW      PIREADBYTE
         DW      PIWRITEBYTE
         DW      PIEXCHANGEBYTE
+        DW      SENDIFCMD
         DW      SENDPICMD
         DW      PRINT
         DW      PRINTNLINE
@@ -927,7 +928,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      "MSXPi ROM v1.0.0 "
-build:  DB      "20200904.000"
+build:  DB      "20201015.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10

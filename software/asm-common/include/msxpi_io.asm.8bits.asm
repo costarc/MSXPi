@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0                                                          |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -30,8 +30,6 @@
 ;|===========================================================================|
 ;
 ; File history :
-; 1.0    : New logic for CPLD and re-write of bios
-;        : Compatible with pcb v0.7 and v1.0 and more recent.
 ; 0.8    : Re-worked protocol as protocol-v2:
 ;          RECVDATABLOCK, SENDDATABLOCK, SECRECVDATA, SECSENDDATA,CHKBUSY
 ;          Moved to here various routines from msxpi_api.asm
@@ -52,32 +50,47 @@
 ; ==================================================================
 
 ;-----------------------
+; SENDIFCMD            |
+;-----------------------
+SENDIFCMD:
+            out     (CONTROL_PORT1),a  ; Send data, or command
+            ret
+
+;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            nop                        ; 1 cycle to allow interface to catch up
+            push    bc
+            ld      bc,$ffff
+CHKPIRDY0:
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
-            or      a
-            jr      nz,CHKPIRDY       ; rdy signal is zero, pi app fsm is ready
+            or       a
+            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
                                        ; for next command/byte
+            dec     bc                 ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+CHKPIRDYNOTOK:
+            scf
+CHKPIRDYOK:
+            pop     bc
             ret
 
-; These routines are the MSXPi BIOS. 
-; The routines will check the MSXPi Interface version before transfering data.
-; For versions 0.7 (ID 8 and lower) where /wait is not supported, the routine 
-; will run chkpirdy to poll when RPi is ready.
-; On versions 1.0 and more recent (ID 9 on higher) the /wait is enabled
-; by the interface, therefore no need to check status.
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
 PIREADBYTE:
-            in      a,(CONTROL_PORT2)
-            cp      9
-            call    c,CHKPIRDY
-            di
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                  ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT1),a  ; send read command to the interface
+            call    CHKPIRDY           ; wait interface transfer data to pi and
+                                       ; pi app processing
+                                       ; no ret c is required here, because in a,(7) 
+                                       ; does not reset c flag
+PIREADBYTE1:
             in      a,(DATA_PORT1)     ; read byte
-            ei
             ret                        ; return in a the byte received
 
 ;-----------------------
@@ -85,13 +98,9 @@ PIREADBYTE:
 ;-----------------------
 PIWRITEBYTE:
             push    af
-            in      a,(CONTROL_PORT2)
-            cp      9
-            call    c,CHKPIRDY
+            call    CHKPIRDY
             pop     af
-            di
             out     (DATA_PORT1),a     ; send data, or command
-            ei
             ret
 
 ;-----------------------
@@ -99,9 +108,7 @@ PIWRITEBYTE:
 ;-----------------------
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
-            in      a,(CONTROL_PORT2)
-            cp      9
-            call    c,CHKPIRDY
-            in      a,(DATA_PORT2)     ; read byte
+            call    CHKPIRDY
+            in      a,(DATA_PORT1)     ; read byte
             ret
 

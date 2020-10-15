@@ -31,24 +31,20 @@
 -- Modified ports (from 6,7,8) to range 0x56 - 0x5D
 ----------------------------------------------------------------------------------
 -- Version 1.0 Rev 0 - 2020-08-01
--- Added support to /wait signal (using LED pin)
+-- Added support to /Wait signal (using LED pin)
 -- LED now is drived by SPI_CS signal
 ----------------------------------------------------------------------------------
--- Version 1.1 Rev 2 - 2020-09-03
--- Added full support to /wait signal on PCB v1.1
--- Redesigned the logic to support /wait and bus data (no longer only data bus)
--- "piexchange" now should read byte from dataport2 (save one iteration cycle with RPi
-----------------------------------------------------------------------------------
 -- MSXPI Versions:
--- 0001: Wired up prototype, without EPROM,EPM3064ALC-44
--- 0010: Semi-wired up prototype, with EPROM, EPM3064ATC-44
--- 0011: Limited 10-samples PCB, with EPROM, EPM3064ALC-44
--- 0100: Limited 1 sample PCB, with EPROM, EPM3064ALC-44, 4 bits mode.
--- 0101: Limited 10 samples PCB Rev.3, EPROM, EPM3064ALC-44
--- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
--- 0111: General Release v0.7 Rev.4 - Rev.7, EPM3064ALC-44
--- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
--- 1001: General Release V1.1, EPM3064ALC44-10, EEPROM AT28C256
+-- 0001: Wired up prototype, EPM3064ALC-44
+-- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
+-- 0011: Limited 10-samples PCB, EPROM 27C256, EPM3064ALC-44
+-- 0100: Limited 1 sample PCB, EPROM 27C256, EPM3064ALC-44, 4 bits mode.
+-- 0101: Limited 10 samples PCB Rev.3, EPROM 27C256, EPM3064ALC-44
+-- 0110: Wired up prototype, EPROM 27C256, EPM7128SLC-84
+-- 0111: General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44
+-- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
+-- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
+-- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
@@ -86,83 +82,68 @@ package msxpi_package is
         constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 end msxpi_package;
 
-architecture behaviour of MSXPi is
-    type fsm_type is (start,transferring);
-    signal state : fsm_type := start;
-    
-    signal readoper_s     : std_logic;
-    signal writeoper_s    : std_logic;
-    signal rpi_en_s       : std_logic;
-    signal msxbus_s       : std_logic_vector(16 downto 0);
-    signal msxbusbuf_s    : std_logic_vector(16 downto 0);
-    signal D_buff_pi_s    : std_logic_vector(7 downto 0);  
-    signal wait_n_s       : std_logic := 'Z';
-    signal msxpiserver    : std_logic := '0';
-    signal msxpi_state    : std_logic := '0';
+architecture rtl of MSXPi is
+    type fsm_type is (idle, prepare, transferring);
+    signal spi_state    : fsm_type := idle;
+    signal readoper     : std_logic;
+    signal writeoper    : std_logic;
+    signal spi_en       : std_logic;
+    signal D_buff_msx   : std_logic_vector(7 downto 0);
+    signal D_buff_pi    : std_logic_vector(7 downto 0);
+    signal RESET        : std_logic;
+    signal spibitcount_s: integer range 0 to 8;
+    signal D_buff_msx_r : std_logic_vector(7 downto 0);
+    signal SPI_en_s     : STD_LOGIC := '0';
+    signal SPI_RDY_s    : STD_LOGIC;
     
 begin
 
-    WAIT_n <= wait_n_s when msxpiserver = '1' else 'Z';
-	 
-    -- SPI_CS <= not rpi_enabled_s;
-	 SPI_CS <= not msxpi_state;
-    BUSDIR_n <= '0' when (readoper_s = '1' and (A = CTRLPORT1 or A = CTRLPORT2 or A = DATAPORT1)) else '1';
-
-    readoper_s   <= not (IORQ_n or RD_n);
-    writeoper_s  <= not (IORQ_n or WR_n);
-
-    rpi_en_s    <= '1' when (A = DATAPORT1 and (writeoper_s = '1' or readoper_s = '1')) else '0';
-
-    D <= "0000000" & msxpi_state when (readoper_s = '1' and A = CTRLPORT1) else     
-         D_buff_pi_s when readoper_s = '1' and (A = DATAPORT1 or A = DATAPORT2) else
-          "0000" & MSXPIVer when (readoper_s = '1' and A = CTRLPORT2) else 
+    WAIT_n <= 'Z';
+    BUSDIR_n <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
+    readoper   <= not (IORQ_n or RD_n);
+    writeoper  <= not (IORQ_n or WR_n);
+    spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
+                     '0';
+    
+    -- SPI_en_s = '1' means SPI is busy
+    -- SPI_RDY  = '1' means Pi is Busy
+    SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
+    RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
+    D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
+    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else     
+         D_buff_pi when readoper = '1' and A = DATAPORT1 else
+          "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
           "ZZZZZZZZ";
 
-    -- This process detects when msxpi-server component has initialized
-    -- If it has not started, /wait signal should not be enabled to allow MSX to start
-    -- Once it has ticked one time, we know msxpi-server has started,
-    -- then /wait can start to be driven by that rpi_rdy signal.
-    process(SPI_RDY)
-    begin
-        if (rising_edge(SPI_RDY)) then
-            msxpiserver <= '1';
-         end if;
-    end process;
+spi:process(SPI_SCLK,readoper,writeoper,RESET)
+begin
+    if RESET = '1' then
+        SPI_en_s <= '0';
+        D_buff_pi <= "00000000";
+        spi_state <= idle;
+    elsif (SPI_en_s = '0' and spi_en = '1') then
+        SPI_en_s <= '1';
+        spibitcount_s <= 0;
+        spi_state <= prepare;
+    elsif rising_edge(SPI_SCLK) then
+        case spi_state is
+            when idle =>
+                SPI_en_s <= '0';
+            when prepare  =>
+                D_buff_msx_r <= D_buff_msx;
+                spi_state <= transferring;
+            when transferring =>
+                D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+                SPI_MOSI <= D_buff_msx_r(7);
+                D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
+                spibitcount_s <= spibitcount_s + 1;
+                if spibitcount_s > 6 then
+                        spi_state <= idle;
+                end if;
+        end case;
+    end if;
 
-    -- Triggers the interface
-    process(rpi_en_s, SPI_RDY)
-    begin
-        if (SPI_RDY = '0') then
-            msxpi_state <= '0';
-            wait_n_s <= 'Z';
-        elsif (rising_edge(rpi_en_s)) then
-            wait_n_s <= '0';
-            msxpi_state <= '1';
-				msxbusbuf_s <= WR_n & A & D;
-         end if;
-    end process;
+    SPI_CS <= not SPI_en_s;
 
-    -- Initialize serial/paralell process
-    process(msxpi_state,SPI_SCLK)
-    begin
-        if (msxpi_state = '0') then
-            state <= start;
-        elsif rising_edge(SPI_SCLK) then
-            state <= transferring;
-        end if;
-    end process;
-    
-    -- Convert MSX data to serial / RPi serial to parallel
-    -- Send bits to RPi in serial mode, receive RPi bits and latches
-    process(SPI_SCLK)
-    begin
-         if (state = start) then
-            msxbus_s <= msxbusbuf_s;
-        elsif rising_edge(SPI_SCLK) then
-            D_buff_pi_s <= D_buff_pi_s(6 downto 0) & SPI_MISO;
-            SPI_MOSI <= msxbus_s(16);
-            msxbus_s(16 downto 1) <= msxbus_s(15 downto 0);
-        end if;
-    end process;
-end behaviour;
-
+end process;
+end rtl;

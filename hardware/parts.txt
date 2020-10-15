@@ -1,29 +1,17 @@
-R1		1K Ohm (Resistor)
-R2		1k Ohm (Resistor)
-R3		1k Ohm (Resistor)
-R4		1k Ohm (Resistor)
-R5		270 Ohm (Resistor)
-R6		10k Ohm (Resistor)
-R7		10K Ohm (Resistor)
-R8		10k Ohm (Resistor)
-R9		10k Ohm (Resistor)
-R10		10k Ohm (Resistor)
-
-D1		3mm, 3v (LED)
-
+R1		2K Ohm
+R2		1k Ohm
+R3		1k Ohm
+R4		1k Ohm
+R5		1k Ohm
+R6		10k Ohm
+LED1		3mm, 3v
 C1		0.1uF (ceramic capacitor, code 104)
 C2		0.1uF (ceramic capacitor, code 104)
-C3		0.1uF (ceramic capacitor, code 104)
+C3		47uF 16v (electrolytic capacitor)
 C4		0.1uF (ceramic capacitor, code 104)
-C5		0.1uF (ceramic capacitor, code 104)
-C6		0.1uF (ceramic capacitor, code 104)
-C7		0.1uF (ceramic capacitor, code 104)
-C8		100uF 16v (electrolytic capacitor)
-C9		100uF 16v (electrolytic capacitor)
-
-U1		CPLD Altera EPM3064ALC44-10N
-U2		EPROM 27C256
-U3		LD117AS33TR 3.3v Voltage Regulator
-J2		JTAG Male conector (10 x PinHead or 90 degree 10xPinHead)
-J1		Pin Head
+IC1		LD117AS33TR 3.3v Voltage Regulator
+IC2		CPLD Altera EPM3064ALC44-10N
+IC3		EPROM 27C256
+JP7		JTAG Male conector (10 x PinHead or 90 degree 10xPinHead)
+JP (ALL)	Pin Head
 

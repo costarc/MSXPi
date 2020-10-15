@@ -180,7 +180,7 @@ READPARMS:
         LD      DE,FILEFCB
         LD      B,12
 READPARMS0:
-        CALL    PIEXCHANGEBYTE
+        CALL    PIREADBYTE
         LD      (DE),A
         INC     DE
         DJNZ    READPARMS0

@@ -31,8 +31,7 @@
 ;
 ; File history :
 ; 0.1    : initial version
-; 0.9    : Changes to supoprt new transfer logic
-; 1.0    : Added CRC16 checks to upload/download
+; 0.9.1  : Changes to supoprt new transfer logic
 
 TEXTTERMINATOR: EQU 0
 BDOS:           EQU $F37D
@@ -427,6 +426,7 @@ BIOSENTRYADDR:  EQU     $
         DW      PIREADBYTE
         DW      PIWRITEBYTE
         DW      PIEXCHANGEBYTE
+        DW      SENDIFCMD
         DW      SENDPICMD
         DW      PRINT
         DW      PRINTNLINE
@@ -441,7 +441,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      "MSXPi ROM v1.0.0 "
-build:  DB      "20200904.000"
+build:  DB      "20201015.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10

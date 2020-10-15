@@ -26,16 +26,8 @@ else
     mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
 fi
 
-if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
-   ../../add-build-id.sh -v
-fi
-
-if [[ $1 == "-vr" || $2 == "-vr" || $3 == "-vr" ]];then
-   ../../add-build-id.sh -vr
-fi
-
-if [[ $1 == "-vs" || $2 == "-vs" || $3 == "-vs" ]];then
-   ../../add-build-id.sh -vs
+if [[ $1 == "-v" || $1 == "-va" || $1 == "-vs" || $1 == "-vs" ]];then
+   ../../add-build-id.sh $1
 fi
 
 ~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/bios.asm    -o ./target/bios.rom
@@ -57,9 +49,9 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm     -o ./target/dosinit.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm     -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm     -o ./target/psync.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm    -o ./target/psync.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
 
 
