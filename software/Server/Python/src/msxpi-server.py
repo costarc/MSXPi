@@ -18,7 +18,7 @@ import select
 import base64
 from random import randint
 
-version = "0.9.1"
+version = "1.0.0"
 build = "20201015.000"
 BLKSIZE = 1024
 
