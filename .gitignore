@@ -13,3 +13,4 @@ software/zout/**
 *.cdf
 *.db_info
 *.tmw_info
+*.lst
