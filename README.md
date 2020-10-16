@@ -1,5 +1,5 @@
-
-github project: https://github.com/costarc/MSXPi/tree/release/v1.0
+For more details, please refer to the github project: 
+https://github.com/costarc/MSXPi
 
 MSXPi is a hardware interface and software solution to allow MSX computers to control and user Raspberry Pi resources.
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
@@ -24,6 +24,10 @@ user: pi
 password: raspberry
 
 Step 2: Copy all MSXPi commands from the latest release - https://github.com/costarc/MSXPi/releases/tag/v1.0.0.20201015.000/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
+
+Jumpers:
+A14 - Load the MSX-DOS 1.03 from Raspberry Pi disk image (msxpiboot.dsk). BIOS is available from BASIC
+A15 - BIOS is available from BASIC. MSX Will boot to BASIC or to another connectd IDE interface.
 
 MSXPi v1.0 Release Notes
 ========================
@@ -54,7 +58,7 @@ On the software side:
 Other non functional changes includes a new design using KiCad 5 instead of Eagle, some more jumpers to support new EEPROM features.
 
 Limitations and bugs
-- To write a rom to the eeprom, you may need to specify the slot number where the MSXPi is plugged - there is not, currently, an automated and failsafe method to detect on whaat slot the epprom is connected.
+- When booting from MSXPI-DOS, pcopy cannot copy file to the msxpiboot.dsk
 - The CPLD logic and softwares are not benefiting of the /wait signal (future improvement)
 
 
