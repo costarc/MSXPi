@@ -29,6 +29,7 @@ Step 2: Copy all MSXPi commands from the latest release - https://github.com/cos
 
 Jumpers:
 A14 - Load the MSX-DOS 1.03 from Raspberry Pi disk image (msxpiboot.dsk). BIOS is available from BASIC
+
 A15 - BIOS is available from BASIC. MSX Will boot to BASIC or to another connectd IDE interface.
 
 MSXPi v1.0 Release Notes
