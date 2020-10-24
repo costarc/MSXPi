@@ -28,6 +28,7 @@ password: raspberry
 Step 2: Copy all MSXPi commands from the latest release - https://github.com/costarc/MSXPi/releases/tag/v1.0.0.20201015.000/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
 Jumpers:
+
 A14 - Load the MSX-DOS 1.03 from Raspberry Pi disk image (msxpiboot.dsk). BIOS is available from BASIC
 
 A15 - BIOS is available from BASIC. MSX Will boot to BASIC or to another connectd IDE interface.
