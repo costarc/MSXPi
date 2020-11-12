@@ -39,6 +39,9 @@
 -- Redesigned the logic to support /wait and bus data (no longer only data bus)
 -- "piexchange" now should read byte from dataport2 (save one iteration cycle with RPi
 ----------------------------------------------------------------------------------
+-- Version 1.1 Rev 3 - 2020-11-12
+-- Modified qsf (pin assigments) to new PCB layout with EPM3064ATC44-10
+----------------------------------------------------------------------------------
 -- MSXPI Versions:
 -- 0001: Wired up prototype, without EPROM,EPM3064ALC-44
 -- 0010: Semi-wired up prototype, with EPROM, EPM3064ATC-44
@@ -48,7 +51,8 @@
 -- 0110: Wired up prototype, with EPROM, EPM7128SLC-84
 -- 0111: General Release v0.7 Rev.4 - Rev.7, EPM3064ALC-44
 -- 1000: Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
--- 1001: General Release V1.1, EPM3064ALC44-10, EEPROM AT28C256
+-- 1001: Prototype V1.1 Rev 0, EPM3064ALC44-10, EEPROM AT28C256
+-- 1010: Prototype V1.1 Rev 3, EPM3064ATC44-10, EEPROM AT28C256
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 

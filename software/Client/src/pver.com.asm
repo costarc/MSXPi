@@ -109,8 +109,8 @@ ifv5:   DB      "(0101) Limited 10 samples PCB Rev.3, EPROM 27C256, EPM3064ALC-4
 ifv6:   DB      "(0110) Wired up prototype, EPROM 27C256, EPM7128SLC-84","$"
 ifv7:   DB      "(0111) General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44","$"
 ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84","$"
-ifv9:   DB      "(1001) General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44","$"
-ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44","$"
+ifv9:   DB      "(1001) Prototype versino V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44","$"
+ifvA:   DB      "(1010) General Release V1.1 Rev 3, EEPROM AT28C256, EPM3064ATC-44","$"
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
 

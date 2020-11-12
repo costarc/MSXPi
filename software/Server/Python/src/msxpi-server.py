@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "1.0.0"
-build = "20200910.001"
+build = "20201112.001"
 BLKSIZE = 8192
 
 # Pin Definitons
@@ -977,14 +977,34 @@ def resync():
         rc_x,msxbyte,busa,buswr = piexchangebyte(READY,2)
     return
 
-def ptest():
-    global ptestcnt
-    rc_x,byte_in,busa,buswr = piexchangebyte(ptestcnt)
-    print(hex(byte_in),chr(byte_in),bin(byte_in),"A=",hex(busa),"WR_n=",buswr)
-    ptestcnt += 1
-    if ptestcnt == 256:
-        ptestcnt = 0
+def ptest(parms=''):
 
+    debug = 0
+
+    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_WAIT)
+    rc_x,msxbyte,busa,buswr = piexchangebyte(RC_SUCCESS)
+    rc_x,msxtestcount,busa,buswr = piexchangebyte(RC_SUCCESS)
+    print("MSX Loop count: {}").format(msxtestcount)
+    print("Will loop {} times, couting from 0 to 255").format(msxtestcount)
+    print("Will print the final loop counter RPi/MSX - they must match when transfer is in sync")
+
+    while msxtestcount > 0:
+        ptestcnt = 0
+        while ptestcnt < 256:
+            rc_x,byte_in,busa,buswr = piexchangebyte(ptestcnt)
+            if ptestcnt == 0 and debug == 0:
+                print("0 .."),
+            elif debug == 1:
+                print("{}/{}").format(ptestcnt,byte_in)
+            ptestcnt += 1
+        if debug == 0:
+            print("{}/{}").format(ptestcnt - 1,byte_in)
+        msxtestcount = msxtestcount - 1
+    
+    print("\nEnd of test.")
+    print("If all numbers match, there was no errors\n")
+    print("To show all numbers in the test, inside function ptest() define:")
+    print("debug = 1")
     return [RC_FAILED,'']
 
 """ ============================================================================
