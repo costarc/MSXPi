@@ -1,3 +1,8 @@
+V1.0R1 - This is not ready for general use.
+Please do not fabricate or build this project.
+This information is valid as of 01-June-2021.
+------------------------------------------------
+
 MSXPi
 =====
 

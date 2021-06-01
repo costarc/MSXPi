@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<pin_planner>
+	<pin_info>
+		<pin name="IORQ_n" source="Pin Planner" >
+		</pin>
+		<pin name="MREQ_n" source="Pin Planner" >
+		</pin>
+		<pin name="GPIO1" source="Pin Planner" >
+		</pin>
+		<pin name="GPIO2" source="Pin Planner" >
+		</pin>
+		<pin name="GPIO04" source="Pin Planner" >
+		</pin>
+		<pin name="nc?01" source="Pin Planner" >
+		</pin>
+	</pin_info>
+	<buses>
+	</buses>
+	<group_file_association>
+	</group_file_association>
+	<pin_planner_file_specifies>
+	</pin_planner_file_specifies>
+</pin_planner>

@@ -1,0 +1,111 @@
+# -------------------------------------------------------------------------- #
+#
+# Copyright (C) 1991-2013 Altera Corporation
+# Your use of Altera Corporation's design tools, logic functions 
+# and other software and tools, and its AMPP partner logic 
+# functions, and any output files from any of the foregoing 
+# (including device programming or simulation files), and any 
+# associated documentation or information are expressly subject 
+# to the terms and conditions of the Altera Program License 
+# Subscription Agreement, Altera MegaCore Function License 
+# Agreement, or other applicable license agreement, including, 
+# without limitation, that your use is for the sole purpose of 
+# programming logic devices manufactured by Altera and sold by 
+# Altera or its authorized distributors.  Please refer to the 
+# applicable agreement for further details.
+#
+# -------------------------------------------------------------------------- #
+#
+# Quartus II 64-Bit
+# Version 13.0.1 Build 232 06/12/2013 Service Pack 1 SJ Web Edition
+# Date created = 17:53:13  June 01, 2021
+#
+# -------------------------------------------------------------------------- #
+#
+# Notes:
+#
+# 1) The default values for assignments are stored in the file:
+#		MSXPi2v10r1_assignment_defaults.qdf
+#    If this file doesn't exist, see file:
+#		assignment_defaults.qdf
+#
+# 2) Altera recommends that you do not modify this file. This
+#    file is updated automatically by the Quartus II software
+#    and any changes you make may be lost or overwritten.
+#
+# -------------------------------------------------------------------------- #
+
+
+set_global_assignment -name FAMILY MAX7000S
+set_global_assignment -name DEVICE "EPM7128SLC84-15"
+set_global_assignment -name TOP_LEVEL_ENTITY MSXPi2v10r1
+set_global_assignment -name ORIGINAL_QUARTUS_VERSION "13.0 SP1"
+set_global_assignment -name PROJECT_CREATION_TIME_DATE "17:53:13  JUNE 01, 2021"
+set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
+set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
+set_global_assignment -name DEVICE_FILTER_PIN_COUNT 84
+set_global_assignment -name ERROR_CHECK_FREQUENCY_DIVISOR "-1"
+set_global_assignment -name MIN_CORE_JUNCTION_TEMP 0
+set_global_assignment -name MAX_CORE_JUNCTION_TEMP 85
+set_global_assignment -name MAX7000_DEVICE_IO_STANDARD TTL
+set_location_assignment PIN_1 -to NC_01
+set_location_assignment PIN_4 -to GPIO12
+set_location_assignment PIN_5 -to GPIO13
+set_location_assignment PIN_6 -to GPIO16
+set_location_assignment PIN_8 -to GPIO19
+set_location_assignment PIN_9 -to GPIO20
+set_location_assignment PIN_10 -to GPIO26
+set_location_assignment PIN_11 -to GPIO21
+set_location_assignment PIN_12 -to D7
+set_location_assignment PIN_15 -to D5
+set_location_assignment PIN_16 -to D3
+set_location_assignment PIN_17 -to D1
+set_location_assignment PIN_18 -to A5
+set_location_assignment PIN_20 -to A3
+set_location_assignment PIN_22 -to A14
+set_location_assignment PIN_24 -to A12
+set_location_assignment PIN_25 -to A7
+set_location_assignment PIN_27 -to A11
+set_location_assignment PIN_28 -to A9
+set_location_assignment PIN_29 -to WR_N
+set_location_assignment PIN_30 -to IORQ_N
+set_location_assignment PIN_33 -to D6
+set_location_assignment PIN_34 -to D4
+set_location_assignment PIN_35 -to D2
+set_location_assignment PIN_36 -to D0
+set_location_assignment PIN_37 -to A4
+set_location_assignment PIN_39 -to A2
+set_location_assignment PIN_40 -to A0
+set_location_assignment PIN_41 -to A13
+set_location_assignment PIN_44 -to A8
+set_location_assignment PIN_45 -to A6
+set_location_assignment PIN_46 -to A10
+set_location_assignment PIN_48 -to A15
+set_location_assignment PIN_49 -to RD_N
+set_location_assignment PIN_50 -to MREQ_N
+set_location_assignment PIN_51 -to BDIR_N
+set_location_assignment PIN_52 -to SLTSL_N
+set_location_assignment PIN_54 -to WAIT_N
+set_location_assignment PIN_55 -to GPIO0
+set_location_assignment PIN_56 -to GPIO1
+set_location_assignment PIN_57 -to GPIO2
+set_location_assignment PIN_58 -to GPIO3
+set_location_assignment PIN_60 -to GPIO14
+set_location_assignment PIN_63 -to GPIO15
+set_location_assignment PIN_64 -to GPIO18
+set_location_assignment PIN_65 -to GPIO17
+set_location_assignment PIN_67 -to GPIO27
+set_location_assignment PIN_68 -to GPIO23
+set_location_assignment PIN_69 -to GPIO22
+set_location_assignment PIN_70 -to GPIO24
+set_location_assignment PIN_73 -to GPIO10
+set_location_assignment PIN_74 -to GPIO25
+set_location_assignment PIN_75 -to GPIO9
+set_location_assignment PIN_76 -to GPIO8
+set_location_assignment PIN_77 -to GPIO11
+set_location_assignment PIN_79 -to GPIO7
+set_location_assignment PIN_80 -to GPIO5
+set_location_assignment PIN_81 -to GPIO6
+set_location_assignment PIN_84 -to NC_84
+set_global_assignment -name VHDL_FILE MSXPi2v10r1.vhd
+set_location_assignment PIN_31 -to M1_N
