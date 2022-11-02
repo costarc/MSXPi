@@ -31,19 +31,26 @@
 ;
 ; File history :
 ; 0.1    : initial version
-TEXTTERMINATOR: EQU    '$'
+TEXTTERMINATOR: EQU     '$'
 BDOS:           EQU     5
 DOSSENDPICMD:
-
 ; Copy our command to the buffer
-
         ld      hl,FULLCMD
         ex      de,hl
         push    bc
+;CALL    DBGHL
+;CALL    DBGDE
+;CALL    DBGBC
         ldir
 
 ; now check if there are parameters in the command line
         ld      hl,$80
+        ld      a,(hl)
+;push    de
+;ld      d,0
+;ld      e,a
+;call    DBGDE
+;pop     de
         ld      a,(hl)
         ld      b,a
         or      a
@@ -66,6 +73,7 @@ DOSSENDPICMD1:
 DOSSENDPICMD2:
         ld      a,(hl)
         ld      (de),a
+;call    PUTCHAR
         inc     hl
         inc     de
         djnz    DOSSENDPICMD2
@@ -74,7 +82,7 @@ DOSSENDPICMD2:
         pop     hl
         ld      l,h
         ld      h,0
-        inc     hl
+
 ; then get number of chars in our command
         pop     bc
 
@@ -85,10 +93,10 @@ DOSSENDPICMD2:
         push    bc
 
 DOSSEND1:
-        ;ld      a,0
-        ;ld      (de),a
+        ld      a,0
+        ld      (de),a
         pop     bc
-        ;inc     bc
+        inc     bc
         ld      de,FULLCMD
         di
         call    SENDPICMD

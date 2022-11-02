@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 0.8                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,9 +31,8 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to supoprt new transfer logic
 ;
-;Parameters:    C = 2BH (_SDATE)
+;     Parameters:    C = 2BH (_SDATE)
 ;HL = Year 1980...2079
 ;D = Month (1=Jan...12=Dec)
 ;E = Date (1...31)
@@ -48,41 +47,51 @@
 ;Results:       A = 00H if time was valid
 
 ; Start of command - You may not need to change this
-
         ORG     $0100
-
-        LD      BC,5
-        LD      DE,COMMAND
+        LD      DE,CMDSTR
+        LD      BC,CMDSTREND-CMDSTR
         CALL    DOSSENDPICMD
+; Communication error?
+        JR      C,PRINTPIERR
 
-WAIT_LOOP:
+; -------------------------------------------------
+; Sync protocol. You should not have to change this
+; -------------------------------------------------
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
+        JR      NZ,PRINTPIERR
+
+WAITLOOP:
+        CALL    CHECK_ESC
+        JR      C,PRINTPIERR
         CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
+        JR      C,WAITLOOP
+; Loop waiting download on Pi
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         CP      RC_FAILED
         JP      Z,PRINTPISTDOUT
+
+; Command successful, then we need to read the data
+; sent by RPi. No stdout.
+        CP      RC_SUCCNOSTD
+        JR      Z,MYCOMMAND
+
+; There is data plus stdout to show
         CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
+        JR      NZ,WAITLOOP
+        CALL    MYCOMMAND
+        JP      PRINTPISTDOUT
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:
-
-        CALL    SETCLOCK
-        JP      PRINTPISTDOUT
-
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
 ; --------------------------------
-SETCLOCK:
+MYCOMMAND:
 ; set date
         LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
@@ -117,7 +126,8 @@ SETCLOCK:
         RET
 
 ; Replace with your command name here
-COMMAND:  DB      "PDATE"
+CMDSTR:  DB      "PDATE"
+CMDSTREND:  EQU $
 
 ; --------------------------------------
 ; End of your command

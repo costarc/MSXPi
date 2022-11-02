@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 0.8.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -31,41 +31,45 @@
 ;
 ; File history :
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to supoprt new transfer logic
 
 ORG     $0100
 
-        LD      BC,4
-        LD      DE,COMMAND
-        CALL    DOSSENDPICMD
+    LD      BC,4
+    LD      DE,MYCMD
+    CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_WAIT
+    SCF
+    RET     NZ
+WAITLOOP:
+    CALL    CHECK_ESC
+    JR      C,PRINTPIERR
+    CALL    CHKPIRDY
+    JR      C,WAITLOOP
+    ; Loop waiting download on Pi
+    LD      A,SENDNEXT
+    CALL    PIEXCHANGEBYTE
+    CP      RC_FAILED
+    JR      Z,SHOWSTD
+    CP      RC_SUCCESS
+    JR      NZ,WAITLOOP
 
-WAIT_RELEASED:
+SHOWSTD:
+    CALL    PRINTPISTDOUT
+    RET
 
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
-        
 PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
+    LD      HL,PICOMMERR
+    CALL    PRINT
+    JP      0
 
-MAINPROGRAM:
-        JP      PRINTPISTDOUT
-        
-COMMAND:
-        DB      "PRUN"
+MYCMD:
+    DB      "PRUN"
 
 PICOMMERR:
-        DB      "Communication Error",13,10,"$"
+    DB      "Communication Error",13,10,"$"
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
