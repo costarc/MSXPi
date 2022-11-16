@@ -3370,7 +3370,7 @@
     (property "Value" "JTAG" (id 1) (at 59.436 127.254 0)
       (effects (font (size 1.778 1.5113)) (justify left bottom))
     )
-    (property "Footprint" "msxpi:2X05_90" (id 2) (at 61.214 115.824 0)
+    (property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical" (id 2) (at 61.214 115.824 0)
       (effects (font (size 1.27 1.27)) hide)
     )
     (property "Datasheet" "" (id 3) (at 61.214 115.824 0)
@@ -4289,7 +4289,7 @@
       (reference "JP1") (unit 1) (value "MSXCART1") (footprint "Roni Footprints:MSX_CART")
     )
     (path "/610fb86f-39b8-496e-b00e-193fd857bffc"
-      (reference "JP2") (unit 1) (value "JTAG") (footprint "msxpi:2X05_90")
+      (reference "JP2") (unit 1) (value "JTAG") (footprint "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical")
     )
     (path "/0044612c-4860-4f3b-9000-ca145b60660d"
       (reference "LED1") (unit 1) (value "LED3MM") (footprint "msxpi:LED3MM")
