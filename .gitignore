@@ -11,3 +11,4 @@ software/zout/**
 *.hdb
 *.db_info
 *.tmw_info
+*-backups
