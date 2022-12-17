@@ -44,36 +44,35 @@ set_global_assignment -name LIMIT_AHDL_INTEGERS_TO_32_BITS ON
 set_global_assignment -name ALM_REGISTER_PACKING_EFFORT HIGH
 set_global_assignment -name MAX_LABS 20
 set_global_assignment -name DEVICE_FILTER_PACKAGE PLCC
-
-
-set_location_assignment PIN_9 -to D[0]
-set_location_assignment PIN_20 -to D[1]
-set_location_assignment PIN_11 -to D[2]
-set_location_assignment PIN_18 -to D[3]
-set_location_assignment PIN_14 -to D[4]
-set_location_assignment PIN_21 -to D[5]
-set_location_assignment PIN_16 -to D[6]
-set_location_assignment PIN_19 -to D[7]
-
-set_location_assignment PIN_31 -to A[0]
-set_location_assignment PIN_29 -to A[1]
-set_location_assignment PIN_24 -to A[2]
-set_location_assignment PIN_26 -to A[3]
-set_location_assignment PIN_25 -to A[4]
-set_location_assignment PIN_27 -to A[5]
-set_location_assignment PIN_33 -to A[6]
-set_location_assignment PIN_4 -to A[7]
-
-set_location_assignment PIN_37 -to RD_n
-set_location_assignment PIN_39 -to WR_n
-set_location_assignment PIN_40 -to IORQ_n
-
-set_location_assignment PIN_28 -to SPI_CS
-set_location_assignment PIN_41 -to SPI_MISO
-set_location_assignment PIN_5 -to SPI_MOSI
-set_location_assignment PIN_34 -to SPI_SCLK
-
 set_global_assignment -name MAX7000_DEVICE_IO_STANDARD "3.3-V LVTTL"
-set_location_assignment PIN_12 -to SPI_RDY
-set_location_assignment PIN_6 -to BUSDIR_n
-set_location_assignment PIN_8 -to WAIT_n
+
+set_location_assignment PIN_20 -to D[0]
+set_location_assignment PIN_37 -to D[1]
+set_location_assignment PIN_19 -to D[2]
+set_location_assignment PIN_39 -to D[3]
+set_location_assignment PIN_18 -to D[4]
+set_location_assignment PIN_41 -to D[5]
+set_location_assignment PIN_11 -to D[6]
+set_location_assignment PIN_29 -to D[7]
+
+set_location_assignment PIN_14 -to A[0]
+set_location_assignment PIN_34 -to A[1]
+set_location_assignment PIN_21 -to A[2]
+set_location_assignment PIN_25 -to A[3]
+set_location_assignment PIN_16 -to A[4]
+set_location_assignment PIN_33 -to A[5]
+set_location_assignment PIN_24 -to A[6]
+set_location_assignment PIN_12 -to A[7]
+
+set_location_assignment PIN_26 -to RD_n
+set_location_assignment PIN_5 -to WR_n
+set_location_assignment PIN_27 -to IORQ_n
+
+set_location_assignment PIN_9 -to SPI_CS
+set_location_assignment PIN_4 -to SPI_MISO
+set_location_assignment PIN_6 -to SPI_MOSI
+set_location_assignment PIN_8 -to SPI_SCLK
+
+set_location_assignment PIN_40 -to SPI_RDY
+set_location_assignment PIN_31 -to BUSDIR_n
+set_location_assignment PIN_28 -to WAIT_n
