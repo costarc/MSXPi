@@ -350,7 +350,7 @@ def prun(cmd):
     rc = RC_SUCCESS
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        print "prun:syntax error"
+        print("prun:syntax error")
         sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
@@ -404,11 +404,11 @@ def pdir(path):
 
                 except urllib2.HTTPError as e:
                     rc = RC_FAILED
-                    print "pdir:http error "+ str(e)
+                    print("pdir:http error "+ str(e))
                     sendstdmsg(rc,str(e))
         else:
             rc = RC_FAILNOSTD
-            print "pdir:out of sync in RC_WAIT"
+            print("pdir:out of sync in RC_WAIT")
     except Exception as e:
         print("pdir:"+str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
@@ -458,7 +458,7 @@ def pcd(path):
                         sendstdmsg(RC_FAILED,"Pi:Error - path not found")
         else:
             rc = RC_FAILNOSTD
-            print "pcd:out of sync in RC_WAIT"
+            print("pcd:out of sync in RC_WAIT")
     except Exception as e:
         print("pcd:"+str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
@@ -569,9 +569,9 @@ def pdate(parms = ''):
             senddatablock(buf,len(buf),0)
             rc = RC_SUCCESS
         else:
-            print "pdate:out of sync in SENDNEXT"
+            print("pdate:out of sync in SENDNEXT")
     else:
-        print "pdate:out of sync in RC_WAIT"
+        print("pdate:out of sync in RC_WAIT")
 
     return rc
 
@@ -785,7 +785,7 @@ def irc(cmd=''):
                     ircmsg = 'Pi:no new messages'
                     rc = RC_SUCCNOSTD
                 else:
-                    print "Socket error"
+                    print("Socket error")
                     ircmsg = 'Pi:irc Socket error\n'
                     rc = RC_FAILED
   
@@ -853,11 +853,11 @@ def dos(parms=''):
             blocksize = sectorInfo[1]*512
 
             """
-            print "dos_rds:deviceNumber=",sectorInfo[0]
-            print "dos_rds:numsectors=",sectorInfo[1]
-            print "dos_rds:mediaDescriptor=",sectorInfo[2]
-            print "dos_rds:initialSector=",sectorInfo[3]
-            print "dos_rds:blocksize=",blocksize
+            print("dos_rds:deviceNumber=",sectorInfo[0])
+            print("dos_rds:numsectors=",sectorInfo[1])
+            print("dos_rds:mediaDescriptor=",sectorInfo[2])
+            print("dos_rds:initialSector=",sectorInfo[3])
+            print("dos_rds:blocksize=",blocksize)
             """
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
@@ -879,11 +879,11 @@ def dos(parms=''):
             blocksize = sectorInfo[1]*512
 
             """
-            print "dos_wrs:deviceNumber=",sectorInfo[0]
-            print "dos_wrs:numsectors=",sectorInfo[1]
-            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
-            print "dos_wrs:initialSector=",sectorInfo[3]
-            print "dos_wrs:blocksize=",blocksize
+            print("dos_wrs:deviceNumber=",sectorInfo[0])
+            print("dos_wrs:numsectors=",sectorInfo[1])
+            print("dos_wrs:mediaDescriptor=",sectorInfo[2])
+            print("dos_wrs:initialSector=",sectorInfo[3])
+            print("dos_wrs:blocksize=",blocksize)
             """
 
             piexchangebyte(RC_SUCCESS)
@@ -918,11 +918,11 @@ def dos(parms=''):
             piexchangebyte(blocksize / 256)
 
             """
-            print "dos_sct:deviceNumber=",sectorInfo[0]
-            print "dos_sct:numsectors=",sectorInfo[1]
-            print "dos_sct:mediaDescriptor=",sectorInfo[2]
-            print "dos_sct:initialSector=",sectorInfo[3]
-            print "dos_sct:blocksize=",blocksize
+            print("dos_sct:deviceNumber=",sectorInfo[0])
+            print("dos_sct:numsectors=",sectorInfo[1])
+            print("dos_sct:mediaDescriptor=",sectorInfo[2])
+            print("dos_sct:initialSector=",sectorInfo[3])
+            print("dos_sct:blocksize=",blocksize)
             """
 
             piexchangebyte(RC_SUCCESS)
@@ -1013,8 +1013,8 @@ errcount = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
-print "GPIO Initialized\n"
-print "Starting MSXPi Server Version ",version,"Build",build
+print("GPIO Initialized\n")
+print("Starting MSXPi Server Version ",version,"Build",build)
 
 dos("INI 1")
 
@@ -1023,7 +1023,7 @@ try:
         try:
             print("st_recvcmd: waiting command")
             rc = recvcmd()
-            print"Received:",rc[1]
+            print("Received:",rc[1])
 
             if (rc[0] == RC_SUCCESS):
                 err = 0
@@ -1043,4 +1043,4 @@ try:
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
-    print "Terminating msxpi-server"
+    print("Terminating msxpi-server")
