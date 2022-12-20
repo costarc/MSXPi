@@ -57,8 +57,8 @@ if [[ $ssid == "YourWiFiId" ]];then
         ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
         update_config=1
         network={
-        ssid="MyWifiNetwork"
-        psk="MyWifiPassword"
+        ssid="myssid"
+        psk="mypsk"
         }
 EOF
     else

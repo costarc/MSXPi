@@ -1,11 +1,11 @@
 #!/bin/sh
 
 MSXPIHOME=/home/pi/msxpi
-export PI=192.168.1.11
+export PI=192.168.1.77
 export HW="8b"
 export REV="7"
-export ROMBANK1=./target/msxpi-dos_16k.rom
-export ROMBANK2=./target/msxpi-dos_16k.rom
+export ROMBANK1=./target/bios.rom
+export ROMBANK2=./target/msxpi-dos.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 
 if [[ "$HW" == "8b" ]];then
@@ -26,42 +26,34 @@ else
     mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
 fi
 
-if [[ $1 == "-v" || $2 == "-v" || $3 == "-v" ]];then
-   ../../add-build-id.sh -v
+if [[ $1 == "-v" || $1 == "-va" || $1 == "-vs" || $1 == "-vs" ]];then
+   ../../add-build-id.sh $1
 fi
 
-if [[ $1 == "-vr" || $2 == "-vr" || $3 == "-vr" ]];then
-   ../../add-build-id.sh -vr
-fi
-
-if [[ $1 == "-vs" || $2 == "-vs" || $3 == "-vs" ]];then
-   ../../add-build-id.sh -vs
-fi
-
-~/Dev/bin/z80asm -I ./asm-common/include                      ./Client/src/msxpi-client.asm             -o ./target/msxpi-client.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/bios.asm    -o ./target/bios.rom
 
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos_16k.rom && cat $ROMBANK1 > ./target/msxpi-dos.rom && cat $ROMBANK2 >> ./target/msxpi-dos.rom
+[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos.rom && cat $ROMBANK1 > ./target/msxpidos.rom && cat $ROMBANK2 >> ./target/msxpidos.rom && rm $ROMBANK1 $ROMBANK2
 
 # MSX-DOS commands
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm     -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadrom.com.asm -o ./target/ploadrom.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psetdisk.com.asm -o ./target/psetdisk.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pnewdisk.com.asm -o ./target/pnewdisk.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ptest.com.asm    -o ./target/ptest.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm    -o ./target/psync.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpi-io.asm     -o ./target/msxpi-io.bin
+
 
 # Update script for MSXPi Rev3/Rev4
 echo "pdate"                               > /tmp/MSXPIUPD.BAT

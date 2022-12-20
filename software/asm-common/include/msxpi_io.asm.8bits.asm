@@ -35,10 +35,10 @@
 ;          Moved to here various routines from msxpi_api.asm
 ; 0.7    : Replaced CHKPIRDY retries to $FFFF
 ;          Removed the RESET when PI is not responding. This is now responsability
-;           of the calling function, which might opt to do something else.
+;          of the calling function, which might opt to do something else.
 ; 0.6c   : Initial version commited to git
 ;
-
+;
 ; Inlude file for other sources in the project
 ;
 ; ==================================================================
@@ -53,7 +53,7 @@
 ; SENDIFCMD            |
 ;-----------------------
 SENDIFCMD:
-            out     (CONTROL_PORT1),a       ; Send data, or command
+            out     (CONTROL_PORT1),a  ; Send data, or command
             ret
 
 ;-----------------------
@@ -61,13 +61,13 @@ SENDIFCMD:
 ;-----------------------
 CHKPIRDY:
             push    bc
-            ld      bc,0ffffh
+            ld      bc,$ffff
 CHKPIRDY0:
-            in      a,(CONTROL_PORT1); verify spirdy register on the msxinterface
-            or	    a
-            jr      z,CHKPIRDYOK    ; rdy signal is zero, pi app fsm is ready
-                                    ; for next command/byte
-            dec     bc              ; pi not ready, wait a little bit
+            in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
+            or       a
+            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
+                                       ; for next command/byte
+            dec     bc                 ; pi not ready, wait a little bit
             ld      a,b
             or      c
             jr      nz,CHKPIRDY0
@@ -83,15 +83,15 @@ CHKPIRDYOK:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
-            xor     a                   ; do not use xor to preserve c flag state
-            out     (CONTROL_PORT1),a    ; send read command to the interface
-;in      a,(DATA_PORT1)
-            call    CHKPIRDY            ;wait interface transfer data to pi and
-                                        ; pi app processing
-                                        ; no ret c is required here, because in a,(7) does not reset c flag
+            xor     a                  ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT1),a  ; send read command to the interface
+            call    CHKPIRDY           ; wait interface transfer data to pi and
+                                       ; pi app processing
+                                       ; no ret c is required here, because in a,(7) 
+                                       ; does not reset c flag
 PIREADBYTE1:
-            in      a,(DATA_PORT1)       ; read byte
-            ret                         ; return in a the byte received
+            in      a,(DATA_PORT1)     ; read byte
+            ret                        ; return in a the byte received
 
 ;-----------------------
 ; PIWRITEBYTE          |
@@ -100,7 +100,7 @@ PIWRITEBYTE:
             push    af
             call    CHKPIRDY
             pop     af
-            out     (DATA_PORT1),a       ; send data, or command
+            out     (DATA_PORT1),a     ; send data, or command
             ret
 
 ;-----------------------
@@ -109,6 +109,6 @@ PIWRITEBYTE:
 PIEXCHANGEBYTE:
             call    PIWRITEBYTE
             call    CHKPIRDY
-            in      a,(DATA_PORT1)       ; read byte
+            in      a,(DATA_PORT1)     ; read byte
             ret
 

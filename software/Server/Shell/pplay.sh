@@ -40,6 +40,8 @@ VERSION=1
 RELEASE=0
 
 shift
+BASEPATH=$1
+shift
 CMD=$(echo $1 | tr [a-z] [A-Z])
 
 if [ $# -gt 0 ];then
@@ -76,10 +78,10 @@ if [ "$CMD" = "PLAY" ]; then
 
    rc=$(echo "$MEDIA" | grep -c -i ^http)
    if [ $rc -eq 1 ];then
-      (mplayer -nocache -afm ffmpeg "$MEDIA" 2>&1) >/dev/null &
+      (mplayer -nocache -afm ffmpeg "$BASEPATH/$MEDIA" 2>&1) >/dev/null &
       sleep 1
    else
-      music123 "$MEDIA" &
+      music123 "$BASEPATH/$MEDIA" &
       sleep 1
    fi
 
@@ -98,7 +100,7 @@ if [ "$CMD" = "PLAY" ]; then
 fi
 
 if [ "$CMD" = "LOOP" ]; then
-   music123 -l 0 "$MEDIA" &
+   music123 -l 0 "$BASEPATH/$MEDIA" &
    sleep 1
 
    rc=$(echo "$MEDIA" | grep -c -i \.mp3)
@@ -152,6 +154,7 @@ if [ $rc -eq 1  ]; then
    exit 0
 fi
 
-echo "Syntax:\n pplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
+echo "Syntax:"
+echo "pplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
 exit 1
 

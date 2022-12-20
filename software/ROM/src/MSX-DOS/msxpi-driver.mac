@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.8.1                                                           |
+;| Version : 1.0.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v0.8.1 (2017,2018)
+; MSXPi Driver v0.9.1 (2017,2020)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -55,11 +55,6 @@ BUSY           EQU $AE
 RC_SUCCESS     EQU $E0
 RC_CRCERROR    EQU $E2
 RC_OUTOFSYNC   EQU $E5
-
-CALBAS	EQU     0159H
-CHRGTR  EQU     04666H
-CHPUT   EQU     0A2H
-D.F34D	EQU     0F34DH
 
 ; symbols which can be used from the kernel
 
@@ -95,47 +90,56 @@ SECLEN		equ	512		; Size of biggest sector
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 
 ; Remark: This i called twice. I distinguish the 1st and 2nd verifyig reggister A.
-; A = #40 in first call, and #80 in second all.
+; A = #40 in first call, and #80 in second all.;
+;
 INIHRD:
-; If P is pressed during boot, MSXPi disk driver is not initialized
-        call    CHECK_P
-        JR      C,INIHRD_DISABLE
-INIHRD_START:
         ld      a,$80
         cp      h
         ret     z
+
         ld      hl,MSXPIVERSION
         call    PRINT
-        ld      hl,PIWAITMSG
+        ld      hl,MSXPISKP
         call    PRINT
-        call    PI_WAITBOOT
-        scf
-		ret
 
-INIHRD_DISABLE:
-        pop     hl
-        ret
-;-----------------------
-; PI_WAITBOOT          |
-;-----------------------
-PI_WAITBOOT:
-        ld      b,10
-
-PI_WAITBOOT1:
-        ld      a,'.'
-        call    CHPUT
-        call    SYNCH
-        ret     nc
+; give some time for the user to view the credits, and press P start MSXPi MSX-DOS1
+        ld      bc,45000
+INIHRD_WAIT:
         push    bc
-        call    CHECK_P
+        ld      a,4
+        call    SNSMAT
+        bit     5,a
         pop     bc
-        ret		c
-; Pi responded
-        djnz    PI_WAITBOOT1
-; Pi did not respond
+        jr      z,INIHRD_BOOT
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,INIHRD_WAIT
+        or      a
+        ret
+        
+INIHRD_BOOT:
+        call    PSYNC
+        ld      bc,9
+        ld      de,DOS_INI
+        call    SENDPICMD
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,INIHRD_FAILED
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE     
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
         scf
         ret
+INIHRD_FAILED:
+        or     a
+        ret
 
+; START OF -----------------------------
+; MSXPi v1.0.0 DRIVES Routine          |
+;---------------------------------------
 ; DRIVES
 ;
 ; Input: 	F	Zx set if to return physical drives
@@ -146,31 +150,13 @@ PI_WAITBOOT1:
 ;
 ; Remark:	DOS1 does not handle L=0 correctly. It hangs the computer upon boot if L = 0.
 ; During boot this is called twice, with BC = FB21 and then BC = FB23.
-; This
 
-DRIVESMSG: DB  "DRIVES"
 DRIVES:
-    	push    af
-		push	bc
-		push    de
-		ld		de,DRIVESMSG
-		ld		bc,6
-		call	SENDPICMD
-		ld		a,SENDNEXT
-		call	PIEXCHANGEBYTE
-; Is it zero? MSXDOS1 dont like it.
-        ld      l,1
-        jr      c,DRIVES2
-		or		a
-		jr		nz,DRIVES1
-		ld		a,1
-DRIVES1:
-        ld      l,a
-DRIVES2:
-		pop		de
-		pop		bc
-		pop		af
-		ret
+        ld     l,1
+        ret
+; END OF -------------------------------
+; MSXPi v1.0.0 DRIVES Routine          |
+;---------------------------------------
 
 ; INIENV
 ;
@@ -184,7 +170,9 @@ DRIVES2:
 INIENV:
         ret
 
-;
+; START OF -----------------------------
+; MSXPi v1.0.0 DSKIO Routine           |
+;---------------------------------------
 ; DSKIO
 ;
 ; Input: 	A	Drivenumber
@@ -199,132 +187,218 @@ INIENV:
 ;		A	if error, errorcode
 ;		B	if error, remaining sectors
 ; Changed:	af,bc,de,hl,IX,IY may be affected
-
-
-DOS_RSEC:   DB      "RDS",0
-DOS_WSEC:   DB      "WRS",0
+;
 DSKIO:
         jr		nc,DSKIO_READ
+; END OF -------------------------------
+; MSXPi v1.0.0 DSKIO Routine           |
+;---------------------------------------
 
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+;--------------------------------------
 DSKIO_WRITE:
         cp      4
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
-        push    bc
-        push    hl
-        call    DSKIO_SECTINFO
+        ;push    bc               ; need to save this ?
+        push    hl                ; save buffer address
+        call    DSKIO_SECTINFO    ; Send sector info
+                                  ; Receives back the block size 
+                                  ; (sectors * 512)
         jr      c,DSKIO_ERR
+        push    bc                ; Save block size
+        ld      bc,7
         ld      de,DOS_WSEC
-        ld      bc,3
-        call    SENDPICMD
-        jr      c,DSKIO_ERR
+        call    SENDPICMD         ; Send sector write command "WRS"
+        pop     bc                ; number of bytes to transfer
+        pop     de                ; buffer with data to read
+        jr      c,DSKIO_ERR1
 
 ; source address to read sector data and number of sectors
-        pop     de
-        pop     bc
 
-; will write one sector at a time
-DSKIO_WRITE1:
-        push    bc
-        ld      bc,512
-        call    SECSENDDATA
-        pop     bc
+DSKIO_WRITE_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_WRITE_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_WRITE_LOOP
+DSKIO_WRITE_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_ERR1
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
+
+        call    SENDDATABLOCK     ; Send the sectors (write to disk
         jr      c,DSKIO_ERR1
-        djnz    DSKIO_WRITE1
-        or      a
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
         ei
         ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+;--------------------------------------
 
-; ----------------
-; DSKIO_READ     |
-;-----------------
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_READ Routine     |
+;--------------------------------------
+; DSKIO
+;
+; Input:    A   Drivenumber
+;       F   Cx reset for read
+;           Cx set for write
+;       B   number of sectors
+;       C   Media descriptor
+;       de  logical sectornumber
+;       hl  transfer address
+; Output:   F   Cx set for error
+;           Cx reset for ok
+;       A   if error, errorcode
+;       B   if error, remaining sectors
+; Changed:  af,bc,de,hl,IX,IY may be affected
+;
 DSKIO_READ:
         cp      4
         jr      nc,DSKIO_ERR1
         di
 
-; save destination address only
-        push    bc
-        push    hl
-        call    DSKIO_SECTINFO
+; save destination address HL in the stack
+; save number of sectors BC in the stack
+;
+        ;push    bc              ; do we need to save secotr info?
+        push    hl               ; address to save sectors data
+        call    DSKIO_SECTINFO   ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
-        ld      bc,3
-        call    SENDPICMD
-        jr      c,DSKIO_ERR
+        ld      bc,7
+        call    SENDPICMD        ; Send read sector command "RDS"
         pop     de
-        call    SECRECVDATA
-        pop     bc
         jr      c,DSKIO_ERR1
+DSKIO_READ_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_READ_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_READ_LOOP
+DSKIO_READ_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_ERR1
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
+        call    RECVDATABLOCK    ; Receive the data (sectors)
+        ; pop     bc             ; do we need to save secotr info?
+        jr      c,DSKIO_ERR1
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_ERR1
         ei
         ret
-
-
 DSKIO_ERR:
         pop     hl
-        pop     bc
+        ;pop     bc
 DSKIO_ERR1:
         ld      a,12
         scf
         ei
         ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_READ Routine     |
+;--------------------------------------
 
-;-----------------------
-; DSKIO_SECTINFO       |
-;-----------------------
-DOS_SECINFO:    DB  "SCT",0
+
+; START OF ----------------------------
+; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+;--------------------------------------
+; DSKIO
+;
+; Input:    A   Drivenumber
+;       F   Cx reset for read
+;           Cx set for write
+;       B   number of sectors
+;       C   Media descriptor
+;       de  logical sectornumber
+;       hl  transfer address
+; Output:   F   Cx set for error
+;           Cx reset for ok
+;       A   if error, errorcode
+;       B   if error, remaining sectors
+; Changed:  af,bc,de,hl,IX,IY may be affected
+;
 
 DSKIO_SECTINFO:
         push    af
         push    bc
         push    de
         push    hl
-        LD      de,DOS_SECINFO
-        LD      bc,3
+        LD      de,DOS_SECI
+        LD      bc,7
         call    SENDPICMD
+        jr		c,DSKIO_SEC_ERR
+
+DSKIO_SECTINFO_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,DSKIO_SECTINFO_RELEASED
+        call    CHKPIRDY
+        JR      DSKIO_SECTINFO_LOOP
+DSKIO_SECTINFO_RELEASED:
+        cp      RC_FAILED
+        jr      z,DSKIO_SEC_ERR
+        cp      RC_SUCCESS
+        jr      nz,DSKIO_SEC_ERR
+
         pop     hl
         pop     de
         pop     bc
-        jr		nc,DSKIO_SECTINFO1
         pop     af
-        scf
-        ret
 
-DSKIO_SECTINFO1:
-; synchronize communication with MSX
-
-	ld		a,SENDNEXT
-	call	PIEXCHANGEBYTE
-	cp		SENDNEXT
-	jr		z,DSKIO_SECTINFO2
-	pop		af
-	scf
-	ret
-
-DSKIO_SECTINFO2:
 ; send device number
-
-		pop     af
         call    PIEXCHANGEBYTE
 
 ; send number of sectors to read/write
-
 		ld      a,b
         call    PIEXCHANGEBYTE
 
 ; send media decriptor
-
         ld      a,c
         call    PIEXCHANGEBYTE
 
 ; send logical sectornumber (initial sector number)
-
 		ld      a,e
         call    PIEXCHANGEBYTE
         ld      a,d
         call    PIEXCHANGEBYTE
+
+; new to version 1.0.0 : read back number of bytes 
+; calculated as 512 * number of sectors
+        call    READDATASIZE
+
+; read return code
+        call    PIEXCHANGEBYTE
+        cp      RC_SUCCESS
+        ret     z
+        scf
         ret
+
+DSKIO_SEC_ERR:
+        pop     hl
+        pop     de
+        pop     bc
+        pop     af
+        scf
+        ret
+; END OF ------------------------------
+; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+;--------------------------------------
 
 DSKIORDMSG:
     DB      "DSKIO READ ERROR",13,10,0
@@ -437,24 +511,21 @@ ChoiceStr:	db	13,10
 ;			Cx reset for ok
 ;		A	if error, errorcode
 ; Changed:	af,bc,de,hl,IX,IY may be affected
-DSKFMTCMD:DB    "FMT",0
+
 DSKFMT:
-        push    de
-        push    af
-        ld      bc,3
-        ld      de,DSKFMTCMD
-        call    SENDPICMD
-        pop     af
-        call    PIEXCHANGEBYTE
-        pop     de
-        ld      a,d
-        call    PIEXCHANGEBYTE
-        ld      a,ENDOFTRANSFER
-        call    PIEXCHANGEBYTE
-        cp      ENDOFTRANSFER
-        ret     Z
         scf
         ld      a,10
+        ret
+
+
+; MTOFF
+;
+; Input:    None
+; Output:   None
+; Changed:  af,bc,de,hl,IX,IY may be affected
+
+DSKSTP:
+MTOFF:
         ret
 
 ; OEMSTATEMENT
@@ -467,60 +538,99 @@ DSKFMT:
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 
 OEMSTA:
-		push    hl
-		ld      hl,STR_CALL_CMD
-CALL_CHECK:
-		ld      de,PROCNM
-CHECKCMD:
-        ld      a,(de)
-		cp      (hl)
-		jr		nz,CHECKNEXT
-		inc     de
-		inc     hl
-		or		a
-		jr		nz,CHECKCMD
-		ld		e,(hl)
-		inc     hl
-		ld		d,(hl)
-		call	MYCOMMAND
-		pop     hl
-        call	GETPREVCHAR
-		or		a
-		ret
-
-; Find entry address of next command to test
-CHECKNEXT:
-		ld		c,0FFH
-		xor		a
-		cpir
-		inc		hl
-		inc		hl
-        cp		(hl)
-		jr		nz,CALL_CHECK	;Check next command
-		pop		hl
-        scf
-		ret
+CALLHAND:
  
-MYCOMMAND:
-		push	de
-		ret
-
-
-; MTOFF
-;
-; Input:	None
-; Output:	None
-; Changed:	af,bc,de,hl,IX,IY may be affected
-
-DSKSTP:
-MTOFF:
-		ret
-
+    PUSH    HL
+    LD  HL,CALL_TABLE         ; Table with "_" instructions
+.CHKCMD:
+    LD  DE,PROCNM
+.LOOP:  LD  A,(DE)
+    CP  (HL)
+    JR  NZ,.TONEXTCMD   ; Not equal
+    INC DE
+    INC HL
+    AND A
+    JR  NZ,.LOOP    ; No end of instruction name, go checking
+    LD  E,(HL)
+    INC HL
+    LD  D,(HL)
+    POP HL      ; routine address
+    CALL    GETPREVCHAR
+    CALL    .CALLDE     ; Call routine
+    AND A
+    RET
+ 
+.TONEXTCMD:
+    LD  C,0FFH
+    XOR A
+    CPIR            ; Skip to end of instruction name
+    INC HL
+    INC HL      ; Skip address
+    CP  (HL)
+    JR  NZ,.CHKCMD  ; Not end of table, go checking
+    POP HL
+        SCF
+    RET
+ 
+.CALLDE:
+    PUSH    DE
+    RET
+  
+GETSTRPNT:
+; OUT:
+; HL = String Address
+; B  = Lenght
+ 
+        LD      HL,($F7F8)
+        LD      B,(HL)
+        INC     HL
+        LD      E,(HL)
+        INC     HL
+        LD      D,(HL)
+        EX      DE,HL
+        RET
+ 
+EVALTXTPARAM:
+    CALL    CHKCHAR
+    DEFB    "("             ; Check for (
+    LD  IX,FRMEVL
+    CALL    CALBAS      ; Evaluate expression
+        LD      A,(VALTYP)
+        CP      3               ; Text type?
+        JP      NZ,TYPE_MISMATCH
+        PUSH    HL
+        LD  IX,FRESTR         ; Free the temporary string
+        CALL    CALBAS
+        POP HL
+    CALL    CHKCHAR
+    DEFB    ")"             ; Check for )
+        RET
+ 
+ 
+CHKCHAR:
+    CALL    GETPREVCHAR ; Get previous basic char
+    EX  (SP),HL
+    CP  (HL)            ; Check if good char
+    JR  NZ,SYNTAX_ERROR ; No, Syntax error
+    INC HL
+    EX  (SP),HL
+    INC HL      ; Get next basic char
+ 
 GETPREVCHAR:
-        dec     hl
-        ld      IX,CHRGTR
-        jp      CALBAS
-
+    DEC HL
+    LD  IX,CHRGTR
+    JP      CALBAS
+ 
+ 
+TYPE_MISMATCH:
+        LD      E,13
+        DB      1
+ 
+SYNTAX_ERROR:
+        LD      E,2
+    LD  IX,ERRHAND  ; Call the Basic error handler
+    JP  CALBAS
+ 
 ;================================================================
 ; call Commands start here
 ; ================================================================
@@ -528,230 +638,154 @@ GETPREVCHAR:
 ;-----------------------
 ; call MSXPIVER        |
 ;-----------------------
-MSXPIVER:
+_MSXPIVER:
+        push    hl
         ld      hl,MSXPIVERSION
-        jp      PRINT
-
+        call    PRINT
+        pop     hl
+        ret
+        
 ;-----------------------
 ; call MSXPISTATUS     |
 ;-----------------------
-MSXPISTATUS:
-
-; check if Pi is responding
-        call    CHKPIRDY
+_MSXPISTATUS:
+        PUSH    HL
+        LD      BC,4
+        LD      DE,PINGCMD
+        CALL    SENDPICMD
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
         ld      hl,PIOFFLINE
-
-; Pi App is not available, print error message
-        jr      c,PRINTSTATUSMSG
-
-; Pi App is online
+        JR      C,PRINTSTATUSMSG
+        CP      RC_SUCCNOSTD
+        jr      NZ,PRINTSTATUSMSG
         ld      hl,PIONLINE
-
 PRINTSTATUSMSG:
-        jp      PRINT
-
-;-----------------------
-; call MSXPILOAD       |
-;-----------------------
-; Load the client to the memory address in the headers
-
-LOADCLIENTCMD: DB "ploadbin msxpi-client.bin",0
-MSXPILOAD:
-        ld      hl,MSXPILOADING
-        call    PRINT
-        ld      a,RESET
-        call    SENDIFCMD
-
-; Send command LOADROM to Pi
-        ld      bc,25
-        ld      de,LOADCLIENTCMD
-        call    SENDPICMD
-        jr		c,MSXPILOADERROR
-        call    LOADBINPROG
-        jp      c,MSXPILOADERROR
-        call    PIEXCHANGEBYTE
-        cp      ENDOFTRANSFER
-        jr      nz,MSXPILOADERR
-        push    hl
-        call    MSXPILOADERR
-        pop     hl
-        jp      (hl)
-MSXPILOADERR:
-        call    PRINTPISTDOUT
+        call      PRINT
+        POP       HL
         ret
 
-LOADERRMSG:     DB "Error loading file",13,10,0
-MSXPILOADERROR:
-        ld      hl,LOADERRMSG
-        jp      PRINT
-
+;--------------------------------------------------------------------
+; Call MSXPI BIOS function                                          |
+;--------------------------------------------------------------------
 ; Verify is command has STD parameters specified
 ; Examples:
 ; call mspxi("pdir")  -> will print the output
 ; call mspxi("0,pdir")  -> will not print the output
 ; call msxpi("1,pdir")  -> will print the output to screen
-; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
-MSXPI:
-CALL_MSXPI:
-; retrive CALL parameters from stack (second position in stack)
-        POP     DE
-        POP     HL
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)       
+_MSXPI:
+        CALL    EVALTXTPARAM    ; Evaluate text parameter
         PUSH    HL
-        PUSH    DE
-; Find end of command call and save in HL before returning to BASIC
-        CALL    SKIPMYCMD
-        POP     DE
-        EX      (SP),HL
-        PUSH    DE
-; put Command string in DE to parse parameters
-; ("0,1234,command")
-;   ^ DE should be pointing at flag before calling PARMSEVAL
-; Save a copy to stack
-        INC     HL
-        INC     HL
-        LD      D,H
-        LD      E,L
-        PUSH    HL
+        CALL    GETSTRPNT
+        EX      DE,HL
         CALL    PARMSEVAL
-        JR      C,CALL_MSXPIERR1
+        
 CALL_MSXPI1:
-; Store buffer address in stack after CALL parameters
-        EX      (SP),HL
+; At this point:
+; HL = contain buffer address to store data from RPi
+; DE = contain string address of command to send to RPi
+; A  = contain the output required for the command
+; B  = contain number of chars in the command
+;
+        PUSH    AF
         PUSH    HL
-; At this point, HL contain buffer addres
-; stack contain address of call parameters
-; DE contain string address of command to send to RPi
+        LD      C,B
+        LD      B,0
         LD      H,D
         LD      L,E
         CALL    SENDPICMD
-        JR      C,CALL_MSXPIERR2
+        JR      NC,CALL_MSXPI_LOOP
+        POP     HL
+        POP     AF
+        POP     HL
+        SCF
+        RET
 
-; protocol to detect result of command sent to RPi
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,CALL_MSXPIERR2
-WAITLOOP:
-        CALL    CHECK_ESC
-        JR      C,CALL_MSXPIERR2
-        CALL    CHKPIRDY
-        JR      C,WAITLOOP
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+CALL_MSXPI_LOOP:
+        ld      a,SENDNEXT
+        call    PIEXCHANGEBYTE
+        cp      RC_WAIT
+        jr      NZ,CALL_MSXPI_RELEASED
+        call    CHKPIRDY
+        JR      CALL_MSXPI_LOOP
+
+CALL_MSXPI_RELEASED: 
         CP      RC_FAILED
         JR      Z,CALL_MSXPISTD
         CP      RC_SUCCESS
         JR      Z,CALL_MSXPISTD
-        CP      RC_SUCCNOSTD
-        JR      Z,CALL_MSXPIERR3
-        JR      WAITLOOP
-
-CALL_MSXPIERR1:
         POP     HL
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        RET
-BUFERRMSG:DB    "Parameters or Buffer address invalid",13,10,0
-
-CALL_MSXPIERR2:
+        POP     AF
+        CP      1
+        JR      NZ,CALL_MSXPIERR2
         LD      A,RC_CONNERR
-CALL_MSXPIERR3:
-; Store return code in buffer
+        LD      (HL),A                  ; Store return code in buffer
+CALL_MSXPIERR2:
         POP     HL
-CALL_MSXPIERR4:
-        POP     HL
-        LD      (HL),A
+        OR      A
         RET
 
 CALL_MSXPISTD:
-; Restore address of string with command
-        POP     DE
-; Verify if user wants to print STDOUT from RPi
-        INC     DE
-        LD      A,(DE)
-        CP      ','
-; User did not specify. Default is to print
-        JR      NZ,CALL_MSXPISTDOUT
-        DEC     DE
-        LD      A,(DE)
+                                        ; Restore address of buffer and stdout option
+        POP     DE     ; buffer address
+        POP     AF     ; stdout option
+
+                                        ; Verify if user wants to print STDOUT from RPi
         CP      '1'
+                                        ; User did not specify. Default is to print
         JR      Z,CALL_MSXPISTDOUT
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
+
         CALL    NOSTDOUT
-        LD      A,RC_SUCCNOSTD
-        JR      CALL_MSXPIERR4
+        LD      (DE),A
+        POP     HL
+        OR      A
+        RET
 
 CALL_MSXPISTDOUT:
-; Discard buffer address
-        CALL    PRINTPISTDOUT
-        LD      A,RC_SUCCNOSTD
-        JR      CALL_MSXPIERR4
-
-; This routine will save the RPi data to (STREND)
-CALL_MSXPISAVSTD:
-; Retrieve buffer address from stack
-        POP     DE
-        CALL    DBGDE
-;Save buffer address
         PUSH    DE
-; Get data area
+        CALL    PRINTPISTDOUT
+        POP     DE
+        LD      (DE),A
+        POP     HL
+        OR      A
+        RET
+
+                                        ; This routine will save the RPi data to (STREND)
+CALL_MSXPISAVSTD:
+        PUSH    DE
         INC     DE
         INC     DE
         INC     DE
         CALL    RECVDATABLOCK
         POP     HL
-        LD      (HL),A
-; Return buffer size to BASIC in first two positions of buffer
+        LD      (HL),A                  ; return code
         INC     HL
-        LD      (HL),C
+        LD      (HL),C                  ; Return buffer size to BASIC in first two 
+                                        ; positions of buffer
         INC     HL
         LD      (HL),B
+        POP     HL
+        OR      A
         RET
 
-; Check parameters with this format:
-; ("0,1234,command")
-; Return:
-; BC = Number of characters in command
-; HL = address after ")"
-;
-SKIPMYCMD:
-        LD      BC,$FFFF
-        INC     HL      ;Skip '('
-SKIPMYCMD1:
-        INC     HL
-        INC     BC
-        LD      A,(HL)
-SKIPMYCMD2:
-        CP      34
-        JR      NZ,SKIPMYCMD3
-        DEC     BC
-SKIPMYCMD3:
-        CP      ')'
-        JR      NZ,SKIPMYCMD1
-        INC     HL
-        RET
-        LD      A,(HL)
-        CP      ':'
-        RET     NZ
-        INC     HL
-        RET
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATABLOCK|
 ;----------------------------------------
-MSXPISEND:
+_MSXPISEND:
 ; retrive CALL parameters from stack (second position in stack)
-        POP     DE
-        POP     HL
+        CALL    EVALTXTPARAM    ; Evaluate text parameter
         PUSH    HL
-        PUSH    DE
-        INC     HL
-        INC     HL
+        CALL    GETSTRPNT
         CALL    STRTOHEX
         JR      NC,MSXPISEND1
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
         CALL    PRINT
+        POP     HL
+        OR      A
         RET
 MSXPISEND1:
 ; Save buffer address to later store return code
@@ -770,29 +804,24 @@ MSXPISEND1:
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
         POP     HL
         LD      (HL),A
-        POP     DE
         POP     HL
-        LD      BC,8
-        ADD     HL,BC
-        PUSH    HL
-        PUSH    DE
+        OR      A
         RET
 
 ;----------------------------------------
 ; Call MSXPI BIOS function RECVDATABLOCK|
 ;----------------------------------------
-MSXPIRECV:
-        POP     DE
-        POP     HL
+_MSXPIRECV:
+        CALL    EVALTXTPARAM    ; Evaluate text parameter
         PUSH    HL
-        PUSH    DE
-        INC     HL
-        INC     HL
+        CALL    GETSTRPNT
         CALL    STRTOHEX
         JR      NC,MSXPIRECV1
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
         CALL    PRINT
+        POP     HL
+        OR      A
         RET
 MSXPIRECV1:
         LD      D,H
@@ -817,12 +846,7 @@ MSXPIRECV1:
         INC     HL
         LD      (HL),B
 MSXPIRECV2:
-        POP     DE
         POP     HL
-        LD      BC,8
-        ADD     HL,BC
-        PUSH    HL
-        PUSH    DE
         OR      A
         RET
 
@@ -836,7 +860,7 @@ MSXPIRECV2:
 ;  (sp) = address of the given routine
 ; Modify: af,hl
 ;
-GETPOINTERS:
+_GETPOINTERS:
         push    de
         ld      hl,BIOSENTRYADDR
 
@@ -855,16 +879,34 @@ GETPOINTERSEXIT:
         ld		l,e
         ld      (PROCNM),hl
         pop     de
+        or      a
         ret
 
+;-----------------------
+; call MSXPISYNC       |
+;-----------------------
+_MSXPISYNC:
+    PUSH    HL
+    CALL    PSYNC
+    LD      HL,PSYNC_ERROR
+    JR      C,_MSXPSYNC_EXIT
+    LD      HL,PSYNC_RESTORED
+
+_MSXPSYNC_EXIT:
+    CALL    PRINT
+    POP     HL
+    OR      A
+    RET
+
 BIOSENTRYADDR:  EQU     $
-        DW      MSXPIVER
-        DW      MSXPISTATUS
-        DW      MSXPILOAD
+        DW      _MSXPIVER
+        DW      _MSXPISTATUS
+        DW      _MSXPI
+        DW      _MSXPISEND
+        DW      _MSXPIRECV
+        DW      _MSXPISYNC
         DW      RECVDATABLOCK
         DW      SENDDATABLOCK
-        DW      SECRECVDATA
-        DW      SECSENDDATA
         DW      READDATASIZE
         DW      SENDDATASIZE
         DW      CHKPIRDY
@@ -873,116 +915,27 @@ BIOSENTRYADDR:  EQU     $
         DW      PIEXCHANGEBYTE
         DW      SENDIFCMD
         DW      SENDPICMD
-        DW      CHECKBUSY
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      SYNCH
-        DW      DOWNLOADDATA
-        DW      UPLOADDATA
-        DW      MSXPISEND
-        DW      MSXPIRECV
-        DW      MSXPI
-
-GETSTRPNT:
-; OUT:
-; HL = String Address
-; BC = Length
- 
-        LD      HL,(USR)
-        LD      C,(HL)
-        LD      B,0
-        INC     HL
-        LD      E,(HL)
-        INC     HL
-        LD      D,(HL)
-        RET
- 
-EVALTXTPARAM:
-        CALL	CHKCHAR
-        DEFB	"("             ; Check for (
-        LD      IX,FRMEVL
-        CALL	CALBAS		; Evaluate expression
-        LD      A,(VALTYP)
-        CP      3               ; Text type?
-        JP      NZ,TYPE_MISMATCH
-        PUSH	HL
-        LD      IX,FRESTR         ; Free the temporary string
-        CALL	CALBAS
-        POP     HL
-        CALL	CHKCHAR
-        DEFB	")"             ; Check for )
-        RET
- 
- 
-CHKCHAR:
-        CALL	GETPREVCHAR	; Get previous basic char
-        EX      (SP),HL
-        CP      (HL) 	        ; Check if good char
-        JR      NZ,SYNTAX_ERROR	; No, Syntax error
-        INC     HL
-        EX      (SP),HL
-        INC     HL		; Get next basic char
- 
-TYPE_MISMATCH:
-        LD      E,13
-        DB      1
- 
-SYNTAX_ERROR:
-        LD      E,2
-        LD      IX,ERRHAND	; Call the Basic error handler
-        JP      CALBAS
-
-;-----------------------------------------------------------------------------
-;
-; Read the keyboard matrix to see if ESC is pressed
-; Output: Cy = 1 if pressed, 0 otherwise
-
-CHECK_CTRL:
-        ld		b,6
-        in		a,(0AAh)
-        and		11110000b
-        or		b
-        out		(0AAh),a
-        in		a,(0A9h)
-        scf
-        bit		1,a
-        ret		z
-        or		a
-        ret
-
-CHECK_P:
-        ld		b,4
-        in		a,(0AAh)
-        and		11110000b
-        or		b
-        out		(0AAh),a
-        in		a,(0A9h)
-        scf
-        bit		5,a
-        ret		z
-        or		a
-        ret
+        DW      PSYNC
 
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi Hardware Interface v0.7",13,10
-        DB      "MSXPi ROM v0.8.2",13,10
-        DB      "      Build "
-build:  DB      "20171230.00077"
+        DB      "MSXPi ROM v1.0.0 "
+build:  DB      "20201015.000"
         DB      13,10
-        DB      "(c) Ronivon Costa,2017",13,10,10
+        DB      "(c) Ronivon Costa,2017-2020",13,10,10
         DB      "Commands available:",13,10
-        DB      "MSXPILOAD MSXPISTATUS MSXPIVER MSXPI MSXPISEND MSXPIRECV",13,10
+        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10,0
+MSXPISKP:
+        DB       "Press P to boot MSXPi DOS",13,10
         DB      00
-
-MSXPILOADING:
-        DB      "Loading MSXPi Client",13,10,0
 
 PIOFFLINE:
         DB      "Communication Error",13,10,0
@@ -993,37 +946,53 @@ PIONLINE:
 PIWAITMSG:
         DB      13,10,"Waiting Pi boot. P to skip",13,10,0
 
+BUFERRMSG:
+        DB    "Parameters or Buffer address invalid",13,10,0
+
+PSYNC_RESTORED:
+        DB    "Communication restored",13,10,0
+
+PSYNC_ERROR:
+        DB    "Could not restore communication ",13,10,0
+
+
 ; ================================================================
 ; Table of Commands available/implemented
 ; ================================================================
 
-STR_CALL_CMD:
+CALL_TABLE:
 
         DB      "MSXPIVER",0
-        DW      MSXPIVER
-
-        DB      "MSXPILOAD",0
-        DW      MSXPILOAD
+        DW      _MSXPIVER
 
         DB      "MSXPISTATUS",0
-        DW      MSXPISTATUS
+        DW      _MSXPISTATUS
 
         DB      "GETPOINTERS",0
-        DW      GETPOINTERS
+        DW      _GETPOINTERS
 
         DB      "MSXPISEND",0
-        DW      MSXPISEND
+        DW      _MSXPISEND
 
         DB      "MSXPIRECV",0
-        DW      MSXPIRECV
+        DW      _MSXPIRECV
+
+        DB      "MSXPISYNC",0
+        DW      _MSXPISYNC
 
         DB      "MSXPI",0
-        DW      MSXPI
+        DW      _MSXPI
 
 ENDOFCMDS:
         DB      00
 
-INCLUDE debug.asm
+DOS_INI:    DB  "DOS INI 1",0
+DOS_RSEC:   DB  "DOS RDS",0
+DOS_WSEC:   DB  "DOS WRS",0
+DOS_SECI:   DB  "DOS SCT",0
+DOS_DRV:    DB  "DOS DRV",0
+DOS_FMT:    DB  "DOS FMT",0
+
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm
 INCLUDE basic_stdio.asm
