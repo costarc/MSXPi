@@ -151,7 +151,7 @@ def recvdatablock(timeoutFlag):
     
     mymsxbyte = piexchangebyte(timeoutFlag,SENDNEXT)
     if (mymsxbyte[1] != SENDNEXT):
-        print("recvdatablock:Out of sync with MSX, waiting SENDNEXT, received rc,msxbyte:",hex(mymsxbyte[0]),hex(mymsxbyte[1])
+        print("recvdatablock:Out of sync with MSX, waiting SENDNEXT, received rc,msxbyte:",hex(mymsxbyte[0]),hex(mymsxbyte[1]))
         rc = RC_OUTOFSYNC
     else:
         dsL = piexchangebyte(NoTimeOutCheck,SENDNEXT)
@@ -201,7 +201,7 @@ def secrecvdata(buffer,initbytepos):
         while(index<filesize):
             retries = 0
             rc = RC_UNDEFINED
-            while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
+            while(retries < GLOBALRETRIES and rc != RC_SUCCESS):
                 datablock = recvdatablock(NoTimeOutCheck)
                 rc = datablock[0]
                 retries += 1
@@ -308,7 +308,7 @@ def secsenddata(buffer, initpos, filesize):
             rc = RC_UNDEFINED
             lastindex = index+blocksize
                                 
-            while(retries < GLOBALRETRIES and rc <> RC_SUCCESS):
+            while(retries < GLOBALRETRIES and rc != RC_SUCCESS):
                 #print(secsenddata:initpos=",index,"endpos=",lastindex,"retry=",retries
                 rc = senddatablock(TimeOutCheck,buffer,index+initpos,blocksize,True)
                 retries += 1
@@ -355,7 +355,7 @@ def prun(cmd):
                     buf = str("Pi:Error running command "+cmd+'\n')
             sendstdmsg(rc,buf)
         except subprocess.CalledProcessError as e:
-            print(Error:",buf)
+            print("Error:",buf)
             rc = RC_FAILED
             sendstdmsg(rc,"Pi:Error\n"+buf+'\n')
 
@@ -368,7 +368,7 @@ def ploadr(basepath, file):
     GPIO.output(rdyPin, GPIO.LOW)
     msxbyte = piexchangebyte(NoTimeOutCheck,RC_WAIT)
     if (msxbyte[1]==SENDNEXT):
-        if (file.strip() <> ''):
+        if (file.strip() != ''):
             fpath = getpath(basepath, file)
             # local file?
             if (fpath[0] < 2):
@@ -891,7 +891,7 @@ def whatsup_send(msg):
 def whatsup_read(f):
     msg = f.stdout.readline()
     if len(msg) > 1:
-        print msg
+        print(msg)
         msga = msg.split(":")
         if len(msga) >= 3:
             sender = msga[0]
@@ -1042,7 +1042,7 @@ try:
                         print("pcopy:Syntax error")
                         sendstdmsg(RC_FILENOTFOUND,"Pi:Error\nSyntax: pcopy <source file|url> <target file>")
                     else:
-                        if (len(args) == 2 and args[1] <> ''):
+                        if (len(args) == 2 and args[1] != ''):
                             srcurl = args[1].split("/")
                             fname = srcurl[len(srcurl)-1]
                         elif (len(args) == 3):
