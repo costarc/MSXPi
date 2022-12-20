@@ -157,15 +157,21 @@ RECVDATABLOCK0:
         push    de
         push    bc      ; blocksize   
 ; CLEAR CRC and save block size
-        exx
-        ld      hl,$ffff
-        exx
+;        exx
+;        ld      hl,$ffff
+;        exx
+; 8 bits CRC
+        ld      h,0
+
 RECVDATABLOCK1:
 
 ; send info that msx is in transfer mode
         call    PIEXCHANGEBYTE
         ld      (de),a
-        call    CRC16
+;        call    CRC16
+; 8 bits CRC
+        xor     h
+        ld          h,a
         inc     de
 		dec     bc
         ld      a,b
@@ -173,16 +179,16 @@ RECVDATABLOCK1:
         jr      nz,RECVDATABLOCK1
 
 ; Now exchange CRC
-        exx
-        ld      a,l
-        call    PIEXCHANGEBYTE
-        cp      l
-        jr      nz,RECVDATABLOCK_CRCERROR
+;        exx
+;        ld      a,l
+;        call    PIEXCHANGEBYTE
+;        cp      l
+;        jr      nz,RECVDATABLOCK_CRCERROR
         ld      a,h
         call    PIEXCHANGEBYTE
         cp      h
         jr      nz,RECVDATABLOCK_CRCERROR
-        exx
+;        exx
 
 ;Return number of bytes read
         pop     bc
