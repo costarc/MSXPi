@@ -2,12 +2,12 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
-import urllib2
+from urllib.request import urlopen
 import mmap
 import fcntl,os
 import sys
 from subprocess import Popen,PIPE,STDOUT
-from HTMLParser import HTMLParser
+from html.parser import HTMLParser
 import datetime
 import time
 import glob
@@ -779,7 +779,7 @@ def irc(cmd=''):
                     ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
                     rc = RC_SUCCESS
 
-            except socket.error, e:
+            except socket.error as e:
                 err = e.args[0]
                 if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
                     ircmsg = 'Pi:no new messages'
