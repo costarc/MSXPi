@@ -220,7 +220,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     msxbyte = piexchangebyte(SENDNEXT)
 
     if (msxbyte != SENDNEXT):
-        print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte)
+        print("senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte))
         return RC_OUTOFSYNC
     else:
         piexchangebyte(thisblocksize % 256)
