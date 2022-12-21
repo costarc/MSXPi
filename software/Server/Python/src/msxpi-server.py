@@ -198,7 +198,7 @@ def recvdatablock():
         if (msxcrc != crc):
             rc = RC_CRCERROR
 
-    #print "recvdatablock:exiting with rc = ",hex(rc)
+    print("recvdatablock:exiting with rc = ",hex(rc))
     return [rc,buffer]
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
@@ -224,7 +224,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
         return RC_OUTOFSYNC
     else:
         piexchangebyte(thisblocksize % 256)
-        piexchangebyte(thisblocksize / 256)
+        piexchangebyte(thisblocksize // 256)
         if thisblocksize == 0:
             return ENDTRANSFER
 
@@ -245,7 +245,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
-            msxcrcH = piexchangebyte(crc / 256)
+            msxcrcH = piexchangebyte(crc // 256)
             if msxcrcH != crc / 256:
                 attempts -= 1
                 rc = RC_CRCERROR
@@ -253,7 +253,7 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
 
             else:
                 rc = RC_SUCCESS
-    
+    print("senddatablock:exiting with rc = ",hex(rc))
     return rc 
 
 def sendstdmsg(rc, message):
@@ -299,6 +299,7 @@ def getpath(basepath, path):
         urltype = 3 # this is an relative network path
         newpath = basepath + "/" + path
 
+    print("getpath: Exiting")
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -346,6 +347,7 @@ def ini_fcb(fname):
         piexchangebyte(ord(msxfcbfname[i]))
 
 def prun(cmd):
+    print("prun: Starting cmd:",cmd)
     piexchangebyte(RC_WAIT)
     rc = RC_SUCCESS
 
@@ -356,9 +358,10 @@ def prun(cmd):
     else:
         cmd = cmd.replace('::','|')
         try:
-
-            p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            print("prun: Popen ",cmd)            
+            p = subprocess.Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
+            print("prun:Popen buf var: ",buf)
             if len(buf) == 0:
                 buf = "Pi:No output"
 
@@ -376,7 +379,7 @@ def pdir(path):
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
-    #print "pdir:starting"
+    print("pdir:starting")
 
     try:
         if (msxbyte == SENDNEXT):
@@ -395,6 +398,7 @@ def pdir(path):
             else:
                 parser = MyHTMLParser()
                 try:
+                    print("pdir: htmldata = urllib2.urlopen(urlcheck[1].decode()).read()")
                     htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
                     parser = MyHTMLParser()
                     parser.feed(htmldata)
@@ -428,6 +432,7 @@ def pcd(path):
     try:
         if (msxbyte == SENDNEXT):
             if (path == '' or path.strip() == "."):
+                #print("pcd: show path")
                 sendstdmsg(rc,basepath+'\n')
             elif (path.strip() == ".."):
                 newpath = basepath.rsplit('/', 1)[0]
@@ -448,6 +453,7 @@ def pcd(path):
                     psetvar[0][1] = newpath
                     sendstdmsg(rc,str(newpath+'\n'))
                 else:
+                    print("pcd: inside getpath / else")
                     newpath = str(newpath)
                     if (os.path.isdir(newpath)):
                         psetvar[0][1] = newpath
@@ -460,7 +466,7 @@ def pcd(path):
             rc = RC_FAILNOSTD
             print("pcd:out of sync in RC_WAIT")
     except Exception as e:
-        print("pcd:"+str(e))
+        print("pcd:",str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     return [rc, newpath]
@@ -651,7 +657,7 @@ def pwifi(parms=''):
     wifissid = psetvar[4][1]
     wifipass = psetvar[5][1]
     rc = RC_SUCCESS
-    cmd=parms.decode().strip()
+    cmd=parms.strip()
 
     if (cmd[:2] == "/h"):
         sendstdmsg(RC_FAILED,"Pi:Usage:\npwifi display | set")
@@ -1016,7 +1022,7 @@ GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",build)
 
-dos("INI 1")
+# dos("INI 1")
 
 try:
     while True:
@@ -1027,9 +1033,9 @@ try:
 
             if (rc[0] == RC_SUCCESS):
                 err = 0
-
-                cmd = str(rc[1].split()[0]).lower()
-                parms = str(rc[1][len(cmd)+1:])
+                fullcmd = rc[1].decode()
+                cmd = fullcmd.split()[0].lower()
+                parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
