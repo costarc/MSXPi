@@ -1,6 +1,8 @@
-ghdl -a msxpi.vhd
-ghdl -a msxpi_tb.vhd
-ghdl -e msxpi_tb
+cd /cygdrive/c/Users/alpha/Documents/dev/msxpi/hardware/CPLD\ Project/Sim
+../../../../ghdl/bin/ghdl -a msxpi.vhd
+../../../../ghdl/bin/ghdl -a msxpi_tb.vhd
+../../../../ghdl/bin/ghdl -r msxpi_tb
+
 ./msxpi_tb --stop-time=200ps --vcd=msxpi_tb.vcd
 
 export PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:/usr/local/MacGPG2/bin:/Users/ronivon/Dev/SDCC/bin:/Users/ronivon/Dev/Z80/pasmo-0.5.4.beta2:/Users/ronivon/Desktop/nand2tetris/tools:/Applications/gtkwave.app/Contents/Resources/bin

@@ -1,0 +1,7 @@
+v 4
+file . "msxpi_tb.vhd" "2ef3bf6aae0826e51173ee508078f1b483c46863" "20221221130957.769":
+  entity msxpi_tb at 1( 0) + 0 on 13;
+  architecture tb of msxpi_tb at 8( 113) + 0 on 14;
+file . "..\msxpi.vhd" "12438c0bf62d7de73e36bd691e641cfeae17a895" "20221221130957.751":
+  entity msxpi at 49( 2278) + 0 on 11;
+  architecture rtl of msxpi at 72( 2848) + 0 on 12;

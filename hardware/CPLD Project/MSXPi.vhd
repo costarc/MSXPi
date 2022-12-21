@@ -49,7 +49,6 @@
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
-use work.msxpi_package.all;
 
 ENTITY MSXPi IS
 PORT ( 
@@ -68,33 +67,30 @@ PORT (
     SPI_RDY     : IN STD_LOGIC);
 END MSXPi;
 
-library ieee;
-use ieee.std_logic_1164.all;
-package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
-        constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
-        constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
-        constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
-        constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
-        constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-        constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
-        constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
-        constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
-end msxpi_package;
+
 
 architecture rtl of MSXPi is
+constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
+constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
+constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
+constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
+constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
+constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
     type fsm_type is (idle, prepare, transferring);
     signal spi_state    : fsm_type := idle;
     signal readoper     : std_logic;
     signal writeoper    : std_logic;
-    signal spi_en       : std_logic;
+    signal csPin       : std_logic;
     signal D_buff_msx   : std_logic_vector(7 downto 0);
     signal D_buff_pi    : std_logic_vector(7 downto 0);
     signal RESET        : std_logic;
     signal spibitcount_s: integer range 0 to 8;
     signal D_buff_msx_r : std_logic_vector(7 downto 0);
     signal SPI_en_s     : STD_LOGIC := '0';
-    signal SPI_RDY_s    : STD_LOGIC;
+    signal waitSignal    : STD_LOGIC;
     signal clk: std_logic;
     
 begin
@@ -103,36 +99,23 @@ begin
     WAIT_n <= waitSignal;                -- Z80 /wait signal
     clk <= SPI_SCLK;                        -- Serial clock from RPi
     
-
-    BUSDIR_n <= 'Z';  -- '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
     readoper   <= not (IORQ_n or RD_n);
     writeoper  <= not (IORQ_n or WR_n);
-    spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
-                     '0';
-    
-    -- SPI_en_s = '1' means SPI is busy
-    -- SPI_RDY  = '1' means Pi is Busy
-    SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
-    RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
-    D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
-    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else     
-         D_buff_pi when readoper = '1' and A = DATAPORT1 else
-          "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
-          "ZZZZZZZZ";
 
-spi:process(IORQ_n, WR_n, RD_n, waitSignal, SPI_RDY)
+process(IORQ_n, WR_n, RD_n, waitSignal, SPI_RDY)
 begin
-    if (IORQ_n = '0' and (WR_n = '0' or RD_n = '0') then        -- a new read/write request from MSX
+    if (IORQ_n = '0' and (WR_n = '0' or RD_n = '0')) then        -- a new read/write request from MSX
          csPin <= '0';
          waitSignal <= '0';
     elsif csPin = '0' and SPI_RDY = '1' then                            -- RPi is selected and signaling ready
         csPin <= '1';
         waitSignal <= '1';
-    else SPI_RDY = '1' then
+    elsif SPI_RDY = '1' then
         waitSignal <= 'Z';
+    end if;
 end process;
 
-spi:process(SPI_SCLK)
+process(SPI_SCLK)
 begin
     D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
     SPI_MOSI <= D_buff_msx_r(7);
