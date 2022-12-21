@@ -1,0 +1,85 @@
+m255
+K3
+13
+cModel Technology
+Z0 dC:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD_Project\simulation\modelsim
+Emsxpi
+Z1 w1671622116
+Z2 DPx4 ieee 11 numeric_std 0 22 O3PF8EB`?j9=z7KT`fn941
+Z3 DPx3 std 6 textio 0 22 5>J:;AW>W0[[dW0I6EN1Q0
+Z4 DPx4 ieee 14 std_logic_1164 0 22 5=aWaoGZSMWIcH0i^f`XF1
+Z5 dC:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD_Project\simulation\modelsim
+Z6 8C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/MSXPi.vhd
+Z7 FC:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/MSXPi.vhd
+l0
+L53
+VTU]z0X9DgBP]iJP10Df8^0
+Z8 OV;C;10.1d;51
+31
+Z9 !s108 1671637136.747000
+Z10 !s90 -reportprogress|300|-93|-work|work|C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/MSXPi.vhd|
+Z11 !s107 C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/MSXPi.vhd|
+Z12 o-93 -work work -O0
+Z13 tExplicit 1
+!s100 <F6PWCnCBHDIjfgSe:D_B0
+!i10b 1
+Artl
+R2
+R3
+R4
+DEx4 work 5 msxpi 0 22 TU]z0X9DgBP]iJP10Df8^0
+l96
+L72
+V<@^?KflRU<aj=8FgbMY^C1
+R8
+31
+R9
+R10
+R11
+R12
+R13
+!s100 aaIdB[0Y<@G5]RR`28`]Q1
+!i10b 1
+Emsxpi_tb
+Z14 w1671635527
+Z15 DPx4 ieee 15 std_logic_arith 0 22 4`Y?g_lkdn;7UL9IiJck01
+Z16 DPx4 ieee 18 std_logic_unsigned 0 22 RYmj;=TK`k=k>D@Cz`zoB3
+Z17 DPx4 ieee 16 std_logic_textio 0 22 ?Il0a149GV276[?[UMDWh2
+R4
+R3
+R2
+R5
+Z18 8C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/simulation/modelsim/msxpi_tb.vhd
+Z19 FC:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/simulation/modelsim/msxpi_tb.vhd
+l0
+L8
+VHQbZN?0c`QcJLoALX5mDU1
+!s100 >:>a2[_Bji2Dj:J@>^=fY3
+R8
+31
+!i10b 1
+Z20 !s108 1671637136.800000
+Z21 !s90 -reportprogress|300|-93|-work|work|C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/simulation/modelsim/msxpi_tb.vhd|
+Z22 !s107 C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/simulation/modelsim/msxpi_tb.vhd|
+R12
+R13
+Amsxpi_tb_arch
+R15
+R16
+R17
+R4
+R3
+R2
+DEx4 work 8 msxpi_tb 0 22 HQbZN?0c`QcJLoALX5mDU1
+l39
+L11
+V?Df08b:>6D1aT^WQ:C3Jb1
+!s100 b1DCiAbLkgT=HlXVGzJPE2
+R8
+31
+!i10b 1
+R20
+R21
+R22
+R12
+R13

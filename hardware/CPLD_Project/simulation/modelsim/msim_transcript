@@ -1,0 +1,91 @@
+# Reading C:/altera/13.0sp1/modelsim_ase/tcl/vsim/pref.tcl 
+# do MSXPI_run_msim_rtl_vhdl.do 
+# if {[file exists rtl_work]} {
+# 	vdel -lib rtl_work -all
+# }
+# vlib rtl_work
+# vmap work rtl_work
+# Copying C:\altera\13.0sp1\modelsim_ase\win32aloem/../modelsim.ini to modelsim.ini
+# Modifying modelsim.ini
+# ** Warning: Copied C:\altera\13.0sp1\modelsim_ase\win32aloem/../modelsim.ini to modelsim.ini.
+#          Updated modelsim.ini.
+# 
+# vcom -93 -work work {C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/MSXPi.vhd}
+# Model Technology ModelSim ALTERA vcom 10.1d Compiler 2012.11 Nov  2 2012
+# -- Loading package STANDARD
+# -- Loading package TEXTIO
+# -- Loading package std_logic_1164
+# -- Loading package NUMERIC_STD
+# -- Compiling entity MSXPi
+# -- Compiling architecture rtl of MSXPi
+# 
+# vcom -93 -work work {C:/Users/alpha/Documents/Dev/MSXPi/hardware/CPLD_Project/simulation/modelsim/msxpi_tb.vhd}
+# Model Technology ModelSim ALTERA vcom 10.1d Compiler 2012.11 Nov  2 2012
+# -- Loading package STANDARD
+# -- Loading package TEXTIO
+# -- Loading package std_logic_1164
+# -- Loading package NUMERIC_STD
+# -- Loading package std_logic_textio
+# -- Loading package std_logic_arith
+# -- Loading package STD_LOGIC_UNSIGNED
+# -- Compiling entity msxpi_tb
+# -- Compiling architecture msxpi_tb_arch of msxpi_tb
+# 
+# vsim -t 1ps -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L max -L rtl_work -L work -voptargs="+acc"  msxpi_tb
+# vsim -L altera -L lpm -L sgate -L altera_mf -L altera_lnsim -L max -L rtl_work -L work -voptargs=\"+acc\" -t 1ps msxpi_tb 
+# Loading std.standard
+# Loading std.textio(body)
+# Loading ieee.std_logic_1164(body)
+# Loading ieee.numeric_std(body)
+# Loading ieee.std_logic_textio(body)
+# Loading ieee.std_logic_arith(body)
+# Loading ieee.std_logic_unsigned(body)
+# Loading work.msxpi_tb(msxpi_tb_arch)
+# Loading work.msxpi(rtl)
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(7) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(6) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(5) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(4) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(3) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(2) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(1) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized inout port /msxpi_tb/DUT/D(0) has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# ** Warning: (vsim-8683) Uninitialized out port /msxpi_tb/DUT/BUSDIR_n has no driver.
+# 
+# This port will contribute value (U) to the signal network.
+# 
+# 
+# add wave *
+# view structure
+# .main_pane.structure.interior.cs.body.struct
+# view signals
+# .main_pane.objects.interior.cs.body.tree
+# run -all
+# ** Error:  test case failed
+#    Time: 0 ps  Iteration: 0  Instance: /msxpi_tb
+# ** Error:  test case failed
+#    Time: 0 ps  Iteration: 0  Instance: /msxpi_tb

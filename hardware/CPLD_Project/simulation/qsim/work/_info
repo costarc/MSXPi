@@ -1,0 +1,85 @@
+m255
+K3
+13
+cModel Technology
+Z0 dC:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD Project\simulation\qsim
+vMSXPi
+Z1 I[F6VmAhl]fT8IFGlQ[VcU2
+Z2 V1B`d3N5W:KncYe_WR_F5]2
+Z3 dC:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD_Project\simulation\qsim
+Z4 w1671637164
+Z5 8MSXPI.vo
+Z6 FMSXPI.vo
+L0 31
+Z7 OV;L;10.1d;51
+r1
+31
+Z8 o-work work -O0
+Z9 n@m@s@x@pi
+!i10b 1
+Z10 !s100 `n^U1SODK5;XOVGzH:;lK3
+!s85 0
+Z11 !s108 1671637164.944000
+Z12 !s107 MSXPI.vo|
+Z13 !s90 -work|work|MSXPI.vo|
+!s101 -O0
+vMSXPi_vlg_check_tst
+!i10b 1
+!s100 i;B6776j8^bNPUdFCNE5R3
+IbZk^6_h^C_P^P^BKKUj5c1
+VnH=Cg?hgeiNB<bDU@UCo90
+R3
+R4
+Z14 8MSXPi.vt
+Z15 FMSXPi.vt
+L0 71
+R7
+r1
+!s85 0
+31
+Z16 !s108 1671637164.997000
+Z17 !s107 MSXPi.vt|
+Z18 !s90 -work|work|MSXPi.vt|
+!s101 -O0
+R8
+n@m@s@x@pi_vlg_check_tst
+vMSXPi_vlg_sample_tst
+!i10b 1
+!s100 Qd>XI<@:iQJiN@GhD<[201
+Ie`FfJYGZf6g15fA6zDhKo2
+V^>@j9U4Akcc5znmLV;2bo3
+R3
+R4
+R14
+R15
+L0 29
+R7
+r1
+!s85 0
+31
+R16
+R17
+R18
+!s101 -O0
+R8
+n@m@s@x@pi_vlg_sample_tst
+vMSXPi_vlg_vec_tst
+!i10b 1
+!s100 XS?>S2ZO[44AAImnabb?Q3
+IGZ4]0KJO>BiPF=WF=^Lci3
+VR15[k`8G<VfVYbkUnT`aV2
+R3
+R4
+R14
+R15
+L0 337
+R7
+r1
+!s85 0
+31
+R16
+R17
+R18
+!s101 -O0
+R8
+n@m@s@x@pi_vlg_vec_tst
