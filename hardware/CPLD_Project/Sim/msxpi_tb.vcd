@@ -1,5 +1,5 @@
 $date
-  Wed Dec 21 20:26:44 2022
+  Thu Dec 22 01:12:28 2022
 $end
 $version
   GHDL v0
@@ -39,14 +39,19 @@ $var reg 1 5 spi_sclk $end
 $var reg 1 6 spi_mosi $end
 $var reg 1 7 spi_miso $end
 $var reg 1 8 spi_rdy $end
-$var reg 1 9 cspin $end
-$var reg 8 : d_buff_pi[7:0] $end
-$var reg 1 ; reset $end
-$var reg 8 < d_buff_msx[7:0] $end
-$var reg 1 = waitsignal $end
-$var reg 1 > msxwrite_s $end
-$var reg 1 ? msxread_s $end
-$var reg 4 @ spi_count_s[3:0] $end
+$var reg 1 9 cspinsignal $end
+$var reg 1 : cspin_s1 $end
+$var reg 1 ; cspin_s2 $end
+$var reg 8 < d_buff_pi[7:0] $end
+$var reg 1 = reset $end
+$var reg 8 > d_buff_msx[7:0] $end
+$var reg 1 ? waitsignal $end
+$var reg 1 @ msxwrite_s $end
+$var reg 1 A msxread_s $end
+$var reg 4 B spi_count_s0[3:0] $end
+$var reg 4 C spi_count_s[3:0] $end
+$var reg 1 D spi_rdysignal $end
+$var reg 8 E reg1[7:0] $end
 $upscope $end
 $upscope $end
 $enddefinitions $end
@@ -58,7 +63,7 @@ U$
 U%
 Z&
 U'
-U(
+1(
 U)
 U*
 U+
@@ -70,36 +75,43 @@ U0
 U1
 U2
 Z3
-U4
+14
 U5
 U6
 U7
 08
-U9
-bUUUUUUUU :
+19
+U:
 U;
 bUUUUUUUU <
-Z=
-U>
-U?
-b0000 @
+U=
+bUUUUUUUU >
+Z?
+1@
+1A
+b0000 B
+b0000 C
+0D
+bUUUUUUUU E
 #2000000
 b01011010 !
-b10101110 "
 0#
-1$
-0%
-b10101110 -
+0$
+1%
+0&
+0(
 b01011010 .
 0/
-10
-01
-b10101110 <
-0>
-1?
+00
+11
+03
+04
+09
+0A
 #4000000
 1,
 18
+1D
 #6000000
 1)
 15
@@ -107,107 +119,121 @@ b10101110 <
 0)
 05
 #10000000
+bUUUUUUU1 "
 1)
+1+
+bUUUUUUU1 -
 15
-b0001 @
+17
+bUUUUUUU1 <
+b0001 C
+bUUUUUUU1 E
 #12000000
 0)
 05
 #14000000
+bUUUUUU10 "
 1)
-1*
+0+
+bUUUUUU10 -
 15
-16
-b0010 @
+07
+bUUUUUU10 <
+b0010 C
+bUUUUUU10 E
 #16000000
 0)
 05
 #18000000
+bUUUUU101 "
 1)
-0*
+1+
+bUUUUU101 -
 15
-06
-b0011 @
+17
+bUUUUU101 <
+b0011 C
+bUUUUU101 E
 #20000000
 0)
 05
 #22000000
+bUUUU1010 "
 1)
-1*
+0+
+bUUUU1010 -
 15
-16
-b0100 @
+07
+bUUUU1010 <
+b0100 C
+bUUUU1010 E
 #24000000
 0)
 05
 #26000000
+bUUU10101 "
 1)
-0*
+1+
+bUUU10101 -
 15
-06
-b0101 @
+17
+bUUU10101 <
+b0101 C
+bUUU10101 E
 #28000000
 0)
 05
 #30000000
+bUU101010 "
 1)
-1*
+0+
+bUU101010 -
 15
-16
-b0110 @
+07
+bUU101010 <
+b0110 C
+bUU101010 E
 #32000000
 0)
 05
 #34000000
+bU1010101 "
 1)
+1+
+bU1010101 -
 15
-b0111 @
+17
+bU1010101 <
+b0111 C
+bU1010101 E
 #36000000
 0)
 05
 #38000000
+b10101010 "
 1)
+0+
+b10101010 -
 15
-b1000 @
+07
+b10101010 <
+b1000 C
+b10101010 E
 #40000000
 0)
 05
 #42000000
-1)
-0*
-15
-06
-b1001 @
-#44000000
-0)
-05
-#46000000
-1(
-1)
-14
-15
-19
-1=
-b1010 @
-#48000000
-0)
-05
-#50000000
-0,
-08
-#52000000
-0(
-1)
-04
-15
-09
-0=
-b0000 @
-#54000000
-0)
-05
-#56000000
 1#
+1$
+Z&
+1(
+0,
 1/
-1>
-#58000000
+10
+Z3
+14
+08
+19
+1A
+0D
+#44000000

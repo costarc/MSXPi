@@ -81,54 +81,69 @@ constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
 constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
 constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 
-   signal csPinSignal	: std_logic;
-   signal csPin_s1		:std_logic;
-	signal csPin_s2		: std_logic;
-		
+    signal csPin			: std_logic;
+
 	signal D_buff_pi		: std_logic_vector(7 downto 0);
 	signal RESET			: std_logic;
 	signal D_buff_msx		: std_logic_vector(7 downto 0);
 	signal waitSignal		: STD_LOGIC := 'Z';
 	signal msxwrite_s		: STD_LOGIC;
 	signal msxread_s		: STD_LOGIC;
-	signal spi_count_s0	: std_logic_vector(3 downto 0) := "0000";
 	signal spi_count_s	: std_logic_vector(3 downto 0) := "0000";
-	signal spi_rdysignal	: std_logic;
-	
-	signal reg1: std_logic_vector(7 downto 0);
     
 begin
   
-   spi_rdysignal <= SPI_RDY;
-	csPinSignal <= msxwrite_s and msxread_s and not spi_rdysignal;
-	SPI_CS <= csPinSignal;
-	WAIT_n <= csPinSignal when csPinSignal = '0' else 'Z';
-		
-	msxwrite_s <= '0' when IORQ_n ='0' and WR_n = '0' and A = DATAPORT1 else '1';
-	msxread_s <= '0' when IORQ_n ='0' and RD_n = '0' and A = DATAPORT1 else '1';
-
-	
-	--D_buff_msx <= D when msxwrite_s = '0' and A = DATAPORT1;
-	D <= reg1; -- when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '1' else
+	SPI_CS <= csPin;
+	msxwrite_s <= IORQ_n or WR_n;
+	msxread_s <= IORQ_n or RD_n;
+	WAIT_n <= 'Z';
+	D_buff_msx <= D when msxwrite_s = '0' and A = DATAPORT1;
+	--D <= D_buff_pi; -- when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '1' else
    --     SPI_RDY & csPin & "00" & MSXPIVer when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '0' else
 	--	  "ZZZZZZZZ";
+	      
+process(IORQ_n, WR_n, RD_n, waitSignal, SPI_RDY)
+begin
+	if spi_count_s > "1000" then 
+         csPin	<= '1';														-- Enable RPi for data transfer
+         waitSignal <= '1';												-- Enable Wait state in MSX - make it wait
+	elsif (IORQ_n = '0' and (WR_n = '0' or RD_n = '0')) then		-- a new read/write request from MSX
+																					-- SPI_RDY = 0 -> RPi ready for new commands
+        csPin <= '0';														-- Disable RPi transfers
+        waitSignal <= '0';													-- Disble Wait state in MSX
+	elsif csPin = '1' then												-- Check if Wait transitioned from 0 to 1
+		waitSignal <= 'Z';													-- Put Wait in tri-state
+	end if;
 
-process(SPI_SCLK,spi_count_s)
+end process;
+
+process(SPI_SCLK)
 variable D_reg : std_logic_vector(7 downto 0);
 begin
 	if rising_edge(SPI_SCLK) then
-		if spi_count_s < "1010" then
-			D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+		if spi_count_s = "0000" then
+			D_reg := D_buff_msx;
+		else
+			if spi_count_s < "1001" then
+				D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+			end if;
 			SPI_MOSI <= D_reg(7);
 			D_reg(7 downto 1) := D_reg(6 downto 0);
-			spi_count_s <= std_logic_vector(to_unsigned(to_integer(unsigned(spi_count_s)) + 1, 4));
-		else
-			spi_count_s <= "0000";
 		end if;
 	end if;
 	
-	reg1 <= D_buff_pi;
-	
+	d <= D_buff_pi;
+end process;
+
+process(SPI_SCLK)
+begin
+	if rising_edge(SPI_SCLK) then
+		if spi_count_s > "1001" then
+			spi_count_s <= "0000";
+		else
+			spi_count_s <= std_logic_vector(to_unsigned(to_integer(unsigned(spi_count_s)) + 1, 4));
+		end if;
+	end if;
 end process;
 
 end rtl;

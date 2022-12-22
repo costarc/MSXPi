@@ -61,65 +61,22 @@ begin
 		iorq_n_s <= 'U';
 		rpi_rdy_s <= '0';
 		wait for 2 ns;
-		
-		rpi_rdy_s <= '0';
+
+-- ---------------------------------------
+-- Simulate IO Read operation on port 5A
+
 		a_s <= x"5A";
-		d_s <= x"AE";
-		wr_n_s <= '0';
-		rd_n_s <= '1';
+		wr_n_s <= '1';
+		rd_n_s <= '0';
 		iorq_n_s <= '0';
 		wait for 2 ns;
+
+-- Simulate RPi enabling Busy Signal (SPI_RDY = 1)
 
 		rpi_rdy_s <= '1';
 		wait for 2 ns;
 		
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-		
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-		
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-		
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
-		
-		spi_clk_s <= '1';
-		wait for 2 ns;
-
-		spi_clk_s <= '0';
-		wait for 2 ns;
+-- simulate RPi sending clock signal (SPI_SCLK)
 	
 		spi_clk_s <= '1';
 		wait for 2 ns;
@@ -127,37 +84,67 @@ begin
 		spi_clk_s <= '0';
 		wait for 2 ns;
 		
+		spi_miso_S <= '1';
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
+		wait for 2 ns;
+
+		spi_miso_S <= '0';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
 		spi_clk_s <= '0';
 		wait for 2 ns;
 		
+		spi_miso_S <= '1';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
 		spi_clk_s <= '0';
 		wait for 2 ns;
-						
-		rpi_rdy_s <= '0';
+
+		spi_miso_S <= '0';
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
+		wait for 2 ns;
+
+		spi_miso_S <= '1';
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
 		wait for 2 ns;
 		
+		spi_miso_S <= '0';
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
+		wait for 2 ns;
+		
+		spi_miso_S <= '1';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
 		spi_clk_s <= '0';
 		wait for 2 ns;
 	
--- end of byte transfer - RPi signal free rising SPI_RDY
+		spi_miso_S <= '0';
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
+		wait for 2 ns;
+	
 		rpi_rdy_s <= '0';
-		wr_n_s <= '0';
+		wr_n_s <= '1';
 		rd_n_s <= '1';
 		iorq_n_s <= '1';
 		wait for 2 ns;
-		
--- end of test bench
-
-		wait for 200 ns;
 		
 		wait;
 
