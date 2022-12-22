@@ -60,15 +60,15 @@ begin
 		rd_n_s <= 'U';
 		iorq_n_s <= 'U';
 		rpi_rdy_s <= '0';
-		wait for 20 ns;
+		wait for 2 ns;
 
 -- ---------------------------------------
--- Simulate IO Read operation on port 5A
--- Should get "A1"
+-- Simulate IO Write operation on port 5A
 
 		a_s <= x"5A";
-		wr_n_s <= '1';
-		rd_n_s <= '0';
+		d_s <= x"AB";
+		wr_n_s <= '0';
+		rd_n_s <= '1';
 		iorq_n_s <= '0';
 		wait for 2 ns;
 
@@ -113,7 +113,7 @@ begin
 		spi_clk_s <= '0';
 		wait for 2 ns;
 
-		spi_miso_S <= '0';
+		spi_miso_S <= '1';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
@@ -127,14 +127,14 @@ begin
 		spi_clk_s <= '0';
 		wait for 2 ns;
 		
-		spi_miso_S <= '0';
+		spi_miso_S <= '1';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
 		spi_clk_s <= '0';
 		wait for 2 ns;
 	
-		spi_miso_S <= '1';
+		spi_miso_S <= '0';
 		spi_clk_s <= '1';
 		wait for 2 ns;
 
@@ -150,19 +150,11 @@ begin
 		
 		rpi_rdy_s <= '0';
 		wait for 2 ns;
-	
+		
 		wr_n_s <= '1';
 		rd_n_s <= '1';
 		iorq_n_s <= '1';
-		wait for 6 ns;
-
--- Common block after a transfer
-		spi_clk_s <= 'U';
-		wr_n_s <= 'U';
-		rd_n_s <= 'U';
-		iorq_n_s <= 'U';
 		wait for 2 ns;
---
 
 -- ---------------------------------------
 -- Simulate IO Write operation on port 5A
@@ -257,10 +249,6 @@ begin
 		rd_n_s <= '1';
 		iorq_n_s <= '1';
 		wait for 2 ns;
-		
--- End of Signal simulation
-		
-		wait for 10 ns;
 		
 		wait;
 
