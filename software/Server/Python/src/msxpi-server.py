@@ -82,7 +82,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(mosiPin, GPIO.IN)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
