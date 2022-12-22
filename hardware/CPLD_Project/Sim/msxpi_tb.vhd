@@ -139,8 +139,16 @@ begin
 
 		spi_clk_s <= '0';
 		wait for 2 ns;
-	
+
+		spi_clk_s <= '1';
+		wait for 2 ns;
+
+		spi_clk_s <= '0';
+		wait for 2 ns;
+		
 		rpi_rdy_s <= '0';
+		wait for 2 ns;
+		
 		wr_n_s <= '1';
 		rd_n_s <= '1';
 		iorq_n_s <= '1';

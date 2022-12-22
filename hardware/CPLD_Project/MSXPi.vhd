@@ -34,6 +34,23 @@
 -- Added support to /Wait signal (using LED pin)
 -- LED now is drived by SPI_CS signal
 ----------------------------------------------------------------------------------
+-- Version 1.0.1 - 2022-12-21
+-- Redesigned the CPLD firmware / code
+-- Serial protocol - MSX Reading data:
+--	
+--		Enable SPI_CS - '0'
+--		Enable MSX /Wait - '0'
+--		RPi Disable SPI_RDY - '1'
+--		Wait RPi clock rising event on pin SPI_SCLK
+--		1st Tick is for sync, no valid data present in SPI_MISO
+--    Next 8 Ticks contain 8 bits of data in SPI_MISO
+--		Move Data to Latch D - ready for MSX D register
+--    1 Tick for sync / cleanup
+-- 	RPi Enable SPY_RDY - '0'
+--		Disable SPI_CS - '1'
+--		Disable MSX /Wait - 'Z'
+----------------------------------------------------------------------------------
+
 -- MSXPI Versions:
 -- 0001: Wired up prototype, EPM3064ALC-44
 -- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
@@ -45,6 +62,7 @@
 -- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
 -- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
 -- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
+-- 1011: General Release V1.0.1, EEPROM AT28C256, EPM3064ALC-44
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
@@ -71,7 +89,7 @@ END MSXPi;
 
 
 architecture rtl of MSXPi is
-constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1011";
 constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
 constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
 constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
@@ -109,15 +127,15 @@ begin
 
 	
 	--D_buff_msx <= D when msxwrite_s = '0' and A = DATAPORT1;
-	D <= reg1; -- when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '1' else
+	D <= D_buff_pi; -- when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '1' else
    --     SPI_RDY & csPin & "00" & MSXPIVer when msxread_s = '0' and A = DATAPORT1 and SPI_RDY = '0' else
 	--	  "ZZZZZZZZ";
 
-process(SPI_SCLK,spi_count_s)
+process(SPI_SCLK)
 variable D_reg : std_logic_vector(7 downto 0);
 begin
 	if rising_edge(SPI_SCLK) then
-		if spi_count_s < "1010" then
+		if to_integer(unsigned(spi_count_s)) < 8 then
 			D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
 			SPI_MOSI <= D_reg(7);
 			D_reg(7 downto 1) := D_reg(6 downto 0);
@@ -127,7 +145,7 @@ begin
 		end if;
 	end if;
 	
-	reg1 <= D_buff_pi;
+	--reg1 <= D_buff_pi;
 	
 end process;
 
