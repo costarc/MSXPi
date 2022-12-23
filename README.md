@@ -27,7 +27,7 @@ user: pi
 
 password: raspberry
 
-Step 2: Copy all MSXPi commands from the latest release - <coming soon> or download each individual ommand from https://github.com/costarc/MSXPi/tree/master/software/target and copy to your MSX-DOS SD card (or disk). 
+Step 2: Copy all MSXPi commands from the latest release - <coming soon> or download each individual command from https://github.com/costarc/MSXPi/tree/master/software/target and copy to your MSX-DOS SD card (or disk). 
 Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
 Jumpers:
@@ -155,7 +155,7 @@ The /software branch has this structure:
     |-------/hardware 
     |       |---- 
     |       |    | 
-    |       |    /CPLD Project
+    |       |    /CPLD_Project
     |       |    |
     |       |    /Schematic
     |       |    |----
