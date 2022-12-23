@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <export version="E">
   <design>
-    <source>C:\Users\alpha\Documents\Dev\MSXPi\hardware\Schematic\MSXPi_v0.7.0_Rev_7b\msxpi.kicad_sch</source>
-    <date>17/11/2022 13:43:14</date>
-    <tool>Eeschema (6.0.7)</tool>
+    <source>/Users/ronivon/Dev/github/MSXPi/hardware/Schematic/MSXPi_v1.0.1/msxpi.kicad_sch</source>
+    <date>Friday, 23 December 2022 at 23:57:23</date>
+    <tool>Eeschema (6.0.9-0)</tool>
     <sheet number="1" name="/" tstamps="/">
       <title_block>
         <title>MSXPi</title>
@@ -622,13 +622,13 @@
   </libparts>
   <libraries>
     <library logical="Connector_Generic">
-      <uri>C:\KiCad\6.0\share\kicad\symbols\/Connector_Generic.kicad_sym</uri>
+      <uri>/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols//Connector_Generic.kicad_sym</uri>
     </library>
     <library logical="Memory_EEPROM">
-      <uri>C:\KiCad\6.0\share\kicad\symbols\/Memory_EEPROM.kicad_sym</uri>
+      <uri>/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols//Memory_EEPROM.kicad_sym</uri>
     </library>
     <library logical="msxpi-eagle-import">
-      <uri>C:\Users\alpha\Documents\Dev\MSXPi\hardware\Schematic\MSXPi_v0.7.0_Rev_7b/msxpi-eagle-import.kicad_sym</uri>
+      <uri>/Users/ronivon/Dev/github/MSXPi/hardware/Schematic/MSXPi_v1.0.1/msxpi-eagle-import.kicad_sym</uri>
     </library>
   </libraries>
   <nets>
@@ -889,13 +889,13 @@
       <node ref="JP1" pin="50" pinfunction="-12V" pintype="power_in+no_connect"/>
     </net>
     <net code="51" name="unconnected-(JP2-Pad6)">
-      <node ref="JP2" pin="6" pinfunction="6" pintype="passive"/>
+      <node ref="JP2" pin="6" pinfunction="6" pintype="passive+no_connect"/>
     </net>
     <net code="52" name="unconnected-(JP2-Pad7)">
-      <node ref="JP2" pin="7" pinfunction="7" pintype="passive"/>
+      <node ref="JP2" pin="7" pinfunction="7" pintype="passive+no_connect"/>
     </net>
     <net code="53" name="unconnected-(JP2-Pad8)">
-      <node ref="JP2" pin="8" pinfunction="8" pintype="passive"/>
+      <node ref="JP2" pin="8" pinfunction="8" pintype="passive+no_connect"/>
     </net>
     <net code="54" name="unconnected-(MOUNTHOLE1-Pad1)">
       <node ref="MOUNTHOLE1" pin="1" pinfunction="P" pintype="passive+no_connect"/>

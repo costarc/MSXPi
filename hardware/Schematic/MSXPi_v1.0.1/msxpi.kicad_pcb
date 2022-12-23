@@ -5,6 +5,13 @@
   )
 
   (paper "A4")
+  (title_block
+    (title "MSXPi")
+    (date "2022-12-25")
+    (rev "1.0.1 Rev 1")
+    (company "Ronivon Costa")
+  )
+
   (layers
     (0 "F.Cu" signal)
     (31 "B.Cu" signal)

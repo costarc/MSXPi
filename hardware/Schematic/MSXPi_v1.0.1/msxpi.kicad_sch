@@ -2034,7 +2034,7 @@
     (effects (font (size 1 1)) (justify left bottom))
     (uuid 6c7827a0-e839-4c5b-9ee6-d70b5142ea24)
   )
-  (text "MSXPi Interface V1.0.1 Rev.1\nRCC @ 2022\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n"
+  (text "MSXPi Interface V1.0.1 Rev.1\nRCC @ 2022\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2022-12-25"
     (at 210.058 197.612 0)
     (effects (font (size 1.27 1.27)) (justify left bottom))
     (uuid 738235db-598f-4f49-9de2-ebbf3e164153)

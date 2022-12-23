@@ -75,3 +75,4 @@ set_location_assignment PIN_8 -to SPI_SCLK
 
 set_location_assignment PIN_40 -to SPI_RDY
 set_location_assignment PIN_28 -to WAIT_n
+
