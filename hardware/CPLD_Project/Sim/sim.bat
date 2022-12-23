@@ -1,6 +1,6 @@
 del work*.cf
 ghdl -a ..\msxpi.vhd
-ghdl -a msxpi_readversion_tb.vhd
+ghdl -a msxpi_enablePi_tb.vhd
 ghdl -e msxpi_tb
 ghdl -r msxpi_tb --stop-time=300ns --vcd=msxpi_tb.vcd
 gtkwave -a msxpi_tb.gtkw msxpi_tb.vcd

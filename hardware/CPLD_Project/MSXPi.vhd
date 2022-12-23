@@ -86,8 +86,6 @@ PORT (
     SPI_RDY     : IN STD_LOGIC);
 END MSXPi;
 
-
-
 architecture rtl of MSXPi is
 constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1011";
 constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
@@ -109,15 +107,18 @@ constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
 	signal spi_rdysignal	: std_logic;
 	
 	signal RPI_Recv_Data: std_logic_vector(7 downto 0);
-    
+   
+	signal piEnabled: std_logic := '1';
+	
+	
 begin
   
    spi_rdysignal <= SPI_RDY;
-	csPinSignal <= msxwrite_s and msxread_s and not spi_rdysignal;
+	csPinSignal <= msxwrite_s and msxread_s and not spi_rdysignal when piEnabled = '0' else '1';
 	SPI_CS <= csPinSignal;
-	WAIT_n <= csPinSignal when csPinSignal = '0' else 'Z';
+	WAIT_n <= '1' when piEnabled = '1' else csPinSignal when csPinSignal = '0' else '1';
 		
-	msxwrite_s <= '0' when IORQ_n ='0' and WR_n = '0' and A = DATAPORT1 else '1';
+	msxwrite_s <= '0' when IORQ_n ='0' and WR_n = '0' and (A = DATAPORT1 or A = CTRLPORT1) else '1';
 	msxread_s <= '0' when IORQ_n ='0' and RD_n = '0' and (A = DATAPORT1 or A = CTRLPORT1) else '1';
 	
 	D_buff_msx <= D when msxwrite_s = '0' and A = DATAPORT1;
@@ -125,6 +126,13 @@ begin
         SPI_RDY & csPinSignal & "11" & MSXPIVer when msxread_s = '0' and A = CTRLPORT1 else
 		  "ZZZZZZZZ";
 
+process(msxwrite_s)
+begin
+	if rising_edge(msxwrite_s) and A = CTRLPORT1 then
+		piEnabled <= D(0);
+	end if;
+end process;
+		  
 process(SPI_SCLK)
 variable D_reg : std_logic_vector(7 downto 0);
 begin

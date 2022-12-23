@@ -1,14 +1,14 @@
 [*]
 [*] GTKWave Analyzer v3.3.100 (w)1999-2019 BSI
-[*] Thu Dec 22 12:10:50 2022
+[*] Thu Dec 22 15:14:09 2022
 [*]
 [dumpfile] "C:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD_Project\Sim\msxpi_tb.vcd"
-[dumpfile_mtime] "Thu Dec 22 12:09:40 2022"
-[dumpfile_size] 5042
+[dumpfile_mtime] "Thu Dec 22 15:13:55 2022"
+[dumpfile_size] 2373
 [savefile] "C:\Users\alpha\Documents\Dev\MSXPi\hardware\CPLD_Project\Sim\msxpi_tb.gtkw"
 [timestart] 0
 [size] 2048 1089
-[pos] -9 -87
+[pos] -1 -1
 *-24.553057 74990000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] msxpi_tb.
 [sst_width] 197
@@ -20,7 +20,6 @@ msxpi_tb.msxpi_instance.a[7:0]
 msxpi_tb.msxpi_instance.d[7:0]
 msxpi_tb.msxpi_instance.d_buff_msx[7:0]
 msxpi_tb.msxpi_instance.d_buff_pi[7:0]
-@23
 msxpi_tb.msxpi_instance.rpi_recv_data[7:0]
 @28
 msxpi_tb.msxpi_instance.msxwrite_s
@@ -28,6 +27,9 @@ msxpi_tb.msxpi_instance.msxread_s
 msxpi_tb.msxpi_instance.iorq_n
 msxpi_tb.msxpi_instance.rd_n
 msxpi_tb.msxpi_instance.wr_n
+@29
+msxpi_tb.msxpi_instance.pienabled
+@28
 msxpi_tb.msxpi_instance.wait_n
 msxpi_tb.msxpi_instance.spi_cs
 msxpi_tb.msxpi_instance.spi_rdy
