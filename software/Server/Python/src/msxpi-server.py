@@ -350,14 +350,15 @@ def prun(cmd):
     rc = RC_SUCCESS
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        print("prun:syntax error")
+        print("prun if:syntax error")
         sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
+        print("prun else")
         cmd = cmd.replace('::','|')
         try:
-
-            p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            print("prun: inside try")
+            p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read()
             if len(buf) == 0:
                 buf = "Pi:No output"
@@ -365,10 +366,11 @@ def prun(cmd):
             sendstdmsg(rc,buf)
 
         except Exception as e:
+            print("prun: exception")
             rc = RC_FAILED
             sendstdmsg(rc,"Pi:"+str(e)+'\n')
 
-    #print "prun:exiting rc:",hex(rc)
+    print "prun:exiting rc:",hex(rc)
     return rc
 
 def pdir(path):
