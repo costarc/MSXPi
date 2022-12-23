@@ -7,6 +7,23 @@ DATA_PORT2: EQU $5B
 DATA_PORT3: EQU $5C
 DATA_PORT4: EQU $5D
 
+RC_SUCCESS:       EQU $E0
+RC_INVALIDCOMMAND:EQU $E1
+RC_CRCERROR:      EQU $E2
+RC_TIMEOUT:       EQU $E3
+RC_DSKIOERR:      EQU $E4
+RC_OUTOFSYNC:     EQU $E5
+RC_FILENOTFOUND:  EQU $E6
+RC_FAILED:        EQU $E7
+RC_CONNERR:       EQU $E8
+RC_WAIT:          EQU $E9
+RC_READY:         EQU $EA
+RC_SUCCNOSTD:     EQU $EB
+RC_FAILNOSTD:     EQU $EC
+RC_ESCAPE:        EQU $ED
+RC_UNDEFINED:     EQU $EF
+
+
 MSXTOPI:
 ;  Send a block of data to RPi
 ; Block format:
@@ -29,21 +46,21 @@ MSXTOPI:
 		in			a,(CONTROL_PORT1)
 		or			a
 		jr			nz,MSXTOPI
-
 		push		de
-		push		bc
-
 ; clear HL to calculate CRC16 using simple xor operation
 ; CLEAR CRC and save block size
         exx
         ld      hl,$ffff
         exx
-        
-        push		de
-
 ; Send block size
 		ld			a,c
 		call		CRC16
+		ld			a,c
+		out		(DATA_PORT1),a
+		ld			a,b
+		call		CRC16
+		ld			a,b
+		out		(DATA_PORT1),a
 SLP1:
 		ld			a,(de)
 		out		(DATA_PORT1),a
@@ -53,8 +70,20 @@ SLP1:
 		ld			a,b
 		or			c
 		jr			nz,SLP1
-; end of 
-		
+		exx
+		in			a,(DATA_PORT1)
+		cp			l
+		jr			nz,crcerror
+		in			a,(DATA_PORT1)
+		cp			h
+		jr			nz,crcerror
+		pop		hl								;Discard DE in stack, so it will keep current address
+		ld			a,RC_SUCCESS
+		ret
+crcerror:
+		pop		de							; Restore original DE address
+		ld			a,RC_CRCERROR
+		ret		
 
 PITOMSX:
 ;  Receive a block of data from RPi
