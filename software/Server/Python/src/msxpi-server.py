@@ -1052,7 +1052,7 @@ GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",build)
 
-dos("INI 1")
+# dos("INI 1")
 
 try:
     while True:
