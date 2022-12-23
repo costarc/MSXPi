@@ -409,13 +409,13 @@ def pdir(path):
 
                 except urllib2.HTTPError as e:
                     rc = RC_FAILED
-                    print("pdir:http error "+ str(e))
+                    print("pdir exception 1:http error "+ str(e))
                     sendstdmsg(rc,str(e))
         else:
             rc = RC_FAILNOSTD
             print("pdir:out of sync in RC_WAIT")
     except Exception as e:
-        print("pdir:"+str(e))
+        print("pdir exception 2:"+str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
     #print "pdir:exiting rc:",hex(rc)
