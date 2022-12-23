@@ -1036,10 +1036,18 @@ try:
             if (rc[0] == RC_SUCCESS):
                 err = 0
 
-                fullcmd = str(rc[1].decode())
+                print(type(rc[1]))
+                if type(rc[1]) is bytearray:
+                    print("cmd: decoding bytearray")
+                    fullcmd = rc[1].decode()
+                else:
+                    print("cmd: no need to decod bytearray")
+                    fullcmd = rc[1]
+
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
-                
+                print("cmd: calling globals with ",cmd, parms)
+             
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
