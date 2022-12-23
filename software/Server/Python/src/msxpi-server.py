@@ -380,19 +380,24 @@ def pdir(path):
 
     try:
         if (msxbyte == SENDNEXT):
+            print("pdir: if1")
             urlcheck = getpath(basepath, path)
             if (urlcheck[0] == 0 or urlcheck[0] == 1):
+                print("pdir: if2")
                 if (path.strip() == '*'):
                     prun('ls -l ' + urlcheck[1])
                 elif ('*' in path):
+                    print("pdir: elif1")
                     numChilds = path.count('/')
                     fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
                     if (fileDesc == '' or len(fileDesc) == 0):
                         fileDesc = '.'
                     prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
                 else:
+                    print("pdir: else inside")
                     prun('ls -l ' + urlcheck[1])
             else:
+                print("pdir: else out")
                 parser = MyHTMLParser()
                 try:
                     htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
@@ -1028,8 +1033,10 @@ try:
             if (rc[0] == RC_SUCCESS):
                 err = 0
 
-                cmd = str(rc[1].decode().split()[0]).lower()
-                parms = str(rc[1][len(cmd)+1:])
+                fullcmd = str(rc[1].decode())
+                cmd = fullcmd.split()[0].lower()
+                parms = fullcmd[len(cmd)+1:]
+                
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
