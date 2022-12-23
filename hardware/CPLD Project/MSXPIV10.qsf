@@ -74,5 +74,4 @@ set_location_assignment PIN_6 -to SPI_MOSI
 set_location_assignment PIN_8 -to SPI_SCLK
 
 set_location_assignment PIN_40 -to SPI_RDY
-set_location_assignment PIN_31 -to BUSDIR_n
 set_location_assignment PIN_28 -to WAIT_n
