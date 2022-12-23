@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 *.bin
+=======
+>>>>>>> dev
 *.swp
 *.bak
 .DS_Store

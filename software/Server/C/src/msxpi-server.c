@@ -473,7 +473,7 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
     unsigned char mymsxbyte,mypibyte;
     unsigned char crc = 0;
     
-    printf("senddatablock: starting\n");
+    //printf("senddatablock: starting\n");
     mymsxbyte = piexchangebyte(SENDNEXT);
     
     if (mymsxbyte != SENDNEXT) {
@@ -484,10 +484,10 @@ transferStruct senddatablock(unsigned char *buffer, int datasize, bool sendsize)
         if (sendsize)
             piexchangebyte(datasize % 256); piexchangebyte(datasize / 256);
         
-        printf("senddatablock:blocksize = %i\n",datasize);
+        //printf("senddatablock:blocksize = %i\n",datasize);
         
         while(datasize>bytecounter && mymsxbyte>=0) {
-            printf("senddatablock:waiting MSX request byte\n");
+            //printf("senddatablock:waiting MSX request byte\n");
             
             mypibyte = *(buffer + bytecounter);
             
@@ -1540,7 +1540,6 @@ int pcd(struct psettype *psetvar,char * msxcommand) {
         // pcd without parameters should go to home?
         //strcpy(psetvar[0].value,HOMEPATH);
         sprintf(stdout,"%s\n",psetvar[0].value);
-        print("pcd:ready to send data back:%s\n",stdout);
         senddatablock(stdout,strlen(stdout)+1,true);
         printf("pcd:PCD empty or invalid - exiting with rc=%x\n",rc);
         free(stdout);

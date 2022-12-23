@@ -1,8 +1,3 @@
-Attention: I am in the process of review, update and change both interface and software.
-As of now, the software is not functional. I will update here once I finish the revision process.
-
-====
-
 For more details, please refer to the github project: 
 https://github.com/costarc/MSXPi
 
