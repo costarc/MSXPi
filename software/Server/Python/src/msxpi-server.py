@@ -18,8 +18,8 @@ import select
 import base64
 from random import randint
 
-version = "1.0.0"
-build = "20201015.000"
+version = "1.0.1"
+build = "20221223.000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -1016,7 +1016,7 @@ GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",build)
 
-dos("INI 1")
+# dos("INI 1")
 
 try:
     while True:
@@ -1028,7 +1028,7 @@ try:
             if (rc[0] == RC_SUCCESS):
                 err = 0
 
-                cmd = str(rc[1].split()[0]).lower()
+                cmd = str(rc[1].decode().split()[0]).lower()
                 parms = str(rc[1][len(cmd)+1:])
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
@@ -1039,7 +1039,7 @@ try:
                 errcount += 1
         except Exception as e:
             errcount += 1
-            print("cmd:"+str(e))
+            print("Erro in cmd received:"+str(e))
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
