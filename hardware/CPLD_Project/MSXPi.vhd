@@ -95,11 +95,16 @@ architecture rtl of MSXPi is
     signal D_buff_msx_r : std_logic_vector(7 downto 0);
     signal SPI_en_s     : STD_LOGIC := '0';
     signal SPI_RDY_s    : STD_LOGIC;
+    signal clk: std_logic;
     
 begin
 
-    WAIT_n <= 'Z';
-    BUSDIR_n <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
+    SPI_CS <= csPin;                        -- Enable singal for RPi
+    WAIT_n <= waitSignal;                -- Z80 /wait signal
+    clk <= SPI_SCLK;                        -- Serial clock from RPi
+    
+
+    BUSDIR_n <= 'Z';  -- '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
     readoper   <= not (IORQ_n or RD_n);
     writeoper  <= not (IORQ_n or WR_n);
     spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
@@ -115,35 +120,23 @@ begin
           "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
           "ZZZZZZZZ";
 
-spi:process(SPI_SCLK,readoper,writeoper,RESET)
+spi:process(IORQ_n, WR_n, RD_n, waitSignal, SPI_RDY)
 begin
-    if RESET = '1' then
-        SPI_en_s <= '0';
-        D_buff_pi <= "00000000";
-        spi_state <= idle;
-    elsif (SPI_en_s = '0' and spi_en = '1') then
-        SPI_en_s <= '1';
-        spibitcount_s <= 0;
-        spi_state <= prepare;
-    elsif rising_edge(SPI_SCLK) then
-        case spi_state is
-            when idle =>
-                SPI_en_s <= '0';
-            when prepare  =>
-                D_buff_msx_r <= D_buff_msx;
-                spi_state <= transferring;
-            when transferring =>
-                D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
-                SPI_MOSI <= D_buff_msx_r(7);
-                D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
-                spibitcount_s <= spibitcount_s + 1;
-                if spibitcount_s > 6 then
-                        spi_state <= idle;
-                end if;
-        end case;
-    end if;
-
-    SPI_CS <= not SPI_en_s;
-
+    if (IORQ_n = '0' and (WR_n = '0' or RD_n = '0') then        -- a new read/write request from MSX
+         csPin <= '0';
+         waitSignal <= '0';
+    elsif csPin = '0' and SPI_RDY = '1' then                            -- RPi is selected and signaling ready
+        csPin <= '1';
+        waitSignal <= '1';
+    else SPI_RDY = '1' then
+        waitSignal <= 'Z';
 end process;
+
+spi:process(SPI_SCLK)
+begin
+    D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+    SPI_MOSI <= D_buff_msx_r(7);
+    D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
+end process;
+
 end rtl;
