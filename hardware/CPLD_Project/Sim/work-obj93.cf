@@ -1,7 +1,0 @@
-v 4
-file . "msxpi_enablePi_tb.vhd" "6ba0edd7584a74be1376647ed39d0c838169bb7d" "20221222154331.340":
-  entity msxpi_tb at 1( 0) + 0 on 13;
-  architecture tb of msxpi_tb at 8( 113) + 0 on 14;
-file . "..\msxpi.vhd" "e7de865ebd11d86a7fe730033b674432ece6ea0d" "20221222154331.326":
-  entity msxpi at 67( 2965) + 0 on 11;
-  architecture rtl of msxpi at 89( 3567) + 0 on 12;

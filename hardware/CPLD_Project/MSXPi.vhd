@@ -34,23 +34,6 @@
 -- Added support to /Wait signal (using LED pin)
 -- LED now is drived by SPI_CS signal
 ----------------------------------------------------------------------------------
--- Version 1.0.1 - 2022-12-21
--- Redesigned the CPLD firmware / code
--- Serial protocol - MSX Reading data:
---	
---		Enable SPI_CS - '0'
---		Enable MSX /Wait - '0'
---		RPi Disable SPI_RDY - '1'
---		Wait RPi clock rising event on pin SPI_SCLK
---		1st Tick is for sync, no valid data present in SPI_MISO
---    Next 8 Ticks contain 8 bits of data in SPI_MISO
---		Move Data to Latch D - ready for MSX D register
---    1 Tick for sync / cleanup
--- 	RPi Enable SPY_RDY - '0'
---		Disable SPI_CS - '1'
---		Disable MSX /Wait - 'Z'
-----------------------------------------------------------------------------------
-
 -- MSXPI Versions:
 -- 0001: Wired up prototype, EPM3064ALC-44
 -- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
@@ -62,12 +45,11 @@
 -- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
 -- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
 -- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
--- 1011: General Release V1.0.1, EEPROM AT28C256, EPM3064ALC-44
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
 use ieee.numeric_std.all;
---use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use work.msxpi_package.all;
 
 ENTITY MSXPi IS
 PORT ( 
@@ -86,75 +68,82 @@ PORT (
     SPI_RDY     : IN STD_LOGIC);
 END MSXPi;
 
+library ieee;
+use ieee.std_logic_1164.all;
+package msxpi_package is
+        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1001";
+        constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
+        constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
+        constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
+        constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
+        constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
+        constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
+        constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
+        constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
+end msxpi_package;
+
 architecture rtl of MSXPi is
-constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1011";
-constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
-constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
-constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
-constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
-constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
-constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
-constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
-
-   signal csPinSignal	: std_logic;
-	signal D_buff_pi		: std_logic_vector(7 downto 0);
-	signal D_buff_msx		: std_logic_vector(7 downto 0);
-	signal waitSignal		: STD_LOGIC := 'Z';
-	signal msxwrite_s		: STD_LOGIC;
-	signal msxread_s		: STD_LOGIC;
-	signal spi_count_s	: std_logic_vector(3 downto 0) := "0000";
-	signal spi_rdysignal	: std_logic;
-	
-	signal RPI_Recv_Data: std_logic_vector(7 downto 0);
-   
-	signal piEnabled: std_logic := '1';
-	
-	
+    type fsm_type is (idle, prepare, transferring);
+    signal spi_state    : fsm_type := idle;
+    signal readoper     : std_logic;
+    signal writeoper    : std_logic;
+    signal spi_en       : std_logic;
+    signal D_buff_msx   : std_logic_vector(7 downto 0);
+    signal D_buff_pi    : std_logic_vector(7 downto 0);
+    signal RESET        : std_logic;
+    signal spibitcount_s: integer range 0 to 8;
+    signal D_buff_msx_r : std_logic_vector(7 downto 0);
+    signal SPI_en_s     : STD_LOGIC := '0';
+    signal SPI_RDY_s    : STD_LOGIC;
+    
 begin
-  
-   spi_rdysignal <= SPI_RDY;
-	csPinSignal <= msxwrite_s and msxread_s and not spi_rdysignal when piEnabled = '0' else '1';
-	SPI_CS <= csPinSignal;
-	WAIT_n <= '1' when piEnabled = '1' else csPinSignal when csPinSignal = '0' else '1';
-		
-	msxwrite_s <= '0' when IORQ_n ='0' and WR_n = '0' and (A = DATAPORT1 or A = CTRLPORT1) else '1';
-	msxread_s <= '0' when IORQ_n ='0' and RD_n = '0' and (A = DATAPORT1 or A = CTRLPORT1) else '1';
-	
-	D_buff_msx <= D when msxwrite_s = '0' and A = DATAPORT1;
-	D <= D_buff_pi when msxread_s = '0' and A = DATAPORT1 else
-        SPI_RDY & csPinSignal & "11" & MSXPIVer when msxread_s = '0' and A = CTRLPORT1 else
-		  "ZZZZZZZZ";
 
-process(msxwrite_s)
+    WAIT_n <= 'Z';
+    BUSDIR_n <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
+    readoper   <= not (IORQ_n or RD_n);
+    writeoper  <= not (IORQ_n or WR_n);
+    spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
+                     '0';
+    
+    -- SPI_en_s = '1' means SPI is busy
+    -- SPI_RDY  = '1' means Pi is Busy
+    SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
+    RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
+    D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
+    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else     
+         D_buff_pi when readoper = '1' and A = DATAPORT1 else
+          "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
+          "ZZZZZZZZ";
+
+spi:process(SPI_SCLK,readoper,writeoper,RESET)
 begin
-	if rising_edge(msxwrite_s) and A = CTRLPORT1 then
-		piEnabled <= D(0);
-	end if;
+    if RESET = '1' then
+        SPI_en_s <= '0';
+        D_buff_pi <= "00000000";
+        spi_state <= idle;
+    elsif (SPI_en_s = '0' and spi_en = '1') then
+        SPI_en_s <= '1';
+        spibitcount_s <= 0;
+        spi_state <= prepare;
+    elsif rising_edge(SPI_SCLK) then
+        case spi_state is
+            when idle =>
+                SPI_en_s <= '0';
+            when prepare  =>
+                D_buff_msx_r <= D_buff_msx;
+                spi_state <= transferring;
+            when transferring =>
+                D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
+                SPI_MOSI <= D_buff_msx_r(7);
+                D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
+                spibitcount_s <= spibitcount_s + 1;
+                if spibitcount_s > 6 then
+                        spi_state <= idle;
+                end if;
+        end case;
+    end if;
+
+    SPI_CS <= not SPI_en_s;
+
 end process;
-		  
-process(SPI_SCLK)
-variable D_reg : std_logic_vector(7 downto 0);
-begin
-	if rising_edge(SPI_SCLK) then
-	   if to_integer(unsigned(spi_count_s)) = 0 then
-			D_reg := D_buff_msx;
-		end if;
-		if to_integer(unsigned(spi_count_s)) < 8 then
-			D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
-			SPI_MOSI <= D_reg(7);
-			
-			-- start:testonly
-			RPI_Recv_Data <= RPI_Recv_Data(6 downto 0) & D_reg(7);
-			-- end:testonly
-			
-			D_reg(7 downto 1) := D_reg(6 downto 0);
-			spi_count_s <= std_logic_vector(to_unsigned(to_integer(unsigned(spi_count_s)) + 1, 4));
-		else
-			spi_count_s <= "0000";
-		end if;
-	end if;
-	
-end process;
-
 end rtl;
