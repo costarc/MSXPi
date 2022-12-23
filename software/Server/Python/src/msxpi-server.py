@@ -19,7 +19,7 @@ import base64
 from random import randint
 
 version = "1.0.1"
-build = "20221223.000"
+build = "20230101.000"
 BLKSIZE = 1024
 
 # Pin Definitons
