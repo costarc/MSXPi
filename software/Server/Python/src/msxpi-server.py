@@ -659,7 +659,7 @@ def pwifi(parms=''):
     wifissid = psetvar[4][1]
     wifipass = psetvar[5][1]
     rc = RC_SUCCESS
-    cmd=parms.decode().strip()
+    cmd=parms.strip()
 
     if (cmd[:2] == "/h"):
         sendstdmsg(RC_FAILED,"Pi:Usage:\npwifi display | set")
