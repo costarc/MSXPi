@@ -97,7 +97,7 @@ def SPI_MASTER_transfer_byte(byte_out):
     byte_in = 0
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-        if (byte_out & bit):
+        if (int(byte_out) & bit):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
             GPIO.output(misoPin, GPIO.LOW)
@@ -423,7 +423,7 @@ def pcd(path):
     basepath = psetvar[0][1]
     newpath = basepath
     
-    #print "pcd:starting basepath:path=",basepath + ":" + path
+    print("pcd:starting basepath:path=",basepath + ":" + path)
 
     try:
         if (msxbyte == SENDNEXT):
