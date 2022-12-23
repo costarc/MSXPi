@@ -357,9 +357,10 @@ def prun(cmd):
         print("prun else")
         cmd = cmd.replace('::','|')
         try:
-            print("prun: inside try")
+            print("prun: inside try: cmd = ",cmd)
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-            buf = p.stdout.read()
+            buf = p.stdout.read().decode()
+            print("prun: Popen stdout = ",buf)
             if len(buf) == 0:
                 buf = "Pi:No output"
 
@@ -370,7 +371,7 @@ def prun(cmd):
             rc = RC_FAILED
             sendstdmsg(rc,"Pi:"+str(e)+'\n')
 
-    print "prun:exiting rc:",hex(rc)
+    print("prun:exiting rc:",hex(rc))
     return rc
 
 def pdir(path):
