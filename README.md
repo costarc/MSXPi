@@ -27,13 +27,33 @@ user: pi
 
 password: raspberry
 
-Step 2: Copy all MSXPi commands from the latest release - https://github.com/costarc/MSXPi/releases/tag/v1.0.0.20201015.000/ to your MSX-DOS SD card (or disk). Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
+Step 2: Copy all MSXPi commands from the latest release - <coming soon> or download each individual ommand from https://github.com/costarc/MSXPi/tree/master/software/target and copy to your MSX-DOS SD card (or disk). 
+Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
 
 Jumpers:
 
-A14 - Load the MSX-DOS 1.03 from Raspberry Pi disk image (msxpiboot.dsk). BIOS is available from BASIC
+A14 - Switch the ROM to lower 16K of the ROM ($4000 - $7FFF)
 
-A15 - BIOS is available from BASIC. MSX Will boot to BASIC or to another connectd IDE interface.
+A15 - Switch the ROM to higher 16K of the ROM ($8000 - $BFFF)
+
+MSXPi v1.0.1 Release Notes
+==========================
+- Redesigned the interface in Kicad format, both schematic and PCB
+- Replaced the 27C256 by AT28C256 to allow MSX to program the EEPROM from the MSX-DOS
+- Added the EEPROM programmer AT28C256.COM to available commands - resuing it from my other project https://github.com/costarc/msxcart_flash32k
+- Updated the msxpi-seerver.py to run in Python3, which is the default on newer versions of Raspbian
+
+This version allows:
+- Set MSX data & time from Raspberry Pi
+- Copy programs from Internet to MSX disk (ftp, http, smb)
+- Run 8KB/16KB/32KB ROMS directly from Pi or from the network (ftp, http, smb)
+- Run commands on Pi directly from MSX-DOS command line
+- Configure Pi wifi from MSX-DOS
+
+Known issues and defects
+========================
+- MSXPI-DOS1 is not booting - it's not actually important, because the best way to use MSXPi is along with a MSX-DOS2 system, usually running with a SDCard cartridge
+- pplay.sh notworking
 
 MSXPi v1.0 Release Notes
 ========================
@@ -41,7 +61,7 @@ This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state)
+- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state, therefore this signal is for future use)
 - Schematics was updated to support the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
