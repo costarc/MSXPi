@@ -440,10 +440,10 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      "MSXPi ROM v1.0.0 "
-build:  DB      "20201015.000"
+        DB      "MSXPi ROM v1.0.1 "
+build:  DB      "20230101.000"
         DB      13,10
-        DB      "(c) Ronivon Costa,2017-2020",13,10,10
+        DB      "(c) Ronivon Costa,2017-2023",13,10,10
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10,0
 MSXPISKP:

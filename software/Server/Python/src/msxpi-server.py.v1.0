@@ -2,12 +2,12 @@
 import RPi.GPIO as GPIO
 import time
 import subprocess
-from urllib.request import urlopen
+import urllib2
 import mmap
 import fcntl,os
 import sys
 from subprocess import Popen,PIPE,STDOUT
-from html.parser import HTMLParser
+from HTMLParser import HTMLParser
 import datetime
 import time
 import glob
@@ -18,8 +18,8 @@ import select
 import base64
 from random import randint
 
-version = "1.0.1"
-build = "20221223.000"
+version = "1.0.0"
+build = "20201015.000"
 BLKSIZE = 1024
 
 # Pin Definitons
@@ -82,7 +82,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN)
+    GPIO.setup(mosiPin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
@@ -97,7 +97,7 @@ def SPI_MASTER_transfer_byte(byte_out):
     byte_in = 0
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-        if (int(byte_out) & bit):
+        if (byte_out & bit):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
             GPIO.output(misoPin, GPIO.LOW)
@@ -203,7 +203,6 @@ def recvdatablock():
 
 def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
-    print("senddatablock: Block size,blocknumber,attempts:",blocksize,blocknumber,attempts)
     global GLOBALRETRIES
 
     rc = RC_FAILED
@@ -221,11 +220,11 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     msxbyte = piexchangebyte(SENDNEXT)
 
     if (msxbyte != SENDNEXT):
-        print("senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte))
+        print "senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte)
         return RC_OUTOFSYNC
     else:
         piexchangebyte(thisblocksize % 256)
-        piexchangebyte(thisblocksize // 256)
+        piexchangebyte(thisblocksize / 256)
         if thisblocksize == 0:
             return ENDTRANSFER
 
@@ -235,30 +234,19 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
         crc = 0xffff
         bytecounter = 0
         while(bytecounter < thisblocksize):
-            pibyte0 = buf[bufpos+bytecounter]
-            #print("senddatablock: ord() checkpoint indata is ",type(pibyte0))
-            if type(pibyte0) is int:
-                pibyte = pibyte0
-            else:
-                pibyte = ord(pibyte0)
-
-            #print("senddatablock: ord() checkpoint outdata is ",type(pibyte0))
-            #print("senddatablock: ord() checkpoint 1:end")
+            pibyte = ord(buf[bufpos+bytecounter])
             piexchangebyte(pibyte)
-            
-            #print("senddatablock: calling crc16")
-            
             crc = crc16(crc,pibyte)
             bytecounter += 1
-            
+
         msxcrcL = piexchangebyte(crc % 256)
         if msxcrcL != crc % 256:
             attempts -= 1
             rc = RC_CRCERROR
             print("RC_CRCERROR. Remaining attempts:",attempts)
         else:
-            msxcrcH = piexchangebyte(crc // 256)
-            if msxcrcH != crc // 256:
+            msxcrcH = piexchangebyte(crc / 256)
+            if msxcrcH != crc / 256:
                 attempts -= 1
                 rc = RC_CRCERROR
                 print("RC_CRCERROR. Remaining attempts:",attempts)
@@ -288,9 +276,7 @@ class MyHTMLParser(HTMLParser):
         self.NEWTAGS = []
         self.NEWATTRS = []
         self.HTMLDATA = []
-    def convert_charrefs(self, data):
-        print("MyHTMLParser: convert_charrefs found :", data)
-                
+        
 def getpath(basepath, path):
 
     path=path.strip().rstrip(' \t\r\n\0')
@@ -340,7 +326,6 @@ def dos83format(fname):
 
 def ini_fcb(fname):
 
-    print("ini_fcb: starting")
     fpath = fname.split(':')
     if len(fpath) == 1:
         msxfile = str(fpath[0])
@@ -353,42 +338,37 @@ def ini_fcb(fname):
     #convert filename to 8.3 format using all 11 positions required for the FCB
     msxfcbfname = dos83format(msxfile)
 
-    print("Drive, Filename:",msxdrive,msxfcbfname)
+    #print("Drive, Filename:",msxdrive,msxfcbfname)
 
     # send FCB structure to MSX
     piexchangebyte(msxdrive)
     for i in range(0,11):
         piexchangebyte(ord(msxfcbfname[i]))
-    
-    print("ini_fcb: Exiting")
 
 def prun(cmd):
     piexchangebyte(RC_WAIT)
     rc = RC_SUCCESS
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        print("prun if:syntax error")
+        print "prun:syntax error"
         sendstdmsg(RC_FAILED,"Syntax: prun <command> <::> command\nTo pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
-        print("prun else")
         cmd = cmd.replace('::','|')
         try:
-            print("prun: inside try: cmd = ",cmd)
-            p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-            buf = p.stdout.read().decode()
-            print("prun: Popen stdout = ",buf)
+
+            p = Popen(cmd.decode(), shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+            buf = p.stdout.read()
             if len(buf) == 0:
                 buf = "Pi:No output"
 
             sendstdmsg(rc,buf)
 
         except Exception as e:
-            print("prun: exception")
             rc = RC_FAILED
             sendstdmsg(rc,"Pi:"+str(e)+'\n')
 
-    print("prun:exiting rc:",hex(rc))
+    #print "prun:exiting rc:",hex(rc)
     return rc
 
 def pdir(path):
@@ -400,45 +380,40 @@ def pdir(path):
 
     try:
         if (msxbyte == SENDNEXT):
-            print("pdir: if1")
             urlcheck = getpath(basepath, path)
             if (urlcheck[0] == 0 or urlcheck[0] == 1):
-                print("pdir: if2")
                 if (path.strip() == '*'):
                     prun('ls -l ' + urlcheck[1])
                 elif ('*' in path):
-                    print("pdir: elif1")
                     numChilds = path.count('/')
                     fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
                     if (fileDesc == '' or len(fileDesc) == 0):
                         fileDesc = '.'
                     prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
                 else:
-                    print("pdir: else inside")
                     prun('ls -l ' + urlcheck[1])
             else:
-                print("pdir: else out")
                 parser = MyHTMLParser()
                 try:
-                    htmldata = urlopen(urlcheck[1]).read().decode()
+                    htmldata = urllib2.urlopen(urlcheck[1].decode()).read()
                     parser = MyHTMLParser()
                     parser.feed(htmldata)
                     buf = " ".join(parser.HTMLDATA)
                     piexchangebyte(RC_SUCCESS)
                     rc = senddatablock(buf,len(buf),0,1)
 
-                except Exception as e:
+                except urllib2.HTTPError as e:
                     rc = RC_FAILED
-                    print("pdir exception 1:http error "+ str(e))
+                    print "pdir:http error "+ str(e)
                     sendstdmsg(rc,str(e))
         else:
             rc = RC_FAILNOSTD
-            print("pdir:out of sync in RC_WAIT")
+            print "pdir:out of sync in RC_WAIT"
     except Exception as e:
-        print("pdir exception 2:"+str(e))
+        print("pdir:"+str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
 
-    print("pdir:exiting rc:",hex(rc))
+    #print "pdir:exiting rc:",hex(rc)
     return rc
 
 def pcd(path):    
@@ -448,7 +423,7 @@ def pcd(path):
     basepath = psetvar[0][1]
     newpath = basepath
     
-    print("pcd:starting basepath:path=",basepath + ":" + path)
+    #print "pcd:starting basepath:path=",basepath + ":" + path
 
     try:
         if (msxbyte == SENDNEXT):
@@ -483,7 +458,7 @@ def pcd(path):
                         sendstdmsg(RC_FAILED,"Pi:Error - path not found")
         else:
             rc = RC_FAILNOSTD
-            print("pcd:out of sync in RC_WAIT")
+            print "pcd:out of sync in RC_WAIT"
     except Exception as e:
         print("pcd:"+str(e))
         sendstdmsg(RC_FAILED,'Pi:'+str(e))
@@ -499,8 +474,6 @@ def pcopy(path='',inifcb=True):
     global psetvar,GLOBALRETRIES
     basepath = psetvar[0][1]
     
-    print("pcopy: Starting with params ",path)
-    
     if (path.startswith('http') or \
         path.startswith('ftp') or \
         path.startswith('nfs') or \
@@ -514,8 +487,6 @@ def pcopy(path='',inifcb=True):
 
     fileinfo = fileinfo.split()
 
-    print("pcopy: parsed parameters: ",fileinfo)
-    
     if len(fileinfo) == 1:
         fname_rpi = str(fileinfo[0])
         fname_msx_0 = fname_rpi.split('/')
@@ -530,8 +501,6 @@ def pcopy(path='',inifcb=True):
     urlcheck = getpath(basepath, path)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        print("pcopy: path is local")
-        
         try:
             with open(fname_rpi, mode='rb') as f:
                 buf = f.read()
@@ -543,10 +512,9 @@ def pcopy(path='',inifcb=True):
             return RC_FAILED
 
     else:
-        print("pcopy: path is remote")
         try:
-            urlhandler = urlopen(fname_rpi)
-            print("pcopy:urlopen rc:",urlhandler.getcode())
+            urlhandler = urllib2.urlopen(fname_rpi)
+            #print("pcopy:urlopen rc:",urlhandler.getcode())
             buf = urlhandler.read()
             filesize = len(buf)
             
@@ -555,7 +523,6 @@ def pcopy(path='',inifcb=True):
             sendstdmsg(RC_FAILED,"Pi:"+str(e))
     
     if rc == RC_SUCCESS:
-        print("pcopy: File open success, size is ",filesize)
         if filesize == 0:
             sendstdmsg(RC_FILENOTFOUND,"Pi:No valid data found")
         else:
@@ -568,12 +535,11 @@ def pcopy(path='',inifcb=True):
 
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
-            print("pcopy: Calling senddatablock")
             while (rc == RC_SUCCESS):
                 rc = senddatablock(buf,BLKSIZE,blocknumber)
                 if rc == RC_SUCCESS:
                     blocknumber += 1
-    print("pcopy: exit with rc",rc)
+
     return rc
 
 def ploadr(path=''):
@@ -603,9 +569,9 @@ def pdate(parms = ''):
             senddatablock(buf,len(buf),0)
             rc = RC_SUCCESS
         else:
-            print("pdate:out of sync in SENDNEXT")
+            print "pdate:out of sync in SENDNEXT"
     else:
-        print("pdate:out of sync in RC_WAIT")
+        print "pdate:out of sync in RC_WAIT"
 
     return rc
 
@@ -685,7 +651,7 @@ def pwifi(parms=''):
     wifissid = psetvar[4][1]
     wifipass = psetvar[5][1]
     rc = RC_SUCCESS
-    cmd=parms.strip()
+    cmd=parms.decode().strip()
 
     if (cmd[:2] == "/h"):
         sendstdmsg(RC_FAILED,"Pi:Usage:\npwifi display | set")
@@ -813,13 +779,13 @@ def irc(cmd=''):
                     ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
                     rc = RC_SUCCESS
 
-            except socket.error as e:
+            except socket.error, e:
                 err = e.args[0]
                 if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
                     ircmsg = 'Pi:no new messages'
                     rc = RC_SUCCNOSTD
                 else:
-                    print("Socket error")
+                    print "Socket error"
                     ircmsg = 'Pi:irc Socket error\n'
                     rc = RC_FAILED
   
@@ -847,12 +813,10 @@ def irc(cmd=''):
     except Exception as e:
             print("irc:Caught exception"+str(e))
             sendstdmsg(rc,"Pi:"+str(e))
-    
+
 def dos(parms=''):
     piexchangebyte(RC_WAIT)
 
-    print("DOS: ",parms)
-    
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
     rc = RC_SUCCESS
 
@@ -888,13 +852,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
-            
-            print("dos_rds:deviceNumber=",sectorInfo[0])
-            print("dos_rds:numsectors=",sectorInfo[1])
-            print("dos_rds:mediaDescriptor=",sectorInfo[2])
-            print("dos_rds:initialSector=",sectorInfo[3])
-            print("dos_rds:blocksize=",blocksize)
-            
+            """
+            print "dos_rds:deviceNumber=",sectorInfo[0]
+            print "dos_rds:numsectors=",sectorInfo[1]
+            print "dos_rds:mediaDescriptor=",sectorInfo[2]
+            print "dos_rds:initialSector=",sectorInfo[3]
+            print "dos_rds:blocksize=",blocksize
+            """
 
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 buf = drive0Data[initdataindex:initdataindex+blocksize]
@@ -914,13 +878,13 @@ def dos(parms=''):
             initdataindex = sectorInfo[3]*512
             blocksize = sectorInfo[1]*512
 
-            
-            print("dos_wrs:deviceNumber=",sectorInfo[0])
-            print("dos_wrs:numsectors=",sectorInfo[1])
-            print("dos_wrs:mediaDescriptor=",sectorInfo[2])
-            print("dos_wrs:initialSector=",sectorInfo[3])
-            print("dos_wrs:blocksize=",blocksize)
-            
+            """
+            print "dos_wrs:deviceNumber=",sectorInfo[0]
+            print "dos_wrs:numsectors=",sectorInfo[1]
+            print "dos_wrs:mediaDescriptor=",sectorInfo[2]
+            print "dos_wrs:initialSector=",sectorInfo[3]
+            print "dos_wrs:blocksize=",blocksize
+            """
 
             piexchangebyte(RC_SUCCESS)
 
@@ -954,11 +918,11 @@ def dos(parms=''):
             piexchangebyte(blocksize / 256)
 
             """
-            print("dos_sct:deviceNumber=",sectorInfo[0])
-            print("dos_sct:numsectors=",sectorInfo[1])
-            print("dos_sct:mediaDescriptor=",sectorInfo[2])
-            print("dos_sct:initialSector=",sectorInfo[3])
-            print("dos_sct:blocksize=",blocksize)
+            print "dos_sct:deviceNumber=",sectorInfo[0]
+            print "dos_sct:numsectors=",sectorInfo[1]
+            print "dos_sct:mediaDescriptor=",sectorInfo[2]
+            print "dos_sct:initialSector=",sectorInfo[3]
+            print "dos_sct:blocksize=",blocksize
             """
 
             piexchangebyte(RC_SUCCESS)
@@ -971,7 +935,7 @@ def ping(parms=''):
     piexchangebyte(RC_SUCCNOSTD)
 
 def resync():
-    #print("sync")
+    print("sync")
     msxbyte = piexchangebytewithtimeout(READY,2)
     while (msxbyte != ABORT):
         msxbyte = piexchangebytewithtimeout(READY,2)
@@ -985,7 +949,7 @@ def recvcmd(cmdlength=128):
     
     msxbyte = piexchangebyte(SENDNEXT)
     if (msxbyte != SENDNEXT):
-        #print("recvcmd:Out of sync with MSX:",hex(msxbyte))
+        print("recvcmd:Out of sync with MSX:",hex(msxbyte))
         rc = RC_OUTOFSYNC
     else:
         dsL = piexchangebyte(SENDNEXT)
@@ -1016,9 +980,9 @@ def recvcmd(cmdlength=128):
     ============================================================================
 """
 
-psetvar = [['PATH','/home/pi/msxpi'], \
+psetvar = [['PATH','/home/msxpi'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/blank.dsk'], \
+           ['DRIVE1','disks/50dicas.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
@@ -1049,8 +1013,8 @@ errcount = 0
 
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
-print("GPIO Initialized\n")
-print("Starting MSXPi Server Version ",version,"Build",build)
+print "GPIO Initialized\n"
+print "Starting MSXPi Server Version ",version,"Build",build
 
 dos("INI 1")
 
@@ -1059,23 +1023,13 @@ try:
         try:
             print("st_recvcmd: waiting command")
             rc = recvcmd()
-            #print("Received:",rc[1])
+            print"Received:",rc[1]
 
             if (rc[0] == RC_SUCCESS):
                 err = 0
 
-                #print(type(rc[1]))
-                if type(rc[1]) is bytearray:
-                    #print("cmd: decoding bytearray")
-                    fullcmd = rc[1].decode()
-                else:
-                    print("cmd: no need to decod bytearray")
-                    fullcmd = rc[1]
-
-                cmd = fullcmd.split()[0].lower()
-                parms = fullcmd[len(cmd)+1:]
-                print("cmd: calling globals with ",cmd, parms)
-             
+                cmd = str(rc[1].split()[0]).lower()
+                parms = str(rc[1][len(cmd)+1:])
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
@@ -1085,8 +1039,8 @@ try:
                 errcount += 1
         except Exception as e:
             errcount += 1
-            print("Error in cmd received:"+str(e))
+            print("cmd:"+str(e))
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
-    print("Terminating msxpi-server")
+    print "Terminating msxpi-server"
