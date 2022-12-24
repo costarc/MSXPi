@@ -615,7 +615,7 @@ def pplay(cmd):
     cmd = "bash " + RAMDISK + "/pplay.sh " + " PPLAY "+psetvar[0][1]+ " "+cmd+" >" + RAMDISK + "/msxpi.tmp"
     cmd = str(cmd)
     
-    print "pplay:starting command:len:",cmd,len(cmd)
+    print("pplay:starting command:len:",cmd,len(cmd))
 
     piexchangebyte(RC_WAIT)
     try:
