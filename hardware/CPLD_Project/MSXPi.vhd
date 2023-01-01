@@ -34,6 +34,10 @@
 -- Added support to /Wait signal (using LED pin)
 -- LED now is drived by SPI_CS signal
 ----------------------------------------------------------------------------------
+-- Version 1.0.1 - 2022-12-25
+-- Firmaware version number updated to "1010" to identify new PCB v1.0.1"
+-- No other changes made to this design
+-- -------------------------------------------------------------------------------
 -- MSXPI Versions:
 -- 0001: Wired up prototype, EPM3064ALC-44
 -- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
