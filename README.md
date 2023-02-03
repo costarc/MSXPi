@@ -10,7 +10,9 @@ Many resources are implemented, such as access to network drives, internet, disk
 Quick Start Guide
 =================
 
-This Quick Start Guide is updated to V1.0.1 of the Software and Interface.
+It's not really quick - it may take soime time, depending on your experience with Raspoberry Pi.
+
+This Quick Start Guide is updated to V1.0.1 Rev. 1 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
 
@@ -19,22 +21,17 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card or disk)
 
-Step 1: The easier way to setup the Raspberry Pi is to download the SD CARD image from a MSXPi release - latest image for interface release v1.0.1 which can be found under: <coming soon>
+Step 1: Downbload and install Raspberry Pi lite 32 bits on your Raspberry Pi. Also recommended in this step: configure your Raspberry Pi wifi.
 
-The login user and password are the default for Raspbian:
+Step 2: In the Raspberry Pi, download and run the installer for MSXPi dependencies: 
+wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-dep-inst.sh
 
-user: pi
+Step 3: Also download and run the MSXPi Server in your Raspberry Pi:
+wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 
-password: raspberry
+Step 4: In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
 
-Step 2: Copy all MSXPi commands from the latest release - <coming soon> or download each individual command from https://github.com/costarc/MSXPi/tree/master/software/target and copy to your MSX-DOS SD card (or disk). 
-Use pwifi command from MSX-DOS to setup the wifi network and key, and MSXPi is fully ready to use.
-
-Jumpers:
-
-A14 - Switch the ROM to lower 16K of the ROM ($4000 - $7FFF)
-
-A15 - Switch the ROM to higher 16K of the ROM ($8000 - $BFFF)
+After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX.
 
 MSXPi v1.0.1 Release Notes
 ==========================
