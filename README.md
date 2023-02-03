@@ -1,7 +1,4 @@
-For more details, please refer to the github project: 
-https://github.com/costarc/MSXPi
-
-github project: https://github.com/costarc/MSXPi/tree/master
+# MSXPi
 
 MSXPi is a hardware interface and software solution to allow MSX computers to control and user Raspberry Pi resources.
 The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
