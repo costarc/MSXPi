@@ -35,11 +35,11 @@
 MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
+ssid="notNeeded"
 
-ssid=notNeeded
-psk=YourWiFiPassword
+echo "Do you want to configure Wifi now ? "; read SN
 
-if [[ $ssid == "YourWiFiId" ]];then
+if [ ${SN} = "Y" -o ${SN} = "Yes" -o ${SN} = "YES" -o ${SN} = "yes"  -o ${SN} = "y" ]; then
     echo "Enter your WIFI Netowrk name:"; read ssid
     echo "Enter your WIFI Network password:"; read psk
     echo "Confirm this info?"
@@ -47,7 +47,7 @@ if [[ $ssid == "YourWiFiId" ]];then
     echo "WIFF Password:$psk"
     echo "Yes or No ?"
     read confirm
-    if [[ "x$confirm" == "xYes" ]];then
+    if [ "x$confirm" = "xYes" ];then
         echo "Starting setup..."
         # ----------------------------------------------------------
         # Configure Wireless network with provided SSID and Password
