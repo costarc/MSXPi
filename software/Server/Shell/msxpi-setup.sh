@@ -80,10 +80,6 @@ sudo apt-get -y install libcurl4-nss-dev
 sudo apt-get -y install mplayer
 sudo apt-get -y install pypy
 wget abyz.co.uk/rpi/pigpio/pigpio.tar
-tar xvf pigpio.tar
-cd PIGPIO
-make -j4
-sudo make install
 
 # -------------------------
 # Enable remote ssh into Pi
