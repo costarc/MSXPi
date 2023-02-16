@@ -18,24 +18,31 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card or disk)
 
-Step 1: Downbload and install Raspberry Pi lite 32 bits on your Raspberry Pi. Also recommended in this step: configure your Raspberry Pi wifi.
+### Step 1: Downbload and install Raspberry Pi lite 32 bits on your Raspberry Pi. 
+Also recommended in this step: configure your Raspberry Pi wifi.
+I recommend to use Raspberry Pi Imager utility to create the SD Card image:
 
-Step 2: In the Raspberry Pi, download and run the installer for MSXPi dependencies:
+https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
+
+
+### Step 2: In the Raspberry Pi, download and run the installer for MSXPi:
+
 mkdir /home/pi/msxpi
+
 cd /home/pi/msxpi
-wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-dep-inst.sh
-chmod 755 msxpi-dep-inst.sh
-sudo ./msxpi-dep-inst.sh
 
-Step 3: Download and run the MSXPi Server in your Raspberry Pi:
+wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-setup.sh
 
-wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-chmod 755 msxpi-server.py
-python3 msxpi-server.py
- 
-Step 4: In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
+chmod 755 msxpi-setup.sh
+
+sudo ./msxpi-setup.sh
+
+
+### Step 3: In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX.
+
+Just rebbot Raspberry Pi and it should have msxpi-server running and responding to commands.
 
 MSXPi v1.0.1 Release Notes
 ==========================
