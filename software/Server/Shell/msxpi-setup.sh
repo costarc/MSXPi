@@ -144,15 +144,8 @@ cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
 cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
 cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
 cc -Wall -pthread -o ploadbin.msx      ploadbin.c      -lpigpio -lrt -lcurl
-mv msxpi-server *.msx $MSXPIHOME/
+mv msxpi-server.py msxpi-server *.msx $MSXPIHOME/
 chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
-
-cd $MSXPIHOME/disks/
-rm -f msxpiboot.dsk msxpitools.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk  -O msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpitools.dsk -O msxpitools.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk  -O msxpiboot-dos1.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpitools.dsk -O msxpiboot-dos2.dsk
 
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
