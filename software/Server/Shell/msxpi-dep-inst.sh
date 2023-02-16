@@ -34,6 +34,7 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
+mkdir /home/pi/msxpi
 
 # ------------------------------------------
 # Install libraries required by msxpi-server
@@ -46,11 +47,6 @@ sudo apt-get -y install smbclient
 sudo apt-get -y install html2text
 sudo apt-get -y install libcurl4-nss-dev
 sudo apt-get -y install mplayer
-wget abyz.co.uk/rpi/pigpio/pigpio.tar
-tar xvf pigpio.tar
-cd PIGPIO
-make -j4
-sudo make install
 
 # --------------------------------------------------
 # Configure PWM (analog audio) on GPIO18 and GPIO13
