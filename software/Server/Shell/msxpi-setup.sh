@@ -144,7 +144,9 @@ cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
 cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
 cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
 cc -Wall -pthread -o ploadbin.msx      ploadbin.c      -lpigpio -lrt -lcurl
+
 mv msxpi-server.py msxpi-server *.msx $MSXPIHOME/
+cd $MSXPIHOME
 chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
 
 chown -R pi.pi $MSXPIHOME
