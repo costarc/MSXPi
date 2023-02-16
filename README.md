@@ -38,7 +38,9 @@ chmod 755 msxpi-setup.sh
 sudo ./msxpi-setup.sh
 
 
-### Step 3: In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
+### Step 3: Install the MSXPi commands for MSX-DOS
+
+In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX.
 
