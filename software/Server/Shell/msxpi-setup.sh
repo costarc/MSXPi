@@ -132,12 +132,12 @@ cd $MSXPIHOME
 mkdir msxpi-code
 cd msxpi-code
 rm *.c *.msx
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/msxpi-server.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/senddatablock.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/uploaddata.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/secsenddata.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/C/src/ploadbin.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Python/src/msxpi-server.py
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/msxpi-server.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/senddatablock.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/uploaddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/secsenddata.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/ploadbin.c
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 cc -Wall -pthread -o msxpi-server      msxpi-server.c  -lpigpio -lrt -lcurl
 cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
 cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
