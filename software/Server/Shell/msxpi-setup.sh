@@ -148,10 +148,10 @@ chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
 
 cd $MSXPIHOME/disks/
 rm -f msxpiboot.dsk msxpitools.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk  -O msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpitools.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpiboot.dsk  -O msxpiboot-dos1.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/dev/software/target/disks/msxpitools.dsk -O msxpiboot-dos2.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk  -O msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpitools.dsk -O msxpitools.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk  -O msxpiboot-dos1.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpitools.dsk -O msxpiboot-dos2.dsk
 
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
