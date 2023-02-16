@@ -20,12 +20,19 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 
 Step 1: Downbload and install Raspberry Pi lite 32 bits on your Raspberry Pi. Also recommended in this step: configure your Raspberry Pi wifi.
 
-Step 2: In the Raspberry Pi, download and run the installer for MSXPi dependencies: 
+Step 2: In the Raspberry Pi, download and run the installer for MSXPi dependencies:
+mkdir /home/pi/msxpi
+cd /home/pi/msxpi
 wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-dep-inst.sh
+chmod 755 msxpi-dep-inst.sh
+sudo ./msxpi-dep-inst.sh
 
-Step 3: Also download and run the MSXPi Server in your Raspberry Pi:
+Step 3: Download and run the MSXPi Server in your Raspberry Pi:
+
 wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-
+chmod 755 msxpi-server.py
+python3 msxpi-server.py
+ 
 Step 4: In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card.
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX.
