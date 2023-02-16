@@ -79,6 +79,7 @@ sudo apt-get -y install html2text
 sudo apt-get -y install libcurl4-nss-dev
 sudo apt-get -y install mplayer
 sudo apt-get -y install pypy
+sudo apt-get -y install pigpio
 
 # -------------------------
 # Enable remote ssh into Pi
@@ -102,7 +103,7 @@ rm /lib/systemd/system/msxpi-server
 
 # Install new controller / monitor
 cd $MYTMP
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/dev/software/Server/Shell/msxpi-monitor
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
 mv msxpi-monitor $MSXPIHOME/
 chmod 755 $MSXPIHOME/msxpi-monitor
 
