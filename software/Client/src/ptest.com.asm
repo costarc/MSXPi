@@ -33,23 +33,68 @@
 ; 0.1    : Initial version.
 
         ORG     $0100
-
-
-        xor     a
-loop:
-        and     a
-        jp      m,ism
-        add     a,1
+        ld      hl,msg_title
+        call    PRINT
+        call    clearbuf   
+        ld      hl,command
+        ld      de,buf     
+setbuf:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
         or      a
-        jr      nz,loop
-        ret
-ism:
-        call    PRINTNUMBER
-        ret
+        jr      nz,setbuf
 
+        ld      hl,msg_transf
+        call    PRINT
+        
+msxpicmd:
+        ld      de,buf
+        call    SENDDATA
+        call    print_msgs          ; print informative message based on flag C
+        
+        ld      hl,msg_recv
+        call    PRINT
+        call    clearbuf
+        ld      de,buf
+        call    RECVDATA
+        push    af
+        call    print_msgs          ; print informative message based on flag C
+        pop     af
+        ld      hl,buf
+        call   PRINT            ; if received data correctly, display in screen
+        ret
+        
+print_msgs:
+        ld      hl,msg_error
+        jp      c,PRINT
+        ld      hl,msg_success
+        call    PRINT
+        ret
+        
+clearbuf:
+        ld      hl,buf
+        ld      b,255
+        xor     a
+clearbuf0:
+        ld      (hl),a
+        inc     hl
+        djnz    clearbuf0
+        ret
+                
+msg_success: db "Checksum match",13,10,"$"
+msg_error: db "Checksum did not match",13,10,"$"
+command: db "MSXPi Text Transmission test - testing 1,2,3",0
+msg_transf: db "Starting transfer...",13,10,"$"
+msg_title: db "PTEST.COM starting",13,10,"$"
+msg_recv: db "Now reading MSXPi response...",13,10,"$"
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "msxpi_io.asm"
 INCLUDE "msxdos_stdio.asm"
 
+buf:    equ     $
+        ds      256
+        db      "$"
 

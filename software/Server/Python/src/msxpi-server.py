@@ -20,7 +20,7 @@ from random import randint
 
 version = "1.0.1"
 build = "20230101.000"
-BLKSIZE = 1024
+BLKSIZE = 256
 
 # Pin Definitons
 csPin   = 21
@@ -97,6 +97,7 @@ def SPI_MASTER_transfer_byte(byte_out):
     byte_in = 0
     tick_sclk()
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
+        print(".")
         if (int(byte_out) & bit):
             GPIO.output(misoPin, GPIO.HIGH)
         else:
@@ -977,39 +978,94 @@ def resync():
         msxbyte = piexchangebytewithtimeout(READY,2)
     return
 
-def recvcmd(cmdlength=128):
-    buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
+def recvcmd(cmdlength=BLKSIZE):
+    print("recvcmd")
+    rc,data = recvdata()
+    return rc,data.decode().split("\x00")[0]
     
-    msxbyte = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        #print("recvcmd:Out of sync with MSX:",hex(msxbyte))
-        rc = RC_OUTOFSYNC
+# 
+def recvdata():
+
+    print("recvdata")
+    data = bytearray()
+    bytecounter = BLKSIZE
+    chksum = 0
+    while(bytecounter > 0 ):
+        msxbyte = piexchangebyte()
+        data.append(msxbyte)
+        chksum += msxbyte
+        bytecounter -= 1
+
+    # Receive the CRC
+    msxsum = piexchangebyte()
+    
+    # Send local CRC - only 8 right bits
+    thissum_r = (chksum % 256)              # right 8 bits
+    thissum_l = (chksum >> 8)                 # left 8 bits
+    thissum = ((thissum_l + thissum_r) % 256)
+    piexchangebyte(thissum)
+    
+    if (thissum == msxsum):
+        rc = RC_SUCCESS
+        print("recvdata: checksum is a match")
     else:
-        dsL = piexchangebyte(SENDNEXT)
-        dsM = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
+        rc = RC_CRCERROR
+        print("recvdata: checksum error")
+
+
+    #print "recvdata:exiting with rc = ",hex(rc)
+    return rc,data
+
+def senddata(data):
+    
+    print("senddata")
+    bytecounter = BLKSIZE
+    byteidx = 0
+    bufpos = 0
+    chksum = 0
+    while(bytecounter > 0 ):
+        pibyte0 = data[bufpos+byteidx]
+        if type(pibyte0) is int:
+            pibyte = pibyte0
+        else:
+            pibyte = ord(pibyte0)
         
-        if datasize > cmdlength:
-            print("recvcmd:Error - Command too long")
-            return [RC_INVALIDCOMMAND,datasize]
+        #print("senddata: ",chr(pibyte),byteidx,bytecounter)
+        chksum += pibyte
+        piexchangebyte(pibyte)
+        byteidx += 1
+        bytecounter -= 1
+    
+    # Send local CRC - only 8 right bits
+    thissum_r = (chksum % 256)              # right 8 bits
+    thissum_l = (chksum >> 8)                 # left 8 bits
+    thissum = ((thissum_l + thissum_r) % 256)
+    piexchangebyte(thissum_r)
+    
+     # Receive the CRC
+    msxsum = piexchangebyte()
+        
+    if (thissum == msxsum):
+        rc = RC_SUCCESS
+        print("senddata: checksum is a match")
+    else:
+        rc = RC_CRCERROR
+        print("senddata: checksum error")
 
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
-            msxbyte = piexchangebyte(SENDNEXT)
-            buffer.append(msxbyte)
-            crc ^= msxbyte
-            bytecounter += 1
+    return rc
 
-        msxcrc = piexchangebyte(crc)
-        if (msxcrc != crc):
-            rc = RC_CRCERROR
-
-    #print "recvdatablock:exiting with rc = ",hex(rc)
-    return [rc,buffer]
-
+def msxpi(cmd):
+    print("Command is being processed: ", cmd)
+    cmd = 'MSXPi response: ' + cmd
+    # pad data to send to senddata function
+    data = bytearray(256)
+    idx = 0
+    for c in cmd:
+        data[idx] = ord(c)
+        idx += 1
+        
+    rc = senddata(data)
+    
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -1058,23 +1114,15 @@ try:
     while True:
         try:
             print("st_recvcmd: waiting command")
-            rc = recvcmd()
-            #print("Received:",rc[1])
+            rc,fullcmd = recvcmd()
+            
+            print("Received:",fullcmd)
 
-            if (rc[0] == RC_SUCCESS):
+            if (rc == RC_SUCCESS):
                 err = 0
-
-                #print(type(rc[1]))
-                if type(rc[1]) is bytearray:
-                    #print("cmd: decoding bytearray")
-                    fullcmd = rc[1].decode()
-                else:
-                    print("cmd: no need to decod bytearray")
-                    fullcmd = rc[1]
-
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
-                print("cmd: calling globals with ",cmd, parms)
+                print("cmd: calling command ",cmd)
              
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function

@@ -118,9 +118,77 @@ SENDPICMD:
 		call    SENDDATABLOCK
         ret
 
-;-----------------------
-; RECVDATABLOCK        |
-;-----------------------
+;---------------------------------------------------------------
+; RECVDATA- SENDDATA
+;---------------------------------------------------------------
+; 01/03/2023
+;
+; Receive / Send 256 bytes of data plus a checksum (1 byte)
+; Calculates teh checksum locally as data is coming, and send it back.
+; Compares the local checksum with received checksum, and
+; if they differ return with C flag set.
+;
+; Input:
+;   de = memory address for the data
+; Output:
+;   Flag C set if error
+;
+RECVDATA:
+        ld      hl,0                       ; will store checksum in HL
+        ld      bc,BLKSIZE
+RECV0:
+        call    PIREADBYTE
+        ld      (de),a
+        inc     de
+        push    bc
+        ld      b,0
+        ld      c,a
+        add     hl,bc
+        pop     bc
+		dec     bc
+        ld      a,b
+        or      c
+        jr      nz,RECV0
+        call    PIREADBYTE      ; read checksum byte from msxpi server
+        ld      c,a
+        ld      a,l
+        add     a,h
+        ld      l,a
+        call    PIWRITEBYTE     ; send checksum calculated here
+        ld      a,c                         ; get MSXPi chksum
+        cp      l                           ; compare checksum
+        ret     z                           ; return if match, C is 0
+        scf                                 ; differ, set flag for Error
+        ret
+
+SENDDATA:
+        ld      hl,0                       ; will store checksum in HL
+        ld      bc,BLKSIZE
+SENDD0:
+        ld      a,(de)
+        push    bc
+        ld      b,0
+        ld      c,a
+        add     hl,bc
+        pop     bc
+        call    PIWRITEBYTE
+        inc     de
+		dec     bc
+        ld      a,b
+        or      c
+        jr      nz,SENDD0
+        ld      a,l
+        add    a,h                         ; sum two bytes of checksum to obtain final cum
+        ld      l,a
+        call    PIWRITEBYTE     ; send checksum calculated here
+        call    PIREADBYTE      ; read checksum byte from msxpi server
+        cp      l                           ; compare checksum
+        ret     z                           ; return if match, C is 0
+        scf                                 ; differ, set flag for Error
+        ret
+        
+; -----------------------------------------------------------------------------------------------
+; This is the original MSXPi routine as per v1.0.1
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
