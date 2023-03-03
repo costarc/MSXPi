@@ -38,24 +38,14 @@ DSKBLOCKSIZE:   EQU 1
 
         ORG     $0100
 
-        LD      BC,5
-        LD      DE,COMMAND
+        LD      HL,COMMAND
         CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
+        JR      NC,MAINPROGRAM
 
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JR      Z,MAINPROGRAM
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
 
 PRINTPIERR:
         LD      HL,PICOMMERR

@@ -51,65 +51,83 @@
 
         ORG     $0100
 
-        LD      BC,5
-        LD      DE,COMMAND
+        LD      HL,COMMAND
         CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
+        JR      NC,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:
-
+MAINPROGRAM:        
         CALL    SETCLOCK
-        JP      PRINTPISTDOUT
+        call    CLEARBUF
+        LD      DE,buf
+        CALL    RECVDATA
+        LD      HL,buf
+        call      PRINTPISTDOUT
+        dec     hl                              ;check last byte in buffer. if zero, no more data
+        ld      a,(hl)
+        or      a
+        jr      nz,MAINPROGRAM
+        ret
 
 ; --------------------------------
 ; CODE FOR YOUR COMMAND GOES HERE
 ; --------------------------------
 SETCLOCK:
+        call    CLEARBUF
+        LD      DE,buf
+        CALL    RECVDATA
+        LD      IX,buf
+
+        LD      A,(IX + 0)
+        LD      L,A
+        LD      A,(IX + 1)
+        LD      H,A
+        LD      A,(IX + 2)
+        LD      D,A
+        LD      A,(IX + 3)
+        LD      E,A
+        LD      C,$2B
+        PUSH    IX
+        CALL    BDOS
+        POP     IX
+
+; set time
+        LD      A,(IX + 4)
+        LD      H,A
+        LD      A,(IX + 5)
+        LD      L,A
+        LD      A,(IX + 6)
+        LD      D,A
+        LD      A,(IX + 7)
+        LD      E,A
+        LD      C,$2D
+        CALL    BDOS
+        RET
+
+SETCLOCK_OLD:
 ; set date
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      L,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      H,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      D,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      E,A
         LD      C,$2B
         CALL    BDOS
 
 ; set time
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      H,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      L,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      D,A
-        LD      A,SENDNEXT
         CALL    PIEXCHANGEBYTE
         LD      E,A
         LD      C,$2D
@@ -117,7 +135,7 @@ SETCLOCK:
         RET
 
 ; Replace with your command name here
-COMMAND:  DB      "PDATE"
+COMMAND:  DB      "PDATE",0
 
 ; --------------------------------------
 ; End of your command
@@ -129,8 +147,7 @@ PICOMMERR:
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
+
 
 
 

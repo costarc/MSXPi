@@ -41,8 +41,76 @@
 ; 0.6c   : Initial version commited to git
 ;
 
-; Restore communication with Pi by sending ABORT commands
-; Until RPi responds with READY.
+; ==================================================================
+; BASIC I/O FUNCTIONS STARTS HERE.
+; These are the lower level I/O routines available, and must match
+; the I/O functions implemented in the CPLD.
+; Other than using these functions you will have to create your
+; own commands, using OUT/IN directly to the I/O ports.
+; ==================================================================
+
+;-----------------------
+; SENDIFCMD            |
+;-----------------------
+SENDIFCMD:
+            out     (CONTROL_PORT1),a  ; Send data, or command
+            ret
+
+;-----------------------
+; CHKPIRDY             |
+;-----------------------
+CHKPIRDY:
+            push    bc
+            ld      bc,$ffff
+CHKPIRDY0:
+            in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
+            or       a
+            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
+                                       ; for next command/byte
+            dec     bc                 ; pi not ready, wait a little bit
+            ld      a,b
+            or      c
+            jr      nz,CHKPIRDY0
+CHKPIRDYNOTOK:
+            scf
+CHKPIRDYOK:
+            pop     bc
+            ret
+
+;-----------------------
+; PIREADBYTE           |
+;-----------------------
+PIREADBYTE:
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                  ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT1),a  ; send read command to the interface
+            call    CHKPIRDY           ; wait interface transfer data to pi and
+                                       ; pi app processing
+                                       ; no ret c is required here, because in a,(7) 
+                                       ; does not reset c flag
+PIREADBYTE1:
+            in      a,(DATA_PORT1)     ; read byte
+            ret                        ; return in a the byte received
+
+;-----------------------
+; PIWRITEBYTE          |
+;-----------------------
+PIWRITEBYTE:
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT1),a     ; send data, or command
+            ret
+
+;-----------------------
+; PIEXCHANGEBYTE       |
+;-----------------------
+PIEXCHANGEBYTE:
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT1)     ; read byte
+            ret
 
 PSYNC:  
         CALL    TRYABORT
@@ -134,6 +202,7 @@ SENDPICMD:
 ;   Flag C set if error
 ;
 RECVDATA:
+RECVDATABLOCK:
         ld      hl,0                       ; will store checksum in HL
         ld      bc,BLKSIZE
 RECV0:
@@ -162,6 +231,7 @@ RECV0:
         ret
 
 SENDDATA:
+SENDDATABLOCK:
         ld      hl,0                       ; will store checksum in HL
         ld      bc,BLKSIZE
 SENDD0:
@@ -203,7 +273,7 @@ SENDD0:
 ;   de = Original address if routine finished in error,
 ;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
-RECVDATABLOCK:
+RECVDATABLOCK_LEGACY:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -289,7 +359,7 @@ RECVDATABLOCK_CRCERROR:
 ;   de = Original address if routine finished in error,
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
-SENDDATABLOCK:
+SENDDATABLOCK_LEGACY:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -433,7 +503,6 @@ PRINTNUM1:
         call    PUTCHAR
         ret
 
-
 ; =================================================================
 ; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
 ; Inputs: (PRINTPISTDOUT0)
@@ -446,73 +515,17 @@ PRINTNUM1:
 ; Changes: AF,BC,E,L,HL',BC'
 ; =================================================================
 PRINTPISTDOUT:
-        ld      e,0
-
-PRINTPISTDOUT0:
-    ; CLEAR CRC and save block size
-        exx
-        ld      hl,$ffff
-        exx
-PRINTPISTDOUT1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        ld      a,RC_OUTOFSYNC
-        ret     nz
-PRINTPI0:
-        call    READDATASIZE
-        ld      a,b
-        or      c
-        ld      a,ENDTRANSFER
+        ld      a,(hl)
+        or      a
         ret     z
-        call    PIEXCHANGEBYTE    ; read attempts, but will not use it
-PRINTPI1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        push    af
-        call    CRC16
-        pop     af
-        ld      l,a
-        ld      a,e
-        cp      $ff
-        jr      z,PRINTPI3          ; nostdout - not printing to screen
-        ld      a,l
         cp      10
-        jr      nz,PRINTPI2
+        jr      nz,printchar
         call    PUTCHAR
         ld      a,13
-PRINTPI2:
+printchar:
         call    PUTCHAR
-PRINTPI3:
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,PRINTPI1
-
-; Now exchange CRC
-        exx
-        ld      a,l
-        call    PIEXCHANGEBYTE
-        cp      l
-        jr      nz,PRINTPI4
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        cp      h
-        jr      nz,PRINTPI4
-        ld      a,RC_SUCCESS
-        jr      PRINTPI5
-PRINTPI4: 
-        ld      a,RC_CRCERROR
-PRINTPI5:
-        exx
-        ret
-
-NOSTDOUT:
-        push    de
-        ld      e,$ff
-        call    PRINTPISTDOUT0
-        pop     de
-        ret
+        inc     hl
+        jr      PRINTPISTDOUT
         
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer HL to hex
@@ -641,6 +654,102 @@ PARMSEVAL2:
         LD      HL,0
         RET
 
+SETBUF:
+        push    hl
+        call    CLEARBUF
+        pop     hl
+        ld      de,buf
+SETBUF0:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        or      a
+        jr      nz,SETBUF0
+        ret
+        
+CLEARBUF:
+        ld      hl,buf
+        ld      b,255
+        xor     a
+clearbuf0:
+        ld      (hl),a
+        inc     hl
+        djnz    clearbuf0
+        ret
+
+DOSSENDPICMD:
+; Copy MSXPi command to the buffer
+        push    hl
+        call    CLEARBUF
+        pop     hl
+        ld      de,buf
+DPICMDL:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        or      a
+        jr      nz,DPICMDL
+; now check if there are parameters in the command line
+        ld      hl,$80
+        ld      a,(hl)
+        ld      b,a
+        or      a
+        jr      z,DOSSEND1
+
+DOSSENDPICMD0:
+; b contain number of chars passed as arguments in the command
+        inc     hl
+        call    EATSPACES
+        jr      c,DOSSEND1
+        
+; there is parameters - have to concatenate to our buffer
+DOSSENDPICMD1:
+        dec    de
+        ld      a,32
+        ld      (de),a
+        inc     de
+DOSSENDPICMD2:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        djnz    DOSSENDPICMD2
+
+DOSSEND1:
+        xor     a
+        ld      (de),a
+        ld      de,buf
+        di
+        call    SENDDATA
+        ei
+        ret
+
+PUTCHAR:
+        push    bc
+        push    de
+        push    hl
+        ld      e,a
+        ld      c,2
+        call    BDOS
+        pop     hl
+        pop     de
+        pop     bc
+        ret
+
+EATSPACES:
+        ld      a,(hl)
+        cp      32
+        jr      nz,EATSPACEEND
+        inc     hl
+        djnz    EATSPACES
+        scf
+        ret
+EATSPACEEND:
+        or      a
+        ret
+        
 TESTMSXPISTR:
         DB      'MSXPi'
 confatual:
@@ -650,6 +759,10 @@ slotatual:
 subsatual:
         DB      00
 
+buf:    equ     $
+        ds      256
+        db      "$"
+        
 
 
 

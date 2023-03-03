@@ -42,32 +42,26 @@
         CALL    DESCHWVER
 
 ; Print msxpi-server version
-        LD      BC,4
-        LD      DE,COMMAND
+        LD      HL,COMMAND
         CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
+        JR      NC,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
 MAINPROGRAM:
-        JP      PRINTPISTDOUT
-
+        LD      DE,buf
+        CALL    RECVDATA
+        LD      HL,buf
+        call      PRINTPISTDOUT
+        dec     hl                              ;check last byte in buffer. if zero, no more data
+        ld      a,(hl)
+        or      a
+        jr      nz,MAINPROGRAM
+        ret
+        
 DESCHWVER:
         ld      hl,iftable
 DESCHWVER0:
@@ -115,7 +109,7 @@ ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic","$"
 ifdummy: DB      "MSXPi not detected","$"
 
-COMMAND:DB      "PVER"
+COMMAND:DB      "PVER",0
 
 HWVER:  DB      "Interface version:"
         DB      TEXTTERMINATOR
@@ -133,8 +127,7 @@ PICOMMERR:
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
+
 
 
 

@@ -35,34 +35,27 @@
 
         ORG     $0100
 
-        LD      BC,4
-
-        LD      DE,COMMAND
+        LD      HL,COMMAND
         CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
+        JR      NC,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
 MAINPROGRAM:
-        JP      PRINTPISTDOUT
+        LD      DE,buf
+        CALL    RECVDATA
+        LD      HL,buf
+        call      PRINTPISTDOUT
+        dec     hl                              ;check last byte in buffer. if zero, no more data
+        ld      a,(hl)
+        or      a
+        jr      nz,MAINPROGRAM
+        ret
 
-COMMAND:DB      "PSET"
+COMMAND:DB      "PSET",0
 
 PICOMMERR:
         DB      "Communication Error",13,10,"$"
@@ -70,8 +63,6 @@ PICOMMERR:
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
 
 
 
