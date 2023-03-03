@@ -60,21 +60,9 @@ SENDIFCMD:
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            push    bc
-            ld      bc,$ffff
-CHKPIRDY0:
             in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
             or       a
-            jr      z,CHKPIRDYOK       ; rdy signal is zero, pi app fsm is ready
-                                       ; for next command/byte
-            dec     bc                 ; pi not ready, wait a little bit
-            ld      a,b
-            or      c
-            jr      nz,CHKPIRDY0
-CHKPIRDYNOTOK:
-            scf
-CHKPIRDYOK:
-            pop     bc
+            jr      nz,CHKPIRDY
             ret
 
 ;-----------------------
