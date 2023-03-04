@@ -21,6 +21,8 @@ from random import randint
 version = "1.1"
 build = "20230303.000"
 BLKSIZE = 256
+SECTORSIZE = 256
+CMDSIZE = 9
 
 # Pin Definitons
 csPin   = 21
@@ -269,38 +271,26 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
     return rc 
 
-def sendstdmsg(message):
+def sendmultiblock(buf):
     idx = 0
     cnt = 0
-    data = bytearray(256)
-    for c in message:
-        data[cnt] = ord(c)
+    data = bytearray(BLKSIZE)
+    for b in buf:
+        if (isinstance(b, str)):
+            data[cnt] = ord(b)
+        else:
+            data[cnt] = b
         cnt += 1   
-        if cnt == 255 and len(message) > 255:
+        if cnt == BLKSIZE and len(buf) > BLKSIZE:
+            print(len(data),data)
             rc = senddata(data)
-            data = bytearray(256)
-            idx += 256
+            data = bytearray(BLKSIZE)
+            idx += BLKSIZE
             cnt = 0
+   
     rc = senddata(data)          
     return rc
 
-def sendstddata(message,buf):
-    idx = 0
-    cnt = 0
-    data = bytearray(256)
-    for c in buf:
-        data[cnt] = c
-        cnt += 1   
-        if cnt == 255 and len(buf) > 255:
-            rc = senddata(data)
-            data = bytearray(256)
-            idx += 256
-            cnt = 0
-    rc = senddata(data) 
-    rc = sendstdmsg(message)
-           
-    return rc
-    
 # create a subclass and override the handler methods
 class MyHTMLParser(HTMLParser):
     def __init__(self):
@@ -391,13 +381,17 @@ def ini_fcb(fname):
     
     print("ini_fcb: Exiting")
 
-def prun(cmd):
+def prun(cmd = ''):
 
     rc = RC_SUCCESS
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
+        rc,data = recvdata()
+        cmd = data.decode().split("\x00")[0]
+    
+    if (cmd.strip() == '' or len(cmd.strip()) == 0):
         #print("prun if:syntax error")
-        sendstdmsg("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |")
+        sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
         print("prun else")
@@ -410,22 +404,25 @@ def prun(cmd):
             if len(buf) == 0:
                 buf = "Pi:No output"
 
-            sendstdmsg(buf)
+            sendmultiblock(buf)
 
         except Exception as e:
             print("prun: exception")
             rc = RC_FAILED
-            sendstdmsg("Pi:"+str(e)+'\n')
+            sendmultiblock("Pi:"+str(e)+'\n')
 
     print("prun:exiting rc:",hex(rc))
     return rc
 
-def pdir(path):
+def pdir():
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
     #print "pdir:starting"
 
+    rc,data = recvdata()
+    path = data.decode().split("\x00")[0]
+    
     try:
         if (1 == 1):
             print("pdir: if1")
@@ -442,7 +439,7 @@ def pdir(path):
                         fileDesc = '.'
                     prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
                 else:
-                    print("pdir: else inside")
+                    print("pdir: else inside",urlcheck[1])
                     prun('ls -l ' + urlcheck[1])
             else:
                 print("pdir: else out")
@@ -452,40 +449,42 @@ def pdir(path):
                     parser = MyHTMLParser()
                     parser.feed(htmldata)
                     buf = " ".join(parser.HTMLDATA)
-                    rc = sendstdmsg(buf)
+                    rc = sendmultiblock(buf)
 
                 except Exception as e:
                     rc = RC_FAILED
                     print("pdir exception 1:http error "+ str(e))
-                    sendstdmsg(str(e))
+                    sendmultiblock(str(e))
         else:
             rc = RC_FAILNOSTD
             print("pdir:out of sync in RC_WAIT")
     except Exception as e:
         print("pdir exception 2:"+str(e))
-        sendstdmsg('Pi:'+str(e))
+        sendmultiblock('Pi:'+str(e))
 
     print("pdir:exiting rc:",hex(rc))
     return rc
 
-def pcd(path):    
+def pcd():    
     rc = RC_SUCCESS
     global psetvar
     basepath = psetvar[0][1]
     newpath = basepath
     
-    print("pcd:starting basepath:path=",basepath + ":" + path)
+    print("pcd: system path:",basepath)
+    rc,data = recvdata()
+    path = data.decode().split("\x00")[0]
 
     try:
         if (1 == 1):
-            if (path == '' or path.strip() == "."):
-                sendstdmsg(basepath)
+            if (len(path) == 0 or path == '' or path.strip() == "."):
+                sendmultiblock(basepath)
             elif (path.strip() == ".."):
                 newpath = basepath.rsplit('/', 1)[0]
                 if (newpath == ''):
                     newpath = '/'
                 psetvar[0][1] = newpath
-                sendstdmsg(str(newpath))
+                sendmultiblock(str(newpath))
             else:
                 #print "pcd:calling getpath"
                 urlcheck = getpath(basepath, path)
@@ -497,22 +496,22 @@ def pcd(path):
                     newpath[:3] == "smb"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = newpath
-                    sendstdmsg(str(newpath+'\n'))
+                    sendmultiblock(str(newpath+'\n'))
                 else:
                     newpath = str(newpath)
                     if (os.path.isdir(newpath)):
                         psetvar[0][1] = newpath
-                        sendstdmsg(newpath+'\n')
+                        sendmultiblock(newpath+'\n')
                     elif (os.path.isfile(str(newpath))):
-                        sendstdmsg("Pi:Error - not a folder")
+                        sendmultiblock("Pi:Error - not a folder")
                     else:
-                        sendstdmsg("Pi:Error - path not found")
+                        sendmultiblock("Pi:Error - path not found")
         else:
             rc = RC_FAILNOSTD
             print("pcd:out of sync in RC_WAIT")
     except Exception as e:
         print("pcd:"+str(e))
-        sendstdmsg('Pi:'+str(e))
+        sendmultiblock('Pi:'+str(e))
 
     return [rc, newpath]
 
@@ -549,7 +548,7 @@ def pcopy(path='',inifcb=True):
         fname_rpi = str(fileinfo[0])
         fname_msx = str(fileinfo[1])
     else:
-        sendstdmsg("Pi:Command line parametrs invalid.")
+        sendmultiblock("Pi:Command line parametrs invalid.")
         return RC_FAILED
 
     urlcheck = getpath(basepath, path)
@@ -564,7 +563,7 @@ def pcopy(path='',inifcb=True):
             filesize = len(buf)
  
         except Exception as e:
-            sendstdmsg("Pi:"+str(e)+'\n') 
+            sendmultiblock("Pi:"+str(e)+'\n') 
             return RC_FAILED
 
     else:
@@ -577,12 +576,12 @@ def pcopy(path='',inifcb=True):
             
         except Exception as e:
             rc = RC_FAILED
-            sendstdmsg("Pi:"+str(e))
+            sendmultiblock("Pi:"+str(e))
     
     if rc == RC_SUCCESS:
         print("pcopy: File open success, size is ",filesize)
         if filesize == 0:
-            sendstdmsg("Pi:No valid data found")
+            sendmultiblock("Pi:No valid data found")
         else:
             if inifcb:
                 msxbyte = piexchangebyte(RC_SUCCESS)
@@ -604,21 +603,23 @@ def pcopy(path='',inifcb=True):
 def ploadr(path=''):
     rc = pcopy(path,False)
     if rc == RC_INVALIDDATASIZE:
-        sendstdmsg("Pi:Error - Not valid 8/16/32KB ROM")
+        sendmultiblock("Pi:Error - Not valid 8/16/32KB ROM")
 
-def pdate(parms = ''):
-    pdate = bytearray()
+def pdate():
+
+    print("pdate")
+    pdate = bytearray(8)
     now = datetime.datetime.now()
-    pdate.append(now.year & 0xff)
-    pdate.append(now.year >>8)
-    pdate.append(now.month)
-    pdate.append(now.day)
-    pdate.append(now.hour)
-    pdate.append(now.minute)
-    pdate.append(now.second)
-    pdate.append(0)
+    pdate[0]=(now.year & 0xff)
+    pdate[1]=(now.year >>8)
+    pdate[2]=(now.month)
+    pdate[3]=(now.day)
+    pdate[4]=(now.hour)
+    pdate[5]=(now.minute)
+    pdate[6]=(now.second)
+    pdate[7]=(0)
     
-    sendstddata("Pi:OK", pdate)
+    sendmultiblock(pdate)
    
     return RC_SUCCESS
     
@@ -646,17 +647,17 @@ def pplay(cmd):
         p = subprocess.call(cmd, shell=True)
         buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
         if (buf == RC_FAILED):
-            sendstdmsg("Pi:Ok\n")
+            sendmultiblock("Pi:Ok\n")
         else:
-            sendstdmsg(buf)
+            sendmultiblock(buf)
     except subprocess.CalledProcessError as e:
         rc = RC_FAILED
-        sendstdmsg("Pi:"+str(e))
+        sendmultiblock("Pi:"+str(e))
     
     #print "pplay:exiting rc:",hex(rc)
     return rc
 
-def pset(cmd=''):
+def pset():
     global psetvar
     
     rc = RC_SUCCESS
@@ -696,20 +697,22 @@ def pset(cmd=''):
         else:
             rc = RC_FAILED
 
-    sendstdmsg(buf)
+    sendmultiblock(buf)
 
     return rc
 
-def pwifi(parms=''):
+def pwifi():
 
     global psetvar
     wifissid = psetvar[4][1]
     wifipass = psetvar[5][1]
 
+    rc,data = recvdata()
+    parms = data.decode().split("\x00")[0]
     cmd=parms.strip()
 
     if (cmd[:2] == "/h"):
-        sendstdmsg("Pi:Usage:\npwifi display | set")
+        sendmultiblock("Pi:Usage:\npwifi display | set")
         return RC_SUCCESS
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
@@ -733,10 +736,10 @@ def pwifi(parms=''):
     
     return RC_SUCCESS
 
-def pver(parms=''):
+def pver():
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+build
-    sendstdmsg(ver)
+    sendmultiblock(ver)
 
 def irc(cmd=''):
     piexchangebyte(RC_WAIT)
@@ -760,11 +763,11 @@ def irc(cmd=''):
             ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
             ircsock.send(bytes("NICK "+ jnick +"\n"))
             ircmsg = 'Connected to '+psetvar[8][1]
-            sendstdmsg(rc,ircmsg)
+            sendmultiblock(rc,ircmsg)
         elif cmd[:3] == "msg":
             print("msg:sending msg ",cmd[:4])
             ircsock.send(bytes("PRIVMSG "+ channel +" :" + cmd[4:] +"\n"))
-            sendstdmsg(RC_SUCCNOSTD,"Pi:Ok\n")
+            sendmultiblock(RC_SUCCNOSTD,"Pi:Ok\n")
         elif cmd[:4] == 'join':
             jparm = cmd.split(' ')
             jchannel = jparm[1]
@@ -787,7 +790,7 @@ def irc(cmd=''):
                     allchann.append(jchannel)
                     channel = jchannel
 
-            sendstdmsg(RC_SUCCESS,ircmsg)
+            sendmultiblock(RC_SUCCESS,ircmsg)
 
         elif cmd[:4] == 'read':
             ircmsg = 'Pi:Error'
@@ -821,7 +824,7 @@ def irc(cmd=''):
                     rc = RC_FAILED
   
             ircsock.setblocking(1);
-            sendstdmsg(rc,ircmsg)
+            sendmultiblock(rc,ircmsg)
 
         elif cmd[:5] == 'names':
             ircsock.send(bytes("NAMES " + channel + "\n"))
@@ -829,21 +832,21 @@ def irc(cmd=''):
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
             ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
-            sendstdmsg(RC_SUCCESS,ircmsg)
+            sendmultiblock(RC_SUCCESS,ircmsg)
         elif cmd[:4] == 'quit':
             ircsock.send(bytes("/quit\n"))
             ircsock.close()
-            sendstdmsg(RC_SUCCESS,"Pi:leaving room\n")
+            sendmultiblock(RC_SUCCESS,"Pi:leaving room\n")
         elif cmd[:4] == 'part':
             ircsock.send(bytes("/part\n"))
             ircsock.close()
-            sendstdmsg(RC_SUCCESS,"Pi:leaving room\n")
+            sendmultiblock(RC_SUCCESS,"Pi:leaving room\n")
         else:
             print("irc:no valid command received")
-            sendstdmsg(rc,"Pi:No valid command received")
+            sendmultiblock(rc,"Pi:No valid command received")
     except Exception as e:
             print("irc:Caught exception"+str(e))
-            sendstdmsg(rc,"Pi:"+str(e))
+            sendmultiblock(rc,"Pi:"+str(e))
     
 def dos(parms=''):
     piexchangebyte(RC_WAIT)
@@ -964,16 +967,11 @@ def dos(parms=''):
         print("DOS:"+str(e))
         piexchangebyte(RC_FAILED)
 
-def recvcmd(cmdlength=BLKSIZE):
-    print("recvcmd")
-    rc,data = recvdata()
-    return rc,data.decode().split("\x00")[0]
-
-def recvdata():
+def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
     data = bytearray()
-    bytecounter = BLKSIZE
+
     chksum = 0
     while(bytecounter > 0 ):
         msxbyte = piexchangebyte()
@@ -1001,10 +999,10 @@ def recvdata():
     #print "recvdata:exiting with rc = ",hex(rc)
     return rc,data
 
-def senddata(data):
+def senddata(data, bytecounter = BLKSIZE):
     
     print("senddata")
-    bytecounter = BLKSIZE
+   
     byteidx = 0
     bufpos = 0
     chksum = 0
@@ -1025,7 +1023,7 @@ def senddata(data):
     thissum_r = (chksum % 256)              # right 8 bits
     thissum_l = (chksum >> 8)                 # left 8 bits
     thissum = ((thissum_l + thissum_r) % 256)
-    piexchangebyte(thissum_r)
+    piexchangebyte(thissum)
     
      # Receive the CRC
     msxsum = piexchangebyte()
@@ -1039,18 +1037,32 @@ def senddata(data):
 
     return rc
 
-def msxpi(cmd):
-    print("Command is being processed: ", cmd)
-    cmd = 'MSXPi response: ' + cmd
+def template():
+    print("template now receiving parameters...")
+    
+    rc,data = recvdata()    
+    print("Raw data received:",data)
+    
+    print("Extracting only ascii bytes and setting reponse...")
+    rsp = 'MSXPi received: ' + data.decode().split("\x00")[0]
+    
+    print()
+    print("Creating a bytearray of size BLKSIZE and inserting the response. The full response is padded with zeros")
     # pad data to send to senddata function
-    data = bytearray(256)
+    data = bytearray(BLKSIZE)
     idx = 0
-    for c in cmd:
+    for c in rsp:
         data[idx] = ord(c)
         idx += 1
-        
-    rc = senddata(data)
     
+    print("Sending response: ",data) 
+    rc = senddata(data)
+
+def recvcmd():
+    print("recvcmd")
+    rc,data = recvdata(9)
+    return rc,data.decode().split("\x00")[0]
+        
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -1095,9 +1107,11 @@ print("Starting MSXPi Server Version ",version,"Build",build)
 
 # dos("INI 1")
 
-try:
+#try:
+if 1==1:
     while True:
-        try:
+        #try:
+        if 1==1:
             print("st_recvcmd: waiting command")
             rc,fullcmd = recvcmd()
             
@@ -1112,11 +1126,11 @@ try:
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
-                globals()[cmd](parms)
-        except Exception as e:
-            errcount += 1
-            print("Error in cmd received:"+str(e))
+                globals()[cmd.strip()]()
+        #except Exception as e:
+        #errcount += 1
+        #print("Error in cmd received:"+str(e))
 
-except KeyboardInterrupt:
-    GPIO.cleanup() # cleanup all GPIO
-    print("Terminating msxpi-server")
+#except KeyboardInterrupt:
+#    GPIO.cleanup() # cleanup all GPIO
+#    print("Terminating msxpi-server")

@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 1.1                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -30,58 +30,32 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to supoprt new transfer logic
 ;
-;Parameters:    C = 2BH (_SDATE)
-;HL = Year 1980...2079
-;D = Month (1=Jan...12=Dec)
-;E = Date (1...31)
-;Results:       A = 00H if date was valid
-;FFH if date was invalid
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
 ;
-;Parameters:    C = 2DH (_STIME)
-;H = Hours (0...23)
-;L = Minutes (0...59)
-;D = Seconds (0...59)
-;E = Centiseconds (ignored)
-;Results:       A = 00H if time was valid
-
-; Start of command - You may not need to change this
-
-        ORG     $0100
-
-        LD      HL,COMMAND
-        CALL    DOSSENDPICMD
-
-        JR      NC,MAINPROGRAM
-
+        org     $0100
+        
+        ld      de,command  
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR 
+        call    CLEARBUF
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        jr      c, PRINTPIERR 
+        call    SETCLOCK
+        ret
+        
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:        
-        CALL    SETCLOCK
-        call    CLEARBUF
-        LD      DE,buf
-        CALL    RECVDATA
-        LD      HL,buf
-        call      PRINTPISTDOUT
-        dec     hl                              ;check last byte in buffer. if zero, no more data
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROGRAM
-        ret
-
-; --------------------------------
-; CODE FOR YOUR COMMAND GOES HERE
-; --------------------------------
 SETCLOCK:
-        call    CLEARBUF
-        LD      DE,buf
-        CALL    RECVDATA
         LD      IX,buf
-
         LD      A,(IX + 0)
         LD      L,A
         LD      A,(IX + 1)
@@ -107,48 +81,14 @@ SETCLOCK:
         LD      C,$2D
         CALL    BDOS
         RET
+               
 
-SETCLOCK_OLD:
-; set date
-        CALL    PIEXCHANGEBYTE
-        LD      L,A
-        CALL    PIEXCHANGEBYTE
-        LD      H,A
-        CALL    PIEXCHANGEBYTE
-        LD      D,A
-        CALL    PIEXCHANGEBYTE
-        LD      E,A
-        LD      C,$2B
-        CALL    BDOS
-
-; set time
-        CALL    PIEXCHANGEBYTE
-        LD      H,A
-        CALL    PIEXCHANGEBYTE
-        LD      L,A
-        CALL    PIEXCHANGEBYTE
-        LD      D,A
-        CALL    PIEXCHANGEBYTE
-        LD      E,A
-        LD      C,$2D
-        CALL    BDOS
-        RET
-
-; Replace with your command name here
-COMMAND:  DB      "PDATE",0
-
-; --------------------------------------
-; End of your command
-; You should not modify this code below
-; --------------------------------------
-
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
-
+command: db "pdate   ",0
+PICOMMERR:  DB      "Communication Error",13,10,0
+        
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-
-
-
-
+buf:    equ     $
+        ds      BLKSIZE
+        db      0
 

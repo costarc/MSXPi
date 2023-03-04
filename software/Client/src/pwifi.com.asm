@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 1.1                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -30,36 +30,45 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to supoprt new transfer logic
-
-        ORG     $0100
-
-        LD      HL,COMMAND
-        CALL    DOSSENDPICMD
-
-        JR      NC,MAINPROGRAM
-
+;
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
+;
+        org     $0100
+        
+        ld      de,command  
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR 
+        call    SENDPARMS
+        jr      c, PRINTPIERR 
+MAINPROG:
+        call    CLEARBUF
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        jr      c, PRINTPIERR 
+        ld      hl,buf
+        call   PRINT
+        ld      hl,buf
+        ld      de,BLKSIZE
+        add hl,de
+        ld      a,(hl)
+        or      a
+        jr      nz,MAINPROG
+        ret
+        
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:
-        call    CLEARBUF
-        LD      DE,buf
-        CALL    RECVDATA
-        LD      HL,buf
-        call      PRINTPISTDOUT
-        dec     hl                              ;check last byte in buffer. if zero, no more data
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROGRAM
-        ret
-
-COMMAND:DB      "PWIFI",0
-
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
-
+command: db "pwifi   ",0
+PICOMMERR:  DB      "Communication Error",13,10,0
+        
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
+buf:    equ     $
+        ds      BLKSIZE
+        db      0

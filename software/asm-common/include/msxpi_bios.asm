@@ -191,8 +191,8 @@ SENDPICMD:
 ;
 RECVDATA:
 RECVDATABLOCK:
+        di
         ld      hl,0                       ; will store checksum in HL
-        ld      bc,BLKSIZE
 RECV0:
         call    PIREADBYTE
         ld      (de),a
@@ -212,6 +212,7 @@ RECV0:
         add     a,h
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
+        ei
         ld      a,c                         ; get MSXPi chksum
         cp      l                           ; compare checksum
         ret     z                           ; return if match, C is 0
@@ -220,8 +221,8 @@ RECV0:
 
 SENDDATA:
 SENDDATABLOCK:
+        di
         ld      hl,0                       ; will store checksum in HL
-        ld      bc,BLKSIZE
 SENDD0:
         ld      a,(de)
         push    bc
@@ -240,6 +241,7 @@ SENDD0:
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
         call    PIREADBYTE      ; read checksum byte from msxpi server
+        ei
         cp      l                           ; compare checksum
         ret     z                           ; return if match, C is 0
         scf                                 ; differ, set flag for Error
@@ -429,25 +431,18 @@ SENDDATASIZE:
 ; PRINT                |
 ;-----------------------
 PRINT:
-        push    af
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
         jr      Z,PRINTEXIT
         cp      10
         jr      nz,PRINT1
-        pop     af
-        push    af
-        ld      a,10
-        jr      nc,PRINT1
         call    PUTCHAR
         ld      a,13
 PRINT1:
         call	PUTCHAR		;put a character
-        INC     hl
-        pop     af
+        inc     hl
         jr      PRINT
 PRINTEXIT:
-        pop     af
         ret
 
 PRINTNLINE:
@@ -642,8 +637,43 @@ PARMSEVAL2:
         LD      HL,0
         RET
 
+SENDPARMS:
+        call    CLEARBUF
+; check if there are parameters in the command line
+        ld      hl,$80
+        ld      a,(hl)
+        ld      b,a
+        or      a
+        jr      z,SENDPARMS2
+
+; b contain number of chars passed as arguments in the command
+        inc     hl
+        call    EATSPACES
+        jr      c,SENDPARMS2
+        ld      de,buf
+; Move CLI parameters to buffer
+SENDPARMS1:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        djnz    SENDPARMS1
+SENDPARMS2:
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    SENDDATA
+        ret
+
+; Send a simple command to MSXPi
+; DE = Command name, terminated in zero
+; Will calculate command size in BC
+SENDCOMMAND:
+        ld      bc,CMDSIZE               ; command lenght set to fixed size
+        call      SENDDATA
+        ret
+
 SETBUF:
-        push    hl
+        push    de
         call    CLEARBUF
         pop     hl
         ld      de,buf
@@ -658,62 +688,13 @@ SETBUF0:
         
 CLEARBUF:
         ld      hl,buf
-        ld      b,255
+        ld      de,buf + 1
+        ld      bc,BLKSIZE
         xor     a
-clearbuf0:
         ld      (hl),a
-        inc     hl
-        djnz    clearbuf0
+        ldir
         ret
-
-DOSSENDPICMD:
-; Copy MSXPi command to the buffer
-        push    hl
-        call    CLEARBUF
-        pop     hl
-        ld      de,buf
-DPICMDL:
-        ld      a,(hl)
-        ld      (de),a
-        inc     hl
-        inc     de
-        or      a
-        jr      nz,DPICMDL
-; now check if there are parameters in the command line
-        ld      hl,$80
-        ld      a,(hl)
-        ld      b,a
-        or      a
-        jr      z,DOSSEND1
-
-DOSSENDPICMD0:
-; b contain number of chars passed as arguments in the command
-        inc     hl
-        call    EATSPACES
-        jr      c,DOSSEND1
-        
-; there is parameters - have to concatenate to our buffer
-DOSSENDPICMD1:
-        dec    de
-        ld      a,32
-        ld      (de),a
-        inc     de
-DOSSENDPICMD2:
-        ld      a,(hl)
-        ld      (de),a
-        inc     hl
-        inc     de
-        djnz    DOSSENDPICMD2
-
-DOSSEND1:
-        xor     a
-        ld      (de),a
-        ld      de,buf
-        di
-        call    SENDDATA
-        ei
-        ret
-
+                
 PUTCHAR:
         push    bc
         push    de
@@ -746,11 +727,3 @@ slotatual:
         DB      00
 subsatual:
         DB      00
-
-buf:    equ     $
-        ds      256
-        db      "$"
-        
-
-
-

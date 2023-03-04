@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 1.1                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -30,21 +30,23 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to support new transfer logic
 
         LD      A,($82)
-        LD      (COMMAND + 8),A
+        LD      (COMMAND + 9),A
 
-        LD      HL,COMMAND
-        CALL    DOSSENDPICMD
+        LD      DE,COMMAND
+        CALL    SENDCOMMAND
 
         JR      C,PRINTPIERR
 
 MAINPROGRAM:
         RET
 
-COMMAND:  DB      "DOS INI ",0,0
+COMMAND:  DB      "DOS     ",0
+                      DB        0,0
+        
 PICOMMERR:  DB      "Communication Error",13,10,"$"
 PARMSERR:   DB      "Invalid parameters",13,10,"$"
 
