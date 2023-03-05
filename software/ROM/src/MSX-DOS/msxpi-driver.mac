@@ -93,6 +93,11 @@ SECLEN		equ	512		; Size of biggest sector
 ; A = #40 in first call, and #80 in second all.;
 ;
 INIHRD:
+	ld	a,65
+	out	($98),a
+	ld	a,66
+	out	($98),a
+	ret
         ld      a,$80
         cp      h
         ret     z
@@ -291,7 +296,6 @@ DSKIO_SECTINFO:
         LD      de,DOS_SECI
         call    SENDCOMMAND
         jr	c,DSKIO_SEC_ERR
-DSKIO_SECTINFO_LOOP:
         pop     de	; contain now the buffer address
 	pop	hl
         pop     bc
