@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0.0                                                           |
+;| Version : 1.1                                                           |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v0.9.1 (2017,2020)
+; MSXPi Driver v1.1 (2023)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -126,7 +126,7 @@ INIHRD_FAILED:
         ret
 
 ; START OF -----------------------------
-; MSXPi v1.0.0 DRIVES Routine          |
+; MSXPi DRIVES Routine          |
 ;---------------------------------------
 ; DRIVES
 ;
@@ -143,7 +143,7 @@ DRIVES:
         ld     l,1
         ret
 ; END OF -------------------------------
-; MSXPi v1.0.0 DRIVES Routine          |
+; MSXPi DRIVES Routine          |
 ;---------------------------------------
 
 ; INIENV
@@ -159,7 +159,7 @@ INIENV:
         ret
 
 ; START OF -----------------------------
-; MSXPi v1.0.0 DSKIO Routine           |
+; MSXPi DSKIO Routine           |
 ;---------------------------------------
 ; DSKIO
 ;
@@ -179,41 +179,42 @@ INIENV:
 DSKIO:
         jr		nc,DSKIO_READ
 ; END OF -------------------------------
-; MSXPi v1.0.0 DSKIO Routine           |
+; MSXPi DSKIO Routine           |
 ;---------------------------------------
 
 
 ; START OF ----------------------------
-; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+; MSXPi DSKIO_WRITE Routine    |
 ;--------------------------------------
 DSKIO_WRITE:
         cp      4
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
-        push    bc                              ; number of sectors
-        push    hl                              ; save buffer address
+        push    bc               ; need to save this ?
+        push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_WSEC
-        call    SENDCOMMAND         ; Send sector write command "WRS"
-        pop de
-        pop bc
+        call    SENDCOMMAND       ; Send sector write command "WRS"
+        jr      c,DSKIO_ERR
+        pop     de                ; number of bytes to transfer
+        pop     bc                ; buffer with data to read
 DSKIO_WRITE_LOOP:
-        push    bc
-        ld      bc,SECTORSIZE
-        call    SENDDATA     ; Send the sectors (write to disk
-        pop     bc
-        djnz    DSKIO_WRITE_LOOP
-        ei
+	push	bc
+	ld	bc,SECTORSIZE
+        call    SENDDATA	  ; Send the sectors (write to disk
+	pop	bc
+	jr	c, DSKIO_ERR1
+	djnz	DSKIO_WRITE_LOOP
         ret
 ; END OF ------------------------------
-; MSXPi v1.0.0 DSKIO_WRITE Routine    |
+; MSXPi DSKIO_WRITE Routine    |
 ;--------------------------------------
 
 
 ; START OF ----------------------------
-; MSXPi v1.0.0 DSKIO_READ Routine     |
+; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
 ; DSKIO
 ;
@@ -233,28 +234,23 @@ DSKIO_WRITE_LOOP:
 DSKIO_READ:
         cp      4
         jr      nc,DSKIO_ERR1
-        di
-
-; save destination address HL in the stack
-; save number of sectors BC in the stack
-;
-        push    bc              ; n# of sectors
-        push    hl               ; address to save sectors data
-        call    DSKIO_SECTINFO   ; Send sector info
+; save destination address and number of sectors to write
+        push    bc               ; need to save this ?
+        push    hl                ; save buffer address
+        call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
-        call    SENDCOMMAND        ; Send read sector command "RDS"
+        call    SENDCOMMAND       ; Send sector write command "WRS"
         jr      c,DSKIO_ERR
-        pop     de                               ; Buffer address
-        pop     bc                              ; number of sectors in B
+        pop     de                ; number of bytes to transfer
+        pop     bc                ; buffer with data to read
 DSKIO_READ_LOOP:
-        push    bc
-        ld          bc,SECTORSIZE
-        call    RECVDATA                ; Receive the data (sectors)
-        pop     bc             
-        jr          c,DSKIO_ERR1
-        djnz      DSKIO_READ_LOOP
-        ei
+	push	bc
+	ld	bc,SECTORSIZE
+        call    READDATA	  ; Send the sectors (write to disk
+	pop	bc
+	jr	c, DSKIO_ERR1
+	djnz	DSKIO_READ_LOOP
         ret
 DSKIO_ERR:
         pop     hl
@@ -262,15 +258,14 @@ DSKIO_ERR:
 DSKIO_ERR1:
         ld      a,12
         scf
-        ei
         ret
 ; END OF ------------------------------
-; MSXPi v1.0.0 DSKIO_READ Routine     |
+; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
 
 
 ; START OF ----------------------------
-; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
 ; DSKIO
 ;
@@ -291,41 +286,54 @@ DSKIO_ERR1:
 DSKIO_SECTINFO:
         push    af
         push    bc
+        push    de
+	push	hl
         LD      de,DOS_SECI
         call    SENDCOMMAND
         jr	c,DSKIO_SEC_ERR
-        call	GETWRK
-        pop bc 
-        pop af
-        push    hl          ; save work area
-        ld  (hl),a              ; send device number
-        inc     hl
-		ld      a,b
-        ld      (hl),a          ; send number of sectors to read/write
-        inc     hl
+DSKIO_SECTINFO_LOOP:
+        pop     de	; contain now the buffer address
+	pop	hl
+        pop     bc
+        pop     af
+
+	push	de		
+; send device number
+        ld	(de),a
+	inc	de
+	
+; send number of sectors to read/write
+	ld      a,b
+        ld	(de),a
+	inc	de
+
+; send media decriptor
         ld      a,c
-        ld      (hl),a          ;send media decriptor
-        inc     hl
-		ld      a,e
-        ld      (hl),a          ;send logical sectornumber (initial sector number)
-        inc     hl
-        ld      a,d
-        ld      (hl),a
-        inc     hl
-        xor    a
-        ld      (hl),a
-        pop     de          ; get workarea address              
-        ld          bc,CMDSIZE
-        call        SENDDATA
+        ld	(de),a
+	inc	de
+
+; send logical sectornumber (initial sector number)
+	ld      a,l
+        ld	(de),a
+	inc	de
+
+        ld      a,h
+        ld	(de),a
+
+	pop	de
+	ld	bc,CMDSIZE
+	call	SENDDATA
         ret
 
 DSKIO_SEC_ERR:
+        pop     hl
+        pop     de
         pop     bc
         pop     af
         scf
         ret
 ; END OF ------------------------------
-; MSXPi v1.0.0 DSKIO_SECTINFO Routine |
+; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
 
 DSKIORDMSG:
@@ -666,7 +674,7 @@ CALL_MSXPISTD:
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
 
-        CALL    CALL_MSXPISTDOUT  ; SHOULD BE NOSTDOUT
+        CALL    NOSTDOUT
         LD      (DE),A
         POP     HL
         OR      A
@@ -855,8 +863,8 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      "MSXPi ROM v1.0.1 "
-build:  DB      "20230101.000"
+        DB      "MSXPi ROM v1.1   "
+build:  DB      "20230305.000"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2023",13,10,10
         DB      "Commands available:",13,10
@@ -869,7 +877,7 @@ PIOFFLINE:
         DB      "Communication Error",13,10,0
 
 PIONLINE:
-        DB      "Rasperry PI is online",13,10,0
+        DB      "Raspberry Pi is online",13,10,0
 
 PIWAITMSG:
         DB      13,10,"Waiting Pi boot. P to skip",13,10,0
@@ -923,5 +931,6 @@ DOS_FMT:    DB  "dskiofmt",0
 
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm
+INCLUDE basic_stdio.asm
 
 
