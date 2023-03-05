@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSX Software for Cartridge AT28C256 32K EEPROM                            |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.2                                                            |
 ;|                                                                           |
 ;| Copyright (c) 2020 Ronivon Candido Costa (ronivon@outlook.com)            |
 ;|                                                                           |
@@ -36,6 +36,8 @@
 ; 1.0  - 27/06/2020 : initial version
 ;        05/08/2020 : Revised version
 ; 1.1  - 24/08/2020 : Improved parsing of filename
+; 1.2. - 26/02/2023 : Changed how slots are detected and added support to display extended slots
+;      - Changed way how EEPROM is detected and fixed bug that was writting to MSX RAM in some models
 ;
 ; Note on this code:
 ; This version does not identify the AT28C256 automatically.
@@ -101,10 +103,10 @@ RAMAD2:         EQU     $F343       ; slotid DOS ram page 2
 RAMAD3:         EQU     $F344       ; slotid DOS ram page 3
 
 ; This is a MSX-DOS program
-; STart address is $100
+; Start address is $100
 
     org     $100
-
+    ld		a,$ff
     ld      hl,txt_credits
     call    print
     call    resetfcb
@@ -124,19 +126,23 @@ RAMAD3:         EQU     $F344       ; slotid DOS ram page 3
     ld      a,(data_option_s)
     cp      $ff
     jr      nz,write
-    ld      hl,txt_ramsearch
-    call    print
-    call    search_eeprom
-
-                                ; if could not find the cartridge, exit with error message
-    ld      hl,txt_ramnotfound
-    jp      c,print
+   ; if could not find the cartridge, exit with error message
+    ld      hl,txt_param_s_missing
+    jp      print   
+        
 write:
-
-                                ; Found writable memory (or received slot number
+    
+    call		testEpromWrite
+    jp			c,notEprom							; did not find the EEPROM
+    
+    ; given the slot passed in command line,
+    ; verify if it is expanded and added the final slot configuration to expandedslt
+	; call		getExpandedSlot	    
+	; will write only to primary slots
+	
+                               ; Found writable memory (or received slot number
                                 ; from CLI) therefore can continue 
                                 ; writing the ROM into the eeprom
-    push    af
     ld      hl,txt_ffound
     call    print
     ld      hl,fcb+1
@@ -144,33 +150,39 @@ write:
     call    PRINTNEWLINE
     ld      hl,txt_writingflash
     call    print
-    pop     af
+    ld		a,(thisslt)
     call    PRINTNUMBER
     call    PRINTNEWLINE
 
                                 ; read filename passed with DOS command line
                                 ; and update fcb with filename
-    call    enable_eeprom_slots
-    call    disable_w_prot
-    call    restore_ram_slots
-    call    openfile
-    cp      $ff
-    jp      z, fnotfounderr 
-    call    setdma
-    call    enable_eeprom_slots
-    ld      de,$4000
-    ld      (curraddr),de
+    ld			a,(data_option_z)
+    cp			'>'
+    jr			z,keep_sdp_enabled
+	ld			a,(thisslt)
+	call    	enable_eeprom_slot
+    call    	disable_w_prot
+    call    	restore_ram_slots
+keep_sdp_enabled:
+    call    	openfile
+    cp      	$ff
+    jp      	z, fnotfounderr 
+    call    	setdma
+    ld      	de,$4000
+    ld      	(curraddr),de
+    call    	enable_eeprom_slot
+    call		erase_chip
 writeeeprom:
-    ld      a,'.'
-    call    PUTCHAR
-    call    readfileregister    ; read 1 block of data from disk
-    cp      2
-    jp      nc,filereaderr      ; some error
-    ld      d,a                 ; save error in D for a while
-    ld      a,h
-    or      l
-    jr      z,endofreading      ; number of bytes read is zero, end.
-    push    de                  ; save error code because this might be
+    ld			a,(data_option_z)
+    call    	PUTCHAR
+    call    	readfileregister    ; read 1 block of data from disk
+    cp     	 2
+    jp			nc,filereaderr      ; some error
+    ld      	d,a                 ; save error in D for a while
+    ld      	a,h
+    or      	l
+    jr      		z,endofreading      ; number of bytes read is zero, end.
+    push		de                  ; save error code because this might be
                                 ; the last record of the file. will test 
                                 ; at the end of this loop, below.
     ld      b,l                 ; hl = number of bytes read from disk, but we are
@@ -196,18 +208,35 @@ writeeeprom0:
 endofreading:
     call    enable_w_prot
     call    restore_ram_slots
-
     ld      a,(data_option_p)
     cp      1
     call    z,param_p_patch_rom
-    
     ld      hl,txt_advice
     call    print
-
+    ld		a,5
+safety_wait:
+	push		af
+    call		wait_eeprom
+    pop		af
+    dec	a
+    or		a
+    jr		nz,safety_wait
     ei
     ret
 
-enable_eeprom_slots:
+notEprom:
+	ld		hl,txt_ramfoundnoteeprom
+	cp		1
+	jr		z,notEprom2
+	ld		hl,txt_ramnotfound
+notEprom2:
+	call	print
+	ld		a,(thisslt)
+    call    PRINTNUMBER
+    call    PRINTNEWLINE
+    ret
+	
+enable_eeprom_slot:
     ld      a,(thisslt)
     ld      h,$40
     call    ENASLT
@@ -225,88 +254,153 @@ restore_ram_slots:
     call    ENASLT
     ret
 
-    ; Search for the EEPROM
-search_eeprom:
-    ld      a,$FF
-    ld      (thisslt),a
-nextslot:
-    di
-    call    sigslot
-    cp      $FF
-    jr      z,endofsearch
-    ld      h,$40
-    call    ENASLT
-    call    testram
-    jr      c,nextslot
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)             ; return the slot where eeprom was found
-    or      a
-    ret 
-endofsearch:
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,$FF
-    scf
-    ret 
+testEpromWrite:
+; Will run tests in the slot number passed via command line
+; to try and determine if the slot is actually the flash or the computer RAM
 
-testram:
+; tag ram in current slot to check later after tried to write the the flash
+; when writting to the flash, the RAM is this slot must no be changed - if it does
+; then program is not writing to the eeprom correctly
+	call		savePage0Hdr						; save $4000 header in ram in current slot
+	call		writePage0TestHdr				; write to the ram in the slot passed by command line
+	call		checkPage0Hrd
+	push		af
+	call		restorePage0Hdr	
+	pop		af
+	ret
+	
+checkPage0Hrd:	
+	; now check this RAM page 0 header
+	; if match bytes written to SLOT, its is incorrect!!
+	
+	ld		a,($4000)						; read current by in this ram
+	ld		b,a		
+	ld		a,(workarea + 0)			
+	cp		b									; compare to what was there before
+	ld		a,1
+	scf		
+	ret	nz									; if different, flags error (scf) and return
+												; it means the slot switch did not work and the program wrote to ram instead of EEPROM
+
+	; repeat the test for the other two bytes
+	ld		a,($4001)						; read current by in this ram
+	ld		b,a		
+	ld		a,(workarea + 1)			
+	cp		b									; compare to what was there before
+	ld		a,1
+	scf		
+	ret	nz									; if different, flags error (scf) and return
+
+	ld		a,($4002)						; read current by in this ram
+	ld		b,a		
+	ld		a,(workarea + 2)			
+	cp		b									; compare to what was there before
+	ld		a,1
+	scf		
+	ret	nz									; if different, flags error (scf) and return
+
+	; this RAM was not changed - that's good.
+	; now will check the EEPROM and see if it was correctly written
+	
+	call	enable_eeprom_slot	; switch to the slot with the eeprom
+	call		testPage0SlotHdr
+	push		af								; save flags with return code
+	call		restore_ram_slots
+	pop		af
+	ret
+	
+testPage0SlotHdr:
+	ld		a,($4000)
+	cp		'A'
+	scf							; flag error - header not found in the eeprom
+	ld		a,2
+	ret	nz
+	ld		a,($4001)
+	cp		'T'
+	scf							; flag error - header not found in the eeprom
+	ld		a,2
+	ret	nz
+	ld		a,($4002)
+	cp		'C'
+	scf							; flag error - header not found in the eeprom
+	ld		a,2
+	ret	nz
+	scf								; set error flag
+	ccf								; to 0 to flag the eeprom was correctly found and written
+	ret
+	 
+savePage0Hdr:
+	ld			a,($4000)
+	ld			(workarea + 0),a
+	ld			a,($4001)
+	ld			(workarea + 1),a
+	ld			a,($4002)
+	ld			(workarea + 2),a
+	ret
+	
+restorePage0Hdr:
+	ld			a,(workarea + 0)
+	ld			($4000),a
+	ld			a,(workarea + 1)
+	ld			($4001),a
+	ld			a,(workarea + 2)
+	ld			($4002),a
+	ret
+
+writePage0TestHdr:
+	ld			a,(thisslt)
+	call		enable_eeprom_slot	; enable the eeprom slot (from command line)
+	call    disable_w_prot
     ld      hl,$4000
     ld      a,'A'
-    call    write_test
-    ret     c
+    ld		(hl),a
+    inc	hl
+    call	wait_eeprom
     ld      a,'T'
-    call    write_test
-    ret     c
+    ld		(hl),a
+    inc	hl
+    call	wait_eeprom
     ld      a,'C'
-    call    write_test
+    ld		(hl),a
+    call	wait_eeprom
+    call		enable_w_prot
+    call		restore_ram_slots		; restore the original RAM slots
     ret 
-
-write_test:
-    ld      b,a
-    ld      (hl),a
-    call    waitforwrite
-    ld      a,(hl)
-    inc     hl
-    cp      b
-    ret     z
-    scf
-    ret
-
-waitforwrite:
-    push    bc
-    ld      bc,300
-waitforwrite0:
-    push    af
-    push    bc
-    push    de
-    push    hl
-    pop     hl
-    pop     de
-    pop     bc
-    pop     af
-    dec     bc
-    ld      a,b
-    or      c
-    jr      nz,waitforwrite0
-    pop     bc
-    ret
-
+ 
 fnotfounderr:
     ld     hl,txt_fnotfound
     call   print
     ret
 
 writebyte:
-    ld      de,(curraddr)
-    ld      (de),a
-    inc     de
-    ld      (curraddr),de           ; Write once to the EEPROM. After this, write is 
-                                    ; disabled on the EEPRPM
+    ld      	de,(curraddr)
+	ld			c,a
+	ld			a,(data_option_z)
+	cp			'.'
+	jr			z,write_userbyte
+    ld      	a, $AA
+    ld      	($9555),a     ; 0x5555 + 0x4000
+    ld      	a, $55
+    ld      	($6AAA),a     ; 0x2AAA + 0x4000
+    ld      	a, $A0
+    ld      	($9555),a     ; 0x5555 + 0x4000
+write_userbyte:
+	ld			a,c
+    ld      	(de),a
+    inc     	de
+    ld      	(curraddr),de           ; Write once to the EEPROM. After this, write is disabled on the EEPRPM
     ret
-
+write_delay:
+	exx
+	exx
+	exx
+	exx
+	exx
+	exx
+	exx
+	exx
+	ret
+	
 openfile:
     ld     c,$0f
     ld     de,fcb
@@ -382,6 +476,60 @@ printnumber:
     call    PRINTDIGIT
     pop     de
     ret
+
+; --------   http://map.grauw.nl/sources/getslot.php. --------
+; GetSlotID
+
+; h = memory address high byte (bits 6-7: page)
+; a <- slot ID formatted F000SSPP
+; Modifies: f, bc, de
+Memory_GetSlot:
+    call RSLREG
+    bit 7,h
+    jr z,PrimaryShiftContinue
+    rrca
+    rrca
+    rrca
+    rrca
+PrimaryShiftContinue:
+    bit 6,h
+    jr z,PrimaryShiftDone
+    rrca
+    rrca
+PrimaryShiftDone:
+    and 00000011B
+    ld c,a
+    ld b,0
+    ex de,hl
+    ld hl,EXPTBL
+    add hl,bc
+    ex de,hl
+    ld a,(de)
+    and 80H
+    or c
+    ret p
+    ld c,a
+    inc de  ; move to SLTTBL
+    inc de
+    inc de
+    inc de
+    ld a,(de)
+    bit 7,h
+    jr z,SecondaryShiftContinue
+    rrca
+    rrca
+    rrca
+    rrca
+SecondaryShiftContinue:
+    bit 6,h
+    jr nz,SecondaryShiftDone
+    rlca
+    rlca
+SecondaryShiftDone:
+    and 00001100B
+    or c
+    ret
+; ---------------------------------------------
 
 PRINTDIGIT:
     cp      0AH
@@ -663,7 +811,7 @@ enable_w_prot:
     ld      ($6AAA),a     ; 0x2AAA + 0x4000
     ld      a, $A0
     ld      ($9555),a     ; 0x5555 + 0x4000
-    call    waitforwrite
+    call    wait_eeprom
     ret
 
 ; Disable write-protection
@@ -680,114 +828,32 @@ disable_w_prot:
     ld      ($6AAA),a 
     ld      a,$20
     ld      ($9555),a
-    call    waitforwrite
-    ret
-
-; Search for the EEPROM
-search_eeprom_for_future_improvement:
-    di
-    call    sigslot
-    cp      $FF
-    jr      z,search_eeprom_end
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)
-    ld      h,$80
-    call    ENASLT
-
-    call   save_tested_bytes      ; savem the address used to enable SDP
-    call   disable_w_prot
-    ;                             ; re-enable current slot for the memory tests
-    ld      a,(thisslt)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(thisslt)
-    ld      h,$80
-    call    ENASLT
-    ;
-    call   compare_with_sdp_bytes   ; compare ram with the sdp control bytes
-    jr     z,restore_bytes          ; if same, the ram is not ATC28C256 
-                                    ; the memory was not overwritten by sdp control bytes
-    call   test_for_ram             ; Now test if can write to the memory
-                                    ; since we potentially disabled SDP
-    jr     z,restore_slots          ; found the eeprom 
-                                    ; otherwise continue looking
-restore_bytes:
-    call   restore_tested_bytes     ; this slot is not AT28C256
-    jp     search_eeprom            ; test next slot
-
-restore_slots:
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(RAMAD2)
-    ld      h,$80
-    call    ENASLT
-    ei
-    ret 
-search_eeprom_end:
-    call     restore_slots
-    scf
-    ret
-
-save_tested_bytes:
-    ld     a,($9555)
-    ld     (eeprom_saved_bytes),a
-    ld     a,($6AAA)
-    ld     (eeprom_saved_bytes + 1),a
-    ret
-restore_tested_bytes:
-    ld     a,(eeprom_saved_bytes)
-    ld     ($9555),a
-    ld     a,(eeprom_saved_bytes + 1)
-    ld     ($6AAA),a
-    ret
-compare_with_sdp_bytes:
-    ld     hl,eeprom_saved_bytes
-    ld     a,($9555)
-    cp     (hl)
-    ret    z
-    inc    hl
-    ld     a,($6AAA)
-    cp     (hl)
-    ret
-
-; write 'ATC' to address $4000,4001,4002
-; Restore the original values before exiting the routine
-; C flag set if written value was not verified (that is, not RAM)
-;
-test_for_ram:
-    ld      hl,$4000
-    ld      a,(hl)
-    ld      b,a
-    ld      a,'A'
-    ld      (hl),a
-    inc     hl
-    ld      a,(hl)
-    ld      c,a
-    ld      a,'T'
-    ld      (hl),a
-    inc     hl
-    ld      a,(hl)
-    ld      d,a
-    ld      a,'C'
-    ld      (hl),a
     call    wait_eeprom
-    ld      a,d
-    cp      (hl)
-    ret     nz
-    dec     hl
-    ld      a,c
-    cp      (hl)
-    ret     nz
-    dec     hl
-    ld      a,b
-    cp      (hl)
+    ret
+
+; Chip Erase
+erase_chip:
+    ld      a, $AA
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    ld      a, $55
+    ld      ($6AAA),a     ; 0x2AAA + 0x4000
+    ld      a, $80
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    ld      a, $AA
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    ld      a, $55
+    ld      ($6AAA),a     ; 0x2AAA + 0x4000
+    ld      a, $10
+    ld      ($9555),a     ; 0x5555 + 0x4000
+    call    wait_eeprom
     ret
 
 wait_eeprom:
-    push    bc
-    ld      bc,300
+    push		bc
+    ld			bc,300
+	call		wait_eeprom0    
+	pop		bc
+	ret
 wait_eeprom0:
     push    af
     push    bc
@@ -801,9 +867,8 @@ wait_eeprom0:
     ld      a,b
     or      c
     jr      nz,wait_eeprom0
-    pop     bc
     ret
-
+        
 param_h:
     xor     a
     ld      (ignorerc),a
@@ -934,63 +999,97 @@ param_i:
 
     ld      a,(data_option_s)
     cp      $ff
-    jr      nz,param_i_show         ; received slot numnber from cli
-                                    ; Search for the EEPROM for at28show command
+    jp      nz,param_i_show         ; received slot numnber from cli
+                                    			; Search for the EEPROM for at28show command
 search_cart:
     ld      a,$FF
     ld      (thisslt),a
 search_cart0:
-    di
     call    sigslot
     cp      $FF
-    jr      z,search_cart_end
-    ld      h,$40
-    call    ENASLT
-    call    test_cart
+   ret		z
+    call    checkHdr
     jr      c,search_cart0
     call    showcontent
     jr      search_cart0
 
-search_cart_end:
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,$FF
-    scf
+param_e:
+    xor     a
+    ld      (ignorerc),a
+    ld		a,(data_option_s)
+    cp		$ff
+    ld		hl,txt_param_s_missing
+    jp		z,print
+    ld      hl,txt_erasing
+    call    print
+    call	enable_eeprom_slot
+    call   erase_chip
+    call	restore_ram_slots
+    or      a
     ret
 
+param_z:
+    ld			a,'>'
+    ld			(data_option_z),a
+    or			a
+    ret
+	
+checkHdr:
+	ld		hl,txt_nextslot
+	call	print
+	ld		a,(thisslt)
+    bit		7,a
+    jr		z,checkHdrnotexpanded
+ 	ld		b,a
+ 	and	%00000011
+ 	push		bc
+ 	call		PRINTNUMBER
+	ld      a,'.'
+    call    PUTCHAR
+ 	pop		bc
+ 	ld			a,b
+ 	and		%00001100
+ 	sra		a
+ 	sra		a
+checkHdrnotexpanded:
+	call	PRINTNUMBER
+	call	PRINTNEWLINE
+	call	enable_eeprom_slot
+	ld		a,($4000)
+	cp		'A'
+	scf
+	jr		nz,checkHdr_end
+	ld		a,($4001)
+	cp		'B'
+	jr		z,checkHdr_end
+	scf
+checkHdr_end:
+	push		af
+	call		restore_ram_slots
+	pop		af
+	ret
+	
 param_i_show:
-    ld      a,(thisslt)
-    ld      h,$40
-    call    ENASLT
-    call    showcontent
-    call    PRINTNEWLINE
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ret
-
-test_cart:
-    ld      a,($4000)
-    cp      'A'
-    scf
-    ret     nz
-    ld      a,($4001)
-    cp      'B'
-    ret     Z
-    SCF
+	call		enable_eeprom_slot
+    call		showcontent
+    call		PRINTNEWLINE
+	call		restore_ram_slots
     ret
 
 showcontent:
-    ld      hl,txt_slot
-    call    print
-    ld      a,(thisslt)
-    call    PRINTNUMBER
-    ld      a,':'
-    call    PUTCHAR
-    ld      hl,$4000
-    ld      b,24
+    ld			hl,$4000
+    ld			b,6
+    call		showcontent0
+	ld			hl,$4010
+    ld			b,6
+    call		showcontent0
+	call		PRINTNEWLINE
+	ret
+ 	     
 showcontent0:
+	exx
+	call	enable_eeprom_slot
+	exx
     ld      a,(hl)
     call    PRINTNUMBER
     ld      a,' '
@@ -999,7 +1098,7 @@ showcontent0:
     pop     bc
     inc     hl
     djnz    showcontent0
-    call    PRINTNEWLINE
+    call	restore_ram_slots
     ret
 
 param_p:
@@ -1012,7 +1111,7 @@ param_p_patch_rom:
     call   print
 
     call   wait_eeprom
-    call   enable_eeprom_slots
+    call   enable_eeprom_slot
     call   disable_w_prot
     call   wait_eeprom
 
@@ -1054,11 +1153,14 @@ parap_p_end: equ $
 
 ROM_NEW_INIT: EQU $400A
 
+txt_erasing: db "Erasing the EEPROM...",0
 txt_slot: db "Slot ",0
+txt_nextslot: db "Checking slot ",0
 txt_ramsearch: db "Searching for EEPROM",13,10,0
 txt_ramfound:  db "Found writable memory in slot ",0
+txt_ramfoundnoteeprom:  db "Found writable memory but its not the eeprom in slot ",0
 txt_newline:   db 13,10,0
-txt_ramnotfound: db "EEPROM not found",13,10,0
+txt_ramnotfound: db "EEPROM not found in slot ",0
 txt_writingflash: db "Writing file to EEPROM in slot ",0
 txt_completed: db "Completed.",13,10,0
 txt_nofn: db "Filename is empty or not valid",13,10,0
@@ -1073,11 +1175,12 @@ txt_exit: db "Returning to MSX-DOS",13,10,0
 txt_needfname: db "File name not specified",13,10,0
 txt_unprotecting: db "Disabling AT28C256 Software Data Protection on slot:",0
 txt_protecting: db "Enabling AT28C256 Software Data Protection on slot:",0
+txt_param_s_missing: db 13,10,"Error - parameter /s <slot> must come first or it is missing",13,10,0
 txt_param_dx_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /dx",13,10,0
 txt_param_ex_err1: db 13,10,"Error - missing parameter /s <slot> before parameter /ex",13,10,0
 txt_patching_rom: DB 13,10,"Patching ROM. Use ESC to bypass ROM boot",13,10,0
-txt_credits: db "AT28C256 EEPROM Programmer for MSX v1.1",13,10
-db "(c) Ronivon Costa, 2020",13,10,13,10,0
+txt_credits: db "AT28C256 EEPROM Programmer for MSX v1.2",13,10
+db "(c) Ronivon Costa, 2020-2023",13,10,13,10,0
 txt_advice: db 13,10
 db "Write process completed",13,10,0
 
@@ -1092,6 +1195,7 @@ db "/h Show this help",13,10
 db "/s <slot number>",13,10
 db "/i Show initial 24 bytes of the slot cartridge",13,10
 db "/p Patch rom to skip boot when pressing ESC (Dangerous)",13,10
+db "/e Erase the EEPROM",13,10
 db "/f File name with extension, for example game.rom",13,10,0
 
 parms_table:    
@@ -1107,18 +1211,27 @@ parms_table:
     dw param_p
     db "f",0
     dw param_f
+	db "e",0
+    dw param_e
+  	db "z",0
+    dw param_z
+
     db 0                ; end of table. this byte is mandatory to be zero
 
-thisslt:        db $FF
+thisslt:        db $00
 parm_index:     db $ff
 parm_found:     db $ff
 ignorerc:       db $ff
 data_option_s:  db $ff
 data_option_f:  db $ff,0,0,0,0,0,0,0,0,0,0,0,0
 data_option_p:  db $ff
+data_option_e:  db $ff
+data_option_z: db '.'
 parm_address:   dw 0000
 curraddr:       dw 0000
 eeprom_saved_bytes:  db 0,0,0
+expandedslt:	db $FF
+workarea:		db	0,0,0,0
 
 fcb:
                         ; reference: https://www.msx.org/wiki/FCB    

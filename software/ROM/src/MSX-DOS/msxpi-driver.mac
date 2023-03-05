@@ -93,14 +93,14 @@ SECLEN		equ	512		; Size of biggest sector
 ; A = #40 in first call, and #80 in second all.;
 ;
 INIHRD:
+        ld      a,$80
+        cp      h
+        ret     z
 	ld	a,65
 	out	($98),a
 	ld	a,66
 	out	($98),a
 	ret
-        ld      a,$80
-        cp      h
-        ret     z
 
         ld      hl,MSXPIVERSION
         call    PRINT
@@ -240,7 +240,7 @@ DSKIO_READ:
         cp      4
         jr      nc,DSKIO_ERR1
 ; save destination address and number of sectors to write
-        push    bc               ; need to save this ?
+        push    bc                ;
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
@@ -250,9 +250,13 @@ DSKIO_READ:
         pop     de                ; number of bytes to transfer
         pop     bc                ; buffer with data to read
 DSKIO_READ_LOOP:
+	ld	a,'>'
+	out	($98),a
 	push	bc
 	ld	bc,SECTORSIZE
-        call    READDATA	  ; Send the sectors (write to disk
+        call    RECVDATA	  ; Send the sectors (write to disk
+	ld	a,'<'
+	out	($98),a
 	pop	bc
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_READ_LOOP
@@ -289,19 +293,21 @@ DSKIO_ERR1:
 ;
 
 DSKIO_SECTINFO:
-        push    af
+	push	de
         push    bc
-        push    de
-	push	hl
+        push    af
         LD      de,DOS_SECI
         call    SENDCOMMAND
         jr	c,DSKIO_SEC_ERR
-        pop     de	; contain now the buffer address
+	call	GETWRK
+	ld	d,h
+	ld	e,l
+	
+	pop	af
+	pop	bc
 	pop	hl
-        pop     bc
-        pop     af
-
-	push	de		
+	
+	push	de
 ; send device number
         ld	(de),a
 	inc	de
@@ -327,6 +333,7 @@ DSKIO_SECTINFO:
 	pop	de
 	ld	bc,CMDSIZE
 	call	SENDDATA
+	ei
         ret
 
 DSKIO_SEC_ERR:
@@ -335,6 +342,7 @@ DSKIO_SEC_ERR:
         pop     bc
         pop     af
         scf
+	ei
         ret
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
@@ -853,7 +861,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PIREADBYTE
         DW      PIWRITEBYTE
         DW      PIEXCHANGEBYTE
-        DW      SENDIFCMD
         DW      SENDPICMD
         DW      PRINT
         DW      PRINTNLINE
@@ -934,6 +941,7 @@ DOS_DRV:    DB  "dskiodrv",0
 DOS_FMT:    DB  "dskiofmt",0
 
 INCLUDE include.asm
+INCLUDE debug.asm
 INCLUDE msxpi_bios.asm
 INCLUDE basic_stdio.asm
 

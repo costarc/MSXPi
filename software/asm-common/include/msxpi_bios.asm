@@ -49,21 +49,22 @@
 ; own commands, using OUT/IN directly to the I/O ports.
 ; ==================================================================
 
-;-----------------------
-; SENDIFCMD            |
-;-----------------------
-SENDIFCMD:
-            out     (CONTROL_PORT1),a  ; Send data, or command
-            ret
+NOSTDOUT: ret
 
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
 CHKPIRDY:
-            in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
-            or       a
-            jr      nz,CHKPIRDY
-            ret
+        ld      a,7
+        out    ($AA),a
+        in      a,($A9)
+        bit     2,a                         ; Test ESC key 
+        scf
+        ret     z
+        in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
+        or      a
+        jr      nz,CHKPIRDY
+        ret
 
 ;-----------------------
 ; PIREADBYTE           |

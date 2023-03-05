@@ -862,12 +862,13 @@ def irc(cmd=''):
             print("irc:Caught exception"+str(e))
             sendmultiblock(rc,"Pi:"+str(e))
     
-def dskioini():
-    rc,parms = recvdata(CMDSIZE)
-    parms = parms.decode().split("\x00")[0]    
-    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
-    iniflag = piexchangebyte()
+def dskioini(iniflag = ''):
+    print("dskioini")
+    if len(iniflag) == 0:
+        iniflag = piexchangebyte()
 
+    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+    
     if iniflag == '1':
         print("DOS: Enabling MSX-DOS1")
 
@@ -880,63 +881,64 @@ def dskioini():
         # Load the disk images into a memory mapped variable
         drive0Data = msxdos_inihrd(psetvar[1][1])
         drive1Data = msxdos_inihrd(psetvar[2][1])
-
     else:
         #print("parms: disabling msxdos1boot")
         msxdos1boot = False
 
 def dskiords():
-    initdataindex = sectorInfo[3]*512
+    initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
-    blocksize = BLKSIZE
     sectorcnt = 0
     
     print("dos_rds:deviceNumber=",sectorInfo[0])
     print("dos_rds:numsectors=",sectorInfo[1])
     print("dos_rds:mediaDescriptor=",sectorInfo[2])
     print("dos_rds:initialSector=",sectorInfo[3])
-    print("dos_rds:blocksize=",blocksize)
+    print("dos_rds:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
         if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-            buf = drive0Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)]
+            buf = drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
         else:
-            buf = drive1Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)]
-        rc = senddata(SECTORSIZE)
+            buf = drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
+        rc = senddata(buf,SECTORSIZE)
         sectorcnt += 1
-        if  rc = RC_CRCERROR:
+        if  rc == RC_CRCERROR:
+            print("senddata: checksum error")
             break
  
 def dskiowrs():
-    initdataindex = sectorInfo[3]*512
+    initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
-    blocksize = BLKSIZE
     sectorcnt = 0
     
     print("dos_wrs:deviceNumber=",sectorInfo[0])
     print("dos_wrs:numsectors=",sectorInfo[1])
     print("dos_wrs:mediaDescriptor=",sectorInfo[2])
     print("dos_wrs:initialSector=",sectorInfo[3])
-    print("dos_wrs:blocksize=",blocksize)
+    print("dos_wrs:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
         rc,buf = recvdata(SECTORSIZE)
-        if  rc = RC_SUCCESS:
+        if  rc == RC_SUCCESS:
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
                 print("A:",data)
-                #drive0Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)] = str(data)
+                #drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = str(data)
             else:
                 print("B:",data)
-                #drive1Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)] = str(data)
+                #drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = str(data)
             sectorcnt += 1
         else:
             break
                   
 def dskiosct():
+    print("dskiosct")
     #if msxdos1boot != True:
     #   piexchangebyte(RC_FAILED)
     #  return
 
+    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+    
     rc,buf = recvdata(CMDSIZE)
     sectorInfo[0] = buf[0]
     sectorInfo[1] = buf[1]
@@ -945,17 +947,10 @@ def dskiosct():
     byte_msb = buf[4]
     sectorInfo[3] = byte_lsb + 256 * byte_msb
 
-    #blocksize = sectorInfo[1] * 512
-    #piexchangebyte(blocksize % 256)
-    #piexchangebyte(blocksize / 256)
-
-    """
     print("dos_sct:deviceNumber=",sectorInfo[0])
     print("dos_sct:numsectors=",sectorInfo[1])
     print("dos_sct:mediaDescriptor=",sectorInfo[2])
     print("dos_sct:initialSector=",sectorInfo[3])
-    print("dos_sct:blocksize=",blocksize)
-    """
         
 def recvdata( bytecounter = BLKSIZE):
 
@@ -989,25 +984,22 @@ def recvdata( bytecounter = BLKSIZE):
     #print "recvdata:exiting with rc = ",hex(rc)
     return rc,data
 
-def senddata(data, bytecounter = BLKSIZE):
+def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
    
     byteidx = 0
-    bufpos = 0
     chksum = 0
-    while(bytecounter > 0 ):
-        pibyte0 = data[bufpos+byteidx]
+    while(byteidx < blocksize):
+        pibyte0 = data[byteidx]
         if type(pibyte0) is int:
             pibyte = pibyte0
         else:
             pibyte = ord(pibyte0)
-        
-        #print("senddata: ",chr(pibyte),byteidx,bytecounter)
+
         chksum += pibyte
         piexchangebyte(pibyte)
         byteidx += 1
-        bytecounter -= 1
     
     # Send local CRC - only 8 right bits
     thissum_r = (chksum % 256)              # right 8 bits
@@ -1061,7 +1053,7 @@ def recvcmd():
 
 psetvar = [['PATH','/home/pi/msxpi'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/blank.dsk'], \
+           ['DRIVE1','disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
@@ -1095,7 +1087,7 @@ GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",build)
 
-# dos("INI 1")
+dskioini("1")
 
 #try:
 if 1==1:
