@@ -1,5 +1,4 @@
 #!/bin/sh
-
 MSXPIHOME=/home/pi/msxpi
 export PI=192.168.1.77
 export HW="8b"
@@ -26,7 +25,7 @@ else
     mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
 fi
 
-if [[ $1 == "-v" || $1 == "-va" || $1 == "-vs" || $1 == "-vs" ]];then
+if [[ $1 == "-v" || $1 == "-va" || $1 == "-vs" || $1 == "-vs" || $1 == "-vr" ]];then
    ../../add-build-id.sh $1
 fi
 

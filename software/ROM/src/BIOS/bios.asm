@@ -441,7 +441,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      "MSXPi ROM v1.0.1 "
-build:  DB      "20230101.000"
+build:  DB      "20230305.011"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2023",13,10,10
         DB      "Commands available:",13,10

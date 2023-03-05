@@ -211,8 +211,21 @@ DSKIO_WRITE_LOOP:
 ; Changed:  af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO_READ:
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
+
         cp      4
         jr      nc,DSKIO_ERR1
+
+	CALL	DBGBC
+	CALL	DBGDE
+	CALL	DBGHL
+
 ; save destination address and number of sectors to write
         push    bc                ;
         push    hl                ; save buffer address
@@ -225,19 +238,61 @@ DSKIO_READ:
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
 	push	bc
+
+	push	af
+	ld	a,'>'
+	call	PUTCHAR
+	pop	af
+
 	ld	bc,SECTORSIZE
         call    RECVDATA	  ; Send the sectors (write to disk)
+
+	push	af
+	ld	a,'<'
+	call	PUTCHAR
+	pop	af
+
 	pop	bc
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_READ_LOOP
+	push	af
+	ld	a,'+'
+	call	PUTCHAR
+	pop	af
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
+
+	ld	bc,2
+	call	DELAY
 	or	a
 	ei
         ret
 
 DSKIO_ERR:
+	push	af
+	ld	a,'-'
+	call	PUTCHAR
+	pop	af
+
         pop     hl
         pop     bc
 DSKIO_ERR1:
+	push	af
+	ld	a,'x'
+	call	PUTCHAR
+	pop	af
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
         ld      a,12
         scf
 	ei
@@ -267,6 +322,10 @@ DSKIO_ERR1:
 ;
 
 DSKIO_SECTINFO:
+	push	af
+	ld	a,'s'
+	call	PUTCHAR
+	pop	af
         push    bc
         push    de
 	push	af
@@ -305,10 +364,20 @@ DSKIO_SECTINFO:
 	pop	de
 	ld	bc,CMDSIZE
 	call	SENDDATA
+
+	push	af
+	ld	a,'e'
+	call	PUTCHAR
+	pop	af
 	ei
         ret
 
 DSKIO_SEC_ERR:
+	push	af
+	ld	a,'q'
+	call	PUTCHAR
+	pop	af
+
         pop     hl
         pop     de
         pop     bc
@@ -847,7 +916,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      "MSXPi ROM v1.1   "
-build:  DB      "20230305.007"
+build:  DB      "20230305.006"
         DB      13,10
         DB      "(c) Ronivon Costa,2017-2023",13,10,10
         DB      "Commands available:",13,10
