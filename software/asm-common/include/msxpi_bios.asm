@@ -180,7 +180,7 @@ SENDPICMD:
 ;---------------------------------------------------------------
 ; 01/03/2023
 ;
-; Receive / Send 256 bytes of data plus a checksum (1 byte)
+; Receive / Send BC bytes of data plus a checksum (1 byte)
 ; Calculates teh checksum locally as data is coming, and send it back.
 ; Compares the local checksum with received checksum, and
 ; if they differ return with C flag set.
@@ -190,16 +190,16 @@ SENDPICMD:
 ;   bc = block size
 ; Output:
 ;   Flag C set if error
-;
+;  DE next available address
 RECVDATA:
 RECVDATABLOCK:
         di
         ld      hl,0                       ; will store checksum in HL
 RECV0:
+        push    bc
         call    PIREADBYTE
         ld      (de),a
         inc     de
-        push    bc
         ld      b,0
         ld      c,a
         add     hl,bc
@@ -226,14 +226,14 @@ SENDDATABLOCK:
         di
         ld      hl,0                       ; will store checksum in HL
 SENDD0:
-        ld      a,(de)
         push    bc
+        ld      a,(de)
+        inc     de
         ld      b,0
         ld      c,a
         add     hl,bc
-        pop     bc
         call    PIWRITEBYTE
-        inc     de
+        pop     bc
 		dec     bc
         ld      a,b
         or      c
@@ -703,7 +703,7 @@ PUTCHAR:
         push    hl
         ld      e,a
         ld      c,2
-        call    BDOS
+        call    $A2  ;BDOS
         pop     hl
         pop     de
         pop     bc
@@ -720,7 +720,31 @@ EATSPACES:
 EATSPACEEND:
         or      a
         ret
-        
+
+DELAY:
+        PUSH    DE
+        PUSH    HL
+DELAY0:
+        PUSH    BC
+        LD          BC,$FFFF
+DELAY1:
+        EXX
+        EXX
+        EXX
+        EXX
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,DELAY1
+        POP     BC
+        DEC     BC
+        LD         A,B
+        OR      C
+        JR      NZ,DELAY0
+        POP     HL
+        POP     DE
+        RET
+              
 TESTMSXPISTR:
         DB      'MSXPi'
 confatual:

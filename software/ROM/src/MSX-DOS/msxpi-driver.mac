@@ -96,38 +96,12 @@ INIHRD:
         ld      a,$80
         cp      h
         ret     z
-	ld	a,65
-	out	($98),a
-	ld	a,66
-	out	($98),a
-	ret
-
         ld      hl,MSXPIVERSION
         call    PRINT
         ld      hl,MSXPISKP
         call    PRINT
-
-; give some time for the user to view the credits, and press P start MSXPi MSX-DOS1
-        ld      bc,45000
-INIHRD_WAIT:
-        push    bc
-        ld      a,4
-        call    SNSMAT
-        bit     5,a
-        pop     bc
-        jr      z,INIHRD_BOOT
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,INIHRD_WAIT
-        or      a
-        ret
-        
-INIHRD_BOOT:
-        scf
-        ret
-INIHRD_FAILED:
-        or     a
+	ld	bc,3
+	call	DELAY
         ret
 
 ; START OF -----------------------------
@@ -192,7 +166,7 @@ DSKIO:
 ; MSXPi DSKIO_WRITE Routine    |
 ;--------------------------------------
 DSKIO_WRITE:
-        cp      4
+        cp      3
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
@@ -237,8 +211,21 @@ DSKIO_WRITE_LOOP:
 ; Changed:  af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO_READ:
-        cp      4
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
+
+        cp      3
         jr      nc,DSKIO_ERR1
+
+	CALL	DBGBC
+	CALL	DBGDE
+	CALL	DBGHL
+
 ; save destination address and number of sectors to write
         push    bc                ;
         push    hl                ; save buffer address
@@ -247,24 +234,50 @@ DSKIO_READ:
         ld      de,DOS_RSEC
         call    SENDCOMMAND       ; Send sector write command "WRS"
         jr      c,DSKIO_ERR
-        pop     de                ; number of bytes to transfer
-        pop     bc                ; buffer with data to read
+        pop     de                ; buffer with data to read
+        pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
 	ld	a,'>'
-	out	($98),a
+	call	PUTCHAR
 	push	bc
 	ld	bc,SECTORSIZE
         call    RECVDATA	  ; Send the sectors (write to disk
 	ld	a,'<'
-	out	($98),a
+	call	PUTCHAR
 	pop	bc
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_READ_LOOP
+	ld	a,'+'
+	call	PUTCHAR
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
+
+	ld	bc,5
+	call	DELAY
+	or	a
         ret
+
 DSKIO_ERR:
+	ld	a,'-'
+	call	PUTCHAR
         pop     hl
         pop     bc
 DSKIO_ERR1:
+	ld	a,'x'
+	call	PUTCHAR
+
+; debug - show SP
+	exx
+	pop	hl
+	push	hl
+	call	DBGHL
+	exx
+
         ld      a,12
         scf
         ret
@@ -293,20 +306,18 @@ DSKIO_ERR1:
 ;
 
 DSKIO_SECTINFO:
-	push	de
         push    bc
-        push    af
+        push    de
+	push	af
         LD      de,DOS_SECI
         call    SENDCOMMAND
         jr	c,DSKIO_SEC_ERR
 	call	GETWRK
 	ld	d,h
 	ld	e,l
-	
 	pop	af
-	pop	bc
 	pop	hl
-	
+	pop	bc	
 	push	de
 ; send device number
         ld	(de),a
@@ -333,7 +344,6 @@ DSKIO_SECTINFO:
 	pop	de
 	ld	bc,CMDSIZE
 	call	SENDDATA
-	ei
         ret
 
 DSKIO_SEC_ERR:
@@ -342,7 +352,6 @@ DSKIO_SEC_ERR:
         pop     bc
         pop     af
         scf
-	ei
         ret
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
