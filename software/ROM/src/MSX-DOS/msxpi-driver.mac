@@ -119,18 +119,6 @@ INIHRD_WAIT:
         ret
         
 INIHRD_BOOT:
-        call    PSYNC
-        ld      bc,9
-        ld      de,DOS_INI
-        call    SENDPICMD
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_WAIT
-        jr      NZ,INIHRD_FAILED
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE     
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
         scf
         ret
 INIHRD_FAILED:
@@ -203,41 +191,20 @@ DSKIO_WRITE:
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
-        ;push    bc               ; need to save this ?
-        push    hl                ; save buffer address
+        push    bc                              ; number of sectors
+        push    hl                              ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-                                  ; Receives back the block size 
-                                  ; (sectors * 512)
         jr      c,DSKIO_ERR
-        push    bc                ; Save block size
-        ld      bc,7
         ld      de,DOS_WSEC
-        call    SENDPICMD         ; Send sector write command "WRS"
-        pop     bc                ; number of bytes to transfer
-        pop     de                ; buffer with data to read
-        jr      c,DSKIO_ERR1
-
-; source address to read sector data and number of sectors
-
+        call    SENDCOMMAND         ; Send sector write command "WRS"
+        pop de
+        pop bc
 DSKIO_WRITE_LOOP:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_WAIT
-        jr      NZ,DSKIO_WRITE_RELEASED
-        call    CHKPIRDY
-        JR      DSKIO_WRITE_LOOP
-DSKIO_WRITE_RELEASED:
-        cp      RC_FAILED
-        jr      z,DSKIO_ERR1
-        cp      RC_SUCCESS
-        jr      nz,DSKIO_ERR1
-
-        call    SENDDATABLOCK     ; Send the sectors (write to disk
-        jr      c,DSKIO_ERR1
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_SUCCESS
-        jr      nz,DSKIO_ERR1
+        push    bc
+        ld      bc,SECTORSIZE
+        call    SENDDATA     ; Send the sectors (write to disk
+        pop     bc
+        djnz    DSKIO_WRITE_LOOP
         ei
         ret
 ; END OF ------------------------------
@@ -271,39 +238,27 @@ DSKIO_READ:
 ; save destination address HL in the stack
 ; save number of sectors BC in the stack
 ;
-        ;push    bc              ; do we need to save secotr info?
+        push    bc              ; n# of sectors
         push    hl               ; address to save sectors data
         call    DSKIO_SECTINFO   ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
-        ld      bc,7
-        call    SENDPICMD        ; Send read sector command "RDS"
-        pop     de
-        jr      c,DSKIO_ERR1
+        call    SENDCOMMAND        ; Send read sector command "RDS"
+        jr      c,DSKIO_ERR
+        pop     de                               ; Buffer address
+        pop     bc                              ; number of sectors in B
 DSKIO_READ_LOOP:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_WAIT
-        jr      NZ,DSKIO_READ_RELEASED
-        call    CHKPIRDY
-        JR      DSKIO_READ_LOOP
-DSKIO_READ_RELEASED:
-        cp      RC_FAILED
-        jr      z,DSKIO_ERR1
-        cp      RC_SUCCESS
-        jr      nz,DSKIO_ERR1
-        call    RECVDATABLOCK    ; Receive the data (sectors)
-        ; pop     bc             ; do we need to save secotr info?
-        jr      c,DSKIO_ERR1
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_SUCCESS
-        jr      nz,DSKIO_ERR1
+        push    bc
+        ld          bc,SECTORSIZE
+        call    RECVDATA                ; Receive the data (sectors)
+        pop     bc             
+        jr          c,DSKIO_ERR1
+        djnz      DSKIO_READ_LOOP
         ei
         ret
 DSKIO_ERR:
         pop     hl
-        ;pop     bc
+        pop     bc
 DSKIO_ERR1:
         ld      a,12
         scf
@@ -336,62 +291,35 @@ DSKIO_ERR1:
 DSKIO_SECTINFO:
         push    af
         push    bc
-        push    de
-        push    hl
         LD      de,DOS_SECI
-        LD      bc,7
-        call    SENDPICMD
-        jr		c,DSKIO_SEC_ERR
-
-DSKIO_SECTINFO_LOOP:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_WAIT
-        jr      NZ,DSKIO_SECTINFO_RELEASED
-        call    CHKPIRDY
-        JR      DSKIO_SECTINFO_LOOP
-DSKIO_SECTINFO_RELEASED:
-        cp      RC_FAILED
-        jr      z,DSKIO_SEC_ERR
-        cp      RC_SUCCESS
-        jr      nz,DSKIO_SEC_ERR
-
-        pop     hl
-        pop     de
-        pop     bc
-        pop     af
-
-; send device number
-        call    PIEXCHANGEBYTE
-
-; send number of sectors to read/write
+        call    SENDCOMMAND
+        jr	c,DSKIO_SEC_ERR
+        call	GETWRK
+        pop bc 
+        pop af
+        push    hl          ; save work area
+        ld  (hl),a              ; send device number
+        inc     hl
 		ld      a,b
-        call    PIEXCHANGEBYTE
-
-; send media decriptor
+        ld      (hl),a          ; send number of sectors to read/write
+        inc     hl
         ld      a,c
-        call    PIEXCHANGEBYTE
-
-; send logical sectornumber (initial sector number)
+        ld      (hl),a          ;send media decriptor
+        inc     hl
 		ld      a,e
-        call    PIEXCHANGEBYTE
+        ld      (hl),a          ;send logical sectornumber (initial sector number)
+        inc     hl
         ld      a,d
-        call    PIEXCHANGEBYTE
-
-; new to version 1.0.0 : read back number of bytes 
-; calculated as 512 * number of sectors
-        call    READDATASIZE
-
-; read return code
-        call    PIEXCHANGEBYTE
-        cp      RC_SUCCESS
-        ret     z
-        scf
+        ld      (hl),a
+        inc     hl
+        xor    a
+        ld      (hl),a
+        pop     de          ; get workarea address              
+        ld          bc,CMDSIZE
+        call        SENDDATA
         ret
 
 DSKIO_SEC_ERR:
-        pop     hl
-        pop     de
         pop     bc
         pop     af
         scf
@@ -738,7 +666,7 @@ CALL_MSXPISTD:
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
 
-        CALL    NOSTDOUT
+        CALL    CALL_MSXPISTDOUT  ; SHOULD BE NOSTDOUT
         LD      (DE),A
         POP     HL
         OR      A
@@ -986,15 +914,14 @@ CALL_TABLE:
 ENDOFCMDS:
         DB      00
 
-DOS_INI:    DB  "DOS INI 1",0
-DOS_RSEC:   DB  "DOS RDS",0
-DOS_WSEC:   DB  "DOS WRS",0
-DOS_SECI:   DB  "DOS SCT",0
-DOS_DRV:    DB  "DOS DRV",0
-DOS_FMT:    DB  "DOS FMT",0
+DOS_INI:    DB  "dskioini",0
+DOS_RSEC:   DB  "dskiords",0
+DOS_WSEC:   DB  "dskiowrs",0
+DOS_SECI:   DB  "dskiosct",0
+DOS_DRV:    DB  "dskiodrv",0
+DOS_FMT:    DB  "dskiofmt",0
 
 INCLUDE include.asm
 INCLUDE msxpi_bios.asm
-INCLUDE basic_stdio.asm
-INCLUDE msxpi_io.asm
+
 

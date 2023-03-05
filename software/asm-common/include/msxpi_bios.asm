@@ -186,6 +186,7 @@ SENDPICMD:
 ;
 ; Input:
 ;   de = memory address for the data
+;   bc = block size
 ; Output:
 ;   Flag C set if error
 ;

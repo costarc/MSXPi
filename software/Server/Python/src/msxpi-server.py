@@ -21,7 +21,7 @@ from random import randint
 version = "1.1"
 build = "20230303.000"
 BLKSIZE = 256
-SECTORSIZE = 256
+SECTORSIZE = 512
 CMDSIZE = 9
 
 # Pin Definitons
@@ -271,21 +271,21 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
     return rc 
 
-def sendmultiblock(buf):
+def sendmultiblock(buf, size = BLKSIZE):
     idx = 0
     cnt = 0
-    data = bytearray(BLKSIZE)
+    data = bytearray(size)
     for b in buf:
         if (isinstance(b, str)):
             data[cnt] = ord(b)
         else:
             data[cnt] = b
         cnt += 1   
-        if cnt == BLKSIZE and len(buf) > BLKSIZE:
+        if cnt == size and len(buf) > size:
             print(len(data),data)
             rc = senddata(data)
-            data = bytearray(BLKSIZE)
-            idx += BLKSIZE
+            data = bytearray(size)
+            idx += size
             cnt = 0
    
     rc = senddata(data)          
@@ -515,13 +515,17 @@ def pcd():
 
     return [rc, newpath]
 
-def pcopy(path='',inifcb=True):
+def pcopy():
 
-    buf = ''
+    inifcb=True
+    buf = bytearray(BLKSIZE)
     rc = RC_SUCCESS
 
     global psetvar,GLOBALRETRIES
     basepath = psetvar[0][1]
+    
+    rc,data = recvdata()
+    path = data.decode().split("\x00")[0]
     
     print("pcopy: Starting with params ",path)
     
@@ -563,8 +567,10 @@ def pcopy(path='',inifcb=True):
             filesize = len(buf)
  
         except Exception as e:
-            sendmultiblock("Pi:"+str(e)+'\n') 
-            return RC_FAILED
+            rc = 1
+            buf = formatrsp(rc,0,0,str(e))
+            rc = sendmultiblock(buf)
+            return rc
 
     else:
         print("pcopy: path is remote")
@@ -575,13 +581,16 @@ def pcopy(path='',inifcb=True):
             filesize = len(buf)
             
         except Exception as e:
-            rc = RC_FAILED
-            sendmultiblock("Pi:"+str(e))
-    
+            rc = 1
+            buf = formatrsp(rc,0,0,str(e))
+            rc = sendmultiblock(buf)
+            
     if rc == RC_SUCCESS:
         print("pcopy: File open success, size is ",filesize)
         if filesize == 0:
-            sendmultiblock("Pi:No valid data found")
+            rc = 1
+            buf = formatrsp(rc,0,0,"No valid data found")
+            rc = sendmultiblock(buf)
         else:
             if inifcb:
                 msxbyte = piexchangebyte(RC_SUCCESS)
@@ -592,11 +601,8 @@ def pcopy(path='',inifcb=True):
 
                 msxbyte = piexchangebyte(RC_SUCCESS)
             blocknumber = 0   
-            print("pcopy: Calling senddatablock")
-            while (rc == RC_SUCCESS):
-                rc = senddatablock(buf,BLKSIZE,blocknumber)
-                if rc == RC_SUCCESS:
-                    blocknumber += 1
+            print("pcopy: Calling senddata")
+            rc = sendmultiblock(buf)
     print("pcopy: exit with rc",rc)
     return rc
 
@@ -605,6 +611,14 @@ def ploadr(path=''):
     if rc == RC_INVALIDDATASIZE:
         sendmultiblock("Pi:Error - Not valid 8/16/32KB ROM")
 
+def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
+    b = bytearray(size)
+    b[0] = rc
+    b[1] = lsb
+    b[2] = msb
+    b[3:len(msg)] = bytearray(msg.encode())
+    return b
+    
 def pdate():
 
     print("pdate")
@@ -848,125 +862,101 @@ def irc(cmd=''):
             print("irc:Caught exception"+str(e))
             sendmultiblock(rc,"Pi:"+str(e))
     
-def dos(parms=''):
-    piexchangebyte(RC_WAIT)
-
-    print("DOS: ",parms)
-    
+def dskioini():
+    rc,parms = recvdata(CMDSIZE)
+    parms = parms.decode().split("\x00")[0]    
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
-    rc = RC_SUCCESS
+    iniflag = piexchangebyte()
 
-    try:
-        if parms[:3] == 'INI': 
+    if iniflag == '1':
+        print("DOS: Enabling MSX-DOS1")
 
-            piexchangebyte(RC_SUCCESS)
+        msxdos1boot = True
 
-            iniflag = parms[4:5]
+        # Initialize disk system parameters
+        sectorInfo = [0,0,0,0]
+        numdrives = 0
 
-            if iniflag == '1':
-                print("DOS: Enabling MSX-DOS1")
+        # Load the disk images into a memory mapped variable
+        drive0Data = msxdos_inihrd(psetvar[1][1])
+        drive1Data = msxdos_inihrd(psetvar[2][1])
 
-                msxdos1boot = True
+    else:
+        #print("parms: disabling msxdos1boot")
+        msxdos1boot = False
 
-                # Initialize disk system parameters
-                sectorInfo = [0,0,0,0]
-                numdrives = 0
-
-                # Load the disk images into a memory mapped variable
-                drive0Data = msxdos_inihrd(psetvar[1][1])
-                drive1Data = msxdos_inihrd(psetvar[2][1])
-
-            else:
-                #print("parms: disabling msxdos1boot")
-                msxdos1boot = False
-
-            piexchangebyte(RC_SUCCESS)
-
-
-        elif parms[:3] == 'RDS': 
-        
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
-
-            
-            print("dos_rds:deviceNumber=",sectorInfo[0])
-            print("dos_rds:numsectors=",sectorInfo[1])
-            print("dos_rds:mediaDescriptor=",sectorInfo[2])
-            print("dos_rds:initialSector=",sectorInfo[3])
-            print("dos_rds:blocksize=",blocksize)
-            
-
+def dskiords():
+    initdataindex = sectorInfo[3]*512
+    numsectors = sectorInfo[1]
+    blocksize = BLKSIZE
+    sectorcnt = 0
+    
+    print("dos_rds:deviceNumber=",sectorInfo[0])
+    print("dos_rds:numsectors=",sectorInfo[1])
+    print("dos_rds:mediaDescriptor=",sectorInfo[2])
+    print("dos_rds:initialSector=",sectorInfo[3])
+    print("dos_rds:blocksize=",blocksize)
+    
+    while sectorcnt < numsectors:
+        if sectorInfo[0] == 0 or sectorInfo[0] == 1:
+            buf = drive0Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)]
+        else:
+            buf = drive1Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)]
+        rc = senddata(SECTORSIZE)
+        sectorcnt += 1
+        if  rc = RC_CRCERROR:
+            break
+ 
+def dskiowrs():
+    initdataindex = sectorInfo[3]*512
+    numsectors = sectorInfo[1]
+    blocksize = BLKSIZE
+    sectorcnt = 0
+    
+    print("dos_wrs:deviceNumber=",sectorInfo[0])
+    print("dos_wrs:numsectors=",sectorInfo[1])
+    print("dos_wrs:mediaDescriptor=",sectorInfo[2])
+    print("dos_wrs:initialSector=",sectorInfo[3])
+    print("dos_wrs:blocksize=",blocksize)
+    
+    while sectorcnt < numsectors:
+        rc,buf = recvdata(SECTORSIZE)
+        if  rc = RC_SUCCESS:
             if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-                buf = drive0Data[initdataindex:initdataindex+blocksize]
+                print("A:",data)
+                #drive0Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)] = str(data)
             else:
-                buf = drive1Data[initdataindex:initdataindex+blocksize]
-
-            piexchangebyte(RC_SUCCESS)
-
-            rc = senddatablock(buf,blocksize,0)
-            if rc != RC_SUCCESS:
-                rc = RC_FAILED
-            
-            piexchangebyte(rc)
-
-
-        elif parms[:3] == 'WRS':  
-            initdataindex = sectorInfo[3]*512
-            blocksize = sectorInfo[1]*512
-
-            
-            print("dos_wrs:deviceNumber=",sectorInfo[0])
-            print("dos_wrs:numsectors=",sectorInfo[1])
-            print("dos_wrs:mediaDescriptor=",sectorInfo[2])
-            print("dos_wrs:initialSector=",sectorInfo[3])
-            print("dos_wrs:blocksize=",blocksize)
-            
-
-            piexchangebyte(RC_SUCCESS)
-
-            datainfo = recvdatablock()
-            if datainfo[0] == RC_SUCCESS:
-                if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-                    drive0Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
-                else:
-                    drive1Data[initdataindex:initdataindex+blocksize] = str(datainfo[1])
-            else:
-                rc = RC_FAILED
-
-            piexchangebyte(rc)
+                print("B:",data)
+                #drive1Data[initdataindex+(sectorcnt*512):initdataindex+blocksize+(sectorcnt*512)] = str(data)
+            sectorcnt += 1
+        else:
+            break
                   
-        elif parms[:3] == 'SCT':
-            if msxdos1boot != True:
-                piexchangebyte(RC_FAILED)
-                return
+def dskiosct():
+    #if msxdos1boot != True:
+    #   piexchangebyte(RC_FAILED)
+    #  return
 
-            piexchangebyte(RC_SUCCESS)
+    rc,buf = recvdata(CMDSIZE)
+    sectorInfo[0] = buf[0]
+    sectorInfo[1] = buf[1]
+    sectorInfo[2] = buf[2]
+    byte_lsb = buf[3]
+    byte_msb = buf[4]
+    sectorInfo[3] = byte_lsb + 256 * byte_msb
 
-            sectorInfo[0] = piexchangebyte(SENDNEXT)
-            sectorInfo[1] = piexchangebyte(SENDNEXT)
-            sectorInfo[2] = piexchangebyte(SENDNEXT)
-            byte_lsb = piexchangebyte(SENDNEXT)
-            byte_msb = piexchangebyte(SENDNEXT)
-            sectorInfo[3] = byte_lsb + 256 * byte_msb
+    #blocksize = sectorInfo[1] * 512
+    #piexchangebyte(blocksize % 256)
+    #piexchangebyte(blocksize / 256)
 
-            blocksize = sectorInfo[1] * 512
-            piexchangebyte(blocksize % 256)
-            piexchangebyte(blocksize / 256)
-
-            """
-            print("dos_sct:deviceNumber=",sectorInfo[0])
-            print("dos_sct:numsectors=",sectorInfo[1])
-            print("dos_sct:mediaDescriptor=",sectorInfo[2])
-            print("dos_sct:initialSector=",sectorInfo[3])
-            print("dos_sct:blocksize=",blocksize)
-            """
-
-            piexchangebyte(RC_SUCCESS)
-
-    except Exception as e:
-        print("DOS:"+str(e))
-        piexchangebyte(RC_FAILED)
-
+    """
+    print("dos_sct:deviceNumber=",sectorInfo[0])
+    print("dos_sct:numsectors=",sectorInfo[1])
+    print("dos_sct:mediaDescriptor=",sectorInfo[2])
+    print("dos_sct:initialSector=",sectorInfo[3])
+    print("dos_sct:blocksize=",blocksize)
+    """
+        
 def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
@@ -1060,7 +1050,7 @@ def template():
 
 def recvcmd():
     print("recvcmd")
-    rc,data = recvdata(9)
+    rc,data = recvdata(CMDSIZE)
     return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================
