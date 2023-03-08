@@ -1,43 +1,33 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
-export PI=192.168.1.77
-export HW="8b"
-export REV="7"
-export ROMBANK1=./target/bios.rom
-export ROMBANK2=./target/msxpi-dos.rom
+export PI=raspberrypi
+export ROMBANK1=./target/msxpidos.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 
-if [[ "$HW" == "8b" ]];then
-    cp ./asm-common/include/msxpi_io.asm.8bits.asm asm-common/include/msxpi_io.asm
-else
-    cp ./asm-common/include/msxpi_io.asm.4bits.asm asm-common/include/msxpi_io.asm
-fi
+# Functions
+UpdateBuildId() {
+    fname=$1
+    cp $fname $fname.bak
+    curdefine=$(cat $fname | grep "^BuildId: DB")
+    today=$(date +%Y%m%d)
+    newbuild=$(cat $fname | grep "BuildId: DB" | awk '{print $3}' | cut -f2 -d"."|sed 's/"//'|awk '{printf "%03d\n", $1 + 1;}')
+    rc=$?
+    if [ $rc = 0 ];then
+        newdefine="BuildId: DB \"$today.$newbuild\""
+        cat $fname | sed "s/$curdefine/$newdefine/" > $fname.tmp && mv $fname.tmp $fname
+        echo "New BuildId for $1: $today.$newbuild"
+    fi
+}
 
-if [[ "$REV" == "0" ]];then
-    cat ./asm-common/include/include.asm | sed 's/CONTROL_PORT1: EQU $56/CONTROL_PORT1: EQU $06/' | sed 's/DATA_PORT1: EQU $5A/DATA_PORT1: EQU $07/' >./asm-common/include/include.asm.tmp
-    mv ./asm-common/include/include.asm.tmp ./asm-common/include/include.asm
-    cat ./ROM/src/MSX-DOS/msxpi-driver.mac | sed 's/CONTROL_PORT1 EQU $56/CONTROL_PORT1 EQU $06/' | sed 's/DATA_PORT1 EQU $5A/DATA_PORT1 EQU $07/' > ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp
-    mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
-else
-    cat ./asm-common/include/include.asm | sed 's/CONTROL_PORT1: EQU $06/CONTROL_PORT1: EQU $56/' | sed 's/DATA_PORT1: EQU $07/DATA_PORT1: EQU $5A/' >./asm-common/include/include.asm.tmp
-    mv ./asm-common/include/include.asm.tmp ./asm-common/include/include.asm
-    cat ./ROM/src/MSX-DOS/msxpi-driver.mac | sed 's/CONTROL_PORT1 EQU $06/CONTROL_PORT1 EQU $56/' | sed 's/DATA_PORT1 EQU $07/DATA_PORT1 EQU $5A/' > ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp
-    mv ./ROM/src/MSX-DOS/msxpi-driver.mac.tmp ./ROM/src/MSX-DOS/msxpi-driver.mac
-fi
-
-if [[ $1 == "-v" || $1 == "-va" || $1 == "-vs" || $1 == "-vs" || $1 == "-vr" ]];then
-   ../../add-build-id.sh $1
-fi
-
-~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/bios.asm    -o ./target/bios.rom
+# Build MSX-DOS with MSXPi Drivers with build id
+UpdateBuildId ./ROM/src/MSX-DOS/msxpi-driver.mac
 
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpi-dos.rom && cat $ROMBANK1 > ./target/msxpidos.rom && cat $ROMBANK2 >> ./target/msxpidos.rom && rm $ROMBANK1 $ROMBANK2
+[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
 
-# MSX-DOS commands
+# MSX-Dos P Commands
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm     -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
@@ -50,66 +40,3 @@ fi
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/psync.com.asm    -o ./target/psync.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/msxpiext.asm     -o ./target/msxpiext.bin
-
-
-# Update script for MSXPi Rev3/Rev4
-echo "pdate"                               > /tmp/MSXPIUPD.BAT
-echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
-echo "prun rm $MSXPIHOME/msxpi-update.sh 2>/dev/null" >> /tmp/MSXPIUPD.BAT
-echo "prun wget --user=msxpi@retro-cpu.run --password=retro-cpu.run http://retro-cpu.run/MSXPI/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
-echo "prun chmod 755 $MSXPIHOME/msxpi-update.sh;$MSXPIHOME/msxpi-update.sh" >> /tmp/MSXPIUPD.BAT
-echo "pcopy MSXPIUP1.BAT MSXPIUP1.BAT" >> /tmp/MSXPIUPD.BAT
-echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
-echo "perror"                          >> /tmp/MSXPIUPD.BAT
-cat /tmp/MSXPIUPD.BAT | awk 'sub("$", "\r")' > ./target/MSXPIUPD.BAT 
-rm /tmp/MSXPIUPD.BAT
-
-# Update script for MSXPi Rev0
-echo "pdate"                               > /tmp/MSXPIUPD.BAT
-echo "pcd $MSXPIHOME"                     >> /tmp/MSXPIUPD.BAT
-echo "prun rm $MSXPIHOME/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
-echo "prun wget --user=msxpi@retro-cpu.run --password=retro-cpu.run http://retro-cpu.run/MSXPI/rev0/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
-echo "prun chmod 755 $MSXPIHOME/msxpi-update_rev0.sh;$MSXPIHOME/msxpi-update_rev0.sh" >> /tmp/MSXPIUPD.BAT
-echo "pcopy MSXPIUP1.BAT MSXPIUP1.BAT" >> /tmp/MSXPIUPD.BAT
-echo "MSXPIUP1"                        >> /tmp/MSXPIUPD.BAT
-echo "perror"                          >> /tmp/MSXPIUPD.BAT
-cat /tmp/MSXPIUPD.BAT | awk 'sub("$", "\r")' > ./target/MSXPIUP0.BAT
-rm /tmp/MSXPIUPD.BAT
-
-
-# Nextor File System driver
-# Hack to work around issue with includes on sjasm
-if [ -f ./Client/src/_NFS.ASM ];then
-    cp Client/src/NFS.ASM Client/src/NFS.ASM.work
-    if [[ "$HW" == "8b" ]];then
-       cat asm-common/include/msxpi_io.asm.8bits.asm >> Client/src/NFS.ASM.work
-    else
-       cat asm-common/include/msxpi_io.asm.4bits.asm >> Client/src/NFS.ASM.work
-    fi 
-
-    cat asm-common/include/msxpi_bios.asm   >> Client/src/NFS.ASM.work
-    cat asm-common/include/msxdos_stdio.asm >> Client/src/NFS.ASM.work
-    cat asm-common/include/include.asm      >> Client/src/NFS.ASM.work
-    echo "PARTRE2!:" >> Client/src/NFS.ASM.work
-
-    [ -f ./Client/src/NFS.ASM.work ] && [ -f ~/Dev/bin/sjasm ] && ~/Dev/bin/sjasm -q -c ./Client/src/NFS.ASM.work ./target/nfs.com 
-     [ -f ./Client/src/NFS.ASM.work ] && rm ./Client/src/NFS.ASM.work
-fi
-
-# build distribution package
-if [[ $1 == "-c" || $2 == "-c" || $3 == "-c" ]];then
-    scp  ./Server/C/src/msxpi-server.c ./Server/C/src/senddatablock.c ./Server/C/src/uploaddata.c ./Server/C/src/secsenddata.c ./Server/C/src/bufsend.c ./Server/C/src/ploadbin.c pi@${PI}:msxpi/
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/bufsend.msx msxpi/bufsend.c -lpigpio -lrt -lcurl
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/msxpi-server msxpi/msxpi-server.c -lpigpio -lrt -lcurl
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/uploaddata.msx msxpi/uploaddata.c -lpigpio -lrt -lcurl
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/senddatablock.msx msxpi/senddatablock.c -lpigpio -lrt -lcurl
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/secsenddata.msx msxpi/secsenddata.c -lpigpio -lrt -lcurl
-    ssh pi@${PI} cc -Wall -pthread -o msxpi/ploadbin.msx msxpi/ploadbin.c -lpigpio -lrt -lcurl
-fi
-
-# build distribution package
-if [[ $1 == "-f" || $2 == "-f" || $3 == "-f" ]];then
-    [ -f ../../build-pkg.sh ] && ../../build-pkg.sh $PI
-fi
