@@ -40,7 +40,6 @@ RC_FAILNOSTD:     EQU $EC
 RC_ESCAPE:        EQU $ED
 RC_UNDEFINED:     EQU $EF
 
-BDOS:           EQU     5
 CALLSTAT:       EQU     $55A8
 INLINBUF:       EQU     $F55E
 INLIN:          EQU     $00B1

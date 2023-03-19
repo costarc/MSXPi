@@ -44,13 +44,17 @@
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 
+readdata:
         call    CLEARBUF
         ld      de,buf
         ld      bc,BLKSIZE
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf
-        call   PRINT
+        call   PRINTPISTDOUT
+        ld      a,(buf+BLKSIZE-1)
+        or      a
+        jr      nz,readdata
         ret
         
 PRINTPIERR:

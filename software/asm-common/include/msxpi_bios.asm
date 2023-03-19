@@ -505,12 +505,18 @@ PRINTPISTDOUT:
         ret     z
         cp      10
         jr      nz,printchar
+        push    bc
         call    PUTCHAR
+        pop     bc
         ld      a,13
 printchar:
         call    PUTCHAR
         inc     hl
-        jr      PRINTPISTDOUT
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,PRINTPISTDOUT
+        ret
         
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer HL to hex
@@ -668,7 +674,7 @@ SENDPARMS2:
 
 ; Send a simple command to MSXPi
 ; DE = Command name, terminated in zero
-; Will calculate command size in BC
+; Size is fixed: CMDSIZE
 SENDCOMMAND:
         ld      bc,CMDSIZE               ; command lenght set to fixed size
         call      SENDDATA
@@ -703,7 +709,7 @@ PUTCHAR:
         push    hl
         ld      e,a
         ld      c,2
-        call    $A2  ;BDOS
+        call   $A2
         pop     hl
         pop     de
         pop     bc

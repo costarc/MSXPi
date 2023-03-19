@@ -37,6 +37,7 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+BDOS:           EQU     $A2
         org     $0100
         
         ld      de,command  
@@ -51,11 +52,9 @@ MAINPROG:
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf
-        call   PRINT
-        ld      hl,buf
-        ld      de,BLKSIZE
-        add hl,de
-        dec hl
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT
+        ld      hl,buf + BLKSIZE - 1
         ld      a,(hl)
         or      a
         jr      nz,MAINPROG

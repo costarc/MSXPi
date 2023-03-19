@@ -271,26 +271,6 @@ def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
     
     return rc 
 
-def sendmultiblock(buf, size = BLKSIZE):
-    idx = 0
-    cnt = 0
-    data = bytearray(size)
-    for b in buf:
-        if (isinstance(b, str)):
-            data[cnt] = ord(b)
-        else:
-            data[cnt] = b
-        cnt += 1   
-        if cnt == size and len(buf) > size:
-            print(len(data),data)
-            rc = senddata(data)
-            data = bytearray(size)
-            idx += size
-            cnt = 0
-   
-    rc = senddata(data)          
-    return rc
-
 # create a subclass and override the handler methods
 class MyHTMLParser(HTMLParser):
     def __init__(self):
@@ -404,7 +384,7 @@ def prun(cmd = ''):
             if len(buf) == 0:
                 buf = "Pi:No output"
 
-            sendmultiblock(buf)
+            sendmultiblock(buf, BLKSIZE)
 
         except Exception as e:
             print("prun: exception")
@@ -1019,6 +999,26 @@ def senddata(data, blocksize = BLKSIZE):
 
     return rc
 
+def sendmultiblock(buf, size = BLKSIZE):
+    idx = 0
+    cnt = 0
+    data = bytearray(size)
+    for b in buf:
+        if (isinstance(b, str)):
+            data[cnt] = ord(b)
+        else:
+            data[cnt] = b
+        cnt += 1   
+        if cnt == size and len(buf) > size:
+            print(len(data),data)
+            rc = senddata(data, size)
+            data = bytearray(size)
+            idx += size
+            cnt = 0
+   
+    rc = senddata(data)          
+    return rc
+
 def template():
     print("template now receiving parameters...")
     
@@ -1043,6 +1043,7 @@ def template():
 def recvcmd():
     print("recvcmd")
     rc,data = recvdata(CMDSIZE)
+    print(data,type(data))
     return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================
