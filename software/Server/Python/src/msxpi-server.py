@@ -1053,7 +1053,7 @@ def recvcmd():
 
 psetvar = [['PATH','/home/pi/msxpi'], \
            ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/msxpitoolsit.dsk'], \
+           ['DRIVE1','disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
