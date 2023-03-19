@@ -33,6 +33,7 @@
 ; 0.1    : Initial version.
 ; 0.9.0  : Changes to supoprt new transfer logic
 
+BDOS:   EQU     5
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
 

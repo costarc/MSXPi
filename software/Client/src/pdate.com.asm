@@ -37,6 +37,8 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+BDOS:   EQU     5
+
         org     $0100
         
         ld      de,command  
@@ -66,7 +68,7 @@ SETCLOCK:
         LD      E,A
         LD      C,$2B
         PUSH    IX
-        CALL    BDOS
+        CALL    5
         POP     IX
 
 ; set time
