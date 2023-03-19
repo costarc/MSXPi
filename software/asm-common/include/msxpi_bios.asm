@@ -41,8 +41,65 @@
 ; 0.6c   : Initial version commited to git
 ;
 
-; Restore communication with Pi by sending ABORT commands
-; Until RPi responds with READY.
+; ==================================================================
+; BASIC I/O FUNCTIONS STARTS HERE.
+; These are the lower level I/O routines available, and must match
+; the I/O functions implemented in the CPLD.
+; Other than using these functions you will have to create your
+; own commands, using OUT/IN directly to the I/O ports.
+; ==================================================================
+
+NOSTDOUT: ret
+
+;-----------------------
+; CHKPIRDY             |
+;-----------------------
+CHKPIRDY:
+        ld      a,7
+        out    ($AA),a
+        in      a,($A9)
+        bit     2,a                         ; Test ESC key 
+        scf
+        ret     z
+        in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
+        or      a
+        jr      nz,CHKPIRDY
+        ret
+
+;-----------------------
+; PIREADBYTE           |
+;-----------------------
+PIREADBYTE:
+            call    CHKPIRDY
+            jr      c,PIREADBYTE1
+            xor     a                  ; do not use xor to preserve c flag state
+            out     (CONTROL_PORT1),a  ; send read command to the interface
+            call    CHKPIRDY           ; wait interface transfer data to pi and
+                                       ; pi app processing
+                                       ; no ret c is required here, because in a,(7) 
+                                       ; does not reset c flag
+PIREADBYTE1:
+            in      a,(DATA_PORT1)     ; read byte
+            ret                        ; return in a the byte received
+
+;-----------------------
+; PIWRITEBYTE          |
+;-----------------------
+PIWRITEBYTE:
+            push    af
+            call    CHKPIRDY
+            pop     af
+            out     (DATA_PORT1),a     ; send data, or command
+            ret
+
+;-----------------------
+; PIEXCHANGEBYTE       |
+;-----------------------
+PIEXCHANGEBYTE:
+            call    PIWRITEBYTE
+            call    CHKPIRDY
+            in      a,(DATA_PORT1)     ; read byte
+            ret
 
 PSYNC:  
         CALL    TRYABORT
@@ -118,9 +175,82 @@ SENDPICMD:
 		call    SENDDATABLOCK
         ret
 
-;-----------------------
-; RECVDATABLOCK        |
-;-----------------------
+;---------------------------------------------------------------
+; RECVDATA- SENDDATA
+;---------------------------------------------------------------
+; 01/03/2023
+;
+; Receive / Send BC bytes of data plus a checksum (1 byte)
+; Calculates teh checksum locally as data is coming, and send it back.
+; Compares the local checksum with received checksum, and
+; if they differ return with C flag set.
+;
+; Input:
+;   de = memory address for the data
+;   bc = block size
+; Output:
+;   Flag C set if error
+;  DE next available address
+RECVDATA:
+RECVDATABLOCK:
+        di
+        ld      hl,0                       ; will store checksum in HL
+RECV0:
+        push    bc
+        call    PIREADBYTE
+        ld      (de),a
+        inc     de
+        ld      b,0
+        ld      c,a
+        add     hl,bc
+        pop     bc
+		dec     bc
+        ld      a,b
+        or      c
+        jr      nz,RECV0
+        call    PIREADBYTE      ; read checksum byte from msxpi server
+        ld      c,a
+        ld      a,l
+        add     a,h
+        ld      l,a
+        call    PIWRITEBYTE     ; send checksum calculated here
+        ei
+        ld      a,c                         ; get MSXPi chksum
+        cp      l                           ; compare checksum
+        ret     z                           ; return if match, C is 0
+        scf                                 ; differ, set flag for Error
+        ret
+
+SENDDATA:
+SENDDATABLOCK:
+        di
+        ld      hl,0                       ; will store checksum in HL
+SENDD0:
+        push    bc
+        ld      a,(de)
+        inc     de
+        ld      b,0
+        ld      c,a
+        add     hl,bc
+        call    PIWRITEBYTE
+        pop     bc
+		dec     bc
+        ld      a,b
+        or      c
+        jr      nz,SENDD0
+        ld      a,l
+        add    a,h                         ; sum two bytes of checksum to obtain final cum
+        ld      l,a
+        call    PIWRITEBYTE     ; send checksum calculated here
+        call    PIREADBYTE      ; read checksum byte from msxpi server
+        ei
+        cp      l                           ; compare checksum
+        ret     z                           ; return if match, C is 0
+        scf                                 ; differ, set flag for Error
+        ret
+        
+; -----------------------------------------------------------------------------------------------
+; This is the original MSXPi routine as per v1.0.1
 ; 21/03/2017
 ; Receive a number of bytes from PI
 ; This routine expects PI to send SENDNEXT control byte
@@ -135,7 +265,7 @@ SENDPICMD:
 ;   de = Original address if routine finished in error,
 ;   de = Next current address to write data when terminated successfully
 ; -------------------------------------------------------------
-RECVDATABLOCK:
+RECVDATABLOCK_LEGACY:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -221,7 +351,7 @@ RECVDATABLOCK_CRCERROR:
 ;   de = Original address if routine finished in error,
 ;   de = Next current address to read if finished successfully
 ; -------------------------------------------------------------
-SENDDATABLOCK:
+SENDDATABLOCK_LEGACY:
         ld      a,SENDNEXT
         call    PIEXCHANGEBYTE
         cp      SENDNEXT
@@ -303,25 +433,18 @@ SENDDATASIZE:
 ; PRINT                |
 ;-----------------------
 PRINT:
-        push    af
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
         jr      Z,PRINTEXIT
         cp      10
         jr      nz,PRINT1
-        pop     af
-        push    af
-        ld      a,10
-        jr      nc,PRINT1
         call    PUTCHAR
         ld      a,13
 PRINT1:
         call	PUTCHAR		;put a character
-        INC     hl
-        pop     af
+        inc     hl
         jr      PRINT
 PRINTEXIT:
-        pop     af
         ret
 
 PRINTNLINE:
@@ -365,7 +488,6 @@ PRINTNUM1:
         call    PUTCHAR
         ret
 
-
 ; =================================================================
 ; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
 ; Inputs: (PRINTPISTDOUT0)
@@ -378,72 +500,22 @@ PRINTNUM1:
 ; Changes: AF,BC,E,L,HL',BC'
 ; =================================================================
 PRINTPISTDOUT:
-        ld      e,0
-
-PRINTPISTDOUT0:
-    ; CLEAR CRC and save block size
-        exx
-        ld      hl,$ffff
-        exx
-PRINTPISTDOUT1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      SENDNEXT
-        ld      a,RC_OUTOFSYNC
-        ret     nz
-PRINTPI0:
-        call    READDATASIZE
-        ld      a,b
-        or      c
-        ld      a,ENDTRANSFER
+        ld      a,(hl)
+        or      a
         ret     z
-        call    PIEXCHANGEBYTE    ; read attempts, but will not use it
-PRINTPI1:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        push    af
-        call    CRC16
-        pop     af
-        ld      l,a
-        ld      a,e
-        cp      $ff
-        jr      z,PRINTPI3          ; nostdout - not printing to screen
-        ld      a,l
         cp      10
-        jr      nz,PRINTPI2
+        jr      nz,printchar
+        push    bc
         call    PUTCHAR
+        pop     bc
         ld      a,13
-PRINTPI2:
+printchar:
         call    PUTCHAR
-PRINTPI3:
+        inc     hl
         dec     bc
         ld      a,b
         or      c
-        jr      nz,PRINTPI1
-
-; Now exchange CRC
-        exx
-        ld      a,l
-        call    PIEXCHANGEBYTE
-        cp      l
-        jr      nz,PRINTPI4
-        ld      a,h
-        call    PIEXCHANGEBYTE
-        cp      h
-        jr      nz,PRINTPI4
-        ld      a,RC_SUCCESS
-        jr      PRINTPI5
-PRINTPI4: 
-        ld      a,RC_CRCERROR
-PRINTPI5:
-        exx
-        ret
-
-NOSTDOUT:
-        push    de
-        ld      e,$ff
-        call    PRINTPISTDOUT0
-        pop     de
+        jr      nz,PRINTPISTDOUT
         ret
         
 STRTOHEX:
@@ -573,6 +645,112 @@ PARMSEVAL2:
         LD      HL,0
         RET
 
+SENDPARMS:
+        call    CLEARBUF
+; check if there are parameters in the command line
+        ld      hl,$80
+        ld      a,(hl)
+        ld      b,a
+        or      a
+        jr      z,SENDPARMS2
+
+; b contain number of chars passed as arguments in the command
+        inc     hl
+        call    EATSPACES
+        jr      c,SENDPARMS2
+        ld      de,buf
+; Move CLI parameters to buffer
+SENDPARMS1:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        djnz    SENDPARMS1
+SENDPARMS2:
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    SENDDATA
+        ret
+
+; Send a simple command to MSXPi
+; DE = Command name, terminated in zero
+; Size is fixed: CMDSIZE
+SENDCOMMAND:
+        ld      bc,CMDSIZE               ; command lenght set to fixed size
+        call      SENDDATA
+        ret
+
+SETBUF:
+        push    de
+        call    CLEARBUF
+        pop     hl
+        ld      de,buf
+SETBUF0:
+        ld      a,(hl)
+        ld      (de),a
+        inc     hl
+        inc     de
+        or      a
+        jr      nz,SETBUF0
+        ret
+        
+CLEARBUF:
+        ld      hl,buf
+        ld      de,buf + 1
+        ld      bc,BLKSIZE
+        xor     a
+        ld      (hl),a
+        ldir
+        ret
+                
+PUTCHAR:
+        push    bc
+        push    de
+        push    hl
+        ld      e,a
+        ld      c,2
+        call   $A2
+        pop     hl
+        pop     de
+        pop     bc
+        ret
+
+EATSPACES:
+        ld      a,(hl)
+        cp      32
+        jr      nz,EATSPACEEND
+        inc     hl
+        djnz    EATSPACES
+        scf
+        ret
+EATSPACEEND:
+        or      a
+        ret
+
+DELAY:
+        PUSH    DE
+        PUSH    HL
+DELAY0:
+        PUSH    BC
+        LD          BC,$FFFF
+DELAY1:
+        EXX
+        EXX
+        EXX
+        EXX
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,DELAY1
+        POP     BC
+        DEC     BC
+        LD         A,B
+        OR      C
+        JR      NZ,DELAY0
+        POP     HL
+        POP     DE
+        RET
+              
 TESTMSXPISTR:
         DB      'MSXPi'
 confatual:
@@ -581,7 +759,3 @@ slotatual:
         DB      00
 subsatual:
         DB      00
-
-
-
-

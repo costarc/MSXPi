@@ -35,24 +35,10 @@
 
         ORG     $0100
 
-        LD      BC,6
-        LD      DE,COMMAND
+        LD      HL,COMMAND
         CALL    DOSSENDPICMD
 
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
+        JR      NC,MAINPROGRAM
 
 PRINTPIERR:
         LD      HL,PICOMMERR

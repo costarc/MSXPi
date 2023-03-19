@@ -1,0 +1,4 @@
+1.0.3 - Shifted PCB holes to better fit in Patola (Brazilian) case & added 3rd mounting hole
+1.0.2 - Changed footprint to smaller size to help reducing manufacturing costs
+1.0.1 - Changed ROM from 27C256 to AT28C256 with hability to be programmed from MSX-DOs
+1.0 - PCB Changes from Rev.7

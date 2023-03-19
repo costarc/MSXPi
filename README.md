@@ -1,15 +1,15 @@
 # MSXPi
 
-MSXPi is a hardware interface and software solution to allow MSX computers to control and user Raspberry Pi resources.
-The interface exposes ports that can be read and written by MSX, and in turn will be accessible on the Raspberry Pi.
+MSXPi is a hardware interface and software solution to allow MSX computers to control and use Raspberry Pi resources.
+The interface exposes I/O ports that can be read and written by MSX, and in turn the data will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
 
 Quick Start Guide
 =================
 
-It's not really quick - it may take soime time, depending on your experience with Raspoberry Pi.
+It's not really quick - it may take some time, depending on your experience with Raspberry Pi.
 
-This Quick Start Guide is updated to V1.0.1 Rev. 1 of the Software and Interface.
+This Quick Start Guide is updated to V1.0.1 Rev. 3 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
 

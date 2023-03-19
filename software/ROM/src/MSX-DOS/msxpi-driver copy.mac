@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.1                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -98,8 +98,8 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        ;ld      hl,MSXPISKP
-        ;call    PRINT
+        ld      hl,MSXPISKP
+        call    PRINT
 	ld	bc,3
 	call	DELAY
         ret
@@ -846,10 +846,10 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230319.033"
+        DB      "MSXPi ROM v1.1   "
+BuildId: DB "20230305.007"
         DB      13,10
-        DB      "    RCC (c) 2017-2023",0
+        DB      "(c) Ronivon Costa,2017-2023",13,10,10
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10,0
 MSXPISKP:

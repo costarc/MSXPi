@@ -34,34 +34,52 @@
 
 DBGBC:
         PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
         LD      A,B
         CALL    PRINTNUMBER
         LD      A,C
         CALL    PRINTNUMBER
         LD      A,' '
         CALL    PUTCHAR
+        POP     HL
+        POP     DE
+        POP     BC
         POP     AF
         RET
 
 DBGDE:
         PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
         LD      A,D
         CALL    PRINTNUMBER
         LD      A,E
         CALL    PRINTNUMBER
         LD      A,' '
         CALL    PUTCHAR
+        POP     HL
+        POP     DE
+        POP     BC
         POP     AF
         RET
 
 DBGHL:
         PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
         LD      A,H
         CALL    PRINTNUMBER
         LD      A,L
         CALL    PRINTNUMBER
         LD      A,' '
         CALL    PUTCHAR
+        POP     HL
+        POP     DE
+        POP     BC
         POP     AF
         RET
 

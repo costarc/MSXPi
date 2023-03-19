@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 0.9.0                                                           |
+;| Version : 1.1                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -30,108 +30,67 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-; 0.9.0  : Changes to supoprt new transfer logic
 ;
-;Parameters:    C = 2BH (_SDATE)
-;HL = Year 1980...2079
-;D = Month (1=Jan...12=Dec)
-;E = Date (1...31)
-;Results:       A = 00H if date was valid
-;FFH if date was invalid
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
 ;
-;Parameters:    C = 2DH (_STIME)
-;H = Hours (0...23)
-;L = Minutes (0...59)
-;D = Seconds (0...59)
-;E = Centiseconds (ignored)
-;Results:       A = 00H if time was valid
+BDOS:   EQU     5
 
-; Start of command - You may not need to change this
-
-        ORG     $0100
-
-        LD      BC,5
-        LD      DE,COMMAND
-        CALL    DOSSENDPICMD
-
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JP      Z,MAINPROGRAM
-
+        org     $0100
+        
+        ld      de,command  
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR 
+        call    CLEARBUF
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        jr      c, PRINTPIERR 
+        call    SETCLOCK
+        ret
+        
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-MAINPROGRAM:
-
-        CALL    SETCLOCK
-        JP      PRINTPISTDOUT
-
-; --------------------------------
-; CODE FOR YOUR COMMAND GOES HERE
-; --------------------------------
 SETCLOCK:
-; set date
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      IX,buf
+        LD      A,(IX + 0)
         LD      L,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 1)
         LD      H,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 2)
         LD      D,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 3)
         LD      E,A
         LD      C,$2B
-        CALL    BDOS
+        PUSH    IX
+        CALL    5
+        POP     IX
 
 ; set time
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 4)
         LD      H,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 5)
         LD      L,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 6)
         LD      D,A
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
+        LD      A,(IX + 7)
         LD      E,A
         LD      C,$2D
         CALL    BDOS
         RET
+               
 
-; Replace with your command name here
-COMMAND:  DB      "PDATE"
-
-; --------------------------------------
-; End of your command
-; You should not modify this code below
-; --------------------------------------
-
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
-
+command: db "pdate   ",0
+PICOMMERR:  DB      "Communication Error",13,10,0
+        
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
-
-
-
+buf:    equ     $
+        ds      BLKSIZE
+        db      0
 

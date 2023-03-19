@@ -33,44 +33,11 @@
 ; 0.1    : Initial version.
 ; 0.9.0  : Changes to supoprt new transfer logic
 
+BDOS:   EQU     5
 DSKNUMREGISTERS:   EQU 8192
 DSKBLOCKSIZE:   EQU 1
 
         ORG     $0100
-
-        LD      BC,5
-        LD      DE,COMMAND
-        CALL    DOSSENDPICMD
-
-WAIT_LOOP:
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_WAIT
-        JR      NZ,WAIT_RELEASED
-        CALL    CHKPIRDY
-        JR      WAIT_LOOP
-
-WAIT_RELEASED:
-
-        CP      RC_FAILED
-        JP      Z,PRINTPISTDOUT
-        CP      RC_SUCCESS
-        JR      Z,MAINPROGRAM
-
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        CP      RC_CONNERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PICRCERR
-        CP      RC_CRCERROR
-        JR      Z,PRINTERRMSG
-        LD      HL,DSKERR
-        CP      RC_DSKIOERR
-        JR      Z,PRINTERRMSG
-        LD      HL,PIUNKNERR
-PRINTERRMSG:
-        CALL    PRINT
-        JP      0
 
 MAINPROGRAM:
 
@@ -104,6 +71,10 @@ FILEERR:
         LD      HL,PRINTPIERR
         CALL    PRINT
         JP      0
+        
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
 
 PRINTFNAME:
         LD      HL,FNTITLE
@@ -148,32 +119,30 @@ DSKREADBLK:
 
 ; Buffer where data is stored during transfer, and also DMA for disk access
         LD      DE,DMA
-
+        LD      BC,DSKNUMREGISTERS
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
-        CALL    RECVDATABLOCK
+        CALL    RECVDATA
         RET     C
-; The routine return A = status code,
-; ENDTRANSFER means the transfer ended.
-; Note that the last block of data was transferd in the previous call,
-; which means tht in this call (the last call) there will never be data to save.
-        CP      ENDTRANSFER
-        RET     Z
-
-; The routine returned SUCCESS, this means the block of data was transferred,
-; Also means there may be more data, and another call is needed (fater saving this block)
-; If the STATUS code is something else, set flag C and terminate the routine with error
-        CP      RC_SUCCESS
-        SCF
-        RET     NZ
-
-; Set HL with the number of bytes received
-
-        LD      H,B
-        LD      L,C
+        
+        ; Set HL with the number of bytes received
+        LD      A,(DMA)
+        LD      L,A
+        LD      A,(DMA +1)
+        LD      H,A        
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS
-        JR      DSKREADBLK
+        
+        ; now verify if data received was less thant DMA bufffer - if so, finished transferinf
+        LD      DE,DSKNUMREGISTERS
+        LD      A,(DMA + 1)
+        LD      L,A
+        LD      A,(DMA + 2)
+        LD      H,A
+        OR      A                   ; reset flag C 
+        SBC HL,DE               ; NUM BYTES READ - BUFFER SIZE
+        JR      NC,DSKREADBLK       ; data read less than buffer - finished transfer
+        RET
 
 READPARMS:
 ; READ FILENAME DIRECTLY INTO THE FCB AREA
@@ -214,7 +183,7 @@ INIFCB:
         RET
 
 SETFILEFCB:
-        LD      DE,DMA
+        LD      DE,DMA+3
         LD      C,$1A
         CALL    BDOS
         LD      HL,DSKBLOCKSIZE
@@ -231,26 +200,27 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-COMMAND:    DB      "PCOPY"
-FNTITLE:    DB      "Saving file:$"
-PICOMMERR:  DB      "Communication Error",13,10,"$"
-PIUNKNERR:  DB      "Unknown error",13,10,"$"
-PICRCERR:   DB      "CRC Error",13,10,"$"
-DSKERR:     DB      "DISK IO ERROR",13,10,"$"
+COMMAND:    DB      "PCOPY000",0
+FNTITLE:    DB      "Saving file:",0
+PICOMMERR:  DB      "Communication Error",13,10,0
+PIUNKNERR:  DB      "Unknown error",13,10,0
+PICRCERR:   DB      "CRC Error",13,10,0
+DSKERR:     DB      "DISK IO ERROR",13,10,0
 LOADPROGERRMSG: DB  "Error download file from network",13,10,10
-FOPENERR:   DB      "Error opening file",13,10,"$"
-PARMSERR:   DB      "Invalid parameters",13,10,"$"
-USERESCAPE: DB      "Cancelled",13,10,"$"
+FOPENERR:   DB      "Error opening file",13,10,0
+PARMSERR:   DB      "Invalid parameters",13,10,0
+USERESCAPE: DB      "Cancelled",13,10,0
 RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
 FILEFCB:    ds     40
 
 ;INCLUDE "debug.asm"
-INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
 INCLUDE "include.asm"
+INCLUDE "msxpi_bios.asm"
 
+buf:    equ     $
+        ds      BLKSIZE
+        db      0
 
 
