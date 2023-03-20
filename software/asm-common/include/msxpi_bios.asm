@@ -502,6 +502,7 @@ PRINTNUM1:
 PRINTPISTDOUT:
         ld      a,(hl)
         or      a
+        scf
         ret     z
         cp      10
         jr      nz,printchar
@@ -516,6 +517,8 @@ printchar:
         ld      a,b
         or      c
         jr      nz,PRINTPISTDOUT
+        scf
+        ccf
         ret
         
 STRTOHEX:

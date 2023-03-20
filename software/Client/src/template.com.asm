@@ -37,12 +37,18 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+BDOS:           EQU     $A2
         org     $0100
         
         ld      hl,msg_cmd
         call    PRINT
+
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
+
         call    print_msgs          ; print informative message based on flag C
         
         ld      hl,msg_parms

@@ -148,6 +148,7 @@ def piexchangebytewithtimeout(byte_out=0,twait=5):
     GPIO.output(rdyPin, GPIO.LOW)
 
     #print "piexchangebyte: received:",hex(mymsxbyte)
+    print("io:",byte_in)
     return byte_in
 
 # Using CRC code from :
@@ -999,24 +1000,30 @@ def senddata(data, blocksize = BLKSIZE):
 
     return rc
 
-def sendmultiblock(buf, size = BLKSIZE):
+def sendmultiblock(buf, blocksize = BLKSIZE):
     idx = 0
     cnt = 0
-    data = bytearray(size)
+    data = bytearray(blocksize)
     for b in buf:
         if (isinstance(b, str)):
             data[cnt] = ord(b)
         else:
             data[cnt] = b
         cnt += 1   
-        if cnt == size and len(buf) > size:
+        if cnt == blocksize and blocksize < len(buf):
             print(len(data),data)
-            rc = senddata(data, size)
-            data = bytearray(size)
-            idx += size
+            rc = senddata(data, blocksize)
+            data = bytearray(blocksize)
+            idx += blocksize
             cnt = 0
+    rc = senddata(data,blocksize)          
+    return rc
    
-    rc = senddata(data)          
+def send_rc_msg(rc,msg):
+    buf = bytearray()
+    buf.extend(rc.to_bytes(1,'little'))
+    buf.extend(msg.encode())
+    rc = sendmultiblock(buf, MSGSIZE)
     return rc
 
 def template():

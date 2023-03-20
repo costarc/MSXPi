@@ -40,12 +40,17 @@
 BDOS:           EQU     $A2
         org     $0100
         
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 
 MAINPROG:
+        ld      a,'?'
+        out ($98),a
         call    CLEARBUF
         ld      de,buf
         ld      bc,BLKSIZE
@@ -54,10 +59,7 @@ MAINPROG:
         ld      hl,buf
         ld      bc,BLKSIZE
         call   PRINTPISTDOUT
-        ld      hl,buf + BLKSIZE - 1
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROG
+        jr      nc,MAINPROG
         ret
         
 PRINTPIERR:
