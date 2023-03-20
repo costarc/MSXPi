@@ -148,6 +148,7 @@ def piexchangebytewithtimeout(byte_out=0,twait=5):
     GPIO.output(rdyPin, GPIO.LOW)
 
     #print "piexchangebyte: received:",hex(mymsxbyte)
+    print("io:",byte_in)
     return byte_in
 
 # Using CRC code from :
@@ -999,51 +1000,48 @@ def senddata(data, blocksize = BLKSIZE):
 
     return rc
 
-def sendmultiblock(buf, size = BLKSIZE):
+def sendmultiblock(buf, blocksize = BLKSIZE):
     idx = 0
     cnt = 0
-    data = bytearray(size)
+    data = bytearray(blocksize)
     for b in buf:
         if (isinstance(b, str)):
             data[cnt] = ord(b)
         else:
             data[cnt] = b
         cnt += 1   
-        if cnt == size and len(buf) > size:
+        if cnt == blocksize and blocksize < len(buf):
             print(len(data),data)
-            rc = senddata(data, size)
-            data = bytearray(size)
-            idx += size
+            rc = senddata(data, blocksize)
+            data = bytearray(blocksize)
+            idx += blocksize
             cnt = 0
+    rc = senddata(data,blocksize)          
+    return rc
    
-    rc = senddata(data)          
+def send_rc_msg(rc,msg):
+    buf = bytearray()
+    buf.extend(rc.to_bytes(1,'little'))
+    buf.extend(msg.encode())
+    rc = sendmultiblock(buf, MSGSIZE)
     return rc
 
 def template():
     print("template now receiving parameters...")
     
-    rc,data = recvdata()    
+    # Parameters have always a fixed size: BLKSIZE
+    rc,data = recvdata(BLKSIZE)    
     print("Raw data received:",data)
     
     print("Extracting only ascii bytes and setting reponse...")
-    rsp = 'MSXPi received: ' + data.decode().split("\x00")[0]
+    buf = 'MSXPi received: ' + data.decode().split("\x00")[0]
     
-    print()
-    print("Creating a bytearray of size BLKSIZE and inserting the response. The full response is padded with zeros")
-    # pad data to send to senddata function
-    data = bytearray(BLKSIZE)
-    idx = 0
-    for c in rsp:
-        data[idx] = ord(c)
-        idx += 1
-    
-    print("Sending response: ",data) 
-    rc = senddata(data)
+    print("Sending response: ",buf) 
+    rc = sendmultiblock(buf, BLKSIZE)
 
 def recvcmd():
     print("recvcmd")
     rc,data = recvdata(CMDSIZE)
-    print(data,type(data))
     return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================

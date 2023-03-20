@@ -109,9 +109,9 @@ LOADPROGRESS:
         DB      "Loading game...$"
 
 INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
+
 
 
 

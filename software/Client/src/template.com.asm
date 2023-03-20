@@ -37,19 +37,25 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+BDOS:           EQU     $A2
         org     $0100
         
         ld      hl,msg_cmd
         call    PRINT
+
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
+
         call    print_msgs          ; print informative message based on flag C
         
         ld      hl,msg_parms
         call    PRINT
 
         ; send CLI parameters to MSXPi
-        call    SENDPARMS
+        call    SENDPARMS     ; Its contatn size: BLKSIZE
         call    print_msgs          ; print informative message based on flag C
         
         ld      hl,msg_recv
@@ -63,14 +69,10 @@ MAINPROG:
         call    print_msgs          ; print informative message based on flag C
 
         ld      hl,buf
-        call   PRINT            ; if received data correctly, display in screen
-        ld      hl,buf
-        ld      de,BLKSIZE
-        add hl,de
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROG
-        ret
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT            ; if received data correctly, display in screen
+        jr      nc,MAINPROG                 ; Flag C is set if detected zero in the data
+        ret                                             ; C flag set, end of text to print
         
 print_msgs:
         ld      hl,msg_error
@@ -88,12 +90,13 @@ command: db "template",0
        
 msg_success: db "Checksum match",13,10,0
 msg_error: db "Checksum did not match",13,10,0
-msg_cmd: db "Sending command...",13,10,0
-msg_parms: db "Sending parameters: ",0
-msg_recv: db "Now reading MSXPi response...",13,10,0
+msg_cmd: db "Sending command...",0
+msg_parms: db "Sending parameters... ",0
+msg_recv: db "Now reading MSXPi response... ",0
 
 ; Core MSXPi APIs / BIOS routines.
 INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
 
 ; All MSX-DOS programs must have this buf defined.

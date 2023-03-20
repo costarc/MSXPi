@@ -502,6 +502,7 @@ PRINTNUM1:
 PRINTPISTDOUT:
         ld      a,(hl)
         or      a
+        scf
         ret     z
         cp      10
         jr      nz,printchar
@@ -516,6 +517,8 @@ printchar:
         ld      a,b
         or      c
         jr      nz,PRINTPISTDOUT
+        scf
+        ccf
         ret
         
 STRTOHEX:
@@ -703,18 +706,6 @@ CLEARBUF:
         ldir
         ret
                 
-PUTCHAR:
-        push    bc
-        push    de
-        push    hl
-        ld      e,a
-        ld      c,2
-        call   $A2
-        pop     hl
-        pop     de
-        pop     bc
-        ret
-
 EATSPACES:
         ld      a,(hl)
         cp      32
