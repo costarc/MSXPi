@@ -375,7 +375,7 @@ def prun(cmd = ''):
         sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |")
         rc = RC_FAILED
     else:
-        print("prun else")
+        #print("prun else")
         cmd = cmd.replace('::','|')
         try:
             #print("prun: inside try: cmd = ",cmd)
@@ -406,24 +406,24 @@ def pdir():
     
     try:
         if (1 == 1):
-            print("pdir: if1")
+            #print("pdir: if1")
             urlcheck = getpath(basepath, path)
             if (urlcheck[0] == 0 or urlcheck[0] == 1):
-                print("pdir: if2")
+                #print("pdir: if2")
                 if (path.strip() == '*'):
                     prun('ls -l ' + urlcheck[1])
                 elif ('*' in path):
-                    print("pdir: elif1")
+                    #print("pdir: elif1")
                     numChilds = path.count('/')
                     fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
                     if (fileDesc == '' or len(fileDesc) == 0):
                         fileDesc = '.'
                     prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
                 else:
-                    print("pdir: else inside",urlcheck[1])
+                    #print("pdir: else inside",urlcheck[1])
                     prun('ls -l ' + urlcheck[1])
             else:
-                print("pdir: else out")
+                #print("pdir: else out")
                 parser = MyHTMLParser()
                 try:
                     htmldata = urlopen(urlcheck[1]).read().decode()
@@ -440,10 +440,10 @@ def pdir():
             rc = RC_FAILNOSTD
             print("pdir:out of sync in RC_WAIT")
     except Exception as e:
-        print("pdir exception 2:"+str(e))
+        #print("pdir exception 2:"+str(e))
         sendmultiblock('Pi:'+str(e))
 
-    print("pdir:exiting rc:",hex(rc))
+    #print("pdir:exiting rc:",hex(rc))
     return rc
 
 def pcd():    
@@ -1011,7 +1011,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             data[cnt] = b
         cnt += 1   
         if cnt == blocksize and blocksize < len(buf):
-            print(len(data),data)
+            #print(len(data),data)
             rc = senddata(data, blocksize)
             data = bytearray(blocksize)
             idx += blocksize
