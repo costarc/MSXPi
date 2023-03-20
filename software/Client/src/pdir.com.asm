@@ -49,8 +49,6 @@ BDOS:           EQU     $A2
         call    SENDPARMS
         jr      c, PRINTPIERR 
 MAINPROG:
-        ld      a,'?'
-        out ($98),a
         call    CLEARBUF
         ld      de,buf
         ld      bc,BLKSIZE
@@ -70,6 +68,7 @@ command: db "pdir    ",0
 PICOMMERR:  DB      "Communication Error",13,10,0
         
 INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
 buf:    equ     $
         ds      BLKSIZE

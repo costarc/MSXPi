@@ -217,6 +217,7 @@ FILEFCB:    ds     40
 
 ;INCLUDE "debug.asm"
 INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
 
 buf:    equ     $

@@ -1029,28 +1029,19 @@ def send_rc_msg(rc,msg):
 def template():
     print("template now receiving parameters...")
     
-    rc,data = recvdata()    
+    # Parameters have always a fixed size: BLKSIZE
+    rc,data = recvdata(BLKSIZE)    
     print("Raw data received:",data)
     
     print("Extracting only ascii bytes and setting reponse...")
-    rsp = 'MSXPi received: ' + data.decode().split("\x00")[0]
+    buf = 'MSXPi received: ' + data.decode().split("\x00")[0]
     
-    print()
-    print("Creating a bytearray of size BLKSIZE and inserting the response. The full response is padded with zeros")
-    # pad data to send to senddata function
-    data = bytearray(BLKSIZE)
-    idx = 0
-    for c in rsp:
-        data[idx] = ord(c)
-        idx += 1
-    
-    print("Sending response: ",data) 
-    rc = senddata(data)
+    print("Sending response: ",buf) 
+    rc = sendmultiblock(buf, BLKSIZE)
 
 def recvcmd():
     print("recvcmd")
     rc,data = recvdata(CMDSIZE)
-    print(data,type(data))
     return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================
