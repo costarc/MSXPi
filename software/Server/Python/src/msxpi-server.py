@@ -401,18 +401,19 @@ def prun(cmd = ''):
             #print("prun: inside try: cmd = ",cmd)
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
-            print("prun: Popen stdout = ",buf)
-            if len(buf) == 0:
-                buf = "Pi:" + p.stderr.read().decode()
+            err = (p.stderr.read().decode())
+            if len(err) > 0 or len(buf) == 0:
+                sendmultiblock(str(err),BLKSIZE)
+                return RC_FAILED
 
             sendmultiblock(buf, BLKSIZE)
 
         except Exception as e:
             print("prun: exception")
             rc = RC_FAILED
-            sendmultiblock("Pi:"+str(e)+'\n')
+            sendmultiblock("Pi:"+str(e)+'\n',BLKSIZE)
 
-    print("prun:exiting rc:",hex(rc))
+    print(hex(rc))
     return rc
 
 def pdir():
@@ -648,28 +649,28 @@ def pdate():
     piexchangebyte(0)
 
 
-def pplay(cmd):
+def pplay():
     rc = RC_SUCCESS
     
-    cmd = "bash " + RAMDISK + "/pplay.sh " + " PPLAY "+psetvar[0][1]+ " "+cmd+" >" + RAMDISK + "/msxpi.tmp"
-    cmd = str(cmd)
+    rc,data = recvdata(BLKSIZE)
+    cmd = data.decode().split("\x00")[0]
     
-    print("pplay:starting command:len:",cmd,len(cmd))
-
-    try:
-        p = subprocess.call(cmd, shell=True)
-        buf = msxdos_inihrd(RAMDISK + "/msxpi.tmp")
-        if (buf == RC_FAILED):
-            sendmultiblock("Pi:Ok\n")
-        else:
-            sendmultiblock(buf)
-    except subprocess.CalledProcessError as e:
-        rc = RC_FAILED
-        sendmultiblock("Pi:"+str(e))
+    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  psetvar[0][1]+ " "+cmd)
     
-    #print "pplay:exiting rc:",hex(rc)
+    print (hex(rc))
     return rc
-
+    
+def pvol():
+    rc = RC_SUCCESS
+    
+    rc,data = recvdata(BLKSIZE)
+    vol = data.decode().split("\x00")[0]
+    
+    rc = prun("mixer set PCM -- "+vol)
+    
+    print (hex(rc))
+    return rc
+    
 def pset():
     global psetvar
     

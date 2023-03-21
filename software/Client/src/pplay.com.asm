@@ -39,11 +39,15 @@
 ;
         org     $0100
         
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 
+
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
@@ -51,13 +55,9 @@ MAINPROG:
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf
-        call   PRINT
-        ld      hl,buf
-        ld      de,BLKSIZE
-        add hl,de
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROG
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT
+        jr      nc,MAINPROG
         ret
         
 PRINTPIERR:
