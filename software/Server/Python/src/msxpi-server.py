@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230305.003"
+build = "20230321.001"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -673,47 +673,40 @@ def pplay(cmd):
 def pset():
     global psetvar
     
+    print("pset")
+    
     rc = RC_SUCCESS
-    buf = "Pi:\nSyntax: pset set <var> <value>"
-    cmd = cmd.strip()
-
+    rc,data = recvdata(BLKSIZE)
+    cmd = data.decode().split("\x00")[0]
+    print(cmd)
+    
     if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
         s = str(psetvar)
         buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
-    
+        rc = sendmultiblock(buf, BLKSIZE)
+        return rc
+        
     elif (cmd[:1] == "s" or cmd[:1] == "S"):
         cmd=cmd.split(" ")
-        found = False
-        if (len(cmd) == 3):
-            for index in range(0,len(psetvar)):
-                if (psetvar[index][0] == str(cmd[1])):
-                    psetvar[index][1] = str(cmd[2])
-                    found = True
-                    buf = "Pi:Ok\n"
-                    rc_text = psetvar[index][0];
-                    break
-
-            if (not found):
-                for index in range(7,len(psetvar)):
-                    if (psetvar[index][0] == "free"):
-                        psetvar[index][0] = str(cmd[1])
-                        psetvar[index][1] = str(cmd[2])
-                        found = True
-                        buf = "Pi:Ok\n"
-                        rc_text = psetvar[index][0];
-                        break
-
-            if (not found):
-                rc = RC_FAILED
-                rc_text = '';
-                buf = "Pi:Error setting parameter"
-        else:
-            rc = RC_FAILED
-
-    sendmultiblock(buf)
-
+        for index in range(0,len(psetvar)):
+            print(index)
+            if (psetvar[index][0] == str(cmd[1])):
+                psetvar[index][1] = str(cmd[2])
+                rc = sendmultiblock("Pi:Ok", BLKSIZE)
+                return rc
+        
+        for index in range(7,len(psetvar)):
+            print(2,index,psetvar[index][0] )
+            if (psetvar[index][0] == "free"):
+                psetvar[index][0] = str(cmd[1])
+                psetvar[index][1] = str(cmd[2])
+                rc = sendmultiblock("Pi:Ok", BLKSIZE)
+                return rc
+                
+    # When everythign fails:          
+    rc = sendmultiblock("Pi:Error setting parameter",BLKSIZE)
     return rc
-
+                            
 def pwifi():
 
     global psetvar

@@ -159,12 +159,10 @@ PLOOP:
 ; it will use blocks size SECTORSIZE (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
-        LD      BC,(buf + 1)                            ; Read the number of blocks to transfer
-        LD          A,'.'
-        CALL    PUTCHAR        
+        LD      BC,(buf + 1)                            ; Read the number of blocks to transfer     
 DSKREADBLK:
         LD          A,'.'
-        OUT     ($98),A
+        CALL    PUTCHAR 
         PUSH    BC
 ; Buffer where data is stored during transfer, and also DMA for disk access
 

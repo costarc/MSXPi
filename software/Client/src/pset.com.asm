@@ -39,11 +39,15 @@
 ;
         org     $0100
         
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 
+        
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
@@ -51,14 +55,10 @@ MAINPROG:
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf
-        call   PRINT
-        ld      hl,buf
-        ld      de,BLKSIZE
-        add hl,de
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROG
-        ret
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT            ; if received data correctly, display in screen
+        jr      nc,MAINPROG                 ; Flag C is set if detected zero in the data
+        ret                                             ; C flag set, end of text to print
         
 PRINTPIERR:
         LD      HL,PICOMMERR
