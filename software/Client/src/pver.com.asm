@@ -45,26 +45,23 @@
         IN      A,(CONTROL_PORT2)
         CALL    DESCHWVER
 
-; Print msxpi-server version
+; Sending a command to RPi
         ld      de,command  
-        call    SENDCOMMAND
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
         jr      c, PRINTPIERR 
-        call    SENDPARMS
-        jr      c, PRINTPIERR 
+
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
-        ld      bc,BLKSIZE
+        ld      bc,MSGSIZE
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf
-        call   PRINT
-        ld      hl,buf
-        ld      de,BLKSIZE
-        add hl,de
-        ld      a,(hl)
-        or      a
-        jr      nz,MAINPROG
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT
+        jr      nc,MAINPROG
         ret
         
 PRINTPIERR:
@@ -128,8 +125,6 @@ ROMCER: DB      "MSXPi ROM version:"
 
 PVERHWNFSTR:
         DB      "MSXPi Interface not found",0
-PICOMMERR:
-        DB      "Communication Error",13,10,0
 
 command: db "pver    ",0
 PICOMMERR:  DB      "Communication Error",13,10,0

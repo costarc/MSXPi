@@ -678,28 +678,33 @@ def pset():
     rc = RC_SUCCESS
     rc,data = recvdata(BLKSIZE)
     cmd = data.decode().split("\x00")[0]
-    print(cmd)
-    
-    if (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
+
+    if  (cmd.lower() == "/h" or cmd.lower() == "/help"):
+        rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname", BLKSIZE)
+        return rc
+    elif (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
         s = str(psetvar)
         buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
         rc = sendmultiblock(buf, BLKSIZE)
         return rc
         
-    elif (cmd[:1] == "s" or cmd[:1] == "S"):
+    else: # if (cmd[:1] == "s" or cmd[:1] == "S"):
         cmd=cmd.split(" ")
+        print(cmd)
         for index in range(0,len(psetvar)):
-            print(index)
-            if (psetvar[index][0] == str(cmd[1])):
-                psetvar[index][1] = str(cmd[2])
+            if (psetvar[index][0] == str(cmd[0])):
+                if len(cmd) == 1:  #will erase / clean a variable
+                    psetvar[index][0] = 'free'
+                    psetvar[index][1] = 'free'
+                else:
+                    psetvar[index][1] = str(cmd[1])
                 rc = sendmultiblock("Pi:Ok", BLKSIZE)
                 return rc
         
         for index in range(7,len(psetvar)):
-            print(2,index,psetvar[index][0] )
             if (psetvar[index][0] == "free"):
-                psetvar[index][0] = str(cmd[1])
-                psetvar[index][1] = str(cmd[2])
+                psetvar[index][0] = str(cmd[0])
+                psetvar[index][1] = str(cmd[1])
                 rc = sendmultiblock("Pi:Ok", BLKSIZE)
                 return rc
                 
@@ -745,8 +750,9 @@ def pwifi():
 def pver():
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+build
-    sendmultiblock(ver)
-
+    rc = sendmultiblock(ver, MSGSIZE)
+    return rc
+    
 def irc(cmd=''):
     piexchangebyte(RC_WAIT)
 
