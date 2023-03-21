@@ -379,6 +379,8 @@ def ini_fcb(fname,fsize):
     rc = sendmultiblock(buf, MSGSIZE)
     
     print("ini_fcb: Exiting")
+    
+    return rc
 
 def prun(cmd = ''):
 
@@ -591,11 +593,10 @@ def pcopy():
 
         else:
             if inifcb:
-                ini_fcb(fname_msx,filesize)
-            else:
-                if filesize > 32768:
-                    send_rc_msg(RC_FAILED,"Pi:File is too big")
-                    return RC_FAILED
+                rc = ini_fcb(fname_msx,filesize)
+                if rc != RC_SUCCESS:
+                    print("pcopy: ini_fcb failed")
+                    return rc
 
             #print("pcopy: Calling sendmultiblock",buf)
             
