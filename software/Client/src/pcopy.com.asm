@@ -42,36 +42,19 @@ DSKBLOCKSIZE:   EQU 1
 
         org     $0100
         
-        ld      hl,msg_cmd
-        call    PRINT
-
-; Sending a command to RPi
+; Sending Command and Parameters to RPi
         ld      de,command  
-        ld      bc,CMDSIZE
-        call    SENDDATA
-; ------------------------------------
-
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
-        
-        ld      hl,msg_parms
-        call    PRINT
-
-        ; send CLI parameters to MSXPi
-        call    SENDPARMS     ; Its contatn size: BLKSIZE
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
-        
-        ld      hl,msg_recv
-        call    PRINT
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR 
+        call    SENDPARMS
+        jr      c, PRINTPIERR 
         
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
         ld      bc,MSGSIZE
         call    RECVDATA        ; Receive RC and FCB data if successful
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
+        jr      c, PRINTPIERR        
         
         ld      hl,buf
         ld      a,(hl)
@@ -101,23 +84,6 @@ MAINPROG:
         CALL    CLOSEFILE
 
         JP      0
-
-print_msgs:
-        push    bc
-        push    de
-        push    hl
-        push    af
-        ld      hl,msg_error
-        call      c,PRINT
-        pop     af
-        push    af
-        ld      hl,msg_success
-        call    nc,PRINT
-        pop     af
-        pop     hl
-        pop     de
-        pop     bc
-        ret
         
 PRINTPIERR:
         LD      HL,PICOMMERR
@@ -159,11 +125,29 @@ PLOOP:
 ; it will use blocks size SECTORSIZE (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
+        LD          A,'.'
+        CALL    PUTCHAR
+        LD      A,10
+        LD      (buf),a                                     ; counter for cosmetic feature
         LD      BC,(buf + 1)                            ; Read the number of blocks to transfer     
 DSKREADBLK:
+        LD          A,(buf)
+        OR          A
+        JR          Z,DSKREADBLK1
+        DEC     A
+        LD          (buf),a
+        CP          9
+        JR          Z,DSKREADBLK2
         LD          A,'.'
-        CALL    PUTCHAR 
-        PUSH    BC
+        OUT     ($98),A
+        JR          DSKREADBLK2
+DSKREADBLK1:
+        LD          A,'.'
+        CALL    PUTCHAR
+        LD      A,10
+        LD      (buf),A        
+ DSKREADBLK2:
+         PUSH    BC
 ; Buffer where data is stored during transfer, and also DMA for disk access
 
         LD      DE,DMA                              ; Disk drive buffer for temporary data
@@ -171,7 +155,6 @@ DSKREADBLK:
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
         CALL    RECVDATA
         POP     BC
-        ;call    print_msgs          ; print informative message based on flag C
         RET     C
                
         PUSH    BC
@@ -180,12 +163,12 @@ DSKREADBLK:
         LD      HL,SECTORSIZE 
         LD      A,B
         CP      1
-        JR      NC,DSKREADBLK1
+        JR      NC,DSKREADBLK3
         LD      A,C
         CP      1
-        JR      NZ,DSKREADBLK1
+        JR      NZ,DSKREADBLK3
         LD      HL,(buf + 3)            ; get actual block size
-DSKREADBLK1:
+DSKREADBLK3:
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS

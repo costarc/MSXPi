@@ -39,11 +39,9 @@
 ;
         org     $0100
         
-; Sending a command to RPi
+; Sending Command and Parameters to RPi
         ld      de,command  
-        ld      bc,CMDSIZE
-        call    SENDDATA
-; ------------------------------------
+        call    SENDCOMMAND
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 

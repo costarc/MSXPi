@@ -47,9 +47,7 @@
 
 ; Sending a command to RPi
         ld      de,command  
-        ld      bc,CMDSIZE
-        call    SENDDATA
-; ------------------------------------
+        call    SENDCOMMAND
         jr      c, PRINTPIERR 
 
 MAINPROG:

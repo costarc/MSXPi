@@ -179,102 +179,6 @@ def crc16(crc, c):
 
     return crc
 
-def recvdatablock():
-    buffer = bytearray()
-    bytecounter = 0
-    crc = 0
-    rc = RC_SUCCESS
-    
-    msxbyte = piexchangebyte(SENDNEXT)
-    if (msxbyte != SENDNEXT):
-        print("recvdatablock:Out of sync with MSX")
-        rc = RC_OUTOFSYNC
-    else:
-        dsL = piexchangebyte(SENDNEXT)
-        dsM = piexchangebyte(SENDNEXT)
-        datasize = dsL + 256 * dsM
-        
-        #print "recvdatablock:Received blocksize =",datasize
-        while(datasize>bytecounter):
-            msxbyte = piexchangebyte(SENDNEXT)
-            buffer.append(msxbyte)
-            crc ^= msxbyte
-            bytecounter += 1
-
-        msxcrc = piexchangebyte(crc)
-        if (msxcrc != crc):
-            rc = RC_CRCERROR
-
-    #print "recvdatablock:exiting with rc = ",hex(rc)
-    return [rc,buffer]
-
-def senddatablock(buf,blocksize,blocknumber,attempts=GLOBALRETRIES):
-    
-    print("senddatablock: Block size,blocknumber,attempts:",blocksize,blocknumber,attempts)
-    global GLOBALRETRIES
-
-    rc = RC_FAILED
-    
-    bufsize = len(buf)
-    bufpos = blocksize*blocknumber
-
-    if (blocksize <= bufsize - bufpos):
-        thisblocksize = blocksize
-    else:
-        thisblocksize = bufsize - bufpos
-        if thisblocksize < 0:
-            thisblocksize = 0
-
-    msxbyte = piexchangebyte(SENDNEXT)
-
-    if (msxbyte != SENDNEXT):
-        print("senddatablock:Out of sync with MSX, waiting SENDNEXT, received",hex(msxbyte),hex(msxbyte))
-        return RC_OUTOFSYNC
-    else:
-        piexchangebyte(thisblocksize % 256)
-        piexchangebyte(thisblocksize // 256)
-        if thisblocksize == 0:
-            return ENDTRANSFER
-
-    piexchangebyte(attempts)
-
-    while (attempts > 0 and rc != RC_SUCCESS):
-        crc = 0xffff
-        bytecounter = 0
-        while(bytecounter < thisblocksize):
-            pibyte0 = buf[bufpos+bytecounter]
-            #print("senddatablock: ord() checkpoint indata is ",type(pibyte0))
-            if type(pibyte0) is int:
-                pibyte = pibyte0
-            else:
-                pibyte = ord(pibyte0)
-
-            #print("senddatablock: ord() checkpoint outdata is ",type(pibyte0))
-            #print("senddatablock: ord() checkpoint 1:end")
-            piexchangebyte(pibyte)
-            
-            #print("senddatablock: calling crc16")
-            
-            crc = crc16(crc,pibyte)
-            bytecounter += 1
-            
-        msxcrcL = piexchangebyte(crc % 256)
-        if msxcrcL != crc % 256:
-            attempts -= 1
-            rc = RC_CRCERROR
-            print("RC_CRCERROR. Remaining attempts:",attempts)
-        else:
-            msxcrcH = piexchangebyte(crc // 256)
-            if msxcrcH != crc // 256:
-                attempts -= 1
-                rc = RC_CRCERROR
-                print("RC_CRCERROR. Remaining attempts:",attempts)
-
-            else:
-                rc = RC_SUCCESS
-    
-    return rc 
-
 # create a subclass and override the handler methods
 class MyHTMLParser(HTMLParser):
     def __init__(self):
@@ -343,7 +247,7 @@ def dos83format(fname):
 
 def ini_fcb(fname,fsize):
 
-    print("ini_fcb: starting")
+    #print("ini_fcb: starting")
     fpath = fname.split(':')
     if len(fpath) == 1:
         msxfile = str(fpath[0])
@@ -364,7 +268,7 @@ def ini_fcb(fname,fsize):
     if numblocks == 0:
         numblocks = 1
     
-    print("Drive, Filename, N# blocks:",msxdrive,msxfcbfname,numblocks)
+    #print("Drive, Filename, N# blocks:",msxdrive,msxfcbfname,numblocks)
 
     # send FCB structure to MSX
     buf = bytearray()
@@ -378,7 +282,7 @@ def ini_fcb(fname,fsize):
     
     rc = sendmultiblock(buf, MSGSIZE)
     
-    print("ini_fcb: Exiting")
+    #print("ini_fcb: Exiting")
     
     return rc
 
@@ -413,7 +317,7 @@ def prun(cmd = ''):
             rc = RC_FAILED
             sendmultiblock("Pi:"+str(e)+'\n',BLKSIZE)
 
-    print(hex(rc))
+    #print(hex(rc))
     return rc
 
 def pdir():
@@ -473,7 +377,7 @@ def pcd():
     basepath = psetvar[0][1]
     newpath = basepath
     
-    print("pcd: system path:",basepath)
+    #print("pcd: system path:",basepath)
     rc,data = recvdata()
     path = data.decode().split("\x00")[0]
 
@@ -530,9 +434,19 @@ def pcopy():
     rc,data = recvdata(BLKSIZE)
     path = data.decode().split("\x00")[0]
     
-    print("pcopy: Starting with params ",path)
+    #print("pcopy: Starting with params ",path)
     
-    if (path.startswith('http') or \
+    if (path.lower().startswith('/h') or len(path) == 0):
+        buf = 'Syntax:\n'
+        buf = buf + 'pcopy remotefile <localfile>\n'
+        buf = buf +'Valid devices:\n'
+        buf = buf +'/, path, http, ftp, nfs, smb\n'
+        buf = buf + 'Path relative to RPi path (set with pcd)'    
+        #print(len(buf),buf)
+        rc = send_rc_msg(RC_FAILED,buf)
+        return rc
+        
+    elif (path.startswith('http') or \
         path.startswith('ftp') or \
         path.startswith('nfs') or \
         path.startswith('smb') or \
@@ -544,8 +458,6 @@ def pcopy():
         fileinfo = basepath+'/'+path
 
     fileinfo = fileinfo.split()
-
-    print("pcopy: parsed parameters: ",fileinfo)
     
     if len(fileinfo) == 1:
         fname_rpi = str(fileinfo[0])
@@ -561,7 +473,7 @@ def pcopy():
     urlcheck = getpath(basepath, path)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        print("pcopy: path is local")
+        #print("pcopy: path is local")
         
         try:
             with open(fname_rpi, mode='rb') as f:
@@ -575,10 +487,10 @@ def pcopy():
             return RC_FAILED
 
     else:
-        print("pcopy: path is remote")
+        #print("pcopy: path is remote")
         try:
             urlhandler = urlopen(fname_rpi)
-            print("pcopy:urlopen rc:",urlhandler.getcode())
+            #print("pcopy:urlopen rc:",urlhandler.getcode())
             buf = urlhandler.read()
             filesize = len(buf)
             
@@ -587,7 +499,7 @@ def pcopy():
             return RC_FAILED
             
     if rc == RC_SUCCESS:
-        print("pcopy: File open success, size is ",filesize)
+        #print("pcopy: File open success, size is ",filesize)
         if filesize == 0:
             send_rc_msg(RC_FAILED,"Pi:File size is zero bytes")
             return RC_FAILED
@@ -598,12 +510,9 @@ def pcopy():
                 if rc != RC_SUCCESS:
                     print("pcopy: ini_fcb failed")
                     return rc
-
-            #print("pcopy: Calling sendmultiblock",buf)
-            
             rc = sendmultiblock(buf,SECTORSIZE)
             
-    print("pcopy: exit with rc",hex(rc))
+    #print(hex(rc))
     return rc
 
 def ploadr(path=''):
@@ -657,7 +566,7 @@ def pplay():
     
     rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  psetvar[0][1]+ " "+cmd)
     
-    print (hex(rc))
+    #print (hex(rc))
     return rc
     
 def pvol():
@@ -673,8 +582,6 @@ def pvol():
     
 def pset():
     global psetvar
-    
-    print("pset")
     
     rc = RC_SUCCESS
     rc,data = recvdata(BLKSIZE)
@@ -953,7 +860,7 @@ def dskiosct():
         
 def recvdata( bytecounter = BLKSIZE):
 
-    print("recvdata")
+    #print("recvdata")
     
     retries = GLOBALRETRIES
     while retries > 0:
@@ -978,18 +885,18 @@ def recvdata( bytecounter = BLKSIZE):
         
         if (thissum == msxsum):
             rc = RC_SUCCESS
-            print("recvdata: checksum is a match")
+            #print("recvdata: checksum is a match")
             break
         else:
             rc = RC_CRCERROR
             print("recvdata: checksum error")
 
-    print (hex(rc))
+    #print (hex(rc))
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
     
-    print("senddata")
+    #print("senddata")
    
     retries = GLOBALRETRIES
     while retries > 0:
@@ -1021,13 +928,13 @@ def senddata(data, blocksize = BLKSIZE):
             
         if (thissum == msxsum):
             rc = RC_SUCCESS
-            print("senddata: checksum is a match")
+            #print("senddata: checksum is a match")
             break
         else:
             rc = RC_CRCERROR
             print("senddata: checksum error")
 
-    print (hex(rc))
+    #print (hex(rc))
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE):
@@ -1081,8 +988,42 @@ def template():
     rc = sendmultiblock(buf, BLKSIZE)
 
 def recvcmd():
-    print("recvcmd")
-    rc,data = recvdata(CMDSIZE)
+    #print("recvcmd")
+      
+    retries = GLOBALRETRIES
+    while retries > 0:
+        retries -= 1
+        
+        # Syncronize with MSX
+        while piexchangebyte() != 0x9F:
+            pass
+        
+        bytecounter = CMDSIZE
+        data = bytearray()
+        chksum = 0
+        while(bytecounter > 0 ):
+            msxbyte = piexchangebyte()
+            data.append(msxbyte)
+            chksum += msxbyte
+            bytecounter -= 1
+
+        # Receive the CRC
+        msxsum = piexchangebyte()
+        
+        # Send local CRC - only 8 right bits
+        thissum_r = (chksum % 256)              # right 8 bits
+        thissum_l = (chksum >> 8)                 # left 8 bits
+        thissum = ((thissum_l + thissum_r) % 256)
+        piexchangebyte(thissum)
+        
+        if (thissum == msxsum):
+            rc = RC_SUCCESS
+            #print("recvdata: checksum is a match")
+            break
+        else:
+            rc = RC_CRCERROR
+            print("recvdata: checksum error")
+
     return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================
@@ -1129,30 +1070,27 @@ print("Starting MSXPi Server Version ",version,"Build",build)
 
 dskioini("1")
 
-#try:
-if 1==1:
+try:
     while True:
-        #try:
-        if 1==1:
-            print("st_recvcmd: waiting command")
+        try:
+            #print("st_recvcmd: waiting command")
             rc,fullcmd = recvcmd()
+            print(fullcmd)
             
-            print("Received:",fullcmd,len(fullcmd))
-
             if (rc == RC_SUCCESS and len(fullcmd) > 0):
                 err = 0
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
-                print("cmd: calling command ",cmd)
+                #print("cmd: calling command ",cmd)
              
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd.strip()]()
-        #except Exception as e:
-        #errcount += 1
-        #print("Error in cmd received:"+str(e))
+        except Exception as e:
+            errcount += 1
+            print("Error in cmd received:"+str(e))
 
-#except KeyboardInterrupt:
-#    GPIO.cleanup() # cleanup all GPIO
-#    print("Terminating msxpi-server")
+except KeyboardInterrupt:
+    GPIO.cleanup() # cleanup all GPIO
+    print("Terminating msxpi-server")

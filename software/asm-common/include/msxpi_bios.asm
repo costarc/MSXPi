@@ -697,8 +697,10 @@ SENDPARMS2:
 ; DE = Command name, terminated in zero
 ; Size is fixed: CMDSIZE
 SENDCOMMAND:
-        ld      bc,CMDSIZE               ; command lenght set to fixed size
-        call      SENDDATA
+        ld          a,$9F                           ; %10011111
+        call        PIWRITEBYTE         ; sync byte - indicate a command is about to start
+        ld          bc,CMDSIZE               ; command lenght set to fixed size
+        call        SENDDATA
         ret
 
 SETBUF:

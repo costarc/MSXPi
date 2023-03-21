@@ -75,10 +75,20 @@ MAINPROG:
         ret                                             ; C flag set, end of text to print
         
 print_msgs:
+        push    bc
+        push    de
+        push    hl
+        push    af
         ld      hl,msg_error
-        jp      c,PRINT
+        call      c,PRINT
+        pop     af
+        push    af
         ld      hl,msg_success
-        call    PRINT
+        call    nc,PRINT
+        pop     af
+        pop     hl
+        pop     de
+        pop     bc
         ret
 
 ; Command maximu lenght is 8 characters. 

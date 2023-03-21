@@ -39,11 +39,13 @@
 ;
         org     $0100
         
+; Sending Command and Parameters to RPi
         ld      de,command  
         call    SENDCOMMAND
         jr      c, PRINTPIERR 
         call    SENDPARMS
         jr      c, PRINTPIERR 
+        
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
