@@ -16,13 +16,16 @@ import socket
 import errno
 import select
 import base64
+import math
 from random import randint
 
 version = "1.1"
 build = "20230305.003"
+
+CMDSIZE = 9
+MSGSIZE = 64
 BLKSIZE = 256
 SECTORSIZE = 512
-CMDSIZE = 9
 
 # Pin Definitons
 csPin   = 21
@@ -338,7 +341,7 @@ def dos83format(fname):
     
     return name+ext
 
-def ini_fcb(fname):
+def ini_fcb(fname,fsize):
 
     print("ini_fcb: starting")
     fpath = fname.split(':')
@@ -353,12 +356,27 @@ def ini_fcb(fname):
     #convert filename to 8.3 format using all 11 positions required for the FCB
     msxfcbfname = dos83format(msxfile)
 
-    print("Drive, Filename:",msxdrive,msxfcbfname)
+    lastSectorSize = fsize % SECTORSIZE
+    if lastSectorSize == 0:
+        lastSectorSize = SECTORSIZE
+        
+    numblocks = math.ceil(fsize / SECTORSIZE)
+    if numblocks == 0:
+        numblocks = 1
+    
+    print("Drive, Filename, N# blocks:",msxdrive,msxfcbfname,numblocks)
 
     # send FCB structure to MSX
-    piexchangebyte(msxdrive)
-    for i in range(0,11):
-        piexchangebyte(ord(msxfcbfname[i]))
+    buf = bytearray()
+    buf.extend(RC_SUCCESS.to_bytes(1,'little'))
+    buf.extend((numblocks % 256).to_bytes(1,'little'))
+    buf.extend((numblocks // 256).to_bytes(1,'little'))
+    buf.extend((lastSectorSize % 256).to_bytes(1,'little'))
+    buf.extend((lastSectorSize // 256).to_bytes(1,'little'))
+    buf.extend(msxdrive.to_bytes(1,'little'))
+    buf.extend(msxfcbfname.encode())
+    
+    rc = sendmultiblock(buf, MSGSIZE)
     
     print("ini_fcb: Exiting")
 
@@ -505,7 +523,8 @@ def pcopy():
     global psetvar,GLOBALRETRIES
     basepath = psetvar[0][1]
     
-    rc,data = recvdata()
+    # Receive parameters -
+    rc,data = recvdata(BLKSIZE)
     path = data.decode().split("\x00")[0]
     
     print("pcopy: Starting with params ",path)
@@ -533,7 +552,7 @@ def pcopy():
         fname_rpi = str(fileinfo[0])
         fname_msx = str(fileinfo[1])
     else:
-        sendmultiblock("Pi:Command line parametrs invalid.")
+        send_rc_msg(RC_FAILED,"Pi:Command line parametrs invalid.")
         return RC_FAILED
 
     urlcheck = getpath(basepath, path)
@@ -548,10 +567,9 @@ def pcopy():
             filesize = len(buf)
  
         except Exception as e:
-            rc = 1
-            buf = formatrsp(rc,0,0,str(e))
-            rc = sendmultiblock(buf)
-            return rc
+            print("pcopy: exception 1",str(e))
+            send_rc_msg(RC_FAILED,str(e))
+            return RC_FAILED
 
     else:
         print("pcopy: path is remote")
@@ -562,29 +580,28 @@ def pcopy():
             filesize = len(buf)
             
         except Exception as e:
-            rc = 1
-            buf = formatrsp(rc,0,0,str(e))
-            rc = sendmultiblock(buf)
+            send_rc_msg(RC_FAILED,str(e))
+            return RC_FAILED
             
     if rc == RC_SUCCESS:
         print("pcopy: File open success, size is ",filesize)
         if filesize == 0:
-            rc = 1
-            buf = formatrsp(rc,0,0,"No valid data found")
-            rc = sendmultiblock(buf)
+            send_rc_msg(RC_FAILED,"Pi:File size is zero bytes")
+            return RC_FAILED
+
         else:
             if inifcb:
-                msxbyte = piexchangebyte(RC_SUCCESS)
-                ini_fcb(fname_msx)
+                ini_fcb(fname_msx,filesize)
             else:
                 if filesize > 32768:
-                    return RC_INVALIDDATASIZE
+                    send_rc_msg(RC_FAILED,"Pi:File is too big")
+                    return RC_FAILED
 
-                msxbyte = piexchangebyte(RC_SUCCESS)
-            blocknumber = 0   
-            print("pcopy: Calling senddata")
-            rc = sendmultiblock(buf)
-    print("pcopy: exit with rc",rc)
+            #print("pcopy: Calling sendmultiblock",buf)
+            
+            rc = sendmultiblock(buf,SECTORSIZE)
+            
+    print("pcopy: exit with rc",hex(rc))
     return rc
 
 def ploadr(path=''):
@@ -972,6 +989,7 @@ def senddata(data, blocksize = BLKSIZE):
     byteidx = 0
     chksum = 0
     while(byteidx < blocksize):
+        #print(byteidx)
         pibyte0 = data[byteidx]
         if type(pibyte0) is int:
             pibyte = pibyte0
@@ -1012,17 +1030,27 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
         cnt += 1   
         if cnt == blocksize and blocksize < len(buf):
             #print(len(data),data)
+            print("sendmultiblock:",idx,cnt)
             rc = senddata(data, blocksize)
+            if rc != RC_SUCCESS:
+                return RC_FAILED
+                
             data = bytearray(blocksize)
             idx += blocksize
             cnt = 0
-    rc = senddata(data,blocksize)          
+    #print(len(data),data)
+    print("sendmultiblock:",idx,cnt)
+    if cnt > 0:
+        rc = senddata(data,blocksize)          
     return rc
    
 def send_rc_msg(rc,msg):
+    #print("send_rc_msg:",rc,msg)
+    
     buf = bytearray()
     buf.extend(rc.to_bytes(1,'little'))
     buf.extend(msg.encode())
+    
     rc = sendmultiblock(buf, MSGSIZE)
     return rc
 

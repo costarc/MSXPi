@@ -33,55 +33,52 @@
 ; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
 ;
-; This is a generic template for MSX-DOS command to interact with MSXPi
-; This command must have a equivalent function in the msxpi-server.py program
-; The function name must be the same defined in the "command" string in this program
-;
 
 DSKBLOCKSIZE:   EQU 1
 
-        org     $0100
-        
-        ld      hl,msg_cmd
-        call    PRINT
+        ORG     $0100
+
+MAINPROGRAM:
+
+
+; Initialize MSX buffer for FCB - No connection to RPi is done at this time
+        CALL    INIFCB
 
 ; Sending a command to RPi
-        ld      de,command  
-        ld      bc,CMDSIZE
-        call    SENDDATA
+        LD      DE,COMMAND  
+        LD      BC,CMDSIZE
+        CALL    SENDDATA
+        call        print_msgs
 ; ------------------------------------
 
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
-        
-        ld      hl,msg_parms
-        call    PRINT
+        JR      C,PRINTPIERR
 
         ; send CLI parameters to MSXPi
-        call    SENDPARMS     ; Its contatn size: BLKSIZE
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
+        call    SENDPARMS 
+        call    print_msgs
+        JR      C,PRINTPIERR
         
-        ld      hl,msg_recv
-        call    PRINT
+        ; Now receive a control block (MSGSIZE) containing :
+        ; Error Code (RC, 1 byte)
+        ; Number of blocks to transfer (1 byte, only if RC != RC_FAILED)
+        ; FCB data (40 bytes)
+        ;
+        ; If byte 1 contain RC_FAILED, then the remaining of the buffer contain the Error Message
+        ;
+        CALL    CLEARBUF
+        LD          DE,buf
+        LD          BC,MSGSIZE
+        CALL      RECVDATA
+        call        print_msgs
+        JR          C,PRINTPIERR
         
-MAINPROG:
-        call    CLEARBUF
-        ld      de,buf
-        ld      bc,MSGSIZE
-        call    RECVDATA        ; Receive RC and FCB data if successful
-        call    print_msgs          ; print informative message based on flag C
-        ret     c
+        LD          HL,buf
+        LD          A,(HL)
+        INC         HL
+        CP          RC_FAILED
+        LD          BC,MSGSIZE
+        JP          Z,PRINTPISTDOUT                 ; RPi detected an error, and stopped the operation.
         
-        ld      hl,buf
-        ld      a,(hl)
-        inc     hl
-        cp      RC_FAILED   
-        ld      bc,MSGSIZE
-        jp      z,PRINTPISTDOUT            ; if received data correctly, display in screen
-        INC         HL
-        INC         HL
-        INC         HL
         INC         HL              ; Point to the start of the data to fill the FCB
 
 ; UpdateFCB with the data received from RPi
@@ -103,21 +100,25 @@ MAINPROG:
         JP      0
 
 print_msgs:
-        push    bc
-        push    de
-        push    hl
         push    af
         ld      hl,msg_error
-        call      c,PRINT
-        pop     af
-        push    af
+        jp      c,PRINT
         ld      hl,msg_success
-        call    nc,PRINT
+        call    PRINT
         pop     af
-        pop     hl
-        pop     de
-        pop     bc
         ret
+        
+EXITSTDOUT:
+        CALL    PRINTNLINE
+        CALL    PRINTPISTDOUT
+        jp      0
+
+FILEERR:
+        LD      A,RC_FAILED
+        CALL    PIEXCHANGEBYTE
+        LD      HL,PRINTPIERR
+        CALL    PRINT
+        JP      0
         
 PRINTPIERR:
         LD      HL,PICOMMERR
@@ -159,7 +160,8 @@ PLOOP:
 ; it will use blocks size SECTORSIZE (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
-        LD      BC,(buf + 1)                            ; Read the number of blocks to transfer
+        LD      A,(buf + 1)                            ; Read the number of blocks to transfer
+        LD      B,A
 DSKREADBLK:
         PUSH    BC
         LD          A,'.'
@@ -172,30 +174,16 @@ DSKREADBLK:
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
         CALL    RECVDATA
         POP     BC
-        call    print_msgs          ; print informative message based on flag C
         RET     C
-               
+        
         PUSH    BC
         ; Set HL with the number of bytes received
-        ; If its last sector, get the actual size that was sent by RPi in the ini_fcb 
-        LD      HL,SECTORSIZE 
-        LD      A,B
-        CP      1
-        JR      NC,DSKREADBLK1
-        LD      A,C
-        CP      1
-        JR      NZ,DSKREADBLK1
-        LD      HL,(buf + 3)            ; get actual block size
-DSKREADBLK1:
+        LD      HL,SECTORSIZE     
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS
         POP     BC
-        DEC     BC
-        LD        A,B
-        OR      C
-        JR      NZ, DSKREADBLK       ; data read less than buffer - finished transfer
-        OR      A
+        DJNZ    DSKREADBLK       ; data read less than buffer - finished transfer
         RET
 
 OPENFILEW:
@@ -243,7 +231,7 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-command:    DB      "pcopy   ",0
+COMMAND:    DB      "PCOPY   ",0
 msg_success: db "Checksum match",13,10,0
 msg_error: db "Checksum did not match",13,10,0
 msg_cmd: db "Sending command...",0
@@ -263,13 +251,16 @@ SAVEOPTION: db  0
 REGINDEX:   dw  0
 FILEFCB:    ds     40
 
-
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
 
+msg_success: db "Checksum match",13,10,0
+msg_error: db "Checksum did not match",13,10,0
+
 buf:     equ     $
-           DB       0,0,0,0,0,0
+           DW      0000
 DMA:  ds      SECTORSIZE
            db      0
+
 

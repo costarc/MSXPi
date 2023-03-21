@@ -37,7 +37,7 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
-BDOS:           EQU     $A2
+
         org     $0100
         
 ; Sending a command to RPi
