@@ -1,3 +1,4 @@
+BDOS:   EQU     5
 PUTCHAR:
         push    bc
         push    de
