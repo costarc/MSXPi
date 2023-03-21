@@ -160,11 +160,12 @@ PLOOP:
 ; Each block is written to disk after download
 GETFILE:
         LD      BC,(buf + 1)                            ; Read the number of blocks to transfer
-DSKREADBLK:
-        PUSH    BC
         LD          A,'.'
-        CALL    PUTCHAR
-
+        CALL    PUTCHAR        
+DSKREADBLK:
+        LD          A,'.'
+        OUT     ($98),A
+        PUSH    BC
 ; Buffer where data is stored during transfer, and also DMA for disk access
 
         LD      DE,DMA                              ; Disk drive buffer for temporary data
@@ -172,7 +173,7 @@ DSKREADBLK:
 ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
         CALL    RECVDATA
         POP     BC
-        call    print_msgs          ; print informative message based on flag C
+        ;call    print_msgs          ; print informative message based on flag C
         RET     C
                
         PUSH    BC

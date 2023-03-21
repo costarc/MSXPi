@@ -23,7 +23,7 @@ version = "1.1"
 build = "20230305.003"
 
 CMDSIZE = 9
-MSGSIZE = 64
+MSGSIZE = 128
 BLKSIZE = 256
 SECTORSIZE = 512
 
@@ -37,7 +37,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       = 10
+GLOBALRETRIES       = 5
 SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
@@ -954,72 +954,84 @@ def dskiosct():
 def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
-    data = bytearray()
-
-    chksum = 0
-    while(bytecounter > 0 ):
-        msxbyte = piexchangebyte()
-        data.append(msxbyte)
-        chksum += msxbyte
-        bytecounter -= 1
-
-    # Receive the CRC
-    msxsum = piexchangebyte()
     
-    # Send local CRC - only 8 right bits
-    thissum_r = (chksum % 256)              # right 8 bits
-    thissum_l = (chksum >> 8)                 # left 8 bits
-    thissum = ((thissum_l + thissum_r) % 256)
-    piexchangebyte(thissum)
-    
-    if (thissum == msxsum):
-        rc = RC_SUCCESS
-        print("recvdata: checksum is a match")
-    else:
-        rc = RC_CRCERROR
-        print("recvdata: checksum error")
+    retries = GLOBALRETRIES
+    while retries > 0:
+        retries -= 1
+        
+        data = bytearray()
+        chksum = 0
+        while(bytecounter > 0 ):
+            msxbyte = piexchangebyte()
+            data.append(msxbyte)
+            chksum += msxbyte
+            bytecounter -= 1
 
+        # Receive the CRC
+        msxsum = piexchangebyte()
+        
+        # Send local CRC - only 8 right bits
+        thissum_r = (chksum % 256)              # right 8 bits
+        thissum_l = (chksum >> 8)                 # left 8 bits
+        thissum = ((thissum_l + thissum_r) % 256)
+        piexchangebyte(thissum)
+        
+        if (thissum == msxsum):
+            rc = RC_SUCCESS
+            print("recvdata: checksum is a match")
+            break
+        else:
+            rc = RC_CRCERROR
+            print("recvdata: checksum error")
 
-    #print "recvdata:exiting with rc = ",hex(rc)
+    print (hex(rc))
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
    
-    byteidx = 0
-    chksum = 0
-    while(byteidx < blocksize):
-        #print(byteidx)
-        pibyte0 = data[byteidx]
-        if type(pibyte0) is int:
-            pibyte = pibyte0
-        else:
-            pibyte = ord(pibyte0)
-
-        chksum += pibyte
-        piexchangebyte(pibyte)
-        byteidx += 1
-    
-    # Send local CRC - only 8 right bits
-    thissum_r = (chksum % 256)              # right 8 bits
-    thissum_l = (chksum >> 8)                 # left 8 bits
-    thissum = ((thissum_l + thissum_r) % 256)
-    piexchangebyte(thissum)
-    
-     # Receive the CRC
-    msxsum = piexchangebyte()
+    retries = GLOBALRETRIES
+    while retries > 0:
+        retries -= 1
         
-    if (thissum == msxsum):
-        rc = RC_SUCCESS
-        print("senddata: checksum is a match")
-    else:
-        rc = RC_CRCERROR
-        print("senddata: checksum error")
+        byteidx = 0
+        chksum = 0
+    
+        while(byteidx < blocksize):
+            #print(byteidx)
+            pibyte0 = data[byteidx]
+            if type(pibyte0) is int:
+                pibyte = pibyte0
+            else:
+                pibyte = ord(pibyte0)
 
+            chksum += pibyte
+            piexchangebyte(pibyte)
+            byteidx += 1
+        
+        # Send local CRC - only 8 right bits
+        thissum_r = (chksum % 256)              # right 8 bits
+        thissum_l = (chksum >> 8)                 # left 8 bits
+        thissum = ((thissum_l + thissum_r) % 256)
+        piexchangebyte(thissum)
+    
+        # Receive the CRC
+        msxsum = piexchangebyte()
+            
+        if (thissum == msxsum):
+            rc = RC_SUCCESS
+            print("senddata: checksum is a match")
+            break
+        else:
+            rc = RC_CRCERROR
+            print("senddata: checksum error")
+
+    print (hex(rc))
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE):
+    #print("sendmultiblock: msg len = ",len(buf))
     idx = 0
     cnt = 0
     data = bytearray(blocksize)
@@ -1031,7 +1043,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
         cnt += 1   
         if cnt == blocksize and blocksize < len(buf):
             #print(len(data),data)
-            print("sendmultiblock:",idx,cnt)
+            #print("sendmultiblock:",idx,cnt)
             rc = senddata(data, blocksize)
             if rc != RC_SUCCESS:
                 return RC_FAILED
@@ -1040,7 +1052,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             idx += blocksize
             cnt = 0
     #print(len(data),data)
-    print("sendmultiblock:",idx,cnt)
+    #print("sendmultiblock:",idx,cnt)
     if cnt > 0:
         rc = senddata(data,blocksize)          
     return rc

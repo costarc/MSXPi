@@ -847,7 +847,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230321.089"
+BuildId: DB "20230321.098"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -914,6 +914,7 @@ DOS_FMT:    DB  "dskiofmt",0
 
 INCLUDE include.asm
 INCLUDE debug.asm
+INCLUDE putchar-msxdos.asm
 INCLUDE msxpi_bios.asm
 INCLUDE basic_stdio.asm
 

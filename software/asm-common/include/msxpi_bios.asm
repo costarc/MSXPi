@@ -184,6 +184,7 @@ SENDPICMD:
 ; Calculates teh checksum locally as data is coming, and send it back.
 ; Compares the local checksum with received checksum, and
 ; if they differ return with C flag set.
+; Will retry transmisison a number of times: GLOBALRETRIES
 ;
 ; Input:
 ;   de = memory address for the data
@@ -194,6 +195,10 @@ SENDPICMD:
 RECVDATA:
 RECVDATABLOCK:
         di
+        ld      a,GLOBALRETRIES
+RECVRETRY:
+        dec     a
+        push    af                      ; save number of retries left
         ld      hl,0                       ; will store checksum in HL
 RECV0:
         push    bc
@@ -214,16 +219,25 @@ RECV0:
         add     a,h
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
-        ei
         ld      a,c                         ; get MSXPi chksum
+        pop     bc                      ; number of retries in B
         cp      l                           ; compare checksum
         ret     z                           ; return if match, C is 0
+        ld      a,b
+        or      a
+        jr       nz,RECVRETRY     ;go for another retry 
+        ei
         scf                                 ; differ, set flag for Error
         ret
+
 
 SENDDATA:
 SENDDATABLOCK:
         di
+        ld      a,GLOBALRETRIES
+SENDRETRY:
+        dec     a
+        push    af                      ; save number of retries left
         ld      hl,0                       ; will store checksum in HL
 SENDD0:
         push    bc
@@ -243,12 +257,16 @@ SENDD0:
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
         call    PIREADBYTE      ; read checksum byte from msxpi server
-        ei
+        pop     bc                      ; Number of retreis left in B
         cp      l                           ; compare checksum
         ret     z                           ; return if match, C is 0
+        ld      a,b                         ; Check retries left
+        or      a
+        jr       nz,SENDRETRY     ;go for another retry 
+        ei
         scf                                 ; differ, set flag for Error
         ret
-        
+             
 ; -----------------------------------------------------------------------------------------------
 ; This is the original MSXPi routine as per v1.0.1
 ; 21/03/2017
