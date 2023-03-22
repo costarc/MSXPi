@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230322.001"
+build = "20230322.002"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -204,19 +204,25 @@ def getpath(basepath, path):
     if  path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
-    elif (path.startswith('http') or \
-          path.startswith('ftp') or \
-          path.startswith('nfs') or \
-          path.startswith('smb')):
+    elif (path.startswith('m:') or \
+        path.startswith('ma1:') or \
+        path.startswith('ma2:') or \
+        path.startswith('http') or \
+        path.startswith('ftp') or \
+        path.startswith('nfs') or \
+        path.startswith('smb')):
         urltype = 2 # this is an absolute network path
         newpath = path
     elif basepath.startswith('/'):
         urltype = 1 # this is an relative local path
         newpath = basepath + "/" + path
-    elif (basepath.startswith('http') or \
-          basepath.startswith('ftp') or \
-          basepath.startswith('nfs') or \
-          basepath.startswith('smb')):
+    elif (basepath.startswith('m:') or \
+        basepath.startswith('ma1:') or \
+        basepath.startswith('ma2:') or \
+        basepath.startswith('http') or \
+        basepath.startswith('ftp') or \
+        basepath.startswith('nfs') or \
+        basepath.startswith('smb')):
         urltype = 3 # this is an relative network path
         newpath = basepath + "/" + path
        
@@ -396,7 +402,21 @@ def pcd():
                 urlcheck = getpath(basepath, path)
                 newpath = urlcheck[1]
 
-                if (newpath[:4] == "http" or \
+                print(newpath)
+                
+                if (newpath[:2] == "m:"):
+                    rc = RC_SUCCESS
+                    psetvar[0][1] = 'ftp://192.168.1.100/'
+                    sendmultiblock(str(psetvar[0][1] +'\n'))
+                elif (newpath[:4] == "ma1:"):
+                    rc = RC_SUCCESS
+                    psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
+                    sendmultiblock(str(psetvar[0][1] +'\n'))
+                elif  (newpath[:4] == "ma2:"):
+                    rc = RC_SUCCESS
+                    psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
+                    sendmultiblock(str(psetvar[0][1] +'\n'))
+                elif (newpath[:4] == "http" or \
                     newpath[:3] == "ftp" or \
                     newpath[:3] == "nfs" or \
                     newpath[:3] == "smb"):
@@ -434,7 +454,7 @@ def pcopy():
     rc,data = recvdata(BLKSIZE)
     path = data.decode().split("\x00")[0]
     
-    #print("pcopy: Starting with params ",path)
+    print("pcopy: Starting with params ",path)
 
     path = path.strip().split()
                    
@@ -448,50 +468,61 @@ def pcopy():
         rc = send_rc_msg(RC_FAILED,buf)
         return rc
 
-    elif (path[0].lower() == '/z'):
-        if len(path) < 2:
-            rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
-            return rc
+    if (path[0].lower() == '/z'):
         expand = True
-        fname1 = path[1]
-        if len(path) == 3:
-            fname2 = path[2]
-        else:
-            fname2 = ''
+        path = path[1:]
     else:
         expand = False
+    
+    print(len(path))
+    if len(path) < 1:
+            rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
+            return rc
+    elif len(path) == 1:
         fname1 = path[0]
-        if len(path) == 2:
-            fname2 = path[1]
-        else:
-            fname2 = ''
-                      
-    if (fname1.startswith('ma1:')):
+        fname_msx = ''
+    elif len(path) == 2:
+        fname1 = path[0]
+        fname_msx = path[1]
+    
+    if (fname1.startswith('m:')):
+        basepath = 'ftp://192.168.1.100/'
+        fileinfo = basepath + fname1.split(':')[1]
+        fname1 = fname1.split(':')[1]
+        if len(fname_msx) == 0:
+            fname_msx = fname1
+    elif (fname1.startswith('ma1:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
         fileinfo = basepath + fname1.split(':')[1]
         fname1 = fname1.split(':')[1]
+        if len(fname_msx) == 0:
+            fname_msx = fname1
     elif  (fname1.startswith('ma2:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
         fileinfo = basepath + fname1.split(':')[1]    
         fname1 = fname1.split(':')[1]
+        if len(fname_msx) == 0:
+            fname_msx = fname1
     elif (fname1.startswith('http') or \
         fname1.startswith('ftp') or \
         fname1.startswith('nfs') or \
         fname1.startswith('smb') or \
         fname1.startswith('/')):
         fileinfo = fname1
+        if len(fname_msx) == 0:
+            fname_msx0 = fname1.split('/')
+            fname_msx = fname_msx0[len(fname_msx0)-1]
     elif fname1 == '':
         fileinfo = basepath
     else: 
         fileinfo = basepath+'/'+fname1
                             
     fname_rpi = fileinfo
-    fname_msx = ''
-    
+        
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        #print("pcopy: path is local:",fname_rpi)
+        print("pcopy: path is local:",fname_rpi,fname_msx)
         
         try:
             with open(fname_rpi, mode='rb') as f:
@@ -505,14 +536,11 @@ def pcopy():
             return RC_FAILED
 
     else:
-        print("pcopy: path is remote:",fname_rpi)
+        print("pcopy: path is remote:",fname_rpi,fname_msx)
         try:
             urlhandler = urlopen(fname_rpi)
-            #print("pcopy:urlopen rc:",urlhandler.getcode())
             buf = urlhandler.read()
             filesize = len(buf)
-            if fname_msx == '':
-                fname_msx = fname1
                     
             # if /z passed, will uncompress the file
             if expand:
@@ -529,7 +557,7 @@ def pcopy():
                 if rc == 0:
                     #print("entered rc == 0")
                     fname_rpi = os.listdir('/tmp/msxpi')[0]
-                    if fname2 == '':
+                    if fname_msx == '':
                         fname_msx = fname_rpi
                     fname_rpi = '/tmp/msxpi/' + fname_rpi
 
