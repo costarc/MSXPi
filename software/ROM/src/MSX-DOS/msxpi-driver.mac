@@ -271,53 +271,50 @@ DSKIO_ERR1:
 DSKIO_SECTINFO:
         push    bc
         push    de
-	push	af
+        push	    af
         LD      de,DOS_SECI
         call    SENDCOMMAND
-        jr	c,DSKIO_SEC_ERR
-	call	GETWRK
-	ld	d,h
-	ld	e,l
-	pop	af
-	pop	hl
-	pop	bc	
-	push	de
+        jr      c,DSKIO_SEC_ERR
+        call	GETWRK
+        ld      d,h
+        ld      e,l
+        pop	af
+        pop	hl
+        pop	bc	
+        push	    de
 ; send device number
-        ld	(de),a
-	inc	de
-	
+        ld      (de),a
+        inc	de
 ; send number of sectors to read/write
-	ld      a,b
-        ld	(de),a
-	inc	de
+        ld      a,b
+        ld      (de),a
+        inc	de
 
 ; send media decriptor
         ld      a,c
-        ld	(de),a
-	inc	de
+        ld      (de),a
+        inc	de
 
 ; send logical sectornumber (initial sector number)
-	ld      a,l
-        ld	(de),a
-	inc	de
+        ld      a,l
+        ld	      (de),a
+        inc     de
 
         ld      a,h
-        ld	(de),a
+        ld      (de),a
 
-	pop	de
-	ld	bc,CMDSIZE
-	call	SENDDATA
-	ei
+    	pop	 de
+        ld      bc,CMDSIZE
+        call    SENDDATA
         ret
 
 DSKIO_SEC_ERR:
-        pop     hl
+        pop     af
         pop     de
         pop     bc
-        pop     af
         scf
-	ei
         ret
+        
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
