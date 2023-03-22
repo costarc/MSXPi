@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230321.001"
+build = "20230322.001"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -37,7 +37,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       = 5
+GLOBALRETRIES       = 20
 SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
@@ -486,9 +486,7 @@ def pcopy():
         fileinfo = basepath+'/'+fname1
                             
     fname_rpi = fileinfo
-    fname_msx = fname2
-
-    print(fileinfo,fname1,fname2,expand)
+    fname_msx = ''
     
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
@@ -507,13 +505,18 @@ def pcopy():
             return RC_FAILED
 
     else:
-        #print("pcopy: path is remote:",fname_rpi)
+        print("pcopy: path is remote:",fname_rpi)
         try:
             urlhandler = urlopen(fname_rpi)
             #print("pcopy:urlopen rc:",urlhandler.getcode())
             buf = urlhandler.read()
+            filesize = len(buf)
+            if fname_msx == '':
+                fname_msx = fname1
+                    
             # if /z passed, will uncompress the file
             if expand:
+                #print("Entered expand")
                 os.system('rm /tmp/msxpi/* 2>/dev/null')
                 tmpfile = open('/tmp/' + fname1, 'wb')
                 tmpfile.write(buf)
@@ -524,6 +527,7 @@ def pcopy():
                     rc = os.system('/usr/bin/unar -f -o /tmp/msxpi /tmp/' + fname1)
                     
                 if rc == 0:
+                    #print("entered rc == 0")
                     fname_rpi = os.listdir('/tmp/msxpi')[0]
                     if fname2 == '':
                         fname_msx = fname_rpi
@@ -550,7 +554,7 @@ def pcopy():
             return RC_FAILED
 
     if rc == RC_SUCCESS:
-        #print("pcopy: File open success, size is ",filesize)
+        #print("pcopy: File open success, target name,size is ",fname_msx,filesize)
         if filesize == 0:
             send_rc_msg(RC_FAILED,"Pi:File size is zero bytes")
             return RC_FAILED

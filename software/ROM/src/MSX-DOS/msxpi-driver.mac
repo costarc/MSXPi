@@ -166,7 +166,7 @@ DSKIO:
 ; MSXPi DSKIO_WRITE Routine    |
 ;--------------------------------------
 DSKIO_WRITE:
-        cp      4
+        cp      2
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
@@ -186,6 +186,8 @@ DSKIO_WRITE_LOOP:
 	pop	bc
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_WRITE_LOOP
+	or	a
+	ei
         ret
 ; END OF ------------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -499,7 +501,7 @@ CALLHAND:
 GETSTRPNT:
 ; OUT:
 ; HL = String Address
-; B  = Lenght
+; B  = Length
  
         LD      HL,($F7F8)
         LD      B,(HL)
@@ -588,7 +590,7 @@ PRINTSTATUSMSG:
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
 ;--------------------------------------------------------------------
-; Verify is command has STD parameters specified
+; Verify if command has STD parameters specified
 ; Examples:
 ; call mspxi("pdir")  -> will print the output
 ; call mspxi("0,pdir")  -> will not print the output
@@ -603,94 +605,126 @@ _MSXPI:
         
 CALL_MSXPI1:
 ; At this point:
-; HL = contain buffer address to store data from RPi
+; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
 ; DE = contain string address of command to send to RPi
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
 ;
-        PUSH    AF
         PUSH    HL
+        PUSH    AF
         LD      C,B
         LD      B,0
         LD      H,D
         LD      L,E
         CALL    SENDPICMD
-        JR      NC,CALL_MSXPI_LOOP
-        POP     HL
-        POP     AF
-        POP     HL
-        SCF
-        RET
-
-CALL_MSXPI_LOOP:
-        ld      a,SENDNEXT
-        call    PIEXCHANGEBYTE
-        cp      RC_WAIT
-        jr      NZ,CALL_MSXPI_RELEASED
-        call    CHKPIRDY
-        JR      CALL_MSXPI_LOOP
-
-CALL_MSXPI_RELEASED: 
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPISTD
-        CP      RC_SUCCESS
-        JR      Z,CALL_MSXPISTD
-        POP     HL
-        POP     AF
-        CP      1
-        JR      NZ,CALL_MSXPIERR2
-        LD      A,RC_CONNERR
-        LD      (HL),A                  ; Store return code in buffer
-CALL_MSXPIERR2:
+        JR      C,CALL_MSXPIERR
+        POP     AF     			; stdout option
+                                        ; Verify if user wants to print STDOUT from RPi
+        CP      '1'			; User did not specify. Default is to print
+        JR      Z,CALL_MSXPISTDOUT
+        CP      '2'
+        JR      Z,CALL_MSXPISAVSTD
+	POP	HL
+	LD	BC,BLKSIZE
+        CALL    NOSTDOUT
+	XOR	A	
+        LD      (HL),A
         POP     HL
         OR      A
         RET
 
-CALL_MSXPISTD:
-                                        ; Restore address of buffer and stdout option
-        POP     DE     ; buffer address
-        POP     AF     ; stdout option
 
-                                        ; Verify if user wants to print STDOUT from RPi
-        CP      '1'
-                                        ; User did not specify. Default is to print
-        JR      Z,CALL_MSXPISTDOUT
-        CP      '2'
-        JR      Z,CALL_MSXPISAVSTD
-
-        CALL    NOSTDOUT
-        LD      (DE),A
+CALL_MSXPIERR:
+        POP     AF
+        POP     HL
+        CP      1
+        JR      NZ,CALL_MSXPIERR2
+        LD      A,RC_CONNERR
+CALL_MSXPIERR2:
+        LD      (HL),A                  ; Store return code in buffer
         POP     HL
         OR      A
         RET
 
 CALL_MSXPISTDOUT:
+	POP	DE
+CALL_MSXPISTDOUT1:
         PUSH    DE
+	LD	BC,BLKSIZE
+        CALL    RECVDATA
+        POP     HL
+	LD	A,1
+	JR	C,CALL_MSXPIERR2	; If error
+	LD	BC,BLKSIZE
+	PUSH	HL
         CALL    PRINTPISTDOUT
-        POP     DE
-        LD      (DE),A
+	POP	DE
+	JR	NC,CALL_MSXPISTDOUT1
         POP     HL
         OR      A
         RET
 
-                                        ; This routine will save the RPi data to (STREND)
 CALL_MSXPISAVSTD:
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE
-        CALL    RECVDATABLOCK
-        POP     HL
-        LD      (HL),A                  ; return code
-        INC     HL
-        LD      (HL),C                  ; Return buffer size to BASIC in first two 
-                                        ; positions of buffer
-        INC     HL
-        LD      (HL),B
+	POP	DE
+	PUSH	DE
+	LD	BC,BLKSIZE
+        CALL    RECVDATA		; Read first block
+	POP	HL
+	LD	A,1
+	JR	C,CALL_MSXPIERR2
+	LD	A,(HL)
+	CP	RC_FAILED
+	JR	Z, CALL_MSXPIERR2
+	CP	RC_SUCCESS		; End of transfer - no calculations are required
+	JR	Z, CALL_MSXPISAVSTDEND
+					
+	CP	RC_READY		; Assume there is another block and continue
+	JR	Z, CALL_MSXPISAVSTD1
+	SCF
+	JR	CALL_MSXPIERR2
+CALL_MSXPISAVSTD1:			; If its here, it's multi-block transfer	
+	PUSH	HL			; Always save start of the user buffer 
+	PUSH	DE			; Save current buffer address
+	LD	BC,BLKSIZE		
+        CALL    RECVDATA
+	POP	IY
+	POP	IX
+	LD	A,1
+	JR	C, CALL_MSXPIERR2	; Transfer error
+	PUSH	IX
+	LD	A,(IY + 0)		; Transfer this block header to buffer header
+	LD	(IX + 0),A		; Transfer return code
+	LD	L,(IX + 1)		; add block size to current buffer size
+	LD	H,(IX + 2)		
+	LD	C,(IY + 1)			
+	LD	B,(IY + 2)
+	ADD	HL,BC			; and store total in the master header (block 1 header)
+	LD	(IX + 1),L
+	LD	(IX + 2),H
+	PUSH	IY
+	POP	DE
+	LD	H,D
+	LD	L,E
+	INC	HL
+	INC	HL
+	INC	HL
+	LD	BC,BLKSIZE
+	LDIR				; Move this block 3 bytes left (discard header)
+	POP	HL
+	LD	A,(HL)
+	CP	RC_FAILED
+	JR	Z, CALL_MSXPIERR2
+	CP	RC_SUCCESS
+	JR	Z, CALL_MSXPISAVSTDEND	; This was last block - finish command
+	CP	RC_READY
+	JR	Z, CALL_MSXPISAVSTD1
+
+CALL_MSXPISAVSTDEND:			; Go back to BASIC
         POP     HL
         OR      A
         RET
 
+	
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATABLOCK|
 ;----------------------------------------
@@ -847,7 +881,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230321.118"
+BuildId: DB "20230322.121"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -884,22 +918,22 @@ CALL_TABLE:
         DB      "MSXPIVER",0
         DW      _MSXPIVER
 
-        DB      "MSXPISTATUS",0
+        DB      "MSXPISTA",0
         DW      _MSXPISTATUS
 
-        DB      "GETPOINTERS",0
+        DB      "GETPOINT",0
         DW      _GETPOINTERS
 
-        DB      "MSXPISEND",0
+        DB      "MSXPISND",0
         DW      _MSXPISEND
 
-        DB      "MSXPIRECV",0
+        DB      "MSXPIRCV",0
         DW      _MSXPIRECV
 
-        DB      "MSXPISYNC",0
+        DB      "MSXPISYN",0
         DW      _MSXPISYNC
 
-        DB      "MSXPI",0
+        DB      "MSXPI   ",0
         DW      _MSXPI
 
 ENDOFCMDS:
@@ -913,9 +947,7 @@ DOS_DRV:    DB  "dskiodrv",0
 DOS_FMT:    DB  "dskiofmt",0
 
 INCLUDE include.asm
-INCLUDE debug.asm
 INCLUDE putchar-msxdos.asm
 INCLUDE msxpi_bios.asm
-INCLUDE basic_stdio.asm
 
 

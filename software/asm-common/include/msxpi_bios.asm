@@ -49,8 +49,6 @@
 ; own commands, using OUT/IN directly to the I/O ports.
 ; ==================================================================
 
-NOSTDOUT: ret
-
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
@@ -172,8 +170,32 @@ nextbit16:
 ;   Flag C set if there was a communication error
 SENDPICMD:
 ; Save flag C which tells if extra error information is required
-		call    SENDDATABLOCK
-        ret
+; Get working area to store the command, and format it:
+        PUSH    BC
+        PUSH    DE
+        ;CALL    GETWRK
+        LD      H,D
+        LD      L,E
+        LD      BC,BLKSIZE
+        ADD HL,BC               ; Get a workign area at the end of user's buffer        
+        PUSH    HL
+        LD      D,H
+        LD      E,L
+        LD      BC,8
+        LD      A,32
+        LD      (HL),A
+        INC     DE
+        LDIR
+        XOR     A
+        LD      (DE),A
+        POP     DE              ; Workarea (to store command)
+        POP     HL              ; Command address sent by BASIC
+        POP     BC              ; Size of command
+        PUSH   DE
+        LDIR                       ; Move command to formated 9 bytes work area
+        POP     DE              ; Restore command address (Workarea)
+        CALL    SENDCOMMAND
+        RET
 
 ;---------------------------------------------------------------
 ; RECVDATA- SENDDATA
@@ -507,15 +529,12 @@ PRINTNUM1:
         ret
 
 ; =================================================================
-; PRINTPISTDOUT (Same as RECVDATABLOCK but printing to SCREEN) 
+; PRINTPISTDOUT 
+; Read buffer of BC lenght and print to screen. Terminates also if zero detected
 ; Inputs: (PRINTPISTDOUT0)
-;  E = 0 - Print data to screen
-;      $ff - Do not print
-; Output:
-; HL' = CRC16
-; A = Return Code (RC_SUCCESS or RC_CRCERROR)
-;
-; Changes: AF,BC,E,L,HL',BC'
+;  HL: Buffer address
+;  BC: Buffer lenght
+; Changes: AF,BC,HL
 ; =================================================================
 PRINTPISTDOUT:
         ld      a,(hl)
@@ -538,7 +557,17 @@ printchar:
         scf
         ccf
         ret
-        
+
+NOSTDOUT: 
+        call    PIREADBYTE
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,NOSTDOUT
+        call    PIREADBYTE      ; read two extra bytes with the Checksum/CRC
+        call    PIREADBYTE
+        ret
+
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer HL to hex
         PUSH    DE
