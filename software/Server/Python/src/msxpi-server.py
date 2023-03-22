@@ -219,7 +219,7 @@ def getpath(basepath, path):
           basepath.startswith('smb')):
         urltype = 3 # this is an relative network path
         newpath = basepath + "/" + path
-
+       
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -435,8 +435,10 @@ def pcopy():
     path = data.decode().split("\x00")[0]
     
     #print("pcopy: Starting with params ",path)
-    
-    if (path.lower().startswith('/h') or len(path) == 0):
+
+    path = path.strip().split()
+                   
+    if (len(path) == 0 or path[0].lower().startswith('/h') ):
         buf = 'Syntax:\n'
         buf = buf + 'pcopy remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
@@ -445,35 +447,53 @@ def pcopy():
         #print(len(buf),buf)
         rc = send_rc_msg(RC_FAILED,buf)
         return rc
-        
-    elif (path.startswith('http') or \
-        path.startswith('ftp') or \
-        path.startswith('nfs') or \
-        path.startswith('smb') or \
-        path.startswith('/')):
-        fileinfo = path
-    elif path == '':
+
+    elif (path[0].lower() == '/z'):
+        if len(path) < 2:
+            rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
+            return rc
+        expand = True
+        fname1 = path[1]
+        if len(path) == 3:
+            fname2 = path[2]
+        else:
+            fname2 = ''
+    else:
+        expand = False
+        fname1 = path[0]
+        if len(path) == 2:
+            fname2 = path[1]
+        else:
+            fname2 = ''
+                      
+    if (fname1.startswith('ma1:')):
+        basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
+        fileinfo = basepath + fname1.split(':')[1]
+        fname1 = fname1.split(':')[1]
+    elif  (fname1.startswith('ma2:')):
+        basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
+        fileinfo = basepath + fname1.split(':')[1]    
+        fname1 = fname1.split(':')[1]
+    elif (fname1.startswith('http') or \
+        fname1.startswith('ftp') or \
+        fname1.startswith('nfs') or \
+        fname1.startswith('smb') or \
+        fname1.startswith('/')):
+        fileinfo = fname1
+    elif fname1 == '':
         fileinfo = basepath
     else: 
-        fileinfo = basepath+'/'+path
+        fileinfo = basepath+'/'+fname1
+                            
+    fname_rpi = fileinfo
+    fname_msx = fname2
 
-    fileinfo = fileinfo.split()
+    print(fileinfo,fname1,fname2,expand)
     
-    if len(fileinfo) == 1:
-        fname_rpi = str(fileinfo[0])
-        fname_msx_0 = fname_rpi.split('/')
-        fname_msx = str(fname_msx_0[len(fname_msx_0)-1])
-    elif len(fileinfo) == 2:
-        fname_rpi = str(fileinfo[0])
-        fname_msx = str(fileinfo[1])
-    else:
-        send_rc_msg(RC_FAILED,"Pi:Command line parametrs invalid.")
-        return RC_FAILED
-
-    urlcheck = getpath(basepath, path)
+    urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        #print("pcopy: path is local")
+        #print("pcopy: path is local:",fname_rpi)
         
         try:
             with open(fname_rpi, mode='rb') as f:
@@ -487,17 +507,48 @@ def pcopy():
             return RC_FAILED
 
     else:
-        #print("pcopy: path is remote")
+        #print("pcopy: path is remote:",fname_rpi)
         try:
             urlhandler = urlopen(fname_rpi)
             #print("pcopy:urlopen rc:",urlhandler.getcode())
             buf = urlhandler.read()
-            filesize = len(buf)
-            
+            # if /z passed, will uncompress the file
+            if expand:
+                os.system('rm /tmp/msxpi/* 2>/dev/null')
+                tmpfile = open('/tmp/' + fname1, 'wb')
+                tmpfile.write(buf)
+                tmpfile.close()
+                if ".lzh" in fname1:
+                    rc = os.system('/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + fname1)
+                else:
+                    rc = os.system('/usr/bin/unar -f -o /tmp/msxpi /tmp/' + fname1)
+                    
+                if rc == 0:
+                    fname_rpi = os.listdir('/tmp/msxpi')[0]
+                    if fname2 == '':
+                        fname_msx = fname_rpi
+                    fname_rpi = '/tmp/msxpi/' + fname_rpi
+
+                    try:
+                        with open(fname_rpi, mode='rb') as f:
+                            buf = f.read()
+
+                        filesize = len(buf)
+                        rc = RC_SUCCESS
+                        
+                    except Exception as e:
+                        print("pcopy: exception 2",str(e))
+                        send_rc_msg(RC_FAILED,str(e))
+                        return RC_FAILED
+       
+                else:
+                    send_rc_msg(RC_FAILED,"Pi:Error decompressing the file")
+                    return RC_FAILED
+    
         except Exception as e:
             send_rc_msg(RC_FAILED,str(e))
             return RC_FAILED
-            
+
     if rc == RC_SUCCESS:
         #print("pcopy: File open success, size is ",filesize)
         if filesize == 0:

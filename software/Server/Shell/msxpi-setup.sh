@@ -80,6 +80,7 @@ sudo apt-get -y install libcurl4-nss-dev
 sudo apt-get -y install mplayer
 sudo apt-get -y install pypy
 sudo apt-get -y install pigpio
+sudo apt-get -y install lhasa
 
 # -------------------------
 # Enable remote ssh into Pi
