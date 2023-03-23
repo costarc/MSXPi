@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230323.001"
+build = "20230323.002"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -886,15 +886,14 @@ def dskiords():
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
-    print("dos_rds:deviceNumber=",sectorInfo[0])
-    print("dos_rds:numsectors=",sectorInfo[1])
-    print("dos_rds:mediaDescriptor=",sectorInfo[2])
-    print("dos_rds:initialSector=",sectorInfo[3])
-    print("dos_rds:blocksize=",SECTORSIZE)
+    #print("dos_rds:deviceNumber=",sectorInfo[0])
+    #print("dos_rds:numsectors=",sectorInfo[1])
+    #print("dos_rds:mediaDescriptor=",sectorInfo[2])
+    #print("dos_rds:initialSector=",sectorInfo[3])
+    #print("dos_rds:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
-        print("dos_rds:",initdataindex+(sectorcnt*SECTORSIZE),initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE))
-        if sectorInfo[0] == 0 or sectorInfo[0] == 1:
+        if sectorInfo[0] == 0:
             buf = drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
         else:
             buf = drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
@@ -910,21 +909,19 @@ def dskiowrs():
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
-    print("dos_wrs:deviceNumber=",sectorInfo[0])
-    print("dos_wrs:numsectors=",sectorInfo[1])
-    print("dos_wrs:mediaDescriptor=",sectorInfo[2])
-    print("dos_wrs:initialSector=",sectorInfo[3])
-    print("dos_wrs:blocksize=",SECTORSIZE)
+    #print("dos_wrs:deviceNumber=",sectorInfo[0])
+    #print("dos_wrs:numsectors=",sectorInfo[1])
+    #print("dos_wrs:mediaDescriptor=",sectorInfo[2])
+    #print("dos_wrs:initialSector=",sectorInfo[3])
+    #print("dos_wrs:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
         rc,buf = recvdata(SECTORSIZE)
         if  rc == RC_SUCCESS:
-            if sectorInfo[0] == 0 or sectorInfo[0] == 1:
-                print("A:",data)
-                #drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = str(data)
+            if sectorInfo[0] == 0:
+                drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
             else:
-                print("B:",data)
-                #drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = str(data)
+                drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
             sectorcnt += 1
         else:
             break
@@ -951,20 +948,32 @@ def dskiosct():
     else:
         # Syncronize with MSX
         while piexchangebyte() != 0x9F:
-            print(".")
             pass
+            
         sectorInfo[0] = piexchangebyte()
         sectorInfo[1] = piexchangebyte()
         sectorInfo[2] = piexchangebyte()
         byte_lsb = piexchangebyte()
         byte_msb = piexchangebyte()
         sectorInfo[3] = byte_lsb + 256 * byte_msb
+        msxcrc = piexchangebyte()
 
-    print("dos_sct:deviceNumber=",sectorInfo[0])
-    print("dos_sct:numsectors=",sectorInfo[1])
-    print("dos_sct:mediaDescriptor=",sectorInfo[2])
-    print("dos_sct:initialSector=",sectorInfo[3])
-        
+        crc = 0x9F
+        crc = crc ^ (sectorInfo[0])        
+        crc = crc ^ (sectorInfo[1])
+        crc = crc ^ (sectorInfo[2])
+        crc = crc ^ (byte_lsb)        
+        crc = crc ^ (byte_msb)    
+        piexchangebyte(crc)
+      
+    if crc != msxcrc:
+        print("dos_sct: crc error")
+          
+    #print("dos_sct:deviceNumber=",sectorInfo[0])
+    #print("dos_sct:numsectors=",sectorInfo[1])
+    #print("dos_sct:mediaDescriptor=",sectorInfo[2])
+    #print("dos_sct:initialSector=",sectorInfo[3])
+       
 def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
