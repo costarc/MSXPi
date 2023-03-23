@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230322.002"
+build = "20230323.001"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -881,6 +881,7 @@ def dskioini(iniflag = ''):
         msxdos1boot = False
 
 def dskiords():
+    print("dskiords")
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
@@ -904,6 +905,7 @@ def dskiords():
             break
  
 def dskiowrs():
+    print("dskiowrs")
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
@@ -934,14 +936,29 @@ def dskiosct():
     #  return
 
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+
+    route = 2
     
-    rc,buf = recvdata(CMDSIZE)
-    sectorInfo[0] = buf[0]
-    sectorInfo[1] = buf[1]
-    sectorInfo[2] = buf[2]
-    byte_lsb = buf[3]
-    byte_msb = buf[4]
-    sectorInfo[3] = byte_lsb + 256 * byte_msb
+    if route == 1:             
+        rc,buf = recvdata(5)
+        sectorInfo[0] = buf[0]
+        sectorInfo[1] = buf[1]
+        sectorInfo[2] = buf[2]
+        byte_lsb = buf[3]
+        byte_msb = buf[4]
+        sectorInfo[3] = byte_lsb + 256 * byte_msb
+
+    else:
+        # Syncronize with MSX
+        while piexchangebyte() != 0x9F:
+            print(".")
+            pass
+        sectorInfo[0] = piexchangebyte()
+        sectorInfo[1] = piexchangebyte()
+        sectorInfo[2] = piexchangebyte()
+        byte_lsb = piexchangebyte()
+        byte_msb = piexchangebyte()
+        sectorInfo[3] = byte_lsb + 256 * byte_msb
 
     print("dos_sct:deviceNumber=",sectorInfo[0])
     print("dos_sct:numsectors=",sectorInfo[1])
@@ -950,7 +967,7 @@ def dskiosct():
         
 def recvdata( bytecounter = BLKSIZE):
 
-    #print("recvdata")
+    print("recvdata")
     
     retries = GLOBALRETRIES
     while retries > 0:
@@ -986,7 +1003,7 @@ def recvdata( bytecounter = BLKSIZE):
 
 def senddata(data, blocksize = BLKSIZE):
     
-    #print("senddata")
+    print("senddata")
    
     retries = GLOBALRETRIES
     while retries > 0:
@@ -1028,7 +1045,7 @@ def senddata(data, blocksize = BLKSIZE):
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE):
-    #print("sendmultiblock: msg len = ",len(buf))
+    print("sendmultiblock")
     idx = 0
     cnt = 0
     data = bytearray(blocksize)
@@ -1078,7 +1095,7 @@ def template():
     rc = sendmultiblock(buf, BLKSIZE)
 
 def recvcmd():
-    #print("recvcmd")
+    print("recvcmd")
       
     retries = GLOBALRETRIES
     while retries > 0:

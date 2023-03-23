@@ -94,8 +94,8 @@ SECLEN		equ	512		; Size of biggest sector
 ;
 INIHRD:
 	;call	DBGHL
-	call	RSLREG
-	CALL	PRINTNUMBER
+	;call	RSLREG
+	;CALL	PRINTNUMBER
         ld      a,$80
         cp      h
         ret     z
@@ -123,7 +123,7 @@ INIHRD:
 ; During boot this is called twice, with BC = FB21 and then BC = FB23.
 
 DRIVES:
-        ld     l,2
+        ld     l,1
         ret
 ; END OF -------------------------------
 ; MSXPi DRIVES Routine          |
@@ -172,7 +172,7 @@ DSKIO:
 ; MSXPi DSKIO_WRITE Routine    |
 ;--------------------------------------
 DSKIO_WRITE:
-        cp      2
+        cp      4
         jp      nc,DSKIO_ERR1
 
 ; save destination address and number of sectors to write
@@ -186,7 +186,7 @@ DSKIO_WRITE:
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
 DSKIO_WRITE_LOOP:
-        push	    bc
+        push	bc
         ld      bc,SECTORSIZE
         call    SENDDATA	  ; Send the sectors (write to disk
         pop     bc
@@ -218,7 +218,7 @@ DSKIO_WRITE_LOOP:
 ; Changed:  af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO_READ:
-        cp      2
+        cp      4
         jr      nc,DSKIO_ERR1
 ; save destination address and number of sectors to write
         push    bc                ;
@@ -237,6 +237,8 @@ DSKIO_READ_LOOP:
 	pop	bc
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_READ_LOOP
+	;call	restore_ram_slots
+	ei
 	or	a
         ret
 
@@ -244,6 +246,7 @@ DSKIO_ERR:
         pop     hl
         pop     bc
 DSKIO_ERR1:
+	ei
         ld      a,12
         scf
         ret
@@ -272,51 +275,82 @@ DSKIO_ERR1:
 ;
 
 DSKIO_SECTINFO:
-        push    bc
         push    de
-        push	    af
+        push    bc
+	push	af
         LD      de,DOS_SECI
-        call    SENDCOMMAND
-        jr      c,DSKIO_SEC_ERR
-        call	GETWRK
-        ld      d,h
-        ld      e,l
-        pop	af
-        pop	hl
-        pop	bc	
-        push	    de
-; send device number
-        ld      (de),a
-        inc	de
-; send number of sectors to read/write
-        ld      a,b
-        ld      (de),a
-        inc	de
-
-; send media decriptor
-        ld      a,c
-        ld      (de),a
-        inc	de
-
-; send logical sectornumber (initial sector number)
-        ld      a,l
-        ld	      (de),a
-        inc     de
-
-        ld      a,h
-        ld      (de),a
-
-    	pop	 de
-        ld      bc,CMDSIZE
-        call    SENDDATA
-        ret
+        call    SENDCOMMAND	
+        jr      nc,DSKIO_SECTINFO1
 
 DSKIO_SEC_ERR:
         pop     af
-        pop     de
         pop     bc
+	pop	de
         scf
         ret
+
+DSKIO_SECTINFO1:
+
+	jr	ROUTINE2
+
+ROUTINE1:
+
+	call	GETWRK
+	
+	pop	af
+	ld	(hl),a
+	inc	hl
+
+	pop	bc
+	ld	(hl),b
+	inc	hl
+
+	ld	(hl),c
+	inc	hl
+
+	pop	de
+	ld	(hl),e
+	inc	hl
+
+	ld	(hl),d
+	
+	push	ix
+	pop	de
+	ld	bc,5
+	call	SENDDATA
+	ret
+
+ROUTINE2:
+
+	; Send synchronisation header
+	ld	a,$9F
+	call	PIWRITEBYTE
+
+; Send device number
+	pop     af
+        call    PIWRITEBYTE
+
+; send number of sectors to read/write
+
+	pop	bc
+	ld      a,b
+        call    PIWRITEBYTE
+
+; send media decriptor
+
+        ld      a,c
+        call    PIWRITEBYTE
+
+; send logical sectornumber (initial sector number)
+
+	pop	de
+	ld      a,e
+        call    PIWRITEBYTE
+        ld      a,d
+        call    PIWRITEBYTE
+	or	a
+        ret
+
         
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
@@ -852,6 +886,15 @@ _MSXPSYNC_EXIT:
     OR      A
     RET
 
+restore_ram_slots:
+    ld      a,(RAMAD1)
+    ld      h,$40
+    call    ENASLT
+    ld      a,(RAMAD2)
+    ld      h,$80
+    call    ENASLT
+    ret
+
 BIOSENTRYADDR:  EQU     $
         DW      _MSXPIVER
         DW      _MSXPISTATUS
@@ -881,7 +924,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230323.143"
+BuildId: DB "20230323.144"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
