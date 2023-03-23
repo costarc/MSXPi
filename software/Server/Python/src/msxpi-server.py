@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230323.002"
+build = "20230323.003"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -37,7 +37,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       = 20
+GLOBALRETRIES       = 100
 SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
@@ -229,15 +229,19 @@ def getpath(basepath, path):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    #print "msxdos_inihrd:Starting"
+    print("msxdos_inihrd")
     size = os.path.getsize(filename)
     if (size>0):
         fd = os.open(filename, os.O_RDWR)
-        rc = mmap.mmap(fd, size, access=access)
+        disk = mmap.mmap(fd, size, access=access)
+        rc = RC_SUCCESS
     else:
+        
+        disk = ''
         rc = RC_FAILED
 
-    return rc
+    #print(hex(rc))
+    return rc,disk
 
 def dos83format(fname):
     name = '        '
@@ -670,43 +674,71 @@ def pvol():
     return rc
     
 def pset():
-    global psetvar
+
+    global psetvar,drive0Data,drive1Data
     
-    rc = RC_SUCCESS
     rc,data = recvdata(BLKSIZE)
     cmd = data.decode().split("\x00")[0]
 
     if  (cmd.lower() == "/h" or cmd.lower() == "/help"):
         rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname", BLKSIZE)
         return rc
-    elif (len(cmd)==0 or cmd[:1] == "d" or cmd[:1] == "D"):
+    elif (len(cmd) == 0):   # Display current parameters
         s = str(psetvar)
         buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
         rc = sendmultiblock(buf, BLKSIZE)
         return rc
         
-    else: # if (cmd[:1] == "s" or cmd[:1] == "S"):
-        cmd=cmd.split(" ")
-        print(cmd)
-        for index in range(0,len(psetvar)):
-            if (psetvar[index][0] == str(cmd[0])):
-                if len(cmd) == 1:  #will erase / clean a variable
-                    psetvar[index][0] = 'free'
-                    psetvar[index][1] = 'free'
-                else:
-                    psetvar[index][1] = str(cmd[1])
-                rc = sendmultiblock("Pi:Ok", BLKSIZE)
-                return rc
-        
-        for index in range(7,len(psetvar)):
-            if (psetvar[index][0] == "free"):
-                psetvar[index][0] = str(cmd[0])
-                psetvar[index][1] = str(cmd[1])
-                rc = sendmultiblock("Pi:Ok", BLKSIZE)
-                return rc
+    # Set a new parameter or update an existing parameter
+    rc = RC_FAILED 
+    cmd=cmd.split(" ")
+    
+    for index in range(0,len(psetvar)):
+
+        if (psetvar[index][0] == str(cmd[0])):
+            
+            if len(cmd) == 1:  #will erase / clean a variable
+                psetvar[index][0] = 'free'
+                psetvar[index][1] = 'free'
+                rc = sendmultiblock("Pi:Ok",BLKSIZE)
+                return RC_SUCCESS    
+                         
+            else:
                 
-    # When everythign fails:          
-    rc = sendmultiblock("Pi:Error setting parameter",BLKSIZE)
+                try:
+                    
+                    if str(cmd[0]) == 'DRIVE0':
+                        rc,drive0Data = msxdos_inihrd(cmd[1])
+                        psetvar[index][1] = str(cmd[1])
+                        rc = sendmultiblock("Pi:Ok",BLKSIZE)
+                        return RC_SUCCESS
+
+                    elif str(cmd[0]) == 'DRIVE1':
+                        rc,drive1Data = msxdos_inihrd(cmd[1])
+                        psetvar[index][1] = str(cmd[1])    
+                        rc = sendmultiblock("Pi:Ok",BLKSIZE)
+                        return RC_SUCCESS
+                        
+                except Exception as e:
+                    
+                    rc = sendmultiblock("Pi:Error - " + str(e),BLKSIZE)
+                    return RC_FAILED
+                    
+    # Check if there is a slot, then add new parameter
+    for index in range(7,len(psetvar)):
+
+        if (psetvar[index][0] == "free" and psetvar[index][0] != str(cmd[0])):
+            psetvar[index][0] = str(cmd[0])
+            psetvar[index][1] = str(cmd[1])
+            rc = RC_SUCCESS
+            break
+
+    if rc == RC_SUCCESS:
+        rc = sendmultiblock("Pi:Ok",BLKSIZE)
+    else:        
+        rc = sendmultiblock("Pi:Error setting parameter",BLKSIZE)
+    
+    #print(hex(rc))
     return rc
                             
 def pwifi():
@@ -865,7 +897,7 @@ def dskioini(iniflag = ''):
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
     
     if iniflag == '1':
-        print("DOS: Enabling MSX-DOS1")
+        #print("DOS: Enabling MSX-DOS1")
 
         msxdos1boot = True
 
@@ -874,8 +906,8 @@ def dskioini(iniflag = ''):
         numdrives = 0
 
         # Load the disk images into a memory mapped variable
-        drive0Data = msxdos_inihrd(psetvar[1][1])
-        drive1Data = msxdos_inihrd(psetvar[2][1])
+        rc , drive0Data = msxdos_inihrd(psetvar[1][1])
+        rc , drive1Data = msxdos_inihrd(psetvar[2][1])
     else:
         #print("parms: disabling msxdos1boot")
         msxdos1boot = False
