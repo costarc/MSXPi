@@ -485,6 +485,9 @@ def pcopy():
         fname1 = path[0]
         fname_msx = path[1]
     
+    print(fname1)
+    print(basepath)
+    
     if (fname1.startswith('m:')):
         basepath = 'ftp://192.168.1.100/'
         fileinfo = basepath + fname1.split(':')[1]
@@ -514,8 +517,11 @@ def pcopy():
             fname_msx = fname_msx0[len(fname_msx0)-1]
     elif fname1 == '':
         fileinfo = basepath
+        fname_msx = fname1
     else: 
-        fileinfo = basepath+'/'+fname1
+        if len(fname_msx) == 0:
+            fname_msx = fname1
+            fileinfo = basepath+'/'+fname1
                             
     fname_rpi = fileinfo
         
@@ -886,6 +892,7 @@ def dskiords():
     print("dos_rds:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
+        print("dos_rds:",initdataindex+(sectorcnt*SECTORSIZE),initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE))
         if sectorInfo[0] == 0 or sectorInfo[0] == 1:
             buf = drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
         else:

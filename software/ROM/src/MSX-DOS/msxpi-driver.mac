@@ -93,6 +93,9 @@ SECLEN		equ	512		; Size of biggest sector
 ; A = #40 in first call, and #80 in second all.;
 ;
 INIHRD:
+	;call	DBGHL
+	call	RSLREG
+	CALL	PRINTNUMBER
         ld      a,$80
         cp      h
         ret     z
@@ -102,6 +105,7 @@ INIHRD:
         ;call    PRINT
 	ld	bc,3
 	call	DELAY
+	    scf
         ret
 
 ; START OF -----------------------------
@@ -119,7 +123,7 @@ INIHRD:
 ; During boot this is called twice, with BC = FB21 and then BC = FB23.
 
 DRIVES:
-        ld     l,1
+        ld     l,2
         ret
 ; END OF -------------------------------
 ; MSXPi DRIVES Routine          |
@@ -156,7 +160,9 @@ INIENV:
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO:
-        jr		nc,DSKIO_READ
+
+        JR	NC,DSKIO_READ
+
 ; END OF -------------------------------
 ; MSXPi DSKIO Routine           |
 ;---------------------------------------
@@ -175,19 +181,18 @@ DSKIO_WRITE:
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_WSEC
-        call    SENDCOMMAND       ; Send sector write command "WRS"
+        call    SENDCOMMAND       ; Send sector write command "DSKIOWRS"
         jr      c,DSKIO_ERR
-        pop     de                ; number of bytes to transfer
-        pop     bc                ; buffer with data to read
+        pop     de                ; buffer with data to read
+        pop     bc                ; number of bytes to transfer
 DSKIO_WRITE_LOOP:
-	push	bc
-	ld	bc,SECTORSIZE
+        push	    bc
+        ld      bc,SECTORSIZE
         call    SENDDATA	  ; Send the sectors (write to disk
-	pop	bc
-	jr	c, DSKIO_ERR1
-	djnz	DSKIO_WRITE_LOOP
-	or	a
-	ei
+        pop     bc
+        jr      c, DSKIO_ERR1
+        djnz    DSKIO_WRITE_LOOP
+        or	     a
         ret
 ; END OF ------------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -213,7 +218,7 @@ DSKIO_WRITE_LOOP:
 ; Changed:  af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO_READ:
-        cp      4
+        cp      2
         jr      nc,DSKIO_ERR1
 ; save destination address and number of sectors to write
         push    bc                ;
@@ -221,9 +226,9 @@ DSKIO_READ:
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
         ld      de,DOS_RSEC
-        call    SENDCOMMAND       ; Send sector write command "WRS"
+        call    SENDCOMMAND       ; Send sector read command "DSKIORDS"
         jr      c,DSKIO_ERR
-        pop     de                ; buffer with data to read
+        pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
 	push	bc
@@ -233,7 +238,6 @@ DSKIO_READ_LOOP:
 	jr	c, DSKIO_ERR1
 	djnz	DSKIO_READ_LOOP
 	or	a
-	ei
         ret
 
 DSKIO_ERR:
@@ -242,7 +246,6 @@ DSKIO_ERR:
 DSKIO_ERR1:
         ld      a,12
         scf
-	ei
         ret
 ; END OF ------------------------------
 ; MSXPi DSKIO_READ Routine     |
@@ -878,7 +881,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230322.122"
+BuildId: DB "20230323.143"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -946,5 +949,7 @@ DOS_FMT:    DB  "dskiofmt",0
 INCLUDE include.asm
 INCLUDE putchar-msxdos.asm
 INCLUDE msxpi_bios.asm
+INCLUDE debug.asm
+INCLUDE debug-rom.asm
 
 

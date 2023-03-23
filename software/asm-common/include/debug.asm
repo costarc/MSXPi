@@ -33,6 +33,7 @@
 ; 0.1    : initial version
 
 DBGBC:
+        DI
         PUSH    AF
         PUSH    BC
         PUSH    DE
@@ -47,9 +48,11 @@ DBGBC:
         POP     DE
         POP     BC
         POP     AF
+        EI
         RET
 
 DBGDE:
+        DI
         PUSH    AF
         PUSH    BC
         PUSH    DE
@@ -64,9 +67,11 @@ DBGDE:
         POP     DE
         POP     BC
         POP     AF
+        EI
         RET
 
 DBGHL:
+        DI
         PUSH    AF
         PUSH    BC
         PUSH    DE
@@ -75,12 +80,13 @@ DBGHL:
         CALL    PRINTNUMBER
         LD      A,L
         CALL    PRINTNUMBER
-        LD      A,' '
+        LD      A,'-'
         CALL    PUTCHAR
         POP     HL
         POP     DE
         POP     BC
         POP     AF
+        EI
         RET
 
 

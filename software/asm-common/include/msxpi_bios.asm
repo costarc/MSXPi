@@ -244,14 +244,12 @@ RECV0:
         ld      a,c                         ; get MSXPi chksum
         pop     bc                      ; number of retries in B
         cp      l                           ; compare checksum
-        ret     z                           ; return if match, C is 0
+        ret       z                           ; return if match, C is 0
         ld      a,b
         or      a
         jr       nz,RECVRETRY     ;go for another retry 
-        ei
         scf                                 ; differ, set flag for Error
         ret
-
 
 SENDDATA:
 SENDDATABLOCK:
@@ -279,13 +277,12 @@ SENDD0:
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
         call    PIREADBYTE      ; read checksum byte from msxpi server
-        pop     bc                      ; Number of retreis left in B
+        pop     bc                      ; Number of retries left in B
         cp      l                           ; compare checksum
-        ret     z                           ; return if match, C is 0
+        ret      z                           ; return if match, C is 0
         ld      a,b                         ; Check retries left
         or      a
         jr       nz,SENDRETRY     ;go for another retry 
-        ei
         scf                                 ; differ, set flag for Error
         ret
              
@@ -791,11 +788,3 @@ DELAY1:
         POP     DE
         RET
               
-TESTMSXPISTR:
-        DB      'MSXPi'
-confatual:
-        DB      00
-slotatual:
-        DB      00
-subsatual:
-        DB      00

@@ -4840,7 +4840,7 @@ A5BA0:	ld	sp,0C200H
 	inc	hl
 	ld	(hl),a			; end of program marker
 	inc	hl
-	ld	(VARTAB),hl		; start of the variablespace
+	ld	(VARTAB),hl		; start of the variable space
 	ld	hl,0FFFFH
 	ld	(CURLIN),hl		; interpeter in direct mode
 	call	A5C16			; initialize diskbasic
@@ -4854,7 +4854,7 @@ A5BA0:	ld	sp,0C200H
 	call	A5F86
 	defb	13,10
     defb    "Disk BASIC version 1.0",13,10
-    defb    "MSXPi Driver v0.9.1",13,10,0
+    defb    "MSXPi Driver v1.1",13,10,0
 	ld	hl,M.4173
 	push	hl			; after the RUN command completes
 	ld	hl,BUF+9
@@ -4863,7 +4863,7 @@ A5BA0:	ld	sp,0C200H
 	push	hl
 	ld	(hl),0E1H
 	inc	hl
-	ld	(hl),0C9H		; pop the basicpointer when returning
+	ld	(hl),0C9H		; pop the basic pointer when returning
 	ld	a,(EXPTBL+0)
 	ld	h,040H
 	jp	ENASLT			; enable basic-rom on page 1
