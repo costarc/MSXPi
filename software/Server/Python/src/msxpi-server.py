@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.175"
+BuildId = "20230325.180"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -37,7 +37,7 @@ rdyPin  = 25
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
 
-GLOBALRETRIES       = 100
+GLOBALRETRIES       = 10
 SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
@@ -462,7 +462,7 @@ def pcopy():
 
     path = path.strip().split()
                    
-    if (len(path) == 0 or path[0].lower().startswith('/h') ):
+    if (len(path) == 0 or path[0].lower() == ('/h')):
         buf = 'Syntax:\n'
         buf = buf + 'pcopy remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
@@ -477,65 +477,108 @@ def pcopy():
         path = path[1:]
     else:
         expand = False
-    
-    print(len(path))
+
     if len(path) < 1:
-            rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
-            return rc
-    elif len(path) == 1:
-        fname1 = path[0]
-        fname_msx = ''
-    elif len(path) == 2:
-        fname1 = path[0]
-        fname_msx = path[1]
+        rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
+        return rc
     
-    print(fname1)
-    print(basepath)
-    
-    if (fname1.startswith('m:')):
+    #elif len(path) == 1:
+    #    fname1 = path[0]
+    #    if expand:
+    #        fname2 = '-'
+    #    else:
+    #        fname2 = fname1
+    #elif len(path) == 2:
+    #    fname1 = path[0]
+    #    fname2 = path[1]
+
+    print("p",path,len(path),path[0].startswith('/'))
+    if (path[0].startswith('m:')):
         basepath = 'ftp://192.168.1.100/'
-        fileinfo = basepath + fname1.split(':')[1]
-        fname1 = fname1.split(':')[1]
-        if len(fname_msx) == 0:
-            fname_msx = fname1
-    elif (fname1.startswith('ma1:')):
+        fname1 = basepath + path[0].split(':')[1]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+    elif (path[0].startswith('ma1:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
-        fileinfo = basepath + fname1.split(':')[1]
-        fname1 = fname1.split(':')[1]
-        if len(fname_msx) == 0:
-            fname_msx = fname1
-    elif  (fname1.startswith('ma2:')):
+        fname1 = basepath + path[0].split(':')[1]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+    elif  (path[0].startswith('ma2:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
-        fileinfo = basepath + fname1.split(':')[1]    
-        fname1 = fname1.split(':')[1]
-        if len(fname_msx) == 0:
-            fname_msx = fname1
-    elif (fname1.startswith('http') or \
-        fname1.startswith('ftp') or \
-        fname1.startswith('nfs') or \
-        fname1.startswith('smb') or \
-        fname1.startswith('/')):
-        fileinfo = fname1
-        if len(fname_msx) == 0:
-            fname_msx0 = fname1.split('/')
-            fname_msx = fname_msx0[len(fname_msx0)-1]
-    elif fname1 == '':
-        fileinfo = basepath
-        fname_msx = fname1
-    else: 
-        if len(fname_msx) == 0:
-            fname_msx = fname1
-            fileinfo = basepath+'/'+fname1
-                            
-    fname_rpi = fileinfo
-        
+        fname1 = basepath + path[0].split(':')[1]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+    elif (path[0].startswith('http') or \
+        path[0].startswith('ftp') or \
+        path[0].startswith('nfs') or \
+        path[0].startswith('smb')):
+        fname1 = path[0]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+    elif (path[0].startswith('/')):
+        fname1 = path[0]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+    else:
+        fname1 = basepath + '/' + path[0]
+        if expand == True:
+            if len(path) > 1:
+                fname2 = path[1]
+            else:
+                fname2 = '-'
+        elif len(path) > 1:
+            fname2 = path[1]
+        else:
+            fname0 = fname1.split('/')
+            fname2 = fname0[len(fname0)-1]
+
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        print("pcopy: path is local:",fname_rpi,fname_msx)
+        print("pcopy: path is local:",fname1,fname2)
         
         try:
-            with open(fname_rpi, mode='rb') as f:
+            with open(fname1, mode='rb') as f:
                 buf = f.read()
 
             filesize = len(buf)
@@ -546,60 +589,63 @@ def pcopy():
             return RC_FAILED
 
     else:
-        print("pcopy: path is remote:",fname_rpi,fname_msx)
+        print("pcopy: path is remote:",fname1,fname2)
         try:
-            urlhandler = urlopen(fname_rpi)
+            urlhandler = urlopen(fname1)
             buf = urlhandler.read()
             filesize = len(buf)
                     
-            # if /z passed, will uncompress the file
-            if expand:
-                #print("Entered expand")
-                os.system('rm /tmp/msxpi/* 2>/dev/null')
-                tmpfile = open('/tmp/' + fname1, 'wb')
-                tmpfile.write(buf)
-                tmpfile.close()
-                if ".lzh" in fname1:
-                    rc = os.system('/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + fname1)
-                else:
-                    rc = os.system('/usr/bin/unar -f -o /tmp/msxpi /tmp/' + fname1)
-                    
-                if rc == 0:
-                    #print("entered rc == 0")
-                    fname_rpi = os.listdir('/tmp/msxpi')[0]
-                    if fname_msx == '':
-                        fname_msx = fname_rpi
-                    fname_rpi = '/tmp/msxpi/' + fname_rpi
-
-                    try:
-                        with open(fname_rpi, mode='rb') as f:
-                            buf = f.read()
-
-                        filesize = len(buf)
-                        rc = RC_SUCCESS
-                        
-                    except Exception as e:
-                        print("pcopy: exception 2",str(e))
-                        send_rc_msg(RC_FAILED,str(e))
-                        return RC_FAILED
-       
-                else:
-                    send_rc_msg(RC_FAILED,"Pi:Error decompressing the file")
-                    return RC_FAILED
-    
         except Exception as e:
             send_rc_msg(RC_FAILED,str(e))
             return RC_FAILED
 
     if rc == RC_SUCCESS:
-        #print("pcopy: File open success, target name,size is ",fname_msx,filesize)
+        # if /z passed, will uncompress the file
+        if expand:
+            tmpfn0 = fname1.split('/')
+            tmpfn = tmpfn0[len(tmpfn0)-1]
+            #print("Entered expand")
+            os.system('rm /tmp/msxpi/* 2>/dev/null')
+            tmpfile = open('/tmp/' + tmpfn, 'wb')
+            tmpfile.write(buf)
+            tmpfile.close()
+            if ".lzh" in tmpfn:
+                rc = os.system('/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn)
+            else:
+                rc = os.system('/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn)
+                
+            if rc == 0:
+                #print("entered rc == 0")
+                fname1 = os.listdir('/tmp/msxpi')[0]
+                if fname2 == '-':
+                    fname2 = fname1
+                fname1 = '/tmp/msxpi/' + fname1
+
+                try:
+                    with open(fname1, mode='rb') as f:
+                        buf = f.read()
+
+                    filesize = len(buf)
+                    rc = RC_SUCCESS
+                    
+                except Exception as e:
+                    print("pcopy: exception 2",str(e))
+                    send_rc_msg(RC_FAILED,str(e))
+                    return RC_FAILED
+       
+            else:
+                send_rc_msg(RC_FAILED,"Pi:Error decompressing the file")
+                return RC_FAILED
+                
+    if rc == RC_SUCCESS:
+        #print("pcopy: File open success, target name,size is ",fname2,filesize)
         if filesize == 0:
             send_rc_msg(RC_FAILED,"Pi:File size is zero bytes")
             return RC_FAILED
 
         else:
             if inifcb:
-                rc = ini_fcb(fname_msx,filesize)
+                rc = ini_fcb(fname2,filesize)
                 if rc != RC_SUCCESS:
                     print("pcopy: ini_fcb failed")
                     return rc
