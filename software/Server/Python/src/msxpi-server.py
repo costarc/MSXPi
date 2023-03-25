@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.172"
+BuildId = "20230325.173"
 
 CMDSIZE = 9
 MSGSIZE = 128
