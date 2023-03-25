@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-build = "20230323.003"
+BuildId = "20230325.006"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -990,7 +990,7 @@ def dskiosct():
         sectorInfo[3] = byte_lsb + 256 * byte_msb
         msxcrc = piexchangebyte()
 
-        crc = 0x9F
+        crc = 0xFF
         crc = crc ^ (sectorInfo[0])        
         crc = crc ^ (sectorInfo[1])
         crc = crc ^ (sectorInfo[2])
@@ -998,8 +998,8 @@ def dskiosct():
         crc = crc ^ (byte_msb)    
         piexchangebyte(crc)
       
-    if crc != msxcrc:
-        print("dos_sct: crc error")
+        if crc != msxcrc:
+            print("dos_sct: crc error")
           
     #print("dos_sct:deviceNumber=",sectorInfo[0])
     #print("dos_sct:numsectors=",sectorInfo[1])
@@ -1214,7 +1214,7 @@ errcount = 0
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
-print("Starting MSXPi Server Version ",version,"Build",build)
+print("Starting MSXPi Server Version ",version,"Build",BuildId)
 
 dskioini("1")
 

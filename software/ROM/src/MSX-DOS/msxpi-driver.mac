@@ -80,7 +80,7 @@ RC_OUTOFSYNC   EQU $E5
 ; 14	insufficient memory
 ; 16	other error
 
-MYSIZE		equ	1		; Size of environment
+MYSIZE		equ	9		; Size of environment
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -320,9 +320,10 @@ ROUTINE1:
 ROUTINE2:
 
 	; Send synchronisation header
-	ld	a,$9F
-	ld	h,a			; Initial CRC
+	ld      a,READY
 	call	PIWRITEBYTE
+    
+    ld    h,$FF            ; Initial CRC - muat march value in Server
 
 ; Send device number
 	pop     af
@@ -944,7 +945,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230325.154"
+BuildId: DB "20230325.159"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
