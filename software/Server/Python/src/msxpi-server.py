@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.173"
+BuildId = "20230325.175"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -918,13 +918,14 @@ def dskiords():
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
-    #print("dos_rds:deviceNumber=",sectorInfo[0])
-    #print("dos_rds:numsectors=",sectorInfo[1])
-    #print("dos_rds:mediaDescriptor=",sectorInfo[2])
-    #print("dos_rds:initialSector=",sectorInfo[3])
-    #print("dos_rds:blocksize=",SECTORSIZE)
+    #print("dskiords:deviceNumber=",sectorInfo[0])
+    #print("dskiords:numsectors=",sectorInfo[1])
+    #print("dskiords:mediaDescriptor=",sectorInfo[2])
+    #print("dskiords:initialSector=",sectorInfo[3])
+    #print("dskiords:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
+        #print("dskiords:",sectorcnt)
         if sectorInfo[0] == 0:
             buf = drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
         else:
@@ -933,7 +934,8 @@ def dskiords():
         sectorcnt += 1
         
         if  rc == RC_SUCCESS:
-            print("dskiords: checksum is a match")
+            pass
+            #print("dskiords: checksum is a match")
         else:
             print("dskiords: checksum error")
             break
@@ -944,11 +946,11 @@ def dskiowrs():
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
-    #print("dos_wrs:deviceNumber=",sectorInfo[0])
-    #print("dos_wrs:numsectors=",sectorInfo[1])
-    #print("dos_wrs:mediaDescriptor=",sectorInfo[2])
-    #print("dos_wrs:initialSector=",sectorInfo[3])
-    #print("dos_wrs:blocksize=",SECTORSIZE)
+    #print("dskiowrs:deviceNumber=",sectorInfo[0])
+    #print("dskiowrs:numsectors=",sectorInfo[1])
+    #print("dskiowrs:mediaDescriptor=",sectorInfo[2])
+    #print("dskiowrs:initialSector=",sectorInfo[3])
+    #print("dskiowrs:blocksize=",SECTORSIZE)
     
     while sectorcnt < numsectors:
         rc,buf = recvdata(SECTORSIZE)
@@ -982,7 +984,8 @@ def dskiosct():
         byte_msb = buf[4]
         sectorInfo[3] = byte_lsb + 256 * byte_msb
         if  rc == RC_SUCCESS:
-            print("dskiosct: checksum is a match")
+            pass
+        #    print("dskiosct: checksum is a match")
         else:
             print("dskiosct: checksum error")
             
@@ -1010,10 +1013,10 @@ def dskiosct():
         if crc != msxcrc:
             print("dos_sct: crc error")
           
-    #print("dos_sct:deviceNumber=",sectorInfo[0])
-    #print("dos_sct:numsectors=",sectorInfo[1])
-    #print("dos_sct:mediaDescriptor=",sectorInfo[2])
-    #print("dos_sct:initialSector=",sectorInfo[3])
+    #print("dskiosct:deviceNumber=",sectorInfo[0])
+    #print("dskiosct:numsectors=",sectorInfo[1])
+    #print("dskiosct:mediaDescriptor=",sectorInfo[2])
+    #print("dskiosct:initialSector=",sectorInfo[3])
        
 def recvdata( bytecounter = BLKSIZE):
 
@@ -1071,7 +1074,8 @@ def senddata(data, blocksize = BLKSIZE):
         chksum = 0
     
         while(byteidx < blocksize):
-            #print(byteidx)
+            #if (byteidx == 0) or (byteidx > 499):
+            #    print(byteidx)
             pibyte0 = data[byteidx]
             if type(pibyte0) is int:
                 pibyte = pibyte0
@@ -1204,7 +1208,6 @@ try:
             
             if (rc == RC_SUCCESS):
                 fullcmd = buf.decode().split("\x00")[0]
-                print("cmd:",fullcmd)
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)

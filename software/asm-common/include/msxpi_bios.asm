@@ -86,10 +86,16 @@ PIREADBYTE1:
 PIWRITEBYTE:
             push    af
             call    CHKPIRDY
+            jr      c,PIWRITEBYTE_ERR
             pop     af
             out     (DATA_PORT1),a     ; send data, or command
+            or      a
             ret
-
+PIWRITEBYTE_ERR:
+            pop     af
+            scf
+            ret
+            
 ;-----------------------
 ; PIEXCHANGEBYTE       |
 ;-----------------------
@@ -247,7 +253,7 @@ RECV0:
         pop     bc                      ; number of retries in B
         ei
         cp      l                           ; compare checksum
-        ret       z                           ; return if match, C is 0
+        ret     z                           ; return if match, C is 0
         ld      a,b
         or      a
         jr       nz,RECVRETRY     ;go for another retry 
@@ -278,17 +284,17 @@ SENDD0:
         or      c
         jr      nz,SENDD0
         ld      a,l
-        add    a,h                         ; sum two bytes of checksum to obtain final cum
+        add     a,h                         ; sum two bytes of checksum to obtain final cum
         ld      l,a
         call    PIWRITEBYTE     ; send checksum calculated here
         call    PIREADBYTE      ; read checksum byte from msxpi server
         pop     bc                      ; Number of retries left in B
         ei
         cp      l                           ; compare checksum
-        ret      z                           ; return if match, C is 0
+        ret     z                           ; return if match, C is 0
         ld      a,b                         ; Check retries left
         or      a
-        jr       nz,SENDRETRY     ;go for another retry 
+        jr      nz,SENDRETRY     ;go for another retry
         scf                                 ; differ, set flag for Error
         ret
              
