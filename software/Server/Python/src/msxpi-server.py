@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.011"
+BuildId = "20230325.172"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -778,7 +778,7 @@ def pwifi():
 
 def pver():
     global version,build
-    ver = "MSXPi Server Version "+version+" Build "+build
+    ver = "MSXPi Server Version "+version+" Build "+ BuildId
     rc = sendmultiblock(ver, MSGSIZE)
     return rc
     
@@ -931,8 +931,11 @@ def dskiords():
             buf = drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
         rc = senddata(buf,SECTORSIZE)
         sectorcnt += 1
-        if  rc == RC_CRCERROR:
-            print("senddata: checksum error")
+        
+        if  rc == RC_SUCCESS:
+            print("dskiords: checksum is a match")
+        else:
+            print("dskiords: checksum error")
             break
  
 def dskiowrs():
@@ -950,12 +953,14 @@ def dskiowrs():
     while sectorcnt < numsectors:
         rc,buf = recvdata(SECTORSIZE)
         if  rc == RC_SUCCESS:
+            print("dskiowrs: checksum is a match")
             if sectorInfo[0] == 0:
                 drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
             else:
                 drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
             sectorcnt += 1
         else:
+            print("dskiowrs: checksum error")
             break
                   
 def dskiosct():
@@ -966,7 +971,7 @@ def dskiosct():
 
     global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
 
-    route = 2
+    route = 1
     
     if route == 1:             
         rc,buf = recvdata(5)
@@ -976,7 +981,11 @@ def dskiosct():
         byte_lsb = buf[3]
         byte_msb = buf[4]
         sectorInfo[3] = byte_lsb + 256 * byte_msb
-
+        if  rc == RC_SUCCESS:
+            print("dskiosct: checksum is a match")
+        else:
+            print("dskiosct: checksum error")
+            
     else:
         # Syncronize with MSX
         while piexchangebyte() != READY:  # was 0x9F:

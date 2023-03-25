@@ -288,32 +288,32 @@ DSKIO_SEC_ERR:
 
 DSKIO_SECTINFO1:
 
-	jr	ROUTINE2
+	jr      ROUTINE1
 
 ROUTINE1:
 
 	call	GETWRK
 	
-	pop	af
-	ld	(hl),a
-	inc	hl
+	pop	    af
+	ld	    (hl),a
+	inc	    hl
 
-	pop	bc
-	ld	(hl),b
-	inc	hl
+	pop	    bc
+	ld	    (hl),b
+	inc 	hl
 
-	ld	(hl),c
-	inc	hl
+	ld      (hl),c
+	inc     hl
 
-	pop	de
-	ld	(hl),e
-	inc	hl
+	pop     de
+	ld      (hl),e
+	inc     hl
 
-	ld	(hl),d
+	ld      (hl),d
 	
 	push	ix
-	pop	de
-	ld	bc,5
+	pop     de
+	ld	    bc,5
 	call	SENDDATA
 	ret
 
@@ -925,8 +925,6 @@ BIOSENTRYADDR:  EQU     $
         DW      _MSXPISYNC
         DW      RECVDATABLOCK
         DW      SENDDATABLOCK
-        DW      READDATASIZE
-        DW      SENDDATASIZE
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
@@ -945,7 +943,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230325.164"
+BuildId: DB "20230325.172"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
