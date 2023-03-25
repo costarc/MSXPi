@@ -1162,10 +1162,9 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             data[cnt] = ord(b)
         else:
             data[cnt] = b
-        cnt += 1   
-        if cnt == blocksize and blocksize < len(buf):
-            #print(len(data),data)
-            #print("sendmultiblock:",idx,cnt)
+        cnt += 1
+        if cnt == blocksize and idx < len(buf):
+            print("1",len(buf),idx,blocksize)
             rc = senddata(data, blocksize)
             if rc != RC_SUCCESS:
                 return RC_FAILED
@@ -1174,7 +1173,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             idx += blocksize
             cnt = 0
     #print(len(data),data)
-    #print("sendmultiblock:",idx,cnt)
+    print("2",len(buf),idx,blocksize)
     if cnt > 0:
         rc = senddata(data,blocksize)          
     return rc
