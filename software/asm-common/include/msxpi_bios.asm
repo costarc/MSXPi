@@ -216,11 +216,13 @@ SENDPICMD:
 ;  DE next available address
 RECVDATA:
 RECVDATABLOCK:
-        di
         ld      a,GLOBALRETRIES
 RECVRETRY:
+        di
         dec     a
         push    af                      ; save number of retries left
+        ld      a,READY
+        call    PIWRITEBYTE
         ld      hl,0                       ; will store checksum in HL
 RECV0:
         push    bc
@@ -243,6 +245,7 @@ RECV0:
         call    PIWRITEBYTE     ; send checksum calculated here
         ld      a,c                         ; get MSXPi chksum
         pop     bc                      ; number of retries in B
+        ei
         cp      l                           ; compare checksum
         ret       z                           ; return if match, C is 0
         ld      a,b
@@ -253,11 +256,13 @@ RECV0:
 
 SENDDATA:
 SENDDATABLOCK:
-        di
         ld      a,GLOBALRETRIES
 SENDRETRY:
+        di
         dec     a
         push    af                      ; save number of retries left
+        ld      a,READY
+        call    PIWRITEBYTE
         ld      hl,0                       ; will store checksum in HL
 SENDD0:
         push    bc
@@ -278,6 +283,7 @@ SENDD0:
         call    PIWRITEBYTE     ; send checksum calculated here
         call    PIREADBYTE      ; read checksum byte from msxpi server
         pop     bc                      ; Number of retries left in B
+        ei
         cp      l                           ; compare checksum
         ret      z                           ; return if match, C is 0
         ld      a,b                         ; Check retries left
@@ -723,8 +729,8 @@ SENDPARMS2:
 ; DE = Command name, terminated in zero
 ; Size is fixed: CMDSIZE
 SENDCOMMAND:
-        ld          a,READY             ; WAS $9F
-        call        PIWRITEBYTE         ; sync byte - indicate a command is about to start
+        ;ld          a,READY             ; WAS $9F
+        ;call        PIWRITEBYTE         ; sync byte - indicate a command is about to start
         ld          bc,CMDSIZE               ; command lenght set to fixed size
         call        SENDDATA
         ret

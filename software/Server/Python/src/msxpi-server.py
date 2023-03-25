@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.006"
+BuildId = "20230325.010"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -334,9 +334,9 @@ def pdir():
     global psetvar
     basepath = psetvar[0][1]
     rc = RC_SUCCESS
-    #print "pdir:starting"
+    print("pdir")
 
-    rc,data = recvdata()
+    rc,data = recvdata(BLKSIZE)
     path = data.decode().split("\x00")[0]
     
     try:
@@ -1014,6 +1014,10 @@ def recvdata( bytecounter = BLKSIZE):
     while retries > 0:
         retries -= 1
         
+        # Syncronize with MSX
+        while piexchangebyte() != READY: # WAS 0x9F:
+            pass
+            
         data = bytearray()
         chksum = 0
         while(bytecounter > 0 ):
@@ -1050,6 +1054,10 @@ def senddata(data, blocksize = BLKSIZE):
     while retries > 0:
         retries -= 1
         
+        # Syncronize with MSX
+        while piexchangebyte() != READY: # WAS 0x9F:
+            pass
+            
         byteidx = 0
         chksum = 0
     
@@ -1134,45 +1142,6 @@ def template():
     
     print("Sending response: ",buf) 
     rc = sendmultiblock(buf, BLKSIZE)
-
-def recvcmd():
-    print("recvcmd")
-      
-    retries = GLOBALRETRIES
-    while retries > 0:
-        retries -= 1
-        
-        # Syncronize with MSX
-        while piexchangebyte() != READY: # WAS 0x9F:
-            pass
-        
-        bytecounter = CMDSIZE
-        data = bytearray()
-        chksum = 0
-        while(bytecounter > 0 ):
-            msxbyte = piexchangebyte()
-            data.append(msxbyte)
-            chksum += msxbyte
-            bytecounter -= 1
-
-        # Receive the CRC
-        msxsum = piexchangebyte()
-        
-        # Send local CRC - only 8 right bits
-        thissum_r = (chksum % 256)              # right 8 bits
-        thissum_l = (chksum >> 8)                 # left 8 bits
-        thissum = ((thissum_l + thissum_r) % 256)
-        piexchangebyte(thissum)
-        
-        if (thissum == msxsum):
-            rc = RC_SUCCESS
-            #print("recvdata: checksum is a match")
-            break
-        else:
-            rc = RC_CRCERROR
-            print("recvdata: checksum error")
-
-    return rc,data.decode().split("\x00")[0]
         
 """ ============================================================================
     msxpi-server.py
@@ -1221,16 +1190,14 @@ dskioini("1")
 try:
     while True:
         try:
-            #print("st_recvcmd: waiting command")
-            rc,fullcmd = recvcmd()
-            print(fullcmd)
+            print("st_recvcmd: waiting command")
+            rc,buf = recvdata(CMDSIZE)
             
-            if (rc == RC_SUCCESS and len(fullcmd) > 0):
-                err = 0
+            if (rc == RC_SUCCESS):
+                fullcmd = buf.decode().split("\x00")[0]
+                print("cmd:",fullcmd)
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
-                #print("cmd: calling command ",cmd)
-             
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
