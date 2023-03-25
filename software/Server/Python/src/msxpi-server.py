@@ -979,7 +979,7 @@ def dskiosct():
 
     else:
         # Syncronize with MSX
-        while piexchangebyte() != 0x9F:
+        while piexchangebyte() != READY:  # was 0x9F:
             pass
             
         sectorInfo[0] = piexchangebyte()
@@ -1143,7 +1143,7 @@ def recvcmd():
         retries -= 1
         
         # Syncronize with MSX
-        while piexchangebyte() != 0x9F:
+        while piexchangebyte() != READY: # WAS 0x9F:
             pass
         
         bytecounter = CMDSIZE
