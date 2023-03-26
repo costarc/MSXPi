@@ -20,7 +20,7 @@ import math
 from random import randint
 
 version = "1.1"
-BuildId = "20230325.180"
+BuildId = "20230326.183"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -446,6 +446,9 @@ def pcd():
     return [rc, newpath]
 
 def pcopy():
+    pcp(True)
+    
+def pcp(isPcopy = False):
 
     inifcb=True
     buf = bytearray(BLKSIZE)
@@ -644,12 +647,26 @@ def pcopy():
             return RC_FAILED
 
         else:
-            if inifcb:
-                rc = ini_fcb(fname2,filesize)
-                if rc != RC_SUCCESS:
-                    print("pcopy: ini_fcb failed")
-                    return rc
-            rc = sendmultiblock(buf,SECTORSIZE)
+            if isPcopy:
+                if inifcb:
+                    rc = ini_fcb(fname2,filesize)
+                    if rc != RC_SUCCESS:
+                        print("pcopy: ini_fcb failed")
+                        return rc
+                # Thhis will send the file to MSX, for pcopy to write it to disk
+                rc = sendmultiblock(buf,SECTORSIZE)
+            
+            else:
+                # this will write the file directly to the disk image in RPi
+                try:
+                    fatfsfname = "fat://"+psetvar[2][1]
+                    print(fatfsfname)
+                    dskobj = open_fs(fatfsfname)
+                    dskobj.create(fname2,True)
+                    rc = dskobj.writebytes(fname2,buf)
+                    send_rc_msg(rc,"Pi:ok")
+                except Exception as e:
+                    send_rc_msg(RC_FAILED, str(e))
             
     #print(hex(rc))
     return rc

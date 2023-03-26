@@ -72,6 +72,8 @@ fi
 # ------------------------------------------
 cd $MYTMP
 sudo apt-get update
+sudo apt-get -y install python3
+sudo apt-get -y install python3-pip
 sudo apt-get -y install alsa-utils
 sudo apt-get -y install music123
 sudo apt-get -y install smbclient
@@ -81,6 +83,12 @@ sudo apt-get -y install mplayer
 sudo apt-get -y install pypy
 sudo apt-get -y install pigpio
 sudo apt-get -y install lhasa
+
+# Install FAT library for Python
+sudo python3 -m pip install pyfatfs
+# Apply dirty patch for it to work with MSX Disk images
+sudo sed -i "s/if signature != 0xAA55/#if signature != 0xAA55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
+sudo sed -i "s/xraise PyFATException(f\"Invalid signature:/#xraise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 
 # -------------------------
 # Enable remote ssh into Pi
@@ -131,20 +139,7 @@ amixer cset numid=3 1
 
 # Download msxpi-server (C and Python). Compile the C msxpi-server
 cd $MSXPIHOME
-mkdir msxpi-code
-cd msxpi-code
-rm *.c *.msx
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/msxpi-server.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/senddatablock.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/uploaddata.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/secsenddata.c
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/C/src/ploadbin.c
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-cc -Wall -pthread -o msxpi-server      msxpi-server.c  -lpigpio -lrt -lcurl
-cc -Wall -pthread -o senddatablock.msx senddatablock.c -lpigpio -lrt -lcurl
-cc -Wall -pthread -o uploaddata.msx    uploaddata.c    -lpigpio -lrt -lcurl
-cc -Wall -pthread -o secsenddata.msx   secsenddata.c   -lpigpio -lrt -lcurl
-cc -Wall -pthread -o ploadbin.msx      ploadbin.c      -lpigpio -lrt -lcurl
 
 mv msxpi-server.py msxpi-server *.msx $MSXPIHOME/
 cd $MSXPIHOME
@@ -160,13 +155,3 @@ sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
-# WhatsUp
-#sudo apt-get install python-dateutil
-#sudo apt-get install python-setuptools
-#sudo apt-get install python-dev
-#sudo apt-get install libevent-dev
-#sudo apt-get install ncurses-dev
-#sudo apt-get install git
-#git clone git://github.com/tgalal/yowsup.git
-#cd yowsup
-#sudo python setup.py install
