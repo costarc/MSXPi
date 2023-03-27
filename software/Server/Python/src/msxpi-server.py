@@ -18,9 +18,10 @@ import select
 import base64
 import math
 from random import randint
+from fs import open_fs
 
 version = "1.1"
-BuildId = "20230326.183"
+BuildId = "20230327.186"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -87,7 +88,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN,pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(mosiPin, GPIO.IN)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
@@ -659,7 +660,7 @@ def pcp(isPcopy = False):
             else:
                 # this will write the file directly to the disk image in RPi
                 try:
-                    fatfsfname = "fat://"+psetvar[2][1]
+                    fatfsfname = "fat:///"+psetvar[0][1]+'/'+psetvar[2][1]
                     print(fatfsfname)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
@@ -1097,6 +1098,7 @@ def recvdata( bytecounter = BLKSIZE):
         chksum = 0
         while(bytecounter > 0 ):
             msxbyte = piexchangebyte()
+            print(chr(msxbyte))
             data.append(msxbyte)
             chksum += msxbyte
             bytecounter -= 1
@@ -1270,6 +1272,7 @@ try:
             
             if (rc == RC_SUCCESS):
                 fullcmd = buf.decode().split("\x00")[0]
+                print(fullcmd)
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
