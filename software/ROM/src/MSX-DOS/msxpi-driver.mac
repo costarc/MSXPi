@@ -98,11 +98,11 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        ;ld      hl,MSXPISKP
-        ;call    PRINT
-		ld	bc,3
-		call	DELAY
-	    scf
+	ld	de, DOS_INI
+	call	SENDCOMMAND		; Initialise MSX-DOS in the server
+	ld	bc,2
+	call	DELAY		
+	;scf
         ret
 
 ; START OF -----------------------------
@@ -943,7 +943,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230327.188"
+BuildId: DB "20230327.208"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

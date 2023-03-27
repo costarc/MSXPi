@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230327.188"
+BuildId = "20230327.208"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -231,6 +231,10 @@ def getpath(basepath, path):
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
     print("msxdos_inihrd")
+    
+    if ('disk' in vars() or 'disk' in globals()):
+        disk.flush()
+        
     size = os.path.getsize(filename)
     if (size>0):
         fd = os.open(filename, os.O_RDWR)
@@ -445,13 +449,9 @@ def pcd():
         sendmultiblock('Pi:'+str(e))
 
     return [rc, newpath]
-
-def pcopy():
-    pcp(True)
     
-def pcp(isPcopy = False):
+def pcopy():
 
-    inifcb=True
     buf = bytearray(BLKSIZE)
     rc = RC_SUCCESS
 
@@ -496,20 +496,9 @@ def pcp(isPcopy = False):
     #    fname1 = path[0]
     #    fname2 = path[1]
 
-    print("p",path,len(path),path[0].startswith('/'))
     if (path[0].startswith('m:')):
         basepath = 'ftp://192.168.1.100/'
         fname1 = basepath + path[0].split(':')[1]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
     elif (path[0].startswith('ma1:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
         fname1 = basepath + path[0].split(':')[1]
@@ -526,55 +515,26 @@ def pcp(isPcopy = False):
     elif  (path[0].startswith('ma2:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
         fname1 = basepath + path[0].split(':')[1]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
     elif (path[0].startswith('http') or \
         path[0].startswith('ftp') or \
         path[0].startswith('nfs') or \
         path[0].startswith('smb')):
         fname1 = path[0]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
     elif (path[0].startswith('/')):
         fname1 = path[0]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
     else:
         fname1 = basepath + '/' + path[0]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
+
+    if expand == True:
+        if len(path) > 1:
             fname2 = path[1]
         else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
+            fname2 = '-'
+    elif len(path) > 1:
+        fname2 = path[1]
+    else:
+        fname0 = fname1.split('/')
+        fname2 = fname0[len(fname0)-1]
 
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
@@ -648,20 +608,33 @@ def pcp(isPcopy = False):
             return RC_FAILED
 
         else:
-            if isPcopy:
-                if inifcb:
-                    rc = ini_fcb(fname2,filesize)
-                    if rc != RC_SUCCESS:
-                        print("pcopy: ini_fcb failed")
-                        return rc
+            if not msxdos1boot: # Boot was not from MSXPi disk drive
+                rc = ini_fcb(fname2,filesize)
+                if rc != RC_SUCCESS:
+                    print("pcopy: ini_fcb failed")
+                    return rc
                 # Thhis will send the file to MSX, for pcopy to write it to disk
                 rc = sendmultiblock(buf,SECTORSIZE)
             
-            else:
-                # this will write the file directly to the disk image in RPi
+            else:# Booted from MSXPi disk drive (disk images)
+                # this routine will write the file directly to the disk image in RPi
                 try:
-                    fatfsfname = "fat:///"+psetvar[2][1]
-                    print(fatfsfname)
+                    print("try:",fname1,fname2)
+                    fatfsfname = "fat:///"+psetvar[1][1]        # Asumme Drive A:
+                    if fname2.upper().startswith("A:"):
+                        fname2 = fname2.split(":")
+                        if len(fname2[1]) > 0:
+                            fname2=fname2[1]           # Remove "A:" from name
+                        else:
+                            fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
+                    elif fname2.upper().startswith("B:"):
+                        fatfsfname = "fat:///"+psetvar[2][1]    # Is Drive B:
+                        fname2 = fname2.split(":")
+                        if len(fname2[1]) > 0:
+                            fname2=fname2[1]           # Remove "B:" from name
+                        else:
+                            fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
+                    print("ex",fatfsfname,fname1,fname2)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     rc = dskobj.writebytes(fname2,buf)
@@ -952,32 +925,42 @@ def irc(cmd=''):
     except Exception as e:
             print("irc:Caught exception"+str(e))
             sendmultiblock(rc,"Pi:"+str(e))
+            
+def dosinit():
     
-def dskioini(iniflag = ''):
+    global msxdos1boot
+        
+    rc,data = recvdata(BLKSIZE)
+    if rc = RC_SUCCESS:
+        flag = data.decode().split("\x00")[0]
+        if flag == '1':
+            dskioini()
+        else
+            msxdos1boot = False
+    
+    #print (hex(rc))
+    return rc
+    
+def dskioini():
     print("dskioini")
-    if len(iniflag) == 0:
-        iniflag = piexchangebyte()
-
-    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
     
-    if iniflag == '1':
-        #print("DOS: Enabling MSX-DOS1")
-
-        msxdos1boot = True
-
-        # Initialize disk system parameters
-        sectorInfo = [0,0,0,0]
-        numdrives = 0
-
-        # Load the disk images into a memory mapped variable
-        rc , drive0Data = msxdos_inihrd(psetvar[1][1])
-        rc , drive1Data = msxdos_inihrd(psetvar[2][1])
-    else:
-        #print("parms: disabling msxdos1boot")
-        msxdos1boot = False
+    global msxdos1boot,sectorInfo,drive0Data,drive1Data
+    
+    # Initialize disk system parameters
+    msxdos1boot = True
+    sectorInfo = [0,0,0,0]
+    
+    # Load the disk images into a memory mapped variable
+    rc , drive0Data = msxdos_inihrd(psetvar[1][1])
+    rc , drive1Data = msxdos_inihrd(psetvar[2][1])
 
 def dskiords():
     print("dskiords")
+    
+    global msxdos1boot,sectorInfo,drive0Data,drive1Data
+    if not msxdos1boot:
+        dskioini()
+        
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
@@ -1006,6 +989,11 @@ def dskiords():
  
 def dskiowrs():
     print("dskiowrs")
+    
+    global msxdos1boot,sectorInfo,drive0Data,drive1Data
+    if not msxdos1boot:
+        dskioini()
+        
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
@@ -1031,11 +1019,10 @@ def dskiowrs():
                   
 def dskiosct():
     print("dskiosct")
-    #if msxdos1boot != True:
-    #   piexchangebyte(RC_FAILED)
-    #  return
-
-    global msxdos1boot,sectorInfo,numdrivesM,drive0Data,drive1Data
+    
+    global msxdos1boot,sectorInfo,drive0Data,drive1Data
+    if not msxdos1boot:
+        dskioini()
 
     route = 1
     
@@ -1098,7 +1085,6 @@ def recvdata( bytecounter = BLKSIZE):
         chksum = 0
         while(bytecounter > 0 ):
             msxbyte = piexchangebyte()
-            print(chr(msxbyte))
             data.append(msxbyte)
             chksum += msxbyte
             bytecounter -= 1
@@ -1228,7 +1214,7 @@ def template():
 
 psetvar = [['PATH','/home/pi/msxpi'], \
            ['DRIVE0','/home/pi/msxpi/disks/msxpiboot.dsk'], \
-           ['DRIVE1','/home/pi/msxpi/disks/msxpitools.dsk'], \
+           ['DRIVE1','/home/pi/msxpi/disks/tools.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
@@ -1252,17 +1238,13 @@ psetvar = [['PATH','/home/pi/msxpi'], \
 channel = "#msxpi"
 allchann = []
 
-# msxdos
-msxdos1boot = True
-
 errcount = 0
-
+msxdos1boot = False
+    
 init_spi_bitbang()
 GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",BuildId)
-
-dskioini("1")
 
 try:
     while True:

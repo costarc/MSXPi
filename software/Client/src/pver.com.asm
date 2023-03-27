@@ -82,7 +82,6 @@ PRINTIFVER:
         ld      h,d
         ld      l,e
         call    PRINT
-        call    PRINTNLINE
         ret
 
 iftable:

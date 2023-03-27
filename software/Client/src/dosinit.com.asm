@@ -32,30 +32,42 @@
 ; File history :
 ; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-
-        LD      A,($82)
-        LD      (COMMAND + 9),A
-
-        LD      DE,COMMAND
-        CALL    SENDCOMMAND
-
-        JR      C,PRINTPIERR
-
-MAINPROGRAM:
-        RET
-
-COMMAND:  DB      "DOS     ",0
-                      DB        0,0
+;
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
+;
+        org     $0100
         
-PICOMMERR:  DB      "Communication Error",13,10,"$"
-PARMSERR:   DB      "Invalid parameters",13,10,"$"
+; Sending Command and Parameters to RPi
+        ld      de,command
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR
+        call    SENDPARMS
+        jr      c, PRINTPIERR
+        
+MAINPROG:
+        call    CLEARBUF
+        ld      de,buf
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        jr      c, PRINTPIERR
+        ld      hl,buf
+        ld      bc,BLKSIZE
+        call   PRINTPISTDOUT
+        jr      nc,MAINPROG
+        ret
+        
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
 
-
-; INCLUDE "debug.asm"
-
+command: db "dosinit ",0
+PICOMMERR:  DB      "Communication Error",13,10,0
+        
 INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "msxpi_io.asm"
-INCLUDE "msxdos_stdio.asm"
-
-; Your buffers and other temporary volatile temporary date should go here.
+buf:    equ     $
+        ds      BLKSIZE
+        db      0
