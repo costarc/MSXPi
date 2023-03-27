@@ -18,9 +18,10 @@ import select
 import base64
 import math
 from random import randint
+from fs import open_fs
 
 version = "1.1"
-BuildId = "20230325.180"
+BuildId = "20230327.187"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -87,7 +88,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN,pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(mosiPin, GPIO.IN)
     GPIO.setup(misoPin, GPIO.OUT)
     GPIO.setup(rdyPin, GPIO.OUT)
 
@@ -446,6 +447,9 @@ def pcd():
     return [rc, newpath]
 
 def pcopy():
+    pcp(True)
+    
+def pcp(isPcopy = False):
 
     inifcb=True
     buf = bytearray(BLKSIZE)
@@ -644,12 +648,26 @@ def pcopy():
             return RC_FAILED
 
         else:
-            if inifcb:
-                rc = ini_fcb(fname2,filesize)
-                if rc != RC_SUCCESS:
-                    print("pcopy: ini_fcb failed")
-                    return rc
-            rc = sendmultiblock(buf,SECTORSIZE)
+            if isPcopy:
+                if inifcb:
+                    rc = ini_fcb(fname2,filesize)
+                    if rc != RC_SUCCESS:
+                        print("pcopy: ini_fcb failed")
+                        return rc
+                # Thhis will send the file to MSX, for pcopy to write it to disk
+                rc = sendmultiblock(buf,SECTORSIZE)
+            
+            else:
+                # this will write the file directly to the disk image in RPi
+                try:
+                    fatfsfname = "fat:///"+psetvar[2][1]
+                    print(fatfsfname)
+                    dskobj = open_fs(fatfsfname)
+                    dskobj.create(fname2,True)
+                    rc = dskobj.writebytes(fname2,buf)
+                    send_rc_msg(rc,"Pi:ok")
+                except Exception as e:
+                    send_rc_msg(RC_FAILED, str(e))
             
     #print(hex(rc))
     return rc
@@ -1080,6 +1098,7 @@ def recvdata( bytecounter = BLKSIZE):
         chksum = 0
         while(bytecounter > 0 ):
             msxbyte = piexchangebyte()
+            print(chr(msxbyte))
             data.append(msxbyte)
             chksum += msxbyte
             bytecounter -= 1
@@ -1208,8 +1227,8 @@ def template():
 """
 
 psetvar = [['PATH','/home/pi/msxpi'], \
-           ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/msxpitools.dsk'], \
+           ['DRIVE0','/home/pi/msxpi/disks/msxpiboot.dsk'], \
+           ['DRIVE1','/home/pi/msxpi/disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
@@ -1253,6 +1272,7 @@ try:
             
             if (rc == RC_SUCCESS):
                 fullcmd = buf.decode().split("\x00")[0]
+                print(fullcmd)
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
