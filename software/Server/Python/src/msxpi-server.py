@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230327.186"
+BuildId = "20230327.187"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -660,7 +660,7 @@ def pcp(isPcopy = False):
             else:
                 # this will write the file directly to the disk image in RPi
                 try:
-                    fatfsfname = "fat:///"+psetvar[0][1]+'/'+psetvar[2][1]
+                    fatfsfname = "fat:///"+psetvar[2][1]
                     print(fatfsfname)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
@@ -1227,8 +1227,8 @@ def template():
 """
 
 psetvar = [['PATH','/home/pi/msxpi'], \
-           ['DRIVE0','disks/msxpiboot.dsk'], \
-           ['DRIVE1','disks/msxpitools.dsk'], \
+           ['DRIVE0','/home/pi/msxpi/disks/msxpiboot.dsk'], \
+           ['DRIVE1','/home/pi/msxpi/disks/msxpitools.dsk'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
