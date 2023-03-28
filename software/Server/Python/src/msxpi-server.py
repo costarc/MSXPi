@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230327.208"
+BuildId = "20230328.209"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -65,7 +65,7 @@ RC_WAIT             =    0xE9
 RC_READY            =    0xEA
 RC_SUCCNOSTD        =    0xEB
 RC_FAILNOSTD        =    0xEC
-RC_ESCAPE           =    0xED
+RC_TERMINATE        =    0xED
 RC_UNDEFINED        =    0xEF
 
 st_init             =    0       # waiting loop, waiting for a command
@@ -637,12 +637,14 @@ def pcopy():
                     print("ex",fatfsfname,fname1,fname2)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
-                    rc = dskobj.writebytes(fname2,buf)
-                    send_rc_msg(rc,"Pi:ok")
+                    print("before")
+                    dskobj.writebytes(fname2,buf)
+                    print("after")
+                    send_rc_msg(RC_TERMINATE,"Pi:ok")
                 except Exception as e:
-                    send_rc_msg(RC_FAILED, str(e))
+                    send_rc_msg(RC_FAILED, "Pi: " + str(e))
             
-    #print(hex(rc))
+    print(hex(rc))
     return rc
 
 def ploadr(path=''):
@@ -931,11 +933,11 @@ def dosinit():
     global msxdos1boot
         
     rc,data = recvdata(BLKSIZE)
-    if rc = RC_SUCCESS:
+    if rc == RC_SUCCESS:
         flag = data.decode().split("\x00")[0]
         if flag == '1':
             dskioini()
-        else
+        else:
             msxdos1boot = False
     
     #print (hex(rc))

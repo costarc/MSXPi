@@ -62,6 +62,8 @@ MAINPROG:
         cp      RC_FAILED   
         ld      bc,MSGSIZE
         jp      z,PRINTPISTDOUT            ; if received data correctly, display in screen
+        cp      RC_TERMINATE
+        ret     z
         INC         HL
         INC         HL
         INC         HL
