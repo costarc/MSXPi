@@ -1,11 +1,11 @@
-#from fs import open_fs
+#!/usr/bin/python3
 import sys
 import fs
 
 if len(sys.argv) < 2:
     print("Parameters:")
-    print("/c   copy files")
-    print("/l   list files")
+    print("copy   copy files")
+    print("dir    list files")
     print("To copy a file to a disk image:\n")
     print("dskcp.py file diskimage.dsk:file")
     print("\n Directories are not supported")

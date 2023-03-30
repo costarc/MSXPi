@@ -568,35 +568,35 @@ GETSTRPNT:
         RET
  
 EVALTXTPARAM:
-    CALL    CHKCHAR
-    DEFB    "("             ; Check for (
-    LD  IX,FRMEVL
-    CALL    CALBAS      ; Evaluate expression
+        CALL    CHKCHAR
+        DEFB    "("             ; Check for (
+        LD      IX,FRMEVL
+        CALL    CALBAS      ; Evaluate expression
         LD      A,(VALTYP)
         CP      3               ; Text type?
         JP      NZ,TYPE_MISMATCH
         PUSH    HL
-        LD  IX,FRESTR         ; Free the temporary string
+        LD      IX,FRESTR         ; Free the temporary string
         CALL    CALBAS
         POP HL
-    CALL    CHKCHAR
-    DEFB    ")"             ; Check for )
+        CALL    CHKCHAR
+        DEFB    ")"             ; Check for )
         RET
  
  
 CHKCHAR:
-    CALL    GETPREVCHAR ; Get previous basic char
-    EX  (SP),HL
-    CP  (HL)            ; Check if good char
-    JR  NZ,SYNTAX_ERROR ; No, Syntax error
-    INC HL
-    EX  (SP),HL
-    INC HL      ; Get next basic char
+        CALL    GETPREVCHAR ; Get previous basic char
+        EX      (SP),HL
+        CP      (HL)            ; Check if good char
+        JR      NZ,SYNTAX_ERROR ; No, Syntax error
+        INC     HL
+        EX      (SP),HL
+        INC     HL      ; Get next basic char
  
 GETPREVCHAR:
-    DEC HL
-    LD  IX,CHRGTR
-    JP      CALBAS
+        DEC     HL
+        LD      IX,CHRGTR
+        JP      CALBAS
  
  
 TYPE_MISMATCH:
@@ -605,8 +605,8 @@ TYPE_MISMATCH:
  
 SYNTAX_ERROR:
         LD      E,2
-    LD  IX,ERRHAND  ; Call the Basic error handler
-    JP  CALBAS
+        LD      IX,ERRHAND  ; Call the Basic error handler
+        JP      CALBAS
  
 ;================================================================
 ; call Commands start here
@@ -622,26 +622,6 @@ _MSXPIVER:
         pop     hl
         ret
         
-;-----------------------
-; call MSXPISTATUS     |
-;-----------------------
-_MSXPISTATUS:
-        PUSH    HL
-        LD      BC,4
-        LD      DE,PINGCMD
-        CALL    SENDPICMD
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        ld      hl,PIOFFLINE
-        JR      C,PRINTSTATUSMSG
-        CP      RC_SUCCNOSTD
-        jr      NZ,PRINTSTATUSMSG
-        ld      hl,PIONLINE
-PRINTSTATUSMSG:
-        call      PRINT
-        POP       HL
-        ret
-
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
 ;--------------------------------------------------------------------
@@ -657,7 +637,7 @@ _MSXPI:
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
-        
+
 CALL_MSXPI1:
 ; At this point:
 ; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
@@ -665,123 +645,162 @@ CALL_MSXPI1:
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
 ;
-        PUSH    HL
+; Routine explanation:
+; MSX Send the command to RPi
+; RPi reply with a sort message (MSGSIZE) with the following structure:
+; | RC | LSB | MSB | Message or DATA |
+; RC = RC_FAILED: Pi error. Message available to print
+; RC = RC_SUCCESS: Pi processing succeed - data available and there is another block
+; RC = RC_TERMINATE: Pi processing succeed - data available and this is last block
+
         PUSH    AF
-        LD      C,B
-        LD      B,0
-        LD      H,D
-        LD      L,E
+        PUSH    HL
+        CALL    DBGHL
+        CALL    DBGDE
+        CALL    DBGBC
         CALL    SENDPICMD
+        POP     DE
         JR      C,CALL_MSXPIERR
-        POP     AF     			; stdout option
+        POP     AF     			        ; stdout option
                                         ; Verify if user wants to print STDOUT from RPi
-        CP      '1'			; User did not specify. Default is to print
+        CP      '1'
         JR      Z,CALL_MSXPISTDOUT
         CP      '2'
         JR      Z,CALL_MSXPISAVSTD
-	POP	HL
-	LD	BC,BLKSIZE
-        CALL    NOSTDOUT
-	XOR	A	
-        LD      (HL),A
+        LD	    BC,BLKSIZE
+        PUSH    DE
+        CALL    DISCARDDATA            ; Will read data and discard
+        POP     DE
+        LD      A,RC_SUCCESS
+        LD      (DE),A
         POP     HL
         OR      A
         RET
-
 
 CALL_MSXPIERR:
-        POP     AF
-        POP     HL
-        CP      1
-        JR      NZ,CALL_MSXPIERR2
-        LD      A,RC_CONNERR
-CALL_MSXPIERR2:
-        LD      (HL),A                  ; Store return code in buffer
-        POP     HL
+        LD      A,RC_FAILED
+        LD      (DE),A                  ; Store return code in buffer
+        POP     HL                      ; Stack
         OR      A
         RET
-
-CALL_MSXPISTDOUT:
-	POP	DE
-CALL_MSXPISTDOUT1:
+        
+DISCARDDATA:
         PUSH    DE
-	LD	BC,BLKSIZE
+        PUSH    BC
         CALL    RECVDATA
-        POP     HL
-	LD	A,1
-	JR	C,CALL_MSXPIERR2	; If error
-	LD	BC,BLKSIZE
-	PUSH	HL
-        CALL    PRINTPISTDOUT
-	POP	DE
-	JR	NC,CALL_MSXPISTDOUT1
-        POP     HL
-        OR      A
-        RET
-
+        POP     BC
+        POP     DE
+        JR      C,CALL_MSXPIERR
+        LD      A,(DE)
+        CP      RC_TERMINATE
+        JR      Z,CALL_MSXPISEND
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPIERR
+        JR      DISCARDDATA
+        
+CALL_MSXPISTDOUT:
+        PUSH    DE
+        PUSH    BC
+        CALL    RECVDATA
+        POP     BC
+        POP     DE
+        JR      C,CALL_MSXPIERR
+        LD      A,(DE)
+        CP      RC_TERMINATE
+        JR      Z,CALL_MSXPISEND
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPIERR
+        PUSH    DE
+        PUSH    BC
+        INC     DE
+        LD      A,(DE)
+        LD      C,A
+        INC     DE
+        LD      A,(DE)
+        LD      B,A
+        INC     DE
+        EX      DE,HL
+        CALL    PRINT
+        POP     BC
+        POP     DE
+        JR      CALL_MSXPISTDOUT
+        
 CALL_MSXPISAVSTD:
-	POP	DE
-	PUSH	DE
-	LD	BC,BLKSIZE
-        CALL    RECVDATA		; Read first block
-	POP	HL
-	LD	A,1
-	JR	C,CALL_MSXPIERR2
-	LD	A,(HL)
-	CP	RC_FAILED
-	JR	Z, CALL_MSXPIERR2
-	CP	RC_SUCCESS		; End of transfer - no calculations are required
-	JR	Z, CALL_MSXPISAVSTDEND
-					
-	CP	RC_READY		; Assume there is another block and continue
-	JR	Z, CALL_MSXPISAVSTD1
-	SCF
-	JR	CALL_MSXPIERR2
-CALL_MSXPISAVSTD1:			; If its here, it's multi-block transfer	
-	PUSH	HL			; Always save start of the user buffer 
-	PUSH	DE			; Save current buffer address
-	LD	BC,BLKSIZE		
-        CALL    RECVDATA
-	POP	IY
-	POP	IX
-	LD	A,1
-	JR	C, CALL_MSXPIERR2	; Transfer error
-	PUSH	IX
-	LD	A,(IY + 0)		; Transfer this block header to buffer header
-	LD	(IX + 0),A		; Transfer return code
-	LD	L,(IX + 1)		; add block size to current buffer size
-	LD	H,(IX + 2)		
-	LD	C,(IY + 1)			
-	LD	B,(IY + 2)
-	ADD	HL,BC			; and store total in the master header (block 1 header)
-	LD	(IX + 1),L
-	LD	(IX + 2),H
-	PUSH	IY
-	POP	DE
-	LD	H,D
-	LD	L,E
-	INC	HL
-	INC	HL
-	INC	HL
-	LD	BC,BLKSIZE
-	LDIR				; Move this block 3 bytes left (discard header)
-	POP	HL
-	LD	A,(HL)
-	CP	RC_FAILED
-	JR	Z, CALL_MSXPIERR2
-	CP	RC_SUCCESS
-	JR	Z, CALL_MSXPISAVSTDEND	; This was last block - finish command
-	CP	RC_READY
-	JR	Z, CALL_MSXPISAVSTD1
+        PUSH    DE
+        PUSH    BC
+        CALL    RECVDATA                ; Read first block
+        POP     BC
+        POP     DE
+        JR      C,CALL_MSXPIERR         ; Communication error - exit
+        LD      A,(DE)
+        CP      RC_TERMINATE
+        JR      C,CALL_MSXPISEND       ; Data had only one block - exit
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPIERR         ; Pi processing error
 
-CALL_MSXPISAVSTDEND:			; Go back to BASIC
+; At this point, there will be more blocks to read
+; After every block received, the block header must be moved to the begggining of the buffer,
+; and the data shifted 3 bytes to the left
+; HL = Initial buffer address
+; DE = Next buffer address
+; BC = Buffer size
+
+CALL_MSXPISAVSTDL:
+        PUSH    DE
+        PUSH    HL
+        PUSH    BC
+        CALL    RECVDATA
+        POP     BC
+        POP     HL
+        POP     IX
+        JR      C,CALL_MSXPIERR         ; If error
+; HL = BUF ADDRESS
+; IX = BLOCK ADDRESS
+; DE = BLOCK + BLKSIZE
+        CALL    CALL_MSXPISTDOUTMB      ; Move this block data and header
+        LD      A,(HL)
+        CP      RC_FAILED
+        JR      Z,CALL_MSXPIERR         ; Pi processing error
+        CP      RC_SUCCESS
+        JR      Z,CALL_MSXPISAVSTDL
+        POP     HL                      ; Stack
+        OR      A
+        RET
+CALL_MSXPISEND:
         POP     HL
         OR      A
         RET
 
-	
+CALL_MSXPISTDOUTMB:
+        PUSH    HL
+        POP     IY
+        LD      A,(IX + 0)          ; Move the header to beggining of buffer
+        LD      (IY + 0),A
+        LD      A,(IX + 1)
+        LD      (IY + 1),A
+        LD      A,(IX + 2)
+        LD      (IY + 2),A
+        PUSH    DE                  ; Next buffer address
+        PUSH    HL                  ; Begginign of buffer
+        
+        PUSH    IX                  ;Move remaining data
+        POP     DE
+        LD      H,D
+        LD      L,E
+        INC     HL                  ; Skip header becuase it was already moved
+        INC     HL
+        INC     HL
+        LD      BC,BLKSIZE - 3      ; Remaining bytes in the block (-3 from the header)
+        LDIR
+        POP     HL
+        POP     DE
+        DEC     DE                  ; Discard the 3 bytes header in the block
+        DEC     DE
+        DEC     DE
+        RET
+    
 ;----------------------------------------
-; Call MSXPI BIOS function SENDDATABLOCK|
+; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
 _MSXPISEND:
 ; retrive CALL parameters from stack (second position in stack)
@@ -809,16 +828,19 @@ MSXPISEND1:
         INC     HL
         LD      D,H
         LD      E,L
-        CALL    SENDDATABLOCK
-; skip the parameters before returning: ("xxxx") = 8 positions to skip
+        CALL    SENDDATA
         POP     HL
+        JR      NC,MSXPISEND2
+        LD      A,RC_FAILED
         LD      (HL),A
+MSXPISEND2:
+; skip the parameters before returning: ("xxxx") = 8 positions to skip
         POP     HL
         OR      A
         RET
 
 ;----------------------------------------
-; Call MSXPI BIOS function RECVDATABLOCK|
+; Call MSXPI BIOS function RECVDATA     |
 ;----------------------------------------
 _MSXPIRECV:
         CALL    EVALTXTPARAM    ; Evaluate text parameter
@@ -836,24 +858,11 @@ MSXPIRECV1:
         LD      D,H
         LD      E,L
         PUSH    HL
-; Save first buffer address to store return core
-        INC     DE
-; Save two memory positions to store buffer size later
-        XOR     A
-        LD      (DE),A
-        INC     DE
-        LD      (DE),A
-        INC     DE
-        CALL    RECVDATABLOCK
+        CALL    RECVDATA
         POP     HL
-; Store return code into 1st position in buffer
+        JR      NC,MSXPIRECV2
+        LD      A,RC_FAILED
         LD      (HL),A
-        JR      C,MSXPIRECV2
-        INC     HL
-; Return buffer size to BASIC in first two positions of buffer
-        LD      (HL),C
-        INC     HL
-        LD      (HL),B
 MSXPIRECV2:
         POP     HL
         OR      A
@@ -891,40 +900,13 @@ GETPOINTERSEXIT:
         or      a
         ret
 
-;-----------------------
-; call MSXPISYNC       |
-;-----------------------
-_MSXPISYNC:
-    PUSH    HL
-    CALL    PSYNC
-    LD      HL,PSYNC_ERROR
-    JR      C,_MSXPSYNC_EXIT
-    LD      HL,PSYNC_RESTORED
-
-_MSXPSYNC_EXIT:
-    CALL    PRINT
-    POP     HL
-    OR      A
-    RET
-
-restore_ram_slots:
-    ld      a,(RAMAD1)
-    ld      h,$40
-    call    ENASLT
-    ld      a,(RAMAD2)
-    ld      h,$80
-    call    ENASLT
-    ret
-
 BIOSENTRYADDR:  EQU     $
         DW      _MSXPIVER
-        DW      _MSXPISTATUS
         DW      _MSXPI
         DW      _MSXPISEND
         DW      _MSXPIRECV
-        DW      _MSXPISYNC
-        DW      RECVDATABLOCK
-        DW      SENDDATABLOCK
+        DW      RECVDATA
+        DW      SENDDATA
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
@@ -935,7 +917,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        DW      PSYNC
 
 ; ================================================================
 ; Text messages used in the loader
@@ -943,14 +924,11 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230328.209"
+BuildId: DB "20230330.238"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
-        DB      "MSXPI MSXPISEND MSXPIRECV MSXPISTATUS MSXPISYNC MSXPIVER ",13,10,0
-MSXPISKP:
-        DB       "Press P to boot MSXPi DOS",13,10
-        DB      00
+        DB      "MSXPI MSXPISEND MSXPIRECV MSXPIVER ",13,10,0
 
 PIOFFLINE:
         DB      "Communication Error",13,10,0
@@ -980,9 +958,6 @@ CALL_TABLE:
         DB      "MSXPIVER",0
         DW      _MSXPIVER
 
-        DB      "MSXPISTA",0
-        DW      _MSXPISTATUS
-
         DB      "GETPOINT",0
         DW      _GETPOINTERS
 
@@ -992,10 +967,7 @@ CALL_TABLE:
         DB      "MSXPIRCV",0
         DW      _MSXPIRECV
 
-        DB      "MSXPISYN",0
-        DW      _MSXPISYNC
-
-        DB      "MSXPI   ",0
+        DB      "MSXPI",0
         DW      _MSXPI
 
 ENDOFCMDS:
@@ -1012,6 +984,6 @@ INCLUDE include.asm
 INCLUDE putchar-msxdos.asm
 INCLUDE msxpi_bios.asm
 INCLUDE debug.asm
-INCLUDE debug-rom.asm
+;INCLUDE debug-rom.asm
 
 

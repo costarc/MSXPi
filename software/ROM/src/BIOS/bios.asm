@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.0.0                                                           |
+;| Version : 1.1                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,8 +31,9 @@
 ;
 ; File history :
 ; 0.1    : initial version
-; 0.9.1  : Changes to supoprt new transfer logic
-
+; 0.9.1  : Changes to support new transfer logic
+; 1.1    : Changes to support new transfer routines
+;
 TEXTTERMINATOR: EQU 0
 BDOS:           EQU $F37D
 PageSize:       EQU $4000   ; 16kB

@@ -171,36 +171,21 @@ nextbit16:
 ; Send a command to Raspberry Pi
 ; Input:
 ;   de = should contain the command string
-;   bc = number of bytes in the command string
+;   b  = number of bytes in the command string
 ; Output:
 ;   Flag C set if there was a communication error
 SENDPICMD:
 ; Save flag C which tells if extra error information is required
 ; Get working area to store the command, and format it:
-        PUSH    BC
-        PUSH    DE
-        ;CALL    GETWRK
+        LD      C,B
+        LD      B,0
         LD      H,D
         LD      L,E
-        LD      BC,BLKSIZE
-        ADD HL,BC               ; Get a workign area at the end of user's buffer        
-        PUSH    HL
-        LD      D,H
-        LD      E,L
-        LD      BC,8
-        LD      A,32
-        LD      (HL),A
-        INC     DE
-        LDIR
+        ADD     HL,BC
         XOR     A
-        LD      (DE),A
-        POP     DE              ; Workarea (to store command)
-        POP     HL              ; Command address sent by BASIC
-        POP     BC              ; Size of command
-        PUSH   DE
-        LDIR                       ; Move command to formated 9 bytes work area
-        POP     DE              ; Restore command address (Workarea)
-        CALL    SENDCOMMAND
+        LD      (HL),A          ; Zero at the end of the command
+        LD      BC,CMDSIZE
+        CALL    SENDDATA
         RET
 
 ;---------------------------------------------------------------
@@ -463,7 +448,7 @@ ATOHERR:
 ; Input:
 ;  DE = Call full command (after the ")
 ; Output:
-;  A = Outout type (as below cases)
+;  A = Output type (as below cases)
 ;  DE = Point to start of command to send to RPi (pdir in the case below)
 ;  HL = Address of buffer to store data if stdout = 2
 ;
