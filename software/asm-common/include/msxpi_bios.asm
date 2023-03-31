@@ -170,22 +170,55 @@ nextbit16:
 ;-----------------------
 ; Send a command to Raspberry Pi
 ; Input:
+;   hl = buffer passed by user
 ;   de = should contain the command string
 ;   b  = number of bytes in the command string
 ; Output:
 ;   Flag C set if there was a communication error
 SENDPICMD:
-; Save flag C which tells if extra error information is required
-; Get working area to store the command, and format it:
-        LD      C,B
-        LD      B,0
-        LD      H,D
-        LD      L,E
-        ADD     HL,BC
-        XOR     A
-        LD      (HL),A          ; Zero at the end of the command
-        LD      BC,CMDSIZE
+        PUSH    HL
+        CALL    GETCMD
+        POP     HL
+        PUSH    HL              ; COMMAND BUFFER
+        PUSH    DE              ; Next parmameters address
+        EX      DE,HL
+        CALL    SENDCOMMAND
+        POP     DE
+        POP     HL
+        PUSH    HL
+        INC     DE              ; Skip Zero inseted in previous call
+        CALL    GETPARMS
+        POP     DE
+        LD      BC,BLKSIZE
         CALL    SENDDATA
+        RET
+GETCMD:
+        LD      A,(DE)
+        CP      ' '
+        JR      Z,GETCMDEXIT
+        CP      $22             ; QUOTE (")
+        JR      Z,GETCMDEXIT
+        LD      (HL),A
+        INC     DE
+        INC     HL
+        JR      GETCMD
+GETCMDEXIT:
+        XOR     A
+        LD      (HL),A
+        RET
+GETPARMS:
+        LD      A,(DE)
+        CP      $22
+        JR      Z,GETPARMSEXIT
+        CP      ')'
+        JR      Z,GETPARMSEXIT
+        LD      (HL),A
+        INC     HL
+        INC     DE
+        JR      GETPARMS
+GETPARMSEXIT:
+        XOR     A
+        LD      (HL),A
         RET
 
 ;---------------------------------------------------------------
@@ -241,7 +274,7 @@ RECV0:
         ret     z                           ; return if match, C is 0
         ld      a,b
         or      a
-        jr       nz,RECVRETRY     ;go for another retry 
+        jr      nz,RECVRETRY     ;go for another retry
         scf                                 ; differ, set flag for Error
         ret
 
@@ -289,7 +322,7 @@ SENDD0:
 PRINT:
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
-        jr      Z,PRINTEXIT
+        ret     z
         cp      10
         jr      nz,PRINT1
         call    PUTCHAR
@@ -298,8 +331,6 @@ PRINT1:
         call	PUTCHAR		;put a character
         inc     hl
         jr      PRINT
-PRINTEXIT:
-        ret
 
 PRINTNLINE:
         ld      a,13

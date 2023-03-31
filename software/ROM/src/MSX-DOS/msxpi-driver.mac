@@ -647,7 +647,7 @@ CALL_MSXPI1:
 ;
 ; Routine explanation:
 ; MSX Send the command to RPi
-; RPi reply with a sort message (MSGSIZE) with the following structure:
+; RPi reply with a sort message (BLKSIZE) with the following structure:
 ; | RC | LSB | MSB | Message or DATA |
 ; RC = RC_FAILED: Pi error. Message available to print
 ; RC = RC_SUCCESS: Pi processing succeed - data available and there is another block
@@ -655,150 +655,55 @@ CALL_MSXPI1:
 
         PUSH    AF
         PUSH    HL
-        CALL    DBGHL
-        CALL    DBGDE
-        CALL    DBGBC
         CALL    SENDPICMD
+        POP     DE                      ; buffer for RPi data
+        JR      C,CALL_MSXPIERR
+        PUSH    DE
+        LD      BC,BLKSIZE
+        CALL    RECVDATA
         POP     DE
         JR      C,CALL_MSXPIERR
-        POP     AF     			        ; stdout option
-                                        ; Verify if user wants to print STDOUT from RPi
-        CP      '1'
-        JR      Z,CALL_MSXPISTDOUT
-        CP      '2'
-        JR      Z,CALL_MSXPISAVSTD
-        LD	    BC,BLKSIZE
+; Process RPi reply
+        LD      HL,BLKSIZE
+        ADD     HL,DE
         PUSH    DE
-        CALL    DISCARDDATA            ; Will read data and discard
+        LD      D,H
+        LD      E,L
+        DEC     HL
+        LD      BC,BLKSIZE + 2
+        LDDR                            ; Shift whole data 1 byte ahead
         POP     DE
-        LD      A,RC_SUCCESS
-        LD      (DE),A
+        INC     DE
+        POP     AF                      ; stdou option
+        CP      '1'
+        CALL    Z,CALL_MSXPISTDOUT
         POP     HL
         OR      A
         RET
 
 CALL_MSXPIERR:
+        POP     AF
         LD      A,RC_FAILED
         LD      (DE),A                  ; Store return code in buffer
         POP     HL                      ; Stack
         OR      A
         RET
         
-DISCARDDATA:
-        PUSH    DE
-        PUSH    BC
-        CALL    RECVDATA
-        POP     BC
-        POP     DE
-        JR      C,CALL_MSXPIERR
-        LD      A,(DE)
-        CP      RC_TERMINATE
-        JR      Z,CALL_MSXPISEND
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPIERR
-        JR      DISCARDDATA
-        
 CALL_MSXPISTDOUT:
         PUSH    DE
-        PUSH    BC
-        CALL    RECVDATA
-        POP     BC
-        POP     DE
-        JR      C,CALL_MSXPIERR
-        LD      A,(DE)
-        CP      RC_TERMINATE
-        JR      Z,CALL_MSXPISEND
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPIERR
-        PUSH    DE
-        PUSH    BC
-        INC     DE
-        LD      A,(DE)
-        LD      C,A
-        INC     DE
-        LD      A,(DE)
-        LD      B,A
-        INC     DE
         EX      DE,HL
-        CALL    PRINT
-        POP     BC
+        LD      BC,BLKSIZE
+        CALL    PRINTPISTDOUT
         POP     DE
+        RET     C
+        PUSH    DE
+        LD      BC,BLKSIZE
+        CALL    RECVDATA
+        POP     DE
+        RET     C
         JR      CALL_MSXPISTDOUT
         
-CALL_MSXPISAVSTD:
-        PUSH    DE
-        PUSH    BC
-        CALL    RECVDATA                ; Read first block
-        POP     BC
-        POP     DE
-        JR      C,CALL_MSXPIERR         ; Communication error - exit
-        LD      A,(DE)
-        CP      RC_TERMINATE
-        JR      C,CALL_MSXPISEND       ; Data had only one block - exit
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPIERR         ; Pi processing error
 
-; At this point, there will be more blocks to read
-; After every block received, the block header must be moved to the begggining of the buffer,
-; and the data shifted 3 bytes to the left
-; HL = Initial buffer address
-; DE = Next buffer address
-; BC = Buffer size
-
-CALL_MSXPISAVSTDL:
-        PUSH    DE
-        PUSH    HL
-        PUSH    BC
-        CALL    RECVDATA
-        POP     BC
-        POP     HL
-        POP     IX
-        JR      C,CALL_MSXPIERR         ; If error
-; HL = BUF ADDRESS
-; IX = BLOCK ADDRESS
-; DE = BLOCK + BLKSIZE
-        CALL    CALL_MSXPISTDOUTMB      ; Move this block data and header
-        LD      A,(HL)
-        CP      RC_FAILED
-        JR      Z,CALL_MSXPIERR         ; Pi processing error
-        CP      RC_SUCCESS
-        JR      Z,CALL_MSXPISAVSTDL
-        POP     HL                      ; Stack
-        OR      A
-        RET
-CALL_MSXPISEND:
-        POP     HL
-        OR      A
-        RET
-
-CALL_MSXPISTDOUTMB:
-        PUSH    HL
-        POP     IY
-        LD      A,(IX + 0)          ; Move the header to beggining of buffer
-        LD      (IY + 0),A
-        LD      A,(IX + 1)
-        LD      (IY + 1),A
-        LD      A,(IX + 2)
-        LD      (IY + 2),A
-        PUSH    DE                  ; Next buffer address
-        PUSH    HL                  ; Begginign of buffer
-        
-        PUSH    IX                  ;Move remaining data
-        POP     DE
-        LD      H,D
-        LD      L,E
-        INC     HL                  ; Skip header becuase it was already moved
-        INC     HL
-        INC     HL
-        LD      BC,BLKSIZE - 3      ; Remaining bytes in the block (-3 from the header)
-        LDIR
-        POP     HL
-        POP     DE
-        DEC     DE                  ; Discard the 3 bytes header in the block
-        DEC     DE
-        DEC     DE
-        RET
-    
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
@@ -924,7 +829,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230330.238"
+BuildId: DB "20230330.256"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

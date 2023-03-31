@@ -53,7 +53,7 @@
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
-        ld      bc,MSGSIZE
+        ld      bc,BLKSIZE
         call    RECVDATA
         jr      c, PRINTPIERR 
         ld      hl,buf

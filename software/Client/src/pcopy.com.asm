@@ -52,7 +52,7 @@ DSKBLOCKSIZE:   EQU 1
 MAINPROG:
         call    CLEARBUF
         ld      de,buf
-        ld      bc,MSGSIZE
+        ld      bc,BLKSIZE
         call    RECVDATA        ; Receive RC and FCB data if successful
         jr      c, PRINTPIERR        
         
@@ -60,7 +60,7 @@ MAINPROG:
         ld      a,(hl)
         inc     hl
         cp      RC_FAILED   
-        ld      bc,MSGSIZE
+        ld      bc,BLKSIZE
         jp      z,PRINTPISTDOUT            ; if received data correctly, display in screen
         cp      RC_TERMINATE
         ret     z

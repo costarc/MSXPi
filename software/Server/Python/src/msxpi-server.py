@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230330.238"
+BuildId = "20230330.256"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -295,7 +295,7 @@ def ini_fcb(fname,fsize):
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
     
-    rc = sendmultiblock(buf, MSGSIZE)
+    rc = sendmultiblock(buf, BLKSIZE)
     
     #print("ini_fcb: Exiting")
     
@@ -307,6 +307,7 @@ def prun(cmd = ''):
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc,data = recvdata()
+        print(data)
         cmd = data.decode().split("\x00")[0]
     
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
@@ -818,7 +819,7 @@ def pwifi():
 def pver():
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+ BuildId
-    rc = sendmultiblock(ver, MSGSIZE)
+    rc = sendmultiblock(ver, BLKSIZE)
     return rc
     
 def irc(cmd=''):
@@ -1108,7 +1109,7 @@ def recvdata( bytecounter = BLKSIZE):
             rc = RC_CRCERROR
             print("recvdata: checksum error")
 
-    #print (hex(rc))
+    print (hex(rc))
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
@@ -1171,7 +1172,6 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             data[cnt] = b
         cnt += 1
         if cnt == blocksize and idx < len(buf):
-            print("1",len(buf),idx,blocksize)
             rc = senddata(data, blocksize)
             if rc != RC_SUCCESS:
                 return RC_FAILED
@@ -1179,20 +1179,19 @@ def sendmultiblock(buf, blocksize = BLKSIZE):
             data = bytearray(blocksize)
             idx += blocksize
             cnt = 0
-    #print(len(data),data)
-    print("2",len(buf),idx,blocksize)
+    print(len(data),data)
     if cnt > 0:
         rc = senddata(data,blocksize)          
     return rc
    
-def send_rc_msg(rc,msg):
+def send_rc_msg(rc,msg,blocksize = BLKSIZE):
     #print("send_rc_msg:",rc,msg)
     
     buf = bytearray()
     buf.extend(rc.to_bytes(1,'little'))
     buf.extend(msg.encode())
     
-    rc = sendmultiblock(buf, MSGSIZE)
+    rc = sendmultiblock(buf, blocksize)
     return rc
 
 def template():
@@ -1265,7 +1264,10 @@ try:
                 globals()[cmd.strip()]()
         except Exception as e:
             errcount += 1
-            print("Error in cmd received:"+str(e))
+            rcText = "Command error:"+str(e)
+            print(rcText)
+            recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
+            send_rc_msg(RC_FAILED,rcText,BLKSIZE)
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO
