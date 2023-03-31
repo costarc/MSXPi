@@ -170,23 +170,21 @@ nextbit16:
 ;-----------------------
 ; Send a command to Raspberry Pi
 ; Input:
-;   hl = buffer passed by user
 ;   de = should contain the command string
 ;   b  = number of bytes in the command string
 ; Output:
 ;   Flag C set if there was a communication error
 SENDPICMD:
-        PUSH    HL
+        PUSH    DE
         CALL    GETCMD
         POP     HL
-        PUSH    HL              ; COMMAND BUFFER
         PUSH    DE              ; Next parmameters address
         EX      DE,HL
         CALL    SENDCOMMAND
         POP     DE
-        POP     HL
-        PUSH    HL
-        INC     DE              ; Skip Zero inseted in previous call
+        RET     C
+        PUSH    DE
+        INC     DE              ; Skip Zero inseRted in previous call
         CALL    GETPARMS
         POP     DE
         LD      BC,BLKSIZE
@@ -198,27 +196,25 @@ GETCMD:
         JR      Z,GETCMDEXIT
         CP      $22             ; QUOTE (")
         JR      Z,GETCMDEXIT
-        LD      (HL),A
         INC     DE
-        INC     HL
         JR      GETCMD
 GETCMDEXIT:
         XOR     A
-        LD      (HL),A
+        LD      (DE),A
         RET
 GETPARMS:
         LD      A,(DE)
+        OR      A
+        JR      Z,GETPARMSEXIT
         CP      $22
         JR      Z,GETPARMSEXIT
         CP      ')'
         JR      Z,GETPARMSEXIT
-        LD      (HL),A
-        INC     HL
         INC     DE
         JR      GETPARMS
 GETPARMSEXIT:
         XOR     A
-        LD      (HL),A
+        LD      (DE),A
         RET
 
 ;---------------------------------------------------------------
@@ -399,8 +395,7 @@ printchar:
         ld      a,b
         or      c
         jr      nz,PRINTPISTDOUT
-        scf
-        ccf
+        or      a
         ret
 
 NOSTDOUT: 

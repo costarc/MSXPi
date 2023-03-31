@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230330.256"
+BuildId = "20230331.282"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -343,8 +343,12 @@ def pdir():
     print("pdir")
 
     rc,data = recvdata(BLKSIZE)
-    path = data.decode().split("\x00")[0]
-    
+
+    if data[0] == 0:
+        path=''
+    else:
+        path = data.decode().split("\x00")[0]
+
     try:
         if (1 == 1):
             #print("pdir: if1")
@@ -1115,7 +1119,7 @@ def recvdata( bytecounter = BLKSIZE):
 def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
-   
+    print(data)
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1

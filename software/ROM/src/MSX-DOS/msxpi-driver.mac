@@ -637,13 +637,13 @@ _MSXPI:
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
-
+        
 CALL_MSXPI1:
-; At this point:
-; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
-; DE = contain string address of command to send to RPi
+; Registers at this point:
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
+; DE = contain string address of command to send to RPi
+; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
 ;
 ; Routine explanation:
 ; MSX Send the command to RPi
@@ -658,29 +658,41 @@ CALL_MSXPI1:
         CALL    SENDPICMD
         POP     DE                      ; buffer for RPi data
         JR      C,CALL_MSXPIERR
+        LD      BC,BLKSIZE
+        LD      A,D
+        OR      E
+        JR      Z,NOBUFFERING
+        PUSH    DE
+        PUSH    DE
+        CALL    RECVDATA                ; Receive first block
+        POP     IX
+        INC     IX                      ; Skip the Return Code in the buffer
+        POP     HL
+        JR      C,CALL_MSXPIERR
+; Stack contain A = std option from user
+; HL = IX = Start of the user buffer
+; DE = end of current block = start of next block
+        PUSH    HL
+        PUSH    DE
+        LD      BC,BLKSIZE
+        LD      A,1
+        CALL    SHIFTRIGHT              ; Shift data 1 byte to the right
+        POP     DE
+        POP     HL
+        LD      A,RC_SUCCESS
+        LD      (HL),A
+CALL_MSXPI2:
+        POP     AF
+        PUSH    AF
+        PUSH    DE
+        CALL    CALL_MSXPISTDOUT
+        POP     DE
+        JR      C,CALL_MSXPIEXIT
         PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
-        POP     DE
-        JR      C,CALL_MSXPIERR
-; Process RPi reply
-        LD      HL,BLKSIZE
-        ADD     HL,DE
-        PUSH    DE
-        LD      D,H
-        LD      E,L
-        DEC     HL
-        LD      BC,BLKSIZE + 2
-        LDDR                            ; Shift whole data 1 byte ahead
-        POP     DE
-        INC     DE
-        POP     AF                      ; stdou option
-        CP      '1'
-        CALL    Z,CALL_MSXPISTDOUT
-        POP     HL
-        OR      A
-        RET
-
+        POP     IX
+        JR      NC,CALL_MSXPI2
 CALL_MSXPIERR:
         POP     AF
         LD      A,RC_FAILED
@@ -689,20 +701,80 @@ CALL_MSXPIERR:
         OR      A
         RET
         
+        
+CALL_MSXPIEXIT:
+        POP     AF                      ; Exit to BASIC
+        POP     HL                      ; Stack
+        OR      A
+        RET
+        
 CALL_MSXPISTDOUT:
-        PUSH    DE
-        EX      DE,HL
+        CP      '1'
+        CCF
+        SCF
+        RET     NZ
+        PUSH    IX
+        POP     HL
         LD      BC,BLKSIZE
         CALL    PRINTPISTDOUT
-        POP     DE
-        RET     C
-        PUSH    DE
-        LD      BC,BLKSIZE
-        CALL    RECVDATA
-        POP     DE
-        RET     C
-        JR      CALL_MSXPISTDOUT
+        RET
         
+NOBUFFERING:
+
+NOBUFFERING0:
+        CALL    PIREADBYTE
+        LD      E,A
+        CALL    PUTCHAR
+        LD      A,E
+        OR      A
+        JR      Z,NOBUFFERING2
+        POP     AF
+        PUSH    AF
+        CP      '1'
+        JR      NZ,NOBUFFERING2
+        LD      A,E
+        CP      10
+        JR      NZ,NOBUFFERING1
+        CALL    PUTCHAR
+        LD      A,13
+NOBUFFERING1:
+        CALL    PUTCHAR
+NOBUFFERING2:
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,NOBUFFERING0
+        CALL    PIREADBYTE                  ; Read checksum
+        CALL    PIWRITEBYTE                 ; Send same checksum byte
+        LD      A,E
+        OR      A                           ; Zero, end of text
+        JR      Z,CALL_MSXPIEXIT
+        POP     AF
+        PUSH    AF
+        CALL    PUTCHAR
+        LD      A,"-"
+        CALL    PUTCHAR
+        CALL    DBGBC
+        CALL    DBGDE
+        CALL    DBGHL
+        
+        LD      BC,BLKSIZE
+        JR      NOBUFFERING0
+        
+SHIFTRIGHT:
+        ADD     HL,BC
+        LD      D,H
+        LD      E,L
+        PUSH    BC
+        LD      B,0
+        LD      C,A
+        ADD     HL,BC                   ; Add number of bytes to shifit right
+        POP     BC
+        EX      DE,HL
+        DEC     HL
+        DEC     DE
+        LDDR                            ; Shift whole data 1 byte ahead
+        RET
 
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
@@ -829,7 +901,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230330.256"
+BuildId: DB "20230331.282"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -890,5 +962,4 @@ INCLUDE putchar-msxdos.asm
 INCLUDE msxpi_bios.asm
 INCLUDE debug.asm
 ;INCLUDE debug-rom.asm
-
 
