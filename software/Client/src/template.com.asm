@@ -37,64 +37,60 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
-
         org     $0100
         
-        ld      hl,msg_cmd
-        call    PRINT
-
-; Sending a command to RPi
-        ld      de,command  
-        ld      bc,CMDSIZE
-        call    SENDDATA
-; ------------------------------------
-
-        call    print_msgs          ; print informative message based on flag C
-        
-        ld      hl,msg_parms
-        call    PRINT
-
-        ; send CLI parameters to MSXPi
+; Sending Command and Parameters to RPi
+        ld      de,command
+        call    SENDCOMMAND
+        jr      c, PRINTPIERR
         ld      hl,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
-        call    SENDPARMS           ; Its contatn size: BLKSIZE
-        call    print_msgs          ; print informative message based on flag C
-        
-        ld      hl,msg_recv
-        call    PRINT
-        
+        call    SENDPARMS
+        jr      c, PRINTPIERR
 MAINPROG:
+        call    READ1BLOCK
+        jr      c, PRINTPIERR
+        ld      hl,buf
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)
+        inc     hl
+        xor     a                   ; header in 1st block
+MAINPROG1:
+        push    bc
+        ld      bc,BLKSIZE
+        call    PRINTPISTDOUT
+        pop     hl
+        ld      bc,BLKSIZE
+        or      a
+        sbc     hl,bc
+        ret     c
+        ld      b,h
+        ld      c,l
+        push    bc
+        call    READ1BLOCK
+        pop     bc
+        jr      c,PRINTPIERR
+        ld      a,1                 ; no header in next blocks
+        ld      hl,buf
+        jr      MAINPROG1
+        
+READ1BLOCK:
         ld      hl,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
         ld      de,buf
         ld      bc,BLKSIZE
         call    RECVDATA
-        call    print_msgs          ; print informative message based on flag C
-        xor     a                   ; a = 0 to indicate there is header
-        ld      hl,buf
-        ld      bc,BLKSIZE
-        call   PRINTPISTDOUT        ; if received data correctly, display in screen
-        jr      nc,MAINPROG         ; Flag C is set if detected zero in the data
-        ret                         ; C flag set, end of text to print
-        
-print_msgs:
-        push    bc
-        push    de
-        push    hl
-        push    af
-        ld      hl,msg_error
-        call      c,PRINT
-        pop     af
-        push    af
-        ld      hl,msg_success
-        call    nc,PRINT
-        pop     af
-        pop     hl
-        pop     de
-        pop     bc
         ret
+        
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+PICOMMERR:  DB      "Communication Error",13,10,0
 
 ; Command maximu lenght is 8 characters. 
 ; Always terminate the command with a trailing zero

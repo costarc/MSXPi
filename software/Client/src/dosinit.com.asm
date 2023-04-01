@@ -43,28 +43,21 @@
         ld      de,command
         call    SENDCOMMAND
         jr      c, PRINTPIERR
+        ld      hl,buf
+        ld      bc,CMDSIZE
+        call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR
-        
 MAINPROG:
-        call    CLEARBUF
-        ld      de,buf
-        ld      bc,BLKSIZE
-        call    RECVDATA
-        jr      c, PRINTPIERR
-        ld      hl,buf
-        ld      bc,BLKSIZE
-        call   PRINTPISTDOUT
-        jr      nc,MAINPROG
-        ret
+        RET
         
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-command: db "dosinit ",0
 PICOMMERR:  DB      "Communication Error",13,10,0
-        
+
+command: db "dosinit ",0
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"

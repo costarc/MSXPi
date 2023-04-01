@@ -431,18 +431,12 @@ PRINTNUM1:
 ; PRINTPISTDOUT 
 ; Read buffer of BC lenght and print to screen. Terminates also if zero detected
 ; Inputs: (PRINTPISTDOUT0)
-;  A:  0, NO PRINT, 1 PRINT
+;  A = 0: Data contain header
 ;  HL: Buffer address
 ;  BC: Buffer lenght
 ; Changes: AF,BC,HL
 ; =================================================================
 PRINTPISTDOUT:
-        or      a
-        jr      nz,PRINTPISTDOUT1
-        inc     hl
-        inc     hl
-        inc     hl  ; skip header
-PRINTPISTDOUT1:
         ld      a,(hl)
         or      a
         scf
@@ -459,7 +453,7 @@ printchar:
         dec     bc
         ld      a,b
         or      c
-        jr      nz,PRINTPISTDOUT1
+        jr      nz,PRINTPISTDOUT
         or      a
         ret
 

@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230401.363"
+BuildId = "20230401.377"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -489,18 +489,8 @@ def pcopy():
         expand = False
 
     if len(path) < 1:
-        rc = send_rc_msg(RC_FAILED,"Pi:File name missing")
+        rc = sendmultiblock("Pi:Error - Missing file name", BLKSIZE, True, RC_FAILED)
         return rc
-    
-    #elif len(path) == 1:
-    #    fname1 = path[0]
-    #    if expand:
-    #        fname2 = '-'
-    #    else:
-    #        fname2 = fname1
-    #elif len(path) == 2:
-    #    fname1 = path[0]
-    #    fname2 = path[1]
 
     if (path[0].startswith('m:')):
         basepath = 'ftp://192.168.1.100/'
@@ -555,7 +545,7 @@ def pcopy():
  
         except Exception as e:
             print("pcopy: exception 1",str(e))
-            send_rc_msg(RC_FAILED,str(e))
+            rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
     else:
@@ -566,7 +556,7 @@ def pcopy():
             filesize = len(buf)
                     
         except Exception as e:
-            send_rc_msg(RC_FAILED,str(e))
+            rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
     if rc == RC_SUCCESS:
@@ -600,17 +590,17 @@ def pcopy():
                     
                 except Exception as e:
                     print("pcopy: exception 2",str(e))
-                    send_rc_msg(RC_FAILED,str(e))
+                    rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
                     return RC_FAILED
        
             else:
-                send_rc_msg(RC_FAILED,"Pi:Error decompressing the file")
+                rc = sendmultiblock("Pi:Error decompressing the file", BLKSIZE, True, RC_FAILED)
                 return RC_FAILED
                 
     if rc == RC_SUCCESS:
         #print("pcopy: File open success, target name,size is ",fname2,filesize)
         if filesize == 0:
-            send_rc_msg(RC_FAILED,"Pi:File size is zero bytes")
+            rc = sendmultiblock("Pi:Error - File size is zero bytes", BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
         else:
@@ -620,7 +610,7 @@ def pcopy():
                     print("pcopy: ini_fcb failed")
                     return rc
                 # Thhis will send the file to MSX, for pcopy to write it to disk
-                rc = sendmultiblock(buf,SECTORSIZE, False)
+                rc = sendmultiblock(buf,SECTORSIZE, False, rc)
             
             else:# Booted from MSXPi disk drive (disk images)
                 # this routine will write the file directly to the disk image in RPi
@@ -646,11 +636,11 @@ def pcopy():
                     print("before")
                     dskobj.writebytes(fname2,buf)
                     print("after")
-                    send_rc_msg(RC_TERMINATE,"Pi:ok")
+                    sendmultiblock("Pi:Ok", BLKSIZE, True, RC_TERMINATE)
                 except Exception as e:
-                    send_rc_msg(RC_FAILED, "Pi: " + str(e))
+                    rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
             
-    print(hex(rc))
+    #print(hex(rc))
     return rc
 
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
@@ -675,7 +665,7 @@ def pdate():
     pdate[6]=(now.second)
     pdate[7]=(0)
     
-    sendmultiblock(pdate, BLKSIZE, True, RC_SUCCESS)
+    sendmultiblock(pdate, CMDSIZE, False, RC_SUCCESS)
    
     return RC_SUCCESS
     
@@ -933,7 +923,7 @@ def dosinit():
     
     global msxdos1boot
         
-    rc,data = recvdata(BLKSIZE)
+    rc,data = recvdata(CMDSIZE)
     if rc == RC_SUCCESS:
         flag = data.decode().split("\x00")[0]
         if flag == '1':
@@ -1192,16 +1182,6 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
     if cnt > 0:
         rc = senddata(data,blocksize)          
     return rc
-   
-#def send_rc_msg(rc,msg,blocksize = BLKSIZE):
-#    #print("send_rc_msg:",rc,msg)
-#
-#    buf = bytearray()
-#    buf.extend(rc.to_bytes(1,'little'))
-#    buf.extend(msg.encode())
-#
-#    rc = sendmultiblock(buf, blocksize, True)
-#    return rc
 
 def template():
     print("template now receiving parameters...")
@@ -1273,10 +1253,9 @@ try:
                 globals()[cmd.strip()]()
         except Exception as e:
             errcount += 1
-            rcText = "Command error:"+str(e)
-            print(rcText)
+            print(str(e))
             recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
-            send_rc_msg(RC_FAILED,rcText,BLKSIZE)
+            sendmultiblock("Pi:Error - "+str(e),BLKSIZE, True, RC_FAILED)
 
 except KeyboardInterrupt:
     GPIO.cleanup() # cleanup all GPIO

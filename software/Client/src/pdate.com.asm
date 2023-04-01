@@ -42,19 +42,18 @@
         
         ld      de,command  
         call    SENDCOMMAND
-        jr      c, PRINTPIERR 
+        jr      c, PRINTPIERR
+        ld      hl,buf
+        ld      bc,BLKSIZE
         call    CLEARBUF
         ld      de,buf
-        ld      bc,BLKSIZE
+        ld      bc,CMDSIZE
         call    RECVDATA
         jr      c, PRINTPIERR 
         call    SETCLOCK
-        ret
-        
-PRINTPIERR:
-        LD      HL,PICOMMERR
-        JP      PRINT
-
+        ld      hl,PIOK
+        jp      PRINT
+  
 SETCLOCK:
         LD      IX,buf
         LD      A,(IX + 0)
@@ -83,10 +82,16 @@ SETCLOCK:
         CALL    BDOS
         RET
                
+        
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+        
+PICOMMERR:  DB      "Communication Error",13,10,0
 
 command: db "pdate   ",0
-PICOMMERR:  DB      "Communication Error",13,10,0
-        
+
+PIOK: db "Pi:Ok",0
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
