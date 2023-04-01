@@ -437,6 +437,12 @@ PRINTNUM1:
 ; Changes: AF,BC,HL
 ; =================================================================
 PRINTPISTDOUT:
+        or      a
+        jr      nz,PRINTPISTDOUT1
+        inc     hl
+        inc     hl
+        inc     hl  ; skip header
+PRINTPISTDOUT1:
         ld      a,(hl)
         or      a
         scf
@@ -453,7 +459,7 @@ printchar:
         dec     bc
         ld      a,b
         or      c
-        jr      nz,PRINTPISTDOUT
+        jr      nz,PRINTPISTDOUT1
         or      a
         ret
 
@@ -595,7 +601,6 @@ PARMSEVAL2:
         RET
 
 SENDPARMS:
-        call    CLEARBUF
 ; check if there are parameters in the command line
         ld      hl,$80
         ld      a,(hl)

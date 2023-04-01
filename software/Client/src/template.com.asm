@@ -55,24 +55,29 @@
         call    PRINT
 
         ; send CLI parameters to MSXPi
-        call    SENDPARMS     ; Its contatn size: BLKSIZE
+        ld      hl,buf
+        ld      bc,BLKSIZE
+        call    CLEARBUF
+        call    SENDPARMS           ; Its contatn size: BLKSIZE
         call    print_msgs          ; print informative message based on flag C
         
         ld      hl,msg_recv
         call    PRINT
         
 MAINPROG:
+        ld      hl,buf
+        ld      bc,BLKSIZE
         call    CLEARBUF
         ld      de,buf
         ld      bc,BLKSIZE
         call    RECVDATA
         call    print_msgs          ; print informative message based on flag C
-
+        xor     a                   ; a = 0 to indicate there is header
         ld      hl,buf
         ld      bc,BLKSIZE
-        call   PRINTPISTDOUT            ; if received data correctly, display in screen
-        jr      nc,MAINPROG                 ; Flag C is set if detected zero in the data
-        ret                                             ; C flag set, end of text to print
+        call   PRINTPISTDOUT        ; if received data correctly, display in screen
+        jr      nc,MAINPROG         ; Flag C is set if detected zero in the data
+        ret                         ; C flag set, end of text to print
         
 print_msgs:
         push    bc

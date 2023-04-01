@@ -663,6 +663,9 @@ CALL_MSXPI1:
         JR      Z,CALL_MSXPISAVE
 
 ; Will print RPi response to screen
+        PUSH    HL
+        INC     HL
+        INC     HL
         INC     HL
 CALL_MSXPI2_STDOUT:
         PUSH    HL
@@ -676,15 +679,13 @@ CALL_MSXPI2_STDOUT:
         CALL    PRINTPISTDOUT
         POP     HL
         JR      NC,CALL_MSXPI2_STDOUT
-        DEC     HL
-        LD      A,RC_SUCCESS
-        LD      (HL),A
+        POP     HL
         POP     HL
         OR      A
         RET
 
 CALL_DISCARD:
-        INC     HL
+        PUSH    HL
         LD      D,H
         LD      E,L
 CALL_DISCARD1:
@@ -699,20 +700,15 @@ CALL_DISCARD1:
         POP     DE
         OR      A
         JR      Z,CALL_DISCARD1
-        LD      A,RC_SUCCESS
-        DEC     HL
-        LD      (HL),A
+        POP     HL
         POP     HL
         OR      A
         RET
 CALL_MSXPI3_ERR:
         POP     HL
         POP     DE
-        JR      CALL_MSXPIERR
-
-
 CALL_MSXPIERR:
-        DEC     HL
+        POP     HL
         LD      A,RC_FAILED
         LD      (HL),A                  ; Store return code in buffer
         POP     HL                      ; Stack
@@ -720,15 +716,13 @@ CALL_MSXPIERR:
         RET
         
 CALL_MSXPISAVE:
-        INC     HL
+        PUSH    HL
         LD      D,H
         LD      E,L
 CALL_MSXPISAVE1:
         PUSH    HL
-        PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
-        POP     DE
         POP     HL
         JR      C,CALL_MSXPIERR
         DEC     DE
@@ -736,9 +730,7 @@ CALL_MSXPISAVE1:
         INC     DE
         OR      A
         JR      NZ,CALL_MSXPISAVE1      ; Read/Save another block
-        LD      A,RC_SUCCESS
-        DEC     HL
-        LD      (HL),A
+        POP     HL
         POP     HL
         OR      A
         RET
@@ -868,7 +860,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230401.360"
+BuildId: DB "20230401.363"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
