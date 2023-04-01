@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230401.295"
+BuildId = "20230401.360"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1121,7 +1121,7 @@ def recvdata( bytecounter = BLKSIZE):
 def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
-    print(data)
+
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1

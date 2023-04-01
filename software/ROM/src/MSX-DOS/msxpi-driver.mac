@@ -546,7 +546,7 @@ CALLHAND:
     CP  (HL)
     JR  NZ,.CHKCMD  ; Not end of table, go checking
     POP HL
-        SCF
+    SCF
     RET
  
 .CALLDE:
@@ -654,165 +654,95 @@ CALL_MSXPI1:
 ; RC = RC_TERMINATE: Pi processing succeed - data available and this is last block
 
         PUSH    AF
-        PUSH    HL
         CALL    SENDPICMD
-        POP     DE                      ; buffer for RPi data
         JR      C,CALL_MSXPIERR
         POP     AF
-        
+        CP      '0'
+        JR      Z,CALL_DISCARD
+        CP      '2'
+        JR      Z,CALL_MSXPISAVE
 
-        JR      READTOSTDOUT          ; Print to screen - does not save to buffer
-        RET
-
-READTOSTDOUT:
-        DI
+; Will print RPi response to screen
+        INC     HL
+CALL_MSXPI2_STDOUT:
+        PUSH    HL
+        EX      DE,HL
         LD      BC,BLKSIZE
-READTOSTDOUT1:
-        CALL    PIREADBYTE
-        LD      E,A
-        OR      A
-        CALL    Z,PUTCHAR
-READTOSTDOUT2:
-        DEC     BC
-        LD      A,B
-        OR      C
-        JR      NZ,READTOSTDOUT1
-        CALL    PIREADBYTE
-        CALL    PIWRITEBYTE
-        LD      A,E
-        OR      A
-        JR      NZ,READTOSTDOUT
-        POP     HL
-        OR      A
-        EI
-        RET
-        
-        LD      BC,BLKSIZE
-        LD      A,D
-        OR      E
-        JR      Z,NOBUFFERING
-        PUSH    DE
-        PUSH    DE
-        CALL    RECVDATA                ; Receive first block
-        POP     IX
-        INC     IX                      ; Skip the Return Code in the buffer
+        CALL    RECVDATA
         POP     HL
         JR      C,CALL_MSXPIERR
-; Stack contain A = std option from user
-; HL = IX = Start of the user buffer
-; DE = end of current block = start of next block
         PUSH    HL
-        PUSH    DE
         LD      BC,BLKSIZE
-        LD      A,1
-        CALL    SHIFTRIGHT              ; Shift data 1 byte to the right
-        POP     DE
+        CALL    PRINTPISTDOUT
         POP     HL
+        JR      NC,CALL_MSXPI2_STDOUT
+        DEC     HL
         LD      A,RC_SUCCESS
         LD      (HL),A
-CALL_MSXPI2:
-        POP     AF
-        PUSH    AF
+        POP     HL
+        OR      A
+        RET
+
+CALL_DISCARD:
+        INC     HL
+        LD      D,H
+        LD      E,L
+CALL_DISCARD1:
         PUSH    DE
-        CALL    CALL_MSXPISTDOUT
+        PUSH    HL
+        LD      BC,BLKSIZE
+        CALL    RECVDATA
+        JR      C,CALL_MSXPI3_ERR
+        DEC     DE
+        LD      A,(DE)
+        POP     HL
         POP     DE
-        JR      C,CALL_MSXPIEXIT
+        OR      A
+        JR      Z,CALL_DISCARD1
+        LD      A,RC_SUCCESS
+        DEC     HL
+        LD      (HL),A
+        POP     HL
+        OR      A
+        RET
+CALL_MSXPI3_ERR:
+        POP     HL
+        POP     DE
+        JR      CALL_MSXPIERR
+
+
+CALL_MSXPIERR:
+        DEC     HL
+        LD      A,RC_FAILED
+        LD      (HL),A                  ; Store return code in buffer
+        POP     HL                      ; Stack
+        OR      A
+        RET
+        
+CALL_MSXPISAVE:
+        INC     HL
+        LD      D,H
+        LD      E,L
+CALL_MSXPISAVE1:
+        PUSH    HL
         PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
-        POP     IX
-        JR      NC,CALL_MSXPI2
-CALL_MSXPIERR:
-        POP     AF
-        LD      A,RC_FAILED
-        LD      (DE),A                  ; Store return code in buffer
-        POP     HL                      ; Stack
-        OR      A
-        RET
-        
-        
-CALL_MSXPIEXIT:
-        POP     AF                      ; Exit to BASIC
-        POP     HL                      ; Stack
-        OR      A
-        RET
-        
-CALL_MSXPISTDOUT:
-        CP      '1'
-        CCF
-        SCF
-        RET     NZ
-        PUSH    IX
+        POP     DE
         POP     HL
-        LD      BC,BLKSIZE
-        CALL    PRINTPISTDOUT
-        RET
-        
-NOBUFFERING:
-        POP     AF
-        PUSH    AF
-        CALL    PUTCHAR
-        LD      A,"-"
-        CALL    PUTCHAR
-        CALL    DBGBC
-        CALL    DBGDE
-        CALL    DBGHL
-
-NOBUFFERING0:
-        CALL    PIREADBYTE
-        LD      E,A
-        CALL    PUTCHAR
-        LD      A,E
-        OR      A
-        JR      Z,NOBUFFERING2
-        POP     AF
-        PUSH    AF
-        CP      '1'
-        JR      NZ,NOBUFFERING2
-        LD      A,E
-        CP      10
-        JR      NZ,NOBUFFERING1
-        CALL    PUTCHAR
-        LD      A,13
-NOBUFFERING1:
-        CALL    PUTCHAR
-NOBUFFERING2:
-        DEC     BC
-        LD      A,B
-        OR      C
-        JR      NZ,NOBUFFERING0
-        CALL    PIREADBYTE                  ; Read checksum
-        CALL    PIWRITEBYTE                 ; Send same checksum byte
-        LD      A,E
-        OR      A                           ; Zero, end of text
-        JR      Z,CALL_MSXPIEXIT
-        POP     AF
-        PUSH    AF
-        CALL    PUTCHAR
-        LD      A,"-"
-        CALL    PUTCHAR
-        CALL    DBGBC
-        CALL    DBGDE
-        CALL    DBGHL
-        
-        LD      BC,BLKSIZE
-        JR      NOBUFFERING0
-        
-SHIFTRIGHT:
-        ADD     HL,BC
-        LD      D,H
-        LD      E,L
-        PUSH    BC
-        LD      B,0
-        LD      C,A
-        ADD     HL,BC                   ; Add number of bytes to shifit right
-        POP     BC
-        EX      DE,HL
-        DEC     HL
+        JR      C,CALL_MSXPIERR
         DEC     DE
-        LDDR                            ; Shift whole data 1 byte ahead
+        LD      A,(DE)
+        INC     DE
+        OR      A
+        JR      NZ,CALL_MSXPISAVE1      ; Read/Save another block
+        LD      A,RC_SUCCESS
+        DEC     HL
+        LD      (HL),A
+        POP     HL
+        OR      A
         RET
-
+        
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
@@ -938,7 +868,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230401.295"
+BuildId: DB "20230401.360"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

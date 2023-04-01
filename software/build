@@ -55,7 +55,8 @@ UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-#~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm  -o ./target/msxpiext.bin
+#~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/print.com.asm    -o ./target/print.rom
 
 cp target/disks/blank.dsk target/disks/msxpiboot.dsk
 cp target/disks/blank.dsk target/disks/tools.dsk

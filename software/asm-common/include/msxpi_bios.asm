@@ -187,20 +187,32 @@ CLEARBUF:
 ; This buffer is used for command & parameters transfer
 ; Input:
 ;   de = should contain the command string
+;   hl = buffer address - optional. if zero, will use buffer at top of ram
+;   B = size of command + parameters
 ; Output:
 ;   Flag C set if there was a communication error
+;   hl = buffer address (never zero)
 ;   af,bc,de,hl are modified
 ;
 SENDPICMD:
+        LD      A,H
+        OR      L
+        JR      NZ,CALL_BUFFERPASSED
         LD      HL,(HIMEM)
+        PUSH    BC
         LD      BC,BLKSIZE
         OR      A               ; reset C to avoid carry being used in the SBC command
         SBC     HL,BC           ; Allcoate Buffer on top of RAM
         DEC     HL
         DEC     HL              ;  bytes more for the buffer
+        POP     BC
+CALL_BUFFERPASSED:
         PUSH    HL
         PUSH    DE
+        PUSH    BC
+        LD      BC,BLKSIZE
         CALL    CLEARBUF
+        POP     BC
         POP     DE
         POP     HL
         PUSH    HL              ; Save buffer address, DE will be updated to next parameter
@@ -208,23 +220,29 @@ SENDPICMD:
         POP     HL
         PUSH    HL
         PUSH    DE              ; Next parmameters address
+        PUSH    BC
         EX      DE,HL
         CALL    SENDCOMMAND
+        POP     BC
         POP     DE
         POP     HL
         RET     C
-        LD      BC,BLKSIZE
         PUSH    HL
         PUSH    DE
+        PUSH    BC
+        LD      BC,BLKSIZE
         CALL    CLEARBUF
+        POP     BC
         POP     DE
         POP     HL
         PUSH    HL
         CALL    GETPARMS
         POP     HL
+        PUSH    HL
         EX      DE,HL
         LD      BC,BLKSIZE
         CALL    SENDDATA
+        POP     HL          ; Return address of buffer in HL
         RET
 GETCMD:
         LD      A,(DE)
@@ -237,23 +255,25 @@ GETCMD:
         LD      (HL),A
         INC     DE
         INC     HL
+        DEC     B
         JR      GETCMD
 GETPARMS:
         LD      A,(DE)
         CP      ' '
-        JR      NZ,GETPARMS1
-        INC     DE
-        JR      GETPARMS
+        JR      Z,GETPARMS2
 GETPARMS1:
         LD      A,(DE)
-        CP      $22             ; QUOTE (")
-        RET     Z
+        CP      $22
+        JR      Z,GETPARMS2
         CP      ')'
-        RET     Z
+        JR      Z,GETPARMS2
         LD      (HL),A
         INC     HL
+GETPARMS2:
         INC     DE
-        JR      GETPARMS1
+        DJNZ    GETPARMS1
+        RET
+
 
 ;---------------------------------------------------------------
 ; RECVDATA- SENDDATA
@@ -411,6 +431,7 @@ PRINTNUM1:
 ; PRINTPISTDOUT 
 ; Read buffer of BC lenght and print to screen. Terminates also if zero detected
 ; Inputs: (PRINTPISTDOUT0)
+;  A:  0, NO PRINT, 1 PRINT
 ;  HL: Buffer address
 ;  BC: Buffer lenght
 ; Changes: AF,BC,HL
@@ -657,4 +678,4 @@ DELAY1:
         POP     HL
         POP     DE
         RET
-              
+
