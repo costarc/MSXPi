@@ -165,57 +165,95 @@ nextbit16:
         exx
         ret
 
+; Clear buffer area
+; Input:
+; BC = buffer size
+; HL = Buffer Address
+;
+CLEARBUF:
+        ld      d,h
+        ld      e,l
+        inc     de
+        xor     a
+        ld      (hl),a
+        ldir
+        ret
+        
 ;-----------------------
 ; SENDPICMD            |
 ;-----------------------
 ; Send a command to Raspberry Pi
+; This routine allocate BLKSIZE+2 bytes at the top of th RAM
+; This buffer is used for command & parameters transfer
 ; Input:
 ;   de = should contain the command string
-;   b  = number of bytes in the command string
 ; Output:
 ;   Flag C set if there was a communication error
+;   af,bc,de,hl are modified
+;
 SENDPICMD:
+        LD      HL,(HIMEM)
+        LD      BC,BLKSIZE
+        OR      A               ; reset C to avoid carry being used in the SBC command
+        SBC     HL,BC           ; Allcoate Buffer on top of RAM
+        DEC     HL
+        DEC     HL              ;  bytes more for the buffer
+        PUSH    HL
         PUSH    DE
+        CALL    CLEARBUF
+        POP     DE
+        POP     HL
+        PUSH    HL              ; Save buffer address, DE will be updated to next parameter
         CALL    GETCMD
         POP     HL
+        PUSH    HL
         PUSH    DE              ; Next parmameters address
         EX      DE,HL
         CALL    SENDCOMMAND
         POP     DE
+        POP     HL
         RET     C
+        LD      BC,BLKSIZE
+        PUSH    HL
         PUSH    DE
-        INC     DE              ; Skip Zero inseRted in previous call
-        CALL    GETPARMS
+        CALL    CLEARBUF
         POP     DE
+        POP     HL
+        PUSH    HL
+        CALL    GETPARMS
+        POP     HL
+        EX      DE,HL
         LD      BC,BLKSIZE
         CALL    SENDDATA
         RET
 GETCMD:
         LD      A,(DE)
         CP      ' '
-        JR      Z,GETCMDEXIT
+        RET     Z
         CP      $22             ; QUOTE (")
-        JR      Z,GETCMDEXIT
+        RET     Z
+        CP      ')'
+        RET     Z
+        LD      (HL),A
         INC     DE
+        INC     HL
         JR      GETCMD
-GETCMDEXIT:
-        XOR     A
-        LD      (DE),A
-        RET
 GETPARMS:
         LD      A,(DE)
-        OR      A
-        JR      Z,GETPARMSEXIT
-        CP      $22
-        JR      Z,GETPARMSEXIT
-        CP      ')'
-        JR      Z,GETPARMSEXIT
+        CP      ' '
+        JR      NZ,GETPARMS1
         INC     DE
         JR      GETPARMS
-GETPARMSEXIT:
-        XOR     A
-        LD      (DE),A
-        RET
+GETPARMS1:
+        LD      A,(DE)
+        CP      $22             ; QUOTE (")
+        RET     Z
+        CP      ')'
+        RET     Z
+        LD      (HL),A
+        INC     HL
+        INC     DE
+        JR      GETPARMS1
 
 ;---------------------------------------------------------------
 ; RECVDATA- SENDDATA
@@ -582,15 +620,6 @@ SETBUF0:
         inc     de
         or      a
         jr      nz,SETBUF0
-        ret
-        
-CLEARBUF:
-        ld      hl,buf
-        ld      de,buf + 1
-        ld      bc,BLKSIZE
-        xor     a
-        ld      (hl),a
-        ldir
         ret
                 
 EATSPACES:

@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230331.282"
+BuildId = "20230401.295"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -349,6 +349,8 @@ def pdir():
     else:
         path = data.decode().split("\x00")[0]
 
+    print("pdir:",path)
+    
     try:
         if (1 == 1):
             #print("pdir: if1")

@@ -658,6 +658,35 @@ CALL_MSXPI1:
         CALL    SENDPICMD
         POP     DE                      ; buffer for RPi data
         JR      C,CALL_MSXPIERR
+        POP     AF
+        
+
+        JR      READTOSTDOUT          ; Print to screen - does not save to buffer
+        RET
+
+READTOSTDOUT:
+        DI
+        LD      BC,BLKSIZE
+READTOSTDOUT1:
+        CALL    PIREADBYTE
+        LD      E,A
+        OR      A
+        CALL    Z,PUTCHAR
+READTOSTDOUT2:
+        DEC     BC
+        LD      A,B
+        OR      C
+        JR      NZ,READTOSTDOUT1
+        CALL    PIREADBYTE
+        CALL    PIWRITEBYTE
+        LD      A,E
+        OR      A
+        JR      NZ,READTOSTDOUT
+        POP     HL
+        OR      A
+        EI
+        RET
+        
         LD      BC,BLKSIZE
         LD      A,D
         OR      E
@@ -720,6 +749,14 @@ CALL_MSXPISTDOUT:
         RET
         
 NOBUFFERING:
+        POP     AF
+        PUSH    AF
+        CALL    PUTCHAR
+        LD      A,"-"
+        CALL    PUTCHAR
+        CALL    DBGBC
+        CALL    DBGDE
+        CALL    DBGHL
 
 NOBUFFERING0:
         CALL    PIREADBYTE
@@ -901,7 +938,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230331.282"
+BuildId: DB "20230401.295"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
