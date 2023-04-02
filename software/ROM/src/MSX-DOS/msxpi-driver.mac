@@ -655,66 +655,76 @@ CALL_MSXPI1:
 
         PUSH    AF
         CALL    SENDPICMD
-        JR      C,CALL_MSXPIERR
+        JR      NC,CALL_MSXPI2
+CALL_MSXPI2_ERR:
         POP     AF
-        CP      '0'
-        JR      Z,CALL_DISCARD
+CALL_MSXPI2_ERR2:
+        LD      A,RC_FAILED
+        LD      (HL),A
+        POP     HL
+        OR      A
+        RET
+CALL_MSXPI2:
+        POP     AF
         CP      '2'
         JR      Z,CALL_MSXPISAVE
 
 ; Will print RPi response to screen
-        PUSH    HL
-        INC     HL
-        INC     HL
-        INC     HL
-CALL_MSXPI2_STDOUT:
-        PUSH    HL
-        EX      DE,HL
-        LD      BC,BLKSIZE
-        CALL    RECVDATA
-        POP     HL
-        JR      C,CALL_MSXPIERR
-        PUSH    HL
-        LD      BC,BLKSIZE
-        CALL    PRINTPISTDOUT
-        POP     HL
-        JR      NC,CALL_MSXPI2_STDOUT
-        POP     HL
-        POP     HL
-        OR      A
-        RET
+CALL_MSXPI3:
+        push    af
+        push    hl
+        call    READ1BLOCK
+        pop     hl
+        ld      a,RC_FAILED
+        jr      c, CALL_MSXPI3B1
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)
+        inc     hl
+CALL_MSXPI3A:
+        pop     af
+        push    af
+        push    hl
+        push    bc
+        ld      bc,BLKSIZE
+        cp      '0'                      ; should print ?
+        call    nz,PRINTPISTDOUT
+        pop     hl
+        ld      bc,BLKSIZE
+        or      a
+        sbc     hl,bc
+        jr      nc,CALL_MSXPI3B
+        pop     hl
+        ld      a,RC_SUCCESS
+CALL_MSXPI3B1:
+        pop     bc
+        ld      (hl),a
+        pop     hl
+        or      a
+        ret
+CALL_MSXPI3B:
+        ld      b,h
+        ld      c,l
+        pop     hl
+        push    hl
+        push    bc
+        call    READ1BLOCK
+        pop     bc
+        pop     hl
+        ld      a,RC_FAILED
+        jr      c,CALL_MSXPI3B1
+        jr      CALL_MSXPI3A
 
-CALL_DISCARD:
-        PUSH    HL
-        LD      D,H
-        LD      E,L
-CALL_DISCARD1:
-        PUSH    DE
-        PUSH    HL
-        LD      BC,BLKSIZE
-        CALL    RECVDATA
-        JR      C,CALL_MSXPI3_ERR
-        DEC     DE
-        LD      A,(DE)
-        POP     HL
-        POP     DE
-        OR      A
-        JR      Z,CALL_DISCARD1
-        POP     HL
-        POP     HL
-        OR      A
-        RET
-CALL_MSXPI3_ERR:
-        POP     HL
-        POP     DE
-CALL_MSXPIERR:
-        POP     HL
-        LD      A,RC_FAILED
-        LD      (HL),A                  ; Store return code in buffer
-        POP     HL                      ; Stack
-        OR      A
-        RET
-        
+READ1BLOCK:
+        push    hl
+        ld      bc,BLKSIZE
+        call    CLEARBUF
+        pop     de
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        ret
+
 CALL_MSXPISAVE:
         PUSH    HL
         LD      D,H
@@ -724,7 +734,7 @@ CALL_MSXPISAVE1:
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL
-        JR      C,CALL_MSXPIERR
+        JR      C,CALL_MSXPISERR
         DEC     DE
         LD      A,(DE)
         INC     DE
@@ -733,6 +743,8 @@ CALL_MSXPISAVE1:
         POP     HL
         POP     HL
         OR      A
+        RET
+CALL_MSXPISERR:
         RET
         
 ;----------------------------------------
@@ -860,7 +872,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230401.377"
+BuildId: DB "20230402.385"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
