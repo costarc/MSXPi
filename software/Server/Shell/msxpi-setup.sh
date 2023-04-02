@@ -139,14 +139,14 @@ amixer cset numid=3 1
 # Download msxpi-server
 cd $MSXPIHOME
 rm msxpi-server.py > /dev/null 2>&1
+rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
+rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-chmod 755 $MSXPIHOME/msxpi-server.py
-
-wget --no-check-certificate  https://github.com/costarc/MSXPi/blob/master/software/target/disks/msxpiboot.dsk
-wget --no-check-certificate  https://github.com/costarc/MSXPi/blob/master/software/target/disks/tools.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
-
+chmod 755 $MSXPIHOME/msxpi-server.py
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor

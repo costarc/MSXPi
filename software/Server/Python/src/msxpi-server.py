@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 # External module imports
 import RPi.GPIO as GPIO
 import time
