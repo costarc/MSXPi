@@ -142,6 +142,11 @@ rm msxpi-server.py > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 chmod 755 $MSXPIHOME/msxpi-server.py
 
+wget --no-check-certificate  https://github.com/costarc/MSXPi/blob/master/software/target/disks/msxpiboot.dsk
+wget --no-check-certificate  https://github.com/costarc/MSXPi/blob/master/software/target/disks/tools.dsk
+mv msxpiboot.dsk $MSXPIHOME/disks/
+mv tools.dsk $MSXPIHOME/disks/
+
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor
