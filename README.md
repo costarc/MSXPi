@@ -32,6 +32,8 @@ mkdir /home/pi/msxpi
 cd /home/pi/msxpi
 
 wget https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-setup.sh
+or use the Tiny URL:  https://tinyurl.com/MSXPi-Setup
+
 
 chmod 755 msxpi-setup.sh
 
