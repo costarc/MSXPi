@@ -21,7 +21,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230402.385"
+BuildId = "20230402.386"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -307,8 +307,11 @@ def prun(cmd = ''):
 
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc,data = recvdata()
-        print(data)
-        cmd = data.decode().split("\x00")[0]
+
+        if data[0] == 0:
+            cmd=''
+        else:
+            cmd = data.decode().split("\x00")[0]
     
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         #print("prun if:syntax error")
@@ -318,7 +321,7 @@ def prun(cmd = ''):
         #print("prun else")
         cmd = cmd.replace('::','|')
         try:
-            #print("prun: inside try: cmd = ",cmd)
+            #print("prun: inside try: cmd = ",cmd,type(cmd))
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
@@ -327,7 +330,7 @@ def prun(cmd = ''):
                 sendmultiblock(str(err),BLKSIZE,True,rc)
                 return rc
 
-            sendmultiblock(buf, BLKSIZE, True, rc)
+            sendmultiblock(buf, BLKSIZE, True, RC_SUCCESS)
 
         except Exception as e:
             print("prun: exception")
@@ -402,8 +405,12 @@ def pcd():
     
     #print("pcd: system path:",basepath)
     rc,data = recvdata()
-    path = data.decode().split("\x00")[0]
 
+    if data[0] == 0:
+        path=''
+    else:
+        path = data.decode().split("\x00")[0]
+        
     try:
         if (1 == 1):
             if (len(path) == 0 or path == '' or path.strip() == "."):
@@ -466,7 +473,12 @@ def pcopy():
     
     # Receive parameters -
     rc,data = recvdata(BLKSIZE)
-    path = data.decode().split("\x00")[0]
+    
+    if data[0] == 0:
+        path=''
+    else:
+        path = data.decode().split("\x00")[0]
+        
     
     print("pcopy: Starting with params ",path)
 
@@ -685,7 +697,11 @@ def pplay():
     rc = RC_SUCCESS
     
     rc,data = recvdata(BLKSIZE)
-    cmd = data.decode().split("\x00")[0]
+    
+    if data[0] == 0:
+        cmd=''
+    else:
+        cmd = data.decode().split("\x00")[0]
     
     rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  psetvar[0][1]+ " "+cmd)
     
@@ -696,8 +712,12 @@ def pvol():
     rc = RC_SUCCESS
     
     rc,data = recvdata(BLKSIZE)
-    vol = data.decode().split("\x00")[0]
-    
+
+    if data[0] == 0:
+        vol=''
+    else:
+        vol = data.decode().split("\x00")[0]
+        
     rc = prun("mixer set PCM -- "+vol)
     
     print (hex(rc))
@@ -708,8 +728,12 @@ def pset():
     global psetvar,drive0Data,drive1Data
     
     rc,data = recvdata(BLKSIZE)
-    cmd = data.decode().split("\x00")[0]
 
+    if data[0] == 0:
+        cmd=''
+    else:
+        cmd = data.decode().split("\x00")[0]
+        
     if  (cmd.lower() == "/h" or cmd.lower() == "/help"):
         rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname", BLKSIZE, True, RC_FAILED)
         return rc
@@ -1099,7 +1123,7 @@ def recvdata( bytecounter = BLKSIZE):
             rc = RC_CRCERROR
             print("recvdata: checksum error")
 
-    print (hex(rc))
+    #print (hex(rc))
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
@@ -1160,13 +1184,12 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
         data[1] = int(len(buf) % 256)
         data[2] = int(len(buf) / 256)
         cnt = 3
-        print(len(buf),int(len(buf) % 256),int(len(buf) / 256))
     else:
         cnt = 0
-            
+
     for b in buf:
         if (isinstance(b, str)):
-            data[cnt] = ord(b)
+            data[cnt] = b.encode()[0]          #ord(b)
         else:
             data[cnt] = b
         cnt += 1
@@ -1178,7 +1201,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
             data = bytearray(blocksize)
             idx += blocksize
             cnt = 0
-    print(len(data),data)
+
     if cnt > 0:
         rc = senddata(data,blocksize)          
     return rc
@@ -1243,8 +1266,11 @@ try:
             rc,buf = recvdata(CMDSIZE)
             
             if (rc == RC_SUCCESS):
-                fullcmd = buf.decode().split("\x00")[0]
-                print(fullcmd)
+                if buf[0] == 0:
+                    fullcmd=''
+                else:
+                    fullcmd = buf.decode().split("\x00")[0]
+
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
