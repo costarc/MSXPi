@@ -54,7 +54,7 @@ WAIT                = 0xAE
 
 RC_SUCCESS          =    0xE0
 RC_INVALIDCOMMAND   =    0xE1
-RC_CRCERROR         =    0xE2
+RC_TXERROR          =    0xE2
 RC_TIMEOUT          =    0xE3
 RC_INVALIDDATASIZE  =    0xE4
 RC_OUTOFSYNC        =    0xE5

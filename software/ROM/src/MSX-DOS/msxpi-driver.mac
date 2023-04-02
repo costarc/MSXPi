@@ -659,7 +659,7 @@ CALL_MSXPI1:
 CALL_MSXPI2_ERR:
         POP     AF
 CALL_MSXPI2_ERR2:
-        LD      A,RC_FAILED
+        LD      A,RC_TXERROR
         LD      (HL),A
         POP     HL
         OR      A
@@ -675,8 +675,8 @@ CALL_MSXPI3:
         push    hl
         call    READ1BLOCK
         pop     hl
-        ld      a,RC_FAILED
-        jr      c, CALL_MSXPI3B1
+        ld      a,RC_TXERROR
+        jr      c,CALL_MSXPI3B1
         inc     hl
         ld      c,(hl)
         inc     hl
@@ -696,7 +696,7 @@ CALL_MSXPI3A:
         sbc     hl,bc
         jr      nc,CALL_MSXPI3B
         pop     hl
-        ld      a,RC_SUCCESS
+        ld      a,(hl)  ; will keep/return to BASIC the existing RC from RPi
 CALL_MSXPI3B1:
         pop     bc
         ld      (hl),a
@@ -712,7 +712,7 @@ CALL_MSXPI3B:
         call    READ1BLOCK
         pop     bc
         pop     hl
-        ld      a,RC_FAILED
+        ld      a,RC_TXERROR
         jr      c,CALL_MSXPI3B1
         jr      CALL_MSXPI3A
 
