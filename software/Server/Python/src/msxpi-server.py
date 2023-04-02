@@ -426,22 +426,22 @@ def pcd():
                 urlcheck = getpath(basepath, path)
                 newpath = urlcheck[1]
 
-                if (newpath[:2] == "m:"):
+                if (newpath[:2].lower() == "m:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'ftp://192.168.1.100/'
                     sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
-                elif (newpath[:4] == "ma1:"):
+                elif (newpath[:4].lower() == "ma1:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
                     sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
-                elif  (newpath[:4] == "ma2:"):
+                elif  (newpath[:4].lower() == "ma2:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
                     sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
-                elif (newpath[:4] == "http" or \
-                    newpath[:3] == "ftp" or \
-                    newpath[:3] == "nfs" or \
-                    newpath[:3] == "smb"):
+                elif (newpath[:4].lower() == "http" or \
+                    newpath[:3].lower() == "ftp" or \
+                    newpath[:3].lower() == "nfs" or \
+                    newpath[:3].lower() == "smb"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = newpath
                     sendmultiblock(str(newpath+'\n'), BLKSIZE, True, rc)
@@ -504,10 +504,10 @@ def pcopy():
         rc = sendmultiblock("Pi:Error - Missing file name", BLKSIZE, True, RC_FAILED)
         return rc
 
-    if (path[0].startswith('m:')):
+    if (path[0].lower().startswith('m:')):
         basepath = 'ftp://192.168.1.100/'
         fname1 = basepath + path[0].split(':')[1]
-    elif (path[0].startswith('ma1:')):
+    elif (path[0].lower().startswith('ma1:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
         fname1 = basepath + path[0].split(':')[1]
         if expand == True:
@@ -520,13 +520,13 @@ def pcopy():
         else:
             fname0 = fname1.split('/')
             fname2 = fname0[len(fname0)-1]
-    elif  (path[0].startswith('ma2:')):
+    elif  (path[0].lower().startswith('ma2:')):
         basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
         fname1 = basepath + path[0].split(':')[1]
-    elif (path[0].startswith('http') or \
-        path[0].startswith('ftp') or \
-        path[0].startswith('nfs') or \
-        path[0].startswith('smb')):
+    elif (path[0].lower().startswith('http') or \
+        path[0].lower().startswith('ftp') or \
+        path[0].lower().startswith('nfs') or \
+        path[0].lower().startswith('smb')):
         fname1 = path[0]
     elif (path[0].startswith('/')):
         fname1 = path[0]
