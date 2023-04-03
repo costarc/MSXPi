@@ -42,7 +42,8 @@ UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
 
 # MSX-Dos P Commands
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm     -o ./target/template.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/client-template-descriptive.com.asm -o ./target/templat2.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
@@ -53,6 +54,22 @@ UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
-#~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm -o ./target/dosinit.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcp.com.asm      -o ./target/pcp.com
+#~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm -o ./target/msxpiext.bin
+
+cp target/disks/blank.dsk target/disks/msxpiboot.dsk
+cp target/disks/blank.dsk target/disks/tools.dsk
+
+# Generate msxpiboot.dsk disk image
+for f in `ls ~/Dev/MSX/MSXDOS13/`
+do
+  [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/msxpiboot.dsk:/$f
+  [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/tools.dsk:/$f
+done
+# Add the MSXPi commands and ROM only to msxpiboot.dsk
+for f in `ls target/`
+do
+  [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
+done
+

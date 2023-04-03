@@ -43,25 +43,32 @@ DSKBLOCKSIZE:   EQU 1
         org     $0100
         
 ; Sending Command and Parameters to RPi
-        ld      de,command  
+        ld      de,command
         call    SENDCOMMAND
-        jr      c, PRINTPIERR 
+        jr      c, PRINTPIERR
+        ld      hl,buf
+        ld      bc,BLKSIZE
+        call    CLEARBUF
         call    SENDPARMS
-        jr      c, PRINTPIERR 
-        
+        jr      c, PRINTPIERR
 MAINPROG:
+        ld      hl,buf
+        ld      bc,BLKSIZE
         call    CLEARBUF
         ld      de,buf
-        ld      bc,MSGSIZE
+        ld      bc,BLKSIZE
         call    RECVDATA        ; Receive RC and FCB data if successful
         jr      c, PRINTPIERR        
         
         ld      hl,buf
         ld      a,(hl)
         inc     hl
-        cp      RC_FAILED   
-        ld      bc,MSGSIZE
+        cp      RC_FAILED
+        ld      a,1                         ; no headers in the data
+        ld      bc,BLKSIZE
         jp      z,PRINTPISTDOUT            ; if received data correctly, display in screen
+        cp      RC_TERMINATE
+        ret     z
         INC         HL
         INC         HL
         INC         HL

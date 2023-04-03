@@ -2,9 +2,9 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                           |
+#| Version : 1.1                                                             |
 #|                                                                           |
-#| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
+#| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
 #| All rights reserved                                                       |
 #|                                                                           |
@@ -70,7 +70,6 @@ fi
 # ------------------------------------------
 # Install libraries required by msxpi-server
 # ------------------------------------------
-cd $MYTMP
 sudo apt-get update
 sudo apt-get -y install python3
 sudo apt-get -y install python3-pip
@@ -108,12 +107,12 @@ ln -s $MSXPIHOME /home/msxpi
 
 # remove deprecated msxpi-server startup config
 sudo systemctl disable msxpi-server
-rm /lib/systemd/system/msxpi-server
+rm /lib/systemd/system/msxpi-server > /dev/null 2>&1
 
 # Install new controller / monitor
-cd $MYTMP
+cd $MSXPIHOME
+rm msxpi-monitor > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
-mv msxpi-monitor $MSXPIHOME/
 chmod 755 $MSXPIHOME/msxpi-monitor
 
 cat <<EOF >/lib/systemd/system/msxpi-monitor.service
@@ -137,14 +136,17 @@ sudo systemctl enable msxpi-monitor
 echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
 amixer cset numid=3 1
 
-# Download msxpi-server (C and Python). Compile the C msxpi-server
+# Download msxpi-server
 cd $MSXPIHOME
+rm msxpi-server.py > /dev/null 2>&1
+rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
+rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-
-mv msxpi-server.py msxpi-server *.msx $MSXPIHOME/
-cd $MSXPIHOME
-chmod 755 $MSXPIHOME/msxpi-server $MSXPIHOME/*.msx $MSXPIHOME/msxpi-server.py
-
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
+wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
+mv msxpiboot.dsk $MSXPIHOME/disks/
+mv tools.dsk $MSXPIHOME/disks/
+chmod 755 $MSXPIHOME/msxpi-server.py
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor
@@ -154,4 +156,3 @@ sudo systemctl start msxpi-monitor
 sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
-

@@ -37,20 +37,36 @@
 ; This command must have a equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+
         org     $0100
         
-; Sending Command and Parameters to RPi
-        ld      de,command
-        call    SENDCOMMAND
-        jr      c, PRINTPIERR
+        ld      hl,msg_cmd
+        call    PRINT
+
+; Sending a command to RPi
+        ld      de,command  
+        ld      bc,CMDSIZE
+        call    SENDDATA
+; ------------------------------------
+
+        call    print_msgs          ; print informative message based on flag C
+        
+        ld      hl,msg_parms
+        call    PRINT
+
+        ; send CLI parameters to MSXPi
         ld      hl,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
-        call    SENDPARMS
-        jr      c, PRINTPIERR
+        call    SENDPARMS           ; Its contatn size: BLKSIZE
+        call    print_msgs          ; print informative message based on flag C
+        
 MAINPROG:
+        ld      hl,msg_recv
+        call    PRINT
+        
         call    READ1BLOCK
-        jr      c, PRINTPIERR
+        call    print_msgs          ; print informative message based on flag C
         ld      hl,buf
         inc     hl
         ld      c,(hl)
@@ -70,6 +86,10 @@ MAINPROG1:
         ld      b,h
         ld      c,l
         push    bc
+        
+        ld      hl,msg_recv
+        call    PRINT
+        
         call    READ1BLOCK
         pop     bc
         jr      c,PRINTPIERR
@@ -92,10 +112,47 @@ PRINTPIERR:
 
 PICOMMERR:  DB      "Communication Error",13,10,0
 
-command: db "prun    ",0
+
+print_msgs:
+        push    bc
+        push    de
+        push    hl
+        push    af
+        ld      hl,msg_error
+        call      c,PRINT
+        pop     af
+        push    af
+        ld      hl,msg_success
+        call    nc,PRINT
+        pop     af
+        pop     hl
+        pop     de
+        pop     bc
+        ret
+
+; Command maximu lenght is 8 characters. 
+; Always terminate the command with a trailing zero
+command: db "template",0
+
+; Comand line parameters can be 255 characters maximum
+; Always terminate the string with a trailing zero
+       
+msg_success: db "Checksum match",13,10,0
+msg_error: db "Checksum did not match",13,10,0
+msg_cmd: db "Sending command...",0
+msg_parms: db "Sending parameters... ",0
+msg_recv: db "Reading MSXPi response... ",0
+
+; Core MSXPi APIs / BIOS routines.
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
+
+; All MSX-DOS programs must have this buf defined.
+; It's used by the MSXPi APIs in several commands.
+
 buf:    equ     $
         ds      BLKSIZE
         db      0
+
+

@@ -165,43 +165,115 @@ nextbit16:
         exx
         ret
 
+; Clear buffer area
+; Input:
+; BC = buffer size
+; HL = Buffer Address
+;
+CLEARBUF:
+        ld      d,h
+        ld      e,l
+        inc     de
+        xor     a
+        ld      (hl),a
+        ldir
+        ret
+        
 ;-----------------------
 ; SENDPICMD            |
 ;-----------------------
 ; Send a command to Raspberry Pi
+; This routine allocate BLKSIZE+2 bytes at the top of th RAM
+; This buffer is used for command & parameters transfer
 ; Input:
 ;   de = should contain the command string
-;   bc = number of bytes in the command string
+;   hl = buffer address - optional. if zero, will use buffer at top of ram
+;   B = size of command + parameters
 ; Output:
 ;   Flag C set if there was a communication error
+;   hl = buffer address (never zero)
+;   af,bc,de,hl are modified
+;
 SENDPICMD:
-; Save flag C which tells if extra error information is required
-; Get working area to store the command, and format it:
+        LD      A,H
+        OR      L
+        JR      NZ,CALL_BUFFERPASSED
+        LD      HL,(HIMEM)
         PUSH    BC
-        PUSH    DE
-        ;CALL    GETWRK
-        LD      H,D
-        LD      L,E
         LD      BC,BLKSIZE
-        ADD HL,BC               ; Get a workign area at the end of user's buffer        
+        OR      A               ; reset C to avoid carry being used in the SBC command
+        SBC     HL,BC           ; Allcoate Buffer on top of RAM
+        DEC     HL
+        DEC     HL              ;  bytes more for the buffer
+        POP     BC
+CALL_BUFFERPASSED:
         PUSH    HL
-        LD      D,H
-        LD      E,L
-        LD      BC,8
-        LD      A,32
+        PUSH    DE
+        PUSH    BC
+        LD      BC,BLKSIZE
+        CALL    CLEARBUF
+        POP     BC
+        POP     DE
+        POP     HL
+        PUSH    HL              ; Save buffer address, DE will be updated to next parameter
+        CALL    GETCMD
+        POP     HL
+        PUSH    HL
+        PUSH    DE              ; Next parmameters address
+        PUSH    BC
+        EX      DE,HL
+        CALL    SENDCOMMAND
+        POP     BC
+        POP     DE
+        POP     HL
+        RET     C
+        PUSH    HL
+        PUSH    DE
+        PUSH    BC
+        LD      BC,BLKSIZE
+        CALL    CLEARBUF
+        POP     BC
+        POP     DE
+        POP     HL
+        PUSH    HL
+        CALL    GETPARMS
+        POP     HL
+        PUSH    HL
+        EX      DE,HL
+        LD      BC,BLKSIZE
+        CALL    SENDDATA
+        POP     HL          ; Return address of buffer in HL
+        RET
+GETCMD:
+        LD      A,(DE)
+        CP      ' '
+        RET     Z
+        CP      $22             ; QUOTE (")
+        RET     Z
+        CP      ')'
+        RET     Z
         LD      (HL),A
         INC     DE
-        LDIR
-        XOR     A
-        LD      (DE),A
-        POP     DE              ; Workarea (to store command)
-        POP     HL              ; Command address sent by BASIC
-        POP     BC              ; Size of command
-        PUSH   DE
-        LDIR                       ; Move command to formated 9 bytes work area
-        POP     DE              ; Restore command address (Workarea)
-        CALL    SENDCOMMAND
+        INC     HL
+        DEC     B
+        JR      GETCMD
+GETPARMS:
+        LD      A,(DE)
+        CP      ' '
+        JR      Z,GETPARMS2
+GETPARMS1:
+        LD      A,(DE)
+        CP      $22
+        JR      Z,GETPARMS2
+        CP      ')'
+        JR      Z,GETPARMS2
+        LD      (HL),A
+        INC     HL
+GETPARMS2:
+        INC     DE
+        DJNZ    GETPARMS1
         RET
+
 
 ;---------------------------------------------------------------
 ; RECVDATA- SENDDATA
@@ -256,7 +328,7 @@ RECV0:
         ret     z                           ; return if match, C is 0
         ld      a,b
         or      a
-        jr       nz,RECVRETRY     ;go for another retry 
+        jr      nz,RECVRETRY     ;go for another retry
         scf                                 ; differ, set flag for Error
         ret
 
@@ -304,7 +376,7 @@ SENDD0:
 PRINT:
         ld      a,(hl)		;get a character to print
         cp      TEXTTERMINATOR
-        jr      Z,PRINTEXIT
+        ret     z
         cp      10
         jr      nz,PRINT1
         call    PUTCHAR
@@ -313,8 +385,6 @@ PRINT1:
         call	PUTCHAR		;put a character
         inc     hl
         jr      PRINT
-PRINTEXIT:
-        ret
 
 PRINTNLINE:
         ld      a,13
@@ -361,6 +431,7 @@ PRINTNUM1:
 ; PRINTPISTDOUT 
 ; Read buffer of BC lenght and print to screen. Terminates also if zero detected
 ; Inputs: (PRINTPISTDOUT0)
+;  A = 0: Data contain header
 ;  HL: Buffer address
 ;  BC: Buffer lenght
 ; Changes: AF,BC,HL
@@ -383,8 +454,7 @@ printchar:
         ld      a,b
         or      c
         jr      nz,PRINTPISTDOUT
-        scf
-        ccf
+        or      a
         ret
 
 NOSTDOUT: 
@@ -463,7 +533,7 @@ ATOHERR:
 ; Input:
 ;  DE = Call full command (after the ")
 ; Output:
-;  A = Outout type (as below cases)
+;  A = Output type (as below cases)
 ;  DE = Point to start of command to send to RPi (pdir in the case below)
 ;  HL = Address of buffer to store data if stdout = 2
 ;
@@ -525,7 +595,6 @@ PARMSEVAL2:
         RET
 
 SENDPARMS:
-        call    CLEARBUF
 ; check if there are parameters in the command line
         ld      hl,$80
         ld      a,(hl)
@@ -572,15 +641,6 @@ SETBUF0:
         or      a
         jr      nz,SETBUF0
         ret
-        
-CLEARBUF:
-        ld      hl,buf
-        ld      de,buf + 1
-        ld      bc,BLKSIZE
-        xor     a
-        ld      (hl),a
-        ldir
-        ret
                 
 EATSPACES:
         ld      a,(hl)
@@ -617,4 +677,4 @@ DELAY1:
         POP     HL
         POP     DE
         RET
-              
+
