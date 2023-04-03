@@ -1,5 +1,6 @@
 <<<<<<< HEAD
 *.bin
+!msxpiext.bin
 =======
 >>>>>>> dev
 *.swp
