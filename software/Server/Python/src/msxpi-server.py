@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230404.413"
+BuildId = "20230404.414"
 
 CMDSIZE = 9
 MSGSIZE = 128

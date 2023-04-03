@@ -42,6 +42,6 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/templat2.com?r
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
 echo
-prun wget -q -O msxpi-server.py https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-prun wget -q -O disks/msxpiboot.dsk https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
-prun wget -q -O disks/tools.dsk https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
+prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
+prun wget -q -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk
+prun wget -q -O disks/tools.dsk https://tinyurl.com/toolsdisk
