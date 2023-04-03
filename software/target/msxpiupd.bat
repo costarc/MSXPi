@@ -26,8 +26,6 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pdir.com?raw=t
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pplay.com?raw=true
 echo
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/print.rom?raw=true
-echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/prun.com?raw=true
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pset.com?raw=true
@@ -42,6 +40,9 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/templat2.com?r
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
 echo
-prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
-prun wget -q -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk
-prun wget -q -O disks/tools.dsk https://tinyurl.com/toolsdisk
+Updating msxpi-server.py...
+prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server
+Updating MSXPi boot disk...
+prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk
+Updating MSXPi tools disk...
+prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk

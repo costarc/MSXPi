@@ -623,7 +623,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230404.415"
+BuildId: DB "20230404.417"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230404.414"
+BuildId = "20230404.416"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -286,7 +286,6 @@ def ini_fcb(fname,fsize):
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
     
-    print("ini_fcb:",buf)
     rc = sendmultiblock(buf, BLKSIZE, False, RC_SUCCESS)
     
     #print("ini_fcb: Exiting")
@@ -437,10 +436,6 @@ def pcd():
                     rc = RC_SUCCESS
                     psetvar[0][1] = newpath
                     sendmultiblock(str(newpath+'\n'), BLKSIZE, True, rc)
-                elif (newpath[:4].lower() == "git:":
-                    rc = RC_SUCCESS
-                    psetvar[0][1] = 'https://raw.githubusercontent.com/costarc/MSXPi/master/'
-                    sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
                 else:
                     newpath = str(newpath)
                     if (os.path.isdir(newpath)):
