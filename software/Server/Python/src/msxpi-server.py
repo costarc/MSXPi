@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230403.400"
+BuildId = "20230403.406"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -275,28 +275,19 @@ def ini_fcb(fname,fsize):
 
     #convert filename to 8.3 format using all 11 positions required for the FCB
     msxfcbfname = dos83format(msxfile)
-
-    lastSectorSize = fsize % SECTORSIZE
-    if lastSectorSize == 0:
-        lastSectorSize = SECTORSIZE
-        
-    numblocks = math.ceil(fsize / SECTORSIZE)
-    if numblocks == 0:
-        numblocks = 1
     
     #print("Drive, Filename, N# blocks:",msxdrive,msxfcbfname,numblocks)
 
     # send FCB structure to MSX
     buf = bytearray()
     buf.extend(RC_SUCCESS.to_bytes(1,'little'))
-    buf.extend((numblocks % 256).to_bytes(1,'little'))
-    buf.extend((numblocks // 256).to_bytes(1,'little'))
-    buf.extend((lastSectorSize % 256).to_bytes(1,'little'))
-    buf.extend((lastSectorSize // 256).to_bytes(1,'little'))
+    buf.extend((fsize % 256).to_bytes(1,'little'))
+    buf.extend((fsize // 256).to_bytes(1,'little'))
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
     
-    rc = sendmultiblock(buf, BLKSIZE, False)
+    print("ini_fcb:",buf)
+    rc = sendmultiblock(buf, BLKSIZE, False, RC_SUCCESS)
     
     #print("ini_fcb: Exiting")
     
@@ -480,7 +471,6 @@ def pcopy():
     else:
         path = data.decode().split("\x00")[0]
         
-    
     print("pcopy: Starting with params ",path)
 
     path = path.strip().split()
@@ -622,7 +612,7 @@ def pcopy():
                 if rc != RC_SUCCESS:
                     print("pcopy: ini_fcb failed")
                     return rc
-                # Thhis will send the file to MSX, for pcopy to write it to disk
+                # This will send the file to MSX, for pcopy to write it to disk
                 rc = sendmultiblock(buf,SECTORSIZE, False, rc)
             
             else:# Booted from MSXPi disk drive (disk images)
@@ -807,7 +797,12 @@ def pwifi():
     wifipass = psetvar[5][1]
 
     rc,data = recvdata()
-    parms = data.decode().split("\x00")[0]
+
+    if data[0] == 0:
+        parms=''
+    else:
+        parms = data.decode().split("\x00")[0]
+
     cmd=parms.strip()
 
     if (cmd[:2] == "/h"):
@@ -842,15 +837,20 @@ def pver():
     return rc
     
 def irc(cmd=''):
-    piexchangebyte(RC_WAIT)
 
     global allchann,psetvar,channel,ircsock
     ircserver = psetvar[8][1]
     ircport = int(psetvar[9][1])
     msxpinick =  psetvar[7][1]
-
-    rc = RC_SUCCESS
-    cmd = cmd.lower()
+    
+    rc,data = recvdata()
+    if rc != RC_SUCCESS:
+        return rc
+        
+    if data[0] == 0:
+        cmd=''
+    else:
+        cmd = data.decode().split("\x00")[0].lower()
 
     try:
         if cmd[:4] == 'conn':       
@@ -1192,6 +1192,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
     else:
         cnt = 0
 
+    print(sendheader,rc,len(buf),buf)
     for b in buf:
         if (isinstance(b, str)):
             data[cnt] = b.encode()[0]          #ord(b)

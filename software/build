@@ -36,17 +36,24 @@ UpdateBuildIdASM() {
 }
 
 genUpdateBatch() {
-  echo "echo Updating MSXPi client and server software..." > target/msxpiupd.bat
-  echo "pcd /home/pi/msxpi" >> target/msxpiupd.bat
+  echo "echo Updating MSXPi client and server software..." > /tmp/msxpiupd.bat
+  
+  echo "pcd /home/pi/msxpi" >> /tmp/msxpiupd.bat
+  rm target/msxpiupd.bat  > /dev/null 2>&1
+  
   for fn in `ls target`
   do
     if [ -f target/${fn} ];then
-      echo "pcopy "${GITPATH}/$fn >> target/msxpiupd.bat
+      echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
+      echo "echo" >> /tmp/msxpiupd.bat
     fi
   done
-  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/Server/Python/src/msxpi-server.py msxpi-server.py"  >> target/msxpiupd.bat
-  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk disks/msxpiboot.dsk"  >> target/msxpiupd.bat
-  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk disks/tools.dsk"  >> target/msxpiupd.bat
+  echo "prun wget -O https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py msxpi-server.py"  >> /tmp/msxpiupd.bat
+  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk disks/msxpiboot.dsk"  >> /tmp/msxpiupd.bat
+  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk disks/tools.dsk"  >> /tmp/msxpiupd.bat
+  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
+  rm /tmp/msxpiupd.bat 
+  
 }
 
 # Build MSX-DOS with MSXPi Drivers with build id

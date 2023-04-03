@@ -64,13 +64,10 @@ MAINPROG:
         ld      a,(hl)
         inc     hl
         cp      RC_FAILED
-        ld      a,1                         ; no headers in the data
         ld      bc,BLKSIZE
-        jp      z,PRINTPISTDOUT            ; if received data correctly, display in screen
+        jp      z,PRINTPISTDOUT            ; if RPi sent Error, print message to screen
         cp      RC_TERMINATE
         ret     z
-        INC         HL
-        INC         HL
         INC         HL
         INC         HL              ; Point to the start of the data to fill the FCB
 
@@ -132,61 +129,66 @@ PLOOP:
 ; it will use blocks size SECTORSIZE (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
-        LD          A,'.'
+        LD      A,'.'
         CALL    PUTCHAR
         LD      A,10
-        LD      (buf),a                                     ; counter for cosmetic feature
-        LD      BC,(buf + 1)                            ; Read the number of blocks to transfer     
+        LD      (buf),a             ; counter for cosmetic   feature
+        LD      BC,(buf + 1)        ; Read the number of bytes to transfer
 DSKREADBLK:
-        LD          A,(buf)
-        OR          A
-        JR          Z,DSKREADBLK1
+        LD      A,(buf)
+        OR      A
+        JR      Z,DSKREADBLK1
         DEC     A
-        LD          (buf),a
-        CP          9
-        JR          Z,DSKREADBLK2
-        LD          A,'.'
+        LD      (buf),a
+        CP      9
+        JR      Z,DSKREADBLK2
+        LD      A,'.'
         OUT     ($98),A
-        JR          DSKREADBLK2
+        JR      DSKREADBLK2
 DSKREADBLK1:
-        LD          A,'.'
+        LD      A,'.'
         CALL    PUTCHAR
         LD      A,10
         LD      (buf),A        
  DSKREADBLK2:
-         PUSH    BC
-; Buffer where data is stored during transfer, and also DMA for disk access
-
-        LD      DE,DMA                              ; Disk drive buffer for temporary data
-        LD      BC,SECTORSIZE  ; block size to transfer
-; READ ONE BLOCK OF DATA AND STORE IN THE DMA
+        PUSH    BC
+                                    ; Buffer where data is stored during transfer, and also DMA for disk access
+        LD      DE,DMA              ; Disk drive buffer for temporary data
+        LD      BC,SECTORSIZE       ; block size to transfer
+                                    ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
         CALL    RECVDATA
         POP     BC
         RET     C
-               
+                                    ; Defines the size of the buffer to write to disk.
+                                    ; If received data > SECTORSIZE: HL = SECTORSIZE
+                                    ; If received data <= SECTORSIZE: HL = Size of size of Received Data
+                                    ; Set HL with the number of bytes received
+                                    ; If its last sector, get the actual size that was sent by RPi in the ini_fcb
         PUSH    BC
-        ; Set HL with the number of bytes received
-        ; If its last sector, get the actual size that was sent by RPi in the ini_fcb 
-        LD      HL,SECTORSIZE 
-        LD      A,B
-        CP      1
-        JR      NC,DSKREADBLK3
-        LD      A,C
-        CP      1
-        JR      NZ,DSKREADBLK3
-        LD      HL,(buf + 3)            ; get actual block size
-DSKREADBLK3:
+        PUSH    BC
+        POP     HL
+        LD      DE,SECTORSIZE
+        OR      A
+        SBC     HL,DE
+        JR      C,LASTBLOCK
+        JR      Z,LASTBLOCK
+        POP     BC                  ; Dsicard previous number of bytes to transfer
+        PUSH    HL                  ; Push remaing bytes to Stack
+        LD      HL,SECTORSIZE
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS
-        POP     BC
-        DEC     BC
-        LD        A,B
-        OR      C
-        JR      NZ, DSKREADBLK       ; data read less than buffer - finished transfer
+        POP     BC                  ; Remaining bytes to transfer
+        JR      DSKREADBLK          ; data read less than buffer - finished transfer
+        
+LASTBLOCK:
+        POP     HL                  ; Pull AF from stack in to HL
+        LD      DE,FILEFCB
+        LD      C,$26
+        CALL    BDOS
         OR      A
         RET
-
+        
 OPENFILEW:
         LD      DE,FILEFCB
         LD      C,$16
