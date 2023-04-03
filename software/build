@@ -48,9 +48,9 @@ genUpdateBatch() {
       echo "echo" >> /tmp/msxpiupd.bat
     fi
   done
-  echo "prun wget -O https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py msxpi-server.py"  >> /tmp/msxpiupd.bat
-  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk disks/msxpiboot.dsk"  >> /tmp/msxpiupd.bat
-  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk disks/tools.dsk"  >> /tmp/msxpiupd.bat
+  echo "prun wget -q -O msxpi-server.py https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py"  >> /tmp/msxpiupd.bat
+  echo "prun wget -q -O disks/msxpiboot.dsk https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk"  >> /tmp/msxpiupd.bat
+  echo "prun wget -q -O disks/tools.dsk https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk"  >> /tmp/msxpiupd.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
   rm /tmp/msxpiupd.bat 
   
