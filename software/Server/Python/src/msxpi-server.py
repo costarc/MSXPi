@@ -437,6 +437,10 @@ def pcd():
                     rc = RC_SUCCESS
                     psetvar[0][1] = newpath
                     sendmultiblock(str(newpath+'\n'), BLKSIZE, True, rc)
+                elif (newpath[:4].lower() == "git:":
+                    rc = RC_SUCCESS
+                    psetvar[0][1] = 'https://raw.githubusercontent.com/costarc/MSXPi/master/'
+                    sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
                 else:
                     newpath = str(newpath)
                     if (os.path.isdir(newpath)):
