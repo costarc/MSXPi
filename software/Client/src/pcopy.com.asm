@@ -58,18 +58,18 @@ MAINPROG:
         ld      de,buf
         ld      bc,BLKSIZE
         call    RECVDATA        ; Receive RC and FCB data if successful
-        jr      c, PRINTPIERR        
-        
+        jr      c,PRINTPIERR
         ld      hl,buf
-        ld      a,(hl)
+        ld      a,(hl)          ; return code
+        inc     hl
+        ld      c,(hl)          ; lsb of data size
+        inc     hl
+        ld      b,(hl)          ; msb of data size
         inc     hl
         cp      RC_FAILED
-        ld      bc,BLKSIZE
         jp      z,PRINTPISTDOUT            ; if RPi sent Error, print message to screen
         cp      RC_TERMINATE
-        ret     z
-        INC         HL
-        INC         HL              ; Point to the start of the data to fill the FCB
+        jp      z,PRINTPISTDOUT
 
 ; UpdateFCB with the data received from RPi
         LD      DE,FILEFCB
@@ -252,15 +252,13 @@ USERESCAPE: DB      "Cancelled",13,10,0
 RUNOPTION:  db  0
 SAVEOPTION: db  0
 REGINDEX:   dw  0
-FILEFCB:    ds     40
-
 
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
 
-buf:     equ     $
-           DB       0,0,0,0,0,0
-DMA:  ds      SECTORSIZE
-           db      0
-
+DMA:    ds      SECTORSIZE
+        db      0,0,0,0,0,0,0,0,0,0
+FILEFCB:    ds  40
+        db      0,0,0,0,0,0,0,0,0,0
+buf:    equ     $

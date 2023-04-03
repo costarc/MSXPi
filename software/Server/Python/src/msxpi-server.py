@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230403.406"
+BuildId = "20230404.412"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -471,8 +471,6 @@ def pcopy():
     else:
         path = data.decode().split("\x00")[0]
         
-    print("pcopy: Starting with params ",path)
-
     path = path.strip().split()
                    
     if (len(path) == 0 or path[0].lower() == ('/h')):
@@ -480,9 +478,8 @@ def pcopy():
         buf = buf + 'pcopy remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
         buf = buf +'/, path, http, ftp, nfs, smb\n'
-        buf = buf + 'Path relative to RPi path (set with pcd)'    
-        #print(len(buf),buf)
-        rc = send_rc_msg(RC_FAILED,buf)
+        buf = buf + 'Path relative to RPi path (set with pcd)'
+        rc = sendmultiblock(buf, BLKSIZE, True, RC_FAILED)
         return rc
 
     if (path[0].lower() == '/z'):
@@ -538,7 +535,6 @@ def pcopy():
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        print("pcopy: path is local:",fname1,fname2)
         
         try:
             with open(fname1, mode='rb') as f:
@@ -552,7 +548,7 @@ def pcopy():
             return RC_FAILED
 
     else:
-        print("pcopy: path is remote:",fname1,fname2)
+
         try:
             urlhandler = urlopen(fname1)
             buf = urlhandler.read()
@@ -618,7 +614,6 @@ def pcopy():
             else:# Booted from MSXPi disk drive (disk images)
                 # this routine will write the file directly to the disk image in RPi
                 try:
-                    print("try:",fname1,fname2)
                     fatfsfname = "fat:///"+psetvar[1][1]        # Asumme Drive A:
                     if fname2.upper().startswith("A:"):
                         fname2 = fname2.split(":")
@@ -633,12 +628,9 @@ def pcopy():
                             fname2=fname2[1]           # Remove "B:" from name
                         else:
                             fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
-                    print("ex",fatfsfname,fname1,fname2)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
-                    print("before")
                     dskobj.writebytes(fname2,buf)
-                    print("after")
                     sendmultiblock("Pi:Ok", BLKSIZE, True, RC_TERMINATE)
                 except Exception as e:
                     rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
@@ -1192,7 +1184,6 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
     else:
         cnt = 0
 
-    print(sendheader,rc,len(buf),buf)
     for b in buf:
         if (isinstance(b, str)):
             data[cnt] = b.encode()[0]          #ord(b)
