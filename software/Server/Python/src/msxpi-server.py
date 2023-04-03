@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230402.386"
+BuildId = "20230403.400"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -773,6 +773,10 @@ def pset():
                         psetvar[index][1] = str(cmd[1])    
                         rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
                         return RC_SUCCESS
+                    else: 
+                        psetvar[index][1] = str(cmd[1])    
+                        rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+                        return RC_SUCCESS
                         
                 except Exception as e:
                     
@@ -823,9 +827,9 @@ def pwifi():
         os.system("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf")
         cmd = cmd.strip().split(" ")
         if (len(cmd) == 2 and cmd[1] == "wlan1"):
-            prun("sudo ifdown wlan1 && sleep 1 && sudo ifup wlan1")
+            prun("sudo ip link set wlan1 down && sleep 1 && sudo ip link set wlan1 up")
         else:
-            prun("sudo ifdown wlan0 && sleep 1 && sudo ifup wlan0")
+            prun("sudo ip link set wlan0 down && sleep 1 && sudo ip link set wlan0 up")
     else:
         prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
     
@@ -1121,7 +1125,7 @@ def recvdata( bytecounter = BLKSIZE):
             #print("recvdata: checksum is a match")
             break
         else:
-            rc = RC_CRCERROR
+            rc = RC_TXERROR
             print("recvdata: checksum error")
 
     #print (hex(rc))
@@ -1169,7 +1173,7 @@ def senddata(data, blocksize = BLKSIZE):
             #print("senddata: checksum is a match")
             break
         else:
-            rc = RC_CRCERROR
+            rc = RC_TXERROR
             print("senddata: checksum error")
 
     #print (hex(rc))

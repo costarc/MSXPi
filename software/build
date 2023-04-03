@@ -3,6 +3,7 @@ MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
 export ROMBANK1=./target/msxpidos.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
+export GITPATH=https://github.com/costarc/MSXPi/raw/master/software/target
 
 # Functions
 UpdateBuildId() {
@@ -34,9 +35,24 @@ UpdateBuildIdASM() {
     fi
 }
 
+genUpdateBatch() {
+  echo "echo Updating MSXPi client and server software..." > target/msxpiupd.bat
+  echo "pcd /home/pi/msxpi" >> target/msxpiupd.bat
+  for fn in `ls target`
+  do
+    if [ -f target/${fn} ];then
+      echo "pcopy "${GITPATH}/$fn >> target/msxpiupd.bat
+    fi
+  done
+  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/Server/Python/src/msxpi-server.py msxpi-server.py"  >> target/msxpiupd.bat
+  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk disks/msxpiboot.dsk"  >> target/msxpiupd.bat
+  echo "prun wget -O https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk disks/tools.dsk"  >> target/msxpiupd.bat
+}
+
 # Build MSX-DOS with MSXPi Drivers with build id
 UpdateBuildId ./Server/Python/src/msxpi-server.py
 UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
+UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 
 ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
@@ -56,7 +72,7 @@ UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-#~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm  -o ./target/msxpiext.bin
 
 cp target/disks/blank.dsk target/disks/msxpiboot.dsk
 cp target/disks/blank.dsk target/disks/tools.dsk
@@ -72,4 +88,6 @@ for f in `ls target/`
 do
   [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
 done
+
+genUpdateBatch
 

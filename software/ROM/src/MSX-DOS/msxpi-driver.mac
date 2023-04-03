@@ -552,7 +552,10 @@ CALLHAND:
 .CALLDE:
     PUSH    DE
     RET
-  
+
+; ---------------------
+; Supporting functions|
+;----------------------
 GETSTRPNT:
 ; OUT:
 ; HL = String Address
@@ -751,6 +754,7 @@ CALL_MSXPISERR:
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
 _MSXPISEND:
+; Send a block (BLKSIZE) )of data to RPi
 ; retrive CALL parameters from stack (second position in stack)
         CALL    EVALTXTPARAM    ; Evaluate text parameter
         PUSH    HL
@@ -766,20 +770,13 @@ _MSXPISEND:
 MSXPISEND1:
 ; Save buffer address to later store return code
         PUSH    HL
-; First byte of buffer is saved to store return code
-        INC     HL
-; Second two bytes in buffer must be size of buffer
-; store buffer size in BC
-        LD      C,(HL)
-        INC     HL
-        LD      B,(HL)
-        INC     HL
         LD      D,H
         LD      E,L
+        LD      BC,BLKSIZE
         CALL    SENDDATA
         POP     HL
         JR      NC,MSXPISEND2
-        LD      A,RC_FAILED
+        LD      A,RC_TXERROR
         LD      (HL),A
 MSXPISEND2:
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
@@ -803,13 +800,14 @@ _MSXPIRECV:
         OR      A
         RET
 MSXPIRECV1:
+        PUSH    HL
         LD      D,H
         LD      E,L
-        PUSH    HL
+        LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL
         JR      NC,MSXPIRECV2
-        LD      A,RC_FAILED
+        LD      A,RC_TXERROR
         LD      (HL),A
 MSXPIRECV2:
         POP     HL
@@ -872,7 +870,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230402.386"
+BuildId: DB "20230403.401"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

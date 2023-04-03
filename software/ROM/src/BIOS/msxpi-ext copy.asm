@@ -565,112 +565,30 @@ MSXPIRECV2:
         POP     HL
         OR      A
         RET
-
-;-----------------------
-; call GETPOINTERS      |
-;-----------------------
-; Return in hl the Entry address of th routine indexed in A
-; Input:
-;  A = Routine index
-; Output:
-;  (sp) = address of the given routine
-; Modify: af,hl
-;
-_GETPOINTERS:
-        push    de
-        ld      hl,BIOSENTRYADDR
-
-GETPOINTERS1:
-        or        a
-        jr        z,GETPOINTERSEXIT
-        dec        a
-        inc     hl
-        inc     hl
-        jr        GETPOINTERS1
-
-GETPOINTERSEXIT:
-        ld        e,(hl)
-        inc     hl
-        ld        h,(hl)
-        ld        l,e
-        ld      (PROCNM),hl
-        pop     de
-        or      a
-        ret
-
-BIOSENTRYADDR:  EQU     $
-        DW      _MSXPIVER
-        DW      _MSXPI
-        DW      _MSXPISEND
-        DW      _MSXPIRECV
-        DW      RECVDATA
-        DW      SENDDATA
-        DW      CHKPIRDY
-        DW      PIREADBYTE
-        DW      PIWRITEBYTE
-        DW      PIEXCHANGEBYTE
-        DW      SENDPICMD
-        DW      PRINT
-        DW      PRINTNLINE
-        DW      PRINTNUMBER
-        DW      PRINTDIGIT
-        DW      PRINTPISTDOUT
         
-
-; ================================================================
-; Text messages used in the loader
-; ================================================================
-
+;---------------------------
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230403.401"
+BuildId: DB "20230403.391"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPIVER ",13,10,0
 
-PIOFFLINE:
-        DB      "Communication Error",13,10,0
-
-PIONLINE:
-        DB      "Raspberry Pi is online",13,10,0
-
-PIWAITMSG:
-        DB      13,10,"Waiting Pi boot. P to skip",13,10,0
-
 BUFERRMSG:
         DB    "Parameters or Buffer address invalid",13,10,0
 
-PSYNC_RESTORED:
-        DB    "Communication restored",13,10,0
-
-PSYNC_ERROR:
-        DB    "Could not restore communication ",13,10,0
-
-
-; ================================================================
-; Table of Commands available/implemented
-; ================================================================
-
-CALL_TABLE:
-
-        DB      "MSXPIVER",0
-        DW      _MSXPIVER
-
-        DB      "GETPOINT",0
-        DW      _GETPOINTERS
-
-        DB      "MSXPISND",0
-        DW      _MSXPISEND
-
-        DB      "MSXPIRCV",0
-        DW      _MSXPIRECV
-
-        DB      "MSXPI",0
-        DW      _MSXPI
-
-ENDOFCMDS:
-        DB      00
+CMDS:
+ 
+; List of available instructions (as ASCIIZ) and execute address (as word)
+ 
+        DEFB    "MSXPI",0      ; Print upper case string
+        DEFW    _MSXPI
+        DEFB    "MSXPISEND",0
+        DEFW    _MSXPISEND
+        DEFB    "MSXPIRECV",0
+        DEFW    _MSXPIRECV
+        DEFB    0               ; No more instructions
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
