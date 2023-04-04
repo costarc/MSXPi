@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230404.418"
+BuildId = "20230404.424"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -827,7 +827,7 @@ def pver():
     rc = sendmultiblock(ver, BLKSIZE, True, RC_SUCCESS)
     return rc
     
-def irc(cmd=''):
+def irc():
 
     global allchann,psetvar,channel,ircsock
     ircserver = psetvar[8][1]
@@ -854,11 +854,11 @@ def irc(cmd=''):
             ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
             ircsock.send(bytes("NICK "+ jnick +"\n"))
             ircmsg = 'Connected to '+psetvar[8][1]
-            sendmultiblock(rc,ircmsg)
+            sendmultiblock(ircmsg, BLKSIZE, True, rc)
         elif cmd[:3] == "msg":
             print("msg:sending msg ",cmd[:4])
             ircsock.send(bytes("PRIVMSG "+ channel +" :" + cmd[4:] +"\n"))
-            sendmultiblock(RC_SUCCNOSTD,"Pi:Ok\n")
+            sendmultiblock("Pi:Ok\n", BLKSIZE, True, RC_SUCCNOSTD)
         elif cmd[:4] == 'join':
             jparm = cmd.split(' ')
             jchannel = jparm[1]
@@ -881,7 +881,7 @@ def irc(cmd=''):
                     allchann.append(jchannel)
                     channel = jchannel
 
-            sendmultiblock(RC_SUCCESS,ircmsg)
+            sendmultiblock(ircmsg, BLKSIZE, True, RC_SUCCESS)
 
         elif cmd[:4] == 'read':
             ircmsg = 'Pi:Error'
@@ -915,29 +915,29 @@ def irc(cmd=''):
                     rc = RC_FAILED
   
             ircsock.setblocking(1);
-            sendmultiblock(rc,ircmsg)
-
+            sendmultiblock(ircmsg, BLKSIZE, True, rc)
+            
         elif cmd[:5] == 'names':
             ircsock.send(bytes("NAMES " + channel + "\n"))
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
             ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
-            sendmultiblock(RC_SUCCESS,ircmsg)
+            sendmultiblock(ircmsg, BLKSIZE, True, RC_SUCCESS)
         elif cmd[:4] == 'quit':
             ircsock.send(bytes("/quit\n"))
             ircsock.close()
-            sendmultiblock(RC_SUCCESS,"Pi:leaving room\n")
+            sendmultiblock("Pi:leaving room\n",BLKSIZE, True, RC_SUCCESS)
         elif cmd[:4] == 'part':
             ircsock.send(bytes("/part\n"))
             ircsock.close()
-            sendmultiblock(RC_SUCCESS,"Pi:leaving room\n")
+            sendmultiblock("Pi:leaving room\n",BLKSIZE, True, RC_SUCCESS)
         else:
             print("irc:no valid command received")
-            sendmultiblock(rc,"Pi:No valid command received")
+            sendmultiblock("Pi:No valid command received",BLKSIZE, True, rc)
     except Exception as e:
             print("irc:Caught exception"+str(e))
-            sendmultiblock(rc,"Pi:"+str(e))
+            sendmultiblock("Pi:"+str(e), BLKSIZE, True, rc)
             
 def dosinit():
     
@@ -1260,7 +1260,7 @@ try:
         try:
             print("st_recvcmd: waiting command")
             rc,buf = recvdata(CMDSIZE)
-            
+           
             if (rc == RC_SUCCESS):
                 if buf[0] == 0:
                     fullcmd=''

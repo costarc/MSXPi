@@ -256,8 +256,12 @@ GETCMD:
         INC     DE
         INC     HL
         DEC     B
-        JR      GETCMD
+        JR      NZ,GETCMD
+        RET
 GETPARMS:
+        XOR     A
+        CP      B
+        RET     Z
         LD      A,(DE)
         CP      ' '
         JR      Z,GETPARMS2

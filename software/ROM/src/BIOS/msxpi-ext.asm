@@ -392,7 +392,7 @@ _MSXPI:
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
-        
+
 CALL_MSXPI1:
 ; Registers at this point:
 ; A  = contain the output required for the command
@@ -623,7 +623,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230404.419"
+BuildId: DB "20230404.425"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -675,6 +675,6 @@ ENDOFCMDS:
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "putchar-msxdos.asm"
-
+INCLUDE "debug.asm"
 fim:    equ $
 buf:    equ $

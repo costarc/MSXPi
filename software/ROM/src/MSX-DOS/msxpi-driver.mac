@@ -749,7 +749,7 @@ CALL_MSXPISAVE1:
         RET
 CALL_MSXPISERR:
         RET
-        
+
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
@@ -870,7 +870,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230404.419"
+BuildId: DB "20230404.425"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -907,10 +907,10 @@ CALL_TABLE:
         DB      "GETPOINT",0
         DW      _GETPOINTERS
 
-        DB      "MSXPISND",0
+        DB      "MSXPISEND",0
         DW      _MSXPISEND
 
-        DB      "MSXPIRCV",0
+        DB      "MSXPIRECV",0
         DW      _MSXPIRECV
 
         DB      "MSXPI",0
