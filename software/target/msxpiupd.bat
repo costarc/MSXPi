@@ -4,7 +4,7 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/API.BAS?raw=tr
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRC.BAS?raw=true
 echo
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRC_BAK.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRCv2.BAS?raw=true
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/PRECONN.BAS?raw=true
 echo
@@ -40,9 +40,13 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/templat2.com?r
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
 echo
-Updating msxpi-server.py...
+echo Updating msxpi-server.py...
 prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server
-Updating MSXPi boot disk...
+echo
+echo Updating MSXPi boot disk...
 prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk
-Updating MSXPi tools disk...
+echo
+echo Updating MSXPi tools disk...
 prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk
+echo
+echo Please reboot the Raspberry Pi

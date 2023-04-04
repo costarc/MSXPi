@@ -50,8 +50,10 @@ genUpdateBatch() {
   done
   echo "echo Updating msxpi-server.py..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpiupd.bat
+  echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Updating MSXPi boot disk..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk"  >> /tmp/msxpiupd.bat
+  echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Updating MSXPi tools disk..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
