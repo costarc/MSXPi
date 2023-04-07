@@ -22,12 +22,12 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230405.426"
+BuildId = "20230407.447"
 
-CMDSIZE = 9
-MSGSIZE = 128
-BLKSIZE = 256
-SECTORSIZE = 512
+CMDSIZE = 3 + 9
+MSGSIZE = 3 + 128
+BLKSIZE = 3 + 256
+SECTORSIZE = 3 + 512
 
 # Pin Definitons
 csPin   = 21
@@ -280,9 +280,6 @@ def ini_fcb(fname,fsize):
 
     # send FCB structure to MSX
     buf = bytearray()
-    buf.extend(RC_SUCCESS.to_bytes(1,'little'))
-    buf.extend((fsize % 256).to_bytes(1,'little'))
-    buf.extend((fsize // 256).to_bytes(1,'little'))
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
     
@@ -293,12 +290,13 @@ def ini_fcb(fname,fsize):
     return rc
 
 def prun(cmd = ''):
-
+    print("prun")
     rc = RC_SUCCESS
-
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc,data = recvdata()
 
+        print(data)
+        
         if data[0] == 0:
             cmd=''
         else:
@@ -307,7 +305,8 @@ def prun(cmd = ''):
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         #print("prun if:syntax error")
         rc = RC_FAILED
-        sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |",BLKSIZE,True,rc)
+        print("sending help")
+        sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |".encode(),BLKSIZE,True,rc)
     else:
         #print("prun else")
         cmd = cmd.replace('::','|')
@@ -318,15 +317,15 @@ def prun(cmd = ''):
             err = (p.stderr.read().decode())
             if len(err) > 0 or len(buf) == 0:
                 rc = RC_FAILED
-                sendmultiblock(str(err),BLKSIZE,True,rc)
+                sendmultiblock(str(err).encode(),BLKSIZE,True,rc)
                 return rc
 
-            sendmultiblock(buf, BLKSIZE, True, RC_SUCCESS)
+            sendmultiblock(buf.encode(), BLKSIZE, True, RC_SUCCESS)
 
         except Exception as e:
             print("prun: exception")
             rc = RC_FAILED
-            sendmultiblock("Pi:Error - "+str(e)+'\n',BLKSIZE, True, rc)
+            sendmultiblock("Pi:Error - "+str(e)+'\n'.encode(),BLKSIZE, True, rc)
 
     #print(hex(rc))
     return rc
@@ -372,18 +371,18 @@ def pdir():
                     parser = MyHTMLParser()
                     parser.feed(htmldata)
                     buf = " ".join(parser.HTMLDATA)
-                    rc = sendmultiblock(buf,BLKSIZE, True, RC_SUCCESS)
+                    rc = sendmultiblock(buf.encode(),BLKSIZE, True, RC_SUCCESS)
 
                 except Exception as e:
                     rc = RC_FAILED
                     print("pdir exception 1:http error "+ str(e))
-                    sendmultiblock(str(e), BLKSIZE, True, RC_SUCCESS)
+                    sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_SUCCESS)
         else:
             rc = RC_FAILNOSTD
             print("pdir:out of sync in RC_WAIT")
     except Exception as e:
         #print("pdir exception 2:"+str(e))
-        sendmultiblock('Pi:Error - '+str(e), BLKSIZE, True, RC_SUCCESS)
+        sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_SUCCESS)
 
     #print("pdir:exiting rc:",hex(rc))
     return rc
@@ -405,13 +404,13 @@ def pcd():
     try:
         if (1 == 1):
             if (len(path) == 0 or path == '' or path.strip() == "."):
-                sendmultiblock(basepath, BLKSIZE, True, RC_SUCCESS)
+                sendmultiblock(basepath.encode(), BLKSIZE, True, RC_SUCCESS)
             elif (path.strip() == ".."):
                 newpath = basepath.rsplit('/', 1)[0]
                 if (newpath == ''):
                     newpath = '/'
                 psetvar[0][1] = newpath
-                sendmultiblock(str(newpath), BLKSIZE, True, RC_SUCCESS)
+                sendmultiblock(str(newpath).encode(), BLKSIZE, True, RC_SUCCESS)
             else:
                 #print "pcd:calling getpath"
                 urlcheck = getpath(basepath, path)
@@ -420,37 +419,36 @@ def pcd():
                 if (newpath[:2].lower() == "m:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'ftp://192.168.1.100/'
-                    sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
+                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, True, rc)
                 elif (newpath[:4].lower() == "ma1:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
-                    sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
+                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, True, rc)
                 elif  (newpath[:4].lower() == "ma2:"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
-                    sendmultiblock(str(psetvar[0][1] +'\n'), BLKSIZE, True, rc)
+                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, True, rc)
                 elif (newpath[:4].lower() == "http" or \
                     newpath[:3].lower() == "ftp" or \
                     newpath[:3].lower() == "nfs" or \
                     newpath[:3].lower() == "smb"):
                     rc = RC_SUCCESS
                     psetvar[0][1] = newpath
-                    sendmultiblock(str(newpath+'\n'), BLKSIZE, True, rc)
+                    sendmultiblock(str(newpath+'\n').encode(), BLKSIZE, True, rc)
                 else:
-                    newpath = str(newpath)
                     if (os.path.isdir(newpath)):
                         psetvar[0][1] = newpath
-                        sendmultiblock(newpath+'\n', BLKSIZE, True, RC_SUCCESS)
+                        sendmultiblock(str(newpath).encode(), BLKSIZE, True, RC_SUCCESS)
                     elif (os.path.isfile(str(newpath))):
-                        sendmultiblock("Pi:Error - not a folder", BLKSIZE, True, RC_FAILED)
+                        sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, True, RC_FAILED)
                     else:
-                        sendmultiblock("Pi:Error - path not found", BLKSIZE, True, RC_FAILED)
+                        sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, True, RC_FAILED)
         else:
             rc = RC_FAILNOSTD
             print("pcd:out of sync in RC_WAIT")
     except Exception as e:
         print("pcd:"+str(e))
-        sendmultiblock('Pi:Error - '+str(e), BLKSIZE, True, RC_FAILED)
+        sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
 
     return [rc, newpath]
     
@@ -478,7 +476,7 @@ def pcopy():
         buf = buf +'Valid devices:\n'
         buf = buf +'/, path, http, ftp, nfs, smb\n'
         buf = buf + 'Path relative to RPi path (set with pcd)'
-        rc = sendmultiblock(buf, BLKSIZE, True, RC_FAILED)
+        rc = sendmultiblock(buf.encode(), BLKSIZE, True, RC_FAILED)
         return rc
 
     if (path[0].lower() == '/z'):
@@ -488,7 +486,7 @@ def pcopy():
         expand = False
 
     if len(path) < 1:
-        rc = sendmultiblock("Pi:Error - Missing file name", BLKSIZE, True, RC_FAILED)
+        rc = sendmultiblock("Pi:Error - Missing file name".encode(), BLKSIZE, True, RC_FAILED)
         return rc
 
     if (path[0].lower().startswith('m:')):
@@ -542,8 +540,9 @@ def pcopy():
             filesize = len(buf)
  
         except Exception as e:
-            print("pcopy: exception 1",str(e))
-            rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
+            err = 'Pi:Error - ' + str(e)
+            print(type(err),err)
+            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
     else:
@@ -554,7 +553,7 @@ def pcopy():
             filesize = len(buf)
                     
         except Exception as e:
-            rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
+            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
     if rc == RC_SUCCESS:
@@ -568,14 +567,19 @@ def pcopy():
             tmpfile.write(buf)
             tmpfile.close()
             if ".lzh" in tmpfn:
-                rc = os.system('/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn)
+                cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
+                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+                perror = (p.stderr.read().decode())
+                rc = p.poll()
+                if rc!=0:
+                    rc = RC_FAILED
             else:
                 cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
                 p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
                 perror = (p.stderr.read().decode())
-                rc=p.poll()
+                rc = p.poll()
                 if rc!=0:
-                    rc=RC_FAILED
+                    rc = RC_FAILED
             
             if rc == 0:
                 print("pcopy uncompress: entered rc == 0")
@@ -593,17 +597,17 @@ def pcopy():
                     
                 except Exception as e:
                     print("pcopy: exception 2",str(e))
-                    rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
+                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
                     return RC_FAILED
        
             else:
-                rc = sendmultiblock("Pi:Error - "+perror, BLKSIZE, True, RC_FAILED)
+                rc = sendmultiblock(('Pi:Error - ' + perror).encode(), BLKSIZE, True, RC_FAILED)
                 return RC_FAILED
                 
     if rc == RC_SUCCESS:
         print("pcopy: File open success, target name,size is ",fname2,filesize)
         if filesize == 0:
-            rc = sendmultiblock("Pi:Error - File size is zero bytes", BLKSIZE, True, RC_FAILED)
+            rc = sendmultiblock("Pi:Error - File size is zero bytes".encode(), BLKSIZE, True, RC_FAILED)
             return RC_FAILED
 
         else:
@@ -635,9 +639,9 @@ def pcopy():
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
-                    sendmultiblock("Pi:Ok", BLKSIZE, True, RC_TERMINATE)
+                    sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_TERMINATE)
                 except Exception as e:
-                    rc = sendmultiblock("Pi:Error - "+str(e), BLKSIZE, True, RC_FAILED)
+                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
             
     #print(hex(rc))
     return rc
@@ -722,12 +726,12 @@ def pset():
         cmd = data.decode().split("\x00")[0]
         
     if  (cmd.lower() == "/h" or cmd.lower() == "/help"):
-        rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname", BLKSIZE, True, RC_FAILED)
+        rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname".encode(), BLKSIZE, True, RC_FAILED)
         return rc
     elif (len(cmd) == 0):   # Display current parameters
         s = str(psetvar)
         buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
-        rc = sendmultiblock(buf, BLKSIZE, True, RC_SUCCESS)
+        rc = sendmultiblock(buf.encode(), BLKSIZE, True, RC_SUCCESS)
         return rc
         
     # Set a new parameter or update an existing parameter
@@ -741,7 +745,7 @@ def pset():
             if len(cmd) == 1:  #will erase / clean a variable
                 psetvar[index][0] = 'free'
                 psetvar[index][1] = 'free'
-                rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+                rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_SUCCESS)
                 return RC_SUCCESS    
                          
             else:
@@ -751,22 +755,22 @@ def pset():
                     if str(cmd[0]) == 'DRIVE0':
                         rc,drive0Data = msxdos_inihrd(cmd[1])
                         psetvar[index][1] = str(cmd[1])
-                        rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_SUCCESS)
                         return RC_SUCCESS
 
                     elif str(cmd[0]) == 'DRIVE1':
                         rc,drive1Data = msxdos_inihrd(cmd[1])
                         psetvar[index][1] = str(cmd[1])    
-                        rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_SUCCESS)
                         return RC_SUCCESS
                     else: 
                         psetvar[index][1] = str(cmd[1])    
-                        rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_SUCCESS)
                         return RC_SUCCESS
                         
                 except Exception as e:
                     
-                    rc = sendmultiblock("Pi:Error - " + str(e), BLKSIZE, True, RC_FAILED)
+                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_FAILED)
                     return RC_FAILED
                     
     # Check if there is a slot, then add new parameter
@@ -779,9 +783,9 @@ def pset():
             break
 
     if rc == RC_SUCCESS:
-        rc = sendmultiblock("Pi:Ok", BLKSIZE, True, RC_SUCCESS)
+        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, True, RC_SUCCESS)
     else:        
-        rc = sendmultiblock("Pi:Error setting parameter", BLKSIZE, True, RC_FAILED)
+        rc = sendmultiblock("Pi:Error setting parameter".encode(), BLKSIZE, True, RC_FAILED)
     
     #print(hex(rc))
     return rc
@@ -802,7 +806,7 @@ def pwifi():
     cmd=parms.strip()
 
     if (cmd[:2] == "/h"):
-        sendmultiblock("Pi:Usage:\npwifi display | set", BLKSIZE, True, RC_FAILED)
+        sendmultiblock("Pi:Usage:\npwifi display | set".encode(), BLKSIZE, True, RC_FAILED)
         return RC_SUCCESS
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
@@ -829,7 +833,7 @@ def pwifi():
 def pver():
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+ BuildId
-    rc = sendmultiblock(ver, BLKSIZE, True, RC_SUCCESS)
+    rc = sendmultiblock(ver.encode(), BLKSIZE, True, RC_SUCCESS)
     return rc
     
 def irc():
@@ -1183,35 +1187,50 @@ def senddata(data, blocksize = BLKSIZE):
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS):
-    print("sendmultiblock")
-    idx = 0
-    data = bytearray(blocksize)
 
-    if (sendheader):
+    print("sendmultiblock")
+
+    numblocks = math.ceil(len(buf)/(blocksize - 3))
+    
+    # If buffer small or equal to BLKSIZE
+    if numblocks == 1:  # Only one block to transfer
+        print("sendmultiblock: 1 block")
+        data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
-        data[2] = int(len(buf) / 256)
-        cnt = 3
-    else:
-        cnt = 0
-
-    for b in buf:
-        if (isinstance(b, str)):
-            data[cnt] = b.encode()[0]          #ord(b)
-        else:
-            data[cnt] = b
-        cnt += 1
-        if cnt == blocksize and idx < len(buf):
-            rc = senddata(data, blocksize)
-            if rc != RC_SUCCESS:
-                return RC_FAILED
-                
+        data[2] = int(len(buf) >> 8)
+        data[3:len(buf)] = buf
+        print(data[:blocksize],blocksize)
+        senddata(data[:blocksize],blocksize)
+    else: # Multiple blocks to transfer
+        print("sendmultiblock: multiple blocks")
+        idx = 0
+        thisblk = 0
+        while thisblk < numblocks:
             data = bytearray(blocksize)
-            idx += blocksize
-            cnt = 0
+            if thisblk + 1 == numblocks:
+                print("Last ==> numblocks, thisblk:",numblocks,thisblk)
+                print(thisblk*(blocksize-3))
+                data[0] = rc # Last block - send original RC
+                datasize = len(buf) - idx
+                data[1] = datasize % 256
+                data[2] = datasize >> 8
+                
+            else:
+                print("numblocks, thisblk:",numblocks,thisblk)
+                print(thisblk*(blocksize-3))
+                data[0] = RC_READY  # This is not last block
+                datasize = blocksize - 3
+                data[1] = datasize % 256
+                data[2] = datasize >> 8
 
-    if cnt > 0:
-        rc = senddata(data,blocksize)          
+            data[3:datasize] = buf[idx:idx + datasize]
+            senddata(data,blocksize)
+            idx += (blocksize - 3)
+            thisblk += 1
+            if thisblk + 1 == numblocks:
+                print(data)
+                        
     return rc
 
 def template():
@@ -1225,7 +1244,7 @@ def template():
     buf = 'MSXPi received: ' + data.decode().split("\x00")[0]
     
     print("Sending response: ",buf) 
-    rc = sendmultiblock(buf, BLKSIZE, True, RC_SUCCESS)
+    rc = sendmultiblock(buf.encode(), BLKSIZE, True, RC_SUCCESS)
         
 """ ============================================================================
     msxpi-server.py
@@ -1272,7 +1291,7 @@ if 1==1: #try:
         if 1==1: #try:
             print("st_recvcmd: waiting command")
             rc,buf = recvdata(CMDSIZE)
-           
+            print(buf)
             if (rc == RC_SUCCESS):
                 if buf[0] == 0:
                     fullcmd=''

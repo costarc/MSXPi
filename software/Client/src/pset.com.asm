@@ -43,47 +43,27 @@
         ld      de,command
         call    SENDCOMMAND
         jr      c, PRINTPIERR
-        ld      hl,buf
+        ld      de,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR
+        ld      de,buf
 MAINPROG:
-        call    READ1BLOCK
-        jr      c, PRINTPIERR
-        ld      hl,buf
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        inc     hl
-        xor     a                   ; header in 1st block
-MAINPROG1:
-        push    bc
-        ld      bc,BLKSIZE
-        call    PRINTPISTDOUT
-        pop     hl
-        ld      bc,BLKSIZE
-        or      a
-        sbc     hl,bc
-        ret     c
-        ld      b,h
-        ld      c,l
-        push    bc
-        call    READ1BLOCK
-        pop     bc
-        jr      c,PRINTPIERR
-        ld      a,1                 ; no header in next blocks
-        ld      hl,buf
-        jr      MAINPROG1
-        
-READ1BLOCK:
-        ld      hl,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
-        ld      de,buf
-        ld      bc,BLKSIZE
+        push    de
         call    RECVDATA
+        pop     de
+        jr      c, PRINTPIERR
+        inc     de
+        inc     de
+        inc     de
+        call    PRINTPISTDOUT
+        ld      de,buf
+        ld      a,(de)
+        cp      RC_READY
+        jr      z,MAINPROG
         ret
         
 PRINTPIERR:
@@ -91,7 +71,7 @@ PRINTPIERR:
         JP      PRINT
 
 PICOMMERR:  DB      "Communication Error",13,10,0
-command: db "pset    ",0
+command: db "pset",0
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"

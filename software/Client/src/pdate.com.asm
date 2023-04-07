@@ -39,23 +39,25 @@
 ;
 
         org     $0100
-        
-        ld      de,command  
+
+; Sending Command and Parameters to RPi
+        ld      de,command
         call    SENDCOMMAND
         jr      c, PRINTPIERR
-        ld      hl,buf
-        ld      bc,BLKSIZE
-        call    CLEARBUF
         ld      de,buf
         ld      bc,CMDSIZE
+        call    CLEARBUF
+        push    de
         call    RECVDATA
-        jr      c, PRINTPIERR 
+        pop     de
+        jr      c, PRINTPIERR
+        
         call    SETCLOCK
         ld      hl,PIOK
         jp      PRINT
   
 SETCLOCK:
-        LD      IX,buf
+        LD      IX,buf + 3
         LD      A,(IX + 0)
         LD      L,A
         LD      A,(IX + 1)
@@ -89,7 +91,7 @@ PRINTPIERR:
         
 PICOMMERR:  DB      "Communication Error",13,10,0
 
-command: db "pdate   ",0
+command: db "pdate",0
 
 PIOK: db "Pi:Ok",0
 INCLUDE "include.asm"

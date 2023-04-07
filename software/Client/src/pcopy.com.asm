@@ -46,26 +46,27 @@ DSKBLOCKSIZE:   EQU 1
         ld      de,command
         call    SENDCOMMAND
         jr      c, PRINTPIERR
-        ld      hl,buf
+        ld      de,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR
+        ld      de,buf
 MAINPROG:
-        ld      hl,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
-        ld      de,buf
-        ld      bc,BLKSIZE
-        call    RECVDATA        ; Receive RC and FCB data if successful
-        jr      c,PRINTPIERR
-        ld      hl,buf
+        push    de
+        call    RECVDATA
+        pop     hl
+        jr      c, PRINTPIERR
         ld      a,(hl)          ; return code
         inc     hl
         ld      c,(hl)          ; lsb of data size
         inc     hl
         ld      b,(hl)          ; msb of data size
         inc     hl
+        ld      d,h
+        ld      e,l
         cp      RC_FAILED
         jp      z,PRINTPISTDOUT            ; if RPi sent Error, print message to screen
         cp      RC_TERMINATE
@@ -151,38 +152,23 @@ DSKREADBLK1:
         LD      A,10
         LD      (buf),A        
  DSKREADBLK2:
-        PUSH    BC
-                                    ; Buffer where data is stored during transfer, and also DMA for disk access
         LD      DE,DMA              ; Disk drive buffer for temporary data
         LD      BC,SECTORSIZE       ; block size to transfer
-                                    ; READ ONE BLOCK OF DATA AND STORE IN THE DMA
         CALL    RECVDATA
-        POP     BC
         RET     C
-                                    ; Defines the size of the buffer to write to disk.
-                                    ; If received data > SECTORSIZE: HL = SECTORSIZE
-                                    ; If received data <= SECTORSIZE: HL = Size of size of Received Data
-                                    ; Set HL with the number of bytes received
-                                    ; If its last sector, get the actual size that was sent by RPi in the ini_fcb
-        PUSH    BC
-        PUSH    BC
-        POP     HL
-        LD      DE,SECTORSIZE
-        OR      A
-        SBC     HL,DE
-        JR      C,LASTBLOCK
-        JR      Z,LASTBLOCK
-        POP     BC                  ; Dsicard previous number of bytes to transfer
-        PUSH    HL                  ; Push remaing bytes to Stack
-        LD      HL,SECTORSIZE
+        LD      A,(DMA)
+        CP      RC_READY
+        JR      NZ,LASTBLOCK
+        LD      HL,SECTORSIZE - 3   ; actual data size (minus header)
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS
-        POP     BC                  ; Remaining bytes to transfer
         JR      DSKREADBLK          ; data read less than buffer - finished transfer
-        
 LASTBLOCK:
-        POP     HL                  ; Pull AF from stack in to HL
+        LD      A,(DMA + 1)
+        LD      L,A
+        LD      A,(DMA + 2)
+        LD      H,A
         LD      DE,FILEFCB
         LD      C,$26
         CALL    BDOS
@@ -217,7 +203,7 @@ INIFCB:
         RET
 
 SETFILEFCB:
-        LD      DE,DMA
+        LD      DE,DMA + 3          ; Transfer buffer has 3 bytes header - must skip
         LD      C,$1A
         CALL    BDOS
         LD      HL,DSKBLOCKSIZE
@@ -234,7 +220,7 @@ CLOSEFILE:
         CALL    BDOS
         RET
 
-command:    DB      "pcopy   ",0
+command:    DB      "pcopy",0
 msg_success: db "Checksum match",13,10,0
 msg_error: db "Checksum did not match",13,10,0
 msg_cmd: db "Sending command...",0

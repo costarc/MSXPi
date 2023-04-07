@@ -168,15 +168,19 @@ nextbit16:
 ; Clear buffer area
 ; Input:
 ; BC = buffer size
-; HL = Buffer Address
+; DE = Buffer Address
 ;
 CLEARBUF:
-        ld      d,h
-        ld      e,l
+        push    de
+        push    bc
+        ld      h,d
+        ld      l,e
         inc     de
         xor     a
         ld      (hl),a
         ldir
+        pop     bc
+        pop     de
         ret
         
 ;-----------------------
@@ -436,12 +440,12 @@ PRINTNUM1:
 ; Read buffer of BC lenght and print to screen. Terminates also if zero detected
 ; Inputs: (PRINTPISTDOUT0)
 ;  A = 0: Data contain header
-;  HL: Buffer address
+;  DE: Buffer address
 ;  BC: Buffer lenght
 ; Changes: AF,BC,HL
 ; =================================================================
 PRINTPISTDOUT:
-        ld      a,(hl)
+        ld      a,(de)
         or      a
         scf
         ret     z
@@ -453,7 +457,7 @@ PRINTPISTDOUT:
         ld      a,13
 printchar:
         call    PUTCHAR
-        inc     hl
+        inc     de
         dec     bc
         ld      a,b
         or      c
@@ -628,8 +632,25 @@ SENDPARMS2:
 ; DE = Command name, terminated in zero
 ; Size is fixed: CMDSIZE
 SENDCOMMAND:
-        ld          bc,CMDSIZE               ; command lenght set to fixed size
-        call        SENDDATA
+        ld      hl,buf
+        ex      de,hl
+        ld      bc,CMDSIZE
+        push    hl
+        call    CLEARBUF
+        pop     hl
+        ld      b,CMDSIZE - 1
+SENDCOMMAND0:                       ; Move command to buffer area
+        ld      a,(hl)
+        LD      (de),a
+        or      a
+        jr      z,SENDCOMMAND1
+        inc     hl
+        inc     de
+        djnz    SENDCOMMAND0
+SENDCOMMAND1:
+        ld      bc,CMDSIZE
+        ld      de,buf
+        call    SENDDATA
         ret
 
 SETBUF:
