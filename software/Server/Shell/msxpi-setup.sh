@@ -82,6 +82,7 @@ sudo apt-get -y install mplayer
 sudo apt-get -y install pypy
 sudo apt-get -y install pigpio
 sudo apt-get -y install lhasa
+sudo apt-get -y install unar
 
 # Install FAT library for Python
 sudo python3 -m pip install pyfatfs

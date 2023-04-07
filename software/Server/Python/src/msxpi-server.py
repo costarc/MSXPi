@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230404.424"
+BuildId = "20230405.426"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -570,10 +570,15 @@ def pcopy():
             if ".lzh" in tmpfn:
                 rc = os.system('/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn)
             else:
-                rc = os.system('/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn)
-                
+                cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
+                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+                perror = (p.stderr.read().decode())
+                rc=p.poll()
+                if rc!=0:
+                    rc=RC_FAILED
+            
             if rc == 0:
-                #print("entered rc == 0")
+                print("pcopy uncompress: entered rc == 0")
                 fname1 = os.listdir('/tmp/msxpi')[0]
                 if fname2 == '-':
                     fname2 = fname1
@@ -592,11 +597,11 @@ def pcopy():
                     return RC_FAILED
        
             else:
-                rc = sendmultiblock("Pi:Error decompressing the file", BLKSIZE, True, RC_FAILED)
+                rc = sendmultiblock("Pi:Error - "+perror, BLKSIZE, True, RC_FAILED)
                 return RC_FAILED
                 
     if rc == RC_SUCCESS:
-        #print("pcopy: File open success, target name,size is ",fname2,filesize)
+        print("pcopy: File open success, target name,size is ",fname2,filesize)
         if filesize == 0:
             rc = sendmultiblock("Pi:Error - File size is zero bytes", BLKSIZE, True, RC_FAILED)
             return RC_FAILED
@@ -842,56 +847,65 @@ def irc():
         cmd=''
     else:
         cmd = data.decode().split("\x00")[0].lower()
-
-    try:
-        if cmd[:4] == 'conn':       
+    
+    rc = RC_SUCCNOSTD
+    
+    if 1==1:#try:
+        if cmd[:4] == 'conn':
             ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             jparm = cmd.split(' ')
             jnick = jparm[1]
             if (jnick == 'none'):
                 jnick = msxpinick
             ircsock.connect((ircserver, ircport))
-            ircsock.send(bytes("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\n"))
-            ircsock.send(bytes("NICK "+ jnick +"\n"))
+            buf = bytearray()
+            buf.extend(("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\r\n").encode())
+            ircsock.send(buf)
+            buf = bytearray()
+            buf.extend(("NICK "+ jnick +"\r\n").encode())
+            ircsock.setblocking(0);
+            ircsock.send(buf)
             ircmsg = 'Connected to '+psetvar[8][1]
-            sendmultiblock(ircmsg, BLKSIZE, True, rc)
+            sendmultiblock(ircmsg.encode(), BLKSIZE, True, RC_SUCCESS)
         elif cmd[:3] == "msg":
-            print("msg:sending msg ",cmd[:4])
-            ircsock.send(bytes("PRIVMSG "+ channel +" :" + cmd[4:] +"\n"))
-            sendmultiblock("Pi:Ok\n", BLKSIZE, True, RC_SUCCNOSTD)
+            ircsock.setblocking(0);
+            ircsock.send(("PRIVMSG "+cmd[4:] +"\r\n").encode())
+            sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, True, RC_SUCCNOSTD)
         elif cmd[:4] == 'join':
             jparm = cmd.split(' ')
             jchannel = jparm[1]
             if jchannel in allchann:
                 ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
                 channel = jchannel
-            else:
-                ircsock.send(bytes("JOIN " + jchannel + "\n"))
-                ircmsg = ''
-                while (ircmsg.find("End of /NAMES list.") == -1) and \
-                      (ircmsg.find("No such channel") == -1) and \
-                      (ircmsg.find("Nickname is already in use") == -1):
-                    ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
-                    ircmsg = ircmsg.strip('\n\r')
 
-                if (ircmsg.find("No such channel") != -1):
-                    ircmsg = "No such channel"
-                else:
-                    ircmsg = ircmsg[ircmsg.find('End of /MOTD command.')+21:]
-                    allchann.append(jchannel)
-                    channel = jchannel
+            ircsock.setblocking(0);
+            ircsock.send(("JOIN " + jchannel + "\r\n").encode())
 
-            sendmultiblock(ircmsg, BLKSIZE, True, RC_SUCCESS)
+            ircmsg = 'Pi:Ok'
+            rc = RC_SUCCNOSTD
+        
+            ircsock.setblocking(0);
+            sendmultiblock(ircmsg.encode(), BLKSIZE, True, rc)
 
         elif cmd[:4] == 'read':
+  
             ircmsg = 'Pi:Error'
-            ircsock.setblocking(0);
+            
             try:
-                ircmsg = ircsock.recv(2048)
-                ircmsg = ircmsg.strip('\n\r')
+                ircmsg = ircsock.recv(2048).decode()
+                if len(ircmsg)>1:
+                    ircmsg = ircmsg.strip('\n\r')
+
                 if ircmsg.find("PING :") != -1:
-                    ircsock.send(bytes("PONG :ping\n"))
-                    ircmsg = 'Pi:Ping\n'
+                    ircmsgList = ircmsg.split(":")
+                    idx=0
+                    pingReply = 'PONG'
+                    for msg in ircmsgList:
+                        if 'PING' in msg:
+                            pingReply = ircmsgList[idx + 1]
+                        idx += 1
+                    ircsock.setblocking(0);
+                    ircsock.send(("PONG :"+pingReply+"\r\n").encode())
                     rc = RC_SUCCNOSTD
                 if ircmsg.find("PRIVMSG") != -1:
                     ircname = ircmsg.split('!',1)[0][1:]
@@ -906,38 +920,36 @@ def irc():
 
             except socket.error as e:
                 err = e.args[0]
-                if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                    ircmsg = 'Pi:no new messages'
-                    rc = RC_SUCCNOSTD
-                else:
-                    print("Socket error")
-                    ircmsg = 'Pi:irc Socket error\n'
-                    rc = RC_FAILED
-  
-            ircsock.setblocking(1);
-            sendmultiblock(ircmsg, BLKSIZE, True, rc)
+                print("irc read exception:",err,str(e))
+                ircmsg = 'Pi:Ok'
+                rc = RC_SUCCNOSTD
+    
+            sendmultiblock(ircmsg.encode(), BLKSIZE, True, rc)
             
         elif cmd[:5] == 'names':
-            ircsock.send(bytes("NAMES " + channel + "\n"))
+            print("names:",cmd)
+            ircsock.send((cmd+"\r\n").encode())
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
-            ircmsg = "Users on channel " + ircmsg.split('=',1)[1]
-            sendmultiblock(ircmsg, BLKSIZE, True, RC_SUCCESS)
+            print("names:",ircmsg)
+            ircmsg = "Users on channel " #+ ircmsg.split('=',1)[1]
+            sendmultiblock(ircmsg.encode(), BLKSIZE, True, RC_SUCCESS)
         elif cmd[:4] == 'quit':
-            ircsock.send(bytes("/quit\n"))
+            ircsock.send(("/quit\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\n",BLKSIZE, True, RC_SUCCESS)
+            sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE, True, RC_SUCCESS)
         elif cmd[:4] == 'part':
-            ircsock.send(bytes("/part\n"))
+            print("part:")
+            ircsock.send(("/part\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\n",BLKSIZE, True, RC_SUCCESS)
+            sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE, True, RC_SUCCESS)
         else:
             print("irc:no valid command received")
-            sendmultiblock("Pi:No valid command received",BLKSIZE, True, rc)
-    except Exception as e:
-            print("irc:Caught exception"+str(e))
-            sendmultiblock("Pi:"+str(e), BLKSIZE, True, rc)
+            sendmultiblock("Pi:No valid command received".encode(),BLKSIZE, True, rc)
+    #except Exception as e:
+    #        print("irc:Caught exception"+str(e))
+    #        sendmultiblock("Pi:"+str(e).encode(), BLKSIZE, True, rc)
             
 def dosinit():
     
@@ -1246,7 +1258,7 @@ psetvar = [['PATH','/home/pi/msxpi'], \
 # irc
 channel = "#msxpi"
 allchann = []
-
+ircsock = None
 errcount = 0
 msxdos1boot = False
     
@@ -1255,9 +1267,9 @@ GPIO.output(rdyPin, GPIO.LOW)
 print("GPIO Initialized\n")
 print("Starting MSXPi Server Version ",version,"Build",BuildId)
 
-try:
+if 1==1: #try:
     while True:
-        try:
+        if 1==1: #try:
             print("st_recvcmd: waiting command")
             rc,buf = recvdata(CMDSIZE)
            
@@ -1273,12 +1285,12 @@ try:
                 # And passes the whole string (including command name) to the function
                 # globals()['use_variable_as_function_name']() 
                 globals()[cmd.strip()]()
-        except Exception as e:
-            errcount += 1
-            print(str(e))
-            recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
-            sendmultiblock("Pi:Error - "+str(e),BLKSIZE, True, RC_FAILED)
+        #except Exception as e:
+        #    errcount += 1
+        #    print(str(e))
+        #    recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
+        #    sendmultiblock("Pi:Error - "+str(e),BLKSIZE, True, RC_FAILED)
 
-except KeyboardInterrupt:
-    GPIO.cleanup() # cleanup all GPIO
-    print("Terminating msxpi-server")
+#except KeyboardInterrupt:
+#    GPIO.cleanup() # cleanup all GPIO
+#    print("Terminating msxpi-server")
