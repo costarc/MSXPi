@@ -1194,42 +1194,31 @@ def sendmultiblock(buf, blocksize = BLKSIZE, sendheader = False, rc = RC_SUCCESS
     
     # If buffer small or equal to BLKSIZE
     if numblocks == 1:  # Only one block to transfer
-        print("sendmultiblock: 1 block")
         data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
         data[2] = int(len(buf) >> 8)
         data[3:len(buf)] = buf
-        print(data[:blocksize],blocksize)
         senddata(data[:blocksize],blocksize)
     else: # Multiple blocks to transfer
-        print("sendmultiblock: multiple blocks")
         idx = 0
         thisblk = 0
         while thisblk < numblocks:
             data = bytearray(blocksize)
             if thisblk + 1 == numblocks:
-                print("Last ==> numblocks, thisblk:",numblocks,thisblk)
-                print(thisblk*(blocksize-3))
                 data[0] = rc # Last block - send original RC
                 datasize = len(buf) - idx
                 data[1] = datasize % 256
                 data[2] = datasize >> 8
-                
             else:
-                print("numblocks, thisblk:",numblocks,thisblk)
-                print(thisblk*(blocksize-3))
                 data[0] = RC_READY  # This is not last block
                 datasize = blocksize - 3
                 data[1] = datasize % 256
                 data[2] = datasize >> 8
-
             data[3:datasize] = buf[idx:idx + datasize]
             senddata(data,blocksize)
             idx += (blocksize - 3)
             thisblk += 1
-            if thisblk + 1 == numblocks:
-                print(data)
                         
     return rc
 

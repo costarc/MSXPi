@@ -37,6 +37,7 @@ UpdateBuildIdASM() {
 
 genUpdateBatch() {
   echo "echo Updating MSXPi client and server software..." > /tmp/msxpiupd.bat
+  echo "pdate" >> /tmp/msxpiupd.bat
   
   echo "pcd /home/pi/msxpi" >> /tmp/msxpiupd.bat
   rm target/msxpiupd.bat  > /dev/null 2>&1
