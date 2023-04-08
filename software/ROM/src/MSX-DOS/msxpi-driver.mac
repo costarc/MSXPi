@@ -98,11 +98,12 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-	ld	de, DOS_INI
-	call	SENDCOMMAND		; Initialise MSX-DOS in the server
-	ld	bc,2
-	call	DELAY		
-	;scf
+        ld      bc,CMDSIZE
+        ld	    de,DOS_INI
+        call	SENDDATA
+        ld	    bc,2
+        call	DELAY
+        scf
         ret
 
 ; START OF -----------------------------
@@ -180,15 +181,16 @@ DSKIO_WRITE:
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
+        ld      bc,CMDSIZE
         ld      de,DOS_WSEC
-        call    SENDCOMMAND       ; Send sector write command "DSKIOWRS"
+        call    SENDDATA          ; Send sector write command "DSKIOWRS"
         jr      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
 DSKIO_WRITE_LOOP:
         push	bc
-        ld      bc,SECTORSIZE
-        call    SENDDATA	  ; Send the sectors (write to disk
+        ld      bc,SECTORSIZE - 3
+        call    SENDDATA	      ; Send the sectors (write to disk
         pop     bc
         jr      c, DSKIO_ERR1
         djnz    DSKIO_WRITE_LOOP
@@ -225,21 +227,21 @@ DSKIO_READ:
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
+        ld      bc,CMDSIZE
         ld      de,DOS_RSEC
-        call    SENDCOMMAND       ; Send sector read command "DSKIORDS"
+        call    SENDDATA          ; Send sector read command "DSKIORDS"
         jr      c,DSKIO_ERR
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
-	push	bc
-	ld	bc,SECTORSIZE
+        push	bc
+        ld	    bc,SECTORSIZE - 3
         call    RECVDATA	  ; Send the sectors (write to disk)
-	pop	bc
-	jr	c, DSKIO_ERR1
-	djnz	DSKIO_READ_LOOP
-	or	a
-	ret
-
+        pop	    bc
+        jr	    c, DSKIO_ERR1
+        djnz	DSKIO_READ_LOOP
+        or	    a
+        ret
 DSKIO_ERR:
         pop     hl
         pop     bc
@@ -270,55 +272,40 @@ DSKIO_ERR1:
 ;       B   if error, remaining sectors
 ; Changed:  af,bc,de,hl,IX,IY may be affected
 ;
-
 DSKIO_SECTINFO:
         push    de
         push    bc
-	push	af
+        push	af
+        ld      bc,CMDSIZE
         LD      de,DOS_SECI
-        call    SENDCOMMAND	
+        call    SENDDATA
         jr      nc,DSKIO_SECTINFO1
-
 DSKIO_SEC_ERR:
         pop     af
         pop     bc
-	pop	de
+        pop	de
         scf
         ret
-
 DSKIO_SECTINFO1:
-
-	jr      ROUTINE1
-
-ROUTINE1:
-
 	call	GETWRK
-	
 	pop	    af
 	ld	    (hl),a
 	inc	    hl
-
 	pop	    bc
 	ld	    (hl),b
 	inc 	hl
-
 	ld      (hl),c
 	inc     hl
-
 	pop     de
 	ld      (hl),e
 	inc     hl
-
 	ld      (hl),d
-	
 	push	ix
 	pop     de
 	ld	    bc,5
 	call	SENDDATA
 	ret
-
 ROUTINE2:
-
 	; Send synchronisation header
 	ld      a,READY
 	call	PIWRITEBYTE
@@ -737,7 +724,6 @@ CALL_PRINTBUF:
         
 CALL_MSXPISAVE:
         PUSH    DE
-        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
@@ -747,7 +733,6 @@ CALL_MSXPISAVE:
         JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
 CALL_MSXPISAVE2:
         PUSH    DE
-        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
@@ -879,18 +864,18 @@ _GETPOINTERS:
         ld      hl,BIOSENTRYADDR
 
 GETPOINTERS1:
-        or		a
-        jr		z,GETPOINTERSEXIT
-        dec		a
+        or        a
+        jr        z,GETPOINTERSEXIT
+        dec        a
         inc     hl
         inc     hl
-        jr		GETPOINTERS1
+        jr        GETPOINTERS1
 
 GETPOINTERSEXIT:
-        ld		e,(hl)
+        ld        e,(hl)
         inc     hl
-        ld		h,(hl)
-        ld		l,e
+        ld        h,(hl)
+        ld        l,e
         ld      (PROCNM),hl
         pop     de
         or      a
@@ -920,7 +905,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.534"
+BuildId: DB "20230408.538"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -954,7 +939,7 @@ CALL_TABLE:
         DB      "MSXPIVER",0
         DW      _MSXPIVER
 
-        DB      "GETPOINT",0
+        DB      "GETPOINTER",0
         DW      _GETPOINTERS
 
         DB      "MSXPISEND",0
@@ -969,12 +954,12 @@ CALL_TABLE:
 ENDOFCMDS:
         DB      00
 
-DOS_INI:    DB  "dskioini",0
-DOS_RSEC:   DB  "dskiords",0
-DOS_WSEC:   DB  "dskiowrs",0
-DOS_SECI:   DB  "dskiosct",0
-DOS_DRV:    DB  "dskiodrv",0
-DOS_FMT:    DB  "dskiofmt",0
+DOS_INI:    DB  "dskioini",0,0,0,0
+DOS_RSEC:   DB  "dskiords",0,0,0,0
+DOS_WSEC:   DB  "dskiowrs",0,0,0,0
+DOS_SECI:   DB  "dskiosct",0,0,0,0
+DOS_DRV:    DB  "dskiodrv",0,0,0,0
+DOS_FMT:    DB  "dskiofmt",0,0,0,0
 
 INCLUDE include.asm
 INCLUDE putchar-msxdos.asm

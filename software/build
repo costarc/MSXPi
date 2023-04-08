@@ -52,6 +52,7 @@ genUpdateBatch() {
   done
   echo "pcopy "${GITPATH}/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
   echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpiupd.bat
+  echo "DEL PCOPYNEW.COM" >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Updating msxpi-server.py..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpiupd.bat

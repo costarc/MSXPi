@@ -663,7 +663,6 @@ BIOSENTRYADDR:  EQU     $
         DW      PRINTNUMBER
         DW      PRINTDIGIT
         DW      PRINTPISTDOUT
-        
 
 ; ================================================================
 ; Text messages used in the loader
@@ -671,7 +670,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.534"
+BuildId: DB "20230408.538"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230408.534"
+BuildId = "20230408.538"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -963,12 +963,14 @@ def dskioini():
 
 def dskiords():
     print("dskiords")
+
+    DOSSCTSZ = SECTORSIZE - 3
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
     if not msxdos1boot:
         dskioini()
         
-    initdataindex = sectorInfo[3]*SECTORSIZE
+    initdataindex = sectorInfo[3]*DOSSCTSZ
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
@@ -976,15 +978,15 @@ def dskiords():
     #print("dskiords:numsectors=",sectorInfo[1])
     #print("dskiords:mediaDescriptor=",sectorInfo[2])
     #print("dskiords:initialSector=",sectorInfo[3])
-    #print("dskiords:blocksize=",SECTORSIZE)
+    #print("dskiords:blocksize=",DOSSCTSZ)
     
     while sectorcnt < numsectors:
         #print("dskiords:",sectorcnt)
         if sectorInfo[0] == 0:
-            buf = drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
+            buf = drive0Data[initdataindex+(sectorcnt*DOSSCTSZ):initdataindex+DOSSCTSZ+(sectorcnt*DOSSCTSZ)]
         else:
-            buf = drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
-        rc = senddata(buf,SECTORSIZE)
+            buf = drive1Data[initdataindex+(sectorcnt*DOSSCTSZ):initdataindex+DOSSCTSZ+(sectorcnt*DOSSCTSZ)]
+        rc = senddata(buf,DOSSCTSZ)
         sectorcnt += 1
         
         if  rc == RC_SUCCESS:
@@ -997,11 +999,13 @@ def dskiords():
 def dskiowrs():
     print("dskiowrs")
     
+    DOSSCTSZ = SECTORSIZE - 3
+    
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
     if not msxdos1boot:
         dskioini()
         
-    initdataindex = sectorInfo[3]*SECTORSIZE
+    initdataindex = sectorInfo[3]*DOSSCTSZ
     numsectors = sectorInfo[1]
     sectorcnt = 0
     
@@ -1009,16 +1013,16 @@ def dskiowrs():
     #print("dskiowrs:numsectors=",sectorInfo[1])
     #print("dskiowrs:mediaDescriptor=",sectorInfo[2])
     #print("dskiowrs:initialSector=",sectorInfo[3])
-    #print("dskiowrs:blocksize=",SECTORSIZE)
+    #print("dskiowrs:blocksize=",DOSSCTSZ)
     
     while sectorcnt < numsectors:
-        rc,buf = recvdata(SECTORSIZE)
+        rc,buf = recvdata(DOSSCTSZ)
         if  rc == RC_SUCCESS:
             print("dskiowrs: checksum is a match")
             if sectorInfo[0] == 0:
-                drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
+                drive0Data[initdataindex+(sectorcnt*DOSSCTSZ):initdataindex+DOSSCTSZ+(sectorcnt*DOSSCTSZ)] = buf
             else:
-                drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
+                drive1Data[initdataindex+(sectorcnt*DOSSCTSZ):initdataindex+DOSSCTSZ+(sectorcnt*DOSSCTSZ)] = buf
             sectorcnt += 1
         else:
             print("dskiowrs: checksum error")
@@ -1026,6 +1030,8 @@ def dskiowrs():
                   
 def dskiosct():
     print("dskiosct")
+
+    DOSSCTSZ = SECTORSIZE - 3
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
     if not msxdos1boot:

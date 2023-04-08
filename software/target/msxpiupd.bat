@@ -25,6 +25,7 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/templat2.com?r
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcopy.com?raw=true pcopynew.com
 COPY PCOPYNEW.COM PCOPY.COM
+DEL PCOPYNEW.COM
 echo
 echo Updating msxpi-server.py...
 prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server
