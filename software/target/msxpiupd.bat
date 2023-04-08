@@ -1,7 +1,8 @@
 echo Updating MSXPi client and server software...
 pdate
+ 
 pcd /home/pi/msxpi
-
+ 
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/API.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRC.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRCv2.BAS?raw=true
