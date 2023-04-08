@@ -111,6 +111,13 @@ dev_0.7 - Contain ealier development code. Uses an old single-byte protocol, and
 Other branches might appear and dissapear. I recommend you not to use them.
 
 
+To-Do / Wish List
+=================
+1. Redesign the interface to use Raspberry Pi SPI GPIO pins & hardware support
+2. Implement Z80 /WAIT states in the interface
+3. Implement Z80 /INT support in the interface
+4. Redesign the interace for Parallel bus support
+
 MSXPi project is structured around three directories:
 
     /software  - all software goes here
