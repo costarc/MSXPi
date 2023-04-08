@@ -18,7 +18,7 @@ There are two main steps to setup MSXPi, once you choose the correct branch for 
 - Setup MSX with the client side software (MSX SD Card / disk drive)
 
 ### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
-MSXPi SD Card image: 
+MSXPi SD Card image: https://drive.google.com/file/d/1-tSscZvcSycRPDtG4qwRD4QhrX-2Jswq
 
 
 ### Step 2: Write the image to a SD Card (4 GB minimum)- Use 7Zip to unzip the file, and Raspberry PI Imager to write the image to the SD Card.
@@ -36,14 +36,16 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  pwifi set
  prun sudo reboot
 
+MSXPi v1.1 Release Notes
+========================
+- coming soon.
 
-Just rebbot Raspberry Pi and it should have msxpi-server running and responding to commands.
 
 MSXPi v1.0.1 Release Notes
 ==========================
 - Redesigned the interface in Kicad format, both schematic and PCB
 - Replaced the 27C256 by AT28C256 to allow MSX to program the EEPROM from the MSX-DOS
-- Added the EEPROM programmer AT28C256.COM to available commands - resuing it from my other project https://github.com/costarc/msxcart_flash32k
+- Added the EEPROM programmer AT28C256.COM to available commands - reusing it from my other project https://github.com/costarc/msxcart_flash32k
 - Updated the msxpi-seerver.py to run in Python3, which is the default on newer versions of Raspbian
 
 This version allows:
