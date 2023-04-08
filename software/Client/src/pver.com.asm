@@ -65,6 +65,7 @@ MAINPROG:
         ld      a,(de)
         cp      RC_READY
         jr      z,MAINPROG
+        call    PRINTNLINE
         ret
         
 PRINTPIERR:

@@ -54,7 +54,9 @@
         
         call    SETCLOCK
         ld      hl,PIOK
-        jp      PRINT
+        call    PRINT
+        call    PRINTNLINE
+        ret
   
 SETCLOCK:
         LD      IX,buf + 3

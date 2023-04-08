@@ -48,8 +48,6 @@
         call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR
-        LD      A,'*'
-        CALL    PUTCHAR
         ld      de,buf
 MAINPROG:
         ld      bc,BLKSIZE
@@ -66,6 +64,7 @@ MAINPROG:
         ld      a,(de)
         cp      RC_READY
         jr      z,MAINPROG
+        call    PRINTNLINE
         ret
         
 PRINTPIERR:
