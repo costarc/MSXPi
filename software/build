@@ -41,13 +41,15 @@ genUpdateBatch() {
   echo "pcd /home/pi/msxpi" >> /tmp/msxpiupd.bat
   rm target/msxpiupd.bat  > /dev/null 2>&1
   
-  for fn in `ls target`
+  for fn in `ls target | grep -v -i pcopy.com`
   do
     if [ -f target/${fn} ];then
       echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
-      echo "echo" >> /tmp/msxpiupd.bat
     fi
   done
+  echo "pcopy "${GITPATH}/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
+  echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpiupd.bat
+  echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Updating msxpi-server.py..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
