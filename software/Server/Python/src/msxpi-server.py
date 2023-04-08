@@ -22,7 +22,7 @@ from random import randint
 from fs import open_fs
 
 version = "1.1"
-BuildId = "20230408.530"
+BuildId = "20230408.531"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -294,8 +294,6 @@ def prun(cmd = ''):
     rc = RC_SUCCESS
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc,data = recvdata()
-
-        print(data)
         
         if data[0] == 0:
             cmd=''
@@ -303,15 +301,11 @@ def prun(cmd = ''):
             cmd = data.decode().split("\x00")[0]
     
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        #print("prun if:syntax error")
         rc = RC_FAILED
-        print("sending help")
         sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |".encode(),BLKSIZE,True,rc)
     else:
-        #print("prun else")
         cmd = cmd.replace('::','|')
         try:
-            #print("prun: inside try: cmd = ",cmd,type(cmd))
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
@@ -342,46 +336,34 @@ def pdir():
         path=''
     else:
         path = data.decode().split("\x00")[0]
-
-    print("pdir:",path)
-    
+        
     try:
-        if (1 == 1):
-            #print("pdir: if1")
-            urlcheck = getpath(basepath, path)
-            if (urlcheck[0] == 0 or urlcheck[0] == 1):
-                #print("pdir: if2")
-                if (path.strip() == '*'):
-                    prun('ls -l ' + urlcheck[1])
-                elif ('*' in path):
-                    #print("pdir: elif1")
-                    numChilds = path.count('/')
-                    fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
-                    if (fileDesc == '' or len(fileDesc) == 0):
-                        fileDesc = '.'
-                    prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
-                else:
-                    #print("pdir: else inside",urlcheck[1])
-                    prun('ls -l ' + urlcheck[1])
+        urlcheck = getpath(basepath, path)
+        if (urlcheck[0] == 0 or urlcheck[0] == 1):
+            if (path.strip() == '*'):
+                prun('ls -l ' + urlcheck[1])
+            elif ('*' in path):
+                numChilds = path.count('/')
+                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
+                if (fileDesc == '' or len(fileDesc) == 0):
+                    fileDesc = '.'
+                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
             else:
-                #print("pdir: else out")
-                parser = MyHTMLParser()
-                try:
-                    htmldata = urlopen(urlcheck[1]).read().decode()
-                    parser = MyHTMLParser()
-                    parser.feed(htmldata)
-                    buf = " ".join(parser.HTMLDATA)
-                    rc = sendmultiblock(buf.encode(),BLKSIZE, True, RC_SUCCESS)
-
-                except Exception as e:
-                    rc = RC_FAILED
-                    print("pdir exception 1:http error "+ str(e))
-                    sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_SUCCESS)
+                prun('ls -l ' + urlcheck[1])
         else:
-            rc = RC_FAILNOSTD
-            print("pdir:out of sync in RC_WAIT")
+            parser = MyHTMLParser()
+            try:
+                htmldata = urlopen(urlcheck[1]).read().decode()
+                parser = MyHTMLParser()
+                parser.feed(htmldata)
+                buf = " ".join(parser.HTMLDATA)
+                rc = sendmultiblock(buf.encode(),BLKSIZE, True, RC_SUCCESS)
+
+            except Exception as e:
+                rc = RC_FAILED
+                sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_SUCCESS)
+
     except Exception as e:
-        #print("pdir exception 2:"+str(e))
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, True, RC_SUCCESS)
 
     #print("pdir:exiting rc:",hex(rc))
