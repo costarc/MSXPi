@@ -77,7 +77,6 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
 
 # MSX-Dos P Commands
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/client-template-descriptive.com.asm -o ./target/templat2.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com

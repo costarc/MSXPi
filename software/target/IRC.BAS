@@ -3,9 +3,8 @@
 29 REM Define FN Keys and Constants
 30 GOSUB 6000:GOSUB6100     ' Define Functonn Keys and RC constants
 40 FOR I=1 TO 10: KEY(I) STOP:NEXT I
-50 INPUT "Nick name:";NI$
+50 INPUT "Nick name:";NI$: IF NI$<>"" THEN NK$=NI$
 60 IF NI$="" THEN NI$="none"
-70 INPUT "Channel name:";CH$
 95 onerrorgoto99
 96 call msxpiver
 97 goto 100
@@ -28,7 +27,7 @@
 330 KEY (1) OFF:KEY (2) OFF:KEY (3) OFF
 340 ' Read new messages in the IRC Channel: Set the inputs / Call SENDCOMMAND
 350 if CH$=""THENGOTO358
-355 A=2:B=&HC000:C$="IRC":D$="READ":GOSUB10000:IF RC<>&HEB THENA=1:B=&HC000:GOSUB11000
+355 A=2:B=&HC000:C$="IRC":D$="READ":GOSUB10000:IF RC<>&HEB THENA=1:B=&HC000:GOSUB11000:PRINT
 357 GOTO300
 358 A=1:B=&HC000:C$="IRC":D$="READ":GOSUB10000:GOTO300
 999 '
@@ -68,7 +67,7 @@
 5599 ' End of typing - Prepare to return to main loop
 5600 FOR I=0 TO LEN(M$)+P:PRINT " ";CHR$(8);CHR$(8);" ";CHR$(8);:NEXT I:RETURN
 8999 '
-6000 KEY 1,"F1-Talk":KEY 2,"F2-Join":KEY 3,"F3-Bye":KEY 4,"":KEY 5,"":KEY 6,"":KEY 7,"":KEY 8,"":KEY 9,"":KEY 10,""
+6000 KEY 1,"F1-Send Message":KEY 2,"F2-Join channel":KEY 3,"F3-Quit":KEY 4,"":KEY 5,"":KEY 6,"":KEY 7,"":KEY 8,"":KEY 9,"":KEY 10,""
 6095 RETURN
 6100 E0=&HE0:E1=&HE1:E2=&HE2:E3=&HE3:E4=&HE4:E5=&HE5:E6=&HE6:E7=&HE7:E8=&HE8:E9=&HE9:EA=&HEA:EB=&HEB:EC=&HEC:ED=&HED:EF=&HEF
 6130 RETURN

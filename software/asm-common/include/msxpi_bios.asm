@@ -228,7 +228,6 @@ GETPARMS:
         JR      Z,GETPARMS2
 GETPARMS1:
         LD      A,(HL)
-        out ($98),a
         CP      $22
         JR      Z,GETPARMS2
         CP      ')'
