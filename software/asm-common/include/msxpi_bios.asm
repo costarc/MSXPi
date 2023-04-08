@@ -136,6 +136,7 @@ nextbit16:
 ; DE = Buffer Address
 ;
 CLEARBUF:
+        push    bc
         push    de
         push    hl
         ld      h,d
@@ -146,6 +147,7 @@ CLEARBUF:
         ldir
         pop     hl
         pop     de
+        pop     bc
         ret
         
 ;-----------------------

@@ -87,6 +87,8 @@ MAINPROG:
         JR      C,PRINTPIERR
 
         CALL    CLOSEFILE
+        
+        CALL    PRINTNLINE
 
         JP      0
         

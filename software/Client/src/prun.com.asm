@@ -48,6 +48,8 @@
         call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR
+        LD      A,'*'
+        CALL    PUTCHAR
         ld      de,buf
 MAINPROG:
         ld      bc,BLKSIZE
