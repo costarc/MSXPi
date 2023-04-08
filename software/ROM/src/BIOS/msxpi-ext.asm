@@ -489,7 +489,6 @@ CALL_PRINTBUF:
         
 CALL_MSXPISAVE:
         PUSH    DE
-        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
@@ -499,7 +498,6 @@ CALL_MSXPISAVE:
         JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
 CALL_MSXPISAVE2:
         PUSH    DE
-        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
@@ -564,6 +562,7 @@ _MSXPISEND:
         PUSH    HL
         CALL    GETSTRPNT
         CALL    STRTOHEX
+        EX      DE,HL
         JR      NC,MSXPISEND1
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
@@ -573,15 +572,13 @@ _MSXPISEND:
         RET
 MSXPISEND1:
 ; Save buffer address to later store return code
-        PUSH    HL
-        LD      D,H
-        LD      E,L
+        PUSH    DE
         LD      BC,BLKSIZE
         CALL    SENDDATA
-        POP     HL
+        POP     DE
         JR      NC,MSXPISEND2
         LD      A,RC_TXERROR
-        LD      (HL),A
+        LD      (DE),A
 MSXPISEND2:
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
         POP     HL
@@ -596,6 +593,7 @@ _MSXPIRECV:
         PUSH    HL
         CALL    GETSTRPNT
         CALL    STRTOHEX
+        EX      DE,HL
         JR      NC,MSXPIRECV1
 ; Buffer address is not valid hex number
         LD      HL,BUFERRMSG
@@ -604,15 +602,13 @@ _MSXPIRECV:
         OR      A
         RET
 MSXPIRECV1:
-        PUSH    HL
-        LD      D,H
-        LD      E,L
+        PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
-        POP     HL
+        POP     DE
         JR      NC,MSXPIRECV2
         LD      A,RC_TXERROR
-        LD      (HL),A
+        LD      (DE),A
 MSXPIRECV2:
         POP     HL
         OR      A
@@ -675,7 +671,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.512"
+BuildId: DB "20230408.517"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -709,13 +705,13 @@ CALL_TABLE:
         DB      "MSXPIVER",0
         DW      _MSXPIVER
 
-        DB      "GETPOINT",0
+        DB      "GETPOINTER",0
         DW      _GETPOINTERS
 
-        DB      "MSXPISND",0
+        DB      "MSXPISEND",0
         DW      _MSXPISEND
 
-        DB      "MSXPIRCV",0
+        DB      "MSXPIRECV",0
         DW      _MSXPIRECV
 
         DB      "MSXPI",0
@@ -727,6 +723,5 @@ ENDOFCMDS:
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "putchar-msxdos.asm"
-INCLUDE "debug.asm"
 fim:    equ $
 buf:    equ $
