@@ -119,7 +119,6 @@ PRINTFNAME2:
         CALL    PUTCHAR
         LD      B,3
         CALL    PLOOP
-        CALL    PRINTNLINE
         RET
 PLOOP:
         LD      A,(HL)
@@ -132,7 +131,7 @@ PLOOP:
 ; it will use blocks size SECTORSIZE (because disk block is 1)
 ; Each block is written to disk after download
 GETFILE:
-        LD      A,'.'
+        LD      A,' '
         CALL    PUTCHAR
         LD      A,10
         LD      (buf),a             ; counter for cosmetic   feature
@@ -228,7 +227,7 @@ msg_error: db "Checksum did not match",13,10,0
 msg_cmd: db "Sending command...",0
 msg_parms: db "Sending parameters... ",0
 msg_recv: db "Now reading MSXPi response... ",0
-FNTITLE:    DB      "Saving file:",0
+FNTITLE:    DB      13,10,"Saving file:",0
 PICOMMERR:  DB      "Communication Error",13,10,0
 PIUNKNERR:  DB      "Unknown error",13,10,0
 PICRCERR:   DB      "CRC Error",13,10,0

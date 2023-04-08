@@ -40,6 +40,7 @@ genUpdateBatch() {
   echo "pdate" >> /tmp/msxpiupd.bat
   
   echo "pcd /home/pi/msxpi" >> /tmp/msxpiupd.bat
+  echo "" >> /tmp/msxpiupd.bat
   rm target/msxpiupd.bat  > /dev/null 2>&1
   
   for fn in `ls target | grep -v -i pcopy.com`
