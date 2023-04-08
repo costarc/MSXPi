@@ -14,8 +14,6 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/dosinit.com?ra
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpidos.rom?raw=true
 echo
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiext.bin?raw=true
-echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcd.com?raw=true
 echo
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcopy.com?raw=true

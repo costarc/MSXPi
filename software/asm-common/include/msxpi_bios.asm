@@ -152,7 +152,7 @@ CLEARBUF:
 ; SENDPICMD            |
 ;-----------------------
 ; Send a command to Raspberry Pi
-; This routine allocate BLKSIZE+2 bytes at the top of th RAM
+; This routine allocate BLKSIZE bytes at the top of th RAM
 ; This buffer is used for command & parameters transfer
 ; Input:
 ;   de = should contain the command string
@@ -164,64 +164,45 @@ CLEARBUF:
 ;   af,bc,de,hl are modified
 ;
 SENDPICMD:
-        LD      A,H
-        OR      L
-        JR      NZ,CALL_BUFFERPASSED
-        LD      HL,(HIMEM)
-        PUSH    BC
-        LD      BC,BLKSIZE
-        OR      A               ; reset C to avoid carry being used in the SBC command
-        SBC     HL,BC           ; Allcoate Buffer on top of RAM
-        DEC     HL
-        DEC     HL              ;  bytes more for the buffer
-        POP     BC
-CALL_BUFFERPASSED:
         PUSH    HL
-        PUSH    DE
-        PUSH    BC
         LD      BC,BLKSIZE
         CALL    CLEARBUF
-        POP     BC
-        POP     DE
         POP     HL
-        PUSH    HL              ; Save buffer address, DE will be updated to next parameter
+; Call GETCMD, which will parse the whole string in the CALL command area,
+; get only the first string and send as Command - the remaining of the string
+; will be the parameters
+; The Command string is copied to the transfer buffer area (DE) and then
+; SENDCOMMAND is called
+        PUSH    DE
         CALL    GETCMD
-        POP     HL
-        PUSH    HL
-        PUSH    DE              ; Next parmameters address
-        PUSH    BC
-        EX      DE,HL
-        CALL    SENDCOMMAND
-        POP     BC
+        POP     DE
+        PUSH    HL              ; Next parmameters address
+        PUSH    DE
+        LD      BC,CMDSIZE
+        CALL    SENDDATA
         POP     DE
         POP     HL
         RET     C
+; Clear the buffer again, and pass the remaining of the string
+; as parameters to RPi
         PUSH    HL
-        PUSH    DE
-        PUSH    BC
         LD      BC,BLKSIZE
         CALL    CLEARBUF
-        POP     BC
-        POP     DE
         POP     HL
-        PUSH    HL
         CALL    GETPARMS
-        POP     HL
-        PUSH    HL
-        EX      DE,HL
         LD      BC,BLKSIZE
         CALL    SENDDATA
         POP     HL          ; Return address of buffer in HL
         RET
 GETCMD:
-        LD      A,(DE)
+        LD      A,(HL)
         CP      ' '
         RET     Z
         CP      $22             ; QUOTE (")
         RET     Z
         CP      ')'
         RET     Z
-        LD      (HL),A
+        LD      (DE),A
         INC     DE
         INC     HL
         DEC     B
@@ -231,19 +212,19 @@ GETPARMS:
         XOR     A
         CP      B
         RET     Z
-        LD      A,(DE)
+        LD      A,(HL)
         CP      ' '
         JR      Z,GETPARMS2
 GETPARMS1:
-        LD      A,(DE)
+        LD      A,(HL)
         CP      $22
         JR      Z,GETPARMS2
         CP      ')'
         JR      Z,GETPARMS2
-        LD      (HL),A
-        INC     HL
-GETPARMS2:
+        LD      (DE),A
         INC     DE
+GETPARMS2:
+        INC     HL
         DJNZ    GETPARMS1
         RET
 
@@ -595,7 +576,7 @@ SENDPARMS2:
 
 ; Send a simple command to MSXPi
 ; DE = Command name, terminated in zero
-; Size is fixed: CMDSIZE
+; Size of buffer is fixed (CMDSIZE) but command can be up to 8 chars
 SENDCOMMAND:
         ld      hl,buf
         ex      de,hl

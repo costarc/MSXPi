@@ -392,116 +392,151 @@ _MSXPI:
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
+        
+; Now that it processed the parameters, check if Buffer address was passed
+; If not passed, will allocate a buffer of size BLOCKSIZE at the top of the ram
+; Output: IX = HL = Buffer address
+        PUSH    AF
+        LD      A,H
+        OR      L
+        JR      NZ,CALL_BUFFERPASSED
+        LD      HL,(HIMEM)
+        PUSH    BC
+        LD      BC,BLKSIZE
+        OR      A               ; reset C to avoid carry being used in the SBC command
+        SBC     HL,BC           ; Allocate Buffer on top of RAM
+        POP     BC
+CALL_BUFFERPASSED:
+        PUSH    HL
+        POP     IX              ; IX = WORK AREA ( BYTES )
 
 CALL_MSXPI1:
 ; Registers at this point:
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
 ; DE = contain string address of command to send to RPi
-; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
+; HL = IX = contain buffer address to store data from RPi (if provided by user, otherwise 0)
 ;
 ; Routine explanation:
 ; MSX Send the command to RPi
-; RPi reply with a sort message (BLKSIZE) with the following structure:
-; | RC | LSB | MSB | Message or DATA |
+; RPi reply with data block (BLKSIZE) with the following structure:
+; | RC | LSB | MSB | DATA |
 ; RC = RC_FAILED: Pi error. Message available to print
-; RC = RC_SUCCESS: Pi processing succeed - data available and there is another block
-; RC = RC_TERMINATE: Pi processing succeed - data available and this is last block
-
-        PUSH    AF
+; RC = RC_READY: Pi processing succeed - data available and there is another block
+; RC = RC_SUCCESS : Pi processing succeed - data available and this is last block
+; RC = RC_TXERROR : Error in the connection with RPi
+;
+; Send commands (in CALL parameters) to RPi
+        
         CALL    SENDPICMD
-        JR      NC,CALL_MSXPI2
+        JR      NC,CALL_MSXPI3
 CALL_MSXPI2_ERR:
         POP     AF
-CALL_MSXPI2_ERR2:
+CALL_MSXPISERR:
         LD      A,RC_TXERROR
         LD      (HL),A
         POP     HL
         OR      A
         RET
-CALL_MSXPI2:
+CALL_MSXPI3:
         POP     AF
         CP      '2'
         JR      Z,CALL_MSXPISAVE
-
+        LD      C,A
 ; Will print RPi response to screen
-CALL_MSXPI3:
+CALL_PRINTBUF:
+        ld      a,c                 ; stdout option
         push    af
-        push    hl
-        call    READ1BLOCK
+        ld      bc,BLKSIZE
+        call    CLEARBUF
+        push    de
+        call    RECVDATA
         pop     hl
         ld      a,RC_TXERROR
-        jr      c,CALL_MSXPI3B1
+        jr      c,CALL_MSXPI2_ERR
         inc     hl
         ld      c,(hl)
         inc     hl
         ld      b,(hl)
         inc     hl
-CALL_MSXPI3A:
+        ld      d,h
+        ld      e,l
         pop     af
         push    af
-        push    hl
-        push    bc
+        push    de
         ld      bc,BLKSIZE
         cp      '0'                      ; should print ?
         call    nz,PRINTPISTDOUT
-        pop     hl
-        ld      bc,BLKSIZE
-        or      a
-        sbc     hl,bc
-        jr      nc,CALL_MSXPI3B
-        pop     hl
-        ld      a,(hl)  ; will keep/return to BASIC the existing RC from RPi
-CALL_MSXPI3B1:
-        pop     bc
-        ld      (hl),a
-        pop     hl
-        or      a
-        ret
-CALL_MSXPI3B:
-        ld      b,h
-        ld      c,l
-        pop     hl
-        push    hl
-        push    bc
-        call    READ1BLOCK
-        pop     bc
-        pop     hl
-        ld      a,RC_TXERROR
-        jr      c,CALL_MSXPI3B1
-        jr      CALL_MSXPI3A
-
-READ1BLOCK:
-        push    hl
-        ld      bc,BLKSIZE
-        call    CLEARBUF
         pop     de
-        ld      bc,BLKSIZE
-        call    RECVDATA
+        pop     af
+        ld      c,a
+        ld      a,(de)
+        cp      RC_READY
+        jr      z,CALL_PRINTBUF
+        pop     hl
+        or      a
         ret
-
+        
 CALL_MSXPISAVE:
-        PUSH    HL
-        LD      D,H
-        LD      E,L
-CALL_MSXPISAVE1:
-        PUSH    HL
+        PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
-        POP     HL
+        POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
-        DEC     DE
-        LD      A,(DE)
-        INC     DE
-        OR      A
-        JR      NZ,CALL_MSXPISAVE1      ; Read/Save another block
+        LD      A,(HL)
+        CP      RC_READY
+        JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
+CALL_MSXPISAVE2:
+        PUSH    DE
+        LD      BC,BLKSIZE
+        CALL    RECVDATA
+        POP     HL                      ; HL = Start of buffer, DE=Address next block
+        JR      C,CALL_MSXPISERR
+        LD      A,(HL)
+        LD      (IX),A                  ; Update return code
+        CALL    SUMBLOCKSIZES           ; Add block size to full data block size
+        LD      BC,BLKSIZE
+        CALL    SHIFTDATA
+        LD      A,(IX)
+        CP      RC_READY
+        JR      Z,CALL_MSXPISAVE2
+CALL_MSXPISAVEXIT:
         POP     HL
-        POP     HL
         OR      A
-        RET
-CALL_MSXPISERR:
         RET
         
+; SUMBLOCKSIZES
+; Add size of each block to the block address
+; Note that it the data to receive is too big,
+; it will corrupt the memory and crash the program
+; This routines are not supposed to transfer huge files.
+; Inputs:
+; IX = Address of total data size (will be updated in this routine)
+; HL = Address of current block
+; Changed registries: AF, BC
+SUMBLOCKSIZES:
+        PUSH    HL
+        INC     HL
+        LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        LD      L,(IX + 1)
+        LD      H,(IX + 2)
+        ADD     HL,BC
+        LD      (IX + 1),L
+        LD      (IX + 2),H
+        POP     HL
+        RET
+        
+SHIFTDATA:
+        LD      D,H
+        LD      E,L
+        INC     HL
+        INC     HL
+        INC     HL
+        LDIR
+        RET                 ; DE = Next block address
+
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
@@ -623,7 +658,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.449"
+BuildId: DB "20230408.464"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
