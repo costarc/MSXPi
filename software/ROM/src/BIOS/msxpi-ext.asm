@@ -405,6 +405,9 @@ _MSXPI:
         LD      BC,BLKSIZE
         OR      A               ; reset C to avoid carry being used in the SBC command
         SBC     HL,BC           ; Allocate Buffer on top of RAM
+        DEC     HL
+        DEC     HL
+        DEC     HL
         POP     BC
 CALL_BUFFERPASSED:
         PUSH    HL
@@ -428,7 +431,9 @@ CALL_MSXPI1:
 ;
 ; Send commands (in CALL parameters) to RPi
         
+        PUSH    HL
         CALL    SENDPICMD
+        POP     DE
         JR      NC,CALL_MSXPI3
 CALL_MSXPI2_ERR:
         POP     AF
@@ -479,6 +484,7 @@ CALL_PRINTBUF:
         
 CALL_MSXPISAVE:
         PUSH    DE
+        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
@@ -488,16 +494,22 @@ CALL_MSXPISAVE:
         JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
 CALL_MSXPISAVE2:
         PUSH    DE
+        CALL    DBGDE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
         LD      A,(HL)
-        LD      (IX),A                  ; Update return code
+        LD      (IX + 0),A              ; Update return code
         CALL    SUMBLOCKSIZES           ; Add block size to full data block size
+        DEC     DE
+        DEC     DE
+        DEC     DE
+        PUSH    DE
         LD      BC,BLKSIZE
         CALL    SHIFTDATA
-        LD      A,(IX)
+        POP     DE
+        LD      A,(IX + 0)
         CP      RC_READY
         JR      Z,CALL_MSXPISAVE2
 CALL_MSXPISAVEXIT:
@@ -658,7 +670,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.464"
+BuildId: DB "20230408.510"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10

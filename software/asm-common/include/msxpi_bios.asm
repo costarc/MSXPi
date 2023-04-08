@@ -137,14 +137,14 @@ nextbit16:
 ;
 CLEARBUF:
         push    de
-        push    bc
+        push    hl
         ld      h,d
         ld      l,e
         inc     de
         xor     a
         ld      (hl),a
         ldir
-        pop     bc
+        pop     hl
         pop     de
         ret
         
@@ -164,36 +164,45 @@ CLEARBUF:
 ;   af,bc,de,hl are modified
 ;
 SENDPICMD:
-        PUSH    HL
+        EX      DE,HL
+        PUSH    BC
         LD      BC,BLKSIZE
         CALL    CLEARBUF
-        POP     HL
+        POP     BC
+
 ; Call GETCMD, which will parse the whole string in the CALL command area,
 ; get only the first string and send as Command - the remaining of the string
 ; will be the parameters
 ; The Command string is copied to the transfer buffer area (DE) and then
 ; SENDCOMMAND is called
+
         PUSH    DE
         CALL    GETCMD
         POP     DE
         PUSH    HL              ; Next parmameters address
         PUSH    DE
+        PUSH    BC
         LD      BC,CMDSIZE
         CALL    SENDDATA
+        POP     BC
         POP     DE
         POP     HL
         RET     C
 ; Clear the buffer again, and pass the remaining of the string
 ; as parameters to RPi
-        PUSH    HL
+
+        PUSH    BC
         LD      BC,BLKSIZE
         CALL    CLEARBUF
-        POP     HL
+        POP     BC
+
+        PUSH    DE
         CALL    GETPARMS
+        POP     DE
         LD      BC,BLKSIZE
         CALL    SENDDATA
-        POP     HL          ; Return address of buffer in HL
         RET
+        
 GETCMD:
         LD      A,(HL)
         CP      ' '
@@ -217,6 +226,7 @@ GETPARMS:
         JR      Z,GETPARMS2
 GETPARMS1:
         LD      A,(HL)
+        out ($98),a
         CP      $22
         JR      Z,GETPARMS2
         CP      ')'
