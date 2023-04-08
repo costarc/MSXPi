@@ -31,6 +31,7 @@ RPi Imager can be download from here: https://www.raspberrypi.com/news/raspberry
 In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card or Disk.
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX. To unleash full MSXPi power, configure the Raspberry Pi Zero W WiFi:
+
  pset WIFISSID yourWifi
  
  pset WIFIPWD yourWifiPassword
