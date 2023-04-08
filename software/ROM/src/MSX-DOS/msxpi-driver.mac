@@ -305,60 +305,6 @@ DSKIO_SECTINFO1:
 	ld	    bc,5
 	call	SENDDATA
 	ret
-ROUTINE2:
-	; Send synchronisation header
-	ld      a,READY
-	call	PIWRITEBYTE
-    
-    ld    h,$FF            ; Initial CRC - muat march value in Server
-
-; Send device number
-	pop     af
-	ld	l,a
-	xor	h
-	ld	h,a
-	ld	a,l
-	call    PIWRITEBYTE
-
-; send number of sectors to read/write
-
-	pop	bc
-	ld      a,b
-	xor	h
-	ld	h,a
-	ld	a,b
-	call    PIWRITEBYTE
-
-; send media decriptor
-
-	ld      a,c
-	xor	h
-	ld	h,a
-	ld	a,c
-	call    PIWRITEBYTE
-
-; send logical sectornumber (initial sector number)
-
-	pop		de
-	ld			a,e
-	xor		h
-	ld			h,a
-	ld			a,e
-	call    PIWRITEBYTE
-
-	ld      a,d
-	xor	h
-	ld		h,a
-	ld		a,d
-	call    PIWRITEBYTE
-	ld	a,h
-	call    PIWRITEBYTE
-	call	PIREADBYTE
-	cp	h
-	ret	z
-	scf
-        ret
-
         
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
