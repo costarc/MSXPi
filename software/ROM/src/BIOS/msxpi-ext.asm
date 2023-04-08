@@ -455,10 +455,14 @@ CALL_PRINTBUF:
         ld      bc,BLKSIZE
         call    CLEARBUF
         push    de
+        ld      bc,BLKSIZE
         call    RECVDATA
         pop     hl
         ld      a,RC_TXERROR
         jr      c,CALL_MSXPI2_ERR
+        pop     af
+        push    hl
+        push    af
         inc     hl
         ld      c,(hl)
         inc     hl
@@ -467,8 +471,9 @@ CALL_PRINTBUF:
         ld      d,h
         ld      e,l
         pop     af
+        pop     hl
         push    af
-        push    de
+        push    hl
         ld      bc,BLKSIZE
         cp      '0'                      ; should print ?
         call    nz,PRINTPISTDOUT
@@ -670,7 +675,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230408.510"
+BuildId: DB "20230408.512"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
