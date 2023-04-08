@@ -12,7 +12,7 @@ This Quick Start Guide is updated to V1.1 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
 
-There are two main steps to setup MSXPi, once you choose the correct branch for your interface:
+There are a few steps to setup MSXPi:
 
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
