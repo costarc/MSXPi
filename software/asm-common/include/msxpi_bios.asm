@@ -105,41 +105,6 @@ PIEXCHANGEBYTE:
             in      a,(DATA_PORT1)     ; read byte
             ret
 
-PSYNC:  
-        CALL    TRYABORT
-        RET     C
-        LD      BC,4
-        LD      DE,PINGCMD
-        CALL    SENDPICMD
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        CP      RC_SUCCNOSTD
-        JR      NZ,PSYNC
-        RET
-
-TRYABORT:
-        LD      A,4
-        CALL    SNSMAT
-        BIT     5,A
-        RET     Z
-        LD      A,ABORT
-        CALL    PIEXCHANGEBYTE
-        CP      READY
-        RET     Z
-        CP      SENDNEXT
-        JR      NZ,TRYABORT
-        LD      A,1
-        CALL    PIEXCHANGEBYTE
-        XOR     A
-        CALL    PIEXCHANGEBYTE
-        LD      A,'X'
-        CALL    PIEXCHANGEBYTE
-        CALL    PIEXCHANGEBYTE
-        OR      A
-        RET
-
-PINGCMD: DB      "ping",0
-
 ; Input:
 ; A = byte to calculate CRC
 ; HL' = Current CRC 
