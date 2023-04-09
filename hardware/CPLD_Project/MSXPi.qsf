@@ -31,7 +31,7 @@ set_global_assignment -name LAST_QUARTUS_VERSION "13.0 SP1"
 set_global_assignment -name USE_GENERATED_PHYSICAL_CONSTRAINTS OFF -section_id eda_palace
 
 set_global_assignment -name VHDL_FILE MSXPi.vhd
-set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE AREA
+set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE BALANCED
 set_global_assignment -name OPTIMIZE_HOLD_TIMING OFF
 set_global_assignment -name FITTER_EFFORT "STANDARD FIT"
 #set_global_assignment -name ENABLE_DA_RULE "C101, C102, C103, C104, C105, C106, R101, R102, R103, R104, R105, T101, T102, A101, A102, A103, A104, A105, A106, A107, A108, A109, A110, S101, S102, S103, S104, D101, D102, D103, H101, H102, M101, M102, M103, M104, M105"
