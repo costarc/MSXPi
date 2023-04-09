@@ -44,7 +44,8 @@
         CALL    PRINT
         IN      A,(CONTROL_PORT2)
         CALL    DESCHWVER
-                
+        call    PRINTNLINE
+
 ; Sending Command and Parameters to RPi
         ld      de,command
         call    SENDCOMMAND
