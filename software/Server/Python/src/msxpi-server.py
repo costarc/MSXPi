@@ -20,9 +20,10 @@ import base64
 import math
 from random import randint
 from fs import open_fs
+import threading
 
 version = "1.1"
-BuildId = "20230409.542"
+BuildId = "20230409.543"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1085,7 +1086,9 @@ def dskiosct():
 def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
-    
+
+    th = threading.Timer(5.0, exitDueToSyncError)
+            
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
@@ -1114,11 +1117,13 @@ def recvdata( bytecounter = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             #print("recvdata: checksum is a match")
+            th.cancel()
             break
         else:
             rc = RC_TXERROR
             print("recvdata: checksum error")
-
+            th.start()
+        
     #print (hex(rc))
     return rc,data
 
@@ -1126,6 +1131,9 @@ def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
 
+    th = threading.Timer(5.0, exitDueToSyncError)
+    th.start()
+            
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
@@ -1162,11 +1170,12 @@ def senddata(data, blocksize = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             #print("senddata: checksum is a match")
+            th.cancel()
             break
         else:
             rc = RC_TXERROR
             print("senddata: checksum error")
-
+    
     #print (hex(rc))
     return rc
 
@@ -1218,7 +1227,11 @@ def template():
     
     print("Sending response: ",buf) 
     rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        
+    
+def exitDueToSyncError():
+    print("Sync error. Recycling MSXPi-Server")
+    os.system("/home/pi/msxpi/kill.sh")
+    
 """ ============================================================================
     msxpi-server.py
     main program starts here
