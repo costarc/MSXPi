@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230410.556"
+BuildId = "20230410.557"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -392,50 +392,44 @@ def pcd():
         path = data.decode().split("\x00")[0]
         
     try:
-        if (1 == 1):
-            if (len(path) == 0 or path == '' or path.strip() == "."):
-                sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
-            elif (path.strip() == ".."):
-                newpath = basepath.rsplit('/', 1)[0]
-                if (newpath == ''):
-                    newpath = '/'
-                psetvar[0][1] = newpath
-                sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
-            else:
-                #print "pcd:calling getpath"
-                urlcheck = getpath(basepath, path)
-                newpath = urlcheck[1]
-
-                if (newpath[:2].lower() == "m:"):
-                    rc = RC_SUCCESS
-                    psetvar[0][1] = getVirDev(psetvar,'DriveM')
-                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
-                elif (newpath[:4].lower() == "r1:"):
-                    rc = RC_SUCCESS
-                    psetvar[0][1] = getVirDev(psetvar,'DriveR1')
-                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
-                elif  (newpath[:4].lower() == "r2:"):
-                    rc = RC_SUCCESS
-                    psetvar[0][1] = getVirDev(psetvar,'DriveR2')
-                    sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
-                elif (newpath[:4].lower() == "http" or \
-                    newpath[:3].lower() == "ftp" or \
-                    newpath[:3].lower() == "nfs" or \
-                    newpath[:3].lower() == "smb"):
-                    rc = RC_SUCCESS
-                    psetvar[0][1] = newpath
-                    sendmultiblock(str(newpath+'\n').encode(), BLKSIZE, rc)
-                else:
-                    if (os.path.isdir(newpath)):
-                        psetvar[0][1] = newpath
-                        sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
-                    elif (os.path.isfile(str(newpath))):
-                        sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, RC_FAILED)
-                    else:
-                        sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, RC_FAILED)
+        if (len(path) == 0 or path == '' or path.strip() == "."):
+            sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
+        elif (path.strip() == ".."):
+            newpath = basepath.rsplit('/', 1)[0]
+            if (newpath == ''):
+                newpath = '/'
+            psetvar[0][1] = newpath
+            sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
         else:
-            rc = RC_FAILNOSTD
-            print("pcd:out of sync in RC_WAIT")
+            urlcheck = getpath(basepath, path)
+            newpath = urlcheck[1]
+            if (newpath[:2].lower() == "m:"):
+                rc = RC_SUCCESS
+                psetvar[0][1] = getVirDev(psetvar,'DriveM')
+                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+            elif (newpath[:4].lower() == "r1:"):
+                rc = RC_SUCCESS
+                psetvar[0][1] = getVirDev(psetvar,'DriveR1')
+                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+            elif  (newpath[:4].lower() == "r2:"):
+                rc = RC_SUCCESS
+                psetvar[0][1] = getVirDev(psetvar,'DriveR2')
+                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+            elif (newpath[:4].lower() == "http" or \
+                newpath[:3].lower() == "ftp" or \
+                newpath[:3].lower() == "nfs" or \
+                newpath[:3].lower() == "smb"):
+                rc = RC_SUCCESS
+                psetvar[0][1] = newpath
+                sendmultiblock(str(newpath+'\n').encode(), BLKSIZE, rc)
+            else:
+                if (os.path.isdir(newpath)):
+                    psetvar[0][1] = newpath
+                    sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
+                elif (os.path.isfile(str(newpath))):
+                    sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, RC_FAILED)
+                else:
+                    sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, RC_FAILED)
     except Exception as e:
         print("pcd:"+str(e))
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
