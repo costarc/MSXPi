@@ -62,8 +62,8 @@ genUpdateBatch() {
   echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Updating MSXPi tools disk..." >> /tmp/msxpiupd.bat
   echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpiupd.bat
+  echo "prestart" >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
-  echo "echo Please reboot the Raspberry Pi" >> /tmp/msxpiupd.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
   rm /tmp/msxpiupd.bat
 }
