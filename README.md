@@ -46,9 +46,9 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  Note: The first reboot may take longer than 2 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
  
 
-##Using a Fresh Raspbian Image
+###Using a Fresh Raspbian Image
 In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
-### Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
+#### Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
 This is the official Raspberry Pi sd imager writer. Download and install in your desktop PC.
 
 ### Write the Raspbian image to the SD Card
