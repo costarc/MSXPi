@@ -24,7 +24,9 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pshut.com?raw=
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pver.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pvol.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pwifi.com?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/python.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/vi.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcopy.com?raw=true pcopynew.com
 COPY PCOPYNEW.COM PCOPY.COM
 DEL PCOPYNEW.COM
