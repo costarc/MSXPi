@@ -5,7 +5,9 @@ pdate
 pcd /home/pi/msxpi
  
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/API.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/DOLAR.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRC.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/WEATHER.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/at28c256.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/dosinit.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpidos.rom?raw=true
