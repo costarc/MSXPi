@@ -1294,7 +1294,7 @@ else:
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
            ['DriveM','ftp://192.168.1.100'], \
            ['DriveR1','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
-           ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
+           ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
