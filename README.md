@@ -91,11 +91,12 @@ MSXPi v1.1 Release Notes
 - New PCB layout
 - New basic IO routines (used by all components)
 - Lots of code changes to improve stability
-- Improved pcopy: can decompress files, use vifrtual remote devices  
-- Added BASIC API and BASIC programs from contributors:
-  - DOLAR.BAS (by Retropix, Brazil)
-  - WEATHER.BAS (by Retropix, Brazil)
-  - IRC.BAS  (IRC client to chat in webchat.freenode.net) 
+- Improved pcopy: can decompress files, use virtual remote devices  
+- Added BASIC API to support development in BASIC
+- Added IRC.BAS - IRC client to chat in webchat.freenode.net
+- Added BASIC programs from Retropix Brazil:
+  - DOLAR.BAS
+  - WEATHER.BAS
 - Lots of bug fixes and improvements
 
 MSXPi v1.0.1 Release Notes
