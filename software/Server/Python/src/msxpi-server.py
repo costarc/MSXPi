@@ -715,11 +715,14 @@ def pset():
         
     # Set a new parameter or update an existing parameter
     rc = RC_FAILED 
-    cmd=cmd.split(" ")
+    
+    varname = cmd.split(" ")[0]
+    varvalue = cmd.replace(varname,'').strip()
+    cmd = cmd.split(" ")
     
     for index in range(0,len(psetvar)):
 
-        if (psetvar[index][0] == str(cmd[0])):
+        if (psetvar[index][0] == varname):
             
             if len(cmd) == 1:  #will erase / clean a variable
                 psetvar[index][0] = 'free'
@@ -731,19 +734,19 @@ def pset():
                 
                 try:
                     
-                    if str(cmd[0]) == 'DRIVE0':
-                        rc,drive0Data = msxdos_inihrd(cmd[1])
-                        psetvar[index][1] = str(cmd[1])
+                    if varname == 'DRIVE0':
+                        rc,drive0Data = msxdos_inihrd(varvalue)
+                        psetvar[index][1] = varvalue
                         rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
 
-                    elif str(cmd[0]) == 'DRIVE1':
-                        rc,drive1Data = msxdos_inihrd(cmd[1])
-                        psetvar[index][1] = str(cmd[1])    
+                    elif varname == 'DRIVE1':
+                        rc,drive1Data = msxdos_inihrd(varvalue)
+                        psetvar[index][1] = str(varvalue)
                         rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                     else: 
-                        psetvar[index][1] = str(cmd[1])    
+                        psetvar[index][1] = varvalue
                         rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                         
@@ -755,9 +758,9 @@ def pset():
     # Check if there is a slot, then add new parameter
     for index in range(7,len(psetvar)):
 
-        if (psetvar[index][0] == "free" and psetvar[index][0] != str(cmd[0])):
-            psetvar[index][0] = str(cmd[0])
-            psetvar[index][1] = str(cmd[1])
+        if (psetvar[index][0] == "free" and psetvar[index][0] != varname):
+            psetvar[index][0] = varname
+            psetvar[index][1] = varvalue
             rc = RC_SUCCESS
             break
 
