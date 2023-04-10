@@ -24,7 +24,7 @@ from fs import open_fs
 import threading
 
 version = "1.1"
-BuildId = "20230410.553"
+BuildId = "20230410.554"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
