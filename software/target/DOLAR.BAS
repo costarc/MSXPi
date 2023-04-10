@@ -7,7 +7,12 @@
 70 '*   (C) 2019  By  Retropix    *
 80 '*                             *
 90 '*******************************
-100 CLEAR1000,49152!:BLOAD"msxpiext.bin",R
+94 CLEAR1000,49152!
+95 onerrorgoto99
+96 call msxpiver
+97 goto 100
+99 bload "msxpiext.bin",r
+100 '
 110 SCREEN0,,80:WIDTH80:KEY OFF:DEFINT A-Z:COLOR2,1:CLS
 120 GOSUB 220
 130 C$="01-07-2019":GOTO 340

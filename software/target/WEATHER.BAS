@@ -7,6 +7,10 @@
 70 '*   (C) 2019  By  Retropix    *
 80 '*                             *
 90 '*******************************
+95 onerrorgoto99
+96 call msxpiver
+97 goto 100
+99 bload "msxpiext.bin",r
 100 CLEAR500,49152!:REM BLOAD"msxpiext.bin",R
 110 SCREEN0,,80:KEY OFF:DEFINT A-Z:CLS
 120 GOSUB 230

@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230410.557"
+BuildId = "20230410.559"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
