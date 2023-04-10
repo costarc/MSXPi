@@ -35,7 +35,7 @@
 350 ON ERROR GOTO 570
 360 LOCATE33,10:PRINT"Carregando..."
 370 A=&HC000
-380 CALL MSXPI("2,c000,prun sudo wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d="+C$)
+380 CALL MSXPI("2,c000,prun wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d="+C$)
 390  C$="":LIN=4
 400 GOSUB 150
 410 IF (CHR$(PEEK(&HC003))+CHR$(PEEK(&HC004))="-1")THENLOCATE17,10:PRINT"Nenhuma cotacao foi encontada para essa data.":LOCATE31,12:PRINT"Tente outra data."
@@ -54,7 +54,7 @@
 540 ON ERROR GOTO:CLS:END
 550 '
 560 '---- Paliativo para reiniciar o msxpi e deixa-lo aceitar um novo comando
-570 CALL MSXPI("2,c000,prun sudo wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d1="+C$)
+570 CALL MSXPI("2,c000,prun wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d1="+C$)
 580 RESUME 390
 590 '
 600 '--- rotina de tratamento de entrada de dados ---

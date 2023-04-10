@@ -36,7 +36,7 @@
 360 ON ERROR GOTO 1170
 370 LOCATE35,10:PRINT"Loading..."
 380 A=&HC000
-390 CALL MSXPI("2,c000,prun sudo wget -O- -q wttr.in/"+C$+"?0nT")
+390 CALL MSXPI("2,C000,prun wget -O- -q wttr.in/"+C$+"?0nT")
 400  C$="":LIN=4:RW=0: 'recebeu uma previsao de tempo 0 nao 1 sim
 410 IF PEEK(&HC003)=ASC("W")THENRW=1
 420 GOSUB 150
@@ -114,7 +114,7 @@
 1140 C$=R$:RETURN
 1150 '
 1160 '---- Paliativo para reiniciar o msxpi e deixa-lo aceitar um novo comando
-1170 CALL MSXPI("2,&Hc000,prun sudo wget -O- -q wttr.in/recife?0nT")
+1170 CALL MSXPI("2,C000,prun wget -O- -q wttr.in/recife?0nT")
 1180 RESUME 400
 1190 '
 1200 '---- rotina para lower case ----

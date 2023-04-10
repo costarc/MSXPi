@@ -334,7 +334,7 @@ def prun(cmd = ''):
 
 def pdir():
     global psetvar
-    basepath = psetvar[0][1]
+    basepath = getVirtDevice(psetvar,'DriveR2')
     rc = RC_SUCCESS
     print("pdir")
 
@@ -380,7 +380,7 @@ def pdir():
 def pcd():    
     rc = RC_SUCCESS
     global psetvar
-    basepath = psetvar[0][1]
+    basepath = getVirtDevice(psetvar,'PATH')
     newpath = basepath
     
     #print("pcd: system path:",basepath)
@@ -405,16 +405,16 @@ def pcd():
             newpath = urlcheck[1]
             if (newpath[:2].lower() == "m:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirDev(psetvar,'DriveM')
-                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+                psetvar[0][1] = getVirtDevice(psetvar,'DriveM')
+                sendmultiblock(getVirtDevice(psetvar,'DriveM').encode(), BLKSIZE, rc)
             elif (newpath[:4].lower() == "r1:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirDev(psetvar,'DriveR1')
-                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+                psetvar[0][1] = getVirtDevice(psetvar,'DriveR1')
+                sendmultiblock(getVirtDevice(psetvar,'DriveR1').encode(), BLKSIZE, rc)
             elif  (newpath[:4].lower() == "r2:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirDev(psetvar,'DriveR2')
-                sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
+                psetvar[0][1] = getVirtDevice(psetvar,'DriveR2')
+                sendmultiblock(getVirtDevice(psetvar,'DriveR2').encode(), BLKSIZE, rc)
             elif (newpath[:4].lower() == "http" or \
                 newpath[:3].lower() == "ftp" or \
                 newpath[:3].lower() == "nfs" or \
@@ -442,7 +442,7 @@ def pcopy():
     rc = RC_SUCCESS
 
     global psetvar,GLOBALRETRIES
-    basepath = psetvar[0][1]
+    basepath = getVirtDevice('PATH')
     
     # Receive parameters -
     rc,data = recvdata(BLKSIZE)
@@ -476,13 +476,13 @@ def pcopy():
         return rc
 
     if (path[0].lower().startswith('m:')):
-        basepath = getVirDev(psetvar,'DriveM')
+        basepath = getVirtDevice(psetvar,'DriveM')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('r1:')):
-        basepath = getVirDev(psetvar,'DriveR1')
+        basepath = getVirtDevice(psetvar,'DriveR1')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif  (path[0].lower().startswith('r2:')):
-        basepath = getVirDev(psetvar,'DriveR2')
+        basepath = getVirtDevice(psetvar,'DriveR2')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('http') or \
         path[0].lower().startswith('ftp') or \
@@ -594,7 +594,7 @@ def pcopy():
             else:# Booted from MSXPi disk drive (disk images)
                 # this routine will write the file directly to the disk image in RPi
                 try:
-                    fatfsfname = "fat:///"+psetvar[1][1]        # Asumme Drive A:
+                    fatfsfname = "fat:///"+getVirtDevice('DriveA')        # Asumme Drive A:
                     if fname2.upper().startswith("A:"):
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
@@ -602,7 +602,7 @@ def pcopy():
                         else:
                             fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
                     elif fname2.upper().startswith("B:"):
-                        fatfsfname = "fat:///"+psetvar[2][1]    # Is Drive B:
+                        fatfsfname = "fat:///"+getVirtDevice('DriveB')    # Is Drive B:
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
                             fname2=fname2[1]           # Remove "B:" from name
@@ -666,7 +666,7 @@ def pplay():
     else:
         cmd = data.decode().split("\x00")[0]
     
-    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  psetvar[0][1]+ " "+cmd)
+    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  getVirtDevice('PATH')+ " "+cmd)
     
     #print (hex(rc))
     return rc
@@ -773,8 +773,8 @@ def pset():
 def pwifi():
 
     global psetvar
-    wifissid = psetvar[4][1]
-    wifipass = psetvar[5][1]
+    wifissid = getVirtDevice('WIFISSID')
+    wifipass = getVirtDevice('WIFIPWD')
 
     rc,data = recvdata()
 
@@ -818,10 +818,12 @@ def pver():
     
 def irc():
 
+    print("irc")
+
     global allchann,psetvar,channel,ircsock
-    ircserver = psetvar[8][1]
-    ircport = int(psetvar[9][1])
-    msxpinick =  psetvar[7][1]
+    ircserver = getVirtDevice(psetvar,'IRCADDR')
+    ircport = int(getVirtDevice(psetvar,'IRCPORT'))
+    msxpinick =  getVirtDevice(psetvar,'IRCNICK')
     
     rc,data = recvdata()
     if rc != RC_SUCCESS:
@@ -849,7 +851,7 @@ def irc():
             buf.extend(("NICK "+ jnick +"\r\n").encode())
             ircsock.setblocking(0);
             ircsock.send(buf)
-            ircmsg = 'Connected to '+psetvar[8][1]
+            ircmsg = 'Connected to ' + ircserver
             sendmultiblock(ircmsg.encode(), BLKSIZE, RC_SUCCESS)
         elif cmd[:3] == "msg":
             ircsock.setblocking(0);
@@ -873,6 +875,8 @@ def irc():
 
         elif cmd[:4] == 'read':
   
+            print("irc:read")
+            
             ircmsg = 'Pi:Error'
             
             try:
@@ -977,8 +981,8 @@ def dskioini():
     sectorInfo = [0,0,0,0]
     
     # Load the disk images into a memory mapped variable
-    rc , drive0Data = msxdos_inihrd(psetvar[1][1])
-    rc , drive1Data = msxdos_inihrd(psetvar[2][1])
+    rc , drive0Data = msxdos_inihrd(getVirtDevice('DriveA'))
+    rc , drive1Data = msxdos_inihrd(getVirtDevice('DriveB'))
 
 def dskiords():
     print("dskiords")
@@ -1269,7 +1273,7 @@ def updateIniFile(fname,memvar):
     f.close()
     
 
-def getVirDev(memvar, devname = 'PATH'):
+def getVirtDevice(memvar, devname = 'PATH'):
     devval = ''
     idx = 0
     for v in memvar:
