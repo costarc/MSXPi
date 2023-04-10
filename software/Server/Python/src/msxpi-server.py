@@ -24,7 +24,7 @@ from fs import open_fs
 import threading
 
 version = "1.1"
-BuildId = "20230410.554"
+BuildId = "20230410.555"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -209,8 +209,8 @@ def getpath(basepath, path):
         urltype = 0 # this is an absolute local path
         newpath = path
     elif (path.startswith('m:') or \
-        path.startswith('ma1:') or \
-        path.startswith('ma2:') or \
+        path.startswith('r1:') or \
+        path.startswith('r2:') or \
         path.startswith('http') or \
         path.startswith('ftp') or \
         path.startswith('nfs') or \
@@ -221,8 +221,8 @@ def getpath(basepath, path):
         urltype = 1 # this is an relative local path
         newpath = basepath + "/" + path
     elif (basepath.startswith('m:') or \
-        basepath.startswith('ma1:') or \
-        basepath.startswith('ma2:') or \
+        basepath.startswith('r1:') or \
+        basepath.startswith('r2:') or \
         basepath.startswith('http') or \
         basepath.startswith('ftp') or \
         basepath.startswith('nfs') or \
@@ -291,13 +291,6 @@ def ini_fcb(fname,fsize):
     
     return rc
 
-def updateIniFile(fname,memvar):
-    f = open(fname, 'w')
-    for v in memvar:
-        print('var '+v[0]+'='+v[1]+'\n')
-        f.writelines('var '+v[0]+'='+v[1]+'\n')
-    f.close()
-    
 def prun(cmd = ''):
     print("prun")
     rc = RC_SUCCESS
@@ -413,15 +406,15 @@ def pcd():
 
                 if (newpath[:2].lower() == "m:"):
                     rc = RC_SUCCESS
-                    psetvar[0][1] = 'ftp://192.168.1.100/'
+                    psetvar[0][1] = getVirDev(psetvar,'DriveM')
                     sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
-                elif (newpath[:4].lower() == "ma1:"):
+                elif (newpath[:4].lower() == "r1:"):
                     rc = RC_SUCCESS
-                    psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
+                    psetvar[0][1] = getVirDev(psetvar,'DriveR1')
                     sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
-                elif  (newpath[:4].lower() == "ma2:"):
+                elif  (newpath[:4].lower() == "r2:"):
                     rc = RC_SUCCESS
-                    psetvar[0][1] = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
+                    psetvar[0][1] = getVirDev(psetvar,'DriveR2')
                     sendmultiblock(str(psetvar[0][1]).encode(), BLKSIZE, rc)
                 elif (newpath[:4].lower() == "http" or \
                     newpath[:3].lower() == "ftp" or \
@@ -469,9 +462,9 @@ def pcopy():
         buf = 'Syntax:\n'
         buf = buf + 'pcopy </z> remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
-        buf = buf +'/, path, http, ftp, nfs, smb, m:, ma1:, ma2:\n'
+        buf = buf +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
         buf = buf + '/z decompress file\n'
-        buf = buf + 'm:, ma1: ma2: virtual remote devices'
+        buf = buf + 'm:, r1: r2: virtual remote devices'
 
         rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
         return rc
@@ -487,23 +480,13 @@ def pcopy():
         return rc
 
     if (path[0].lower().startswith('m:')):
-        basepath = 'ftp://192.168.1.100/'
+        basepath = getVirDev(psetvar,'DriveM')
         fname1 = basepath + path[0].split(':')[1]
-    elif (path[0].lower().startswith('ma1:')):
-        basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx1/'
+    elif (path[0].lower().startswith('r1:')):
+        basepath = getVirDev(psetvar,'DriveR1')
         fname1 = basepath + path[0].split(':')[1]
-        if expand == True:
-            if len(path) > 1:
-                fname2 = path[1]
-            else:
-                fname2 = '-'
-        elif len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname0 = fname1.split('/')
-            fname2 = fname0[len(fname0)-1]
-    elif  (path[0].lower().startswith('ma2:')):
-        basepath = 'http://www.msxarchive.nl/pub/msx/games/roms/msx2/'
+    elif  (path[0].lower().startswith('r2:')):
+        basepath = getVirDev(psetvar,'DriveR2')
         fname1 = basepath + path[0].split(':')[1]
     elif (path[0].lower().startswith('http') or \
         path[0].lower().startswith('ftp') or \
@@ -749,14 +732,14 @@ def pset():
                 
                 try:
                     
-                    if varname.upper() == 'DRIVE0':
+                    if varname.upper() == 'DRIVEA':
                         rc,drive0Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = varvalue
                         updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
 
-                    elif varname.upper() == 'DRIVE1':
+                    elif varname.upper() == 'DRIVEB':
                         rc,drive1Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = str(varvalue)
                         updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
@@ -1265,6 +1248,23 @@ def pshut():
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")
     os.system("/home/pi/msxpi/kill.sh")
+
+def updateIniFile(fname,memvar):
+    f = open(fname, 'w')
+    for v in memvar:
+        f.writelines('var '+v[0]+'='+v[1]+'\n')
+    f.close()
+    
+
+def getVirDev(memvar, devname = 'PATH'):
+    devval = ''
+    idx = 0
+    for v in memvar:
+        if devname.upper() ==  memvar[idx][0].upper():
+            devval = memvar[idx][1]
+            break
+        idx += 1
+    return devval
     
 """ ============================================================================
     msxpi-server.py
@@ -1290,26 +1290,25 @@ if exists(MSXPIHOME+'/msxpi.ini'):
 
 else:
     psetvar = [['PATH','/home/pi/msxpi'], \
-           ['DRIVE0','/home/pi/msxpi/disks/msxpiboot.dsk'], \
-           ['DRIVE1','/home/pi/msxpi/disks/tools.dsk'], \
+           ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
+           ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
+           ['DriveM','ftp://192.168.1.100'], \
+           ['DriveR1','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
+           ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
-           ['DSKTMPL','disks/msxpi_720KB_template.dsk'], \
+           ['DSKTMPL','/home/pi/msxpi/disks/blank.dsk'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
-           ['WUPPH','351966764458'], \
-           ['WUPPW','D4YQDfsnY3KIgW4azGdtYDbMAO4='], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
-           ['free','free'], \
-           ['free','free'], \
-           ]
+           ['free','free']]
 
 # irc
 channel = "#msxpi"
