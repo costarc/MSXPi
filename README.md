@@ -12,11 +12,14 @@ This Quick Start Guide is updated to V1.1 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
 
-There are a few steps to setup MSXPi:
+There are a few steps to setup MSXPi, and you can choose between using a MSXPi pre-installed SD Card image (ready to boot MSXPi), or build your own image using a fresh Raspbian Image downloaded from Raspberry Pi web site.
+
+Overall, the steps to get up and running are:
 
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
 
+##Using the MSXPi SD Card with pre-installed software:
 ### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://drive.google.com/file/d/1-tSscZvcSycRPDtG4qwRD4QhrX-2Jswq
 
@@ -38,19 +41,58 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  
  pwifi set
  
- prun sudo reboot. (note that the first reboot may take longer than 2 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
+ prun sudo reboot
  
+ Note: The first reboot may take longer than 2 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
+ 
+
+##Using a Fresh Raspbian Image
+In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
+### Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
+This is the official Raspberry Pi sd imager writer. Download and install in your desktop PC.
+
+### Write the Raspbian image to the SD Card
+Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose teh lite verson (without graphical desktop):
+
+CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
+
+Write the image to your SD Card and boot the Raspberry Pi with it.
+
+### Loggin to Raspberry Pi
+You will need to connect it to a HDMI TV, and have a keyboard connected to the USB port.
+
+Configure the WiFi using raspi-config command.
+
+Download the MSXPi setup script - it will download and install everythign needed to have MSXPi up and running:
+
+          mkdir /home/pi/msxpi
+
+          cd /home/pi/msxpi
+
+          wget https://tinyurl.com/MSXPi-Setup
+
+          chmod 755 msxpi-setup.sh
+
+          sudo ./msxpi-setup.sh
+          
 
 MSXPi v1.1 Release Notes
 ========================
-- coming soon.
-
+- New PCB layout
+- New basic IO routines (used by all components)
+- Lots of code changes to improve stability
+- Improved pcopy: can decompress files, use vifrtual remote devices  
+- Added BASIC API and BASIC programs from contributors:
+  - DOLAR.BAS (by Retropix, Brazil)
+  - WEATHER.BAS (by Retropix, Brazil)
+  - IRC.BAS  (IRC client to chat in webchat.freenode.net) 
+- Lots of bug fixes and improvements
 
 MSXPi v1.0.1 Release Notes
 ==========================
 - Redesigned the interface in Kicad format, both schematic and PCB
 - Replaced the 27C256 by AT28C256 to allow MSX to program the EEPROM from the MSX-DOS
-- Added the EEPROM programmer AT28C256.COM to available commands - reusing it from my other project https://github.com/costarc/msxcart_flash32k
+- Added the EEPROM programmer AT28C256.COM to available commands - re-using it from my other project https://github.com/costarc/msxcart_flash32k
 - Updated the msxpi-seerver.py to run in Python3, which is the default on newer versions of Raspbian
 
 This version allows:
