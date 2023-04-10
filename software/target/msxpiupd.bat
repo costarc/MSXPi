@@ -37,5 +37,5 @@ prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpiboo
 echo
 echo Updating MSXPi tools disk...
 prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk
+prestart
 echo
-echo Please reboot the Raspberry Pi
