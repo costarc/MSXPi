@@ -333,10 +333,12 @@ def prun(cmd = ''):
     return rc
 
 def pdir():
+
+    print(pdir)
+    
     global psetvar
-    basepath = getVirtDevice(psetvar,'DriveR2')
+    basepath = getVirtDevice(psetvar,'PATH')
     rc = RC_SUCCESS
-    print("pdir")
 
     rc,data = recvdata(BLKSIZE)
 
@@ -347,6 +349,7 @@ def pdir():
         
     try:
         urlcheck = getpath(basepath, path)
+                
         if (urlcheck[0] == 0 or urlcheck[0] == 1):
             if (path.strip() == '*'):
                 prun('ls -l ' + urlcheck[1])
