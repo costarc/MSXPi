@@ -21,14 +21,14 @@ Overall, the steps to get up and running are:
 
 Prepare Raspberry Pi Using MSXPi SDCard Image
 =============================================
-### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
+### Step 1: Download and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCard
 
 
 ### Step 2: Write the image to a SD Card
 Use a SD Card with a minimum of 4GB.
 
-Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to the SD Card (select option "Use Custom" in the Operating SYstem drop box).
+Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to the SD Card (select option "Use Custom" in the Operating System drop box).
 
 RPi Imager can be download from https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
 
@@ -39,9 +39,9 @@ In your favorite PC computer, copy all MSXPi commands from https://github.com/co
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX. To unleash full MSXPi power, configure the Raspberry Pi Zero W WiFi:
 
- pset WIFISSID yourWifi
+ pset WIFISSID Your Wifi Name
  
- pset WIFIPWD yourWifiPassword
+ pset WIFIPWD YourWifiPassword
  
  pwifi set
  
@@ -57,21 +57,23 @@ In this mode, you will have to install all requirements for MSXPi - there is a s
 ### Step 1: Download the Raspberry Pi Imager
 Download from https://www.raspberrypi.com/software
 
-This is the official Raspberry Pi sd imager writer. Download and install in your desktop PC.
+This is the official Raspberry Pi SD Card image writer - download and install in your desktop PC.
 
 ### Step 2: Write the Raspbian image to the SD Card
-Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose teh lite verson (without graphical desktop):
+Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose the lite version (without graphical desktop):
 
 CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
 
-Write the image to your SD Card and boot the Raspberry Pi with it.
+Write the image to your SD Card and when completed, boot the Raspberry with the SD Card inserted.
 
 ### Step 3: Setup MSXPi using MSXPI-Setup tool
-You will need to connect it to a HDMI TV, and have a keyboard connected to the USB port.
+You will need to connect the Raspberry Pi to a HDMI TV and a keyboard to complete these steps.
 
-Configure the WiFi using raspi-config command.
+Login to Raspbian using default user and passwird: pi / raspberry
 
-Download the MSXPi setup script - it will download and install everythign needed to have MSXPi up and running:
+Configure the WiFi using raspi-config command
+
+Download the MSXPi setup script - it will download and install everything needed to have MSXPi up and running:
 
           mkdir /home/pi/msxpi
 
