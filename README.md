@@ -39,13 +39,13 @@ In your favorite PC computer, copy all MSXPi commands from https://github.com/co
 
 After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX. To unleash full MSXPi power, configure the Raspberry Pi Zero W WiFi:
 
- pset WIFISSID Your Wifi Name
+          pset WIFISSID Your Wifi Name
  
- pset WIFIPWD YourWifiPassword
+          pset WIFIPWD YourWifiPassword
  
- pwifi set
+          pwifi set
  
- prun sudo reboot
+          prun sudo reboot
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
  
@@ -62,7 +62,7 @@ This is the official Raspberry Pi SD Card image writer - download and install in
 ### Step 2: Write the Raspbian image to the SD Card
 Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose the lite version (without graphical desktop):
 
-CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
+          CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
 
 Write the image to your SD Card and when completed, boot the Raspberry with the SD Card inserted.
 
