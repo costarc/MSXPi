@@ -310,7 +310,9 @@ def prun(cmd = ''):
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
-            if len(err) > 0:
+            print(len(buf))
+            print(len(err))
+            if len(err) > 0 and not ('0K ....' in err): # workaround for wget false positive
                 rc = RC_FAILED
                 buf = ("Pi:Error - " + str(err))
             elif len(buf) == 0:
@@ -622,7 +624,7 @@ def pcopy():
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
-                    sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_TERMINATE)
+                    sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_TERMINATE)
                 except Exception as e:
                     rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             
