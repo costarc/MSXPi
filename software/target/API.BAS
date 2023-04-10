@@ -69,12 +69,11 @@
 365 PRINT:PRINT"Example 3 finished:";HEX$(RC)
 399 '
 998 END
-999 ' ============================  API ROUTINES STARTS HERE - DO NOT CHANGE ===================================
+9999 ' ============================  API ROUTINES STARTS HERE - DO NOT CHANGE ===================================
 10000 ' ==========================         SENDCOMMAND(A,B,C$,D$)          ===================================
 10001 ON ERROR GOTO 10900
-10002 IFA=0THENCALLMSXPI("0,"+HEX$(B)+","+C$+" "+D$"")ELSEIFA=1THENCALLMSXPI("1,"+HEX$(B)+","+C$+" "+D$)ELSECALLMSXPI("2,"+HEX$(B)+","+C$+" "+D$)
-10004 RC=PEEK(B):IF RC=&HE7 THEN RC=-1
-10040 RETURN
+10002 IFA=0THENCALLMSXPI("0,"+HEX$(B)+","+C$+" "+D$)ELSEIFA=1THENCALLMSXPI("1,"+HEX$(B)+","+C$+" "+D$)ELSECALLMSXPI("2,"+HEX$(B)+","+C$+" "+D$)
+10004 RC=PEEK(B):RETURN
 10900 RC=-1:RETURN
 10999 '
 11000 ' ==========================           PRINTSTDOUT(A,B,C$)          ===================================

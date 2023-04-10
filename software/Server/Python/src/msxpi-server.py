@@ -726,7 +726,7 @@ def pset():
     
     for index in range(0,len(psetvar)):
 
-        if (psetvar[index][0] == varname):
+        if (psetvar[index][0].upper() == varname.upper()):
             
             if len(cmd) == 1:  #will erase / clean a variable
                 psetvar[index][0] = 'free'
@@ -738,13 +738,13 @@ def pset():
                 
                 try:
                     
-                    if varname == 'DRIVE0':
+                    if varname.upper() == 'DRIVE0':
                         rc,drive0Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = varvalue
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
 
-                    elif varname == 'DRIVE1':
+                    elif varname.upper() == 'DRIVE1':
                         rc,drive1Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = str(varvalue)
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
