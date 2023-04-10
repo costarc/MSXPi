@@ -7,6 +7,7 @@ from urllib.request import urlopen
 import mmap
 import fcntl,os
 import sys
+from os.path import exists
 from subprocess import Popen,PIPE,STDOUT
 from html.parser import HTMLParser
 import datetime
@@ -23,7 +24,7 @@ from fs import open_fs
 import threading
 
 version = "1.1"
-BuildId = "20230410.546"
+BuildId = "20230410.548"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -81,7 +82,7 @@ st_shutdown         =    99
 NoTimeOutCheck      = False
 TimeOutCheck        = True
 
-MSXPIHOME = "/home/msxpi"
+MSXPIHOME = "/home/pi/msxpi"
 RAMDISK = "/media/ramdisk"
 TMPFILE = RAMDISK + "/msxpi.tmp"
 
@@ -290,6 +291,13 @@ def ini_fcb(fname,fsize):
     
     return rc
 
+def updateIniFile(fname,memvar):
+    f = open(fname, 'w')
+    for v in memvar:
+        print('var '+v[0]+'='+v[1]+'\n')
+        f.writelines('var '+v[0]+'='+v[1]+'\n')
+    f.close()
+    
 def prun(cmd = ''):
     print("prun")
     rc = RC_SUCCESS
@@ -723,7 +731,7 @@ def pset():
     rc = RC_FAILED 
     
     varname = cmd.split(" ")[0]
-    varvalue = cmd.replace(varname,'').strip()
+    varvalue = cmd.replace(varname,'',1).strip()
     cmd = cmd.split(" ")
     
     for index in range(0,len(psetvar)):
@@ -733,6 +741,7 @@ def pset():
             if len(cmd) == 1:  #will erase / clean a variable
                 psetvar[index][0] = 'free'
                 psetvar[index][1] = 'free'
+                updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
                 rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                 return RC_SUCCESS    
                          
@@ -743,16 +752,19 @@ def pset():
                     if varname.upper() == 'DRIVE0':
                         rc,drive0Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = varvalue
+                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
 
                     elif varname.upper() == 'DRIVE1':
                         rc,drive1Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = str(varvalue)
+                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                     else: 
                         psetvar[index][1] = varvalue
+                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
                         rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                         
@@ -767,6 +779,7 @@ def pset():
         if (psetvar[index][0] == "free" and psetvar[index][0] != varname):
             psetvar[index][0] = varname
             psetvar[index][1] = varvalue
+            updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
             rc = RC_SUCCESS
             break
 
@@ -1247,7 +1260,24 @@ def exitDueToSyncError():
     ============================================================================
 """
 
-psetvar = [['PATH','/home/pi/msxpi'], \
+if exists(MSXPIHOME+'/msxpi.ini'):
+    f = open(MSXPIHOME+'/msxpi.ini','r')
+    idx = 0
+    psetvar = []
+    while True:
+        line = f.readline()
+        if not line:
+            break
+    
+        if line.startswith('var'):
+            var = line.split(' ')[1].split('=')[0].strip()
+            value = line.replace('var ','',1).replace(var,'',1).split('=')[1].strip()
+            psetvar.append([var,value])
+            idx += 1
+    f.close()
+
+else:
+    psetvar = [['PATH','/home/pi/msxpi'], \
            ['DRIVE0','/home/pi/msxpi/disks/msxpiboot.dsk'], \
            ['DRIVE1','/home/pi/msxpi/disks/tools.dsk'], \
            ['WIDTH','80'], \
