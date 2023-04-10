@@ -24,7 +24,7 @@ from fs import open_fs
 import threading
 
 version = "1.1"
-BuildId = "20230410.548"
+BuildId = "20230410.551"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1109,7 +1109,7 @@ def recvdata( bytecounter = BLKSIZE):
 
     print("recvdata")
 
-    th = threading.Timer(5.0, exitDueToSyncError)
+    th = threading.Timer(3.0, exitDueToSyncError)
             
     retries = GLOBALRETRIES
     while retries > 0:
@@ -1153,7 +1153,7 @@ def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
 
-    th = threading.Timer(5.0, exitDueToSyncError)
+    th = threading.Timer(3.0, exitDueToSyncError)
     th.start()
             
     retries = GLOBALRETRIES
@@ -1249,6 +1249,18 @@ def template():
     
     print("Sending response: ",buf) 
     rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+
+def prestart():
+    print("Restarting MSXPi Server")
+    exitDueToSyncError()
+    
+def preboot():
+    print("Rebooting Raspberry Pi")
+    os.system("sudo reboot")
+    
+def pshut():
+    print("Shutting down Raspberry Pi")
+    os.system("sudo shutdown -h now")
     
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")

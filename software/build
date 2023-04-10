@@ -77,6 +77,7 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
 
 # MSX-Dos P Commands
+~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm  -o ./target/msxpiext.bin
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
@@ -90,7 +91,9 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm  -o ./target/msxpiext.bin
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 
 cp target/disks/blank.dsk target/disks/msxpiboot.dsk
 cp target/disks/blank.dsk target/disks/tools.dsk

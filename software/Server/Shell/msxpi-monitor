@@ -1,5 +1,6 @@
 #!/bin/bash
-set -x
+# 2023-04-10 : Removed WhatsApp monitor
+#              Changed sleep from 5 to 2 seconds
 # 2017-11-23 : Added ramdisk setup
 # 2017-11-18 : Added switch to python or C version
 
@@ -56,7 +57,7 @@ rm /home/pi/msxpi/msxpi-update*
 
 while :
 do
-sleep 5
+sleep 2
 state=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
 
 if [[ $state -eq 0 ]];then
@@ -91,28 +92,4 @@ if [[ $state -eq 0 ]];then
         shutdown -h now
     fi
 fi
-
-# whatsup server
-
-wupsvc=$(grep -c "1" /media/ramdisk/whatsup.state)
-if [[ $wupsvc -eq 1 ]];then
-    wupph=$(cat /media/ramdisk/wup.config|cut -f1 -d" ")
-    wuppw=$(cat /media/ramdisk/wup.config|cut -f2 -d" ")
-    rm /media/ramdisk/wup.config
-    wuptst=$(echo $wuppw | wc -c)
-    if [[ $wuptst -gt 10 ]];then
-        sudo echo > /media/ramdisk/chat-session.log
-        /usr/bin/python /home/pi/yowsup/run.py ${wupph} ${wuppw} &
-        echo "2" > /media/ramdisk/whatsup.state
-    else
-       echo "WhatsUp service failed to start"
-    fi
-fi
-wupsvc=$(grep -c "3" /media/ramdisk/whatsup.state)
-if [[ $wupsvc -eq 1 ]];then
-    sudo kill -9 $(ps -ef | grep 'python /home/pi/yowsup/run.py' | grep -v grep  | awk '{print $2}')
-    echo "0" > /media/ramdisk/whatsup.state
-fi
 done
-
-
