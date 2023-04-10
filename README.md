@@ -19,7 +19,8 @@ Overall, the steps to get up and running are:
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
 
-####Using the MSXPi SD Card with pre-installed software:
+Using the MSXPi SD Card with pre-installed software
+===================================================
 ### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://drive.google.com/file/d/1-tSscZvcSycRPDtG4qwRD4QhrX-2Jswq
 
@@ -46,19 +47,20 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  Note: The first reboot may take longer than 2 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
  
 
-###Using a Fresh Raspbian Image
+Using a Fresh Raspbian Image
+============================
 In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
-#### Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
+### Step 1: Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
 This is the official Raspberry Pi sd imager writer. Download and install in your desktop PC.
 
-### Write the Raspbian image to the SD Card
+### Step 2: Write the Raspbian image to the SD Card
 Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose teh lite verson (without graphical desktop):
 
 CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
 
 Write the image to your SD Card and boot the Raspberry Pi with it.
 
-### Loggin to Raspberry Pi
+### Step 3: Setup MSXPi using MSXPI-Setup tool
 You will need to connect it to a HDMI TV, and have a keyboard connected to the USB port.
 
 Configure the WiFi using raspi-config command.
