@@ -45,7 +45,7 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  
           pwifi set
  
-          prun sudo reboot
+          preboot
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
  
