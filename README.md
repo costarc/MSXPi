@@ -19,7 +19,7 @@ Overall, the steps to get up and running are:
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
 
-##Using the MSXPi SD Card with pre-installed software:
+####Using the MSXPi SD Card with pre-installed software:
 ### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://drive.google.com/file/d/1-tSscZvcSycRPDtG4qwRD4QhrX-2Jswq
 
