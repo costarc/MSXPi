@@ -22,12 +22,15 @@ Overall, the steps to get up and running are:
 Prepare Raspberry Pi Using MSXPi SDCard Image
 =============================================
 ### Step 1: Downbload and install Raspberry Pi SD Card with MSXPi server software. 
-MSXPi SD Card image: https://drive.google.com/file/d/1-tSscZvcSycRPDtG4qwRD4QhrX-2Jswq
+MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCard
 
 
-### Step 2: Write the image to a SD Card (4 GB minimum)- Use 7Zip to unzip the file, and Raspberry PI Imager to write the image to the SD Card.
+### Step 2: Write the image to a SD Card
+Use a SD Card with a minimum of 4GB.
 
-RPi Imager can be download from here: https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
+Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to the SD Card (select option "Use Custom" in the Operating SYstem drop box).
+
+RPi Imager can be download from https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
 
 
 ### Step 3: Install the MSXPi commands for MSX-DOS
@@ -44,13 +47,16 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  
  prun sudo reboot
  
- Note: The first reboot may take longer than 2 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
+ Note: The first reboot may take longer than 3 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
  
 
 Prepare Raspberry Pi Using a Fresh Raspbian Image
 =================================================
 In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
-### Step 1: Download the Raspberry Pi Imager: https://www.raspberrypi.com/software
+
+### Step 1: Download the Raspberry Pi Imager
+Download from https://www.raspberrypi.com/software
+
 This is the official Raspberry Pi sd imager writer. Download and install in your desktop PC.
 
 ### Step 2: Write the Raspbian image to the SD Card
