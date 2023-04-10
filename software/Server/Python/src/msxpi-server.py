@@ -310,10 +310,12 @@ def prun(cmd = ''):
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
-            if len(err) > 0 or len(buf) == 0:
+            if len(err) > 0:
                 rc = RC_FAILED
-                sendmultiblock(("Pi:Error - " + str(err)).encode(),BLKSIZE,rc)
-                return rc
+                buf = ("Pi:Error - " + str(err)).encode()
+            elif len(buf) == 0:
+                rc = RC_SUCCESS
+                buf = "Pi:Ok".encode()
 
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
 
