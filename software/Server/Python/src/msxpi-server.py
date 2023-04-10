@@ -23,7 +23,7 @@ from fs import open_fs
 import threading
 
 version = "1.1"
-BuildId = "20230409.543"
+BuildId = "20230410.544"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -312,10 +312,10 @@ def prun(cmd = ''):
             err = (p.stderr.read().decode())
             if len(err) > 0:
                 rc = RC_FAILED
-                buf = ("Pi:Error - " + str(err)).encode()
+                buf = ("Pi:Error - " + str(err))
             elif len(buf) == 0:
                 rc = RC_SUCCESS
-                buf = "Pi:Ok".encode()
+                buf = "Pi:Ok"
 
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
 
@@ -457,10 +457,12 @@ def pcopy():
                    
     if (len(path) == 0 or path[0].lower() == ('/h')):
         buf = 'Syntax:\n'
-        buf = buf + 'pcopy remotefile <localfile>\n'
+        buf = buf + 'pcopy </z> remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
-        buf = buf +'/, path, http, ftp, nfs, smb\n'
-        buf = buf + 'Path relative to RPi path (set with pcd)'
+        buf = buf +'/, path, http, ftp, nfs, smb, m:, ma1:, ma2:\n'
+        buf = buf + '/z decompress file\n'
+        buf = buf + 'm:, ma1: ma2: virtual remote devices'
+
         rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
         return rc
 
@@ -729,7 +731,7 @@ def pset():
             if len(cmd) == 1:  #will erase / clean a variable
                 psetvar[index][0] = 'free'
                 psetvar[index][1] = 'free'
-                rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
+                rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                 return RC_SUCCESS    
                          
             else:
@@ -739,17 +741,17 @@ def pset():
                     if varname == 'DRIVE0':
                         rc,drive0Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = varvalue
-                        rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
 
                     elif varname == 'DRIVE1':
                         rc,drive1Data = msxdos_inihrd(varvalue)
                         psetvar[index][1] = str(varvalue)
-                        rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                     else: 
                         psetvar[index][1] = varvalue
-                        rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
+                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
                         return RC_SUCCESS
                         
                 except Exception as e:
@@ -767,7 +769,7 @@ def pset():
             break
 
     if rc == RC_SUCCESS:
-        rc = sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCESS)
+        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
     else:        
         rc = sendmultiblock("Pi:Error setting parameter".encode(), BLKSIZE, RC_FAILED)
     
