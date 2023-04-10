@@ -22,6 +22,8 @@ import math
 from random import randint
 from fs import open_fs
 import threading
+from io import StringIO
+from contextlib import redirect_stdout
 
 version = "1.1"
 BuildId = "20230410.555"
@@ -481,13 +483,13 @@ def pcopy():
 
     if (path[0].lower().startswith('m:')):
         basepath = getVirDev(psetvar,'DriveM')
-        fname1 = basepath + path[0].split(':')[1]
+        fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('r1:')):
         basepath = getVirDev(psetvar,'DriveR1')
-        fname1 = basepath + path[0].split(':')[1]
+        fname1 = basepath + '/' + path[0].split(':')[1]
     elif  (path[0].lower().startswith('r2:')):
         basepath = getVirDev(psetvar,'DriveR2')
-        fname1 = basepath + path[0].split(':')[1]
+        fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('http') or \
         path[0].lower().startswith('ftp') or \
         path[0].lower().startswith('nfs') or \
@@ -508,7 +510,7 @@ def pcopy():
     else:
         fname0 = fname1.split('/')
         fname2 = fname0[len(fname0)-1]
-
+    
     urlcheck = getpath(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
@@ -938,7 +940,24 @@ def irc():
     except Exception as e:
         print("irc:Caught exception"+str(e))
         sendmultiblock("Pi:"+str(e).encode(), BLKSIZE, rc)
-            
+
+def py():
+    print('python')
+    rc,data = recvdata(BLKSIZE)
+    cmd = data.decode().split("\x00")[0]
+    if rc == RC_SUCCESS:
+        try:
+            f = StringIO()
+            with redirect_stdout(f):
+                exec(cmd)
+            buf = f.getvalue()
+            sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+        except Exception as e:
+            print("python:",str(e).encode())
+            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+    else:
+        sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
+        
 def dosinit():
     
     global msxdos1boot
