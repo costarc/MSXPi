@@ -235,7 +235,7 @@ def getpath(basepath, path):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    print("msxdos_inihrd")
+    print("msxdos_inihrd",filename)
     
     if ('disk' in vars() or 'disk' in globals()):
         disk.flush()
@@ -313,8 +313,6 @@ def prun(cmd = ''):
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
-            print(len(buf))
-            print(len(err))
             if len(err) > 0 and not ('0K ....' in err): # workaround for wget false positive
                 rc = RC_FAILED
                 buf = ("Pi:Error - " + str(err))
@@ -336,8 +334,7 @@ def pdir():
 
     print(pdir)
     
-    global psetvar
-    basepath = getVirtDevice(psetvar,'PATH')
+    basepath = getMSXPiVar('PATH')
     rc = RC_SUCCESS
 
     rc,data = recvdata(BLKSIZE)
@@ -380,15 +377,17 @@ def pdir():
     #print("pdir:exiting rc:",hex(rc))
     return rc
 
-def pcd():    
+def pcd():
+    
+    print("pcd")
+    
     rc = RC_SUCCESS
-    global psetvar
-    basepath = getVirtDevice(psetvar,'PATH')
+
+    basepath = getMSXPiVar('PATH')
     newpath = basepath
     
-    #print("pcd: system path:",basepath)
     rc,data = recvdata()
-
+    
     if data[0] == 0:
         path=''
     else:
@@ -396,43 +395,43 @@ def pcd():
         
     try:
         if (len(path) == 0 or path == '' or path.strip() == "."):
-            sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
+            rc = sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
         elif (path.strip() == ".."):
             newpath = basepath.rsplit('/', 1)[0]
             if (newpath == ''):
                 newpath = '/'
-            psetvar[0][1] = newpath
-            sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
+            setMSXPiVar('PATH',newpath)
+            rc = sendmultiblock(newpath.encode(), BLKSIZE, RC_SUCCESS)
         else:
             urlcheck = getpath(basepath, path)
             newpath = urlcheck[1]
             if (newpath[:2].lower() == "m:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirtDevice(psetvar,'DriveM')
-                sendmultiblock(getVirtDevice(psetvar,'DriveM').encode(), BLKSIZE, rc)
+                setMSXPiVar('PATH',getMSXPiVar('DriveM'))
+                rc = sendmultiblock(getMSXPiVar('DriveM').encode(), BLKSIZE, rc)
             elif (newpath[:4].lower() == "r1:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirtDevice(psetvar,'DriveR1')
-                sendmultiblock(getVirtDevice(psetvar,'DriveR1').encode(), BLKSIZE, rc)
+                setMSXPiVar('PATH',getMSXPiVar('DriveR1'))
+                rc = sendmultiblock(getMSXPiVar('DriveR1').encode(), BLKSIZE, rc)
             elif  (newpath[:4].lower() == "r2:"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = getVirtDevice(psetvar,'DriveR2')
-                sendmultiblock(getVirtDevice(psetvar,'DriveR2').encode(), BLKSIZE, rc)
+                setMSXPiVar('PATH',getMSXPiVar('DriveR2'))
+                rc = sendmultiblock(getMSXPiVar('DriveR2').encode(), BLKSIZE, rc)
             elif (newpath[:4].lower() == "http" or \
                 newpath[:3].lower() == "ftp" or \
                 newpath[:3].lower() == "nfs" or \
                 newpath[:3].lower() == "smb"):
                 rc = RC_SUCCESS
-                psetvar[0][1] = newpath
-                sendmultiblock(str(newpath+'\n').encode(), BLKSIZE, rc)
+                setMSXPiVar('PATH',newpath)
+                rc = sendmultiblock(newpath.encode(), BLKSIZE, rc)
             else:
                 if (os.path.isdir(newpath)):
-                    psetvar[0][1] = newpath
-                    sendmultiblock(str(newpath).encode(), BLKSIZE, RC_SUCCESS)
-                elif (os.path.isfile(str(newpath))):
+                    setMSXPiVar('PATH',newpath)
+                    rc = sendmultiblock(newpath.encode(), BLKSIZE, RC_SUCCESS)
+                elif (os.path.isfile(newpath)):
                     sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, RC_FAILED)
                 else:
-                    sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, RC_FAILED)
+                    rc = sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, RC_FAILED)
     except Exception as e:
         print("pcd:"+str(e))
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
@@ -445,7 +444,7 @@ def pcopy():
     rc = RC_SUCCESS
 
     global psetvar,GLOBALRETRIES
-    basepath = getVirtDevice('PATH')
+    basepath = getMSXPiVar('PATH')
     
     # Receive parameters -
     rc,data = recvdata(BLKSIZE)
@@ -479,13 +478,13 @@ def pcopy():
         return rc
 
     if (path[0].lower().startswith('m:')):
-        basepath = getVirtDevice(psetvar,'DriveM')
+        basepath = getMSXPiVar('DriveM')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('r1:')):
-        basepath = getVirtDevice(psetvar,'DriveR1')
+        basepath = getMSXPiVar('DriveR1')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif  (path[0].lower().startswith('r2:')):
-        basepath = getVirtDevice(psetvar,'DriveR2')
+        basepath = getMSXPiVar('DriveR2')
         fname1 = basepath + '/' + path[0].split(':')[1]
     elif (path[0].lower().startswith('http') or \
         path[0].lower().startswith('ftp') or \
@@ -597,7 +596,7 @@ def pcopy():
             else:# Booted from MSXPi disk drive (disk images)
                 # this routine will write the file directly to the disk image in RPi
                 try:
-                    fatfsfname = "fat:///"+getVirtDevice('DriveA')        # Asumme Drive A:
+                    fatfsfname = "fat:///"+getMSXPiVar('DriveA')        # Asumme Drive A:
                     if fname2.upper().startswith("A:"):
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
@@ -605,7 +604,7 @@ def pcopy():
                         else:
                             fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
                     elif fname2.upper().startswith("B:"):
-                        fatfsfname = "fat:///"+getVirtDevice('DriveB')    # Is Drive B:
+                        fatfsfname = "fat:///"+getMSXPiVar('DriveB')    # Is Drive B:
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
                             fname2=fname2[1]           # Remove "B:" from name
@@ -669,7 +668,7 @@ def pplay():
     else:
         cmd = data.decode().split("\x00")[0]
     
-    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  getVirtDevice('PATH')+ " "+cmd)
+    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  getMSXPiVar('PATH')+ " "+cmd)
     
     #print (hex(rc))
     return rc
@@ -688,96 +687,88 @@ def pvol():
     
     print (hex(rc))
     return rc
-    
+
 def pset():
-
+    
+    print("pset")
+    
     global psetvar,drive0Data,drive1Data
-    
+
     rc,data = recvdata(BLKSIZE)
-
+    
+    buf = ''
     if data[0] == 0:
-        cmd=''
-    else:
-        cmd = data.decode().split("\x00")[0]
-        
-    if  (cmd.lower() == "/h" or cmd.lower() == "/help"):
-        rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname".encode(), BLKSIZE, RC_FAILED)
-        return rc
-    elif (len(cmd) == 0):   # Display current parameters
-        s = str(psetvar)
-        buf = s.replace(", ",",").replace("[[","").replace("]]","").replace("],","\n").replace("[","").replace(",","=").replace("'","")
+        for index in range(0,len(psetvar)):
+            print(psetvar[index])
+            buf = buf + psetvar[index][0]+'='+psetvar[index][1]+'\n'
         rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        return rc
-        
-    # Set a new parameter or update an existing parameter
-    rc = RC_FAILED 
-    
-    varname = cmd.split(" ")[0]
-    varvalue = cmd.replace(varname,'',1).strip()
-    cmd = cmd.split(" ")
-    
-    for index in range(0,len(psetvar)):
+        return RC_SUCCESS
+    else:
+        buf = data.decode().split("\x00")[0]
+        if  (buf.lower() == "/h" or buf.lower() == "/help"):
+            rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname".encode(), BLKSIZE, RC_FAILED)
+            return rc
 
-        if (psetvar[index][0].upper() == varname.upper()):
+    print("pset:",buf)
+    varname = buf.split(" ")[0]
+    varvalue = buf.replace(varname,'',1).strip()
+    print("pset:",varname)
+    print("pset:",varvalue)
+    
+    rc = setMSXPiVar(varname, varvalue)
+    
+    if rc == RC_SUCCESS:
+        if varname.upper() == 'DRIVEA':
+            rc,drive0Data = msxdos_inihrd(varvalue)
+            updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
+        elif varname.upper() == 'DRIVEB':
+            rc,drive1Data = msxdos_inihrd(varvalue)
+            updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
             
-            if len(cmd) == 1:  #will erase / clean a variable
+        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
+        return rc
+    else:
+        sendmultiblock("Pi:Error".encode(), BLKSIZE, RC_FAILED)
+
+def setMSXPiVar(pvar = '', pvalue = ''):
+
+    print("setMSXPiVar")
+    
+    global psetvar
+    
+    index = 0
+    for index in range(0,len(psetvar)):
+        print("1",psetvar[index][0])
+        if (psetvar[index][0].upper() == pvar.upper()):
+            if pvalue == '':  #will erase / clean a variable
                 psetvar[index][0] = 'free'
                 psetvar[index][1] = 'free'
                 updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-                rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
-                return RC_SUCCESS    
-                         
+                return RC_SUCCESS
             else:
+                psetvar[index][1] = pvalue
+                updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
+                return RC_SUCCESS
+        index += 1
                 
-                try:
-                    
-                    if varname.upper() == 'DRIVEA':
-                        rc,drive0Data = msxdos_inihrd(varvalue)
-                        psetvar[index][1] = varvalue
-                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
-                        return RC_SUCCESS
-
-                    elif varname.upper() == 'DRIVEB':
-                        rc,drive1Data = msxdos_inihrd(varvalue)
-                        psetvar[index][1] = str(varvalue)
-                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
-                        return RC_SUCCESS
-                    else: 
-                        psetvar[index][1] = varvalue
-                        updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-                        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
-                        return RC_SUCCESS
-                        
-                except Exception as e:
-                    
-                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
-                    return RC_FAILED
-                    
-    # Check if there is a slot, then add new parameter
-    for index in range(7,len(psetvar)):
-
-        if (psetvar[index][0] == "free" and psetvar[index][0] != varname):
-            psetvar[index][0] = varname
-            psetvar[index][1] = varvalue
+    # Did not find the Var - User is tryign to add a new one
+    # Check if there is a slot, then add new variable
+    print("add new var",pvar,pvalue)
+    for index in range(0,len(psetvar)):
+        print("2",psetvar[index][0])
+        if (psetvar[index][0] == "free" and psetvar[index][1] == "free"):
+            psetvar[index][0] = pvar
+            psetvar[index][1] = pvalue
             updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-            rc = RC_SUCCESS
-            break
+            return RC_SUCCESS
 
-    if rc == RC_SUCCESS:
-        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
-    else:        
-        rc = sendmultiblock("Pi:Error setting parameter".encode(), BLKSIZE, RC_FAILED)
-    
-    #print(hex(rc))
-    return rc
+    return RC_FAILED
                             
 def pwifi():
 
     global psetvar
-    wifissid = getVirtDevice('WIFISSID')
-    wifipass = getVirtDevice('WIFIPWD')
+    wifissid = getMSXPiVar('WIFISSID')
+    wifipass = getMSXPiVar('WIFIPWD')
 
     rc,data = recvdata()
 
@@ -824,9 +815,9 @@ def irc():
     print("irc")
 
     global allchann,psetvar,channel,ircsock
-    ircserver = getVirtDevice(psetvar,'IRCADDR')
-    ircport = int(getVirtDevice(psetvar,'IRCPORT'))
-    msxpinick =  getVirtDevice(psetvar,'IRCNICK')
+    ircserver = getMSXPiVar('IRCADDR')
+    ircport = int(getMSXPiVar('IRCPORT'))
+    msxpinick =  getMSXPiVar('IRCNICK')
     
     rc,data = recvdata()
     if rc != RC_SUCCESS:
@@ -982,10 +973,10 @@ def dskioini():
     # Initialize disk system parameters
     msxdos1boot = True
     sectorInfo = [0,0,0,0]
-    
+    print(getMSXPiVar('DriveA'))
     # Load the disk images into a memory mapped variable
-    rc , drive0Data = msxdos_inihrd(getVirtDevice('DriveA'))
-    rc , drive1Data = msxdos_inihrd(getVirtDevice('DriveB'))
+    rc , drive0Data = msxdos_inihrd(getMSXPiVar('DriveA'))
+    rc , drive1Data = msxdos_inihrd(getMSXPiVar('DriveB'))
 
 def dskiords():
     print("dskiords")
@@ -1156,7 +1147,7 @@ def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
 
-    th = threading.Timer(3.0, exitDueToSyncError)
+    th = threading.Timer(5.0, exitDueToSyncError)
     th.start()
             
     retries = GLOBALRETRIES
@@ -1276,12 +1267,13 @@ def updateIniFile(fname,memvar):
     f.close()
     
 
-def getVirtDevice(memvar, devname = 'PATH'):
+def getMSXPiVar(devname = 'PATH'):
+    global psetvar
     devval = ''
     idx = 0
-    for v in memvar:
-        if devname.upper() ==  memvar[idx][0].upper():
-            devval = memvar[idx][1]
+    for v in psetvar:
+        if devname.upper() ==  psetvar[idx][0].upper():
+            devval = psetvar[idx][1]
             break
         idx += 1
     return devval
