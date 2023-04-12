@@ -81,9 +81,9 @@ Download the MSXPi setup script - it will download and install everything needed
 
           wget https://tinyurl.com/MSXPi-Setup
 
-          chmod 755 msxpi-setup.sh
+          chmod 755 MSXPi-Setup
 
-          sudo ./msxpi-setup.sh
+          sudo ./MSXPi-Setup
           
 
 MSXPi v1.1 Release Notes
