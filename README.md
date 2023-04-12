@@ -12,7 +12,7 @@ This Quick Start Guide is updated to V1.1 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
 
-There are a few steps to setup MSXPi, and you can choose between using a MSXPi pre-installed SD Card image (ready to boot MSXPi), or build your own image using a fresh Raspbian Image downloaded from Raspberry Pi web site.
+There are a few steps to setup MSXPi, and you can choose between using a MSXPi pre-installed SD Card image (ready to boot MSXPi), or build your own image using a fresh Raspbian Image downloaded from Raspberry Pi web site - both methods are described below.
 
 Overall, the steps to get up and running are:
 
