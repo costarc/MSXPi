@@ -1,3 +1,5 @@
+(outdated)
+
 R1		2K Ohm
 R2		1k Ohm
 R3		1k Ohm
