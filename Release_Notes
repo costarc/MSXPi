@@ -1,9 +1,16 @@
-MSXPi Server Update
-===================
-- Update server to v0.9.1 build 20200905-001
-- Updated sync command
-- Update transfer routine to match ROM protocol
 
+MSXPi v1.1 Release Notes
+========================
+- New PCB layout
+- New basic IO routines (used by all components)
+- Lots of code changes to improve stability
+- Improved pcopy: can decompress files, use virtual remote devices  
+- Added BASIC API to support development in BASIC
+- Added IRC.BAS - IRC client to chat in webchat.freenode.net
+- Added BASIC programs from Retropix Brazil:
+  - DOLAR.BAS
+  - WEATHER.BAS
+- Lots of bug fixes and improvements
 
 MSXPi v1.0 Release Notes
 ========================
