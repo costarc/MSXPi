@@ -158,3 +158,5 @@ sudo systemctl start msxpi-monitor
 sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
+
+sudo rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
