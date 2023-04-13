@@ -87,7 +87,7 @@ Download the MSXPi setup script - it will download and install everything needed
 
           sudo ./MSXPi-Setup
           
-If you need very detailed instructions, please read "Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - Installing Raspbian from Scratch.pdf"  in https://github.com/costarc/MSXPi/tree/master/documents (Portuguese version also available).
+If you need very detailed instructions, please read [Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - Installing Raspbian from Scratch.pdf] ([ https://github.com/costarc/MSXPi/tree/master/documents](https://github.com/costarc/MSXPi/blob/master/documents/Tutorial%20-%20Setup%20%20Raspberry%20Pi%20for%20MSXPi%20the%20Hard%20Way%20-%20Installing%20Raspbian%20from%20Scratch.pdf)) [(Portuguese version also available)] [https://github.com/costarc/MSXPi/blob/master/documents/Tutorial%20-%20Configurando%20o%20Raspberry%20Pi%20do%20Jeito%20Dif%C3%ADcil%20-%20Instala%C3%A7%C3%A3o%20do%20Raspbian%20a%20partir%20da%20Imagem%20Oficial.pdf)
 
 MSXPi v1.1 Release Notes
 ========================
