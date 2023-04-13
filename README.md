@@ -49,8 +49,8 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
 
-In case you need very detailed instructions, please read: https://github.com/costarc/MSXPi/raw/master/documents/Tutorial%20-%20Setup%20Raspberry%20Pi%20for%20MSXPi%20the%20Easy%20Way%20-%20Using%20the%20MSXPi%20Pre-Installed%20Image.pdf
- 
+In case you need very detailed instructions, please read  "Tutorial - Setup Raspberry Pi for MSXPi the Easy Way - Using the MSXPi Pre-Installed Image.pdf", in https://github.com/costarc/MSXPi/tree/master/documents. 
+
 
 Prepare Raspberry Pi Using a Fresh Raspbian Image
 =================================================
@@ -87,7 +87,7 @@ Download the MSXPi setup script - it will download and install everything needed
 
           sudo ./MSXPi-Setup
           
-If you need very detailed instructions, please read: https://github.com/costarc/MSXPi/raw/master/documents/Tutorial%20-%20Setup%20%20Raspberry%20Pi%20for%20MSXPi%20the%20Hard%20Way%20-%20Installing%20Raspbian%20from%20Scratch.pdf
+If you need very detailed instructions, please read "Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - Installing Raspbian from Scratch.pdf"  in https://github.com/costarc/MSXPi/tree/master/documents. 
 
 MSXPi v1.1 Release Notes
 ========================
