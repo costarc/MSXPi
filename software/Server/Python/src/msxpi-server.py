@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230411.560"
+BuildId = "20230414.564"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1230,20 +1230,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
             thisblk += 1
                         
     return rc
-
-def template():
-    print("template now receiving parameters...")
     
-    # Parameters have always a fixed size: BLKSIZE
-    rc,data = recvdata(BLKSIZE)    
-    print("Raw data received:",data)
-    
-    print("Extracting only ascii bytes and setting reponse...")
-    buf = 'MSXPi received: ' + data.decode().split("\x00")[0]
-    
-    print("Sending response: ",buf) 
-    rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-
 def prestart():
     print("Restarting MSXPi Server")
     exitDueToSyncError()
@@ -1265,7 +1252,6 @@ def updateIniFile(fname,memvar):
     for v in memvar:
         f.writelines('var '+v[0]+'='+v[1]+'\n')
     f.close()
-    
 
 def getMSXPiVar(devname = 'PATH'):
     global psetvar
@@ -1277,6 +1263,29 @@ def getMSXPiVar(devname = 'PATH'):
             break
         idx += 1
     return devval
+
+def apitest():
+    print("apitest")
+    
+    # Parameters have always a fixed size: BLKSIZE
+    rc,data = recvdata(BLKSIZE)
+    #print("Parameters in CALL MSXPI:",data)
+    
+    #print("Extracting only ascii bytes and setting reponse...")
+    buf1 = data.decode().split("\x00")[0]
+
+    # Send response to CALL MSXPI - It will always expect a response
+    rc = sendmultiblock(('Pi:CALL MSXPI parameters:' + buf1).encode(), BLKSIZE, RC_SUCCESS)
+        
+    # Now Receive additional data sent with CALL MSXPISEND
+    rc,data = recvdata(BLKSIZE)
+    #print("Additional data sent by CALL MSXPISEND:",data)
+    
+    #print("Extracting only ascii bytes and setting reponse...")
+    buf2 = data.decode().split("\x00")[0]
+
+    #print("Sending response: ",buf2)
+    rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 """ ============================================================================
     msxpi-server.py
