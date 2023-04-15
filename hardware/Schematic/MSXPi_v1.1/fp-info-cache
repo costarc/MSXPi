@@ -1,4 +1,4 @@
-20426866844019472
+20428566765063053
 Audio_Module
 Reverb_BTDR-1H
 Digital Reverberation Unit, http://www.belton.co.kr/inc/downfile.php?seq=17&file=pdf (footprint from http://www.uk-electronic.de/PDF/BTDR-1.pdf)
@@ -78924,6 +78924,13 @@ MSX_CART_SW_Official_3Holes
 0
 50
 50
+Roni Footprints
+PLCC-S44
+<b>Plastic Leaded Chip Carrier</b> Socked
+
+0
+44
+44
 Roni Footprints
 PinSocket_2x20_P2.54mm_Vertical
 Through hole straight socket strip, 2x20, 2.54mm pitch, double cols (from Kicad 4.0.7), script generated
