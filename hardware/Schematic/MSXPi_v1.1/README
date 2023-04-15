@@ -1,3 +1,5 @@
+1.1.0 - Replaced Raspbery Pi mounting holes by 40 Pin Socket
+      - Added jumpers to select between bit-bang GPIO and hardware GPIO pins
 1.0.3 - Shifted PCB holes to better fit in Patola (Brazilian) case & added 3rd mounting hole
 1.0.2 - Changed footprint to smaller size to help reducing manufacturing costs
 1.0.1 - Changed ROM from 27C256 to AT28C256 with hability to be programmed from MSX-DOs
