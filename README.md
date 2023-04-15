@@ -92,6 +92,7 @@ If you need very detailed instructions, please read "Tutorial - Setup  Raspberry
 MSXPi v1.1 Release Notes
 ========================
 - New PCB layout
+- Schema & PCB  changed to support future expansion to Raspbery Pi hardware SPIO
 - New basic IO routines (used by all components)
 - Lots of code changes to improve stability
 - Improved pcopy: can decompress files, use virtual remote devices  
@@ -101,6 +102,7 @@ MSXPi v1.1 Release Notes
   - DOLAR.BAS
   - WEATHER.BAS
 - Lots of bug fixes and improvements
+- All changes are fully compatible with interface v0.7
 
 MSXPi v1.0.1 Release Notes
 ==========================
