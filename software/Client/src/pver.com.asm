@@ -118,7 +118,7 @@ ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84",0
 ifv9:   DB      "(1001) General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44",0
 ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44",0
 ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic",0
-ifdummy: DB      "MSXPi not detected",0
+ifdummy: DB      "MSXPi not detected - may need firmware update",0
 
 HWVER:  DB      "Interface version:"
         DB      0
