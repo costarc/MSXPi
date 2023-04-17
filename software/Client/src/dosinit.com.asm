@@ -44,7 +44,7 @@
         call    SENDCOMMAND
         jr      c, PRINTPIERR
         ld      de,buf
-        ld      bc,CMDSIZE
+        ld      bc,BLKSIZE
         call    CLEARBUF
         call    SENDPARMS
         jr      c, PRINTPIERR

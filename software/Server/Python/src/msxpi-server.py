@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230417.572"
+BuildId = "20230417.573"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -954,7 +954,7 @@ def dosinit():
     
     global msxdos1boot
         
-    rc,data = recvdata(CMDSIZE)
+    rc,data = recvdata(BLKSIZE)
     if rc == RC_SUCCESS:
         flag = data.decode().split("\x00")[0]
         if flag == '1':
