@@ -22,6 +22,10 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pvol.com?raw=t
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pwifi.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/python.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/API.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/DOLAR.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/IRC.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/WEATHER.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcopy.com?raw=true pcopynew.com
 COPY PCOPYNEW.COM PCOPY.COM
 DEL PCOPYNEW.COM

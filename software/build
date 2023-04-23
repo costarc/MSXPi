@@ -50,6 +50,12 @@ genUpdateBatch() {
       echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
     fi
   done
+  for fn in `ls BASIC`
+  do
+    if [ -f BASIC/${fn} ];then
+      echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
+    fi
+  done
   echo "pcopy "${GITPATH}/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
   echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpiupd.bat
   echo "DEL PCOPYNEW.COM" >> /tmp/msxpiupd.bat
