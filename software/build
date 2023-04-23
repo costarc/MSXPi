@@ -3,7 +3,7 @@ MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
 export ROMBANK1=./target/msxpidos.rom
 export OPENMSXDISK=~/Desktop/MSXPi/commands
-export GITPATH=https://github.com/costarc/MSXPi/raw/master/software/target
+export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
 
 # Functions
 UpdateBuildId() {
@@ -47,16 +47,18 @@ genUpdateBatch() {
   for fn in `ls target | grep -v -i pcopy.com`
   do
     if [ -f target/${fn} ];then
-      echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
+      echo "pcopy "${GITPATH}/target/${fn}?raw=true >> /tmp/msxpiupd.bat
     fi
   done
+  
   for fn in `ls BASIC`
   do
     if [ -f BASIC/${fn} ];then
-      echo "pcopy "${GITPATH}/${fn}?raw=true >> /tmp/msxpiupd.bat
+      echo "pcopy "${GITPATH}/BASIC/${fn}?raw=true >> /tmp/msxpiupd.bat
     fi
   done
-  echo "pcopy "${GITPATH}/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
+  
+  echo "pcopy "${GITPATH}/target/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
   echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpiupd.bat
   echo "DEL PCOPYNEW.COM" >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
@@ -114,6 +116,10 @@ done
 for f in `ls target/`
 do
   [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
+done
+for f in `ls BASIC/`
+do
+  [ -f BASIC/$f ] && python3 ./dsktool.py copy BASIC/$f target/disks/msxpiboot.dsk:/$f
 done
 
 genUpdateBatch
