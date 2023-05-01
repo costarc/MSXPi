@@ -1,4 +1,6 @@
-1.1.0 - Replaced Raspbery Pi mounting holes by 40 Pin Socket
+1.1.Rev.1 - Added jumper for SPI-RDY
+            Added reset button	
+1.1.Rev.0 - Replaced Raspbery Pi mounting holes by 40 Pin Socket
       - Added jumpers to select between bit-bang GPIO and hardware GPIO pins
 1.0.3 - Shifted PCB holes to better fit in Patola (Brazilian) case & added 3rd mounting hole
 1.0.2 - Changed footprint to smaller size to help reducing manufacturing costs

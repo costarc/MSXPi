@@ -14,5 +14,5 @@ U3	EPROM 27C256
 J1	Pin Header (Male, 2x3 pins)
 J2	JTAG Male conector (10 x PinHead or 90 degree 10xPinHead)
 J3	Pin Socket (Female, 2x20 Pins)
-
+J5      Momentary push button 6mm x 2 legs (Reset)
 
