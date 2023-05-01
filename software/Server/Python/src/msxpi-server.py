@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230501.579"
+BuildId = "20230501.580"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -237,13 +237,13 @@ def pathExpander(path, basepath = ''):
         newpath = path
     elif (path.startswith('m:')):
         urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveM')
+        newpath = getMSXPiVar('DriveM') + '/' + path.split(':')[1]
     elif (path.startswith('r1:')):
         urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveR1')
+        newpath = getMSXPiVar('DriveR1') + '/' + path.split(':')[1]
     elif (path.startswith('r2:')):
         urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveR2')
+        newpath = getMSXPiVar('DriveR2') + '/' + path.split(':')[1]
     elif (path.startswith('http') or \
         path.startswith('ftp') or \
         path.startswith('nfs') or \
@@ -369,8 +369,6 @@ def pdir():
 
     pathType, path = pathExpander(userPath, basepath)
 
-    print(path)
-    
     try:
         if pathType == 0:
             prun('ls -l ' + path)
@@ -437,13 +435,11 @@ def pcopy():
     rc,data = recvdata(BLKSIZE)
     
     if data[0] == 0:
-        path=''
+        userPath=''
     else:
-        path = data.decode().split("\x00")[0]
-        
-    path = path.strip().split()
+        userPath = data.decode().split("\x00")[0]
                    
-    if (len(path) == 0 or path[0].lower() == ('/h')):
+    if len(userPath) == 0 or userPath.lower().startswith('/h'):
         buf = 'Syntax:\n'
         buf = buf + 'pcopy </z> remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
@@ -454,68 +450,34 @@ def pcopy():
         rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
         return rc
 
-    if (path[0].lower() == '/z'):
+    fname2 = ''
+    expandedFn = ''
+    parms = userPath.split()
+    if '/z' in userPath.lower():
         expand = True
-        path = path[1:]
+        pathType, path = pathExpander(parms[1], basepath)
+        if len(parms) > 2:
+            fname2 = parms[2]
     else:
         expand = False
+        pathType, path = pathExpander(parms[0], basepath)
+        if len(parms) > 1:
+            fname2 = parms[1]
 
-    if len(path) < 1:
-        rc = sendmultiblock("Pi:Error - Missing file name".encode(), BLKSIZE, RC_FAILED)
-        return rc
-
-    if (path[0].lower().startswith('m:')):
-        basepath = getMSXPiVar('DriveM')
-        fname1 = basepath + '/' + path[0].split(':')[1]
-    elif (path[0].lower().startswith('r1:')):
-        basepath = getMSXPiVar('DriveR1')
-        fname1 = basepath + '/' + path[0].split(':')[1]
-    elif  (path[0].lower().startswith('r2:')):
-        basepath = getMSXPiVar('DriveR2')
-        fname1 = basepath + '/' + path[0].split(':')[1]
-    elif (path[0].lower().startswith('http') or \
-        path[0].lower().startswith('ftp') or \
-        path[0].lower().startswith('nfs') or \
-        path[0].lower().startswith('smb')):
-        fname1 = path[0]
-    elif (path[0].startswith('/')):
-        fname1 = path[0]
-    else:
-        fname1 = basepath + '/' + path[0]
-
-    if expand == True:
-        if len(path) > 1:
-            fname2 = path[1]
-        else:
-            fname2 = '-'
-    elif len(path) > 1:
-        fname2 = path[1]
-    else:
-        fname0 = fname1.split('/')
-        fname2 = fname0[len(fname0)-1]
-    
-    urlcheck = pathExpander(basepath, fname1)
-    # basepath 0 local filesystem
-    if (urlcheck[0] == 0 or urlcheck[0] == 1):
-        
+    if pathType == 0:
         try:
-            with open(fname1, mode='rb') as f:
+            with open(path, mode='rb') as f:
                 buf = f.read()
-
             filesize = len(buf)
- 
         except Exception as e:
             err = 'Pi:Error - ' + str(e)
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
-
     else:
-
         try:
-            urlhandler = urlopen(fname1)
+            urlhandler = urlopen(path)
             buf = urlhandler.read()
             filesize = len(buf)
-                    
         except Exception as e:
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
@@ -523,7 +485,7 @@ def pcopy():
     if rc == RC_SUCCESS:
         # if /z passed, will uncompress the file
         if expand:
-            tmpfn0 = fname1.split('/')
+            tmpfn0 = path.split('/')
             tmpfn = tmpfn0[len(tmpfn0)-1]
             #print("Entered expand")
             os.system('rm /tmp/msxpi/* 2>/dev/null')
@@ -547,8 +509,7 @@ def pcopy():
             
             if rc == 0:
                 fname1 = os.listdir('/tmp/msxpi')[0]
-                if fname2 == '-':
-                    fname2 = fname1
+                expandedFn = fname1
                 fname1 = '/tmp/msxpi/' + fname1
 
                 try:
@@ -588,15 +549,24 @@ def pcopy():
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
                             fname2=fname2[1]           # Remove "A:" from name
+                        elif expandedFn != '':
+                            fname2 = expandedFn
                         else:
-                            fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
+                            fname2=path.split("/")[len(path.split("/"))-1]           # Drive not passed in name
                     elif fname2.upper().startswith("B:"):
                         fatfsfname = "fat:///"+getMSXPiVar('DriveB')    # Is Drive B:
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
                             fname2=fname2[1]           # Remove "B:" from name
+                        elif expandedFn != '':
+                            fname2 = expandedFn
                         else:
-                            fname2=fname1.split("/")[len(fname1.split("/"))-1]           # Drive not passed in name
+                            fname2=path.split("/")[len(path.split("/"))-1]           # Drive not passed in name
+                    elif expandedFn != '':
+                        fname2 = expandedFn
+                    elif fname2 == '':
+                        fname2=path.split("/")[len(path.split("/"))-1]
+
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
@@ -971,7 +941,6 @@ def dskioini():
     # Initialize disk system parameters
     msxdos1boot = True
     sectorInfo = [0,0,0,0]
-    print(getMSXPiVar('DriveA'))
     # Load the disk images into a memory mapped variable
     rc , drive0Data = msxdos_inihrd(getMSXPiVar('DriveA'))
     rc , drive1Data = msxdos_inihrd(getMSXPiVar('DriveB'))
@@ -1033,7 +1002,7 @@ def dskiowrs():
     while sectorcnt < numsectors:
         rc,buf = recvdata(DOSSCTSZ)
         if  rc == RC_SUCCESS:
-            print("dskiowrs: checksum is a match")
+            #print("dskiowrs: checksum is a match")
             if sectorInfo[0] == 0:
                 drive0Data[initdataindex+(sectorcnt*DOSSCTSZ):initdataindex+DOSSCTSZ+(sectorcnt*DOSSCTSZ)] = buf
             else:
@@ -1145,7 +1114,7 @@ def senddata(data, blocksize = BLKSIZE):
     
     print("senddata")
 
-    th = threading.Timer(5.0, exitDueToSyncError)
+    th = threading.Timer(3.0, exitDueToSyncError)
     th.start()
             
     retries = GLOBALRETRIES
@@ -1302,11 +1271,9 @@ if exists(MSXPIHOME+'/msxpi.ini'):
         psetvar.append(["SPI_MOSI","16"])
         psetvar.append(["SPI_MISO","12"])
         psetvar.append(["RPI_READY","25"])
-    psetvar.append(["free","free"])
-    psetvar.append(["free","free"])
-    psetvar.append(["free","free"])
-    psetvar.append(["free","free"])
-    psetvar.append(["free","free"])
+    if 'free' not in str(psetvar):
+        psetvar.append(["free","free"])
+
 else:
     psetvar = [['PATH','/home/pi/msxpi'], \
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
