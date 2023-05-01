@@ -26,19 +26,12 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230423.577"
+BuildId = "20230501.579"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
 BLKSIZE = 3 + 256
 SECTORSIZE = 3 + 512
-
-# Pin Definitons
-csPin   = 21
-sclkPin = 20
-mosiPin = 16
-misoPin = 12
-rdyPin  = 25
 
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
@@ -89,18 +82,31 @@ RAMDISK = "/media/ramdisk"
 TMPFILE = RAMDISK + "/msxpi.tmp"
 
 def init_spi_bitbang():
+
+    global SPI_CS
+    global SPI_SCLK
+    global SPI_MOSI
+    global SPI_MISO
+    global RPI_READY
+
 # Pin Setup:
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(csPin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.setup(sclkPin, GPIO.OUT)
-    GPIO.setup(mosiPin, GPIO.IN)
-    GPIO.setup(misoPin, GPIO.OUT)
-    GPIO.setup(rdyPin, GPIO.OUT)
+    GPIO.setup(SPI_CS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.setup(SPI_SCLK, GPIO.OUT)
+    GPIO.setup(SPI_MOSI, GPIO.IN)
+    GPIO.setup(SPI_MISO, GPIO.OUT)
+    GPIO.setup(RPI_READY, GPIO.OUT)
 
 def tick_sclk():
-    GPIO.output(sclkPin, GPIO.HIGH)
+
+    global SPI_CS
+    global SPI_SCLK
+    global SPI_MOSI
+    global SPI_MISO
+    global RPI_READY
+    GPIO.output(SPI_SCLK, GPIO.HIGH)
     #time.sleep(SPI_SCLK_HIGH_TIME)
-    GPIO.output(sclkPin, GPIO.LOW)
+    GPIO.output(SPI_SCLK, GPIO.LOW)
     #time.sleep(SPI_SCLK_LOW_TIME)
 
 def SPI_MASTER_transfer_byte(byte_out):
@@ -110,17 +116,17 @@ def SPI_MASTER_transfer_byte(byte_out):
     for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
         #print(".")
         if (int(byte_out) & bit):
-            GPIO.output(misoPin, GPIO.HIGH)
+            GPIO.output(SPI_MISO, GPIO.HIGH)
         else:
-            GPIO.output(misoPin, GPIO.LOW)
+            GPIO.output(SPI_MISO, GPIO.LOW)
 
-        GPIO.output(sclkPin, GPIO.HIGH)
+        GPIO.output(SPI_SCLK, GPIO.HIGH)
         #time.sleep(SPI_SCLK_HIGH_TIME)
         
-        if GPIO.input(mosiPin):
+        if GPIO.input(SPI_MOSI):
             byte_in |= bit
     
-        GPIO.output(sclkPin, GPIO.LOW)
+        GPIO.output(SPI_SCLK, GPIO.LOW)
         #time.sleep(SPI_SCLK_LOW_TIME)
 
     tick_sclk()
@@ -128,24 +134,35 @@ def SPI_MASTER_transfer_byte(byte_out):
     return byte_in
 
 def piexchangebyte(byte_out=0):
+    global SPI_CS
+    global SPI_SCLK
+    global SPI_MOSI
+    global SPI_MISO
+    global RPI_READY
+    
     rc = RC_SUCCESS
     
-    GPIO.output(rdyPin, GPIO.HIGH)
-    while(GPIO.input(csPin)):
+    GPIO.output(RPI_READY, GPIO.HIGH)
+    while(GPIO.input(SPI_CS)):
         pass
 
     byte_in = SPI_MASTER_transfer_byte(byte_out)
-    GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(RPI_READY, GPIO.LOW)
 
     #print "piexchangebyte: received:",hex(mymsxbyte)
     return byte_in
 
 def piexchangebytewithtimeout(byte_out=0,twait=5):
+    global SPI_CS
+    global SPI_SCLK
+    global SPI_MOSI
+    global SPI_MISO
+    global RPI_READY
     rc = RC_SUCCESS
     
     t0 = time.time()
-    GPIO.output(rdyPin, GPIO.HIGH)
-    while((GPIO.input(csPin)) and (time.time() - t0) < twait):
+    GPIO.output(RPI_READY, GPIO.HIGH)
+    while((GPIO.input(SPI_CS)) and (time.time() - t0) < twait):
         pass
 
     t1 = time.time()
@@ -154,7 +171,7 @@ def piexchangebytewithtimeout(byte_out=0,twait=5):
         return ABORT
 
     byte_in = SPI_MASTER_transfer_byte(byte_out)
-    GPIO.output(rdyPin, GPIO.LOW)
+    GPIO.output(RPI_READY, GPIO.LOW)
 
     #print "piexchangebyte: received:",hex(mymsxbyte)
     print("io:",byte_in)
@@ -204,34 +221,43 @@ class MyHTMLParser(HTMLParser):
     def convert_charrefs(self, data):
         print("MyHTMLParser: convert_charrefs found :", data)
                 
-def getpath(basepath, path):
-
-    path=path.strip().rstrip(' \t\n\0')
-    if  path.startswith('/'):
+def pathExpander(path, basepath = ''):
+    path=path.strip().rstrip(' \t\n\0').lower()
+    
+    if path.strip() == "..":
+        path = basepath.rsplit('/', 1)[0]
+        basepath = ''
+        
+    if len(path) == 0 or path == '' or path.strip() == "." or path.strip() == "*":
+        path = basepath
+        basepath = ''
+        
+    if path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
-    elif (path.startswith('m:') or \
-        path.startswith('r1:') or \
-        path.startswith('r2:') or \
-        path.startswith('http') or \
+    elif (path.startswith('m:')):
+        urltype = 1 # this is a network path
+        newpath = getMSXPiVar('DriveM')
+    elif (path.startswith('r1:')):
+        urltype = 1 # this is a network path
+        newpath = getMSXPiVar('DriveR1')
+    elif (path.startswith('r2:')):
+        urltype = 1 # this is a network path
+        newpath = getMSXPiVar('DriveR2')
+    elif (path.startswith('http') or \
         path.startswith('ftp') or \
         path.startswith('nfs') or \
         path.startswith('smb')):
-        urltype = 2 # this is an absolute network path
+        urltype = 1 # this is a network path
         newpath = path
     elif basepath.startswith('/'):
-        urltype = 1 # this is an relative local path
+        urltype = 0 # this is a local path
+        newpath = basepath + '/' + path
+        newpath = newpath.replace('//','/')
+    else:
+        urltype = 1 # this is a network path
         newpath = basepath + "/" + path
-    elif (basepath.startswith('m:') or \
-        basepath.startswith('r1:') or \
-        basepath.startswith('r2:') or \
-        basepath.startswith('http') or \
-        basepath.startswith('ftp') or \
-        basepath.startswith('nfs') or \
-        basepath.startswith('smb')):
-        urltype = 3 # this is an relative network path
-        newpath = basepath + "/" + path
-       
+        
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -332,45 +358,29 @@ def prun(cmd = ''):
 
 def pdir():
 
-    print(pdir)
-    
-    basepath = getMSXPiVar('PATH')
+    print("pdir")
     rc = RC_SUCCESS
-
-    rc,data = recvdata(BLKSIZE)
-
+    basepath = getMSXPiVar('PATH')
+    rc,data = recvdata()
     if data[0] == 0:
-        path=''
+        userPath=''
     else:
-        path = data.decode().split("\x00")[0]
-        
+        userPath = data.decode().split("\x00")[0]
+
+    pathType, path = pathExpander(userPath, basepath)
+
+    print(path)
+    
     try:
-        urlcheck = getpath(basepath, path)
-                
-        if (urlcheck[0] == 0 or urlcheck[0] == 1):
-            if (path.strip() == '*'):
-                prun('ls -l ' + urlcheck[1])
-            elif ('*' in path):
-                numChilds = path.count('/')
-                fileDesc = path.rsplit('/', 1)[numChilds].replace('*','')
-                if (fileDesc == '' or len(fileDesc) == 0):
-                    fileDesc = '.'
-                prun('ls -l ' + urlcheck[1].rsplit('/', 1)[0] + '/|/bin/grep '+ fileDesc)
-            else:
-                prun('ls -l ' + urlcheck[1])
+        if pathType == 0:
+            prun('ls -l ' + path)
         else:
             parser = MyHTMLParser()
-            try:
-                htmldata = urlopen(urlcheck[1]).read().decode()
-                parser = MyHTMLParser()
-                parser.feed(htmldata)
-                buf = " ".join(parser.HTMLDATA)
-                rc = sendmultiblock(buf.encode(),BLKSIZE, RC_SUCCESS)
-
-            except Exception as e:
-                rc = RC_FAILED
-                sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_SUCCESS)
-
+            htmldata = urlopen(path).read().decode()
+            parser = MyHTMLParser()
+            parser.feed(htmldata)
+            buf = " ".join(parser.HTMLDATA)
+            rc = sendmultiblock(buf.encode(),BLKSIZE, RC_SUCCESS)
     except Exception as e:
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_SUCCESS)
 
@@ -380,63 +390,40 @@ def pdir():
 def pcd():
     
     print("pcd")
-    
     rc = RC_SUCCESS
-
     basepath = getMSXPiVar('PATH')
-    newpath = basepath
-    
     rc,data = recvdata()
     
     if data[0] == 0:
-        path=''
+        userPath=''
     else:
-        path = data.decode().split("\x00")[0]
+        userPath = data.decode().split("\x00")[0]
         
     try:
-        if (len(path) == 0 or path == '' or path.strip() == "."):
+        if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
             rc = sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
-        elif (path.strip() == ".."):
+        elif (userPath.strip() == ".."):
             newpath = basepath.rsplit('/', 1)[0]
             if (newpath == ''):
                 newpath = '/'
             setMSXPiVar('PATH',newpath)
             rc = sendmultiblock(newpath.encode(), BLKSIZE, RC_SUCCESS)
         else:
-            urlcheck = getpath(basepath, path)
-            newpath = urlcheck[1]
-            if (newpath[:2].lower() == "m:"):
-                rc = RC_SUCCESS
-                setMSXPiVar('PATH',getMSXPiVar('DriveM'))
-                rc = sendmultiblock(getMSXPiVar('DriveM').encode(), BLKSIZE, rc)
-            elif (newpath[:4].lower() == "r1:"):
-                rc = RC_SUCCESS
-                setMSXPiVar('PATH',getMSXPiVar('DriveR1'))
-                rc = sendmultiblock(getMSXPiVar('DriveR1').encode(), BLKSIZE, rc)
-            elif  (newpath[:4].lower() == "r2:"):
-                rc = RC_SUCCESS
-                setMSXPiVar('PATH',getMSXPiVar('DriveR2'))
-                rc = sendmultiblock(getMSXPiVar('DriveR2').encode(), BLKSIZE, rc)
-            elif (newpath[:4].lower() == "http" or \
-                newpath[:3].lower() == "ftp" or \
-                newpath[:3].lower() == "nfs" or \
-                newpath[:3].lower() == "smb"):
-                rc = RC_SUCCESS
-                setMSXPiVar('PATH',newpath)
-                rc = sendmultiblock(newpath.encode(), BLKSIZE, rc)
-            else:
-                if (os.path.isdir(newpath)):
-                    setMSXPiVar('PATH',newpath)
-                    rc = sendmultiblock(newpath.encode(), BLKSIZE, RC_SUCCESS)
-                elif (os.path.isfile(newpath)):
-                    sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, RC_FAILED)
+            pathType, path = pathExpander(userPath, basepath)
+            if pathType == 0:
+                if (os.path.isdir(path)):
+                    setMSXPiVar('PATH',path)
+                    rc = sendmultiblock(path.encode(), BLKSIZE, RC_SUCCESS)
                 else:
-                    rc = sendmultiblock("Pi:Error - path not found".encode(), BLKSIZE, RC_FAILED)
+                    sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE, RC_FAILED)
+            else:
+                setMSXPiVar('PATH',path)
+                rc = sendmultiblock(path.encode(), BLKSIZE, rc)
     except Exception as e:
         print("pcd:"+str(e))
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
 
-    return [rc, newpath]
+    return RC_SUCCESS
     
 def pcopy():
 
@@ -507,7 +494,7 @@ def pcopy():
         fname0 = fname1.split('/')
         fname2 = fname0[len(fname0)-1]
     
-    urlcheck = getpath(basepath, fname1)
+    urlcheck = pathExpander(basepath, fname1)
     # basepath 0 local filesystem
     if (urlcheck[0] == 0 or urlcheck[0] == 1):
         
@@ -688,32 +675,35 @@ def pvol():
     print (hex(rc))
     return rc
 
-def pset():
+def pset(varn = '', varv = ''):
     
     print("pset")
     
     global psetvar,drive0Data,drive1Data
 
-    rc,data = recvdata(BLKSIZE)
-    
-    buf = ''
-    if data[0] == 0:
-        for index in range(0,len(psetvar)):
-            print(psetvar[index])
-            buf = buf + psetvar[index][0]+'='+psetvar[index][1]+'\n'
-        rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        return RC_SUCCESS
-    else:
-        buf = data.decode().split("\x00")[0]
-        if  (buf.lower() == "/h" or buf.lower() == "/help"):
-            rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable varname".encode(), BLKSIZE, RC_FAILED)
-            return rc
+    if varn == '':
+        
+        rc,data = recvdata(BLKSIZE)
+        buf = ''
+        if data[0] == 0:
+            for index in range(0,len(psetvar)):
+                print(psetvar[index])
+                buf = buf + psetvar[index][0]+'='+psetvar[index][1]+'\n'
+            rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+            return RC_SUCCESS
+        else:
+            buf = data.decode().split("\x00")[0]
+            if  (buf.lower() == "/h" or buf.lower() == "/help"):
+                rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname   varvalue   Set varname to varvalue\npset varname            Delete variable     varname".encode(), BLKSIZE, RC_FAILED)
+                return rc
 
-    print("pset:",buf)
-    varname = buf.split(" ")[0]
-    varvalue = buf.replace(varname,'',1).strip()
-    print("pset:",varname)
-    print("pset:",varvalue)
+        varname = buf.split(" ")[0]
+        varvalue = buf.replace(varname,'',1).strip()
+    else:
+        varname = varn
+        varvalue = varv
+        
+    print("pset:",varname, varvalue)
     
     rc = setMSXPiVar(varname, varvalue)
     
@@ -724,21 +714,20 @@ def pset():
         elif varname.upper() == 'DRIVEB':
             rc,drive1Data = msxdos_inihrd(varvalue)
             updateIniFile(MSXPIHOME+'/msxpi.ini',psetvar)
-            
-        rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
+        
+        if varn == '':
+            rc = sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_SUCCESS)
         return rc
     else:
-        sendmultiblock("Pi:Error".encode(), BLKSIZE, RC_FAILED)
+        if varn == '':
+            sendmultiblock("Pi:Error".encode(), BLKSIZE, RC_FAILED)
 
 def setMSXPiVar(pvar = '', pvalue = ''):
-
-    print("setMSXPiVar")
     
     global psetvar
     
     index = 0
     for index in range(0,len(psetvar)):
-        print("1",psetvar[index][0])
         if (psetvar[index][0].upper() == pvar.upper()):
             if pvalue == '':  #will erase / clean a variable
                 psetvar[index][0] = 'free'
@@ -753,9 +742,7 @@ def setMSXPiVar(pvar = '', pvalue = ''):
                 
     # Did not find the Var - User is tryign to add a new one
     # Check if there is a slot, then add new variable
-    print("add new var",pvar,pvalue)
     for index in range(0,len(psetvar)):
-        print("2",psetvar[index][0])
         if (psetvar[index][0] == "free" and psetvar[index][1] == "free"):
             psetvar[index][0] = pvar
             psetvar[index][1] = pvalue
@@ -763,7 +750,18 @@ def setMSXPiVar(pvar = '', pvalue = ''):
             return RC_SUCCESS
 
     return RC_FAILED
-                            
+
+def getMSXPiVar(devname = 'PATH'):
+    global psetvar
+    devval = ''
+    idx = 0
+    for v in psetvar:
+        if devname.upper() ==  psetvar[idx][0].upper():
+            devval = psetvar[idx][1]
+            break
+        idx += 1
+    return devval
+    
 def pwifi():
 
     global psetvar
@@ -1253,17 +1251,6 @@ def updateIniFile(fname,memvar):
         f.writelines('var '+v[0]+'='+v[1]+'\n')
     f.close()
 
-def getMSXPiVar(devname = 'PATH'):
-    global psetvar
-    devval = ''
-    idx = 0
-    for v in psetvar:
-        if devname.upper() ==  psetvar[idx][0].upper():
-            devval = psetvar[idx][1]
-            break
-        idx += 1
-    return devval
-
 def apitest():
     print("apitest")
     
@@ -1308,7 +1295,18 @@ if exists(MSXPIHOME+'/msxpi.ini'):
             psetvar.append([var,value])
             idx += 1
     f.close()
-
+    if 'SPI_CS' not in str(psetvar):
+        psetvar.append(["SPI_HW","False"])
+        psetvar.append(["SPI_CS","21"])
+        psetvar.append(["SPI_SCLK","20"])
+        psetvar.append(["SPI_MOSI","16"])
+        psetvar.append(["SPI_MISO","12"])
+        psetvar.append(["RPI_READY","25"])
+    psetvar.append(["free","free"])
+    psetvar.append(["free","free"])
+    psetvar.append(["free","free"])
+    psetvar.append(["free","free"])
+    psetvar.append(["free","free"])
 else:
     psetvar = [['PATH','/home/pi/msxpi'], \
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
@@ -1323,8 +1321,12 @@ else:
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
-           ['free','free'], \
-           ['free','free'], \
+           ['SPI_HW','False'], \
+           ['SPI_CS','21'], \
+           ['SPI_SCLK','20'], \
+           ['SPI_MOSI','16'], \
+           ['SPI_MISO','12'], \
+           ['RPI_READY','25'], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
@@ -1337,10 +1339,18 @@ allchann = []
 ircsock = None
 errcount = 0
 msxdos1boot = False
-    
+
+# GPIO Pins is now defined by the user
+SPI_CS = int(getMSXPiVar("SPI_CS"))
+SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
+SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
+SPI_MISO = int(getMSXPiVar("SPI_MISO"))
+RPI_READY = int(getMSXPiVar("RPI_READY"))
+
 init_spi_bitbang()
-GPIO.output(rdyPin, GPIO.LOW)
+GPIO.output(RPI_READY, GPIO.LOW)
 print("GPIO Initialized\n")
+
 print("Starting MSXPi Server Version ",version,"Build",BuildId)
 
 try:
