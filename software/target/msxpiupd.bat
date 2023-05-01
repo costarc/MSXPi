@@ -5,7 +5,6 @@ pdate
 pcd /home/pi/msxpi
  
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/at28c256.com?raw=true
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/b577road.rom?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/dosinit.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpidos.rom?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiext.bin?raw=true
@@ -24,10 +23,11 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pvol.com?raw=t
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pwifi.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/python.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
-pcopy https://raw.githubusercontent.com/costarc/MSXPi/master/software/BASIC/API.BAS
-pcopy https://raw.githubusercontent.com/costarc/MSXPi/master/software/BASIC/DOLAR.BAS
-pcopy https://raw.githubusercontent.com/costarc/MSXPi/master/software/BASIC/IRC.BAS
-pcopy https://raw.githubusercontent.com/costarc/MSXPi/master/software/BASIC/WEATHER.BAS
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/test.bat?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/API.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/DOLAR.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/IRC.BAS?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/WEATHER.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcopy.com?raw=true pcopynew.com
 COPY PCOPYNEW.COM PCOPY.COM
 DEL PCOPYNEW.COM

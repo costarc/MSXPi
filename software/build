@@ -50,7 +50,6 @@ genUpdateBatch() {
       echo "pcopy "${GITPATH}/target/${fn}?raw=true >> /tmp/msxpiupd.bat
     fi
   done
-  
   for fn in `ls BASIC`
   do
     if [ -f BASIC/${fn} ];then

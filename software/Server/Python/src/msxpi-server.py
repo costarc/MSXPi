@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230501.581"
+BuildId = "20230501.585"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -222,7 +222,7 @@ class MyHTMLParser(HTMLParser):
         print("MyHTMLParser: convert_charrefs found :", data)
                 
 def pathExpander(path, basepath = ''):
-    path=path.strip().rstrip(' \t\n\0').lower()
+    path=path.strip().rstrip(' \t\n\0')
     
     if path.strip() == "..":
         path = basepath.rsplit('/', 1)[0]
