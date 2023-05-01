@@ -3,6 +3,7 @@
 MSXPi is a hardware interface and software solution to allow MSX computers to control and use Raspberry Pi resources.
 The interface exposes I/O ports that can be read and written by MSX, and in turn the data will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
+To make the most of MSXPi resources, a Raspberry Pi Zero W should be attached to the interface.
 
 Quick Start Guide
 =================
@@ -18,6 +19,7 @@ Overall, the steps to get up and running are:
 
 - Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
+
 
 Prepare Raspberry Pi Using MSXPi SDCard Image
 =============================================
