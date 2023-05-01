@@ -23,7 +23,6 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pvol.com?raw=t
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pwifi.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/python.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/template.com?raw=true
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/test.bat?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/API.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/DOLAR.BAS?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/BASIC/IRC.BAS?raw=true
