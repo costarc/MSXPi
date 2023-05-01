@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230501.580"
+BuildId = "20230501.581"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -534,6 +534,8 @@ def pcopy():
 
         else:
             if not msxdos1boot: # Boot was not from MSXPi disk drive
+                if fname2 == '':
+                    fname2=path.split("/")[len(path.split("/"))-1]
                 rc = ini_fcb(fname2,filesize)
                 if rc != RC_SUCCESS:
                     print("pcopy: ini_fcb failed")
