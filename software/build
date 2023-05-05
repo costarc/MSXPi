@@ -122,6 +122,6 @@ do
 done
 
 genUpdateBatch
-cat target/msxpidos.rom         >> target/multirom.rom
+cat target/msxpidos.rom          > target/multirom.rom
 cat ~/Dev/gameroms/RoadFigh.rom >> target/multirom.rom
 
