@@ -1,0 +1,19 @@
+These instrucstions are for PCBWAY.COM
+The lines with "=>" are the only ones that must ne changed - the others are default for PCBWAY.
+
+The defaults will work very well, but I recommend to change "Edge Connector" option - see below.
+These instructions will result in the cheapest cost (around USD5 for 5 Units)
+
+=> Lenght: 99.90mm, Width: 64.50mm
+Layers: 2, Thickness: 1.6mm
+Material: FR-4
+FR4-TG: TG 150-160
+Thickness: 1.6
+Min Track/Spacing: 6/6mil
+Min Hole Size: 0.3mm
+Solder Mask: -> choose what you like, but some places charge more for this option.
+Silkscreen: White (change this color if you choose "White Solder Mask")
+=> Edge connector: Yes, Bevelling: Yes - 30 Degrees
+=> Surface Finish: HASL lead free (change to "immersion gold" at extra cost)
+
+
