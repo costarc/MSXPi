@@ -6,13 +6,13 @@ R5	10k Ohm
 R6	10k Ohm
 R7	470 oHM
 LED1	3mm, 3.3v
-C1,C2,C3,C4,C5,C6,C7 	0.1uF (ceramic capacitor, code 104)
-C8	100uF 16v (electrolytic capacitor)
+C1,C2,C3,C4,C5,C6,C7,C8 	0.1uF (ceramic capacitor, code 104)
+C9	1uF 16v (electrolytic capacitor)
 U1	LD117AS33TR 3.3v Voltage Regulator
 U2	CPLD Altera EPM3064ALC44-10N
-U3	EPROM 27C256
-J1	Pin Header (Male, 2x3 pins)
-J2	JTAG Male conector (10 x PinHead or 90 degree 10xPinHead)
-J3	Pin Socket (Female, 2x20 Pins)
-J5      Momentary push button 6mm x 2 legs (Reset)
+U3	EEPROM AT28C256
+J2	JTAG Male connector (10 x PinHead or 90 degree 10xPinHead)
+J3	Pin Socket (Female, 2x3 Pins)
+J4	Pin Socket (Female, 2x20 Pins)
+J5/J6   Momentary push button 6mm x 2 legs (Reset / optional / not Recommended to assemble)
 
