@@ -6,7 +6,8 @@ R5	10k Ohm
 R6	10k Ohm
 R7	470 oHM
 LED1	3mm, 3.3v
-C1,C2,C3,C4,C5,C6,C7,C8 	0.1uF (ceramic capacitor, code 104)
+C1,C2,C3,C4,C5,C6,C7	0.1uF (ceramic capacitor, code 104)
+C8	0.1F 16v (electrolytic capacitor)
 C9	1uF 16v (electrolytic capacitor)
 U1	LD117AS33TR 3.3v Voltage Regulator
 U2	CPLD Altera EPM3064ALC44-10N
