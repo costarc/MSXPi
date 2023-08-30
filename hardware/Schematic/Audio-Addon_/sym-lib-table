@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "MSXPi_Audio-eagle-import")(type "KiCad")(uri "${KIPRJMOD}/MSXPi_Audio-eagle-import.kicad_sym")(options "")(descr ""))
+)
