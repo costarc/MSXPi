@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 *.bin
 !msxpiext.bin
-=======
->>>>>>> dev
 *.swp
 *.bak
 .DS_Store
@@ -18,3 +15,5 @@ software/zout/**
 *.db_info
 *.tmw_info
 *.lst
+*lock.*
+
