@@ -11,6 +11,7 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiext.bin?r
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/multirom.rom?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcd.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pdate.com?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pdatedeb.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pdir.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pplay.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/preboot.com?raw=true

@@ -30,101 +30,75 @@
 ;|===========================================================================|
 ;
 ; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
 ; 0.1    : Initial version.
-; 0.9    : Rewritten to support new block download logic
-; 1.1    : Ported to protocol v1.1
+;
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
+;
+; debugging pdate - will skip the code that gets the date from RPi
+; Will inject a known date value in the memory - as returned by RPI
+; Then will proceed to update the MSX with the date and assess results
+; This date was colleted from RPi when pdate as executed:
+; Date: 2023-09-02 18:43:27.713594 bytearray(b'\xe7\x07\t\x02\x12+\x1b\x00')
+;
 
-        ORG     $0100
+; https://map.grauw.nl/resources/dos2_functioncalls.php#_SDATE
+        org     $0100
 
-; Sending Command and Parameters to RPi
-        ld      de,command
-        call    SENDCOMMAND
-        jr      c, PRINTPIERR
         ld      de,buf
-        ld      bc,BLKSIZE
+        ld      bc,CMDSIZE
         call    CLEARBUF
-        call    SENDPARMS
-        JR      NC,MAINPROGRAM
+        
+        call    SETCLOCK
+        ld      hl,PIOK
+        call    PRINT
+        call    PRINTNLINE
+        ret
+  
+SETCLOCK:
+        LD      IX,buf + 3
+        LD      A,$e7
+        LD      L,A
+        LD      A,$07
+        LD      H,A
+        LD      A,$02
+        LD      D,A
+        LD      A,$12
+        LD      E,A
+        LD      C,$2B
+        PUSH    IX
+        CALL    5
+        POP     IX
 
+; set time
+        LD      A,0
+        LD      H,A
+        LD      A,0
+        LD      L,A
+        LD      A,0
+        LD      D,A
+        LD      A,0
+        LD      E,A
+        LD      C,$2D
+        CALL    BDOS
+        RET
+               
+        
 PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
-
-MAINPROGRAM:
-
-        LD      HL,LOADPROGRESS
-        CALL    PRINT
-        CALL    LOADROM
-        JR      C,PRINTPIERR
         
-LOADROMPROG1:
+PICOMMERR:  DB      "Communication Error",13,10,0
 
-        PUSH    HL
-        LD      HL,0
-        LD      A,($FCC1)
-        CALL    ENASLT
-        POP     HL
-        JP      (HL)
+command: db "pdate",0
 
-;-----------------------
-; LOADROM              |
-;-----------------------
-LOADROM:
-; Will load the ROM directly on the destiantion page in $4000
-; Might be slower, but that is what we have so far...
-;Get number of bytes to transfer
-        LD      DE,$4000 - 3
-LOADROM0:
-        LD      A,'.'
-        CALL    PUTCHAR
-        LD      BC,BLKSIZE
-        CALL    RECVDATA
-        RET     C
-        LD      A,(HL)          ; RETURN CODE
-        INC     HL
-        LD      C,(HL)          ; LSB OF DATA SIZE
-        INC     HL
-        LD      B,(HL)          ; MSB OF DATA SIZE
-        INC     HL
-        LD      D,H
-        LD      E,L
-        CP      RC_READY        ; More data available to transfer
-        JR      Z,LOADROM0      ; Get next block
-; File trasnfer finished
-; Return C reseted, and A = filetype
-LOADROMEND:
-        LD      HL,($4002)    ;ROM exec address
-        OR      A             ;Reset C flag
-        RET
-
-LOADPROGERR:
-        LD      HL,LOADPROGERRMSG
-        CALL    PRINT
-        SCF
-        RET
-
-EXITSTDOUT:
-        CALL    PRINTNLINE
-        CALL    PRINTPISTDOUT
-        jp      0
-
-COMMAND:
-        DB      "PLOADR"
-
-PICOMMERR:
-        DB      "Communication Error",13,10,"$"
-
-LOADPROGERRMSG:
-        DB      "Error loading file",13,10,"$"
-
-LOADPROGRESS:
-        DB      "Loading game...$"
-
+PIOK: db "Pi:Ok",0
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
-
-
-
-
+buf:    equ     $
+        ds      BLKSIZE
+        db      0
 

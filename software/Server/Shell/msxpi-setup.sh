@@ -134,16 +134,26 @@ sudo systemctl enable msxpi-monitor
 # --------------------------------------------------
 # Configure PWM (analog audio) on GPIO18 and GPIO13
 # --------------------------------------------------
-echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
+# Disabled - requires addon audio interface
+#echo "dtoverlay=pwm-2chan,pin=18,func=2,pin2=13,func2=4" >> /boot/config.txt
+# --------------------------------------------------
+# Configure Audio over USB Card
+# A USB audio dongle must be connected to RPi
+# --------------------------------------------------
+cp /usr/share/alsa/alsa.conf $MSXPIHOME/alsa.conf.bak
+sed -ri 's/defaults.ctl.card 0/defaults.ctl.card 1/' /usr/share/alsa/alsa.conf
+sed -ri 's/defaults.pcm.card 0/defaults.pcm.card 1/' /usr/share/alsa/alsa.conf
+
 amixer cset numid=3 1
 
-# Download msxpi-server
+# Download msxpi-server components
 cd $MSXPIHOME
 rm msxpi-server.py > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
+wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
 wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
 wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/

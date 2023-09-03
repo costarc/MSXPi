@@ -26,7 +26,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230505.588"
+BuildId = "20230903.599"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -601,6 +601,8 @@ def pdate():
     pdate[6]=(now.second)
     pdate[7]=(0)
     
+    print("Date:",now,pdate)
+    
     sendmultiblock(pdate, CMDSIZE, RC_SUCCESS)
    
     return RC_SUCCESS
@@ -621,14 +623,32 @@ def pplay():
     rc = RC_SUCCESS
     
     rc,data = recvdata(BLKSIZE)
-    
+    print("pplay:",data)
+        
     if data[0] == 0:
-        cmd=''
+        buf = "Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3"
+        sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+        return rc
     else:
-        cmd = data.decode().split("\x00")[0]
+        msxparms = data.decode().split("\x00")[0]
+        parmslist = msxparms.split(" ")
+        cmd = parmslist[0]
+        if len(parmslist) > 1:
+            parms = msxparms.split(" ")[1].split("\x00")[0]
+        else:
+            parms = ''
     
-    rc = prun("/home/pi/msxpi/pplay.sh pplay.sh " +  getMSXPiVar('PATH')+ " "+cmd)
+    #print("cmd / parms:",cmd,parms)
     
+    buf = ''
+    try:
+        buf = subprocess.check_output(['/home/pi/msxpi/pplay.sh',getMSXPiVar('PATH'),cmd,parms])
+        if buf == b'':
+            buf = b'\x0a'
+        sendmultiblock(buf, BLKSIZE, RC_SUCCESS)
+    except subprocess.CalledProcessError as e:
+        sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
+
     #print (hex(rc))
     return rc
     

@@ -102,6 +102,9 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 
+# Commands being debbuged / trobleshooted - disable when not necessary
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/debug/pdatedeb.com.asm    -o ./target/pdatedeb.com
+
 cp target/disks/blank.dsk target/disks/msxpiboot.dsk
 cp target/disks/blank.dsk target/disks/tools.dsk
 
@@ -123,5 +126,5 @@ done
 
 genUpdateBatch
 cat target/msxpidos.rom          > target/multirom.rom
-cat ~/Dev/gameroms/RoadFigh.rom >> target/multirom.rom
+cat ~/Dev/MSX/gameroms/RoadFigh.rom >> target/multirom.rom
 

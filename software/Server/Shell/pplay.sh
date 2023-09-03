@@ -3,9 +3,9 @@
 #|                                                                           |
 #| MSXPi Interface                                                           |
 #|                                                                           |
-#| Version : 0.8.1                                                           |
+#| Version : 1.1                                                             |
 #|                                                                           |
-#| Copyright (c) 2015-2017 Ronivon Candido Costa (ronivon@outlook.com)       |
+#| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
 #|                                                                           |
 #| All rights reserved                                                       |
 #|                                                                           |
@@ -22,7 +22,7 @@
 #| (at your option) any later version.                                       |
 #|                                                                           |
 #| MSX PI Interface is distributed in the hope that it will be useful,       |
-#| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
+#| but WITHOUT ANY WARRANTY# without even the implied warranty of            |
 #| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
 #| GNU General Public License for more details.                              |
 #|                                                                           |
@@ -31,22 +31,27 @@
 #|===========================================================================|
 #
 # File history :
+# 0.2   : Structural changes to support a simplified transfer protocol with error detection
 # 0.1    : Initial version.
-#!/bin/sh
 # MSXPi PPLAY command helper
 # Will start the music player, and return the PID to the caller.
 
 VERSION=1
 RELEASE=0
 
-shift
 BASEPATH=$1
+
 shift
 CMD=$(echo $1 | tr [a-z] [A-Z])
 
 if [ $# -gt 0 ];then
     shift
     MEDIA=$*
+else
+    echo "Syntax:"
+    echo "pplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
+    echo "Exemple: pplay play music.mp3"
+    exit 1
 fi
 
 if [ "$CMD" = "PAUSE" ]; then
@@ -65,56 +70,65 @@ if [ "$CMD" = "STOP" ]; then
 fi
 
 if [ "$CMD" = "GETIDS" ]; then
-        echo MusicID=$(ps -ef | grep mpg123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
+        echo $(ps -ef | grep mpg123 | grep -v "sh -c" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
         exit 0
 fi
 
 if [ "$CMD" = "GETLIDS" ]; then
-        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
+        echo $(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
         exit 0
 fi
 
 if [ "$CMD" = "PLAY" ]; then
+
+    if [ ! -f "$BASEPATH/$MEDIA" ];then
+        echo "File not found: $BASEPATH/$MEDIA"
+        exit 1
+    fi
 
    rc=$(echo "$MEDIA" | grep -c -i ^http)
    if [ $rc -eq 1 ];then
       (mplayer -nocache -afm ffmpeg "$BASEPATH/$MEDIA" 2>&1) >/dev/null &
       sleep 1
    else
-      music123 "$BASEPATH/$MEDIA" &
+      (music123 "$BASEPATH/$MEDIA" 2>&1) >/dev/null &
       sleep 1
    fi
 
+    MusicID="????"
     rc=$(echo "$MEDIA" | grep -c -i \.mp3)
     if [ $rc -eq 1 ];then
-        echo MusicID=$(ps -ef | grep mpg123 | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
-        exit 0
-   fi
+        MusicID=$(ps -ef | grep mpg123 | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
+    fi
 
     rc=$(echo "$MEDIA" | grep -c -i \.wav)
     if [ $rc -eq 1 ];then
-        echo MusicID=$(ps -ef | grep aplay | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
-        exit 0
-   fi
-
+        MusicID=$(ps -ef | grep aplay | grep -v "sh -c" | grep "$MEDIA" | grep -v "grep" | awk '{print $2}')$(ps -ef | grep mplayer | grep -v "grep" | awk '{print $2}')
+    fi
+    
+    echo $MusicID
+    exit 0
+    
 fi
 
 if [ "$CMD" = "LOOP" ]; then
-   music123 -l 0 "$BASEPATH/$MEDIA" &
+   (music123 -l 0 "$BASEPATH/$MEDIA" 2>&1) >/dev/null &
    sleep 1
 
+   LoopID="????"
    rc=$(echo "$MEDIA" | grep -c -i \.mp3)
    if [ $rc -eq 1 ];then
-        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
-        exit 0
+       LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
    fi
 
    rc=$(echo "$MEDIA" | grep -c -i \.wav)
    if [ $rc -eq 1 ];then
-        echo LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
-        exit 0
+       LoopID=$(ps -ef | grep "music123 -l" | grep -v "grep" | awk '{print $2}')
    fi
-
+   
+   echo $LoopID
+   exit 0
+   
 fi
 
 OUTPUT=$VERSION$RELEASE
@@ -154,7 +168,5 @@ if [ $rc -eq 1  ]; then
    exit 0
 fi
 
-echo "Syntax:"
-echo "pplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>"
-exit 1
+
 
