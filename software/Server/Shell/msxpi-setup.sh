@@ -38,7 +38,7 @@ RMFILES=true
 ssid="notNeeded"
 SN="N"
 
-echo "To configure wifi using this tool, remove the coment to the next line and run it again"
+echo "To configure the WiFi interface using this tool, remove the comment to the next line and run it again"
 #echo "Do you want to configure Wifi now ? "; read SN
 if [ ${SN} = "Y" -o ${SN} = "Yes" -o ${SN} = "YES" -o ${SN} = "yes"  -o ${SN} = "y" ]; then
     echo "Enter your WIFI Netowrk name:"; read ssid
