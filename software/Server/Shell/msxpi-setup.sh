@@ -36,9 +36,10 @@ MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
 ssid="notNeeded"
+SN="N"
 
-echo "Do you want to configure Wifi now ? "; read SN
-
+echo "To configure wifi using this tool, remove the coment to the next line and run it again"
+#echo "Do you want to configure Wifi now ? "; read SN
 if [ ${SN} = "Y" -o ${SN} = "Yes" -o ${SN} = "YES" -o ${SN} = "yes"  -o ${SN} = "y" ]; then
     echo "Enter your WIFI Netowrk name:"; read ssid
     echo "Enter your WIFI Network password:"; read psk
