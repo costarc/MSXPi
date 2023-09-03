@@ -140,6 +140,7 @@ sudo systemctl enable msxpi-monitor
 # Configure Audio over USB Card
 # A USB audio dongle must be connected to RPi
 # --------------------------------------------------
+echo "Configuring Audio to second Audio Interface (for USB Cards)"
 cp /usr/share/alsa/alsa.conf $MSXPIHOME/alsa.conf.bak
 sed -ri 's/defaults.ctl.card 0/defaults.ctl.card 1/' /usr/share/alsa/alsa.conf
 sed -ri 's/defaults.pcm.card 0/defaults.pcm.card 1/' /usr/share/alsa/alsa.conf
@@ -149,6 +150,8 @@ amixer cset numid=3 1
 # Download msxpi-server components
 cd $MSXPIHOME
 rm msxpi-server.py > /dev/null 2>&1
+rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
+rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
@@ -159,6 +162,8 @@ wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
 chmod 755 $MSXPIHOME/msxpi-server.py
+chmod 755 $MSXPIHOME/pplay.sh
+chmod 755 $MSXPIHOME/kill.sh
 chown -R pi.pi $MSXPIHOME
 sudo systemctl stop msxpi-monitor
 sudo systemctl start msxpi-monitor
