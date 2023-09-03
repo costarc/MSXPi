@@ -166,8 +166,6 @@ chmod 755 $MSXPIHOME/msxpi-server.py
 chmod 755 $MSXPIHOME/pplay.sh
 chmod 755 $MSXPIHOME/kill.sh
 chown -R pi.pi $MSXPIHOME
-sudo systemctl stop msxpi-monitor
-sudo systemctl start msxpi-monitor
 
 # changes to prevent sd corruption
 # disable swap
@@ -176,3 +174,8 @@ sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
 sudo rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
+
+#sudo systemctl stop msxpi-monitor
+#sudo systemctl start msxpi-monitor
+sudo reboot
+
