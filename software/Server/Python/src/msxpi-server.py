@@ -32,6 +32,7 @@ CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
 BLKSIZE = 3 + 256
 SECTORSIZE = 3 + 512
+BULKBLKSIZE = 3 + 4096
 
 SPI_SCLK_LOW_TIME = 0.001
 SPI_SCLK_HIGH_TIME = 0.001
@@ -577,6 +578,117 @@ def pcopy():
                     rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             
     #print(hex(rc))
+    return rc
+
+def ploadr():
+
+    buf = bytearray(BLKSIZE)
+    rc = RC_SUCCESS
+
+    global psetvar,GLOBALRETRIES
+    basepath = getMSXPiVar('PATH')
+    
+    # Receive parameters -
+    rc,data = recvdata(BLKSIZE)
+    
+    if data[0] == 0:
+        userPath=''
+    else:
+        userPath = data.decode().split("\x00")[0]
+                   
+    if len(userPath) == 0 or userPath.lower().startswith('/h'):
+        buf = 'Syntax:\n'
+        buf = buf + 'ploadr </z> remotefile\n'
+        buf = buf +'Valid devices:\n'
+        buf = buf +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
+        buf = buf + '/z decompress file\n'
+        buf = buf + 'm:, r1: r2: virtual remote devices'
+
+        rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
+        return rc
+
+    expandedFn = ''
+    parms = userPath.split()
+    if '/z' in userPath.lower():
+        expand = True
+        pathType, path = pathExpander(parms[1], basepath)
+    else:
+        expand = False
+        pathType, path = pathExpander(parms[0], basepath)
+
+    if pathType == 0:
+        try:
+            with open(path, mode='rb') as f:
+                buf = f.read()
+            filesize = len(buf)
+        except Exception as e:
+            err = 'Pi:Error - ' + str(e)
+            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
+            return RC_FAILED
+    else:
+        try:
+            urlhandler = urlopen(path)
+            buf = urlhandler.read()
+            filesize = len(buf)
+        except Exception as e:
+            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
+            return RC_FAILED
+
+    if rc == RC_SUCCESS:
+        # if /z passed, will uncompress the file
+        if expand:
+            tmpfn0 = path.split('/')
+            tmpfn = tmpfn0[len(tmpfn0)-1]
+            #print("Entered expand")
+            os.system('rm /tmp/msxpi/* 2>/dev/null')
+            tmpfile = open('/tmp/' + tmpfn, 'wb')
+            tmpfile.write(buf)
+            tmpfile.close()
+            if ".lzh" in tmpfn:
+                cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
+                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+                perror = (p.stderr.read().decode())
+                rc = p.poll()
+                if rc!=0:
+                    rc = RC_FAILED
+            else:
+                cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
+                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+                perror = (p.stderr.read().decode())
+                rc = p.poll()
+                if rc!=0:
+                    rc = RC_FAILED
+            
+            if rc == 0:
+                fname1 = os.listdir('/tmp/msxpi')[0]
+                expandedFn = fname1
+                fname1 = '/tmp/msxpi/' + fname1
+
+                try:
+                    with open(fname1, mode='rb') as f:
+                        buf = f.read()
+
+                    filesize = len(buf)
+                    rc = RC_SUCCESS
+                    
+                except Exception as e:
+                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
+                    return RC_FAILED
+       
+            else:
+                rc = sendmultiblock(('Pi:Error - ' + perror).encode(), BLKSIZE, RC_FAILED)
+                return RC_FAILED
+                
+    if rc == RC_SUCCESS:
+        if filesize == 0:
+            rc = sendmultiblock("Pi:Error - File size is zero bytes".encode(), BLKSIZE, RC_FAILED)
+            return RC_FAILED
+
+        else:
+            # Send the file to MSX
+            rc = sendmultiblock(buf,SECTORSIZE, rc)
+    
+    print(hex(rc))
     return rc
 
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
