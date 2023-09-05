@@ -53,7 +53,7 @@ if [ ${SN} = "Y" -o ${SN} = "Yes" -o ${SN} = "YES" -o ${SN} = "yes"  -o ${SN} = 
         # ----------------------------------------------------------
         # Configure Wireless network with provided SSID and Password
         # ----------------------------------------------------------
-        cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
+        sudo cat <<EOF | sed "s/myssid/$ssid/" | sed "s/mypsk/$psk/"  >/etc/wpa_supplicant/wpa_supplicant.conf
         country=GB
         ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
         update_config=1
@@ -95,7 +95,7 @@ sudo python3 -m pip install openai
 # -------------------------
 # Enable remote ssh into Pi
 # -------------------------
-touch /boot/ssh
+sudo touch /boot/ssh
 
 # -------------------------------------------
 # Create msxpi directory and link on home dir
@@ -118,7 +118,7 @@ rm msxpi-monitor > /dev/null 2>&1
 wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
 chmod 755 $MSXPIHOME/msxpi-monitor
 
-cat <<EOF >/lib/systemd/system/msxpi-monitor.service
+cat <<EOF >/tmp/msxpi-monitor.service
 [Unit]
 Description=Monitor MSXPi Server control Process
 
@@ -130,6 +130,9 @@ ExecStart=/home/pi/msxpi/msxpi-monitor
 [Install]
 WantedBy=multi-user.target
 EOF
+
+sudo mv /tmp/msxpi-monitor.service /lib/systemd/system/msxpi-monitor.service
+sudo chmod 755 /lib/systemd/system/msxpi-monitor.service
 sudo systemctl daemon-reload
 sudo systemctl enable msxpi-monitor
 
@@ -144,10 +147,10 @@ sudo systemctl enable msxpi-monitor
 # --------------------------------------------------
 echo "Configuring Audio to second Audio Interface (for USB Cards)"
 cp /usr/share/alsa/alsa.conf $MSXPIHOME/alsa.conf.bak
-sed -ri 's/defaults.ctl.card 0/defaults.ctl.card 1/' /usr/share/alsa/alsa.conf
-sed -ri 's/defaults.pcm.card 0/defaults.pcm.card 1/' /usr/share/alsa/alsa.conf
+sudo sed -ri 's/defaults.ctl.card 0/defaults.ctl.card 1/' /usr/share/alsa/alsa.conf
+sudo sed -ri 's/defaults.pcm.card 0/defaults.pcm.card 1/' /usr/share/alsa/alsa.conf
 
-amixer cset numid=3 1
+sudo amixer cset numid=3 1
 
 # Download msxpi-server components
 cd $MSXPIHOME
@@ -174,9 +177,8 @@ sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
-sudo rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
+rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
 
 #sudo systemctl stop msxpi-monitor
 #sudo systemctl start msxpi-monitor
 sudo reboot
-

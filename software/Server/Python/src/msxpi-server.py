@@ -1379,12 +1379,18 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-    print('aiquery')
+    print('chatgpt')
     model_engine = "text-davinci-003"
-    openai.api_key = getMSXPiVar('OPENAIKEY')
     
     rc,data = recvdata(BLKSIZE)
     query = data.decode().split("\x00")[0]
+
+    if len(getMSXPiVar('OPENAIKEY')) == 0:
+        print("chatagpt: no key - exiting")
+        sendmultiblock('Pi:Error - OPENAIKEY is not defined. Define your key with PSET'.encode(), BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
+        
+    openai.api_key = getMSXPiVar('OPENAIKEY')
     
     if rc == RC_SUCCESS:
         try:
