@@ -101,6 +101,7 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
 
 # Commands being debbuged / trobleshooted - disable when not necessary
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/debug/pdatedeb.com.asm    -o ./target/pdatedeb.com

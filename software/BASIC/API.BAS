@@ -29,7 +29,7 @@
 34 ' Returns:
 35 ' RC = return code: -1 = Connection Error, 0 = Success
 37 '
-40 ' STORESTR - Store a string a buffer - Line 14000-
+40 ' STORESTR - Store a string in a buffer - Line 14000-
 42 ' B = buffer address: Hexadecimal memory address (ex: &hC000) to store the data received
 42 ' C$ = String to store, maximum 256 bytes (not sure MSX supoprt strings this size though)
 44 ' Returns:

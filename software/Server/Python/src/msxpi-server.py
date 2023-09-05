@@ -24,9 +24,10 @@ from fs import open_fs
 import threading
 from io import StringIO
 from contextlib import redirect_stdout
+import openai
 
 version = "1.1"
-BuildId = "20230903.599"
+BuildId = "20230905.600"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1377,6 +1378,31 @@ def apitest():
     #print("Sending response: ",buf2)
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
+def chatgpt():
+    print('aiquery')
+    model_engine = "text-davinci-003"
+    openai.api_key = getMSXPiVar('OPENAIKEY')
+    
+    rc,data = recvdata(BLKSIZE)
+    query = data.decode().split("\x00")[0]
+    
+    if rc == RC_SUCCESS:
+        try:
+            response = openai.Completion.create(
+                engine=model_engine,
+                prompt=query,
+                max_tokens=1024,
+                temperature=0.5,
+            )
+   
+            buf = str.strip(response['choices'][0]['text']), response['usage']['total_tokens']
+            sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+        except Exception as e:
+            print("Pi:Error - ",str(e).encode())
+            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+    else:
+        sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
+        
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -1428,7 +1454,7 @@ else:
            ['SPI_MOSI','16'], \
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
-           ['free','free'], \
+           ['OPENAIKEY',''], \
            ['free','free'], \
            ['free','free'], \
            ['free','free'], \
