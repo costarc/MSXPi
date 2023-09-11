@@ -36,21 +36,21 @@ UpdateBuildIdASM() {
 }
 
 genUpdateBatch() {
-  echo "echo Updating MSXPi client and server software..." > /tmp/msxpiupd.ba
-  echo "echo Setting date & time..." >> /tmp/msxpiupd.ba
-  echo "pdate" >> /tmp/msxpiupd.ba
-  echo " " >> /tmp/msxpiupd.ba
+  echo "echo Updating MSXPi client and server software..." > /tmp/msxpiupd.tmp
+  echo "echo Setting date & time..." >> /tmp/msxpiupd.tmp
+  echo "pdate" >> /tmp/msxpiupd.tmp
+  echo " " >> /tmp/msxpiupd.tmp
   
-  echo "echo Updating MSXPIUPD.BAT" >> /tmp/msxpiupd.ba
-  echo "pcopy "${GITPATH}/target/msxpiupd.ba?raw=true >> /tmp/msxpiupd.ba
-  echo "COPY MSXPIUPD.BA MSXPIUPD.BAT" >> /tmp/msxpiupd.ba
-  echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.ba
-  echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true >> /tmp/msxpiupd.ba
-  echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.ba
-   
+  echo "echo Updating MSXPIUPD.BAT" >> /tmp/msxpiupd.tmp
+  echo "pcopy "${GITPATH}/target/msxpiupd.tmp?raw=true >> /tmp/msxpiupd.tmp
+  echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.tmp
+  echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true >> /tmp/msxpiupd.tmp
+  echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.tmp
+  
+  echo "COPY MSXPIUPD.BA MSXPIUPD.BAT" >> /tmp/msxpirfh.bat
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
   echo " " >> /tmp/msxpirfh.bat
-  rm target/msxpiupd.bat  > /dev/null 2>&1
+  rm target/msxpiupd.tmp  > /dev/null 2>&1
   rm target/msxpirfh.bat  > /dev/null 2>&1
     
   for fn in `ls target | grep -v -i pcopy.com`
@@ -80,9 +80,9 @@ genUpdateBatch() {
   echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpirfh.bat
   echo "prestart" >> /tmp/msxpirfh.bat
   echo "echo" >> /tmp/msxpirfh.bat
-  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.ba > target/msxpiupd.ba
+  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.tmp > target/msxpiupd.tmp
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
-  rm /tmp/msxpiupd.ba
+  rm /tmp/msxpiupd.tmp
   rm /tmp/msxpirfh.bat 
 }
 

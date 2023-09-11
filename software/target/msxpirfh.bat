@@ -1,3 +1,4 @@
+COPY MSXPIUPD.BA MSXPIUPD.BAT
 pcd /home/pi/msxpi
  
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/at28c256.com?raw=true
@@ -5,7 +6,8 @@ pcopy https://github.com/costarc/MSXPi/raw/master/software/target/chatgpt.com?ra
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/dosinit.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpidos.rom?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiext.bin?raw=true
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiup.bat?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiupd.ba?raw=true
+pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiupd.tmp.ba?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/multirom.rom?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pcd.com?raw=true
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/pdate.com?raw=true
