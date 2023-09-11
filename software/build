@@ -47,7 +47,7 @@ genUpdateBatch() {
   echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true >> /tmp/msxpiupd.tmp
   echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.tmp
   
-  echo "COPY MSXPIUPD.BA MSXPIUPD.BAT" >> /tmp/msxpirfh.bat
+  echo "COPY MSXPIUPD.TMP MSXPIUPD.BAT" >> /tmp/msxpirfh.bat
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
   echo " " >> /tmp/msxpirfh.bat
   rm target/msxpiupd.tmp  > /dev/null 2>&1
