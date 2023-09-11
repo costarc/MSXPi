@@ -80,9 +80,9 @@ genUpdateBatch() {
   echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpirfh.bat
   echo "prestart" >> /tmp/msxpirfh.bat
   echo "echo" >> /tmp/msxpirfh.bat
-  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.ba > target/msxpiupd.bat
+  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.ba > target/msxpiup.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
-  rm /tmp/msxpiupd.bat
+  rm /tmp/msxpiup.bat
   rm /tmp/msxpirfh.bat 
 }
 
