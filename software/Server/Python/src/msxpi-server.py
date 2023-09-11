@@ -1393,7 +1393,7 @@ def chatgpt():
     openai.api_key = getMSXPiVar('OPENAIKEY')
     
     if rc == RC_SUCCESS:
-        try:
+        if 1==1: #try:
             response = openai.Completion.create(
                 engine=model_engine,
                 prompt=query,
@@ -1401,11 +1401,12 @@ def chatgpt():
                 temperature=0.5,
             )
    
-            buf = str.strip(response['choices'][0]['text']), response['usage']['total_tokens']
+            #print("Response:",response)
+            buf = response['choices'][0]['text']
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        except Exception as e:
-            print("Pi:Error - ",str(e).encode())
-            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+        #except Exception as e:
+        #    print("Pi:Error - ",str(e).encode())
+        #    sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
     else:
         sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
         
