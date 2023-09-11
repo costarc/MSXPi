@@ -1,4 +1,5 @@
 COPY MSXPIUPD.TMP MSXPIUPD.BAT
+ 
 pcd /home/pi/msxpi
  
 pcopy https://github.com/costarc/MSXPi/raw/master/software/target/at28c256.com?raw=true
