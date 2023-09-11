@@ -40,39 +40,48 @@ genUpdateBatch() {
   echo "echo Setting date & time..." >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat
   echo " " >> /tmp/msxpiupd.bat
-  echo "pcd /home/pi/msxpi" >> /tmp/msxpiupd.bat
-  echo " " >> /tmp/msxpiupd.bat
-  rm target/msxpiupd.bat  > /dev/null 2>&1
   
+  echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true msxpirfh.tmp >> /tmp/msxpiupd.bat
+  echo "COPY MSXPIRFH.TMP MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
+  echo "DEL MSXPIRFH.TMP" >> /tmp/msxpiupd.bat
+  echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
+  
+  echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
+  echo " " >> /tmp/msxpirfh.bat
+  rm target/msxpiupd.bat  > /dev/null 2>&1
+  rm target/msxpirfh.bat  > /dev/null 2>&1
+    
   for fn in `ls target | grep -v -i pcopy.com`
   do
     if [ -f target/${fn} ];then
-      echo "pcopy "${GITPATH}/target/${fn}?raw=true >> /tmp/msxpiupd.bat
+      echo "pcopy "${GITPATH}/target/${fn}?raw=true >> /tmp/msxpirfh.bat
     fi
   done
   for fn in `ls BASIC`
   do
     if [ -f BASIC/${fn} ];then
-      echo "pcopy "${GITPATH}/BASIC/${fn}?raw=true >> /tmp/msxpiupd.bat
+      echo "pcopy "${GITPATH}/BASIC/${fn}?raw=true >> /tmp/msxpirfh.bat
     fi
   done
   
-  echo "pcopy "${GITPATH}/target/pcopy.com?raw=true pcopynew.com >> /tmp/msxpiupd.bat
-  echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpiupd.bat
-  echo "DEL PCOPYNEW.COM" >> /tmp/msxpiupd.bat
-  echo "echo" >> /tmp/msxpiupd.bat
-  echo "echo Updating msxpi-server.py ..." >> /tmp/msxpiupd.bat
-  echo "prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpiupd.bat
-  echo "echo" >> /tmp/msxpiupd.bat
-  echo "echo Updating MSXPi boot disk ..." >> /tmp/msxpiupd.bat
-  echo "prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk"  >> /tmp/msxpiupd.bat
-  echo "echo" >> /tmp/msxpiupd.bat
-  echo "echo Updating MSXPi tools disk ..." >> /tmp/msxpiupd.bat
-  echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpiupd.bat
-  echo "prestart" >> /tmp/msxpiupd.bat
-  echo "echo" >> /tmp/msxpiupd.bat
+  echo "pcopy "${GITPATH}/target/pcopy.com?raw=true pcopynew.com >> /tmp/msxpirfh.bat
+  echo "COPY PCOPYNEW.COM PCOPY.COM" >> /tmp/msxpirfh.bat
+  echo "DEL PCOPYNEW.COM" >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
+  echo "echo Updating msxpi-server.py ..." >> /tmp/msxpirfh.bat
+  echo "prun wget -q --show-progress -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
+  echo "echo Updating MSXPi boot disk ..." >> /tmp/msxpirfh.bat
+  echo "prun wget -q --show-progress -O disks/msxpiboot.dsk https://tinyurl.com/msxpibootdisk"  >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
+  echo "echo Updating MSXPi tools disk ..." >> /tmp/msxpirfh.bat
+  echo "prun wget -q --show-progress -O disks/tools.dsk https://tinyurl.com/toolsdisk"  >> /tmp/msxpirfh.bat
+  echo "prestart" >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
+  perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
   rm /tmp/msxpiupd.bat
+  rm /tmp/msxpirfh.bat 
 }
 
 # Build MSX-DOS with MSXPi Drivers with build id
