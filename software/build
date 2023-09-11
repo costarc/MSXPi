@@ -42,11 +42,13 @@ genUpdateBatch() {
   echo " " >> /tmp/msxpiupd.bat
   
   echo "echo Updating MSXPIUPD.BAT" >> /tmp/msxpiupd.bat
-  echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true msxpirfh.tmp >> /tmp/msxpiupd.bat
-  echo "COPY MSXPIRFH.TMP MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
-  echo "DEL MSXPIRFH.TMP" >> /tmp/msxpiupd.bat
+  echo "pcopy "${GITPATH}/target/msxpiupd.bat?raw=true msxpiupd.tmp >> /tmp/msxpiupd.bat
+  echo "COPY MSXPIUPD.TMP MSXPIUPD.BAT" >> /tmp/msxpiupd.bat
+  echo "DEL MSXPIUPD.TMP" >> /tmp/msxpiupd.bat
+  echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
+  echo "pcopy "${GITPATH}/target/msxpirfh.bat?raw=true msxpirfh.bat >> /tmp/msxpiupd.bat
   echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
-  
+   
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
   echo " " >> /tmp/msxpirfh.bat
   rm target/msxpiupd.bat  > /dev/null 2>&1
