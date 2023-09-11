@@ -39,7 +39,7 @@ genUpdateBatch() {
   echo "echo Updating MSXPi client and server software..." > /tmp/msxpiupd.tmp
   echo "echo Setting date & time..." >> /tmp/msxpiupd.tmp
   echo "pdate" >> /tmp/msxpiupd.tmp
-  echo " " >> /tmp/msxpiupd.tmp
+  echo "echo" >> /tmp/msxpiupd.tmp
   
   echo "echo Updating MSXPIUPD.BAT" >> /tmp/msxpiupd.tmp
   echo "pcopy "${GITPATH}/target/msxpiupd.tmp?raw=true >> /tmp/msxpiupd.tmp
@@ -48,9 +48,8 @@ genUpdateBatch() {
   echo "MSXPIRFH.BAT" >> /tmp/msxpiupd.tmp
   
   echo "COPY MSXPIUPD.TMP MSXPIUPD.BAT" >> /tmp/msxpirfh.bat
-  echo " " >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
-  echo " " >> /tmp/msxpirfh.bat
   rm target/msxpiupd.tmp  > /dev/null 2>&1
   rm target/msxpirfh.bat  > /dev/null 2>&1
     
