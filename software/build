@@ -36,6 +36,10 @@ UpdateBuildIdASM() {
 }
 
 genUpdateBatch() {
+  echo "MSXPi Update for MSX-DOS 2" >> /tmp/msxpirfh.bat
+  echo "If running this after booting from MSXPi MSX-DOS 1 ROM, please stop this process and instead update the system according to the User's Manual Update Process for MSXPi-DOS." >> /tmp/msxpirfh.bat
+  echo "echo" >> /tmp/msxpirfh.bat
+  echo "Starting update" >> /tmp/msxpirfh.bat
   echo "pdate" >> /tmp/msxpiupd.bat
   echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
   echo "pset DriveR1 ${GITPATH}/target"  >> /tmp/msxpiupd.bat
@@ -65,8 +69,8 @@ genUpdateBatch() {
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
   echo "prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpirfh.bat
 
+  echo "Rebooting... wait for the command prompt.t" >> /tmp/msxpirfh.bat
   echo "prestart" >> /tmp/msxpirfh.bat
-  echo "pver" >> /tmp/msxpirfh.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
   rm /tmp/msxpiupd.bat

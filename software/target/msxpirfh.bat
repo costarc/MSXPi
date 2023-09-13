@@ -1,3 +1,7 @@
+MSXPi Update for MSX-DOS 2
+If running this after booting from MSXPi MSX-DOS 1 ROM, please stop this process and instead update the system according to the User's Manual Update Process for MSXPi-DOS.
+echo
+Starting update
 pcopy r1:at28c256.com
 pcopy r1:chatgpt.com
 pcopy r1:dosinit.com
@@ -8,7 +12,6 @@ pcopy r1:msxpiupd.tmp
 pcopy r1:multirom.rom
 pcopy r1:pcd.com
 pcopy r1:pdate.com
-pcopy r1:pdatedeb.com
 pcopy r1:pdir.com
 pcopy r1:pplay.com
 pcopy r1:preboot.com
@@ -27,5 +30,5 @@ DEL PCOPY.COM
 REN PCOPY.NEW PCOPY.COM
 pcd /home/pi/msxpi
 prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
+Rebooting... wait for the command prompt.t
 prestart
-pver
