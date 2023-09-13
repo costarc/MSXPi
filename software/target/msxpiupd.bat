@@ -1,9 +1,5 @@
-echo Updating MSXPi client and server software...
-echo Setting date & time...
 pdate
-echo
-echo Updating MSXPIUPD.BAT
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpiupd.tmp?raw=true
 DEL MSXPIRFH.BAT
-pcopy https://github.com/costarc/MSXPi/raw/master/software/target/msxpirfh.bat?raw=true
-MSXPIRFH.BAT
+pset DriveR1 ftp://192.168.1.100/target
+pcopy r1:msxpirfh.bat
+msxpirfh
