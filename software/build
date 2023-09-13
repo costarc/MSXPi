@@ -39,7 +39,7 @@ genUpdateBatch() {
   echo "echo MSXPi Update for MSX-DOS 2" >> /tmp/msxpiupd.bat
   echo "echo If running this after booting from MSXPi MSX-DOS 1 ROM, " >> /tmp/msxpiupd.bat
   echo "echo please stop this process and instead update the system according " >> /tmp/msxpiupd.bat
-  echo "echo to the User's Manual Update Process for MSXPi-DOS." >> /tmp/msxpiupd.bat
+  echo "echo to the User's Manual Update Process for MSXPi-DOS Boot Disk." >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Starting update" >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat

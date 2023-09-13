@@ -1,7 +1,7 @@
 echo MSXPi Update for MSX-DOS 2
 echo If running this after booting from MSXPi MSX-DOS 1 ROM, 
 echo please stop this process and instead update the system according 
-echo to the User's Manual Update Process for MSXPi-DOS.
+echo to the User's Manual Update Process for MSXPi-DOS Boot Disk.
 echo
 echo Starting update
 pdate
