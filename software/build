@@ -37,7 +37,9 @@ UpdateBuildIdASM() {
 
 genUpdateBatch() {
   echo "MSXPi Update for MSX-DOS 2" >> /tmp/msxpiupd.bat
-  echo "If running this after booting from MSXPi MSX-DOS 1 ROM, please stop this process and instead update the system according to the User's Manual Update Process for MSXPi-DOS." >> /tmp/msxpiupd.bat
+  echo "If running this after booting from MSXPi MSX-DOS 1 ROM," >> /tmp/msxpiupd.bat
+  echo "please stop this process and instead update the system" >> /tmp/msxpiupd.bat
+  echo " according to the User's Manual Update Process for MSXPi-DOS." >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
   echo "Starting update" >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat
