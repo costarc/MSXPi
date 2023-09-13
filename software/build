@@ -71,6 +71,7 @@ genUpdateBatch() {
 
   echo "Rebooting... wait for the command prompt.t" >> /tmp/msxpirfh.bat
   echo "prestart" >> /tmp/msxpirfh.bat
+  echo "pver" >> /tmp/msxpirfh.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
   perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
   rm /tmp/msxpiupd.bat
