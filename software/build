@@ -47,7 +47,6 @@ genUpdateBatch() {
   echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
   echo "echo Getting lastest updater..." >> /tmp/msxpiupd.bat
   echo "pcopy r1:msxpirfh.bat" >> /tmp/msxpiupd.bat
-  echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Starting update" >> /tmp/msxpiupd.bat
   echo "msxpirfh" >> /tmp/msxpiupd.bat
   

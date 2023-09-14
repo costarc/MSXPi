@@ -9,6 +9,5 @@ pdate
 DEL MSXPIRFH.BAT
 echo Getting lastest updater...
 pcopy r1:msxpirfh.bat
-echo
 echo Starting update
 msxpirfh
