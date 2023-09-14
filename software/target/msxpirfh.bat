@@ -4,7 +4,6 @@ pcopy r1:dosinit.com
 pcopy r1:msxpidos.rom
 pcopy r1:msxpiext.bin
 pcopy r1:msxpiupd.bat
-pcopy r1:msxpiupd.tmp
 pcopy r1:multirom.rom
 pcopy r1:pcd.com
 pcopy r1:pdate.com

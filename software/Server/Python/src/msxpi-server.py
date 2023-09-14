@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230914.634"
+BuildId = "20230914.635"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -574,8 +574,7 @@ def pcopy():
                         fname2=path.split("/")[len(path.split("/"))-1]
 
                     print("dsk write:",drive,fname2)
-                    dskobj = open_fs(fatfsfname,,,False,)
-                    dskobj = open_fs(fatfsfname,,,False,)
+                    dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
                     msxdos_inihrd(drive)
