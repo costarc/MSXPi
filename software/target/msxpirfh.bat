@@ -6,7 +6,6 @@ pcopy r1:msxpiext.bin
 pcopy r1:msxpiupd.bat
 pcopy r1:multirom.rom
 pcopy r1:pcd.com
-pcopy r1:pcopy.com
 pcopy r1:pdate.com
 pcopy r1:pdir.com
 pcopy r1:pplay.com
@@ -20,6 +19,7 @@ pcopy r1:pvol.com
 pcopy r1:pwifi.com
 pcopy r1:python.com
 pcopy r1:template.com
+pcopy r1:pcopy.com
 echo  
 pcd /home/pi/msxpi
 prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
