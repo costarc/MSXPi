@@ -872,6 +872,7 @@ def pwifi():
     global psetvar
     wifissid = getMSXPiVar('WIFISSID')
     wifipass = getMSXPiVar('WIFIPWD')
+    wificountry = getMSXPiVar('WIFICOUNTRY')
 
     rc,data = recvdata()
 
@@ -887,7 +888,9 @@ def pwifi():
         return RC_SUCCESS
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
-        buf = "country=GB\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
+        setWiFiCountryCMD = "sudo raspi-config nonint do_wifi_country " + wificountry
+        prun(setWiFiCountryCMD)
+        buf = "country=" + wificountry + "\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
         buf = buf + "\tssid=\"" + wifissid
         buf = buf + "\"\n\tpsk=\"" + wifipass
         buf = buf + "\"\n}\n"
@@ -1451,6 +1454,7 @@ else:
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
+           ['WIFICOUNTRY','GB'], \
            ['DSKTMPL','/home/pi/msxpi/disks/blank.dsk'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
