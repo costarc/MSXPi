@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230914.633"
+BuildId = "20230914.634"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -548,6 +548,7 @@ def pcopy():
             else:# Booted from MSXPi disk drive (disk images)
                 # this routine will write the file directly to the disk image in RPi
                 try:
+                    drive = getMSXPiVar('DriveA')
                     fatfsfname = "fat:///"+getMSXPiVar('DriveA')        # Asumme Drive A:
                     if fname2.upper().startswith("A:"):
                         fname2 = fname2.split(":")
@@ -558,6 +559,7 @@ def pcopy():
                         else:
                             fname2=path.split("/")[len(path.split("/"))-1]           # Drive not passed in name
                     elif fname2.upper().startswith("B:"):
+                        drive = getMSXPiVar('DriveB')
                         fatfsfname = "fat:///"+getMSXPiVar('DriveB')    # Is Drive B:
                         fname2 = fname2.split(":")
                         if len(fname2[1]) > 0:
@@ -571,10 +573,12 @@ def pcopy():
                     elif fname2 == '':
                         fname2=path.split("/")[len(path.split("/"))-1]
 
-                    print("dsk write:",fname2)
-                    dskobj = open_fs(fatfsfname)
+                    print("dsk write:",drive,fname2)
+                    dskobj = open_fs(fatfsfname,,,False,)
+                    dskobj = open_fs(fatfsfname,,,False,)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
+                    msxdos_inihrd(drive)
                     sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_TERMINATE)
                 except Exception as e:
                     rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)

@@ -44,7 +44,6 @@ genUpdateBatch() {
   echo "echo Preparing to update..." >> /tmp/msxpiupd.bat
   echo "pset DriveR1 ${GITPATH}/target"  >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat
-  echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
   echo "echo Getting lastest updater..." >> /tmp/msxpiupd.bat
   echo "pcopy r1:msxpirfh.bat" >> /tmp/msxpiupd.bat
   echo "echo Starting update" >> /tmp/msxpiupd.bat
@@ -65,10 +64,8 @@ genUpdateBatch() {
     fi
   done
 
-  echo "pcopy r1:pcopy.com pcopy.new" >> /tmp/msxpirfh.bat
-  echo "pcopy r1:msxpiupd.bat msxpiupd.new" >> /tmp/msxpirfh.bat
-  echo "DEL PCOPY.COM" >> /tmp/msxpirfh.bat
-  echo "REN PCOPY.NEW PCOPY.COM" >> /tmp/msxpirfh.bat
+  echo "pcopy r1:pcopy.com" >> /tmp/msxpirfh.bat
+  echo "pcopy r1:msxpiupd.bat" >> /tmp/msxpirfh.bat
   
   echo "echo  " >> /tmp/msxpirfh.bat
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
