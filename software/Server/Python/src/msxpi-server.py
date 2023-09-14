@@ -889,7 +889,7 @@ def pwifi():
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
         setWiFiCountryCMD = "sudo raspi-config nonint do_wifi_country " + wificountry
-        prun(setWiFiCountryCMD)
+        os.system(setWiFiCountryCMD)
         buf = "country=" + wificountry + "\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
         buf = buf + "\tssid=\"" + wifissid
         buf = buf + "\"\n\tpsk=\"" + wifipass
