@@ -26,6 +26,6 @@ DEL PCOPY.COM
 REN PCOPY.NEW PCOPY.COM
 pcd /home/pi/msxpi
 prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
-echo Restarting msxpi-server.py
+echo Rebooting... wait for the command prompt.t
 prestart
 pver
