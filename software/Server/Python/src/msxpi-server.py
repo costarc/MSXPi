@@ -1382,7 +1382,7 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-    print('chatgpt')
+    #print('chatgpt')
     model_engine = "text-davinci-003"
     
     rc,data = recvdata(BLKSIZE)
@@ -1396,7 +1396,7 @@ def chatgpt():
     openai.api_key = getMSXPiVar('OPENAIKEY')
     
     if rc == RC_SUCCESS:
-        if 1==1: #try:
+        try:
             response = openai.Completion.create(
                 engine=model_engine,
                 prompt=query,
@@ -1407,9 +1407,9 @@ def chatgpt():
             #print("Response:",response)
             buf = response['choices'][0]['text']
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        #except Exception as e:
-        #    print("Pi:Error - ",str(e).encode())
-        #    sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+        except Exception as e:
+            print("Pi:Error - ",str(e).encode())
+            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
     else:
         sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
         
