@@ -68,10 +68,10 @@ genUpdateBatch() {
   echo "DEL PCOPY.COM" >> /tmp/msxpirfh.bat
   echo "REN PCOPY.NEW PCOPY.COM" >> /tmp/msxpirfh.bat
   
-  echo "echo"
+  echo "echo  "
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
   echo "prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpirfh.bat
-
+  echo "echo "
   echo "echo Rebooting... wait for the command prompt.t" >> /tmp/msxpirfh.bat
   echo "prestart" >> /tmp/msxpirfh.bat
   echo "pver" >> /tmp/msxpirfh.bat
