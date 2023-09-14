@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230914.637"
+BuildId = "20230914.638"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
