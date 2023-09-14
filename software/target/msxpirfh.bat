@@ -28,6 +28,6 @@ echo
 pcd /home/pi/msxpi
 prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
 echo 
-echo Rebooting... wait for the command prompt.t
+echo Restarting msxpi-server.py
 prestart
 pver

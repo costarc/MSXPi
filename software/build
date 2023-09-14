@@ -41,11 +41,11 @@ genUpdateBatch() {
   echo "echo please stop this process and instead update the system according " >> /tmp/msxpiupd.bat
   echo "echo to the User's Manual Update Process for MSXPi-DOS Boot Disk." >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
-  echo "echo Setting MSX Date" >> /tmp/msxpiupd.bat
+  echo "echo Preparing to update..." >> /tmp/msxpiupd.bat
+  echo "pset DriveR1 ${GITPATH}/target"  >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat
   echo "DEL MSXPIRFH.BAT" >> /tmp/msxpiupd.bat
   echo "echo Getting lastest updater..." >> /tmp/msxpiupd.bat
-  echo "pset DriveR1 ${GITPATH}/target"  >> /tmp/msxpiupd.bat
   echo "pcopy r1:msxpirfh.bat" >> /tmp/msxpiupd.bat
   echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Starting update" >> /tmp/msxpiupd.bat
