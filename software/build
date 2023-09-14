@@ -36,7 +36,6 @@ UpdateBuildIdASM() {
 }
 
 genUpdateBatch() {
-  echo "echo" >> /tmp/msxpiupd.bat
   echo "echo Preparing to update..." >> /tmp/msxpiupd.bat
   echo "pset DriveR1 ${GITPATH}/target"  >> /tmp/msxpiupd.bat
   echo "pdate" >> /tmp/msxpiupd.bat
@@ -48,7 +47,7 @@ genUpdateBatch() {
   
   rm target/msxpirfh.bat  > /dev/null 2>&1
     
-  for fn in `ls target | grep -v -i pcopy.com`
+  for fn in `ls target`
   do
     if [ -f target/${fn} ];then
       echo "pcopy r1:${fn}" >> /tmp/msxpirfh.bat
@@ -60,9 +59,6 @@ genUpdateBatch() {
       echo "pcopy r1:BASIC/${fn}" >> /tmp/msxpirfh.bat
     fi
   done
-
-  echo "pcopy r1:pcopy.com" >> /tmp/msxpirfh.bat
-  echo "pcopy r1:msxpiupd.bat" >> /tmp/msxpirfh.bat
   
   echo "echo  " >> /tmp/msxpirfh.bat
   echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
