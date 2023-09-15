@@ -60,7 +60,6 @@ genUpdateBatch() {
       echo "pcopy m:BASIC/${fn}" >> /tmp/msxpirfh.bat
     fi
   done
-
   echo "pcopy m:pcopy.com" >> /tmp/msxpirfh.bat
   
   echo "echo  " >> /tmp/msxpirfh.bat

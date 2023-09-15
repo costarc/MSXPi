@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230915.644"
+BuildId = "20230915.646"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -237,19 +237,19 @@ def pathExpander(path, basepath = ''):
     if path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
-    elif (path.startswith('m:'.lower())):
+    elif (path.lower().startswith('m:')):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveM') + '/' + path.split(':')[1]
-    elif (path.startswith('r1:'.lower())):
+    elif (path.lower().startswith('r1:')):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveR1') + '/' + path.split(':')[1]
-    elif (path.startswith('r2:'.lower())):
+    elif (path.lower().startswith('r2:')):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveR2') + '/' + path.split(':')[1]
-    elif (path.startswith('http'.lower()) or \
-        path.startswith('ftp'.lower()) or \
-        path.startswith('nfs'.lower()) or \
-        path.startswith('smb'.lower())):
+    elif (path.lower().startswith('http') or \
+        path.lower().startswith('ftp') or \
+        path.lower().startswith('nfs') or \
+        path.lower().startswith('smb')):
         urltype = 1 # this is a network path
         newpath = path
     elif basepath.startswith('/'):
@@ -464,19 +464,17 @@ def pcopy():
     else:
         expand = False
         if len(parms) > 1:
+            pathType, path = pathExpander(parms[0], basepath)
             fname2 = parms[1]
-            pathType, path = pathExpander(parms[1], basepath)
+  
         else:
             pathType, path = pathExpander(parms[0], basepath)
-            print("pathType:",pathType,path)
             if "/" in path:
                 fname2=path.split("/")[len(path.split("/"))-1]
             elif ":" in path:
                 fname2=path.split(":")[0]
             else:
                 fname2 = path
-            
-            print(fname2)
             
     if pathType == 0:
         try:
