@@ -474,7 +474,8 @@ def pcopy():
                 fname2=path.split(":")[0]
             else:
                 fname2 = path
-            
+    
+    print(pathType,fname2,path)
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:
@@ -798,9 +799,6 @@ def pvol():
     return rc
 
 def pset(varn = '', varv = ''):
-    
-    print("pset")
-    
     global psetvar,drive0Data,drive1Data
 
     if varn == '':
@@ -824,9 +822,7 @@ def pset(varn = '', varv = ''):
     else:
         varname = varn
         varvalue = varv
-        
-    print("pset:",varname, varvalue)
-    
+
     rc = setMSXPiVar(varname, varvalue)
     
     if rc == RC_SUCCESS:
