@@ -237,19 +237,19 @@ def pathExpander(path, basepath = ''):
     if path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
-    elif (path.startswith('m:')):
+    elif (path.startswith('m:'.lower())):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveM') + '/' + path.split(':')[1]
-    elif (path.startswith('r1:')):
+    elif (path.startswith('r1:'.lower())):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveR1') + '/' + path.split(':')[1]
-    elif (path.startswith('r2:')):
+    elif (path.startswith('r2:'.lower())):
         urltype = 1 # this is a network path
         newpath = getMSXPiVar('DriveR2') + '/' + path.split(':')[1]
-    elif (path.startswith('http') or \
-        path.startswith('ftp') or \
-        path.startswith('nfs') or \
-        path.startswith('smb')):
+    elif (path.startswith('http'.lower()) or \
+        path.startswith('ftp'.lower()) or \
+        path.startswith('nfs'.lower()) or \
+        path.startswith('smb'.lower())):
         urltype = 1 # this is a network path
         newpath = path
     elif basepath.startswith('/'):
@@ -465,16 +465,19 @@ def pcopy():
         expand = False
         if len(parms) > 1:
             fname2 = parms[1]
-            path = parms[1]
+            pathType, path = pathExpander(parms[1], basepath)
         else:
-            path = parms[0]
+            pathType, path = pathExpander(parms[0], basepath)
+            print("pathType:",pathType,path)
             if "/" in path:
-                fname2=path.split("/")[len(path.split("/"))]
+                fname2=path.split("/")[len(path.split("/"))-1]
             elif ":" in path:
-                fname2=path.split(":")[1]
+                fname2=path.split(":")[0]
             else:
-                fname = path
-                
+                fname2 = path
+            
+            print(fname2)
+            
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:
