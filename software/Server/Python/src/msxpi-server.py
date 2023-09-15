@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230915.646"
+BuildId = "20230915.647"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -263,7 +263,6 @@ def pathExpander(path, basepath = ''):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    print("msxdos_inihrd",filename)
     
     if ('disk' in vars() or 'disk' in globals()):
         disk.flush()

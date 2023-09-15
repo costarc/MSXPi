@@ -19,6 +19,10 @@ pcopy m:pvol.com
 pcopy m:pwifi.com
 pcopy m:python.com
 pcopy m:template.com
+pcopy m:BASIC/API.BAS
+pcopy m:BASIC/DOLAR.BAS
+pcopy m:BASIC/IRC.BAS
+pcopy m:BASIC/WEATHER.BAS
 pcopy m:pcopy.com
 echo  
 pcd /home/pi/msxpi
