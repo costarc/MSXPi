@@ -216,11 +216,11 @@ NOTRAMPG2:
         JP      PRINT
 
 
-ISRAMMSG: DB "RAM ENABLED IN PAGES 1 & 2",13,10,0
+ISRAMMSG: DB "RAM OK in pages 1 & 2",13,10,0
 NOTRAMMSG1: DB "CANNOT WRITE TO PAGE 1",0
 NOTRAMMS2: DB "CANNOT WRITE TO PAGE 2",0
 
-command:    DB      "pcopy",0
+command:    DB      "ploadr",0
 msg_success: db "Checksum match",13,10,0
 msg_error: db "Checksum did not match",13,10,0
 msg_cmd: db "Sending command...",0

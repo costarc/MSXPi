@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230915.678"
+BuildId = "20230915.679"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -424,7 +424,10 @@ def pcd():
 
     return RC_SUCCESS
 
-def pcopy():
+def ploadr():
+    pcopy("ploadr")
+    
+def pcopy(msxcmd = "pcopy"):
 
     buf = bytearray(BLKSIZE)
     rc = RC_SUCCESS
@@ -442,12 +445,15 @@ def pcopy():
     
     if len(userPath) == 0 or (userPath.lower().strip() == '/help'):
         buf = 'Syntax:\n'
-        buf = buf + 'pcopy </z> remotefile <localfile>\n'
+        if msxcmd == "pcopy":
+            buf = buf + 'pcopy </z> remotefile <localfile>\n'
+        elif msxcmd == "ploadr":
+            buf = buf + 'ploadr </z> remotefile\n'
+        
         buf = buf +'Valid devices:\n'
         buf = buf +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
         buf = buf + '/z decompress file\n'
         buf = buf + 'm:, r1: r2: virtual remote devices'
-
         rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
         return rc
 
@@ -548,7 +554,7 @@ def pcopy():
 
         else:
             # Did we boot from the MSXPi ROM or another external drive?
-            if not msxdos1boot: # Boot was from an externdal drive
+            if (not msxdos1boot) or msxcmd == "ploadr": # Boot was from an externdal drive OR it is PLOADR
                 if expand:
                     if fname2 == '':
                         rc = ini_fcb(expandedFn,filesize)
