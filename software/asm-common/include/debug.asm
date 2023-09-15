@@ -80,7 +80,7 @@ DBGHL:
         CALL    PRINTNUMBER
         LD      A,L
         CALL    PRINTNUMBER
-        LD      A,'-'
+        LD      A,' '
         CALL    PUTCHAR
         POP     HL
         POP     DE

@@ -102,6 +102,7 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 ~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
+~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm  -o ./target/ploadr.com
 
 cp target/disks/blank.dsk target/disks/msxpiboot.dsk
 cp target/disks/blank.dsk target/disks/tools.dsk
