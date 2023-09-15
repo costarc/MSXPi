@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230915.640"
+BuildId = "20230915.642"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1465,7 +1465,7 @@ else:
     psetvar = [['PATH','/home/pi/msxpi'], \
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
-           ['DriveM','ftp://192.168.1.100'], \
+           ['DriveM','https://github.com/costarc/MSXPi/raw/master/software/target'], \
            ['DriveR1','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
            ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
            ['WIDTH','80'], \
