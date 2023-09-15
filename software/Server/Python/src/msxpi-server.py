@@ -27,7 +27,7 @@ from contextlib import redirect_stdout
 import openai
 
 version = "1.1"
-BuildId = "20230914.638"
+BuildId = "20230915.639"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -424,7 +424,7 @@ def pcd():
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
 
     return RC_SUCCESS
-    
+
 def pcopy():
 
     buf = bytearray(BLKSIZE)
@@ -440,8 +440,8 @@ def pcopy():
         userPath=''
     else:
         userPath = data.decode().split("\x00")[0]
-                   
-    if len(userPath) == 0 or userPath.lower().startswith('/h'):
+    
+    if len(userPath) == 0 or (userPath.lower().strip() == '/help'):
         buf = 'Syntax:\n'
         buf = buf + 'pcopy </z> remotefile <localfile>\n'
         buf = buf +'Valid devices:\n'
@@ -455,6 +455,7 @@ def pcopy():
     fname2 = ''
     expandedFn = ''
     parms = userPath.split()
+    pathType = 0
     if '/z' in userPath.lower():
         expand = True
         pathType, path = pathExpander(parms[1], basepath)
@@ -462,10 +463,18 @@ def pcopy():
             fname2 = parms[2]
     else:
         expand = False
-        pathType, path = pathExpander(parms[0], basepath)
         if len(parms) > 1:
             fname2 = parms[1]
-
+            path = parms[1]
+        else:
+            path = parms[0]
+            if "/" in path:
+                fname2=path.split("/")[len(path.split("/"))]
+            elif ":" in path:
+                fname2=path.split(":")[1]
+            else:
+                fname = path
+                
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:
@@ -484,8 +493,8 @@ def pcopy():
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
 
+    # if /z passed, will uncompress the file
     if rc == RC_SUCCESS:
-        # if /z passed, will uncompress the file
         if expand:
             tmpfn0 = path.split('/')
             tmpfn = tmpfn0[len(tmpfn0)-1]
@@ -513,7 +522,7 @@ def pcopy():
                 fname1 = os.listdir('/tmp/msxpi')[0]
                 expandedFn = fname1
                 fname1 = '/tmp/msxpi/' + fname1
-
+                
                 try:
                     with open(fname1, mode='rb') as f:
                         buf = f.read()
@@ -528,20 +537,28 @@ def pcopy():
             else:
                 rc = sendmultiblock(('Pi:Error - ' + perror).encode(), BLKSIZE, RC_FAILED)
                 return RC_FAILED
-                
+    
+    # If all good so far (including eventual decompress if needed)
+    # then send the file to MSX
     if rc == RC_SUCCESS:
         if filesize == 0:
             rc = sendmultiblock("Pi:Error - File size is zero bytes".encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
 
         else:
-            if not msxdos1boot: # Boot was not from MSXPi disk drive
-                if fname2 == '':
-                    fname2=path.split("/")[len(path.split("/"))-1]
-                rc = ini_fcb(fname2,filesize)
+            # Did we boot from the MSXPi ROM or another external drive?
+            if not msxdos1boot: # Boot was from an externdal drive
+                if expand:
+                    if fname2 == '':
+                        rc = ini_fcb(expandedFn,filesize)
+                    else:
+                        rc = ini_fcb(fname2,filesize)
+                else:
+                    rc = ini_fcb(fname2,filesize)
                 if rc != RC_SUCCESS:
                     print("pcopy: ini_fcb failed")
                     return rc
+                
                 # This will send the file to MSX, for pcopy to write it to disk
                 rc = sendmultiblock(buf,SECTORSIZE, rc)
             
@@ -573,7 +590,6 @@ def pcopy():
                     elif fname2 == '':
                         fname2=path.split("/")[len(path.split("/"))-1]
 
-                    print("dsk write:",drive,fname2)
                     dskobj = open_fs(fatfsfname)
                     dskobj.create(fname2,True)
                     dskobj.writebytes(fname2,buf)
@@ -718,8 +734,6 @@ def pdate():
     pdate[6]=(now.second)
     pdate[7]=(0)
     
-    print("Date:",now,pdate)
-    
     sendmultiblock(pdate, CMDSIZE, RC_SUCCESS)
    
     return RC_SUCCESS
@@ -740,7 +754,6 @@ def pplay():
     rc = RC_SUCCESS
     
     rc,data = recvdata(BLKSIZE)
-    print("pplay:",data)
         
     if data[0] == 0:
         buf = "Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3"
