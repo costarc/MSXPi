@@ -1,12 +1,10 @@
 pcopy m:at28c256.com
 pcopy m:chatgpt.com
 pcopy m:dosinit.com
-pcopy m:galaga.rom
 pcopy m:msxpidos.rom
 pcopy m:msxpiext.bin
 pcopy m:msxpiupd.bat
 pcopy m:multirom.rom
-pcopy m:pacman.rom
 pcopy m:pcd.com
 pcopy m:pdate.com
 pcopy m:pdir.com
