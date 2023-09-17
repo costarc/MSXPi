@@ -1468,7 +1468,7 @@ else:
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
            ['DriveM','https://github.com/costarc/MSXPi/raw/master/software/target'], \
-           ['DriveR1','http://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
+           ['DriveR1','http://www.msxarchive.nl/pub/msx/games/msx1'], \
            ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
