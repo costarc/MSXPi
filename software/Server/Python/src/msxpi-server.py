@@ -480,8 +480,7 @@ def pcopy(msxcmd = "pcopy"):
                 fname2=path.split(":")[0]
             else:
                 fname2 = path
-    
-    print(pathType,fname2,path)
+
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:

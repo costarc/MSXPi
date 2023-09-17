@@ -242,7 +242,6 @@ REGINDEX:   dw  0
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "debug.asm"
 
 currptx: DB     0,0
 FILEFCB:    ds  40
