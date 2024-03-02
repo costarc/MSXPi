@@ -1401,7 +1401,7 @@ def apitest():
     
 def chatgpt():
     #print('chatgpt')
-    model_engine = "text-davinci-003"
+    model_engine = "gpt-3.5-turbo"
     
     rc,data = recvdata(BLKSIZE)
     query = data.decode().split("\x00")[0]
@@ -1411,19 +1411,23 @@ def chatgpt():
         sendmultiblock('Pi:Error - OPENAIKEY is not defined. Define your key with PSET'.encode(), BLKSIZE, RC_FAILED)
         return RC_SUCCESS
         
-    openai.api_key = getMSXPiVar('OPENAIKEY')
+    api_key = getMSXPiVar('OPENAIKEY')
     
     if rc == RC_SUCCESS:
         try:
-            response = openai.Completion.create(
-                engine=model_engine,
-                prompt=query,
-                max_tokens=1024,
+            client = openai.OpenAI(api_key=api_key)
+            completion = client.chat.completions.create(
+                model=model_engine,
                 temperature=0.5,
+                max_tokens=1024,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": query}
+                ]
             )
-   
-            #print("Response:",response)
-            buf = response['choices'][0]['text']
+
+            buf = completion.choices[0].message.content
+            
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
         except Exception as e:
             print("Pi:Error - ",str(e).encode())
