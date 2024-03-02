@@ -90,7 +90,7 @@ sudo python3 -m pip install pyfatfs
 # Apply dirty patch for it to work with MSX Disk images
 sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-sudo python3 -m pip install openai
+sudo python3 -m pip install openai==1.12.0
 
 # -------------------------
 # Enable remote ssh into Pi
