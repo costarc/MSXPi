@@ -188,7 +188,7 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 source "$VENV_DIR/bin/activate"
 pip install --upgrade pip
-pip install fs pyfatfs openai==1.12.0
+pip install fs pyfatfs openai==1.99.1
 
 # Apply dirty patch for it to work with MSX Disk images
 sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
