@@ -183,4 +183,12 @@ rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
 
 #sudo systemctl stop msxpi-monitor
 #sudo systemctl start msxpi-monitor
+
+# Install Additional Python libraries required by msxpi-server
+sudo apt install -y python3-venv python3-full
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+pip install fs openai
+
 sudo reboot

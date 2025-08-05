@@ -95,7 +95,7 @@ Download the MSXPi setup script - it will download and install everything needed
 
           chmod 755 MSXPi-Setup
 
-          sudo ./MSXPi-Setup
+          sudo bash ./MSXPi-Setup
           
 If you need very detailed instructions, please read "Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - Installing Raspbian from Scratch.pdf", in https://github.com/costarc/MSXPi/tree/master/documents (Portuguese version also available).
 
