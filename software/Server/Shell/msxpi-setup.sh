@@ -178,17 +178,21 @@ rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
 #sudo systemctl start msxpi-monitor
 
 # Install Additional Python libraries required by msxpi-server
+# Define virtual environment path in user's home directory
 sudo apt install -y python3-venv python3-full
-python3 -m venv "$VENV_DIR"
+VENV_DIR="$HOME/msxpi-venv"
+
+# Create virtual environment if it doesn't exist
+if [ ! -d "$VENV_DIR" ]; then
+    echo "Creating virtual environment at $VENV_DIR..."
+    python3 -m venv "$VENV_DIR"
+fi
 source "$VENV_DIR/bin/activate"
-# Install FAT library for Python
-pip install pyfatfs
+pip install --upgrade pip
+pip install fs pyfatfs openai==1.12.0
+
 # Apply dirty patch for it to work with MSX Disk images
 sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-pip install --upgrade pip
-pip install fs openai
-
-
 
 sudo reboot
