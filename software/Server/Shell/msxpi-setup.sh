@@ -195,4 +195,6 @@ pip install fs pyfatfs openai==1.12.0
 sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 
+sudo apt autoremove
+
 sudo reboot
