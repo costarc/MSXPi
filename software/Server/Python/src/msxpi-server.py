@@ -47,7 +47,7 @@ from fs import open_fs
 import threading
 from io import StringIO
 from contextlib import redirect_stdout
-import openai
+from openai import OpenAI
 
 version = "1.1"
 BuildId = "20230915.680"
@@ -1423,7 +1423,9 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
+    useChatResponse = True
     model_engine = "gpt-3.5-turbo"
+    #model_engine="gpt-4.1"
     rc, data = recvdata(BLKSIZE)
     query = data.decode().split("\x00")[0].strip()
 
@@ -1438,17 +1440,24 @@ def chatgpt():
 
     if rc == RC_SUCCESS:
         try:
-            client = openai.OpenAI(api_key=api_key)
-            completion = client.chat.completions.create(
-                model=model_engine,
-                temperature=0.5,
-                max_tokens=1024,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": query}
-                ]
-            )
-            response_text = completion.choices[0].message.content
+            client = OpenAI(api_key=api_key)
+            if useChatResponse:
+                completion = client.chat.completions.create(
+                    model=model_engine,
+                    messages=[
+                        {
+                            "role": "user", 
+                            "content": query
+                        }
+                    ]
+                )
+                response_text = completion.choices[0].message.content
+            else:
+                response_text = client.responses.create(
+                    model=model_engine,
+                    input=query
+                )
+            
             sendmultiblock(response_text.encode(), BLKSIZE, RC_SUCCESS)
         except Exception as e:
             error_msg = f"Pi:Error - {str(e)}"
