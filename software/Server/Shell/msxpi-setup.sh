@@ -93,9 +93,9 @@ sudo touch /boot/ssh
 # -------------------------------------------
 # Create msxpi directory and link on home dir
 # -------------------------------------------
-mkdir -p $MSXPIHOME/disks
-chown -R pi.pi $MSXPIHOME
-ln -s $MSXPIHOME /home/msxpi
+mkdir -p $MSXPIHOME/disks > /dev/null 2>&1
+chown -R pi:pi $MSXPIHOME
+ln -s $MSXPIHOME /home/msxpi > /dev/null 2>&1
 
 # ------------------------------------------
 # Install msxpi-monitor service for systemd
@@ -164,7 +164,6 @@ mv tools.dsk $MSXPIHOME/disks/
 chmod 755 $MSXPIHOME/msxpi-server.py
 chmod 755 $MSXPIHOME/pplay.sh
 chmod 755 $MSXPIHOME/kill.sh
-chown -R pi.pi $MSXPIHOME
 
 # changes to prevent sd corruption
 # disable swap

@@ -1429,13 +1429,12 @@ def chatgpt():
     rc,data = recvdata(BLKSIZE)
     query = data.decode().split("\x00")[0]
 
-    if len(getMSXPiVar('OPENAIKEY')) == 0:
+    api_key = getMSXPiVar('OPENAIKEY')
+    if len(api_key) == 0:
         print("chatagpt: no key - exiting")
         sendmultiblock('Pi:Error - OPENAIKEY is not defined. Define your key with PSET'.encode(), BLKSIZE, RC_FAILED)
         return RC_SUCCESS
-        
-    api_key = getMSXPiVar('OPENAIKEY')
-    
+
     if rc == RC_SUCCESS:
         try:
             client = openai.OpenAI(api_key=api_key)
@@ -1453,7 +1452,7 @@ def chatgpt():
             
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
         except Exception as e:
-            print("Pi:Error - ",str(e).encode())
+            print("Pi:Error - ",str(e))
             sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
     else:
         sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
