@@ -1423,16 +1423,17 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-    #print('chatgpt')
     model_engine = "gpt-3.5-turbo"
-    
-    rc,data = recvdata(BLKSIZE)
-    query = data.decode().split("\x00")[0]
+    rc, data = recvdata(BLKSIZE)
+    query = data.decode().split("\x00")[0].strip()
 
     api_key = getMSXPiVar('OPENAIKEY')
-    if len(api_key) == 0:
-        print("chatagpt: no key - exiting")
-        sendmultiblock('Pi:Error - OPENAIKEY is not defined. Define your key with PSET'.encode(), BLKSIZE, RC_FAILED)
+    if not api_key:
+        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET', BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
+
+    if not query:
+        sendmultiblock(b'Pi:Error - Empty query', BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
     if rc == RC_SUCCESS:
@@ -1447,15 +1448,14 @@ def chatgpt():
                     {"role": "user", "content": query}
                 ]
             )
-
-            buf = completion.choices[0].message.content
-            
-            sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+            response_text = completion.choices[0].message.content
+            sendmultiblock(response_text.encode(), BLKSIZE, RC_SUCCESS)
         except Exception as e:
-            print("Pi:Error - ",str(e))
-            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+            error_msg = f"Pi:Error - {str(e)}"
+            print(error_msg)
+            sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
     else:
-        sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
+        sendmultiblock(b'Pi:Error', BLKSIZE, rc)
         
 """ ============================================================================
     msxpi-server.py
