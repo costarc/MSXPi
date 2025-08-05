@@ -31,6 +31,11 @@ Overall, the steps to get up and running are:
 
 Prepare Raspberry Pi Using MSXPi SDCard Image
 =============================================
+
+
+Note: This method is currently not available. Use the 2nd method below to prepare the PI SD card.
+
+
 ### Step 1: Download and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCard
 
@@ -64,6 +69,8 @@ In case you need very detailed instructions, please read  "Tutorial - Setup Rasp
 
 Prepare Raspberry Pi Using a Fresh Raspbian Image
 =================================================
+
+
 In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
 
 ### Step 1: Download the Raspberry Pi Imager
