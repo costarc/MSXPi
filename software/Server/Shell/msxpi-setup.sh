@@ -85,13 +85,6 @@ sudo apt-get -y install pigpio
 sudo apt-get -y install lhasa
 sudo apt-get -y install unar
 
-# Install FAT library for Python
-sudo python3 -m pip install pyfatfs
-# Apply dirty patch for it to work with MSX Disk images
-sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-sudo python3 -m pip install openai==1.12.0
-
 # -------------------------
 # Enable remote ssh into Pi
 # -------------------------
@@ -188,7 +181,14 @@ rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
 sudo apt install -y python3-venv python3-full
 python3 -m venv "$VENV_DIR"
 source "$VENV_DIR/bin/activate"
+# Install FAT library for Python
+pip install pyfatfs
+# Apply dirty patch for it to work with MSX Disk images
+sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
+sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 pip install --upgrade pip
 pip install fs openai
+
+
 
 sudo reboot

@@ -92,7 +92,7 @@ Login to Raspbian using default user and passwird: pi / raspberry
 
 Configure the WiFi using raspi-config command
 
-Download the MSXPi setup script - it will download and install everything needed to have MSXPi up and running the following commands - but note: the finals stages of the setup installs OPENAI library (last section before the reboot command), which requires compilation - this stage may take over an hour if done in the Pi Zero, therefore you may choose to remove these from the MSXPI-Setup script before running iy, and do it at later time if you want to use ChatGPT with MSXPi.
+Download the MSXPi setup script - it will download and install everything needed to have MSXPi up and running the following commands - but note: the finals stages of the setup installs OPENAI library (the "Install Additional Python libraries required by msxpi-server" section the reboot command), which requires compilation - this stage may take over an hour if done in the Pi Zero, therefore you may choose to remove these from the MSXPI-Setup script before running iy, and do it at later time if you want to use ChatGPT with MSXPi.
 
           mkdir /home/pi/msxpi
 
