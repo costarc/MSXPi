@@ -47,7 +47,6 @@ from fs import open_fs
 import threading
 from io import StringIO
 from contextlib import redirect_stdout
-import openai
 
 version = "1.1"
 BuildId = "20230915.680"
@@ -1423,40 +1422,54 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-    #print('chatgpt')
+    useChatResponse = True
     model_engine = "gpt-3.5-turbo"
+    url = "https://api.openai.com/v1/chat/completions"
     
-    rc,data = recvdata(BLKSIZE)
-    query = data.decode().split("\x00")[0]
-
-    if len(getMSXPiVar('OPENAIKEY')) == 0:
-        print("chatagpt: no key - exiting")
-        sendmultiblock('Pi:Error - OPENAIKEY is not defined. Define your key with PSET'.encode(), BLKSIZE, RC_FAILED)
-        return RC_SUCCESS
-        
     api_key = getMSXPiVar('OPENAIKEY')
+    if not api_key:
+        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET', BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
+    else:
+        print("Using api_key: ",api_key)
+        
+    rc, data = recvdata(512)
+    if rc == RC_SUCCESS:
+        query = data.decode().split("\x00")[0].strip()
+    else:
+        sendmultiblock(b'Pi:Error - Failed to receive query', BLKSIZE, RC_FAILED)
     
+    if not query:
+        sendmultiblock(b'Pi:Error - Empty query', BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
+
     if rc == RC_SUCCESS:
         try:
-            client = openai.OpenAI(api_key=api_key)
-            completion = client.chat.completions.create(
-                model=model_engine,
-                temperature=0.5,
-                max_tokens=1024,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "model": model_engine,
+                "messages": [
                     {"role": "user", "content": query}
                 ]
-            )
-
-            buf = completion.choices[0].message.content
+            }
             
-            sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+            response = requests.post(url, headers=headers, json=payload)
+            openai_response = response.json()
+            if "choices" in openai_response:
+                response_text = openai_response["choices"][0]["message"]["content"]
+                sendmultiblock(response_text.encode(), BLKSIZE, RC_SUCCESS)
+            else:
+                sendmultiblock(openai_response.encode(), BLKSIZE, RC_FAILED)
         except Exception as e:
-            print("Pi:Error - ",str(e).encode())
-            sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE, RC_FAILED)
+            error_msg = f"Pi:Error - {str(e)}"
+            print(error_msg)
+            sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
     else:
-        sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
+        sendmultiblock(b'Pi:Error', BLKSIZE, rc)
         
 """ ============================================================================
     msxpi-server.py

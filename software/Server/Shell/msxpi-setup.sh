@@ -72,18 +72,7 @@ fi
 # Install libraries required by msxpi-server
 # ------------------------------------------
 sudo apt-get update
-sudo apt-get -y install python3
-sudo apt-get -y install python3-pip
-sudo apt-get -y install alsa-utils
-sudo apt-get -y install music123
-sudo apt-get -y install smbclient
-sudo apt-get -y install html2text
-sudo apt-get -y install libcurl4-nss-dev
-sudo apt-get -y install mplayer
-sudo apt-get -y install pypy
-sudo apt-get -y install pigpio
-sudo apt-get -y install lhasa
-sudo apt-get -y install unar
+sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
 
 # -------------------------
 # Enable remote ssh into Pi
@@ -93,9 +82,9 @@ sudo touch /boot/ssh
 # -------------------------------------------
 # Create msxpi directory and link on home dir
 # -------------------------------------------
-mkdir -p $MSXPIHOME/disks
-chown -R pi.pi $MSXPIHOME
-ln -s $MSXPIHOME /home/msxpi
+mkdir -p $MSXPIHOME/disks > /dev/null 2>&1
+chown -R pi:pi $MSXPIHOME
+ln -s $MSXPIHOME /home/msxpi > /dev/null 2>&1
 
 # ------------------------------------------
 # Install msxpi-monitor service for systemd
@@ -108,7 +97,7 @@ rm /lib/systemd/system/msxpi-server > /dev/null 2>&1
 # Install new controller / monitor
 cd $MSXPIHOME
 rm msxpi-monitor > /dev/null 2>&1
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
 chmod 755 $MSXPIHOME/msxpi-monitor
 
 cat <<EOF >/tmp/msxpi-monitor.service
@@ -125,9 +114,9 @@ WantedBy=multi-user.target
 EOF
 
 sudo mv /tmp/msxpi-monitor.service /lib/systemd/system/msxpi-monitor.service
-sudo chmod 755 /lib/systemd/system/msxpi-monitor.service
-sudo systemctl daemon-reload
-sudo systemctl enable msxpi-monitor
+sudo chmod 755 /lib/systemd/system/msxpi-monitor.service > /dev/null 2>&1
+sudo systemctl daemon-reload > /dev/null 2>&1
+sudo systemctl enable msxpi-monitor > /dev/null 2>&1
 
 # --------------------------------------------------
 # Configure PWM (analog audio) on GPIO18 and GPIO13
@@ -153,18 +142,28 @@ rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi.ini -O msxpi.ini.new
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
-wget --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
-wget --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi.ini -O msxpi.ini.new
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
+wget --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
+wget --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
 chmod 755 $MSXPIHOME/msxpi-server.py
 chmod 755 $MSXPIHOME/pplay.sh
 chmod 755 $MSXPIHOME/kill.sh
-chown -R pi.pi $MSXPIHOME
+
+rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
+
+# Install Additional Python libraries required by msxpi-server
+# Define virtual environment path in user's home directory
+sudo python3 -m pip install --upgrade pip --break-system-packages
+sudo python3 -m pip install fs pyfatfs --break-system-packages
+
+# Apply dirty patch for it to work with MSX Disk images
+sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
+sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
 
 # changes to prevent sd corruption
 # disable swap
@@ -172,23 +171,7 @@ sudo dphys-swapfile swapoff
 sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
-rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
-
+sudo apt autoremove
 #sudo systemctl stop msxpi-monitor
 #sudo systemctl start msxpi-monitor
-
-# Install Additional Python libraries required by msxpi-server
-sudo apt install -y python3-venv python3-full
-python3 -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-# Install FAT library for Python
-pip install pyfatfs
-# Apply dirty patch for it to work with MSX Disk images
-sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-pip install --upgrade pip
-pip install fs openai
-
-
-
 sudo reboot
