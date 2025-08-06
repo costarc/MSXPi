@@ -38,7 +38,7 @@ MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV2
 
 
 ### Step 2: Write the image to a SD Card
-Use a SD Card with a minimum of 4GB.
+Use a SD Card with a minimum of 8GB.
 
 Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to the SD Card (select option "Use Custom" in the Operating System drop box).
 
