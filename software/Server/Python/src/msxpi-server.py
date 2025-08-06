@@ -27,6 +27,7 @@ import RPi.GPIO as GPIO
 import time
 import subprocess
 from urllib.request import urlopen
+import requests
 import mmap
 import fcntl,os
 import sys
@@ -1422,7 +1423,7 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-    useChatResponse = True
+
     model_engine = "gpt-3.5-turbo"
     url = "https://api.openai.com/v1/chat/completions"
     
@@ -1433,7 +1434,7 @@ def chatgpt():
     else:
         print("Using api_key: ",api_key)
         
-    rc, data = recvdata(512)
+    rc, data = recvdata(BLKSIZE)
     if rc == RC_SUCCESS:
         query = data.decode().split("\x00")[0].strip()
     else:

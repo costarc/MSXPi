@@ -16,13 +16,13 @@ else
     OSCMDPREFIX="sudo "
 fi
 
-sudo kill -9 $(ps -ef | grep 'python /home/msxpi/msxpi-server.py' | grep -v grep  | awk '{print $2}')
+sudo kill -9 $(ps -ef | grep 'python3 /home/msxpi/msxpi-server.py' | grep -v grep  | awk '{print $2}')
 
 msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 if [[ $msxpisrv -eq 1 ]];then
     MSXPISERVER="sudo $MSXPIHOME/msxpi-server"
 else
-    MSXPISERVER="/usr/bin/python $MSXPIHOME/msxpi-server.py"
+    MSXPISERVER="/usr/bin/python3 $MSXPIHOME/msxpi-server.py"
 fi
 
 # check if msxpi files are already installed in ramdisk
@@ -74,7 +74,7 @@ if [[ $state -eq 0 ]];then
     if [[ msxpisrv -eq 1 ]];then
         ${MSXPIHOME}/msxpi-server &
     else
-        /usr/bin/python ${MSXPIHOME}/msxpi-server.py &
+        /usr/bin/python3 ${MSXPIHOME}/msxpi-server.py &
     fi
     sleep 1
     msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
@@ -86,7 +86,7 @@ if [[ $state -eq 0 ]];then
     if [[ msxpisrv -eq 1 ]];then
         ret=$(${MSXPIHOME}/msxpi-server 2>&1 &)
     else
-        ret=$(/usr/bin/python ${MSXPIHOME}/msxpi-server.py 2>&1 &)
+        ret=$(/usr/bin/python3 ${MSXPIHOME}/msxpi-server.py 2>&1 &)
     fi
     if [[ `echo $ret | grep -c "initialisation failed"` -eq 1 ]];then
         shutdown -h now
