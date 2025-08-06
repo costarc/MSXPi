@@ -91,13 +91,13 @@ ln -s $MSXPIHOME /home/msxpi > /dev/null 2>&1
 # ------------------------------------------
 
 # remove deprecated msxpi-server startup config
-sudo systemctl disable msxpi-server > /dev/null 2>&1
+sudo systemctl disable msxpi-server
 rm /lib/systemd/system/msxpi-server > /dev/null 2>&1
 
 # Install new controller / monitor
 cd $MSXPIHOME
 rm msxpi-monitor > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
 chmod 755 $MSXPIHOME/msxpi-monitor
 
 cat <<EOF >/tmp/msxpi-monitor.service
@@ -142,12 +142,12 @@ rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi.ini -O msxpi.ini.new
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
-wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
-wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi.ini -O msxpi.ini.new
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
+wget --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
+wget --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
+wget --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
 chmod 755 $MSXPIHOME/msxpi-server.py
