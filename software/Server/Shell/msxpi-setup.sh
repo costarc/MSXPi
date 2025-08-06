@@ -152,6 +152,7 @@ wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
+cp msxpi.ini.new msxpi.ini
 chmod 755 $MSXPIHOME/msxpi-server.py
 chmod 755 $MSXPIHOME/pplay.sh
 chmod 755 $MSXPIHOME/kill.sh
