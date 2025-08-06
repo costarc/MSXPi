@@ -1431,46 +1431,42 @@ def chatgpt():
     if not api_key:
         sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET', BLKSIZE, RC_FAILED)
         return RC_SUCCESS
-    else:
-        print("Using api_key: ",api_key)
         
     rc, data = recvdata(BLKSIZE)
     if rc == RC_SUCCESS:
         query = data.decode().split("\x00")[0].strip()
     else:
         sendmultiblock(b'Pi:Error - Failed to receive query', BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
     
     if not query:
         sendmultiblock(b'Pi:Error - Empty query', BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
-    if rc == RC_SUCCESS:
-        try:
-            headers = {
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-            
-            payload = {
-                "model": model_engine,
-                "messages": [
-                    {"role": "user", "content": query}
-                ]
-            }
-            
-            response = requests.post(url, headers=headers, json=payload)
-            openai_response = response.json()
-            if "choices" in openai_response:
-                response_text = openai_response["choices"][0]["message"]["content"]
-                sendmultiblock(response_text.encode(), BLKSIZE, RC_SUCCESS)
-            else:
-                sendmultiblock(openai_response.encode(), BLKSIZE, RC_FAILED)
-        except Exception as e:
-            error_msg = f"Pi:Error - {str(e)}"
-            print(error_msg)
-            sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
-    else:
-        sendmultiblock(b'Pi:Error', BLKSIZE, rc)
+    try:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        payload = {
+            "model": model_engine,
+            "messages": [
+                {"role": "user", "content": query}
+            ]
+        }
+        
+        response = requests.post(url, headers=headers, json=payload)
+        openai_response = response.json()
+        if "choices" in openai_response:
+            response_text = openai_response["choices"][0]["message"]["content"]
+            sendmultiblock(response_text.encode(), BLKSIZE, RC_SUCCESS)
+        else:
+            sendmultiblock(openai_response.encode(), BLKSIZE, RC_FAILED)
+    except Exception as e:
+        error_msg = f"Pi:Error - {str(e)}"
+        print(error_msg)
+        sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
         
 """ ============================================================================
     msxpi-server.py
