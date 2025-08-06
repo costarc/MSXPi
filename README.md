@@ -117,6 +117,7 @@ MSXPi v1.1 Release Notes
 - Added BASIC programs from Retropix Brazil:
   - DOLAR.BAS
   - WEATHER.BAS
+- Added chatgpt.com (OpenAI/chatgpt client)
 - Lots of bug fixes and improvements
 - All changes are fully compatible with interface v0.7
 
