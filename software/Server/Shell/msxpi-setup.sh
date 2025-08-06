@@ -72,7 +72,7 @@ fi
 # Install libraries required by msxpi-server
 # ------------------------------------------
 sudo apt-get update
-sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
+sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 aplay amixer smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
 
 # -------------------------
 # Enable remote ssh into Pi
@@ -132,6 +132,8 @@ cp /usr/share/alsa/alsa.conf $MSXPIHOME/alsa.conf.bak
 sudo sed -ri 's/defaults.ctl.card 0/defaults.ctl.card 1/' /usr/share/alsa/alsa.conf
 sudo sed -ri 's/defaults.pcm.card 0/defaults.pcm.card 1/' /usr/share/alsa/alsa.conf
 
+# this requires the usb sound card to be plugged or it will thrown an error.
+# In that case, this command need to be executed later when the sound card is plugged in.
 sudo amixer cset numid=3 1
 
 # Download msxpi-server components
