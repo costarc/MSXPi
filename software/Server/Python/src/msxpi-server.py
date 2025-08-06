@@ -1245,7 +1245,7 @@ def dskiosct():
     #print("dskiosct:mediaDescriptor=",sectorInfo[2])
     #print("dskiosct:initialSector=",sectorInfo[3])
        
-def recvdata( bytecounter = BLKSIZE):
+def recvdata(bytecounter = BLKSIZE):
 
     print("recvdata")
 
@@ -1423,24 +1423,31 @@ def apitest():
     rc = sendmultiblock(('Pi:CALL MSXPISEND data:' + buf2).encode(), BLKSIZE, RC_SUCCESS)
     
 def chatgpt():
-
+    print("chatgpt()")
+    
     model_engine = "gpt-3.5-turbo"
     url = "https://api.openai.com/v1/chat/completions"
-    
-    api_key = getMSXPiVar('OPENAIKEY')
-    if not api_key:
-        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET', BLKSIZE, RC_FAILED)
-        return RC_SUCCESS
         
-    rc, data = recvdata(BLKSIZE)
+    rc, data = recvdata()
+    
     if rc == RC_SUCCESS:
         query = data.decode().split("\x00")[0].strip()
+        print(f"Query:{query}")
     else:
-        sendmultiblock(b'Pi:Error - Failed to receive query', BLKSIZE, RC_FAILED)
+        print('Pi:Error - Failed to receive query from MSX')
+        sendmultiblock(b'Pi:Error - Failed to receive query from MSX', BLKSIZE, RC_FAILED)
         return RC_SUCCESS
     
     if not query:
+        print('Pi:Error - Empty query')
         sendmultiblock(b'Pi:Error - Empty query', BLKSIZE, RC_FAILED)
+        return RC_SUCCESS
+
+    
+    api_key = getMSXPiVar('OPENAIKEY')
+    if not api_key:
+        print('Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
+        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini', BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
     try:
