@@ -37,7 +37,7 @@ Note: This method is currently not possible - the SD Card is no longer available
 
 
 ### Step 1: Download and install Raspberry Pi SD Card with MSXPi server software. 
-MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCard
+MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV2
 
 
 ### Step 2: Write the image to a SD Card
