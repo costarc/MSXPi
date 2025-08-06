@@ -36,7 +36,7 @@ if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
     fi
 fi
 
-${OSCMDPREFIX}chown -R pi.pi /media/ramdisk
+${OSCMDPREFIX}chown -R pi:pi /media/ramdisk
 
 for file in $FILELIST
 do
