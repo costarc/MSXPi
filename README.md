@@ -33,9 +33,6 @@ Prepare Raspberry Pi Using MSXPi SDCard Image
 =============================================
 
 
-Note: This method is currently not possible - the SD Card is no longer available for download. Use the 2nd method below to prepare the PI SD card.
-
-
 ### Step 1: Download and install Raspberry Pi SD Card with MSXPi server software. 
 MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV2
 
