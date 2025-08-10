@@ -1,7 +1,8 @@
 #!/bin/sh
 MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
-export ROMBANK1=./target/msxpidos.rom
+export ROMBANK1=../../../MSX/gameroms/VALLEY.ROM
+export ROMBANK2=../../../MSX/gameroms/ROAD.ROM
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
 
@@ -124,6 +125,8 @@ do
 done
 
 genUpdateBatch
-cat target/msxpidos.rom          > target/multirom.rom
-cat ~/Dev/MSX/gameroms/RoadFigh.rom >> target/multirom.rom
+
+# Create an optonal 2-bank ROMs for the EEPROM
+cat $ROMBANK1 > target/multirom.rom
+cat $ROMBANK2 >> target/multirom.rom
 
