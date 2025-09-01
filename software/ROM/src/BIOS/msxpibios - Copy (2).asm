@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.2                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-202 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -31,239 +31,20 @@
 ;
 ; File history :
 ; 0.1    : initial version
-; 0.2    : Changed the tansfer routines for v1.1 interface
-;
-; TEXTTERMINATOR: EQU     0
-; BDOS:           EQU     $F37D
+; 0.9.1  : Changes to support new transfer logic
+; 1.1    : Changes to support new transfer routines
+; 1.2    : Removed MSX-DOS 1 Kernel; Replaced by MSXPio BIOS 
+				 
+    ORG         $4000
+; ### ROM header ###
 
-;---------------------------
-; ROM installer
-;---------------------------
-        db    $fe
-        dw    inicio
-        dw    fim-romprog+rotina+1
-        dw  inicio
+    db "AB"     ; ID for auto-executable ROM
+    dw 0000     ; Main program execution address - no used becuase it is CALL handler
+    dw CALLHAND ; STATEMENT
+    dw 0000     ; DEVICE
+    dw 0000     ; TEXT
+    dw 0,0,0    ; Reserved
 
-        org     $b000
-
-inicio:
-        jr      inicio0
-returncode:
-        db      0
-inicio0:
-        ld      hl,msgstart
-        call    localprint
-
-        ld      c,040H
-        call    PG1RAMSEARCH
-
-        ei
-
-        ld      hl,msgramnf
-        jr      c,printmsg
-
-instcall:
-
-        push    af
-        call    ramcheck
-        pop     af
-
-        ld      hl,msgramnf
-        jr      nz,printmsg
-
-        push    af
-        ld      hl,msgdoing
-        call    localprint
-        pop     af
-
-        push    af
-        call    relocprog
-        pop     af
-
-        and     %00000011
-        ld      hl,SLTATR
-        ld      de,16
-        or      a
-        jr      z,setcall2
-        ld      b,a
-
-setcall1:
-        add     hl,de
-        djnz    setcall1
-
-setcall2:
-        xor     a
-        set     5,a
-        inc     hl
-        ld      (hl),a
-
-        ld      hl,msgcallhlp
-        call    localprint
-
-; Reserve RAM for MSXPI commands
-        ld      hl,MSXPICALLBUF
-        ld      (HIMEM),hl
-        ret
-
-printmsg:
-        call    localprint
-        ret
-
-
-
-relocprog:
-        ld de, rotina
-        ld hl, romprog
-        ld bc, fim-romprog+1
-
-relocprog1:
-        push    af
-        push    bc
-        push    de
-        push    hl
-        ld      c,a
-        ld      a,(de)
-        ld      e,a
-        ld      a,c
-        call    WRSLT
-        pop     hl
-        pop     de
-        pop     bc
-        pop     af
-        inc     hl
-        inc     de
-        dec     bc
-        push    af
-        ld      a,b
-        or      c
-        jr      z,relocfinish
-        pop     af
-        jr      relocprog1
-
-    relocfinish:
-        pop     af
-        ret
-
-msgstart:   db      "Search for ram in $4000",13,10,0
-msgramnf:   db      "ram not found",13,10,0
-msgdoing:   db      "Installing MSXPi extension...",13,10,0
-msgcallhlp: db      "Installed. Use ",13,10
-            db      "CALL MSXPI(",$22,"<option,><buffer,><commmand>",$22,") to run MSXPi Commands",13,10
-            db      "CALL MSXPISEND(",$22,"<buffer>",$22,") to send data to RPi",13,10
-            db      "CALL MSXPIRECV(",$22,"<buffer>",$22,") to read data from RPi",13,10
-            db      "flag: 0=no screen output, 1=screen output(default), 2=store output in buffer", 13,10
-            db      "buffer = valid hexadecimal number (4 digits)"
-            db      13,10,0
-
-ramcheck:
-        push    af
-        ld      e,$aa
-        ld      hl,$4000
-        call    WRSLT
-        pop     af
-        ld      hl,$4000
-        call    RDSLT
-        cp      $aa     ;set Z flag if found ram
-        ret
-
-localprint:
-        ld      a,(hl)
-        or      a
-        ret     z
-        call    CHPUT
-        inc     hl
-        jr      localprint
-
-
-PG1RAMSEARCH:
-        LD      HL,EXPTBL
-        LD      B,4
-        XOR     A
-PG1RAMSEARCH1:
-        AND     03H
-        OR      (HL)
-PG1RAMSEARCH2:
-        PUSH    BC
-        PUSH    HL
-        LD      H,C
-PG1RAMSEARCH3:
-        LD      L,10H
-PG1RAMSEARCH4:
-        PUSH    AF
-        CALL    RDSLT
-        CPL
-        LD      E,A
-        POP     AF
-        PUSH    DE
-        PUSH    AF
-        CALL    WRSLT
-        POP     AF
-        POP     DE
-        PUSH    AF
-        PUSH    DE
-        CALL    RDSLT
-        POP     BC
-        LD      B,A
-        LD      A,C
-        CPL
-        LD      E,A
-        POP     AF
-        PUSH    AF
-        PUSH    BC
-        CALL    WRSLT
-        POP     BC
-        LD      A,C
-        CP      B
-        JR      NZ,PG1RAMSEARCH6
-        POP     AF
-        DEC     L
-        JR      NZ,PG1RAMSEARCH4
-        INC     H
-        INC     H
-        INC     H
-        INC     H
-        LD      C,A
-        LD      A,H
-        CP      40H
-        JR      Z,PG1RAMSEARCH5
-        CP      80H
-        LD      A,C
-        JR      NZ,PG1RAMSEARCH3
-PG1RAMSEARCH5:
-        LD      A,C
-        POP     HL
-        POP     HL
-        RET
-    
-PG1RAMSEARCH6:
-        POP     AF
-        POP     HL
-        POP     BC
-        AND     A
-        JP      P,PG1RAMSEARCH7
-        ADD     A,4
-        CP      90H
-        JR      C,PG1RAMSEARCH2
-PG1RAMSEARCH7:
-        INC     HL
-        INC     A
-        DJNZ    PG1RAMSEARCH1
-        SCF
-        RET
-
-;---------------------------
-
-rotina:
-
-        org    $4000
-
-romprog:
-
-; ROM-file header
- 
-        DEFW    $4241,0,CALLHAND,0,0,0,0,0
- 
- 
 ;---------------------------
  
 ; General BASIC CALL-instruction handler
@@ -344,13 +125,13 @@ CHKCHAR:
         EX      (SP),HL
         CP      (HL)            ; Check if good char
         JR      NZ,SYNTAX_ERROR ; No, Syntax error
-        INC     HL
-        EX      (SP),HL
-        INC     HL      ; Get next basic char
+        INC 	HL
+        EX  	(SP),HL
+        INC 	HL      ; Get next basic char
  
 GETPREVCHAR:
-        DEC     HL
-        LD      IX,CHRGTR
+        DEC 	HL
+        LD  	IX,CHRGTR
         JP      CALBAS
  
  
@@ -360,8 +141,8 @@ TYPE_MISMATCH:
  
 SYNTAX_ERROR:
         LD      E,2
-        LD      IX,ERRHAND  ; Call the Basic error handler
-        JP      CALBAS
+        LD  	IX,ERRHAND  ; Call the Basic error handler
+        JP  	CALBAS
  
 ;================================================================
 ; call Commands start here
@@ -377,6 +158,27 @@ _MSXPIVER:
         pop     hl
         ret
         
+;-----------------------
+; call MSXPISTATUS     |
+;-----------------------
+_MSXPISTATUS:
+        PUSH    HL
+        LD      BC,4
+        LD      DE,PINGCMD
+        CALL    SENDPICMD
+        LD      A,SENDNEXT
+        CALL    PIEXCHANGEBYTE
+        ld      hl,PIOFFLINE
+        JR      C,PRINTSTATUSMSG
+        CP      RC_SUCCNOSTD
+        jr      NZ,PRINTSTATUSMSG
+        ld      hl,PIONLINE
+PRINTSTATUSMSG:
+        call      PRINT
+        POP       HL
+        ret
+
+
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
 ;--------------------------------------------------------------------
@@ -392,7 +194,7 @@ _MSXPI:
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
-        
+
 ; Now that it processed the parameters, check if Buffer address was passed
 ; If not passed, will allocate a buffer of size BLOCKSIZE at the top of the ram
 ; Output: IX = HL = Buffer address
@@ -412,9 +214,7 @@ _MSXPI:
 CALL_BUFFERPASSED:
         PUSH    HL
         POP     IX              ; IX = WORK AREA ( BYTES )
-
 CALL_MSXPI1:
-; Registers at this point:
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
 ; DE = contain string address of command to send to RPi
@@ -434,7 +234,20 @@ CALL_MSXPI1:
         PUSH    HL
         CALL    SENDPICMD
         POP     DE
-        JR      NC,CALL_MSXPI3
+        JR      C,CALL_MSXPI2_ERR
+        POP     AF
+        CP      '2'
+        JR      Z,CALL_MSXPISAVE
+		CP		'1'
+		PUSH	AF
+		CALL	Z,PRINTPISTDOUT
+		POP		AF
+        CALL    NZ,NOSTDOUT
+        LD      (DE),A
+        POP     HL
+        OR      A
+        RET
+
 CALL_MSXPI2_ERR:
         POP     AF
 CALL_MSXPISERR:
@@ -443,50 +256,62 @@ CALL_MSXPISERR:
         POP     HL
         OR      A
         RET
-CALL_MSXPI3:
-        POP     AF
-        CP      '2'
-        JR      Z,CALL_MSXPISAVE
-        LD      C,A
-; Will print RPi response to screen
-CALL_PRINTBUF:
-        ld      a,c                 ; stdout option
-        push    af
-        ld      bc,BLKSIZE
-        call    CLEARBUF
-        push    de
-        ld      bc,BLKSIZE
-        call    RECVDATA
-        pop     hl
-        ld      a,RC_TXERROR
-        jr      c,CALL_MSXPI2_ERR
-        pop     af
-        push    hl
-        push    af
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        inc     hl
-        ld      d,h
-        ld      e,l
-        pop     af
-        pop     hl
-        push    af
-        push    hl
-        ld      bc,BLKSIZE
-        cp      '0'                      ; should print ?
-        call    nz,PRINTPISTDOUT
-        pop     de
-        pop     af
-        ld      c,a
-        ld      a,(de)
-        cp      RC_READY
-        jr      z,CALL_PRINTBUF
-        pop     hl
-        or      a
-        ret
-        
+                                        ; This routine will save the RPi data to (STREND)
+CALL_MSXPISAVSTD:
+        PUSH    DE
+        INC     DE
+        INC     DE
+        INC     DE
+        CALL    RECVDATABLOCK
+        POP     HL
+        LD      (HL),A                  ; return code
+        INC     HL
+        LD      (HL),C                  ; Return buffer size to BASIC in first two 
+                                        ; positions of buffer
+        INC     HL
+        LD      (HL),B
+        POP     HL
+        OR      A
+        RET
+
+;----------------------------------------
+; Call MSXPI BIOS function SENDDATABLOCK|
+;----------------------------------------
+_MSXPISEND:
+; retrive CALL parameters from stack (second position in stack)
+        CALL    EVALTXTPARAM    ; Evaluate text parameter
+        PUSH    HL
+        CALL    GETSTRPNT
+        CALL    STRTOHEX
+        JR      NC,MSXPISEND1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        POP     HL
+        OR      A
+        RET
+MSXPISEND1:
+; Save buffer address to later store return code
+        PUSH    HL
+; First byte of buffer is saved to store return code
+        INC     HL
+; Second two bytes in buffer must be size of buffer
+; store buffer size in BC
+        LD      C,(HL)
+        INC     HL
+        LD      B,(HL)
+        INC     HL
+        LD      D,H
+        LD      E,L
+        CALL    SENDDATABLOCK
+; skip the parameters before returning: ("xxxx") = 8 positions to skip
+        POP     HL
+        LD      (HL),A
+        POP     HL
+        OR      A
+        RET
+
+; Putting MSXPISAVE here between the two functions that needs it to allow relative jumps (jr)
 CALL_MSXPISAVE:
         PUSH    DE
         LD      BC,BLKSIZE
@@ -519,7 +344,94 @@ CALL_MSXPISAVEXIT:
         POP     HL
         OR      A
         RET
-        
+;----------------------------------------
+; Call MSXPI BIOS function RECVDATABLOCK|
+;----------------------------------------
+_MSXPIRECV:
+        CALL    EVALTXTPARAM    ; Evaluate text parameter
+        PUSH    HL
+        CALL    GETSTRPNT
+        CALL    STRTOHEX
+        JR      NC,MSXPIRECV1
+; Buffer address is not valid hex number
+        LD      HL,BUFERRMSG
+        CALL    PRINT
+        POP     HL
+        OR      A
+        RET
+MSXPIRECV1:
+        LD      D,H
+        LD      E,L
+        PUSH    HL
+; Save first buffer address to store return core
+        INC     DE
+; Save two memory positions to store buffer size later
+        XOR     A
+        LD      (DE),A
+        INC     DE
+        LD      (DE),A
+        INC     DE
+        CALL    RECVDATABLOCK
+        POP     HL
+; Store return code into 1st position in buffer
+        LD      (HL),A
+        JR      C,MSXPIRECV2
+        INC     HL
+; Return buffer size to BASIC in first two positions of buffer
+        LD      (HL),C
+        INC     HL
+        LD      (HL),B
+MSXPIRECV2:
+        POP     HL
+        OR      A
+        RET
+        LD      C,A
+; Will print RPi response to screen
+CALL_PRINTBUF:
+        ld      a,c                 ; stdout option
+        push    af
+        ld      bc,BLKSIZE
+        call    CLEARBUF
+        push    de
+        ld      bc,BLKSIZE
+        call    RECVDATA
+        pop     hl
+        ld      a,RC_TXERROR
+        jr      c,CALL_MSXPI2_ERR2
+        pop     af
+        push    hl
+        push    af
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)
+        inc     hl
+        ld      d,h
+        ld      e,l
+        pop     af
+        pop     hl
+        push    af
+        push    hl
+        ld      bc,BLKSIZE
+        cp      '0'                      ; should print ?
+        call    nz,PRINTPISTDOUT
+        pop     de
+        pop     af
+        ld      c,a
+        ld      a,(de)
+        cp      RC_READY
+        jr      z,CALL_PRINTBUF
+        pop     hl
+        or      a
+        ret
+		
+CALL_MSXPI2_ERR2:
+        POP     AF
+        LD      A,RC_TXERROR
+        LD      (HL),A
+        POP     HL
+        OR      A
+        RET		
 ; SUMBLOCKSIZES
 ; Add size of each block to the block address
 ; Note that it the data to receive is too big,
@@ -551,68 +463,6 @@ SHIFTDATA:
         INC     HL
         LDIR
         RET                 ; DE = Next block address
-
-;----------------------------------------
-; Call MSXPI BIOS function SENDDATA     |
-;----------------------------------------
-_MSXPISEND:
-; Send a block (BLKSIZE) )of data to RPi
-; retrive CALL parameters from stack (second position in stack)
-        CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL
-        CALL    GETSTRPNT
-        CALL    STRTOHEX
-        EX      DE,HL
-        JR      NC,MSXPISEND1
-; Buffer address is not valid hex number
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        POP     HL
-        OR      A
-        RET
-MSXPISEND1:
-; Save buffer address to later store return code
-        PUSH    DE
-        LD      BC,BLKSIZE
-        CALL    SENDDATA
-        POP     DE
-        JR      NC,MSXPISEND2
-        LD      A,RC_TXERROR
-        LD      (DE),A
-MSXPISEND2:
-; skip the parameters before returning: ("xxxx") = 8 positions to skip
-        POP     HL
-        OR      A
-        RET
-
-;----------------------------------------
-; Call MSXPI BIOS function RECVDATA     |
-;----------------------------------------
-_MSXPIRECV:
-        CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL
-        CALL    GETSTRPNT
-        CALL    STRTOHEX
-        EX      DE,HL
-        JR      NC,MSXPIRECV1
-; Buffer address is not valid hex number
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        POP     HL
-        OR      A
-        RET
-MSXPIRECV1:
-        PUSH    DE
-        LD      BC,BLKSIZE
-        CALL    RECVDATA
-        POP     DE
-        JR      NC,MSXPIRECV2
-        LD      A,RC_TXERROR
-        LD      (DE),A
-MSXPIRECV2:
-        POP     HL
-        OR      A
-        RET
 
 ;-----------------------
 ; call GETPOINTERS      |
@@ -646,7 +496,7 @@ GETPOINTERSEXIT:
         or      a
         ret
 
-BIOSENTRYADDR:  EQU     $
+BIOSENTRYADDR:   EQU     $
         DW      _MSXPIVER
         DW      _MSXPI
         DW      _MSXPISEND
@@ -670,7 +520,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230915.680"
+BuildId: DB "20250810.715"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -694,6 +544,8 @@ PSYNC_RESTORED:
 PSYNC_ERROR:
         DB    "Could not restore communication ",13,10,0
 
+PINGCMD:
+		DB     "pver",0
 
 ; ================================================================
 ; Table of Commands available/implemented
@@ -716,11 +568,14 @@ CALL_TABLE:
         DB      "MSXPI",0
         DW      _MSXPI
 
+        DB      "MSXPISTATUS",0
+        DW      _MSXPISTATUS
+		
 ENDOFCMDS:
         DB      00
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "putchar-msxdos.asm"
-fim:    equ $
+INCLUDE "putchar_msxdos.asm"
 buf:    equ $
+DEFS	$8000-$,0
