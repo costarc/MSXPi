@@ -1,14 +1,18 @@
 #!/bin/sh
 
-export BIOS=ROM/src/BIOS/msxpibios.asm
-export ROMBANK1=../../../MSX/gameroms/ROAD.ROM
-export ROMBANK2=target/msxpibios.rom
+export buildMSXDOS="yes"
 
-export Z80ASM_PATH=../../../z80asm-1.8
+export HOME=../../../..
+export BIOS=ROM/src/BIOS/msxpibios.asm
+export ROMBANK2=$HOME/Dev/MSX/gameroms/ROAD.ROM
+export ROMBANK1=target/msxpibios.rom
+export ZMAC_PATH=$HOME/Dev/zmac
+export HEX2BIN_PATH=$HOME/Dev/bin
+export Z80ASM_PATH=$HOME/Dev/z80asm-1.8
 export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
-export OPENMSXDISK=~/Desktop/MSXPi/commands
+export OPENMSXDISK=$HOME/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
-export buildMSXDOS="no"
+
 MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
 
@@ -27,7 +31,7 @@ UpdateBuildId() {
     fi
 }
 
-# Functions
+# Functionsf
 UpdateBuildIdASM() {
     fname=$1
     cp $fname $fname.bak
@@ -89,6 +93,7 @@ UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
 UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm
 
 # MSX-Dos P Commands
+echo "Compiling MSXPi DOS Commands"
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpibios.rom
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
@@ -109,29 +114,32 @@ $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prestart.com.asm -o
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
 $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/ploadr.com.asm  -o ./target/ploadr.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/sendcmd.com.asm  -o ./target/sendcmd.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/opmsxtst.com.asm  -o ./target/opmsxtst.com
 
-
-if [ buildMSXDOS = "yes" ];then
-  ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-  [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
+if [ $buildMSXDOS = "yes" ];then
+  echo "Compiling MSX-DOS ROM"
+  $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+  [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
   cp target/disks/blank.dsk target/disks/msxpiboot.dsk
   cp target/disks/blank.dsk target/disks/tools.dsk
 
   # Generate msxpiboot.dsk disk image
-  for f in `ls ~/Dev/MSX/MSXDOS13/`
+  for file in `ls $HOME/Dev/MSX/MSXDOS13/`
   do
-    [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/msxpiboot.dsk:/$f
-    [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/tools.dsk:/$f
+    echo $file
+    [ -f $HOME/Dev/MSX/MSXDOS13/$file ] && python3 -W ignore $HOME/Dev/github/MSXPi/software/dsktool.py copy $HOME/Dev/MSX/MSXDOS13/$file target/disks/msxpiboot.dsk:/$file
+    [ -f $HOME/Dev/MSX/MSXDOS13/$file ] && python3 -W ignore $HOME/Dev/github/MSXPi/software/dsktool.py copy $HOME/Dev/MSX/MSXDOS13/$file target/disks/tools.dsk:/$file
   done
 
   # Add the MSXPi commands and ROM only to msxpiboot.dsk
-  for f in `ls target/`
+  for file in `ls target/`
   do
-    [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
+    [ -f target/$file ] && python3 -W ignore ./dsktool.py copy target/$file target/disks/msxpiboot.dsk:/$file
   done
   for f in `ls target/BASIC/`
   do
-    [ -f target/BASIC/$f ] && python3 ./dsktool.py copy target/BASIC/$f target/disks/msxpiboot.dsk:/$f
+    [ -f target/BASIC/$file ] && python3 -W ignore ./dsktool.py copy target/BASIC/$file target/disks/msxpiboot.dsk:/$file
   done
 fi
 
@@ -140,4 +148,3 @@ genUpdateBatch
 # Create an optonal 2-bank ROMs for the EEPROM
 cat $ROMBANK1 > target/multirom.rom
 cat $ROMBANK2 >> target/multirom.rom
-

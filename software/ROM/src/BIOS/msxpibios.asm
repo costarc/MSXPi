@@ -125,13 +125,13 @@ CHKCHAR:
         EX      (SP),HL
         CP      (HL)            ; Check if good char
         JR      NZ,SYNTAX_ERROR ; No, Syntax error
-        INC 	HL
-        EX  	(SP),HL
-        INC 	HL      ; Get next basic char
+        INC     HL
+        EX      (SP),HL
+        INC     HL      ; Get next basic char
  
 GETPREVCHAR:
-        DEC 	HL
-        LD  	IX,CHRGTR
+        DEC     HL
+        LD      IX,CHRGTR
         JP      CALBAS
  
  
@@ -141,8 +141,8 @@ TYPE_MISMATCH:
  
 SYNTAX_ERROR:
         LD      E,2
-        LD  	IX,ERRHAND  ; Call the Basic error handler
-        JP  	CALBAS
+        LD      IX,ERRHAND  ; Call the Basic error handler
+        JP      CALBAS
  
 ;================================================================
 ; call Commands start here
@@ -158,43 +158,22 @@ _MSXPIVER:
         pop     hl
         ret
         
-;-----------------------
-; call MSXPISTATUS     |
-;-----------------------
-_MSXPISTATUS:
-        PUSH    HL
-        LD      BC,4
-        LD      DE,PINGCMD
-        CALL    SENDPICMD
-        LD      A,SENDNEXT
-        CALL    PIEXCHANGEBYTE
-        ld      hl,PIOFFLINE
-        JR      C,PRINTSTATUSMSG
-        CP      RC_SUCCNOSTD
-        jr      NZ,PRINTSTATUSMSG
-        ld      hl,PIONLINE
-PRINTSTATUSMSG:
-        call      PRINT
-        POP       HL
-        ret
-
-
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
 ;--------------------------------------------------------------------
-; Verify is command has STD parameters specified
+; Verify if command has STD parameters specified
 ; Examples:
 ; call mspxi("pdir")  -> will print the output
 ; call mspxi("0,pdir")  -> will not print the output
 ; call msxpi("1,pdir")  -> will print the output to screen
-; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)       
+; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
 _MSXPI:
         CALL    EVALTXTPARAM    ; Evaluate text parameter
         PUSH    HL
         CALL    GETSTRPNT
         EX      DE,HL
         CALL    PARMSEVAL
-
+        
 ; Now that it processed the parameters, check if Buffer address was passed
 ; If not passed, will allocate a buffer of size BLOCKSIZE at the top of the ram
 ; Output: IX = HL = Buffer address
@@ -214,7 +193,9 @@ _MSXPI:
 CALL_BUFFERPASSED:
         PUSH    HL
         POP     IX              ; IX = WORK AREA ( BYTES )
+
 CALL_MSXPI1:
+; Registers at this point:
 ; A  = contain the output required for the command
 ; B  = contain number of chars in the command
 ; DE = contain string address of command to send to RPi
@@ -246,119 +227,7 @@ CALL_MSXPISERR:
 CALL_MSXPI3:
         POP     AF
         CP      '2'
-        JP      Z,CALL_MSXPISAVE
-
-        CALL    NOSTDOUT
-        LD      (DE),A
-        POP     HL
-        OR      A
-        RET
-
-CALL_MSXPISTDOUT:
-        PUSH    DE
-        CALL    PRINTPISTDOUT
-        POP     DE
-        LD      (DE),A
-        POP     HL
-        OR      A
-        RET
-
-                                        ; This routine will save the RPi data to (STREND)
-CALL_MSXPISAVSTD:
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE
-        CALL    RECVDATABLOCK
-        POP     HL
-        LD      (HL),A                  ; return code
-        INC     HL
-        LD      (HL),C                  ; Return buffer size to BASIC in first two 
-                                        ; positions of buffer
-        INC     HL
-        LD      (HL),B
-        POP     HL
-        OR      A
-        RET
-
-;----------------------------------------
-; Call MSXPI BIOS function SENDDATABLOCK|
-;----------------------------------------
-_MSXPISEND_:
-; retrive CALL parameters from stack (second position in stack)
-        CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL
-        CALL    GETSTRPNT
-        CALL    STRTOHEX
-        JR      NC,MSXPISEND1_
-; Buffer address is not valid hex number
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        POP     HL
-        OR      A
-        RET
-MSXPISEND1_:
-; Save buffer address to later store return code
-        PUSH    HL
-; First byte of buffer is saved to store return code
-        INC     HL
-; Second two bytes in buffer must be size of buffer
-; store buffer size in BC
-        LD      C,(HL)
-        INC     HL
-        LD      B,(HL)
-        INC     HL
-        LD      D,H
-        LD      E,L
-        CALL    SENDDATABLOCK
-; skip the parameters before returning: ("xxxx") = 8 positions to skip
-        POP     HL
-        LD      (HL),A
-        POP     HL
-        OR      A
-        RET
-
-;----------------------------------------
-; Call MSXPI BIOS function RECVDATABLOCK|
-;----------------------------------------
-_MSXPIRECV_:
-        CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL
-        CALL    GETSTRPNT
-        CALL    STRTOHEX
-        JR      NC,MSXPIRECV1_
-; Buffer address is not valid hex number
-        LD      HL,BUFERRMSG
-        CALL    PRINT
-        POP     HL
-        OR      A
-        RET
-MSXPIRECV1_:
-        LD      D,H
-        LD      E,L
-        PUSH    HL
-; Save first buffer address to store return core
-        INC     DE
-; Save two memory positions to store buffer size later
-        XOR     A
-        LD      (DE),A
-        INC     DE
-        LD      (DE),A
-        INC     DE
-        CALL    RECVDATABLOCK
-        POP     HL
-; Store return code into 1st position in buffer
-        LD      (HL),A
-        JR      C,MSXPIRECV2_
-        INC     HL
-; Return buffer size to BASIC in first two positions of buffer
-        LD      (HL),C
-        INC     HL
-        LD      (HL),B
-MSXPIRECV2_:
-        POP     HL
-        OR      A
-        RET
+        JR      Z,CALL_MSXPISAVE
         LD      C,A
 ; Will print RPi response to screen
 CALL_PRINTBUF:
@@ -371,7 +240,7 @@ CALL_PRINTBUF:
         call    RECVDATA
         pop     hl
         ld      a,RC_TXERROR
-        jp      c,CALL_MSXPI2_ERR
+        jr      c,CALL_MSXPI2_ERR
         pop     af
         push    hl
         push    af
@@ -398,13 +267,13 @@ CALL_PRINTBUF:
         pop     hl
         or      a
         ret
-        
+
 CALL_MSXPISAVE:
         PUSH    DE
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
-        JP      C,CALL_MSXPISERR
+        JR      C,CALL_MSXPISERR
         LD      A,(HL)
         CP      RC_READY
         JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
@@ -413,7 +282,7 @@ CALL_MSXPISAVE2:
         LD      BC,BLKSIZE
         CALL    RECVDATA
         POP     HL                      ; HL = Start of buffer, DE=Address next block
-        JP      C,CALL_MSXPISERR
+        JR      C,CALL_MSXPISERR
         LD      A,(HL)
         LD      (IX + 0),A              ; Update return code
         CALL    SUMBLOCKSIZES           ; Add block size to full data block size
@@ -431,7 +300,7 @@ CALL_MSXPISAVEXIT:
         POP     HL
         OR      A
         RET
-        
+
 ; SUMBLOCKSIZES
 ; Add size of each block to the block address
 ; Note that it the data to receive is too big,
@@ -463,7 +332,7 @@ SHIFTDATA:
         INC     HL
         LDIR
         RET                 ; DE = Next block address
-
+		
 ;----------------------------------------
 ; Call MSXPI BIOS function SENDDATA     |
 ;----------------------------------------
@@ -582,7 +451,7 @@ BIOSENTRYADDR:   EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20250810.708"
+BuildId: DB "20250901.748"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -606,9 +475,6 @@ PSYNC_RESTORED:
 PSYNC_ERROR:
         DB    "Could not restore communication ",13,10,0
 
-PINGCMD:
-		DB     "pver",0
-
 ; ================================================================
 ; Table of Commands available/implemented
 ; ================================================================
@@ -630,14 +496,12 @@ CALL_TABLE:
         DB      "MSXPI",0
         DW      _MSXPI
 
-        DB      "MSXPISTATUS",0
-        DW      _MSXPISTATUS
-		
 ENDOFCMDS:
         DB      00
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
 INCLUDE "putchar_msxdos.asm"
+fim:    equ $
 buf:    equ $
 DEFS	$8000-$,0
