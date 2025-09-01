@@ -1,0 +1,6 @@
+
+State Machine - |MSXPi|spi_state
+Name spi_state.state_bit_1 spi_state.state_bit_0 
+spi_state.idle 0 0 
+spi_state.prepare 0 1 
+spi_state.transferring 1 0 

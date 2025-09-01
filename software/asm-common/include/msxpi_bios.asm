@@ -56,6 +56,8 @@ CHKPIRDY:
         ret     z
         in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
         or      a
+		ret		z
+		cp		2
         jr      nz,CHKPIRDY
         ret
 
@@ -65,6 +67,8 @@ CHKPIRDY:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
+			cp		2
+			jr		nz,PIREADBYTE
             xor     a                  ; do not use xor to preserve c flag state
             out     (CONTROL_PORT1),a  ; send read command to the interface
             call    CHKPIRDY           ; wait interface transfer data to pi and
@@ -260,8 +264,8 @@ RECVRETRY:
         dec     a
         push    af                      ; save number of retries left
         ld      a,READY
-        call    PIWRITEBYTE
-        ld      hl,0                       ; will store checksum in HL
+        call    PIWRITEBYTE				; send Sync byte
+        ld      hl,0                    ; will store checksum in HL
 RECV0:
         push    bc
         call    PIREADBYTE
@@ -269,7 +273,7 @@ RECV0:
         inc     de
         ld      b,0
         ld      c,a
-        add     hl,bc
+        add     hl,bc					; calculating the CRC
         pop     bc
 		dec     bc
         ld      a,b
