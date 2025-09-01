@@ -670,7 +670,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20230915.680"
+BuildId: DB "20250810.709"
         DB      13,10
         DB      "    RCC (c) 2017-2023",0
         DB      "Commands available:",13,10
@@ -721,6 +721,6 @@ ENDOFCMDS:
 
 INCLUDE "include.asm"
 INCLUDE "msxpi_bios.asm"
-INCLUDE "putchar-msxdos.asm"
+INCLUDE "putchar_msxdos.asm"
 fim:    equ $
 buf:    equ $

@@ -1,10 +1,16 @@
 #!/bin/sh
-MSXPIHOME=/home/pi/msxpi
-export PI=raspberrypi
-export ROMBANK1=../../../MSX/gameroms/VALLEY.ROM
-export ROMBANK2=../../../MSX/gameroms/ROAD.ROM
+
+export BIOS=ROM/src/BIOS/msxpibios.asm
+export ROMBANK1=../../../MSX/gameroms/ROAD.ROM
+export ROMBANK2=target/msxpibios.rom
+
+export Z80ASM_PATH=../../../z80asm-1.8
+export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
 export OPENMSXDISK=~/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
+export buildMSXDOS="no"
+MSXPIHOME=/home/pi/msxpi
+export PI=raspberrypi
 
 # Functions
 UpdateBuildId() {
@@ -79,50 +85,55 @@ genUpdateBatch() {
 # Build MSX-DOS with MSXPi Drivers with build id
 UpdateBuildId ./Server/Python/src/msxpi-server.py
 UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
-UpdateBuildIdASM ./ROM/src/BIOS/msxpi-ext.asm
-
-~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-[ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
+UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
+UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm
 
 # MSX-Dos P Commands
-~/Dev/bin/z80asm -I ./asm-common/include ./ROM/src/BIOS/msxpi-ext.asm  -o ./target/msxpiext.bin
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
-~/Dev/bin/z80asm -I ./asm-common/include ./Client/src/ploadr.com.asm  -o ./target/ploadr.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpibios.rom
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/ploadr.com.asm  -o ./target/ploadr.com
 
-cp target/disks/blank.dsk target/disks/msxpiboot.dsk
-cp target/disks/blank.dsk target/disks/tools.dsk
 
-# Generate msxpiboot.dsk disk image
-for f in `ls ~/Dev/MSX/MSXDOS13/`
-do
-  [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/msxpiboot.dsk:/$f
-  [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/tools.dsk:/$f
-done
-# Add the MSXPi commands and ROM only to msxpiboot.dsk
-for f in `ls target/`
-do
-  [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
-done
-for f in `ls target/BASIC/`
-do
-  [ -f target/BASIC/$f ] && python3 ./dsktool.py copy target/BASIC/$f target/disks/msxpiboot.dsk:/$f
-done
+if [ buildMSXDOS = "yes" ];then
+  ~/Dev/bin/zmac -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+  [ -f ./zout/msx-dos.hex ] && ~/Dev/bin/hex2bin -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
+  cp target/disks/blank.dsk target/disks/msxpiboot.dsk
+  cp target/disks/blank.dsk target/disks/tools.dsk
+
+  # Generate msxpiboot.dsk disk image
+  for f in `ls ~/Dev/MSX/MSXDOS13/`
+  do
+    [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/msxpiboot.dsk:/$f
+    [ -f ~/Dev/MSX/MSXDOS13/$f ] && python3 ~/Dev/github/MSXPi/software/dsktool.py copy ~/Dev/MSX/MSXDOS13/$f target/disks/tools.dsk:/$f
+  done
+
+  # Add the MSXPi commands and ROM only to msxpiboot.dsk
+  for f in `ls target/`
+  do
+    [ -f target/$f ] && python3 ./dsktool.py copy target/$f target/disks/msxpiboot.dsk:/$f
+  done
+  for f in `ls target/BASIC/`
+  do
+    [ -f target/BASIC/$f ] && python3 ./dsktool.py copy target/BASIC/$f target/disks/msxpiboot.dsk:/$f
+  done
+fi
 
 genUpdateBatch
 

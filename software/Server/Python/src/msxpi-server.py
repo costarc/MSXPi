@@ -50,7 +50,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230915.680"
+BuildId = "20250810.710"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -928,24 +928,9 @@ def pwifi():
         sendmultiblock("Pi:Usage:\npwifi display | set".encode(), BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
-    if (cmd[:1] == "s" or cmd[:1] == "S"):
-        setWiFiCountryCMD = "sudo raspi-config nonint do_wifi_country " + wificountry
-        os.system(setWiFiCountryCMD)
-        buf = "country=" + wificountry + "\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
-        buf = buf + "\tssid=\"" + wifissid
-        buf = buf + "\"\n\tpsk=\"" + wifipass
-        buf = buf + "\"\n}\n"
-
-        os.system("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak")
-        f = open(RAMDISK + "/wpa_supplicant.conf","w")
-        f.write(buf)
-        f.close()
-        os.system("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf")
-        cmd = cmd.strip().split(" ")
-        if (len(cmd) == 2 and cmd[1] == "wlan1"):
-            prun("sudo ip link set wlan1 down && sleep 1 && sudo ip link set wlan1 up")
-        else:
-            prun("sudo ip link set wlan0 down && sleep 1 && sudo ip link set wlan0 up")
+    if (cmd[:1] == "s" or cmd[:1] == "S"):       
+        wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
+        prun(wifisetcmd)
     else:
         prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
     
