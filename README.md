@@ -1,17 +1,21 @@
 # MSXPi
 
-== RIP ==
+MSXPi is a hardware interface and software solution to allow MSX computers 
+to control and use Raspberry Pi resources. The interface exposes I/O ports 
+that can be read and written by MSX, and in turn the data will be accessible 
+on the Raspberry Pi. Many resources are implemented, such as access to 
+network drives, internet, disk images, and the Raspberry Pi itself. To make 
+the most of MSXPi resources, a Raspberry Pi Zero W should be attached to the 
+interface.
 
-This project is discontinued. 
-It was a great idea when it started, years ago, but now using microcontrollers and FPGAs to interface with retro computers is widesprad, and a lot of great (and better) projects are available for MSX. MSXPi had it's place in inspiring people in the community, but now it's time has passed, and no more develpment will be done. Hope you have enjoyed to play with it, and thank you.
+* MSXPi is coming to openMSX! 
+A virtual MSXPi device is now available for openMSX, allowing the emulated 
+MSX to perform all the cool tricks MSXPi
+hardware can perform, such as browse internet in text mode, connect to IRC, 
+check the weather or ask for help to 
+ChatGPT.
 
-==
-
-
-MSXPi is a hardware interface and software solution to allow MSX computers to control and use Raspberry Pi resources.
-The interface exposes I/O ports that can be read and written by MSX, and in turn the data will be accessible on the Raspberry Pi.
-Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
-To make the most of MSXPi resources, a Raspberry Pi Zero W should be attached to the interface.
+Mode details in the starter guide below.
 
 Quick Start Guide
 =================
@@ -19,9 +23,13 @@ Quick Start Guide
 
 This Quick Start Guide is updated to V1.1 of the Software and Interface.
 
-Please refer to the full documentation under "documents" folder in github for detailed setup procedure and other information.
+Please refer to the full documentation under "documents" folder in github 
+for detailed setup procedure and other information.
 
-There are a few steps to setup MSXPi, and you can choose between using a MSXPi pre-installed SD Card image (ready to boot MSXPi), or build your own image using a fresh Raspbian Image downloaded from Raspberry Pi web site - both methods are described below.
+There are a few steps to setup MSXPi, and you can choose between using a 
+MSXPi pre-installed SD Card image (ready to boot MSXPi), or build your own 
+image using a fresh Raspbian Image downloaded from Raspberry Pi web site - 
+both methods are described below.
 
 Overall, the steps to get up and running are:
 
@@ -40,16 +48,22 @@ MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV2
 ### Step 2: Write the image to a SD Card
 Use a SD Card with a minimum of 8GB.
 
-Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to the SD Card (select option "Use Custom" in the Operating System drop box).
+Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to 
+the SD Card (select option "Use Custom" in the Operating System drop box).
 
-RPi Imager can be download from https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
+RPi Imager can be download from 
+https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
 
 
 ### Step 3: Install the MSXPi commands for MSX-DOS
 
-In your favorite PC computer, copy all MSXPi commands from https://github.com/costarc/MSXPi/tree/master/software/target to your MSX SD card or Disk.
+In your favorite PC computer, copy all MSXPi commands from 
+https://github.com/costarc/MSXPi/tree/master/software/target to your MSX 
+SD card or Disk.
 
-After this basic setup, you should be able to use the MSXPi ".com" commands from your MSX. To unleash full MSXPi power, configure the Raspberry Pi Zero W WiFi:
+After this basic setup, you should be able to use the MSXPi ".com" commands 
+from your MSX. To unleash full MSXPi power, configure the 
+Raspberry Pi Zero W WiFi:
 
           pset WIFISSID Your Wifi Name
  
@@ -59,37 +73,54 @@ After this basic setup, you should be able to use the MSXPi ".com" commands from
  
           preboot
  
- Note: The first reboot may take longer than 3 minutes, because Raspbian will expand the filesystem in the SD and initialize the Linux system - following reboots will be faster)
+ Note: The first reboot may take longer than 3 minutes, because Raspbian will 
+ expand the filesystem in the SD and initialize the Linux system - following 
+ reboots will be faster)
 
-In case you need very detailed instructions, please read  "Tutorial - Setup Raspberry Pi for MSXPi the Easy Way - Using the MSXPi Pre-Installed Image.pdf", in https://github.com/costarc/MSXPi/tree/master/documents (Portuguese version also available).
+In case you need very detailed instructions, please read  "Tutorial - Setup 
+Raspberry Pi for MSXPi the Easy Way - Using the MSXPi Pre-Installed Image.pdf", 
+in https://github.com/costarc/MSXPi/tree/master/documents (Portuguese version 
+also available).
 
 
 Prepare Raspberry Pi Using a Fresh Raspbian Image
 =================================================
 
 
-In this mode, you will have to install all requirements for MSXPi - there is a script to help you with that, though.
+In this mode, you will have to install all requirements for MSXPi - there is a 
+script to help you with that, though.
 
 ### Step 1: Download the Raspberry Pi Imager
 Download from https://www.raspberrypi.com/software
 
-This is the official Raspberry Pi SD Card image writer - download and install in your desktop PC.
+This is the official Raspberry Pi SD Card image writer - download and install in 
+your desktop PC.
 
 ### Step 2: Write the Raspbian image to the SD Card
-Run the Pi Imager software, and select the best  OS for your raspberry pi. If you are using the recommended Raspberry Pi Zero W, choose the lite version (without graphical desktop):
+Run the Pi Imager software, and select the best  OS for your raspberry pi. If you 
+are using the recommended Raspberry Pi Zero W, choose the lite version (without 
+graphical desktop):
 
-          CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
+        CHOOSE OS -> Raspberry Pi OS Lite (other) -> Raspberry Pi OS LITE (32-bit)
 
-Write the image to your SD Card and when completed, boot the Raspberry with the SD Card inserted.
+Write the image to your SD Card and when completed, boot the Raspberry with the 
+SD Card inserted.
 
 ### Step 3: Setup MSXPi using MSXPI-Setup tool
-You will need to connect the Raspberry Pi to a HDMI TV and a keyboard to complete these steps.
+You will need to connect the Raspberry Pi to a HDMI TV and a keyboard to complete 
+these steps.
 
 Login to Raspbian using default user and passwird: pi / raspberry
 
 Configure the WiFi using raspi-config command
 
-Download the MSXPi setup script - it will download and install everything needed to have MSXPi up and running the following commands - but note: the finals stages of the setup installs OPENAI library (the "Install Additional Python libraries required by msxpi-server" section the reboot command), which requires compilation - this stage may take over an hour if done in the Pi Zero, therefore you may choose to remove these from the MSXPI-Setup script before running iy, and do it at later time if you want to use ChatGPT with MSXPi.
+Download the MSXPi setup script - it will download and install everything
+needed to have MSXPi up and running the following commands - but note: the finals 
+stages of the setup installs OPENAI library (the "Install Additional Python 
+libraries required by msxpi-server" section the reboot command), which requires 
+compilation - this stage may take over an hour if done in the Pi Zero, therefore 
+you may choose to remove these from the MSXPI-Setup script before running iy, and 
+do it at later time if you want to use ChatGPT with MSXPi.
 
           mkdir /home/pi/msxpi
 
@@ -101,9 +132,85 @@ Download the MSXPi setup script - it will download and install everything needed
 
           bash ./MSXPi-Setup
           
-If you need very detailed instructions, please read "Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - Installing Raspbian from Scratch.pdf", in https://github.com/costarc/MSXPi/tree/master/documents (Portuguese version also available).
+If you need very detailed instructions, please read 
+"Tutorial - Setup  Raspberry Pi for MSXPi the Hard Way - 
+Installing Raspbian from Scratch.pdf", in 
+https://github.com/costarc/MSXPi/tree/master/documents 
+(Portuguese version also available).
 
 
+MSXPi in openMSX
+================
+The MSXPi extension allows you to connect a virtual MSXPi to your MSX 
+running in the openMSX, and use the same commands found in the physical
+MSXPi running in real hardware.
+
+It works by implementing a MSXPi Device that listen to the I/O ports allocated
+for MSXPi and fowarding the data to a local TCP socket, which is implemented
+by a Python program (the msxpi-server). The MSXPi device also works for data
+send by the Python program, that is, reading the responses and forwarding to
+the MSX computer, just like the real thing.
+
+There are some difference in the Python code that runs along with openMSX and
+the Python server that runs in the Raspberry Pi - specifically, the low-level
+byte transfer which uses GPIO in the Raspberry Pi, and Socket communication
+in the openMSX solution, but other than that, the remaining code should be
+the same and work on both platforms.
+
+To have MSXPi in you openMSX, you can wait until the openMSX team merge the 
+extension or compile yourself. To compile the extension yourself, head to the
+openMSX fork in https://github.com/costarc/openMSX
+
+
+This is a work in progress - all the features mentioned are planned and not
+yet available.
+
+
+* Quick Start - MSXPi Extension
+
+The MSXPisimple is composed these new files:
+
+openmsx/src/MSXPi/MSXPiDevice.cc
+openmsx/src/MSXPi/MSXPiDevice.hh
+openmsx/share/extensions/MSXPi.xml
+
+and two changes to openMSX/src/DeviceFactory.cc:
+
+include <MSXPiDevice.hh>
+} else if (type == "MSXPiDevice") {
+result = std::make_unique<MSXPiDevice>(conf);
+}
+	
+To compile and test the MSXPi extension, follow these steps after cloning this
+repository.
+All commands below assume you are in the openMSX root folder: openMSX/
+
+> Compile the code and install (in my example, I install under /opt/openMSX in
+ a Linux platform):
+ make -j$(nproc); sudo make install
+ 
+> run the Python server on the local host - use a second CLI window for this:
+ python3 MSXPi/msxpi-server.py
+ 
+> Start openMSX (assuming you created a folder with MSX-DOS 1.3 to boot from):
+ /opt/openMSX/bin/openmsx -machine Panasonic_FS-A1WSX -ext MSXPi 
+ -diska MSXPi/msxdisk
+
+> In openMSX, try the "P" commands, such as:
+  pcd
+  pdir
+  pset
+  prun
+  
+  switch to BASIC test the MSXPi BIOS commands:
+  call msxpiver
+  call msxpi("pver")
+  call msxpi("pdir")
+  
+  There are also some BASIC programs demonstrating how to access internet
+  resources from MSX. They will use the BIOS if loaded, or load a msxpiext.bin/openmsx
+  extension that load the BIOS into the ROM area when the MSXPi BIOS is not available.
+ 
 
 MSXPi v1.1 Release Notes
 ========================
