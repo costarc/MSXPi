@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -----------------------------------------------------------------------------------"""
 # External module imports
-import RPi.GPIO as GPIO
+
 import time
 import subprocess
 from urllib.request import urlopen
@@ -51,7 +51,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20250901.751"
+BuildId = "20250903.755"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -162,87 +162,65 @@ def tick_sclk():
     GPIO.output(SPI_SCLK, GPIO.LOW)
     #time.sleep(SPI_SCLK_LOW_TIME)
 
-def SPI_MASTER_transfer_byte(byte_out):
+def SPI_MASTER_transfer_byte(byte_out=None):
     
     global conn
-    
-    #print "transfer_byte:sending",hex(byte_out)
-    
-    if detect_host == "Raspberry Pi":
+
+    if detect_host() == "Raspberry Pi":
         byte_in = 0
         tick_sclk()
-        for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-            #print(".")
-            if (int(byte_out) & bit):
-                GPIO.output(SPI_MISO, GPIO.HIGH)
+
+        for bit in [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]:
+            # Send bit if byte_out is provided
+            if byte_out is not None:
+                GPIO.output(SPI_MISO, GPIO.HIGH if (byte_out & bit) else GPIO.LOW)
             else:
-                GPIO.output(SPI_MISO, GPIO.LOW)
-    
+                GPIO.output(SPI_MISO, GPIO.LOW)  # Passive receive mode
+
             GPIO.output(SPI_SCLK, GPIO.HIGH)
-            #time.sleep(SPI_SCLK_HIGH_TIME)
-            
+
+            # Always read MOSI
             if GPIO.input(SPI_MOSI):
                 byte_in |= bit
-        
-            GPIO.output(SPI_SCLK, GPIO.LOW)
-            #time.sleep(SPI_SCLK_LOW_TIME)
-    
-        tick_sclk()
-        #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
-        return byte_in
-    else:
-        conn.sendall(bytes([byte_out]))
-        byte_in = conn.recv(1)[0]
-        return byte_in
 
-def piexchangebyte(byte_out=0):#
-    rc = RC_SUCCESS
-    
+            GPIO.output(SPI_SCLK, GPIO.LOW)
+
+        tick_sclk()
+
+        return byte_in if byte_out is None else None
+
+    else:
+        if byte_out is not None:
+            conn.sendall(bytes([byte_out]))
+            return None  # Send-only mode
+        else:
+            byte_in = conn.recv(1)[0]  # Passive receive mode
+            return byte_in
+
+def piexchangebyte(byte_out=None):
+    """
+    Exchanges a byte with the MSXPi interface.
+    If byte_out is provided, sends it and ignores the response.
+    If byte_out is None, waits and reads a byte from MSX.
+    """
     if detect_host() == "Raspberry Pi":
-        global SPI_CS
-        global SPI_SCLK
-        global SPI_MOSI
-        global SPI_MISO
-        global RPI_READY
-  
+        # GPIO-based SPI emulation
+        global SPI_CS, SPI_SCLK, SPI_MOSI, SPI_MISO, RPI_READY
+
         GPIO.output(RPI_READY, GPIO.HIGH)
-        while(GPIO.input(SPI_CS)):
+        while GPIO.input(SPI_CS):
             pass
-    
+
         byte_in = SPI_MASTER_transfer_byte(byte_out)
         GPIO.output(RPI_READY, GPIO.LOW)
-    
-        #print "piexchangebyte: received:",hex(mymsxbyte)
-        return byte_in
     else:
+        # Socket-based communication
+        global conn
         byte_in = SPI_MASTER_transfer_byte(byte_out)
-        print "piexchangebyte: received:",hex(mymsxbyte)
-        return byte_in
+        if byte_out is None:
+            print("piexchangebyte: received:", hex(byte_in))
 
-def piexchangebytewithtimeout(byte_out=0,twait=5):
-    global SPI_CS
-    global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
-    rc = RC_SUCCESS
-    
-    t0 = time.time()
-    GPIO.output(RPI_READY, GPIO.HIGH)
-    while((GPIO.input(SPI_CS)) and (time.time() - t0) < twait):
-        pass
-
-    t1 = time.time()
-
-    if ((t1 - t0) > twait):
-        return ABORT
-
-    byte_in = SPI_MASTER_transfer_byte(byte_out)
-    GPIO.output(RPI_READY, GPIO.LOW)
-
-    #print "piexchangebyte: received:",hex(mymsxbyte)
-    print("io:",byte_in)
-    return byte_in
+    return byte_in if byte_out is None else None
 
 # Using CRC code from :
 # https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
@@ -1589,6 +1567,7 @@ SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
 if detect_host() == "Raspberry Pi":
+    import RPi.GPIO as GPIO
     init_spi_bitbang()
     GPIO.output(RPI_READY, GPIO.LOW)
     print("GPIO Initialized\n")
@@ -1609,6 +1588,7 @@ try:
                 else:
                     fullcmd = buf.decode().split("\x00")[0]
 
+                print(f"Received command: {fullcmd}")
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
@@ -1622,5 +1602,6 @@ try:
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, RC_FAILED)
 
 except KeyboardInterrupt:
-    GPIO.cleanup() # cleanup all GPIO
+    if detect_host() == "Raspberry Pi":
+        GPIO.cleanup() # cleanup all GPIO
     print("Terminating msxpi-server")

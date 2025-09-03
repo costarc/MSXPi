@@ -35,13 +35,17 @@
         org     $0100
 
 ; Print hw interface version (CPLD logic and pcb)
+		JR		GETSWVER			; Dropped use of I/O ports 0x58 - 0x5D. 
+									; PVER now only gets versoin directly from Raspberry Pi, not from the CPLD
+									; therefore, skips this part of the code.
         LD      HL,HWVER
         CALL    PRINT
-        IN      A,(CONTROL_PORT2)
+        IN      A,(57H)
         CALL    DESCHWVER
         call    PRINTNLINE
 
 ; Sending Command and Parameters to RPi
+GETSWVER:
         ld      de,command
         call    SENDCOMMAND
         jr      c, PRINTPIERR

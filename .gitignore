@@ -48,4 +48,16 @@ software/zout/**
 *.tmw_info
 *.lst
 *lock.*
-
+*.qmsg
+*.tdb
+*.rdb
+*.hif
+*.hier_info
+*.ddb
+*.jdi
+*.done
+*.o
+*simulation
+*incremental_db
+*db
+*.cf
