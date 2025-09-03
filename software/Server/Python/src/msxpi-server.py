@@ -205,7 +205,7 @@ def piexchangebyte(byte_out=None):
     """
     if detect_host() == "Raspberry Pi":
         # GPIO-based SPI emulation
-        global SPI_CS, SPI_SCLK, SPI_MOSI, SPI_MISO, RPI_READY
+        global SPI_CS, RPI_READY
 
         GPIO.output(RPI_READY, GPIO.HIGH)
         while GPIO.input(SPI_CS):
@@ -1546,11 +1546,7 @@ else:
            ['SPI_MOSI','16'], \
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
-           ['OPENAIKEY',''], \
-           ['free','free'], \
-           ['free','free'], \
-           ['free','free'], \
-           ['free','free']]
+           ['OPENAIKEY','']]
 
 # irc
 channel = "#msxpi"
