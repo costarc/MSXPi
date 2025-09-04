@@ -216,7 +216,7 @@ def piexchangebyte(byte_out=0):#
         return byte_in
     else:
         byte_in = SPI_MASTER_transfer_byte(byte_out)
-        print "piexchangebyte: received:",hex(mymsxbyte)
+        print("piexchangebyte: received:",hex(mymsxbyte))
         return byte_in
 
 def piexchangebytewithtimeout(byte_out=0,twait=5):
