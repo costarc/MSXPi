@@ -11,3 +11,7 @@ copy all files in this directory to you local project.
 You may wanto to update DeviceFactory.cc manually with the changes for
 MSXPiDevice, since it may have been changed at the source by the 
 openMSX community.
+
+Compilation for windows can be done under Ubuntu (and even Ubuntu on Windows WSL):
+make CROSS_COMPILE=x86_64-w64-mingw32- HOST_OS=mingw PLATFORM=win64 staticbindist=1 -j$(nproc)
+
