@@ -61,7 +61,7 @@ msg_recv: db "Now reading MSXPi response... ",0
 
 ; Core MSXPi APIs / BIOS routines.
 INCLUDE "include.asm"
-INCLUDE "putchar-clients.asm"
+INCLUDE "putchar_clients.asm"
 INCLUDE "msxpi_bios.asm"
 
 ; All MSX-DOS programs must have this buf defined.

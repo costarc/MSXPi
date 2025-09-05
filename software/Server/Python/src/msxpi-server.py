@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 -----------------------------------------------------------------------------------"""
 # External module imports
-import RPi.GPIO as GPIO
+
 import time
 import subprocess
 from urllib.request import urlopen
@@ -31,6 +31,7 @@ import requests
 import mmap
 import fcntl,os
 import sys
+import platform
 from os.path import exists
 from subprocess import Popen,PIPE,STDOUT
 from html.parser import HTMLParser
@@ -50,7 +51,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20230915.680"
+BuildId = "20250905.762"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -106,6 +107,33 @@ MSXPIHOME = "/home/pi/msxpi"
 RAMDISK = "/media/ramdisk"
 TMPFILE = RAMDISK + "/msxpi.tmp"
 
+HOST = '0.0.0.0'  # Listen on all interfaces
+PORT = 5000       # Match this with serverPort in your C++ code
+conn = None
+
+def detect_host():
+    system = platform.system()
+    machine = platform.machine()
+
+    if system == "Windows":
+        return "Windows"
+    elif system == "Darwin":
+        return "macOS"
+    elif system == "Linux":
+        # Check for Raspberry Pi
+        try:
+            with open("/proc/cpuinfo", "r") as f:
+                cpuinfo = f.read()
+            if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo or "Raspberry" in platform.uname().node:
+                return "Raspberry Pi"
+        except Exception:
+            pass
+        return "Linux"
+    else:
+        return f"Unknown ({system})"
+
+print("Running on:", detect_host())
+
 def init_spi_bitbang():
 
     global SPI_CS
@@ -124,82 +152,71 @@ def init_spi_bitbang():
 
 def tick_sclk():
 
-    global SPI_CS
     global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
     GPIO.output(SPI_SCLK, GPIO.HIGH)
-    #time.sleep(SPI_SCLK_HIGH_TIME)
+    time.sleep(0.00001)  # 10 µs or whatever matches your CPLD timing
     GPIO.output(SPI_SCLK, GPIO.LOW)
-    #time.sleep(SPI_SCLK_LOW_TIME)
 
-def SPI_MASTER_transfer_byte(byte_out):
-    #print "transfer_byte:sending",hex(byte_out)
-    byte_in = 0
-    tick_sclk()
-    for bit in [0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1]:
-        #print(".")
-        if (int(byte_out) & bit):
-            GPIO.output(SPI_MISO, GPIO.HIGH)
+def SPI_MASTER_transfer_byte(byte_out=None):
+    
+    global conn
+
+    if detect_host() == "Raspberry Pi":
+        #print("SPI_MASTER_transfer_byte(): Raspberry Pi")
+        byte_in = 0
+        tick_sclk()
+
+        for bit in [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]:
+            # Send bit if byte_out is provided
+            if byte_out is not None:
+                GPIO.output(SPI_MISO, GPIO.HIGH if (byte_out & bit) else GPIO.LOW)
+            else:
+                GPIO.output(SPI_MISO, GPIO.LOW)  # Passive receive mode
+
+            GPIO.output(SPI_SCLK, GPIO.HIGH)
+
+            # Always read MOSI
+            if GPIO.input(SPI_MOSI):
+                byte_in |= bit
+
+            GPIO.output(SPI_SCLK, GPIO.LOW)
+
+        tick_sclk()
+    else:
+        #print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi")
+        if byte_out is not None:
+            conn.sendall(bytes([byte_out]))
+            byte_in = None  # Send-only mode
         else:
-            GPIO.output(SPI_MISO, GPIO.LOW)
+            byte_in = conn.recv(1)[0]  # Passive receive mode
 
-        GPIO.output(SPI_SCLK, GPIO.HIGH)
-        #time.sleep(SPI_SCLK_HIGH_TIME)
-        
-        if GPIO.input(SPI_MOSI):
-            byte_in |= bit
-    
-        GPIO.output(SPI_SCLK, GPIO.LOW)
-        #time.sleep(SPI_SCLK_LOW_TIME)
-
-    tick_sclk()
-    #print "transfer_byte:received",hex(byte_in),":",chr(byte_in)
+    #print(f"Received: {chr(byte_in)}")
     return byte_in
-
-def piexchangebyte(byte_out=0):
-    global SPI_CS
-    global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
     
-    rc = RC_SUCCESS
-    
-    GPIO.output(RPI_READY, GPIO.HIGH)
-    while(GPIO.input(SPI_CS)):
-        pass
+def piexchangebyte(byte_out=None):
+    """
+    Exchanges a byte with the MSXPi interface.
+    If byte_out is provided, sends it and ignores the response.
+    If byte_out is None, waits and reads a byte from MSX.
+    """
+    if detect_host() == "Raspberry Pi":
+        #print("piexchange(): Raspberry Pi")
+        # GPIO-based SPI emulation
+        global SPI_CS, RPI_READY
 
-    byte_in = SPI_MASTER_transfer_byte(byte_out)
-    GPIO.output(RPI_READY, GPIO.LOW)
+        GPIO.output(RPI_READY, GPIO.HIGH)
+        while GPIO.input(SPI_CS):
+            #print("Waiting SPI_CS signal")
+            pass
 
-    #print "piexchangebyte: received:",hex(mymsxbyte)
-    return byte_in
+        byte_in = SPI_MASTER_transfer_byte(byte_out)
+        GPIO.output(RPI_READY, GPIO.LOW)
+    else:
+        #print("piexchange(): Non-Raspberry Pi")
+        # Socket-based communication
+        global conn
+        byte_in = SPI_MASTER_transfer_byte(byte_out)
 
-def piexchangebytewithtimeout(byte_out=0,twait=5):
-    global SPI_CS
-    global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
-    rc = RC_SUCCESS
-    
-    t0 = time.time()
-    GPIO.output(RPI_READY, GPIO.HIGH)
-    while((GPIO.input(SPI_CS)) and (time.time() - t0) < twait):
-        pass
-
-    t1 = time.time()
-
-    if ((t1 - t0) > twait):
-        return ABORT
-
-    byte_in = SPI_MASTER_transfer_byte(byte_out)
-    GPIO.output(RPI_READY, GPIO.LOW)
-
-    #print "piexchangebyte: received:",hex(mymsxbyte)
-    print("io:",byte_in)
     return byte_in
 
 # Using CRC code from :
@@ -928,24 +945,9 @@ def pwifi():
         sendmultiblock("Pi:Usage:\npwifi display | set".encode(), BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
-    if (cmd[:1] == "s" or cmd[:1] == "S"):
-        setWiFiCountryCMD = "sudo raspi-config nonint do_wifi_country " + wificountry
-        os.system(setWiFiCountryCMD)
-        buf = "country=" + wificountry + "\n\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\nnetwork={\n"
-        buf = buf + "\tssid=\"" + wifissid
-        buf = buf + "\"\n\tpsk=\"" + wifipass
-        buf = buf + "\"\n}\n"
-
-        os.system("sudo cp -f /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak")
-        f = open(RAMDISK + "/wpa_supplicant.conf","w")
-        f.write(buf)
-        f.close()
-        os.system("sudo cp -f " + RAMDISK + "/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf")
-        cmd = cmd.strip().split(" ")
-        if (len(cmd) == 2 and cmd[1] == "wlan1"):
-            prun("sudo ip link set wlan1 down && sleep 1 && sudo ip link set wlan1 up")
-        else:
-            prun("sudo ip link set wlan0 down && sleep 1 && sudo ip link set wlan0 up")
+    if (cmd[:1] == "s" or cmd[:1] == "S"):       
+        wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
+        prun(wifisetcmd)
     else:
         prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
     
@@ -1299,9 +1301,10 @@ def senddata(data, blocksize = BLKSIZE):
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
-        
+        print(f"retry {retries}")
         # Syncronize with MSX
         while piexchangebyte() != READY: # WAS 0x9F:
+            print(f"sync loop")
             pass
             
         byteidx = 0
@@ -1331,7 +1334,7 @@ def senddata(data, blocksize = BLKSIZE):
             
         if (thissum == msxsum):
             rc = RC_SUCCESS
-            #print("senddata: checksum is a match")
+            print("senddata: checksum is a match")
             th.cancel()
             break
         else:
@@ -1345,10 +1348,12 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
 
     print("sendmultiblock")
 
-    numblocks = math.ceil(len(buf)/(blocksize - 3))
+    numblocks = math.ceil((len(buf)+3)/blocksize)
     
     # If buffer small or equal to BLKSIZE
     if numblocks == 1:  # Only one block to transfer
+        print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
+        print(f"buf = {buf}")
         data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
@@ -1474,7 +1479,17 @@ def chatgpt():
         error_msg = f"Pi:Error - {str(e)}"
         print(error_msg)
         sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
-        
+  
+def initialize_connection():
+    """Set up the server socket and wait for a client connection."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind((HOST, PORT))
+    s.listen(1)
+    print(f"[Python Server] Listening on {HOST}:{PORT}...")
+    conn, addr = s.accept()
+    print(f"[Python Server] Connected by {addr}")
+    return conn
+
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -1527,11 +1542,7 @@ else:
            ['SPI_MOSI','16'], \
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
-           ['OPENAIKEY',''], \
-           ['free','free'], \
-           ['free','free'], \
-           ['free','free'], \
-           ['free','free']]
+           ['OPENAIKEY','']]
 
 # irc
 channel = "#msxpi"
@@ -1547,14 +1558,19 @@ SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
-init_spi_bitbang()
-GPIO.output(RPI_READY, GPIO.LOW)
-print("GPIO Initialized\n")
-
 print("Starting MSXPi Server Version ",version,"Build",BuildId)
+
+if detect_host() == "Raspberry Pi":
+    import RPi.GPIO as GPIO
+    init_spi_bitbang()
+    GPIO.output(RPI_READY, GPIO.LOW)
+    print("GPIO Initialized\n")
+else:
+    conn = initialize_connection()
 
 try:
     while True:
+
         try:
             print("st_recvcmd: waiting command")
             rc,buf = recvdata(CMDSIZE)
@@ -1565,6 +1581,7 @@ try:
                 else:
                     fullcmd = buf.decode().split("\x00")[0]
 
+                #print(f"Received command: {fullcmd}")
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
@@ -1578,5 +1595,6 @@ try:
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, RC_FAILED)
 
 except KeyboardInterrupt:
-    GPIO.cleanup() # cleanup all GPIO
+    if detect_host() == "Raspberry Pi":
+        GPIO.cleanup() # cleanup all GPIO
     print("Terminating msxpi-server")
