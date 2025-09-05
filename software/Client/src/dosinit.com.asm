@@ -55,7 +55,7 @@ PICOMMERR:  DB      "Communication Error",13,10,0
 
 command: db "dosinit",0
 INCLUDE "include.asm"
-INCLUDE "putchar-clients.asm"
+INCLUDE "putchar_clients.asm"
 INCLUDE "msxpi_bios.asm"
 buf:    equ     $
         ds      BLKSIZE

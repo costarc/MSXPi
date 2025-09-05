@@ -1,0 +1,13 @@
+If you are not compiling openMSX, you only need the msxpibios.rom, 
+which is in share/systemroms/extensions/msxpibios.compiling
+
+To compile, clone the openMSX fork in https://github.com/costarc/openMSX -
+it contains all files neede for the MSXPi extension.
+
+If instead you want to compile from the original openMSX project
+in https://github.com/openMSX/openMSX, clone the repository and
+copy all files in this directory to you local project.
+
+You may wanto to update DeviceFactory.cc manually with the changes for
+MSXPiDevice, since it may have been changed at the source by the 
+openMSX community.

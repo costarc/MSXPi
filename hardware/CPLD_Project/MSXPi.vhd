@@ -1,5 +1,5 @@
 -- MSXPi Interface
--- Version 1.1 
+-- Version 1.12
 -- ------------------------------------------------------------------------------
 -- MIT License
 -- 
@@ -64,6 +64,11 @@
 -- Firmaware version number updated to "1010" to identify new PCB v1.0.1"
 -- No other changes made to this design
 -- -------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
+-- Version 1.2 - 2025-09-05
+-- Firmaware version number updated to "1011"
+-- No other changes made to this design
+-- -------------------------------------------------------------------------------
 -- MSXPI Versions:
 -- 0001: Wired up prototype, EPM3064ALC-44
 -- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
@@ -75,6 +80,7 @@
 -- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
 -- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
 -- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
+-- 1011: 
 -- ----------------------------------------------------------------------------------
 library ieee ;
 use ieee.std_logic_1164.all; 
@@ -98,20 +104,6 @@ PORT (
     SPI_RDY     : IN STD_LOGIC);
 END MSXPi;
 
-library ieee;
-use ieee.std_logic_1164.all;
-package msxpi_package is
-        constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1010";
-        constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
-        constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
-        constant CTRLPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"58";
-        constant CTRLPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"59";
-        constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-        constant DATAPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"5B";
-        constant DATAPORT3: STD_LOGIC_VECTOR(7 downto 0) := x"5C";
-        constant DATAPORT4: STD_LOGIC_VECTOR(7 downto 0) := x"5D";
-end msxpi_package;
-
 architecture rtl of MSXPi is
     type fsm_type is (idle, prepare, transferring);
     signal spi_state    : fsm_type := idle;
@@ -121,7 +113,7 @@ architecture rtl of MSXPi is
     signal D_buff_msx   : std_logic_vector(7 downto 0);
     signal D_buff_pi    : std_logic_vector(7 downto 0);
     signal RESET        : std_logic;
-    signal spibitcount_s: integer range 0 to 8;
+    signal spibitcount_s: std_logic_vector(2 downto 0) := "000";
     signal D_buff_msx_r : std_logic_vector(7 downto 0);
     signal SPI_en_s     : STD_LOGIC := '0';
     signal SPI_RDY_s    : STD_LOGIC;
@@ -133,17 +125,16 @@ begin
     readoper   <= not (IORQ_n or RD_n);
     writeoper  <= not (IORQ_n or WR_n);
     spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
-                     '0';
+                  '0';
     
     -- SPI_en_s = '1' means SPI is busy
     -- SPI_RDY  = '1' means Pi is Busy
     SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
     RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
     D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
-    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else     
+    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  
          D_buff_pi when readoper = '1' and A = DATAPORT1 else
-          "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
-          "ZZZZZZZZ";
+         "ZZZZZZZZ";
 
 spi:process(SPI_SCLK,readoper,writeoper,RESET)
 begin
@@ -153,7 +144,7 @@ begin
         spi_state <= idle;
     elsif (SPI_en_s = '0' and spi_en = '1') then
         SPI_en_s <= '1';
-        spibitcount_s <= 0;
+        spibitcount_s <= "000";
         spi_state <= prepare;
     elsif rising_edge(SPI_SCLK) then
         case spi_state is
@@ -166,9 +157,9 @@ begin
                 D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
                 SPI_MOSI <= D_buff_msx_r(7);
                 D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
-                spibitcount_s <= spibitcount_s + 1;
-                if spibitcount_s > 6 then
-                        spi_state <= idle;
+                spibitcount_s <= std_logic_vector(unsigned(spibitcount_s) + 1);
+                if spibitcount_s = "111" then
+                         spi_state <= idle;
                 end if;
         end case;
     end if;

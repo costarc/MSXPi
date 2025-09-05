@@ -1,10 +1,12 @@
 pcopy m:at28c256.com
 pcopy m:chatgpt.com
 pcopy m:dosinit.com
+pcopy m:msxpibios.rom
 pcopy m:msxpidos.rom
 pcopy m:msxpiext.bin
 pcopy m:msxpiupd.bat
 pcopy m:multirom.rom
+pcopy m:opmsxtst.com
 pcopy m:pcd.com
 pcopy m:pdate.com
 pcopy m:pdir.com
@@ -18,7 +20,6 @@ pcopy m:pshut.com
 pcopy m:pver.com
 pcopy m:pvol.com
 pcopy m:pwifi.com
-pcopy m:python.com
 pcopy m:template.com
 pcopy m:BASIC/API.BAS
 pcopy m:BASIC/DOLAR.BAS
