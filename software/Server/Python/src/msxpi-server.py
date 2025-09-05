@@ -51,7 +51,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.1"
-BuildId = "20250903.755"
+BuildId = "20250905.762"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -152,21 +152,17 @@ def init_spi_bitbang():
 
 def tick_sclk():
 
-    global SPI_CS
     global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
     GPIO.output(SPI_SCLK, GPIO.HIGH)
-    #time.sleep(SPI_SCLK_HIGH_TIME)
+    time.sleep(0.00001)  # 10 µs or whatever matches your CPLD timing
     GPIO.output(SPI_SCLK, GPIO.LOW)
-    #time.sleep(SPI_SCLK_LOW_TIME)
 
 def SPI_MASTER_transfer_byte(byte_out=None):
     
     global conn
 
     if detect_host() == "Raspberry Pi":
+        #print("SPI_MASTER_transfer_byte(): Raspberry Pi")
         byte_in = 0
         tick_sclk()
 
@@ -186,17 +182,17 @@ def SPI_MASTER_transfer_byte(byte_out=None):
             GPIO.output(SPI_SCLK, GPIO.LOW)
 
         tick_sclk()
-
-        return byte_in if byte_out is None else None
-
     else:
+        #print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi")
         if byte_out is not None:
             conn.sendall(bytes([byte_out]))
-            return None  # Send-only mode
+            byte_in = None  # Send-only mode
         else:
             byte_in = conn.recv(1)[0]  # Passive receive mode
-            return byte_in
 
+    #print(f"Received: {chr(byte_in)}")
+    return byte_in
+    
 def piexchangebyte(byte_out=None):
     """
     Exchanges a byte with the MSXPi interface.
@@ -204,23 +200,24 @@ def piexchangebyte(byte_out=None):
     If byte_out is None, waits and reads a byte from MSX.
     """
     if detect_host() == "Raspberry Pi":
+        #print("piexchange(): Raspberry Pi")
         # GPIO-based SPI emulation
         global SPI_CS, RPI_READY
 
         GPIO.output(RPI_READY, GPIO.HIGH)
         while GPIO.input(SPI_CS):
+            #print("Waiting SPI_CS signal")
             pass
 
         byte_in = SPI_MASTER_transfer_byte(byte_out)
         GPIO.output(RPI_READY, GPIO.LOW)
     else:
+        #print("piexchange(): Non-Raspberry Pi")
         # Socket-based communication
         global conn
         byte_in = SPI_MASTER_transfer_byte(byte_out)
-        if byte_out is None:
-            print("piexchangebyte: received:", hex(byte_in))
 
-    return byte_in if byte_out is None else None
+    return byte_in
 
 # Using CRC code from :
 # https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
@@ -1307,7 +1304,7 @@ def senddata(data, blocksize = BLKSIZE):
         print(f"retry {retries}")
         # Syncronize with MSX
         while piexchangebyte() != READY: # WAS 0x9F:
-            printf(f"sync loop")
+            print(f"sync loop")
             pass
             
         byteidx = 0
@@ -1493,7 +1490,6 @@ def initialize_connection():
     print(f"[Python Server] Connected by {addr}")
     return conn
 
-  
 """ ============================================================================
     msxpi-server.py
     main program starts here
@@ -1562,6 +1558,8 @@ SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
+print("Starting MSXPi Server Version ",version,"Build",BuildId)
+
 if detect_host() == "Raspberry Pi":
     import RPi.GPIO as GPIO
     init_spi_bitbang()
@@ -1570,10 +1568,9 @@ if detect_host() == "Raspberry Pi":
 else:
     conn = initialize_connection()
 
-print("Starting MSXPi Server Version ",version,"Build",BuildId)
-
 try:
     while True:
+
         try:
             print("st_recvcmd: waiting command")
             rc,buf = recvdata(CMDSIZE)
@@ -1584,7 +1581,7 @@ try:
                 else:
                     fullcmd = buf.decode().split("\x00")[0]
 
-                print(f"Received command: {fullcmd}")
+                #print(f"Received command: {fullcmd}")
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)

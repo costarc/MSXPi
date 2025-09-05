@@ -1,3 +1,4 @@
+ghdl -a $1_package.vhd
 ghdl -a $1.vhd
 ghdl -a tb_$1.vhd
 ghdl -e tb_$1

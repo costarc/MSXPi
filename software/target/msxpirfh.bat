@@ -20,7 +20,6 @@ pcopy m:pshut.com
 pcopy m:pver.com
 pcopy m:pvol.com
 pcopy m:pwifi.com
-pcopy m:sendcmd.com
 pcopy m:template.com
 pcopy m:BASIC/API.BAS
 pcopy m:BASIC/DOLAR.BAS
