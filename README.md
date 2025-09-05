@@ -1,13 +1,5 @@
 # MSXPi
 
-== RIP ==
-
-This project is discontinued. 
-It was a great idea when it started, years ago, but now using microcontrollers and FPGAs to interface with retro computers is widesprad, and a lot of great (and better) projects are available for MSX. MSXPi had it's place in inspiring people in the community, but now it's time has passed, and no more develpment will be done. Hope you have enjoyed to play with it, and thank you.
-
-==
-
-
 MSXPi is a hardware interface and software solution to allow MSX computers to control and use Raspberry Pi resources.
 The interface exposes I/O ports that can be read and written by MSX, and in turn the data will be accessible on the Raspberry Pi.
 Many resources are implemented, such as access to network drives, internet, disk images, and the Raspberry Pi itself.
