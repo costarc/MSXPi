@@ -155,6 +155,6 @@ SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
 sed "s/msxpibiossha/$SHA/" MSXPi.xml >    $XMLPATH/MSXPi.xml
 cp target/msxpibios.rom                   openMSX/share/systemroms/extensions/msxpibios.rom
 cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
-cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.cc
+cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
 cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
 cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
