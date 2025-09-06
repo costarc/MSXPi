@@ -117,8 +117,17 @@ Steps to Setup and Try MSXPi in openMSX
    because they were developed for Raspberry Pi (Linux). 
    Some work is needed on the msxpi-server side to make the commands
    work on Python running on a host that is not Linux.
+
+9. Create a local /home/pi/msxpi/msxpi.ini
+   This file is used to persist some MSXPi configuration. Create this
+   folder in your computer (under Windows the path is C:\home\pi\msxpi)
+   and save this file inside it:
+   https://github.com/costarc/MSXPi/tree/master/software/Server/Shell/msxpi.ini
    
-9. Read the MSXPi dociumentation for more detailed information:
+   If you have an OpenAI key, update this file with it so you can use the
+   chatgpt.com command.
+
+10. Read the MSXPi dociumentation for more detailed information:
    https://github.com/costarc/MSXPi/tree/master/documents
    
    
