@@ -6160,7 +6160,7 @@
 		)
 		(uuid "5e23da74-d2c9-4934-9868-3b8f69ffa243")
 	)
-	(text "MSXPi Interface V1.1 Rev.2\nRCC @ 2017 - 2023\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2023-08-15"
+	(text "MSXPi Interface V1.2 Rev.0\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-06"
 		(exclude_from_sim no)
 		(at 227.965 194.945 0)
 		(effects
@@ -6366,12 +6366,6 @@
 		(uuid "8def30ce-be3c-409d-b934-5777319cfbc8")
 	)
 	(junction
-		(at 177.8 58.42)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "8fb713bf-2b88-47d3-ba92-2bc7180a0431")
-	)
-	(junction
 		(at 161.544 166.37)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6402,6 +6396,12 @@
 		(uuid "d7053e1a-3aed-4c4d-9e27-e4bad02a7239")
 	)
 	(junction
+		(at 179.07 45.72)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ddb1e689-9717-44e0-96c4-42e5b32050db")
+	)
+	(junction
 		(at 51.435 160.02)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6412,6 +6412,12 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "f1c0790d-1818-4b20-8c38-005081e29ac3")
+	)
+	(junction
+		(at 179.07 53.34)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "fc609db0-3942-49c2-963b-ea822b31189e")
 	)
 	(junction
 		(at 65.0929 82.55)
@@ -6501,6 +6507,16 @@
 	)
 	(wire
 		(pts
+			(xy 179.07 45.72) (xy 198.12 45.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "06d76ad9-6228-4679-baf8-9786a8a004c4")
+	)
+	(wire
+		(pts
 			(xy 78.232 125.222) (xy 93.472 125.222)
 		)
 		(stroke
@@ -6538,16 +6554,6 @@
 			(type default)
 		)
 		(uuid "11a75baf-c111-466c-8285-5d0907b1ab42")
-	)
-	(wire
-		(pts
-			(xy 177.8 63.5) (xy 177.8 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "15d8c46a-38a0-4d90-a971-934c2f0152f3")
 	)
 	(wire
 		(pts
@@ -7101,16 +7107,6 @@
 	)
 	(wire
 		(pts
-			(xy 177.8 58.42) (xy 198.12 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "9718dfcb-0d44-47ba-a05d-c555e308f998")
-	)
-	(wire
-		(pts
 			(xy 65.0478 78.74) (xy 65.0478 76.2)
 		)
 		(stroke
@@ -7151,16 +7147,6 @@
 	)
 	(wire
 		(pts
-			(xy 176.53 58.42) (xy 177.8 58.42)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a06ad59f-29fb-4c80-be8a-1458861f0d7b")
-	)
-	(wire
-		(pts
 			(xy 62.992 66.04) (xy 65.1384 66.04)
 		)
 		(stroke
@@ -7188,6 +7174,26 @@
 			(type default)
 		)
 		(uuid "a581f41c-7b25-4e6c-b3b1-f887ae015774")
+	)
+	(wire
+		(pts
+			(xy 179.07 53.34) (xy 198.12 53.34)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a5d2bfa4-9e6e-4d43-8494-28c8d4c084de")
+	)
+	(wire
+		(pts
+			(xy 176.53 53.34) (xy 179.07 53.34)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a688ca53-9537-4f53-b15f-66b8b9634ad5")
 	)
 	(wire
 		(pts
@@ -7421,6 +7427,16 @@
 	)
 	(wire
 		(pts
+			(xy 173.99 45.72) (xy 179.07 45.72)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "dfd04dd6-401e-46b2-96dc-dd6a768a8ac8")
+	)
+	(wire
+		(pts
 			(xy 51.435 160.02) (xy 57.404 160.02)
 		)
 		(stroke
@@ -7531,7 +7547,7 @@
 	)
 	(global_label "SPI_CS"
 		(shape input)
-		(at 198.12 45.72 180)
+		(at 173.99 45.72 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7541,7 +7557,7 @@
 		)
 		(uuid "007f99ad-c008-43e5-a1e0-9cb6bebc9af9")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 189.1755 45.6406 0)
+			(at 165.0455 45.6406 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -7949,7 +7965,7 @@
 	)
 	(global_label "SPI_MISO"
 		(shape input)
-		(at 176.53 58.42 180)
+		(at 198.12 58.42 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7959,7 +7975,7 @@
 		)
 		(uuid "2475ddce-4426-4993-b99d-94e106fea81a")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 165.4688 58.3406 0)
+			(at 187.0588 58.3406 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9093,7 +9109,7 @@
 	)
 	(global_label "SPI_MOSI"
 		(shape input)
-		(at 198.12 53.34 180)
+		(at 176.53 53.34 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -9103,7 +9119,7 @@
 		)
 		(uuid "81b9d040-6b74-4970-8415-4e5b695dd673")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 187.0588 53.2606 0)
+			(at 165.4688 53.2606 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10698,6 +10714,75 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "#PWR012")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "msxpi-eagle-import:R-US_0207/7")
+		(at 179.07 40.64 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "0b00be0b-4960-46a9-a4df-ef1d362a1401")
+		(property "Reference" "R9"
+			(at 176.53 37.338 90)
+			(effects
+				(font
+					(size 1.778 1.5113)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "10K"
+			(at 177.038 40.132 90)
+			(effects
+				(font
+					(size 1.778 1.5113)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "msxpi:0207_7"
+			(at 179.07 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 179.07 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 179.07 40.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0941dba3-b20c-487a-9c70-790ddbdd3e49")
+		)
+		(pin "2"
+			(uuid "9dbef978-d7d3-4980-9819-201292db8bd1")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "R9")
 					(unit 1)
 				)
 			)
@@ -14035,6 +14120,71 @@
 		)
 	)
 	(symbol
+		(lib_id "power:+3.3V")
+		(at 179.07 35.56 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "da5ddca7-bf9b-44cf-ac19-61f73ce37766")
+		(property "Reference" "#PWR020"
+			(at 179.07 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 179.07 31.75 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 179.07 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 179.07 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 179.07 35.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "4edec3c9-25be-490b-a968-7decc6765820")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR020")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "msxpi-eagle-import:R-US_0207/7")
 		(at 40.132 122.682 0)
 		(unit 1)
@@ -14319,7 +14469,7 @@
 	)
 	(symbol
 		(lib_id "power:GNDREF")
-		(at 177.8 73.66 0)
+		(at 179.07 63.5 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14328,7 +14478,7 @@
 		(fields_autoplaced yes)
 		(uuid "df42d4ca-59a4-464a-b6ba-dce56e0aab6d")
 		(property "Reference" "#PWR019"
-			(at 177.8 80.01 0)
+			(at 179.07 69.85 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14337,7 +14487,7 @@
 			)
 		)
 		(property "Value" "GNDREF"
-			(at 177.8 79.248 0)
+			(at 179.07 69.088 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14346,7 +14496,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 177.8 73.66 0)
+			(at 179.07 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14355,7 +14505,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 177.8 73.66 0)
+			(at 179.07 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14364,7 +14514,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 177.8 73.66 0)
+			(at 179.07 63.5 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14457,7 +14607,7 @@
 	)
 	(symbol
 		(lib_id "msxpi-eagle-import:R-US_0207/7")
-		(at 177.8 68.58 90)
+		(at 179.07 58.42 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14465,7 +14615,7 @@
 		(dnp no)
 		(uuid "ea3e5dbe-f9a4-4c6f-ae05-5d78d06295b8")
 		(property "Reference" "R8"
-			(at 174.498 66.294 90)
+			(at 175.768 56.134 90)
 			(effects
 				(font
 					(size 1.778 1.5113)
@@ -14474,7 +14624,7 @@
 			)
 		)
 		(property "Value" "10K"
-			(at 175.26 68.834 90)
+			(at 176.53 58.674 90)
 			(effects
 				(font
 					(size 1.778 1.5113)
@@ -14483,7 +14633,7 @@
 			)
 		)
 		(property "Footprint" "msxpi:0207_7"
-			(at 177.8 68.58 0)
+			(at 179.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14492,7 +14642,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 177.8 68.58 0)
+			(at 179.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14501,7 +14651,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 177.8 68.58 0)
+			(at 179.07 58.42 0)
 			(effects
 				(font
 					(size 1.27 1.27)

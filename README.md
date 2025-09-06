@@ -211,6 +211,15 @@ All commands below assume you are in the openMSX root folder: openMSX/
   resources from MSX. They will use the BIOS if loaded, or load a msxpiext.bin/openmsx
   extension that load the BIOS into the ROM area when the MSXPi BIOS is not available.
  
+MSXPi v1.1 Release Notes
+========================
+- Add pull-up resistor for SPI_CS and pull-down resistor for SPI_MOSI in the electrical design
+- Created an MSXPi extension for openMSX
+- Added software (clients and server) for MSXPi extension in openMSX
+- Added MSXPi BIOS (msxpibios.rom) with BASIC CALL commands
+- Stopped developing and supporting MSX-DOS 1 driver
+- Bug fixes adn improvements in the software side
+
 
 MSXPi v1.1 Release Notes
 ========================
