@@ -1,5 +1,5 @@
 -- MSXPi Interface
--- Version 1.12
+-- Version 1.2.0.1
 -- ------------------------------------------------------------------------------
 -- MIT License
 -- 
@@ -65,9 +65,12 @@
 -- No other changes made to this design
 -- -------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------
--- Version 1.2 - 2025-09-05
--- Firmaware version number updated to "1011"
--- No other changes made to this design
+-- Version 1.2 - 2025-09-06
+-- Firmware version number updated to "1011"
+-- Removed Reset logic to free logic gates
+-- Changes Status Reg Logic to return 1 (Pi not ready) or 2 (byte ready)
+-- Remove all unused ports from package and from design. Now will use only
+--   ports 0x56 and 0x5a
 -- -------------------------------------------------------------------------------
 -- MSXPI Versions:
 -- 0001: Wired up prototype, EPM3064ALC-44
@@ -112,7 +115,7 @@ architecture rtl of MSXPi is
     signal spi_en       : std_logic;
     signal D_buff_msx   : std_logic_vector(7 downto 0);
     signal D_buff_pi    : std_logic_vector(7 downto 0);
-    signal RESET        : std_logic;
+    --signal RESET        : std_logic;
     signal spibitcount_s: std_logic_vector(2 downto 0) := "000";
     signal D_buff_msx_r : std_logic_vector(7 downto 0);
     signal SPI_en_s     : STD_LOGIC := '0';
@@ -130,19 +133,19 @@ begin
     -- SPI_en_s = '1' means SPI is busy
     -- SPI_RDY  = '1' means Pi is Busy
     SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
-    RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
+    --RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
     D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
-    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  
+    D <= "000000" & not SPI_RDY_s & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  
          D_buff_pi when readoper = '1' and A = DATAPORT1 else
          "ZZZZZZZZ";
 
-spi:process(SPI_SCLK,readoper,writeoper,RESET)
+spi:process(SPI_SCLK,readoper,writeoper)
 begin
-    if RESET = '1' then
-        SPI_en_s <= '0';
-        D_buff_pi <= "00000000";
-        spi_state <= idle;
-    elsif (SPI_en_s = '0' and spi_en = '1') then
+    --if RESET = '1' then
+    --    SPI_en_s <= '0';
+    --    D_buff_pi <= "00000000";
+    --    spi_state <= idle;
+    if (SPI_en_s = '0' and spi_en = '1') then
         SPI_en_s <= '1';
         spibitcount_s <= "000";
         spi_state <= prepare;

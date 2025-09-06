@@ -26,7 +26,6 @@ pcopy m:pshut.com
 pcopy m:pver.com
 pcopy m:pvol.com
 pcopy m:pwifi.com
-pcopy m:python.com
 pcopy m:sendcmd.com
 pcopy m:template.com
 pcopy m:test.bas

@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.1 
+; Version 1.2
 ; ------------------------------------------------------------------------------
 ; MIT License
 ; 
@@ -25,6 +25,9 @@
 ; -----------------------------------------------------------------------------
 ;
 ; File history :
+; 1.2    : CHKPIRDY now return values 0 (pi online), 1 (pi offline), 2(byte ready)
+;           PIREADBYTE now loops until it receives 2 from CHKPIRDY (this add
+;           support for the openMSX extension
 ; 0.9    : Simplification of block transfers routines.
 ;          Removed some deprecated routines.
 ; 0.8    : Re-worked protocol as protocol-v2:
@@ -56,8 +59,8 @@ CHKPIRDY:
         ret     z
         in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
         or      a
-		ret		z
-		cp		2
+        ret     z
+        cp      2
         jr      nz,CHKPIRDY
         ret
 
@@ -67,8 +70,8 @@ CHKPIRDY:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
-			cp      2
-			jr		nz,PIREADBYTE
+            cp      2
+            jr      nz,PIREADBYTE
             xor     a                  ; do not use xor to preserve c flag state
             out     (CONTROL_PORT1),a  ; send read command to the interface
             call    CHKPIRDY           ; wait interface transfer data to pi and
@@ -264,7 +267,7 @@ RECVRETRY:
         dec     a
         push    af                      ; save number of retries left
         ld      a,READY
-        call    PIWRITEBYTE				; send Sync byte
+        call    PIWRITEBYTE             ; send Sync byte
         ld      hl,0                    ; will store checksum in HL
 RECV0:
         push    bc
@@ -273,9 +276,9 @@ RECV0:
         inc     de
         ld      b,0
         ld      c,a
-        add     hl,bc					; calculating the CRC
+        add     hl,bc                   ; calculating the CRC
         pop     bc
-		dec     bc
+        dec     bc
         ld      a,b
         or      c
         jr      nz,RECV0
@@ -315,7 +318,7 @@ SENDD0:
         add     hl,bc
         call    PIWRITEBYTE
         pop     bc
-		dec     bc
+        dec     bc
         ld      a,b
         or      c
         jr      nz,SENDD0
@@ -338,7 +341,7 @@ SENDD0:
 ; PRINT                |
 ;-----------------------
 PRINT:
-        ld      a,(hl)		;get a character to print
+        ld      a,(hl)      ;get a character to print
         cp      TEXTTERMINATOR
         ret     z
         cp      10
@@ -346,7 +349,7 @@ PRINT:
         call    PUTCHAR
         ld      a,13
 PRINT1:
-        call	PUTCHAR		;put a character
+        call    PUTCHAR     ;put a character
         inc     hl
         jr      PRINT
 

@@ -2,7 +2,7 @@
 """-----------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2024 Ronivon Costa
+Copyright (c) 2025 Ronivon Costa
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -50,8 +50,8 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 
-version = "1.1"
-BuildId = "20250906.775"
+version = "1.2"
+BuildId = "20250906.777"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
