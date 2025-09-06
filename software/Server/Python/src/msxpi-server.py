@@ -112,28 +112,29 @@ HOST = '0.0.0.0'  # Listen on all interfaces
 PORT = 5000       # Match this with serverPort in your C++ code
 conn = None
 
+hostType = "pi"
+
 def detect_host():
     system = platform.system()
     machine = platform.machine()
 
     if system == "Windows":
-        return "Windows"
+        return "win"
+
     elif system == "Darwin":
-        return "macOS"
+        return "mac"
     elif system == "Linux":
         # Check for Raspberry Pi
         try:
             with open("/proc/cpuinfo", "r") as f:
                 cpuinfo = f.read()
             if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo or "Raspberry" in platform.uname().node:
-                return "Raspberry Pi"
+                return "pi"
         except Exception:
             pass
-        return "Linux"
+        return "lin"
     else:
-        return f"Unknown ({system})"
-
-print("Running on:", detect_host())
+        return system
 
 def init_spi_bitbang():
 
@@ -160,9 +161,9 @@ def tick_sclk():
 
 def SPI_MASTER_transfer_byte(byte_out=None):
     
-    global conn
+    global conn, hostType
 
-    if detect_host() == "Raspberry Pi":
+    if hostType == "pi":
         #print("SPI_MASTER_transfer_byte(): Raspberry Pi")
         byte_in = 0
         tick_sclk()
@@ -200,7 +201,9 @@ def piexchangebyte(byte_out=None):
     If byte_out is provided, sends it and ignores the response.
     If byte_out is None, waits and reads a byte from MSX.
     """
-    if detect_host() == "Raspberry Pi":
+
+    global hostType
+    if hostType == "pi":
         #print("piexchange(): Raspberry Pi")
         # GPIO-based SPI emulation
         global SPI_CS, RPI_READY
@@ -362,7 +365,9 @@ def ini_fcb(fname,fsize):
     return rc
 
 def prun(cmd = ''):
-    print("prun")
+    global hostType
+    
+    print(f"prun(): {cmd}")
     rc = RC_SUCCESS
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc,data = recvdata(BLKSIZE)
@@ -378,6 +383,10 @@ def prun(cmd = ''):
     else:
         cmd = cmd.replace('::','|')
         try:
+            if hostType == "win":
+                cmd = cmd.replace("/", "\\")
+
+            print(f"Final Popen cmd for platform {hostType}: {repr(cmd)}")   
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
@@ -400,7 +409,7 @@ def prun(cmd = ''):
 
 def pdir():
 
-    print("pdir")
+    print("pdir()")
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
     rc,data = recvdata()
@@ -410,10 +419,13 @@ def pdir():
         userPath = data.decode().split("\x00")[0]
 
     pathType, path = pathExpander(userPath, basepath)
-
+                
     try:
         if pathType == 0:
-            prun('ls -l ' + path)
+            if hostType == "win":
+                prun('dir ' + path)
+            else:
+                prun('ls -l ' + path)
         else:
             parser = MyHTMLParser()
             htmldata = urlopen(path).read().decode()
@@ -1561,13 +1573,16 @@ RPI_READY = int(getMSXPiVar("RPI_READY"))
 
 print("Starting MSXPi Server Version ",version,"Build",BuildId)
 
-if detect_host() == "Raspberry Pi":
+hostType = detect_host()
+
+if hostType == "pi":
     import RPi.GPIO as GPIO
     init_spi_bitbang()
     GPIO.output(RPI_READY, GPIO.LOW)
-    print("GPIO Initialized\n")
+    print("Raspberry Pi GPIO initialized\n")
 else:
     conn = initialize_connection()
+    print(f"{hostType} socket initialized\n")
 
 try:
     while True:
