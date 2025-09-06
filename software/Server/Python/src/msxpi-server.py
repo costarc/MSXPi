@@ -29,7 +29,8 @@ import subprocess
 from urllib.request import urlopen
 import requests
 import mmap
-import fcntl,os
+# import fcntl # does not work in Windows
+import os
 import sys
 import platform
 from os.path import exists
