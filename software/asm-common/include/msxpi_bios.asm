@@ -67,8 +67,8 @@ CHKPIRDY:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE1
-			cp		1
-			jr		z,PIREADBYTE
+			cp      2
+			jr		nz,PIREADBYTE
             xor     a                  ; do not use xor to preserve c flag state
             out     (CONTROL_PORT1),a  ; send read command to the interface
             call    CHKPIRDY           ; wait interface transfer data to pi and

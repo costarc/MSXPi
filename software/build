@@ -1,17 +1,18 @@
 #!/bin/sh
 
-export buildMSXDOS="yes"
-
+XMLPATH=openMSX/share/extensions
+OPENMSXSRC=../../openMSX/openMSX
 export HOME=../../../..
 export BIOS=ROM/src/BIOS/msxpibios.asm
 export ROMBANK2=$HOME/Dev/MSX/gameroms/ROAD.ROM
-export ROMBANK1=target/msxpibios.rom
+export BIOSFILE=target/msxpibios.rom
 export ZMAC_PATH=$HOME/Dev/zmac
 export HEX2BIN_PATH=$HOME/Dev/bin
 export Z80ASM_PATH=$HOME/Dev/z80asm-1.8
 export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
 export OPENMSXDISK=$HOME/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
+export buildMSXDOS="no"
 
 MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
@@ -146,5 +147,14 @@ fi
 genUpdateBatch
 
 # Create an optonal 2-bank ROMs for the EEPROM
-cat $ROMBANK1 > target/multirom.rom
+cat $BIOSFILE > target/multirom.rom
 cat $ROMBANK2 >> target/multirom.rom
+
+# Update artifacts for openMSX extensions
+SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
+sed "s/msxpibiossha/$SHA/" MSXPi.xml >    $XMLPATH/MSXPi.xml
+cp target/msxpibios.rom                   openMSX/share/systemroms/extensions/msxpibios.rom
+cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
+cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.cc
+cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
+cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
