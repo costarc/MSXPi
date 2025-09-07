@@ -368,7 +368,7 @@ def prun(cmd = ''):
     global hostType
     
     print(f"prun(): {cmd}")
-    rc = RC_SUCCESS
+
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc, cmd = readParameters("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |", True)
 
@@ -378,9 +378,7 @@ def prun(cmd = ''):
         cmd = cmd.replace('::','|')
         try:
             if hostType == "win":
-                cmd = cmd.replace("/", "\\")
-
-            print(f"Final Popen cmd for platform {hostType}: {repr(cmd)}")   
+                cmd = cmd.replace("/", "\\")  
             p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
             buf = p.stdout.read().decode()
             err = (p.stderr.read().decode())
@@ -390,16 +388,12 @@ def prun(cmd = ''):
             elif len(buf) == 0:
                 rc = RC_SUCCESS
                 buf = "Pi:Ok"
-
             sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-
+            return rc
         except Exception as e:
             print("prun: exception:"+str(e))
-            rc = RC_FAILED
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
-
-    #print(hex(rc))
-    return rc
+            return RC_FAILED
 
 def pdir():
 
