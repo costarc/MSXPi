@@ -369,6 +369,7 @@ def prun(cmd = ''):
     
     print(f"prun(): {cmd}")
 
+    rc = RC_SUCCESS
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc, cmd = readParameters("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |", True)
 
@@ -376,6 +377,7 @@ def prun(cmd = ''):
         return RC_FAILED
     else:
         cmd = cmd.replace('::','|')
+        rc = RC_SUCCESS
         try:
             if hostType == "win":
                 cmd = cmd.replace("/", "\\")  
@@ -388,17 +390,18 @@ def prun(cmd = ''):
             elif len(buf) == 0:
                 rc = RC_SUCCESS
                 buf = "Pi:Ok"
-            sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+            
+            print("prun(): output = {buf}")
+            sendmultiblock(buf.encode(), BLKSIZE, rc)
             return rc
         except Exception as e:
             print("prun: exception:"+str(e))
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
-            return RC_FAILED
+            return rc
 
 def pdir():
 
     print("pdir()")
-    rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
     rc, data = readParameters("", False)   
     if rc != RC_SUCCESS:
@@ -427,8 +430,7 @@ def pdir():
     except Exception as e:
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_SUCCESS)
 
-    #print("pdir:exiting rc:",hex(rc))
-    return rc
+    return RC_SUCCESS
 
 def pcd():
     
@@ -1231,9 +1233,10 @@ def dskiosct():
        
 def recvdata(bytecounter = BLKSIZE):
 
-    print("recvdata")
+    #print(f"recvdata():")
 
-    th = threading.Timer(3.0, exitDueToSyncError)
+    if hostType == "pi":
+        th = threading.Timer(3.0, exitDueToSyncError)
             
     retries = GLOBALRETRIES
     while retries > 0:
@@ -1263,23 +1266,26 @@ def recvdata(bytecounter = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             #print("recvdata: checksum is a match")
-            th.cancel()
+            if hostType == "pi":
+                th.cancel()
             break
         else:
             rc = RC_TXERROR
             print("recvdata: checksum error")
-            th.start()
+            if hostType == "pi":
+                th.start()
         
-    #print (hex(rc))
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
     
-    print("senddata")
+    #print(f"senddata(): {data}")
 
-    th = threading.Timer(3.0, exitDueToSyncError)
-    th.start()
-            
+    if hostType == "pi":
+        th = threading.Timer(3.0, exitDueToSyncError)
+        th.start()
+    
+    rc = RC_SUCCESS
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
@@ -1317,31 +1323,31 @@ def senddata(data, blocksize = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             print("senddata: checksum is a match")
-            th.cancel()
+            if hostType == "pi":
+                th.cancel()
             break
         else:
             rc = RC_TXERROR
             print("senddata: checksum error")
     
-    #print (hex(rc))
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
 
-    print("sendmultiblock")
+    #print(f"sendmultiblock(): {buf}")
 
     numblocks = math.ceil((len(buf)+3)/blocksize)
     
     # If buffer small or equal to BLKSIZE
     if numblocks == 1:  # Only one block to transfer
-        print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
-        print(f"buf = {buf}")
+        #print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
+        #print(f"buf = {buf}")
         data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
         data[2] = int(len(buf) >> 8)
         data[3:len(buf)] = buf
-        senddata(data[:blocksize],blocksize)
+        rc = senddata(data[:blocksize],blocksize)
     else: # Multiple blocks to transfer
         idx = 0
         thisblk = 0
@@ -1358,7 +1364,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
                 data[1] = datasize % 256
                 data[2] = datasize >> 8
             data[3:datasize] = buf[idx:idx + datasize]
-            senddata(data,blocksize)
+            rc = senddata(data,blocksize)
             idx += (blocksize - 3)
             thisblk += 1
                         
@@ -1376,7 +1382,6 @@ def readParameters(errorMsg, needParm=False):
     print("readparms():")
     rc, data = recvdata(BLKSIZE)
 
-    print(data, len(data))
     if rc != RC_SUCCESS:
         print(f"Pi:Error reading parameters")
         encodederrorMsg = ('Pi:Error reading parameters').encode()
