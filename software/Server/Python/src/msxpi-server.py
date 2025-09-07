@@ -391,7 +391,7 @@ def prun(cmd = ''):
                 rc = RC_SUCCESS
                 buf = "Pi:Ok"
             
-            print("prun(): output = {buf}")
+            #print(f"prun(): output = {buf}")
             sendmultiblock(buf.encode(), BLKSIZE, rc)
             return rc
         except Exception as e:
@@ -688,6 +688,7 @@ def ploadr():
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
     else:
+        print(f"plaodr(): Loading {path}")
         try:
             urlhandler = urlopen(path)
             buf = urlhandler.read()
@@ -699,6 +700,7 @@ def ploadr():
     if rc == RC_SUCCESS:
         # if /z passed, will uncompress the file
         if expand:
+            print(f"ploadr(): Will expand file")
             tmpfn0 = path.split('/')
             tmpfn = tmpfn0[len(tmpfn0)-1]
             #print("Entered expand")
@@ -748,9 +750,10 @@ def ploadr():
 
         else:
             # Send the file to MSX
+            print(f"ploadr(): Sending file {path} with size {len(buf)}")
+            rc = sendmultiblock(b"Pi:Loading...",BLKSIZE,RC_SUCCESS)
             rc = sendmultiblock(buf,SECTORSIZE, rc)
-    
-    print(hex(rc))
+
     return rc
 
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
@@ -1388,15 +1391,15 @@ def readParameters(errorMsg, needParm=False):
         sendmultiblock(encodederrorMsg, BLKSIZE, RC_FAILED)
         return RC_FAILED, None
 
-    query = data.decode().split("\x00")[0].strip()
-    if needParm and not query:
+    parms = data.decode().split("\x00")[0].strip()
+    if needParm and not parms:
         print(f"Pi:Error - {errorMsg}")
         encodederrorMsg = ('Pi:Error - ' + errorMsg).encode()
         sendmultiblock(encodederrorMsg, BLKSIZE, RC_FAILED)
         return RC_FAILED, None
 
-    print(f"Query:{query}")
-    return RC_SUCCESS, query
+    print(f"Parameters:{parms}")
+    return RC_SUCCESS, parms
 
 def prestart():
     print("Restarting MSXPi Server")
