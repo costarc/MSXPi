@@ -370,16 +370,10 @@ def prun(cmd = ''):
     print(f"prun(): {cmd}")
     rc = RC_SUCCESS
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        rc,data = recvdata(BLKSIZE)
-        
-        if data[0] == 0:
-            cmd=''
-        else:
-            cmd = data.decode().split("\x00")[0]
-    
-    if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        rc = RC_FAILED
-        sendmultiblock("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |".encode(),BLKSIZE,rc)
+        rc, cmd = readParameters("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |", True)
+
+    if rc != RC_SUCCESS:
+        return RC_FAILED
     else:
         cmd = cmd.replace('::','|')
         try:
@@ -412,11 +406,14 @@ def pdir():
     print("pdir()")
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
-    rc,data = recvdata()
-    if data[0] == 0:
+    rc, data = readParameters("", False)   
+    if rc != RC_SUCCESS:
+        return RC_FAILED
+    
+    if not data:
         userPath=''
     else:
-        userPath = data.decode().split("\x00")[0]
+        userPath = data
 
     pathType, path = pathExpander(userPath, basepath)
                 
@@ -444,12 +441,14 @@ def pcd():
     print("pcd")
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
-    rc,data = recvdata()
+    rc, data = readParameters("", False)   
+    if rc != RC_SUCCESS:
+        return RC_FAILED
     
-    if data[0] == 0:
+    if not data:
         userPath=''
     else:
-        userPath = data.decode().split("\x00")[0]
+        userPath = data
         
     try:
         if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
@@ -476,39 +475,34 @@ def pcd():
         sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
 
     return RC_SUCCESS
-
-def ploadr():
-    pcopy("ploadr")
     
 def pcopy(msxcmd = "pcopy"):
 
-    buf = bytearray(BLKSIZE)
+    #buf = bytearray(BLKSIZE)
     rc = RC_SUCCESS
 
     global psetvar,GLOBALRETRIES
     basepath = getMSXPiVar('PATH')
     
-    # Receive parameters -
-    rc,data = recvdata(BLKSIZE)
+    # Receive parameters - but before, prepare help message to pass
+    errorMsg = 'Syntax:\n'
+    if msxcmd == "pcopy":
+        errorMsg = errorMsg + 'pcopy </z> remotefile <localfile>\n'
+    elif msxcmd == "ploadr":
+        errorMsg = errorMsg + 'ploadr </z> remotefile\n'
+    errorMsg = errorMsg +'Valid devices:\n'
+    errorMsg = errorMsg +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
+    errorMsg = errorMsg + '/z decompress file\n'
+    errorMsg = errorMsg + 'm:, r1: r2: virtual remote devices'
+        
+    rc, data = readParameters(errorMsg, True)   
+    if rc != RC_SUCCESS:
+        return RC_FAILED
     
-    if data[0] == 0:
+    if not data:
         userPath=''
     else:
-        userPath = data.decode().split("\x00")[0]
-    
-    if len(userPath) == 0 or (userPath.lower().strip() == '/help'):
-        buf = 'Syntax:\n'
-        if msxcmd == "pcopy":
-            buf = buf + 'pcopy </z> remotefile <localfile>\n'
-        elif msxcmd == "ploadr":
-            buf = buf + 'ploadr </z> remotefile\n'
-        
-        buf = buf +'Valid devices:\n'
-        buf = buf +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
-        buf = buf + '/z decompress file\n'
-        buf = buf + 'm:, r1: r2: virtual remote devices'
-        rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
-        return rc
+        userPath = data
 
     fname2 = ''
     expandedFn = ''
@@ -668,24 +662,16 @@ def ploadr():
     global psetvar,GLOBALRETRIES
     basepath = getMSXPiVar('PATH')
     
-    # Receive parameters -
-    rc,data = recvdata(BLKSIZE)
+    # Receive parameters - but before 
+    errorMsg = 'Syntax:\nploadr </z> remotefile\nValid devices:\n/, path, http, ftp, nfs, smb, m:, r1:, r2:\n/z decompress file\nm:, r1: r2: virtual remote devices'
+    rc, data = readParameters(errorMsg, True)   
+    if rc != RC_SUCCESS:
+        return RC_FAILED
     
-    if data[0] == 0:
+    if not data:
         userPath=''
     else:
-        userPath = data.decode().split("\x00")[0]
-                   
-    if len(userPath) == 0 or userPath.lower().startswith('/h'):
-        buf = 'Syntax:\n'
-        buf = buf + 'ploadr </z> remotefile\n'
-        buf = buf +'Valid devices:\n'
-        buf = buf +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
-        buf = buf + '/z decompress file\n'
-        buf = buf + 'm:, r1: r2: virtual remote devices'
-
-        rc = sendmultiblock(buf.encode(), BLKSIZE, RC_FAILED)
-        return rc
+        userPath = data
 
     expandedFn = ''
     parms = userPath.split()
@@ -810,22 +796,18 @@ def pdate():
 
 
 def pplay():
-    rc = RC_SUCCESS
     
-    rc,data = recvdata(BLKSIZE)
-        
-    if data[0] == 0:
-        buf = "Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3"
-        sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
-        return rc
+    rc, data = readParameters("yntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3", True) 
+    
+    if rc != RC_SUCCESS:
+        return RC_FAILED
+
+    parmslist = data.split(" ")
+    cmd = parmslist[0]
+    if len(parmslist) > 1:
+        parms = data.split(" ")[1].split("\x00")[0]
     else:
-        msxparms = data.decode().split("\x00")[0]
-        parmslist = msxparms.split(" ")
-        cmd = parmslist[0]
-        if len(parmslist) > 1:
-            parms = msxparms.split(" ")[1].split("\x00")[0]
-        else:
-            parms = ''
+        parms = ''
     
     #print("cmd / parms:",cmd,parms)
     
@@ -836,47 +818,40 @@ def pplay():
             buf = b'\x0a'
         sendmultiblock(buf, BLKSIZE, RC_SUCCESS)
     except subprocess.CalledProcessError as e:
-        sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
+        sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, RC_FAILED)
 
-    #print (hex(rc))
-    return rc
+    return RC_SUCCESS
     
 def pvol():
     rc = RC_SUCCESS
     
-    rc,data = recvdata(BLKSIZE)
-
-    if data[0] == 0:
-        vol=''
-    else:
-        vol = data.decode().split("\x00")[0]
-        
-    rc = prun("mixer set PCM -- "+vol)
+    rc, data = readParameters("", False)   
+    if rc != RC_SUCCESS:
+        return RC_FAILED
     
-    print (hex(rc))
+    rc = prun("mixer set PCM -- " + data)
     return rc
 
 def pset(varn = '', varv = ''):
     global psetvar,drive0Data,drive1Data
 
     if varn == '':
-        
-        rc,data = recvdata(BLKSIZE)
-        buf = ''
-        if data[0] == 0:
+        rc, data = readParameters("", False)
+        if rc != RC_SUCCESS:
+            return RC_FAILED
+        if not data:
             for index in range(0,len(psetvar)):
                 print(psetvar[index])
-                buf = buf + psetvar[index][0]+'='+psetvar[index][1]+'\n'
-            rc = sendmultiblock(buf.encode(), BLKSIZE, RC_SUCCESS)
+                data = data + psetvar[index][0]+'='+psetvar[index][1]+'\n'
+            rc = sendmultiblock(data.encode(), BLKSIZE, RC_SUCCESS)
             return RC_SUCCESS
         else:
-            buf = data.decode().split("\x00")[0]
-            if  (buf.lower() == "/h" or buf.lower() == "/help"):
-                rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname   varvalue   Set varname to varvalue\npset varname            Delete variable     varname".encode(), BLKSIZE, RC_FAILED)
+            if  (data.lower() == "/h" or data.lower() == "/help"):
+                rc = sendmultiblock("Syntax:\npset                    Display variables\npset varname varvalue   Set varname to varvalue\npset varname            Delete variable     varname".encode(), BLKSIZE, RC_FAILED)
                 return rc
 
-        varname = buf.split(" ")[0]
-        varvalue = buf.replace(varname,'',1).strip()
+        varname = data.split(" ")[0]
+        varvalue = data.replace(varname,'',1).strip()
     else:
         varname = varn
         varvalue = varv
@@ -899,7 +874,6 @@ def pset(varn = '', varv = ''):
             sendmultiblock("Pi:Error".encode(), BLKSIZE, RC_FAILED)
 
 def setMSXPiVar(pvar = '', pvalue = ''):
-    
     global psetvar
     
     index = 0
@@ -945,24 +919,25 @@ def pwifi():
     wifipass = getMSXPiVar('WIFIPWD')
     wificountry = getMSXPiVar('WIFICOUNTRY')
 
-    rc,data = recvdata()
-
-    if data[0] == 0:
-        parms=''
-    else:
-        parms = data.decode().split("\x00")[0]
-
-    cmd=parms.strip()
-
+    rc,cmd = readParameters("", False)
+    if rc != RC_SUCCESS:
+        return RC_FAILED
+        
     if (cmd[:2] == "/h"):
         sendmultiblock("Pi:Usage:\npwifi display | set".encode(), BLKSIZE, RC_FAILED)
         return RC_SUCCESS
 
-    if (cmd[:1] == "s" or cmd[:1] == "S"):       
-        wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
-        prun(wifisetcmd)
+    if (cmd[:1] == "s" or cmd[:1] == "S"):
+        if hostType == "pi":
+            wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
+            prun(wifisetcmd)
+        else:
+            sendmultiblock(b'Parameter not supported in this platform', BLKSIZE, RC_SUCCESS)
     else:
-        prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+        if hostType == "pi":
+            prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+        else:
+            prun("ipconfig")
     
     return RC_SUCCESS
 
@@ -1394,7 +1369,36 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
             thisblk += 1
                         
     return rc
-    
+
+# This is the function that read parameters for all commands
+# The parameters have following use:
+# errorMsg: this is the error message to return to MSX if there
+#  was an error reading the parameter
+# needParm: This flag indicates if a parameters must have been
+#  passed or if parameters are optional.
+#  Some commands (such as chatgpt.com) must have a parameter,
+#  therefore needParam must be True
+def readParameters(errorMsg, needParm=False):
+    print("readparms():")
+    rc, data = recvdata(BLKSIZE)
+
+    print(data, len(data))
+    if rc != RC_SUCCESS:
+        print(f"Pi:Error reading parameters")
+        encodederrorMsg = ('Pi:Error reading parameters').encode()
+        sendmultiblock(encodederrorMsg, BLKSIZE, RC_FAILED)
+        return RC_FAILED, None
+
+    query = data.decode().split("\x00")[0].strip()
+    if needParm and not query:
+        print(f"Pi:Error - {errorMsg}")
+        encodederrorMsg = ('Pi:Error - ' + errorMsg).encode()
+        sendmultiblock(encodederrorMsg, BLKSIZE, RC_FAILED)
+        return RC_FAILED, None
+
+    print(f"Query:{query}")
+    return RC_SUCCESS, query
+
 def prestart():
     print("Restarting MSXPi Server")
     exitDueToSyncError()
@@ -1419,14 +1423,14 @@ def updateIniFile(fname,memvar):
 
 def apitest():
     print("apitest")
-    
-    # Parameters have always a fixed size: BLKSIZE
-    rc,data = recvdata(BLKSIZE)
-    #print("Parameters in CALL MSXPI:",data)
-    
-    #print("Extracting only ascii bytes and setting reponse...")
-    buf1 = data.decode().split("\x00")[0]
 
+    # This command requires parameter
+    rc, data = readParameters("This command requires a parameter", False)
+    
+    # Stops if MSX did not send the query for OpenAI
+    if rc == RC_FAILED:
+        return RC_FAILED
+    
     # Send response to CALL MSXPI - It will always expect a response
     rc = sendmultiblock(('Pi:CALL MSXPI parameters:' + buf1).encode(), BLKSIZE, RC_SUCCESS)
         
@@ -1442,31 +1446,21 @@ def apitest():
     
 def chatgpt():
     print("chatgpt()")
-    
-    model_engine = "gpt-3.5-turbo"
-    url = "https://api.openai.com/v1/chat/completions"
-        
-    rc, data = recvdata()
-    
-    if rc == RC_SUCCESS:
-        query = data.decode().split("\x00")[0].strip()
-        print(f"Query:{query}")
-    else:
-        print('Pi:Error - Failed to receive query from MSX')
-        sendmultiblock(b'Pi:Error - Failed to receive query from MSX', BLKSIZE, RC_FAILED)
-        return RC_SUCCESS
-    
-    if not query:
-        print('Pi:Error - Empty query')
-        sendmultiblock(b'Pi:Error - Empty query', BLKSIZE, RC_FAILED)
-        return RC_SUCCESS
-
-    
     api_key = getMSXPiVar('OPENAIKEY')
     if not api_key:
         print('Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
         sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini', BLKSIZE, RC_FAILED)
-        return RC_SUCCESS
+        return RC_FAILED
+
+    # This command requires parameter
+    rc, query = readParameters("This command requires a query", False)
+    
+    # Stops if MSX did not send the query for OpenAI
+    if rc == RC_FAILED:
+        return RC_FAILED
+
+    model_engine = "gpt-3.5-turbo"
+    url = "https://api.openai.com/v1/chat/completions"
 
     try:
         headers = {

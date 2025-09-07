@@ -158,5 +158,5 @@ cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
 
 # do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
 # SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-# sed "s/msxpibiossha/$SHA/" MSXPi.xml.template >    $XMLPATH/MSXPi.xml
-# cp target/msxpibios.rom                   openMSX/share/systemroms/extensions/msxpibios.rom
+# sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
+# cp target/msxpibios.rom                         openMSX/share/systemroms/extensions/msxpibios.rom

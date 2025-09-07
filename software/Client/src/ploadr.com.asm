@@ -41,13 +41,15 @@ DSKBLOCKSIZE:   EQU 1
         ld      (currptx),hl
 ; Sending Command and Parameters to RPi
         ld      de,command
-        call    SENDCOMMAND
+        call    SENDCOMMAND		; send command
         jr      c, PRINTPIERR
         ld      de,buf
         ld      bc,BLKSIZE
         call    CLEARBUF
-        call    SENDPARMS
+        call    SENDPARMS		; send additional parameters
         jr      c, PRINTPIERR
+		call	printTextReply	; print ploadr command before reading data
+								; ploadr always send a text before sending the actual rom data
         ld      de,buf
 MAINPROG:
         ld      bc,BLKSIZE
@@ -86,6 +88,25 @@ PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
+printTextReply:
+        ld      de,buf
+printTextReply1:
+        ld      bc,BLKSIZE
+        call    CLEARBUF
+        push    de
+        call    RECVDATA
+        pop     de
+        jr      c, PRINTPIERR
+        inc     de
+        inc     de
+        inc     de
+        call    PRINTPISTDOUT
+        ld      de,buf
+        ld      a,(de)
+        cp      RC_READY
+        jr      z,printTextReply1
+        call    PRINTNLINE
+        ret
 PRINTFNAME:
         LD      HL,FNTITLE
         CALL    PRINT
