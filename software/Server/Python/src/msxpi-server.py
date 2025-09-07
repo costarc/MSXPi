@@ -268,6 +268,7 @@ class MyHTMLParser(HTMLParser):
         print("MyHTMLParser: convert_charrefs found :", data)
                 
 def pathExpander(path, basepath = ''):
+    print(f"pathExpander(): {path}, {basepath}")
     path=path.strip().rstrip(' \t\n\0')
     
     if path.strip() == "..":
@@ -303,7 +304,8 @@ def pathExpander(path, basepath = ''):
     else:
         urltype = 1 # this is a network path
         newpath = basepath + "/" + path
-        
+    
+    print(f"pathExpander(): urltype = {urltype}, newpath = {newpath}")
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -474,7 +476,8 @@ def pcd():
     
 def pcopy(msxcmd = "pcopy"):
 
-    #buf = bytearray(BLKSIZE)
+    print(f"pcopy():")
+    global hostType
     rc = RC_SUCCESS
 
     global psetvar,GLOBALRETRIES
@@ -534,43 +537,63 @@ def pcopy(msxcmd = "pcopy"):
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
     else:
+        print(f"(pcopy(): remote file = {path}")
         try:
             urlhandler = urlopen(path)
             buf = urlhandler.read()
             filesize = len(buf)
+            rc = RC_SUCCESS
         except Exception as e:
+            print(f"Pi:Error - {str(e)}")
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
 
     # if /z passed, will uncompress the file
     if rc == RC_SUCCESS:
         if expand:
+            print(f"(pcopy): Loaded, now expanding")
             tmpfn0 = path.split('/')
             tmpfn = tmpfn0[len(tmpfn0)-1]
-            #print("Entered expand")
-            os.system('rm /tmp/msxpi/* 2>/dev/null')
+            if hostType == "win":
+                os.system('del /Q "C:\\tmp\\msxpi\\*"')
+            else:
+                os.system('rm /tmp/msxpi/* 2>/dev/null')
+            
             tmpfile = open('/tmp/' + tmpfn, 'wb')
             tmpfile.write(buf)
             tmpfile.close()
-            if ".lzh" in tmpfn:
-                cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
+            
+            # If not windows, uses lha to extrac lzh files
+            if ".lzh" in tmpfn and hostType != "win":
+                if hostType == "win":
+                    cmd = 'lha -xfiw=/tmp/msxpi /tmp/' + tmpfn
+                else:
+                    cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
+                    
+                print(f"pcopy(): {cmd}")
                 p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
                 perror = (p.stderr.read().decode())
                 rc = p.poll()
-                if rc!=0:
+                print(f"pcopy(): perror = {perror}, rc = {rc}")
+                if rc!=0 and rc != None:
                     rc = RC_FAILED
             else:
-                cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
+                # Will use 7-Zip for any file type under Windows
+                if hostType == "win":
+                    cmd = '7z.exe e /tmp/' + tmpfn + ' -aoa -o/tmp/msxpi/'
+                else:
+                    cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
                 p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
                 perror = (p.stderr.read().decode())
                 rc = p.poll()
                 if rc!=0:
                     rc = RC_FAILED
             
-            if rc == 0:
-                fname1 = os.listdir('/tmp/msxpi')[0]
-                expandedFn = fname1
-                fname1 = '/tmp/msxpi/' + fname1
+            print(f"pcopy(): perror = {perror} , rc = {rc}")
+            romfiles = [f for f in os.listdir('/tmp/msxpi') if f.endswith(('.rom', '.ROM'))]
+            print(f"pcopy(): romfiles = {romfiles}")
+            if romfiles:
+                fname1 = '/tmp/msxpi/' + romfiles[0]
                 
                 try:
                     with open(fname1, mode='rb') as f:
@@ -584,6 +607,7 @@ def pcopy(msxcmd = "pcopy"):
                     return RC_FAILED
        
             else:
+                print(f"Pi:Error - {perror}")
                 rc = sendmultiblock(('Pi:Error - ' + perror).encode(), BLKSIZE, RC_FAILED)
                 return RC_FAILED
     
@@ -595,6 +619,7 @@ def pcopy(msxcmd = "pcopy"):
             return RC_FAILED
 
         else:
+            print(f"(pcopy): checks before sending file")
             # Did we boot from the MSXPi ROM or another external drive?
             if (not msxdos1boot) or msxcmd == "ploadr": # Boot was from an externdal drive OR it is PLOADR
                 if expand:
@@ -648,112 +673,6 @@ def pcopy(msxcmd = "pcopy"):
                     rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             
     #print(hex(rc))
-    return rc
-
-def ploadr():
-
-    buf = bytearray(BLKSIZE)
-    rc = RC_SUCCESS
-
-    global psetvar,GLOBALRETRIES
-    basepath = getMSXPiVar('PATH')
-    
-    # Receive parameters - but before 
-    errorMsg = 'Syntax:\nploadr </z> remotefile\nValid devices:\n/, path, http, ftp, nfs, smb, m:, r1:, r2:\n/z decompress file\nm:, r1: r2: virtual remote devices'
-    rc, data = readParameters(errorMsg, True)   
-    if rc != RC_SUCCESS:
-        return RC_FAILED
-    
-    if not data:
-        userPath=''
-    else:
-        userPath = data
-
-    expandedFn = ''
-    parms = userPath.split()
-    if '/z' in userPath.lower():
-        expand = True
-        pathType, path = pathExpander(parms[1], basepath)
-    else:
-        expand = False
-        pathType, path = pathExpander(parms[0], basepath)
-
-    if pathType == 0:
-        try:
-            with open(path, mode='rb') as f:
-                buf = f.read()
-            filesize = len(buf)
-        except Exception as e:
-            err = 'Pi:Error - ' + str(e)
-            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
-            return RC_FAILED
-    else:
-        print(f"plaodr(): Loading {path}")
-        try:
-            urlhandler = urlopen(path)
-            buf = urlhandler.read()
-            filesize = len(buf)
-        except Exception as e:
-            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
-            return RC_FAILED
-
-    if rc == RC_SUCCESS:
-        # if /z passed, will uncompress the file
-        if expand:
-            print(f"ploadr(): Will expand file")
-            tmpfn0 = path.split('/')
-            tmpfn = tmpfn0[len(tmpfn0)-1]
-            #print("Entered expand")
-            os.system('rm /tmp/msxpi/* 2>/dev/null')
-            tmpfile = open('/tmp/' + tmpfn, 'wb')
-            tmpfile.write(buf)
-            tmpfile.close()
-            if ".lzh" in tmpfn:
-                cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
-                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-                perror = (p.stderr.read().decode())
-                rc = p.poll()
-                if rc!=0:
-                    rc = RC_FAILED
-            else:
-                cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
-                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-                perror = (p.stderr.read().decode())
-                rc = p.poll()
-                if rc!=0:
-                    rc = RC_FAILED
-            
-            if rc == 0:
-                fname1 = os.listdir('/tmp/msxpi')[0]
-                expandedFn = fname1
-                fname1 = '/tmp/msxpi/' + fname1
-
-                try:
-                    with open(fname1, mode='rb') as f:
-                        buf = f.read()
-
-                    filesize = len(buf)
-                    rc = RC_SUCCESS
-                    
-                except Exception as e:
-                    rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
-                    return RC_FAILED
-       
-            else:
-                rc = sendmultiblock(('Pi:Error - ' + perror).encode(), BLKSIZE, RC_FAILED)
-                return RC_FAILED
-                
-    if rc == RC_SUCCESS:
-        if filesize == 0:
-            rc = sendmultiblock("Pi:Error - File size is zero bytes".encode(), BLKSIZE, RC_FAILED)
-            return RC_FAILED
-
-        else:
-            # Send the file to MSX
-            print(f"ploadr(): Sending file {path} with size {len(buf)}")
-            rc = sendmultiblock(b"Pi:Loading...",BLKSIZE,RC_SUCCESS)
-            rc = sendmultiblock(buf,SECTORSIZE, rc)
-
     return rc
 
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
@@ -1292,10 +1211,10 @@ def senddata(data, blocksize = BLKSIZE):
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
-        print(f"retry {retries}")
+        #print(f"retry {retries}")
         # Syncronize with MSX
         while piexchangebyte() != READY: # WAS 0x9F:
-            print(f"sync loop")
+            print(f"WTrying to sync with MSX")
             pass
             
         byteidx = 0
@@ -1325,7 +1244,7 @@ def senddata(data, blocksize = BLKSIZE):
             
         if (thissum == msxsum):
             rc = RC_SUCCESS
-            print("senddata: checksum is a match")
+            #print("senddata: checksum is a match")
             if hostType == "pi":
                 th.cancel()
             break
@@ -1354,7 +1273,9 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
     else: # Multiple blocks to transfer
         idx = 0
         thisblk = 0
+        print(f"sendmultiblock(): Blocks to sent = {numblocks}")
         while thisblk < numblocks:
+            print(f"sendmultiblock(): block {thisblk}")
             data = bytearray(blocksize)
             if thisblk + 1 == numblocks:
                 data[0] = rc # Last block - send original RC
@@ -1535,7 +1456,7 @@ else:
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
            ['DriveM','https://github.com/costarc/MSXPi/raw/master/software/target'], \
-           ['DriveR1','http://www.msxarchive.nl/pub/msx/games/msx1'], \
+           ['DriveR1','https://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
            ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
