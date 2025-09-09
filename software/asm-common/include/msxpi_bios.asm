@@ -59,8 +59,8 @@ CHKPIRDY:
         ret     z
         in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
         or      a
-        ;ret     z
-        ;cp      2
+        ret     z
+        cp      2
         jr      nz,CHKPIRDY
         ret
 
@@ -69,16 +69,31 @@ CHKPIRDY:
 ;-----------------------
 PIREADBYTE:
             call    CHKPIRDY
-            jr      c,PIREADBYTE1
-            ;cp      2
-            ;jr      nz,PIREADBYTE
+            jr      c,PIREADBYTE2
+			;push	af
+			;add		a,48
+			;out		($98),a
+			;pop		af
+			cp		1
+			jr		z,PIREADBYTE       ; Pi not ready - keep trying
+			cp		2                  ; openMSX extension will return 2
+			                           ; when data is available for reading
+			jr      z,PIREADBYTE1      ; is openMSX extension - read data
+		    or		a
+			jr		nz,PIREADBYTE      ; Status not 0, keep trying - otherwise:
+			in		a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
+			                           ; or MSXPi extension in openMSX
+			cp		$FE                ; openMSX will return $FE
+			jr		z,PIREADBYTE       ; openMSX does not have data ready when status = 0
+			                           ; need to keep trying			
+PIREADBYTE1:
             xor     a                  ; do not use xor to preserve c flag state
             out     (CONTROL_PORT1),a  ; send read command to the interface
             call    CHKPIRDY           ; wait interface transfer data to pi and
                                        ; pi app processing
                                        ; no ret c is required here, because in a,(7) 
                                        ; does not reset c flag
-PIREADBYTE1:
+PIREADBYTE2:
             in      a,(DATA_PORT1)     ; read byte
             ret                        ; return in a the byte received
 
@@ -661,4 +676,3 @@ DELAY1:
         POP     HL
         POP     DE
         RET
-

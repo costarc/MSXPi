@@ -19,6 +19,7 @@ pcopy m:pdir.com
 pcopy m:ploadr.com
 pcopy m:pplay.com
 pcopy m:preboot.com
+pcopy m:preset.com
 pcopy m:prestart.com
 pcopy m:prun.com
 pcopy m:pset.com

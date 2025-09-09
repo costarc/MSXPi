@@ -137,6 +137,7 @@ begin
     D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
     D <= "000000" & not SPI_RDY_s & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  
          D_buff_pi when readoper = '1' and A = DATAPORT1 else
+			"0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
          "ZZZZZZZZ";
 
 spi:process(SPI_SCLK,readoper,writeoper)
