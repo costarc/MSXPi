@@ -31,7 +31,21 @@
 ;
 ; File history :
 ; 0.1    : initial version
-
+DBGA:
+        DI
+        PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
+        CALL    PRINTNUMBER
+        LD      A,' '
+        CALL    PUTCHAR
+        POP     HL
+        POP     DE
+        POP     BC
+        POP     AF
+        EI
+        RET
 DBGBC:
         DI
         PUSH    AF

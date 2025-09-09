@@ -52,7 +52,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.2"
-BuildId = "20250906.778"
+BuildId = "20250909.790"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -564,7 +564,8 @@ def pcopy(msxcmd = "pcopy"):
             tmpfile.close()
             
             # If not windows, uses lha to extrac lzh files
-            if ".lzh" in tmpfn and hostType != "win":
+            if ".lzh" in tmpfn:
+                print(f"(pcopy(): hostType = {hostType}")
                 if hostType == "win":
                     cmd = 'lha -xfiw=/tmp/msxpi /tmp/' + tmpfn
                 else:
@@ -1413,6 +1414,7 @@ def chatgpt():
 def initialize_connection():
     """Set up the server socket and wait for a client connection."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((HOST, PORT))
     s.listen(1)
     print(f"[Python Server] Listening on {HOST}:{PORT}...")
@@ -1457,7 +1459,7 @@ else:
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
            ['DriveM','https://github.com/costarc/MSXPi/raw/master/software/target'], \
            ['DriveR1','https://www.msxarchive.nl/pub/msx/games/roms/msx1'], \
-           ['DriveR2','http://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
+           ['DriveR2','https://www.msxarchive.nl/pub/msx/games/roms/msx2'], \
            ['WIDTH','80'], \
            ['WIFISSID','MYWIFI'], \
            ['WIFIPWD','MYWFIPASSWORD'], \
