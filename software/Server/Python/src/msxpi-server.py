@@ -2,7 +2,7 @@
 """-----------------------------------------------------------------------------------
 MIT License
 
-Copyright (c) 2025 Ronivon Costa
+Copyright (c) 2016 - 2025 Ronivon Costa
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -52,7 +52,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.2"
-BuildId = "20250909.790"
+BuildId = "20250910.790"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -162,10 +162,9 @@ def tick_sclk():
 def SPI_MASTER_transfer_byte(byte_out=None):
     
     global conn, hostType
-
+    byte_in = 0    
     if hostType == "pi":
         #print("SPI_MASTER_transfer_byte(): Raspberry Pi")
-        byte_in = 0
         tick_sclk()
 
         for bit in [0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01]:
@@ -185,15 +184,20 @@ def SPI_MASTER_transfer_byte(byte_out=None):
 
         tick_sclk()
     else:
-        #print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi")
+        #conn.settimeout(3.0)  # Set timeout once, e.g. during setup
         if byte_out is not None:
+            # print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi conn.sendall")
             conn.sendall(bytes([byte_out]))
-            byte_in = None  # Send-only mode
         else:
-            byte_in = conn.recv(1)[0]  # Passive receive mode
+            # print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi conn.recv")
+            try:
+                byte_in = conn.recv(1)[0]  # Passive receive mode
+            except socket.timeout:
+                print("SPI_MASTER_transfer_byte(): recv timed out")
+                return RC_FAILED,None
 
     #print(f"Received: {chr(byte_in)}")
-    return byte_in
+    return RC_SUCCESS,byte_in
     
 def piexchangebyte(byte_out=None):
     """
@@ -213,15 +217,15 @@ def piexchangebyte(byte_out=None):
             #print("Waiting SPI_CS signal")
             pass
 
-        byte_in = SPI_MASTER_transfer_byte(byte_out)
+        rc, byte_in = SPI_MASTER_transfer_byte(byte_out)
         GPIO.output(RPI_READY, GPIO.LOW)
     else:
         #print("piexchange(): Non-Raspberry Pi")
         # Socket-based communication
         global conn
-        byte_in = SPI_MASTER_transfer_byte(byte_out)
+        rc, byte_in = SPI_MASTER_transfer_byte(byte_out)
 
-    return byte_in
+    return rc, byte_in
 
 # Using CRC code from :
 # https://stackoverflow.com/questions/25239423/crc-ccitt-16-bit-python-manual-calculation
@@ -402,8 +406,8 @@ def prun(cmd = ''):
             return rc
 
 def pdir():
-
     print("pdir()")
+    
     basepath = getMSXPiVar('PATH')
     rc, data = readParameters("", False)   
     if rc != RC_SUCCESS:
@@ -435,8 +439,8 @@ def pdir():
     return RC_SUCCESS
 
 def pcd():
-    
     print("pcd")
+    
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
     rc, data = readParameters("", False)   
@@ -476,7 +480,8 @@ def pcd():
     
 def pcopy(msxcmd = "pcopy"):
 
-    print(f"pcopy():")
+    print("pcopy():")
+    
     global hostType
     rc = RC_SUCCESS
 
@@ -685,8 +690,8 @@ def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
     return b
     
 def pdate():
-
     print("pdate")
+    
     pdate = bytearray(8)
     now = datetime.datetime.now()
     pdate[0]=(now.year & 0xff)
@@ -715,7 +720,7 @@ def pdate():
 
 
 def pplay():
-    
+    print("pplay")   
     rc, data = readParameters("yntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3", True) 
     
     if rc != RC_SUCCESS:
@@ -742,6 +747,7 @@ def pplay():
     return RC_SUCCESS
     
 def pvol():
+    print("pvol")
     rc = RC_SUCCESS
     
     rc, data = readParameters("", False)   
@@ -752,6 +758,7 @@ def pvol():
     return rc
 
 def pset(varn = '', varv = ''):
+    print("pset")
     global psetvar,drive0Data,drive1Data
 
     if varn == '':
@@ -832,7 +839,7 @@ def getMSXPiVar(devname = 'PATH'):
     return devval
     
 def pwifi():
-
+    print("pwifi")
     global psetvar
     wifissid = getMSXPiVar('WIFISSID')
     wifipass = getMSXPiVar('WIFIPWD')
@@ -861,6 +868,7 @@ def pwifi():
     return RC_SUCCESS
 
 def pver():
+    print("pver()")
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+ BuildId
     rc = sendmultiblock(ver.encode(), BLKSIZE, RC_SUCCESS)
@@ -1127,16 +1135,21 @@ def dskiosct():
             
     else:
         # Syncronize with MSX
-        while piexchangebyte() != READY:  # was 0x9F:
-            pass
+        while True:
+            rc, pibyte = piexchangebyte()
+            if rc == RC_FAILED or pibyte == READY:
+                break
+        
+        if rc == RC_FAILED:
+            return
             
-        sectorInfo[0] = piexchangebyte()
-        sectorInfo[1] = piexchangebyte()
-        sectorInfo[2] = piexchangebyte()
-        byte_lsb = piexchangebyte()
-        byte_msb = piexchangebyte()
+        rc, sectorInfo[0] = piexchangebyte()
+        rc, sectorInfo[1] = piexchangebyte()
+        rc, sectorInfo[2] = piexchangebyte()
+        rc, byte_lsb = piexchangebyte()
+        rc, byte_msb = piexchangebyte()
         sectorInfo[3] = byte_lsb + 256 * byte_msb
-        msxcrc = piexchangebyte()
+        rc, msxcrc = piexchangebyte()
 
         crc = 0xFF
         crc = crc ^ (sectorInfo[0])        
@@ -1156,7 +1169,7 @@ def dskiosct():
        
 def recvdata(bytecounter = BLKSIZE):
 
-    #print(f"recvdata():")
+    print(f"recvdata():")
 
     if hostType == "pi":
         th = threading.Timer(3.0, exitDueToSyncError)
@@ -1166,19 +1179,26 @@ def recvdata(bytecounter = BLKSIZE):
         retries -= 1
         
         # Syncronize with MSX
-        while piexchangebyte() != READY: # WAS 0x9F:
-            pass
+        while True:
+            rc, pibyte = piexchangebyte()
+            if rc == RC_FAILED or pibyte == READY:
+                break
+        
+        if rc == RC_FAILED:
+            return RC_FAILED, None
             
         data = bytearray()
         chksum = 0
         while(bytecounter > 0 ):
-            msxbyte = piexchangebyte()
+            rc, msxbyte = piexchangebyte()
+            if rc == RC_FAILED:
+                return RC_FAILED, None
             data.append(msxbyte)
             chksum += msxbyte
             bytecounter -= 1
 
         # Receive the CRC
-        msxsum = piexchangebyte()
+        rc, msxsum = piexchangebyte()
         
         # Send local CRC - only 8 right bits
         thissum_r = (chksum % 256)              # right 8 bits
@@ -1202,8 +1222,9 @@ def recvdata(bytecounter = BLKSIZE):
 
 def senddata(data, blocksize = BLKSIZE):
     
-    #print(f"senddata(): {data}")
-
+    
+    print(f"senddata():")
+    
     if hostType == "pi":
         th = threading.Timer(3.0, exitDueToSyncError)
         th.start()
@@ -1212,28 +1233,31 @@ def senddata(data, blocksize = BLKSIZE):
     retries = GLOBALRETRIES
     while retries > 0:
         retries -= 1
-        #print(f"retry {retries}")
         # Syncronize with MSX
-        while piexchangebyte() != READY: # WAS 0x9F:
-            print(f"WTrying to sync with MSX")
-            pass
-            
+        while True:
+            rc, pibyte = piexchangebyte()
+            if rc == RC_FAILED or pibyte == READY:
+                break
+        
+        if rc == RC_FAILED:
+            return RC_FAILED
+        
+        #print("senddata(): Sync acquired")
         byteidx = 0
         chksum = 0
     
         while(byteidx < blocksize):
-            #if (byteidx == 0) or (byteidx > 499):
-            #    print(byteidx)
-            pibyte0 = data[byteidx]
-            if type(pibyte0) is int:
-                pibyte = pibyte0
+            byte0 = data[byteidx]
+            if type(byte0) is int:
+                byte = byte0
             else:
-                pibyte = ord(pibyte0)
+                byte = ord(byte0)
 
-            chksum += pibyte
-            piexchangebyte(pibyte)
+            chksum += byte
+            piexchangebyte(byte)
             byteidx += 1
         
+        #print("senddata(): calculating checksum")
         # Send local CRC - only 8 right bits
         thissum_r = (chksum % 256)              # right 8 bits
         thissum_l = (chksum >> 8)                 # left 8 bits
@@ -1241,7 +1265,7 @@ def senddata(data, blocksize = BLKSIZE):
         piexchangebyte(thissum)
     
         # Receive the CRC
-        msxsum = piexchangebyte()
+        rc, msxsum = piexchangebyte()
             
         if (thissum == msxsum):
             rc = RC_SUCCESS
@@ -1256,15 +1280,17 @@ def senddata(data, blocksize = BLKSIZE):
     return rc
 
 def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
-
-    #print(f"sendmultiblock(): {buf}")
+    
+    global hostType
+    
+    print(f"sendmultiblock(): {buf}")
 
     numblocks = math.ceil((len(buf)+3)/blocksize)
     
     # If buffer small or equal to BLKSIZE
     if numblocks == 1:  # Only one block to transfer
-        #print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
-        #print(f"buf = {buf}")
+        print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
+        print(f"buf = {buf}")
         data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
@@ -1274,7 +1300,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
     else: # Multiple blocks to transfer
         idx = 0
         thisblk = 0
-        print(f"sendmultiblock(): Blocks to sent = {numblocks}")
+        print(f"sendmultiblock(): Blocks to send = {numblocks}")
         while thisblk < numblocks:
             print(f"sendmultiblock(): block {thisblk}")
             data = bytearray(blocksize)
@@ -1289,10 +1315,29 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
                 data[1] = datasize % 256
                 data[2] = datasize >> 8
             data[3:datasize] = buf[idx:idx + datasize]
-            rc = senddata(data,blocksize)
-            idx += (blocksize - 3)
-            thisblk += 1
-                        
+            
+            # monitor disconnections on non-Raspberry Pi platforms
+            
+            if hostType == "pi":
+                rc = senddata(data,blocksize)
+                if rc == RC_FAILED:
+                    return RC_FAILED
+                idx += (blocksize - 3)
+                thisblk += 1           
+            else:
+                conn.settimeout(5.0)  # Set timeout before sending
+                try:
+                    rc = senddata(data,blocksize)
+                    if rc == RC_FAILED:
+                        return RC_FAILED
+                    idx += (blocksize - 3)
+                    thisblk += 1
+                    conn.settimeout(None)  # Optional: restore to blocking mode
+                except socket.timeout:
+                    print("Send timeout: peer not responding.")
+                    break
+                    conn.settimeout(None)  # Optional: restore to blocking mode
+
     return rc
 
 # This is the function that read parameters for all commands

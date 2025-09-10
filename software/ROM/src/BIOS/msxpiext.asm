@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.2                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2016 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2025 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -669,10 +669,10 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20250909.788"
+        DB      13,10,"MSXPi BIOS v1.2"
+BuildId: DB "20250910.790"
         DB      13,10
-        DB      "    RCC (c) 2017-2023",0
+        DB      "    RCC (c) 2015-2025",0
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPIVER ",13,10,0
 

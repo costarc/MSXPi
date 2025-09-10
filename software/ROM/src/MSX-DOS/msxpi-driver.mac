@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.2                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2025 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -29,9 +29,10 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.1 (2023)
+; MSXPi Driver v1.2 (2025)
 
 CONTROL_PORT1 EQU $56
+CONTROL_PORT2 EQU $57
 DATA_PORT1 EQU $5A
 
 TEXTTERMINATOR EQU 0
@@ -859,10 +860,10 @@ BIOSENTRYADDR:  EQU     $
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.1."
-BuildId: DB "20250909.784"
+        DB      13,10,"MSXPi BIOS v1.2"
+BuildId: DB "20250910.790"
         DB      13,10
-        DB      "    RCC (c) 2017-2023",0
+        DB      "    RCC (c) 2015-2025",0
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPIVER ",13,10,0
 
