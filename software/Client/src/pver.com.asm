@@ -35,12 +35,9 @@
         org     $0100
 
 ; Print hw interface version (CPLD logic and pcb)
-		JR		GETSWVER			; Dropped use of I/O ports 0x58 - 0x5D. 
-									; PVER now only gets versoin directly from Raspberry Pi, not from the CPLD
-									; therefore, skips this part of the code.
         LD      HL,HWVER
         CALL    PRINT
-        IN      A,(57H)
+        IN      A,(CONTROL_PORT2)
         CALL    DESCHWVER
         call    PRINTNLINE
 
@@ -75,6 +72,12 @@ PRINTPIERR:
 PICOMMERR:  DB      "Communication Error",13,10,0
         
 DESCHWVER:
+		ld		hl,openMSX
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+		cp		$fe				; openMSX extension
+		jr		z,PRINTIFVER
         ld      hl,iftable
 DESCHWVER0:
         ld      e,(hl)
@@ -104,6 +107,8 @@ iftable:
         dw      ifv8
         dw      ifv9
         dw      ifvA
+        dw      ifvB
+openMSX:dw      omsx
         dw      ifukn
 
 ifv1:   DB      "(0001) Wired up prototype, EPM3064ALC-44",0
@@ -116,8 +121,10 @@ ifv7:   DB      "(0111) General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44"
 ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84",0
 ifv9:   DB      "(1001) General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44",0
 ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44",0
-ifukn:  DB      "Could not identify. Possibly an earlier version with old CPLD logic",0
-ifdummy: DB      "MSXPi not detected - may need firmware update",0
+ifvB:   DB      "(1011) General Release V1.2 Rev 0, EEPROM AT28C256, EPM3064ALC-44",0
+omsx:   DB      " (FE)  General Release V1.2 Rev 0, MSXPi Extension for openMSX",0
+ifukn:   DB      "Could not identify. Possibly an earlier version with old CPLD logic",0
+ifdummy:DB      "MSXPi not detected - may need firmware update",0
 
 HWVER:  DB      "Interface version:"
         DB      0

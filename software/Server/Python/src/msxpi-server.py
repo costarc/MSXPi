@@ -1283,7 +1283,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
     
     global hostType
     
-    print(f"sendmultiblock(): {buf}")
+    #print(f"sendmultiblock(): {buf}")
 
     numblocks = math.ceil((len(buf)+3)/blocksize)
     
