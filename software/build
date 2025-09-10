@@ -1,5 +1,10 @@
 #!/bin/sh
 
+export buildClientCommands="no"
+export buildBIOS="yes"
+export buildOpenMSXConfig="no"
+export buildMSXStuff="no"
+
 XMLPATH=openMSX/share/extensions
 OPENMSXSRC=../../openMSX/openMSX
 export HOME=../../../..
@@ -12,7 +17,7 @@ export Z80ASM_PATH=$HOME/Dev/z80asm-1.8
 export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
 export OPENMSXDISK=$HOME/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
-export buildMSXDOS="no"
+
 
 MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
@@ -88,34 +93,56 @@ genUpdateBatch() {
 }
 
 # MSX-Dos P Commands
-echo "Compiling MSXPi DOS Commands"
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpibios.rom && UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin && UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/sendcmd.com.asm  -o ./target/sendcmd.com
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
+if [ $buildClientCommands = "yes" ];then
+  echo "Compiling MSXPi DOS Commands"
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prun.com.asm     -o ./target/prun.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pset.com.asm     -o ./target/pset.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcd.com.asm      -o ./target/pcd.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pwifi.com.asm    -o ./target/pwifi.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdate.com.asm    -o ./target/pdate.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pplay.com.asm    -o ./target/pplay.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pvol.com.asm     -o ./target/pvol.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pver.com.asm     -o ./target/pver.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/dosinit.com.asm  -o ./target/dosinit.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/preboot.com.asm  -o ./target/preboot.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/prestart.com.asm -o ./target/prestart.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/sendcmd.com.asm  -o ./target/sendcmd.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/preset.com.asm   -o ./target/preset.com
+fi
 
-if [ $buildMSXDOS = "yes" ];then
-  echo "Compiling MSX-DOS ROM"
+if [ $buildBIOS = "yes" ];then
+  echo "Compiling MSXPi BIOS and MSX-DOS ROM"
   $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-  [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom && UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
+  
+  UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
+  UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm   
+  UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm 
+  UpdateBuildId    ./Server/Python/src/msxpi-server.py
+  
+  # Build MSX-DOS Driver
+  [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
+  
+  # Build BIOS
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpibios.rom
+  
+  # Build BASIC BIOS Extension
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
+
+  # Create an optonal 2-bank ROMs for the EEPROM
+  cat $BIOSFILE > target/multirom.rom
+  cat $ROMBANK2 >> target/multirom.rom
+fi
+
+if [ $buildMSXStuff = "yes" ];then
+  genUpdateBatch
+  # Update build ID
   cp target/disks/blank.dsk target/disks/msxpiboot.dsk
   cp target/disks/blank.dsk target/disks/tools.dsk
 
@@ -138,22 +165,18 @@ if [ $buildMSXDOS = "yes" ];then
   done
 fi
 
-genUpdateBatch
+if [ $buildOpenMSXConfig = "yes" ];then
+  # Update sources for openMSX extensions - to keep up to date with openMSX fork
+  cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
+  cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
+  cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
+  cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
+  
+  # do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
+  #SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
+  #sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
+  #cp target/msxpibios.rom openMSX/share/systemroms/extensions/msxpibios.rom
+fi
 
-# Create an optonal 2-bank ROMs for the EEPROM
-cat $BIOSFILE > target/multirom.rom
-cat $ROMBANK2 >> target/multirom.rom
 
-# Update sources for openMSX extensions - to keep up to date with openMSX fork
-cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
-cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
-cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
-cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
 
-# do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
-SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
-cp target/msxpibios.rom openMSX/share/systemroms/extensions/msxpibios.rom
-
-# Build MSX-DOS with MSXPi Drivers with build id
-UpdateBuildId ./Server/Python/src/msxpi-server.py
