@@ -53,14 +53,21 @@ Go to Windows command line and type:
 
 Repeat for all modules that are not already installed.
 
+Some commands (such as ploadr) will try to use 7-Zip, LHA or UNAR to 
+decompress files.. You will need to install those tools also or the
+command will fail.
+
 You will also have to download several files needed by MSXPi - follow the 
 instructions below to get started.
 
 Steps to Setup and Try MSXPi in openMSX
 =======================================
 
-1. Install an openMSX package that was compiled with the extension, or compile 
-   yourself.
+1. Install an openMSX version that has support for MSXPi extension. You can download
+   binaries for all platforms (nightly buidls from openMSX) in the releases section:
+   https://github.com/costarc/openMSX/releases
+   
+   Always use the latest releasse.
    
 2. Download msxpi-server.py (the server component that runs in Python) from:
    https://github.com/costarc/MSXPi/tree/master/software/Server/Python/src
@@ -89,7 +96,7 @@ Steps to Setup and Try MSXPi in openMSX
 6. Dowload the MSXPi commands you want to test from:
    https://github.com/costarc/MSXPi/tree/master/software/target
    
-   Many commands will not work (yet) with openMSX because they were originally 
+   Some commands will not work (yet) with openMSX because they were originally 
    developed to work on Raspberry Pi. In time, most (if not all) commands
    will be ported to abstract the platform and run everywhere. If you can develop
    in python, help port them (thanks).
@@ -102,6 +109,7 @@ Steps to Setup and Try MSXPi in openMSX
    pdir.com
    pver.com
    pset.com
+   ploadr
    
    Copy all these commands to you FloppyA
  
@@ -119,13 +127,17 @@ Steps to Setup and Try MSXPi in openMSX
    pset
    pcd R1:
    pcd
-   pdir
    pcd R2:
-   pdir
-   prun dir
+   prun ipconfig
+   prun dir /
+   chatgpt
    chatgpt Tell me funny fact about MSX Computers.
+   ploadr /z zaxxon.lzh
    
-   Note: As I mentioned before, some commands will not behave nicely
+   Note 1: Read the Users guide to learn more about these commands. it can be 
+   download here: https://github.com/costarc/MSXPi/tree/master/documents
+   
+   Note 2: As I mentioned before, some commands will not behave nicely
    because they were developed for Raspberry Pi (Linux). 
    Some work is needed on the msxpi-server side to make the commands
    work on Python running on a host that is not Linux.
