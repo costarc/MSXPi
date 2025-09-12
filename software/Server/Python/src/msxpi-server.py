@@ -143,6 +143,7 @@ def init_spi_bitbang():
     global SPI_MOSI
     global SPI_MISO
     global RPI_READY
+    global RPI_SHUTDOWN
 
 # Pin Setup:
     GPIO.setmode(GPIO.BCM)
@@ -151,6 +152,7 @@ def init_spi_bitbang():
     GPIO.setup(SPI_MOSI, GPIO.IN, , pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
+    GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
 def tick_sclk():
 
@@ -1544,6 +1546,8 @@ if hostType == "pi":
     import RPi.GPIO as GPIO
     init_spi_bitbang()
     GPIO.output(RPI_READY, GPIO.LOW)
+    # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
+    GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=pshut, bouncetime=200)
     print("Raspberry Pi GPIO initialized\n")
 else:
     conn = initialize_connection()

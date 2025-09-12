@@ -6192,7 +6192,7 @@
 		)
 		(uuid "5e23da74-d2c9-4934-9868-3b8f69ffa243")
 	)
-	(text "MSXPi Interface V1.2 Rev.1\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-11"
+	(text "MSXPi Interface V1.2 Rev.1\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-12"
 		(exclude_from_sim no)
 		(at 227.965 194.945 0)
 		(effects
@@ -6362,12 +6362,6 @@
 		(uuid "810687e3-92ba-416b-9717-1b935fa64365")
 	)
 	(junction
-		(at 330.2 125.73)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "81baa64b-1b83-4756-99b5-1b9a3058285a")
-	)
-	(junction
 		(at 167.386 166.37)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6396,12 +6390,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "9c387801-7551-44ef-9aa6-c30ee80973bd")
-	)
-	(junction
-		(at 321.31 115.57)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "a9ac2527-37aa-49a9-b8c3-034d7f76b13e")
 	)
 	(junction
 		(at 233.68 91.44)
@@ -6813,7 +6801,7 @@
 	)
 	(wire
 		(pts
-			(xy 316.23 133.35) (xy 330.2 133.35)
+			(xy 316.23 111.76) (xy 330.2 111.76)
 		)
 		(stroke
 			(width 0)
@@ -6870,16 +6858,6 @@
 			(type default)
 		)
 		(uuid "4d548138-c1cb-492a-8c47-ad0e96a9d9dc")
-	)
-	(wire
-		(pts
-			(xy 316.23 115.57) (xy 321.31 115.57)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "5466e640-7643-4e63-8760-532edc1ab439")
 	)
 	(wire
 		(pts
@@ -7073,16 +7051,6 @@
 	)
 	(wire
 		(pts
-			(xy 321.31 125.73) (xy 330.2 125.73)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "7deed330-a806-4fed-8168-5706eb93259a")
-	)
-	(wire
-		(pts
 			(xy 74.676 152.4) (xy 74.676 167.64)
 		)
 		(stroke
@@ -7180,16 +7148,6 @@
 			(type default)
 		)
 		(uuid "a1f5d7dc-aaf4-46e8-a453-c2807f7f84e0")
-	)
-	(wire
-		(pts
-			(xy 321.31 115.57) (xy 330.2 115.57)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a4916b19-9a42-4270-84d5-5494787fd0d8")
 	)
 	(wire
 		(pts
@@ -7313,16 +7271,6 @@
 	)
 	(wire
 		(pts
-			(xy 321.31 123.19) (xy 321.31 125.73)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "c3e65f1f-4144-4849-a7e3-27e90e17dd98")
-	)
-	(wire
-		(pts
 			(xy 223.52 93.98) (xy 233.68 93.98)
 		)
 		(stroke
@@ -7430,16 +7378,6 @@
 			(type default)
 		)
 		(uuid "de0b914b-0d52-4e66-84b4-55da43da2ec8")
-	)
-	(wire
-		(pts
-			(xy 321.31 115.57) (xy 321.31 118.11)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "ded7bad1-000d-44d3-b2b2-cb4e5c925241")
 	)
 	(wire
 		(pts
@@ -7631,7 +7569,7 @@
 	)
 	(global_label "PISHUT"
 		(shape input)
-		(at 316.23 133.35 180)
+		(at 316.23 111.76 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -7641,7 +7579,7 @@
 		)
 		(uuid "034aeaed-5534-425f-b78e-a8f34cd5f8f4")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 306.5319 133.35 0)
+			(at 306.5319 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8461,28 +8399,6 @@
 					(size 1.27 1.27)
 				)
 				(justify left)
-				(hide yes)
-			)
-		)
-	)
-	(global_label "{slash}RESET"
-		(shape input)
-		(at 316.23 115.57 180)
-		(fields_autoplaced yes)
-		(effects
-			(font
-				(size 1.27 1.27)
-			)
-			(justify right)
-		)
-		(uuid "48578c73-448f-4961-99bf-f78e229e25b6")
-		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 306.7412 115.4906 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify right)
 				(hide yes)
 			)
 		)
@@ -11592,7 +11508,7 @@
 	)
 	(symbol
 		(lib_id "Switch:SW_Push")
-		(at 330.2 138.43 270)
+		(at 330.2 116.84 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -11601,7 +11517,7 @@
 		(fields_autoplaced yes)
 		(uuid "34eb7341-20b9-4e1a-b2d0-1daadbbead4a")
 		(property "Reference" "SW2"
-			(at 334.01 137.1599 90)
+			(at 334.01 115.5699 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11610,7 +11526,7 @@
 			)
 		)
 		(property "Value" "Shutdown"
-			(at 334.01 139.6999 90)
+			(at 334.01 118.1099 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11619,7 +11535,7 @@
 			)
 		)
 		(property "Footprint" "Roni Footprints:SW_PUSH_6mm_2Holes"
-			(at 335.28 138.43 0)
+			(at 335.28 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11628,7 +11544,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 335.28 138.43 0)
+			(at 335.28 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -11637,7 +11553,7 @@
 			)
 		)
 		(property "Description" "Push button switch, generic, two pins"
-			(at 330.2 138.43 0)
+			(at 330.2 116.84 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12690,7 +12606,7 @@
 	)
 	(symbol
 		(lib_id "power:GNDREF")
-		(at 330.2 143.51 0)
+		(at 330.2 121.92 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -12699,7 +12615,7 @@
 		(fields_autoplaced yes)
 		(uuid "6ce0c689-2241-4de0-bccd-beb2c3606087")
 		(property "Reference" "#PWR023"
-			(at 330.2 149.86 0)
+			(at 330.2 128.27 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12708,7 +12624,7 @@
 			)
 		)
 		(property "Value" "GNDREF"
-			(at 330.2 149.098 0)
+			(at 330.2 127.508 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12717,7 +12633,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 330.2 143.51 0)
+			(at 330.2 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12726,7 +12642,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 330.2 143.51 0)
+			(at 330.2 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12735,7 +12651,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 330.2 143.51 0)
+			(at 330.2 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12750,76 +12666,6 @@
 			(project "msxpi"
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "#PWR023")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "Switch:SW_Push")
-		(at 330.2 120.65 270)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "705e2721-aea7-43cc-967b-5f84e6e6f52c")
-		(property "Reference" "SW1"
-			(at 334.01 119.3799 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "Reset"
-			(at 334.01 121.9199 90)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Roni Footprints:SW_PUSH_6mm_2Holes"
-			(at 335.28 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 335.28 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Push button switch, generic, two pins"
-			(at 330.2 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "2"
-			(uuid "5a31ba4f-d38a-4fef-a696-f99f21f1e09b")
-		)
-		(pin "1"
-			(uuid "c101bc98-d5b2-4a6d-aa04-467bc64683c1")
-		)
-		(instances
-			(project ""
-				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
-					(reference "SW1")
 					(unit 1)
 				)
 			)
@@ -13831,75 +13677,6 @@
 		)
 	)
 	(symbol
-		(lib_id "Device:C_Polarized_Small")
-		(at 321.31 120.65 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "b7442c16-bbe5-4ad1-a2b2-31e5d2f5f25c")
-		(property "Reference" "C9"
-			(at 314.706 119.634 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Value" "1uF"
-			(at 314.452 122.174 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(justify left)
-			)
-		)
-		(property "Footprint" "Capacitor_THT:CP_Radial_D4.0mm_P1.50mm"
-			(at 321.31 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" "~"
-			(at 321.31 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" "Polarized capacitor, small symbol"
-			(at 321.31 120.65 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "2"
-			(uuid "4b364ebc-89c3-4f85-9cec-fdf3d553e79b")
-		)
-		(pin "1"
-			(uuid "2c554569-043f-41db-93b0-cf7e7ed411f7")
-		)
-		(instances
-			(project ""
-				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
-					(reference "C9")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "power:+5V")
 		(at 26.162 160.02 0)
 		(unit 1)
@@ -14091,73 +13868,6 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "#PWR017")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:GNDREF")
-		(at 330.2 125.73 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "d85413d2-b82c-4fb8-bc76-6a30cb1b6df3")
-		(property "Reference" "#PWR0103"
-			(at 330.2 132.08 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GNDREF"
-			(at 330.2 131.318 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Footprint" ""
-			(at 330.2 125.73 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 330.2 125.73 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 330.2 125.73 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "092fb4ee-9f46-4513-b7d1-0f89a448cea3")
-		)
-		(instances
-			(project ""
-				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
-					(reference "#PWR0103")
 					(unit 1)
 				)
 			)
