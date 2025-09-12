@@ -148,7 +148,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SPI_CS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(SPI_SCLK, GPIO.OUT)
-    GPIO.setup(SPI_MOSI, GPIO.IN)
+    GPIO.setup(SPI_MOSI, GPIO.IN, , pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
 
@@ -156,7 +156,7 @@ def tick_sclk():
 
     global SPI_SCLK
     GPIO.output(SPI_SCLK, GPIO.HIGH)
-    time.sleep(0.00001)  # 10 µs or whatever matches your CPLD timing
+    time.sleep(0.00001)
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
 def SPI_MASTER_transfer_byte(byte_out=None):
@@ -1169,6 +1169,7 @@ def dskiosct():
        
 def recvdata(bytecounter = BLKSIZE):
 
+    global hostType
     print(f"recvdata():")
 
     if hostType == "pi":
@@ -1221,8 +1222,8 @@ def recvdata(bytecounter = BLKSIZE):
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
-    
-    
+
+    global hostType
     print(f"senddata():")
     
     if hostType == "pi":
