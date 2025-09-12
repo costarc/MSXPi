@@ -3,7 +3,7 @@
 ; ------------------------------------------------------------------------------
 ; MIT License
 ; 
-; Copyright (c) 2024 Ronivon Costa
+; Copyright (c) 2015-2025 Ronivon Costa
 ; 
 ; Permission is hereby granted, free of charge, to any person obtaining a copy
 ; of this software and associated documentation files (the "Software"), to deal
@@ -70,10 +70,10 @@ CHKPIRDY:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE2
-			;push	af
-			;add		a,48
-			;out		($98),a
-			;pop		af
+			push	af
+			add		a,48
+			out		($98),a
+			pop		af
 			cp		1
 			jr		z,PIREADBYTE       ; Pi not ready - keep trying
 			cp		2                  ; openMSX extension will return 2
@@ -87,14 +87,15 @@ PIREADBYTE:
 			jr		z,PIREADBYTE       ; openMSX does not have data ready when status = 0
 			                           ; need to keep trying			
 PIREADBYTE1:
-            xor     a                  ; do not use xor to preserve c flag state
+            xor     a                  ; clear A - but not really necessary
             out     (CONTROL_PORT1),a  ; send read command to the interface
             call    CHKPIRDY           ; wait interface transfer data to pi and
                                        ; pi app processing
                                        ; no ret c is required here, because in a,(7) 
                                        ; does not reset c flag
 PIREADBYTE2:
-            in      a,(DATA_PORT1)     ; read byte
+            in      a,(DATA_PORT1)     ; read byte - probably has nothign useful since
+			                           ; there was an error in the comms
             ret                        ; return in a the byte received
 
 ;-----------------------
@@ -106,7 +107,7 @@ PIWRITEBYTE:
             jr      c,PIWRITEBYTE_ERR
             pop     af
             out     (DATA_PORT1),a     ; send data, or command
-            or      a
+            or      a				   ; clear C flag
             ret
 PIWRITEBYTE_ERR:
             pop     af
