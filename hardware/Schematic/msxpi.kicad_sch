@@ -6192,7 +6192,7 @@
 		)
 		(uuid "5e23da74-d2c9-4934-9868-3b8f69ffa243")
 	)
-	(text "MSXPi Interface V1.2 Rev.0\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-07"
+	(text "MSXPi Interface V1.2 Rev.1\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-11"
 		(exclude_from_sim no)
 		(at 227.965 194.945 0)
 		(effects
@@ -6362,7 +6362,7 @@
 		(uuid "810687e3-92ba-416b-9717-1b935fa64365")
 	)
 	(junction
-		(at 320.04 135.89)
+		(at 330.2 125.73)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "81baa64b-1b83-4756-99b5-1b9a3058285a")
@@ -6398,7 +6398,7 @@
 		(uuid "9c387801-7551-44ef-9aa6-c30ee80973bd")
 	)
 	(junction
-		(at 311.15 125.73)
+		(at 321.31 115.57)
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "a9ac2527-37aa-49a9-b8c3-034d7f76b13e")
@@ -6440,10 +6440,10 @@
 		(uuid "f82d87ec-bdf5-41c5-a33d-2ad2ca657007")
 	)
 	(junction
-		(at 179.07 53.34)
+		(at 180.34 116.84)
 		(diameter 0)
 		(color 0 0 0 0)
-		(uuid "fc609db0-3942-49c2-963b-ea822b31189e")
+		(uuid "fda4e558-5d67-48c3-9ae4-cd12f4d2889f")
 	)
 	(junction
 		(at 65.0929 82.55)
@@ -6803,6 +6803,26 @@
 	)
 	(wire
 		(pts
+			(xy 180.34 116.84) (xy 198.12 116.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "475c1f6c-bdf7-4133-af77-14c100ae6b06")
+	)
+	(wire
+		(pts
+			(xy 316.23 133.35) (xy 330.2 133.35)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "47f5a57c-62bb-42b3-bdaa-9ca0ad70ed06")
+	)
+	(wire
+		(pts
 			(xy 65.0478 76.2) (xy 74.93 76.2)
 		)
 		(stroke
@@ -6853,7 +6873,7 @@
 	)
 	(wire
 		(pts
-			(xy 306.07 125.73) (xy 311.15 125.73)
+			(xy 316.23 115.57) (xy 321.31 115.57)
 		)
 		(stroke
 			(width 0)
@@ -7053,7 +7073,7 @@
 	)
 	(wire
 		(pts
-			(xy 311.15 135.89) (xy 320.04 135.89)
+			(xy 321.31 125.73) (xy 330.2 125.73)
 		)
 		(stroke
 			(width 0)
@@ -7163,7 +7183,7 @@
 	)
 	(wire
 		(pts
-			(xy 311.15 125.73) (xy 320.04 125.73)
+			(xy 321.31 115.57) (xy 330.2 115.57)
 		)
 		(stroke
 			(width 0)
@@ -7180,26 +7200,6 @@
 			(type default)
 		)
 		(uuid "a5129b11-bda3-4f81-a9ae-4ec96422ef8e")
-	)
-	(wire
-		(pts
-			(xy 179.07 53.34) (xy 198.12 53.34)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a5d2bfa4-9e6e-4d43-8494-28c8d4c084de")
-	)
-	(wire
-		(pts
-			(xy 176.53 53.34) (xy 179.07 53.34)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "a688ca53-9537-4f53-b15f-66b8b9634ad5")
 	)
 	(wire
 		(pts
@@ -7313,7 +7313,7 @@
 	)
 	(wire
 		(pts
-			(xy 311.15 133.35) (xy 311.15 135.89)
+			(xy 321.31 123.19) (xy 321.31 125.73)
 		)
 		(stroke
 			(width 0)
@@ -7383,6 +7383,16 @@
 	)
 	(wire
 		(pts
+			(xy 177.8 116.84) (xy 180.34 116.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d344520d-a4c2-41cc-82f4-7d2c11820994")
+	)
+	(wire
+		(pts
 			(xy 233.68 88.9) (xy 233.68 91.44)
 		)
 		(stroke
@@ -7423,7 +7433,7 @@
 	)
 	(wire
 		(pts
-			(xy 311.15 125.73) (xy 311.15 128.27)
+			(xy 321.31 115.57) (xy 321.31 118.11)
 		)
 		(stroke
 			(width 0)
@@ -7610,6 +7620,28 @@
 		(uuid "020ff205-c873-4a0f-81b1-0a3e8f267205")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
 			(at 193.2274 43.1006 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "PISHUT"
+		(shape input)
+		(at 316.23 133.35 180)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "034aeaed-5534-425f-b78e-a8f34cd5f8f4")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 306.5319 133.35 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -8435,7 +8467,7 @@
 	)
 	(global_label "{slash}RESET"
 		(shape input)
-		(at 306.07 125.73 180)
+		(at 316.23 115.57 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -8445,7 +8477,7 @@
 		)
 		(uuid "48578c73-448f-4961-99bf-f78e229e25b6")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 296.5812 125.6506 0)
+			(at 306.7412 115.4906 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9095,7 +9127,7 @@
 	)
 	(global_label "SPI_MOSI"
 		(shape input)
-		(at 176.53 53.34 180)
+		(at 198.12 53.34 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -9105,7 +9137,7 @@
 		)
 		(uuid "81b9d040-6b74-4970-8415-4e5b695dd673")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 165.4688 53.2606 0)
+			(at 187.0588 53.2606 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -9139,7 +9171,7 @@
 	)
 	(global_label "SPI_RDY"
 		(shape input)
-		(at 198.12 116.84 180)
+		(at 177.8 116.84 180)
 		(fields_autoplaced yes)
 		(effects
 			(font
@@ -9149,7 +9181,7 @@
 		)
 		(uuid "8dc1bef3-daf7-4a04-b264-643644bfc823")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 188.0264 116.7606 0)
+			(at 167.7064 116.7606 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10321,6 +10353,28 @@
 					(size 1.27 1.27)
 				)
 				(justify right)
+				(hide yes)
+			)
+		)
+	)
+	(global_label "PISHUT"
+		(shape input)
+		(at 280.67 12.065 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1 1)
+			)
+			(justify left)
+		)
+		(uuid "f41f338f-13cf-43f8-9e64-eb71e79f9353")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 280.67 4.429 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
 				(hide yes)
 			)
 		)
@@ -11537,6 +11591,76 @@
 		)
 	)
 	(symbol
+		(lib_id "Switch:SW_Push")
+		(at 330.2 138.43 270)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "34eb7341-20b9-4e1a-b2d0-1daadbbead4a")
+		(property "Reference" "SW2"
+			(at 334.01 137.1599 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "Shutdown"
+			(at 334.01 139.6999 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" "Roni Footprints:SW_PUSH_6mm_2Holes"
+			(at 335.28 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 335.28 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Push button switch, generic, two pins"
+			(at 330.2 138.43 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "2"
+			(uuid "f5058ea4-89bb-4d7b-a273-5584f377f9bb")
+		)
+		(pin "1"
+			(uuid "a00bb61f-8527-4682-992d-fa1d85c499f3")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "SW2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "msxpi-eagle-import:R-US_0207/7")
 		(at 40.132 115.062 0)
 		(unit 1)
@@ -12565,8 +12689,75 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDREF")
+		(at 330.2 143.51 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "6ce0c689-2241-4de0-bccd-beb2c3606087")
+		(property "Reference" "#PWR023"
+			(at 330.2 149.86 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 330.2 149.098 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 330.2 143.51 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 330.2 143.51 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 330.2 143.51 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0f67da26-c438-44cc-8aee-c2f447945c78")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR023")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "Switch:SW_Push")
-		(at 320.04 130.81 270)
+		(at 330.2 120.65 270)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -12575,7 +12766,7 @@
 		(fields_autoplaced yes)
 		(uuid "705e2721-aea7-43cc-967b-5f84e6e6f52c")
 		(property "Reference" "SW1"
-			(at 323.85 129.5399 90)
+			(at 334.01 119.3799 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12583,8 +12774,8 @@
 				(justify left)
 			)
 		)
-		(property "Value" "SW_Push"
-			(at 323.85 132.0799 90)
+		(property "Value" "Reset"
+			(at 334.01 121.9199 90)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12593,7 +12784,7 @@
 			)
 		)
 		(property "Footprint" "Roni Footprints:SW_PUSH_6mm_2Holes"
-			(at 325.12 130.81 0)
+			(at 335.28 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12602,7 +12793,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 325.12 130.81 0)
+			(at 335.28 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -12611,7 +12802,7 @@
 			)
 		)
 		(property "Description" "Push button switch, generic, two pins"
-			(at 320.04 130.81 0)
+			(at 330.2 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13171,6 +13362,71 @@
 		)
 	)
 	(symbol
+		(lib_id "power:+3.3V")
+		(at 180.34 106.68 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "9f085047-dad7-4e52-8509-73e2042aba89")
+		(property "Reference" "#PWR025"
+			(at 180.34 110.49 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "+3.3V"
+			(at 180.34 102.87 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at 180.34 106.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 180.34 106.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 180.34 106.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5b6420a1-ade7-4b18-862a-d02278b7c6bb")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR025")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+5V")
 		(at 326.39 24.765 180)
 		(unit 1)
@@ -13576,7 +13832,7 @@
 	)
 	(symbol
 		(lib_id "Device:C_Polarized_Small")
-		(at 311.15 130.81 0)
+		(at 321.31 120.65 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -13584,7 +13840,7 @@
 		(dnp no)
 		(uuid "b7442c16-bbe5-4ad1-a2b2-31e5d2f5f25c")
 		(property "Reference" "C9"
-			(at 304.546 129.794 0)
+			(at 314.706 119.634 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13593,7 +13849,7 @@
 			)
 		)
 		(property "Value" "1uF"
-			(at 304.292 132.334 0)
+			(at 314.452 122.174 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13602,7 +13858,7 @@
 			)
 		)
 		(property "Footprint" "Capacitor_THT:CP_Radial_D4.0mm_P1.50mm"
-			(at 311.15 130.81 0)
+			(at 321.31 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13611,7 +13867,7 @@
 			)
 		)
 		(property "Datasheet" "~"
-			(at 311.15 130.81 0)
+			(at 321.31 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13620,7 +13876,7 @@
 			)
 		)
 		(property "Description" "Polarized capacitor, small symbol"
-			(at 311.15 130.81 0)
+			(at 321.31 120.65 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13842,7 +14098,7 @@
 	)
 	(symbol
 		(lib_id "power:GNDREF")
-		(at 320.04 135.89 0)
+		(at 330.2 125.73 0)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -13851,7 +14107,7 @@
 		(fields_autoplaced yes)
 		(uuid "d85413d2-b82c-4fb8-bc76-6a30cb1b6df3")
 		(property "Reference" "#PWR0103"
-			(at 320.04 142.24 0)
+			(at 330.2 132.08 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13860,7 +14116,7 @@
 			)
 		)
 		(property "Value" "GNDREF"
-			(at 320.04 141.478 0)
+			(at 330.2 131.318 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13869,7 +14125,7 @@
 			)
 		)
 		(property "Footprint" ""
-			(at 320.04 135.89 0)
+			(at 330.2 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13878,7 +14134,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 320.04 135.89 0)
+			(at 330.2 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -13887,7 +14143,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 320.04 135.89 0)
+			(at 330.2 125.73 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14390,73 +14646,6 @@
 		)
 	)
 	(symbol
-		(lib_id "power:GNDREF")
-		(at 179.07 63.5 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(fields_autoplaced yes)
-		(uuid "df42d4ca-59a4-464a-b6ba-dce56e0aab6d")
-		(property "Reference" "#PWR019"
-			(at 179.07 69.85 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "GNDREF"
-			(at 179.07 69.088 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Footprint" ""
-			(at 179.07 63.5 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 179.07 63.5 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 179.07 63.5 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "d0e60f97-edbc-426a-81a9-42b45e18d052")
-		)
-		(instances
-			(project "msxpi"
-				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
-					(reference "#PWR019")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
 		(lib_id "Jumper:Jumper_3_Open")
 		(at 325.755 57.785 0)
 		(unit 1)
@@ -14598,7 +14787,7 @@
 	)
 	(symbol
 		(lib_id "msxpi-eagle-import:R-US_0207/7")
-		(at 179.07 58.42 90)
+		(at 180.34 111.76 90)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
@@ -14606,7 +14795,7 @@
 		(dnp no)
 		(uuid "ea3e5dbe-f9a4-4c6f-ae05-5d78d06295b8")
 		(property "Reference" "R8"
-			(at 175.768 56.134 90)
+			(at 177.038 109.474 90)
 			(effects
 				(font
 					(size 1.778 1.5113)
@@ -14615,7 +14804,7 @@
 			)
 		)
 		(property "Value" "10K"
-			(at 176.53 58.674 90)
+			(at 177.8 112.014 90)
 			(effects
 				(font
 					(size 1.778 1.5113)
@@ -14624,7 +14813,7 @@
 			)
 		)
 		(property "Footprint" "msxpi:0207_7"
-			(at 179.07 58.42 0)
+			(at 180.34 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14633,7 +14822,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 179.07 58.42 0)
+			(at 180.34 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14642,7 +14831,7 @@
 			)
 		)
 		(property "Description" ""
-			(at 179.07 58.42 0)
+			(at 180.34 111.76 0)
 			(effects
 				(font
 					(size 1.27 1.27)

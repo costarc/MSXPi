@@ -211,14 +211,19 @@ All commands below assume you are in the openMSX root folder: openMSX/
   resources from MSX. They will use the BIOS if loaded, or load a msxpiext.bin/openmsx
   extension that load the BIOS into the ROM area when the MSXPi BIOS is not available.
  
-MSXPi v1.1 Release Notes
+MSXPi v1.2 Release Notes
 ========================
-- Add pull-up resistor for SPI_CS and pull-down resistor for SPI_MOSI in the electrical design
-- Created an MSXPi extension for openMSX
-- Added software (clients and server) for MSXPi extension in openMSX
-- Added MSXPi BIOS (msxpibios.rom) with BASIC CALL commands
-- Stopped developing and supporting MSX-DOS 1 driver
-- Bug fixes adn improvements in the software side
+- Added Pull-Up ressitors to SPI_CS & SPI_RDY
+- Added Push-button to Shutdown Raspberry Pi (via interruption)
+- Added RESET button (may not be safe for all MSX models)
+- Added diode in the 5V rail - allow Raspberry Pi to be powered
+  via USB without leaking to the MSX
+- Changed the 5V rail capacitor to 10uF
+- Made optimiation to the CPLD firmware to save some logic gates
+- Extensive changes to all software for stability
+- Added support in the software for the extension MSXPi for openMSX
+- Added new build file msxpibios.rom with MSXPi BIOS for BASIC CALL commands
+- Lots of bug fixes to the code
 
 
 MSXPi v1.1 Release Notes
