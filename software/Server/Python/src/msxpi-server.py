@@ -113,6 +113,7 @@ PORT = 5000       # Match this with serverPort in your C++ code
 conn = None
 
 hostType = "pi"
+RPI_SHUTDOWN = 26
 
 def detect_host():
     system = platform.system()
@@ -149,7 +150,7 @@ def init_spi_bitbang():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SPI_CS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(SPI_SCLK, GPIO.OUT)
-    GPIO.setup(SPI_MOSI, GPIO.IN, , pull_up_down=GPIO.PUD_DOWN)
+    GPIO.setup(SPI_MOSI, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
     GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
