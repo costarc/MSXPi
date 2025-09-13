@@ -8,20 +8,20 @@ network drives, internet, disk images, and the Raspberry Pi itself. To make
 the most of MSXPi resources, a Raspberry Pi Zero W should be attached to the 
 interface.
 
-* MSXPi is coming to openMSX! 
+* MSXPi is Now Available for openMSX! 
 A virtual MSXPi device is now available for openMSX, allowing the emulated 
-MSX to perform all the cool tricks MSXPi
-hardware can perform, such as browse internet in text mode, connect to IRC, 
-check the weather or ask for help to 
-ChatGPT.
+MSX to perform all the cool tricks MSXPi hardware can perform, such as 
+browse internet in text mode, connect to IRC, check the weather or ask
+ChatGPT for help do develop your MSX programs.
 
-Mode details in the starter guide below.
+Read for and learn how to start using MSXPi extension in the openMSX section
+below.
 
 Quick Start Guide
 =================
 
 
-This Quick Start Guide is updated to V1.1 of the Software and Interface.
+This Quick Start Guide is updated to V1.2 of the Software and Interface.
 
 Please refer to the full documentation under "documents" folder in github 
 for detailed setup procedure and other information.
@@ -33,7 +33,7 @@ both methods are described below.
 
 Overall, the steps to get up and running are:
 
-- Setup Rapsberry Pi with the server-side software (Raspberry Pi SD Card)
+- Setup Raspberry Pi with the server-side software (Raspberry Pi SD Card)
 - Setup MSX with the client side software (MSX SD Card / disk drive)
 
 
@@ -57,7 +57,7 @@ https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
 
 ### Step 3: Install the MSXPi commands for MSX-DOS
 
-In your favorite PC computer, copy all MSXPi commands from 
+In your favourite PC computer, copy all MSXPi commands from 
 https://github.com/costarc/MSXPi/tree/master/software/target to your MSX 
 SD card or Disk.
 
@@ -74,7 +74,7 @@ Raspberry Pi Zero W WiFi:
           preboot
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will 
- expand the filesystem in the SD and initialize the Linux system - following 
+ expand the filesystem in the SD and initialise the Linux system - following 
  reboots will be faster)
 
 In case you need very detailed instructions, please read  "Tutorial - Setup 
@@ -110,7 +110,7 @@ SD Card inserted.
 You will need to connect the Raspberry Pi to a HDMI TV and a keyboard to complete 
 these steps.
 
-Login to Raspbian using default user and passwird: pi / raspberry
+Login to Raspbian using default user and password: pi / raspberry
 
 Configure the WiFi using raspi-config command
 
@@ -119,7 +119,7 @@ needed to have MSXPi up and running the following commands - but note: the final
 stages of the setup installs OPENAI library (the "Install Additional Python 
 libraries required by msxpi-server" section the reboot command), which requires 
 compilation - this stage may take over an hour if done in the Pi Zero, therefore 
-you may choose to remove these from the MSXPI-Setup script before running iy, and 
+you may choose to remove these from the MSXPI-Setup script before running it, and 
 do it at later time if you want to use ChatGPT with MSXPi.
 
           mkdir /home/pi/msxpi
@@ -146,7 +146,7 @@ running in the openMSX, and use the same commands found in the physical
 MSXPi running in real hardware.
 
 It works by implementing a MSXPi Device that listen to the I/O ports allocated
-for MSXPi and fowarding the data to a local TCP socket, which is implemented
+for MSXPi and forwarding the data to a local TCP socket, which is implemented
 by a Python program (the msxpi-server). The MSXPi device also works for data
 send by the Python program, that is, reading the responses and forwarding to
 the MSX computer, just like the real thing.
@@ -157,69 +157,26 @@ byte transfer which uses GPIO in the Raspberry Pi, and Socket communication
 in the openMSX solution, but other than that, the remaining code should be
 the same and work on both platforms.
 
-To have MSXPi in you openMSX, you can wait until the openMSX team merge the 
-extension or compile yourself. To compile the extension yourself, head to the
-openMSX fork in https://github.com/costarc/openMSX
+To have MSXPi in you openMSX, download the binary for your operating system from
+the latest release in the MSXPi Extension official repository:
+https://github.com/costarc/openMSX/releases
 
+Follow the instructions in:
+https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 
-This is a work in progress - all the features mentioned are planned and not
-yet available.
+MSXPi specific documentation is available in the MSXPi repository:
+https://github.com/costarc/MSXPi/tree/master/documents
 
-
-* Quick Start - MSXPi Extension
-
-The MSXPisimple is composed these new files:
-
-openmsx/src/MSXPi/MSXPiDevice.cc
-openmsx/src/MSXPi/MSXPiDevice.hh
-openmsx/share/extensions/MSXPi.xml
-
-and two changes to openMSX/src/DeviceFactory.cc:
-
-include <MSXPiDevice.hh>
-} else if (type == "MSXPiDevice") {
-result = std::make_unique<MSXPiDevice>(conf);
-}
-	
-To compile and test the MSXPi extension, follow these steps after cloning this
-repository.
-All commands below assume you are in the openMSX root folder: openMSX/
-
-> Compile the code and install (in my example, I install under /opt/openMSX in
- a Linux platform):
- make -j$(nproc); sudo make install
- 
-> run the Python server on the local host - use a second CLI window for this:
- python3 MSXPi/msxpi-server.py
- 
-> Start openMSX (assuming you created a folder with MSX-DOS 1.3 to boot from):
- /opt/openMSX/bin/openmsx -machine Panasonic_FS-A1WSX -ext MSXPi 
- -diska MSXPi/msxdisk
-
-> In openMSX, try the "P" commands, such as:
-  pcd
-  pdir
-  pset
-  prun
-  
-  switch to BASIC test the MSXPi BIOS commands:
-  call msxpiver
-  call msxpi("pver")
-  call msxpi("pdir")
-  
-  There are also some BASIC programs demonstrating how to access internet
-  resources from MSX. They will use the BIOS if loaded, or load a msxpiext.bin/openmsx
-  extension that load the BIOS into the ROM area when the MSXPi BIOS is not available.
  
 MSXPi v1.2 Release Notes
 ========================
-- Added Pull-Up ressitors to SPI_CS & SPI_RDY
+- Added Pull-Up resistors to SPI_CS & SPI_RDY
 - Added Push-button to Shutdown Raspberry Pi (via interruption)
 - Added RESET button (may not be safe for all MSX models)
 - Added diode in the 5V rail - allow Raspberry Pi to be powered
   via USB without leaking to the MSX
 - Changed the 5V rail capacitor to 10uF
-- Made optimiation to the CPLD firmware to save some logic gates
+- CPLD logic (MSXPi firmware) optimised to reduce logic gate count
 - Extensive changes to all software for stability
 - Added support in the software for the extension MSXPi for openMSX
 - Added new build file msxpibios.rom with MSXPi BIOS for BASIC CALL commands
@@ -229,7 +186,7 @@ MSXPi v1.2 Release Notes
 MSXPi v1.1 Release Notes
 ========================
 - New PCB layout
-- Schema & PCB  changed to support future expansion to Raspbery Pi hardware SPIO
+- Schema & PCB  changed to support future expansion to Raspberry Pi hardware SPIO
 - New basic IO routines (used by all components)
 - Lots of code changes to improve stability
 - Improved pcopy: can decompress files, use virtual remote devices  
@@ -267,12 +224,12 @@ This release has some major changes to the hardware and software components.
 
 On the hardware side:
 
-- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tai-state, therefore this signal is for future use)
+- Implemented the /wait signal on the PCB (CPLD does not drives at this time, it is always tri-state, therefore this signal is for future use)
 - Schematics was updated to support the /wait signal
 - CPLD logic update to drive /wait to tri-state (to avoid MSX to freeze)
 - LED is driven by the SPI_CS signal (needed that CPLD pin for the /wait signal)
 - Removed the jumper for the BUSDIR signal (since it is always driven by CPLD internal logic)
-- Added pull-up resistors for all Raspbery Pins used in the design
+- Added pull-up resistors for all Raspberry Pins used in the design
 - Added by-pass capacitors for all CIs.
 
 On the software side:
@@ -291,31 +248,28 @@ Other non functional changes includes a new design using KiCad 5 instead of Eagl
 
 Limitations and bugs
 - When booting from MSXPI-DOS, pcopy cannot copy file to the msxpiboot.dsk
-- The CPLD logic and softwares are not benefiting of the /wait signal (future improvement)
+- The CPLD logic and software are not benefiting of the /wait signal (future improvement)
 
 
 MSXPi has two main branches:
 
-master - current working stable release. This contains code for the branch under development, in a more mature state, but may not contain most current tools. 
+master - Most up-to-date version. This contains fresh code, that might have been updated just couple mintues ago. Expect to find bugs, but also expect them to be fixed very quickly.
 
-dev - current devlopment branch. This is where latest tools are developed and tested. Code here might change overnight, and even several times a day. Things may nor work properly, so if you want something more usable, go to the master branch or dev_0.7. 
+Release branches - Contains previous releases.
 
-dev_0.7 - Contain ealier development code. Uses an old single-byte protocol, and only support BASIC client (no MSX_DOS).
-
-Other branches might appear and dissapear. I recommend you not to use them.
-
+Other branches might appear and disappear. I recommend you not to use them.
 
 To-Do / Wish List
 =================
 1. Redesign the interface to use Raspberry Pi SPI GPIO pins & hardware support
 2. Implement Z80 /WAIT states in the interface
 3. Implement Z80 /INT support in the interface
-4. Redesign the interace for Parallel bus support
+4. Redesign the interface for Parallel bus support
 
 MSXPi project is structured around three directories:
 
     /software  - all software goes here
-    /hardware  - electric schematics, cpld design files
+    /hardware  - interface schematics, CPLD design files
     /documents - documentation
 
 
@@ -364,7 +318,9 @@ The /software branch has this structure:
     |       |         |----
     |       |              |
     |       |              /src
-    |       |          
+    |       |
+    |-------/openMSX	
+    |       |
     |-------/hardware 
     |       |---- 
     |       |    | 
