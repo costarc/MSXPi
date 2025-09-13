@@ -12,19 +12,19 @@ physical MSXPi without the need of a Raspberry Pi - instead, relies
 on a Python msxpi-server code running on the same computer where 
 openMSX is hosted.
 
-For detailed information about the MSXPi project and the hardwaare interface,
-go to: https://github.com/costarc/MSXPi/tree/master/software
+For detailed information about the MSXPi project and the hardware interface,
+go to: https://github.com/costarc/MSXPi
 
 This README is for the openMSX extension that reproduces the behaviour of
 the physical interface.
 
-Arquitecture of the physical Interface:
+Architecture of the physical Interface:
 ┌────────────┐         ┌────────────────────────┐         ┌────────────────────┐
 │    MSX     │  <--->  │     MSXPi Interface    │  <--->  │   msxpi-server     │
 │ (Z80 I/O)  │   0x56  │   (CPLD + SPI bridge)  │  GPIO   │ (Python GPIO API)  │
 └────────────┘   0x5A  └────────────────────────┘         └────────────────────┘
                                                  
-Arquitecture of the MSXPi extension for openMSX: 
+Architecture of the MSXPi extension for openMSX: 
 ┌────────────┐         ┌────────────────────────┐         ┌────────────────────┐
 │    MSX     │  <--->  │     MSXPi Interface    │  <--->  │   msxpi-server     │
 │ (Z80 I/O)  │  0x56   │ MSXPiDevice + socket)  │  Socket │(Python socket API) │
@@ -45,7 +45,7 @@ refreshing your local copy frequently.
 There are a lot of Python modules that are not standard in Python, and will
 require you to install before running MSXPi. When you run msxpi-server, it
 will complain about missing modules - use that information to install them.
-For exmaple, to install module "fs":
+For example, to install module "fs":
 
 Go to Windows command line and type:
 
@@ -64,10 +64,10 @@ Steps to Setup and Try MSXPi in openMSX
 =======================================
 
 1. Install an openMSX version that has support for MSXPi extension. You can download
-   binaries for all platforms (nightly buidls from openMSX) in the releases section:
+   binaries for all platforms (nightly builds from openMSX) in the releases section:
    https://github.com/costarc/openMSX/releases
    
-   Always use the latest releasse.
+   Always use the latest release.
    
 2. Download msxpi-server.py (the server component that runs in Python) from:
    https://github.com/costarc/MSXPi/tree/master/software/Server/Python/src
@@ -151,5 +151,5 @@ Steps to Setup and Try MSXPi in openMSX
    If you have an OpenAI key, update this file with it so you can use the
    chatgpt.com command.
 
-10. Read the MSXPi dociumentation for more detailed information:
+10. Read the MSXPi documentation for more detailed information:
    https://github.com/costarc/MSXPi/tree/master/documents
