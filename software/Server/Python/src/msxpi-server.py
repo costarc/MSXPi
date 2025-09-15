@@ -1481,7 +1481,7 @@ def initialize_connection():
     return conn
 
 def ShowSecurityDisclaimer():
-    print("\n========================================================================================")
+    print("\n=====================================================================================")
     print("This server process is meant to handle communication with a MSX computer.")
     print("It allows the MSX to:\n")
     print(" * List/read (any) file from this computer or network (via the the PDIR/PCOPY commands).\n")
@@ -1490,8 +1490,8 @@ def ShowSecurityDisclaimer():
     print("\nSome of the commands in Raspberry Pi require elevation of privileges using sudo.")
     print("The server will not execute such commands in the other non-Raspberry Pi platforms,")
     print("and in some cases when supported by the command, a message will be returned to the MSX")
-    print("with that information.")
-    print("========================================================================================\n")   
+    print("informing that the command is not supported.")
+    print("=======================================================================================\n")   
 
 """ ============================================================================
     msxpi-server.py
