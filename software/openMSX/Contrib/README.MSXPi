@@ -69,17 +69,16 @@ Steps to Setup and Try MSXPi in openMSX
    
    Always use the latest release.
    
-2. Download msxpi-server (the server component that runs in Python) from your
-   platform. Note that the generic version of the msxpi-server does not contain
-   commands that require sudo, such as pwifi set, preboot and pshut. These commands
-   are only available and required for the physical interface with the Raspberry Pi
-   plugged into it.
+2. Download msxpi-server.py from:
 
    https://github.com/costarc/MSXPi/tree/master/software/Server/Python/src
 
-   msxpi-server.py: For Rapsberry Pi and the physical interface
-   msxpi-server-generic.py: For all non-raspberrypi hosts (Mac, Linux, Windows).
 
+   Note: the msxpi-server component has some commands that requires elevation of privileges
+   in the Raspberry Pi platform using "sudo". These commands apply only to Raspberry Pi
+   and will return a message "Command not supported on this platform" for all non-raspberry
+   pi hosts.
+   
    Run from IDLE console, or from command line:
    
    python msxpi-server.py
