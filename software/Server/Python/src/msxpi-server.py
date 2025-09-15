@@ -1373,16 +1373,25 @@ def readParameters(errorMsg, needParm=False):
     return RC_SUCCESS, parms
 
 def prestart():
-    print("Restarting MSXPi Server")
-    exitDueToSyncError()
-    
+    if hostType == "pi":
+        print("Restarting MSXPi Server")
+        exitDueToSyncError()
+    else:
+        print("Command not supported in this platform")
+        
 def preboot():
-    print("Rebooting Raspberry Pi")
-    os.system("sudo reboot")
-    
+    if hostType == "pi":
+        print("Rebooting Raspberry Pi")
+        os.system("sudo reboot")
+    else:
+        print("Command not supported in this platform")
+        
 def pshut():
-    print("Shutting down Raspberry Pi")
-    os.system("sudo shutdown -h now")
+    if hostType == "pi":
+        print("Shutting down Raspberry Pi")
+        os.system("sudo shutdown -h now")
+    else:
+        print("Command not supported in this platform")
     
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")
@@ -1466,10 +1475,23 @@ def initialize_connection():
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind((HOST, PORT))
     s.listen(1)
-    print(f"[Python Server] Listening on {HOST}:{PORT}...")
+    print(f"[MSXPi Server Non-Raspberry Pi Platform:{hostType}] Listening on {HOST}:{PORT}...")
     conn, addr = s.accept()
-    print(f"[Python Server] Connected by {addr}")
+    print(f"** MSX Connected to {addr} **")
     return conn
+
+def ShowSecurityDisclaimer():
+    print("\n========================================================================================")
+    print("This server process is meant to handle communication with a MSX computer.")
+    print("It allows the MSX to:\n")
+    print(" * List/read (any) file from this computer or network (via the the PDIR/PCOPY commands).\n")
+    print(" * Execute arbitrary(!) shell commands (via the PRUN command).\n")
+    print(" * Configure the WiFi settings (via the PSET/PWIFI commands).\n")
+    print("\nSome of the commands in Raspberry Pi require elevation of privileges using sudo.")
+    print("The server will not execute such commands in the other non-Raspberry Pi platforms,")
+    print("and in some cases when supported by the command, a message will be returned to the MSX")
+    print("with that information.")
+    print("========================================================================================\n")   
 
 """ ============================================================================
     msxpi-server.py
@@ -1539,7 +1561,9 @@ SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
-print("Starting MSXPi Server Version ",version,"Build",BuildId)
+print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
+
+ShowSecurityDisclaimer()
 
 hostType = detect_host()
 
@@ -1549,10 +1573,9 @@ if hostType == "pi":
     GPIO.output(RPI_READY, GPIO.LOW)
     # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
     GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=pshut, bouncetime=200)
-    print("Raspberry Pi GPIO initialized\n")
+    print(f"[MSXPi Server on Raspberry Pi Platform] GPIO initialized\n")
 else:
     conn = initialize_connection()
-    print(f"{hostType} socket initialized\n")
 
 try:
     while True:
