@@ -40,11 +40,10 @@ void MSXPiDevice::reset(EmuTime /*time*/)
 byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 {
 	switch (port & 0xff) {
-	case 0x56: // status
+	case 0x56: // Status
 	case 0x57: // Version
 		return peekIO(port, time);
-	case 0x5A: // data
-		std::cout << "[MSXPi] readIO Data Read" << std::endl;
+	case 0x5A: // Data
 		if (readRequested) {
 			readRequested = false;
 			std::lock_guard lock(mtx);
@@ -62,20 +61,17 @@ byte MSXPiDevice::peekIO(uint16_t port, EmuTime /*time*/) const
 {
 	switch (port & 0xff) {
 	case 0x56: // status
-		std::cout << "[MSXPi] peekIO Status Check" << std::endl;
 		if (sock == OPENMSX_INVALID_SOCKET) {
 			return 0x01; // server not available
 		}
 		{
 			std::lock_guard lock(mtx);
-			if (!rxQueue.empty()) return 0x02;
+			if (!rxQueue.empty()) return 0x02; // byte available
 		}
 		return 0x00;
 	case 0x57: // Version
-		std::cout << "[MSXPi] peekIO Version Check" << std::endl;
-		return 0xFE;
+		return 0xFE; // Used to know when its the extension and not the actual physical interface
 	case 0x5A: // data
-		std::cout << "[MSXPi] peekIO Data Read" << std::endl;
 		if (readRequested) {
 			std::lock_guard lock(mtx);
 			if (!rxQueue.empty()) {
@@ -88,12 +84,12 @@ byte MSXPiDevice::peekIO(uint16_t port, EmuTime /*time*/) const
 	}
 }
 
-void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime /*time*/)
+void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime time)
 {
 	switch (port & 0xff) {
 	case 0x56: // control
 		if (value == 0xFF) {
-			reset(openmsx::EmuTime::dummy());
+			reset(time);
 		}
 		if (sock != OPENMSX_INVALID_SOCKET) {
 			readRequested = true;
@@ -113,7 +109,6 @@ void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime /*time*/)
 void MSXPiDevice::readLoop()
 {
 	while (!shouldStop) {
-		// std::cout << "[MSXPi] readLoop" << std::endl;
 		if (sock == OPENMSX_INVALID_SOCKET) {
 			sock = socket(AF_INET, SOCK_STREAM, 0);
 			if (sock == OPENMSX_INVALID_SOCKET) {
