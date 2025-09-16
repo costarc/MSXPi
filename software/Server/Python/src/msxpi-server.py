@@ -1486,7 +1486,7 @@ def ShowSecurityDisclaimer():
     print("It allows the MSX to:\n")
     print(" * List/read (any) file from this computer or network (via the the PDIR/PCOPY commands).\n")
     print(" * Execute arbitrary(!) shell commands (via the PRUN command).\n")
-    print(" * Configure the WiFi settings (via the PSET/PWIFI commands).\n")
+    print(" * Configure the WiFi settings (Raspberry Pi only via the PSET/PWIFI commands) .\n")
     print("\nSome of the commands in Raspberry Pi require elevation of privileges using sudo.")
     print("The server will not execute such commands in the other non-Raspberry Pi platforms,")
     print("and in some cases when supported by the command, a message will be returned to the MSX")
