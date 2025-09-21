@@ -108,11 +108,18 @@ MSXPIHOME = "/home/pi/msxpi"
 RAMDISK = "/media/ramdisk"
 TMPFILE = RAMDISK + "/msxpi.tmp"
 
+# irc
+channel = "#msxpi"
+allchann = []
+ircsock = None
+errcount = 0
+msxdos1boot = False
+
 HOST = '0.0.0.0'  # Listen on all interfaces
 PORT = 5000       # Match this with serverPort in your C++ code
 conn = None
 
-hostType = "pi"
+hostType = "RaspberryPi"
 RPI_SHUTDOWN = 26
 
 def detect_host():
@@ -120,20 +127,19 @@ def detect_host():
     machine = platform.machine()
 
     if system == "Windows":
-        return "win"
-
+        return "Windows"
     elif system == "Darwin":
-        return "mac"
+        return "MacOS"
     elif system == "Linux":
         # Check for Raspberry Pi
         try:
             with open("/proc/cpuinfo", "r") as f:
                 cpuinfo = f.read()
             if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo or "Raspberry" in platform.uname().node:
-                return "pi"
+                return "RaspberryPi"
         except Exception:
             pass
-        return "lin"
+        return "Linux"
     else:
         return system
 
@@ -166,7 +172,7 @@ def SPI_MASTER_transfer_byte(byte_out=None):
     
     global conn, hostType
     byte_in = 0    
-    if hostType == "pi":
+    if hostType == "RaspberryPi":
         #print("SPI_MASTER_transfer_byte(): Raspberry Pi")
         tick_sclk()
 
@@ -210,7 +216,7 @@ def piexchangebyte(byte_out=None):
     """
 
     global hostType
-    if hostType == "pi":
+    if hostType == "RaspberryPi":
         #print("piexchange(): Raspberry Pi")
         # GPIO-based SPI emulation
         global SPI_CS, RPI_READY
@@ -248,11 +254,9 @@ crctab = [ crcinit(i) for i in range(256) ]
 
 def crc16(crc, c):
     cc = 0xff & c
-
     tmp = (crc >> 8) ^ cc
     crc = (crc << 8) ^ crctab[tmp & 0xff]
     crc = crc & 0xffff
-
     return crc
 
 # create a subclass and override the handler methods
@@ -275,17 +279,16 @@ class MyHTMLParser(HTMLParser):
         print("MyHTMLParser: convert_charrefs found :", data)
                 
 def pathExpander(path, basepath = ''):
-    print(f"pathExpander(): {path}, {basepath}")
+    #print(f"pathExpander()")
+    
     path=path.strip().rstrip(' \t\n\0')
     
     if path.strip() == "..":
         path = basepath.rsplit('/', 1)[0]
         basepath = ''
-        
     if len(path) == 0 or path == '' or path.strip() == "." or path.strip() == "*":
         path = basepath
         basepath = ''
-        
     if path.startswith('/'):
         urltype = 0 # this is an absolute local path
         newpath = path
@@ -311,26 +314,21 @@ def pathExpander(path, basepath = ''):
     else:
         urltype = 1 # this is a network path
         newpath = basepath + "/" + path
-    
-    print(f"pathExpander(): urltype = {urltype}, newpath = {newpath}")
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
+    print("msxdos_inihrd()")
     
     if ('disk' in vars() or 'disk' in globals()):
         disk.flush()
-        
     size = os.path.getsize(filename)
     if (size>0):
         fd = os.open(filename, os.O_RDWR)
         disk = mmap.mmap(fd, size, access=access)
         rc = RC_SUCCESS
-    else:
-        
+    else:   
         disk = ''
         rc = RC_FAILED
-
-    #print(hex(rc))
     return rc,disk
 
 def dos83format(fname):
@@ -346,8 +344,8 @@ def dos83format(fname):
     return name+ext
 
 def ini_fcb(fname,fsize):
-
-    #print("ini_fcb: starting")
+    print("ini_fcb()")
+    
     fpath = fname.split(':')
     if len(fpath) == 1:
         msxfile = str(fpath[0])
@@ -359,54 +357,42 @@ def ini_fcb(fname,fsize):
 
     #convert filename to 8.3 format using all 11 positions required for the FCB
     msxfcbfname = dos83format(msxfile)
-    
-    #print("Drive, Filename, N# blocks:",msxdrive,msxfcbfname,numblocks)
 
     # send FCB structure to MSX
     buf = bytearray()
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
-    
-    rc = sendmultiblock(buf, BLKSIZE, RC_SUCCESS)
-    
-    #print("ini_fcb: Exiting")
-    
+    rc = sendmultiblock(buf, BLKSIZE, RC_SUCCESS)   
     return rc
 
 def prun(cmd = ''):
-    global hostType
+    print(f"prun()")
     
-    print(f"prun(): {cmd}")
-
-    rc = RC_SUCCESS
+    global hostType
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
         rc, cmd = readParameters("Syntax: prun <command> <::> command. To  pipe a command to other, use :: instead of |", True)
-
-    if rc != RC_SUCCESS:
-        return RC_FAILED
-    else:
-        cmd = cmd.replace('::','|')
-        rc = RC_SUCCESS
-        try:
-            if hostType == "win":
-                cmd = cmd.replace("/", "\\")  
-            p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-            buf = p.stdout.read().decode()
-            err = (p.stderr.read().decode())
-            if len(err) > 0 and not ('0K ....' in err): # workaround for wget false positive
-                rc = RC_FAILED
-                buf = ("Pi:Error - " + str(err))
-            elif len(buf) == 0:
-                rc = RC_SUCCESS
-                buf = "Pi:Ok"
-            
-            #print(f"prun(): output = {buf}")
-            sendmultiblock(buf.encode(), BLKSIZE, rc)
-            return rc
-        except Exception as e:
-            print("prun: exception:"+str(e))
-            sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
-            return rc
+        if rc != RC_SUCCESS:
+            return RC_FAILED
+    cmd = cmd.replace('::','|')
+    rc = RC_SUCCESS
+    try:
+        if hostType == "Windows":
+            cmd = cmd.replace("/", "\\")  
+        p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+        buf = p.stdout.read().decode()
+        err = (p.stderr.read().decode())
+        if len(err) > 0 and not ('0K ....' in err): # workaround for wget false positive
+            rc = RC_FAILED
+            buf = ("Pi:Error - " + str(err))
+        elif len(buf) == 0:
+            rc = RC_SUCCESS
+            buf = "Pi:Ok"
+        sendmultiblock(buf.encode(), BLKSIZE, rc)
+        return rc
+    except Exception as e:
+        print("prun: exception:"+str(e))
+        sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, rc)
+        return rc
 
 def pdir():
     print("pdir()")
@@ -415,17 +401,14 @@ def pdir():
     rc, data = readParameters("", False)   
     if rc != RC_SUCCESS:
         return RC_FAILED
-    
     if not data:
         userPath=''
     else:
         userPath = data
-
-    pathType, path = pathExpander(userPath, basepath)
-                
+    pathType, path = pathExpander(userPath, basepath)           
     try:
         if pathType == 0:
-            if hostType == "win":
+            if hostType == "Windows":
                 prun('dir ' + path)
             else:
                 prun('ls -l ' + path)
@@ -442,19 +425,17 @@ def pdir():
     return RC_SUCCESS
 
 def pcd():
-    print("pcd")
+    print("pcd()")
     
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH')
     rc, data = readParameters("", False)   
     if rc != RC_SUCCESS:
-        return RC_FAILED
-    
+        return RC_FAILED  
     if not data:
         userPath=''
     else:
-        userPath = data
-        
+        userPath = data 
     try:
         if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
             rc = sendmultiblock(basepath.encode(), BLKSIZE, RC_SUCCESS)
@@ -482,14 +463,11 @@ def pcd():
     return RC_SUCCESS
     
 def pcopy(msxcmd = "pcopy"):
-
-    print("pcopy():")
+    print("pcopy()")
     
-    global hostType
-    rc = RC_SUCCESS
-
-    global psetvar,GLOBALRETRIES
+    global psetvar,GLOBALRETRIES,hostType
     basepath = getMSXPiVar('PATH')
+    rc = RC_SUCCESS
     
     # Receive parameters - but before, prepare help message to pass
     errorMsg = 'Syntax:\n'
@@ -501,16 +479,14 @@ def pcopy(msxcmd = "pcopy"):
     errorMsg = errorMsg +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
     errorMsg = errorMsg + '/z decompress file\n'
     errorMsg = errorMsg + 'm:, r1: r2: virtual remote devices'
-        
+
     rc, data = readParameters(errorMsg, True)   
     if rc != RC_SUCCESS:
         return RC_FAILED
-    
     if not data:
         userPath=''
     else:
         userPath = data
-
     fname2 = ''
     expandedFn = ''
     parms = userPath.split()
@@ -534,7 +510,6 @@ def pcopy(msxcmd = "pcopy"):
                 fname2=path.split(":")[0]
             else:
                 fname2 = path
-
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:
@@ -545,7 +520,6 @@ def pcopy(msxcmd = "pcopy"):
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
     else:
-        print(f"(pcopy(): remote file = {path}")
         try:
             urlhandler = urlopen(path)
             buf = urlhandler.read()
@@ -555,40 +529,32 @@ def pcopy(msxcmd = "pcopy"):
             print(f"Pi:Error - {str(e)}")
             rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
             return RC_FAILED
-
     # if /z passed, will uncompress the file
     if rc == RC_SUCCESS:
         if expand:
-            print(f"(pcopy): Loaded, now expanding")
             tmpfn0 = path.split('/')
             tmpfn = tmpfn0[len(tmpfn0)-1]
-            if hostType == "win":
+            if hostType == "Windows":
                 os.system('del /Q "C:\\tmp\\msxpi\\*"')
             else:
                 os.system('rm /tmp/msxpi/* 2>/dev/null')
-            
             tmpfile = open('/tmp/' + tmpfn, 'wb')
             tmpfile.write(buf)
             tmpfile.close()
-            
             # If not windows, uses lha to extrac lzh files
             if ".lzh" in tmpfn:
-                print(f"(pcopy(): hostType = {hostType}")
-                if hostType == "win":
+                if hostType == "Windows":
                     cmd = 'lha -xfiw=/tmp/msxpi /tmp/' + tmpfn
                 else:
                     cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
-                    
-                print(f"pcopy(): {cmd}")
                 p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
                 perror = (p.stderr.read().decode())
                 rc = p.poll()
-                print(f"pcopy(): perror = {perror}, rc = {rc}")
                 if rc!=0 and rc != None:
                     rc = RC_FAILED
             else:
                 # Will use 7-Zip for any file type under Windows
-                if hostType == "win":
+                if hostType == "Windows":
                     cmd = '7z.exe e /tmp/' + tmpfn + ' -aoa -o/tmp/msxpi/'
                 else:
                     cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
@@ -597,10 +563,7 @@ def pcopy(msxcmd = "pcopy"):
                 rc = p.poll()
                 if rc!=0:
                     rc = RC_FAILED
-            
-            print(f"pcopy(): perror = {perror} , rc = {rc}")
             romfiles = [f for f in os.listdir('/tmp/msxpi') if f.endswith(('.rom', '.ROM'))]
-            print(f"pcopy(): romfiles = {romfiles}")
             if romfiles:
                 fname1 = '/tmp/msxpi/' + romfiles[0]
                 
@@ -628,7 +591,6 @@ def pcopy(msxcmd = "pcopy"):
             return RC_FAILED
 
         else:
-            print(f"(pcopy): checks before sending file")
             # Did we boot from the MSXPi ROM or another external drive?
             if (not msxdos1boot) or msxcmd == "ploadr": # Boot was from an externdal drive OR it is PLOADR
                 if expand:
@@ -680,8 +642,7 @@ def pcopy(msxcmd = "pcopy"):
                     sendmultiblock("Pi:Ok".encode(), BLKSIZE, RC_TERMINATE)
                 except Exception as e:
                     rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
-            
-    #print(hex(rc))
+
     return rc
 
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
@@ -693,7 +654,7 @@ def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
     return b
     
 def pdate():
-    print("pdate")
+    print("pdate()")
     
     pdate = bytearray(8)
     now = datetime.datetime.now()
@@ -705,39 +666,27 @@ def pdate():
     pdate[5]=(now.minute)
     pdate[6]=(now.second)
     pdate[7]=(0)
-    
     sendmultiblock(pdate, CMDSIZE, RC_SUCCESS)
-   
     return RC_SUCCESS
-    
-    # old code - never executed 
-    now = datetime.datetime.now()
-    piexchangebyte(now.year & 0xff)
-    piexchangebyte(now.year >>8)
-    piexchangebyte(now.month)
-    piexchangebyte(now.day)
-    piexchangebyte(now.hour)
-    piexchangebyte(now.minute)
-    piexchangebyte(now.second)
-    piexchangebyte(0)
-
 
 def pplay():
-    print("pplay")   
-    rc, data = readParameters("yntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3", True) 
-    
-    if rc != RC_SUCCESS:
-        return RC_FAILED
+    print("pplay()")   
+    rc, data = readParameters("Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3", True) 
 
+    if rc != RC_SUCCESS:
+        return RC_SUCCESS
+        
+    if hostType != "Raspberry Pi": 
+        sendmultiblock("Command not supported in this platform".encode(), BLKSIZE, RC_SUCCESS)
+        return RC_SUCCESS
+        
     parmslist = data.split(" ")
     cmd = parmslist[0]
     if len(parmslist) > 1:
         parms = data.split(" ")[1].split("\x00")[0]
     else:
         parms = ''
-    
-    #print("cmd / parms:",cmd,parms)
-    
+
     buf = ''
     try:
         buf = subprocess.check_output(['/home/pi/msxpi/pplay.sh',getMSXPiVar('PATH'),cmd,parms])
@@ -750,18 +699,18 @@ def pplay():
     return RC_SUCCESS
     
 def pvol():
-    print("pvol")
-    rc = RC_SUCCESS
+    print("pvol()")
+    rc, data = readParameters("This command requires a parameter", True)
+    if rc == RC_SUCCESS:
+        if hostType == "Raspberry Pi": 
+            rc = prun("mixer set PCM -- " + data)
+            return RC_SUCCESS
+        else:
+            sendmultiblock("Command not supported in this platform".encode(), BLKSIZE, RC_SUCCESS)
+    return RC_SUCCESS
     
-    rc, data = readParameters("", False)   
-    if rc != RC_SUCCESS:
-        return RC_FAILED
-    
-    rc = prun("mixer set PCM -- " + data)
-    return rc
-
 def pset(varn = '', varv = ''):
-    print("pset")
+    print("pset()")
     global psetvar,drive0Data,drive1Data
 
     if varn == '':
@@ -770,7 +719,6 @@ def pset(varn = '', varv = ''):
             return RC_FAILED
         if not data:
             for index in range(0,len(psetvar)):
-                print(psetvar[index])
                 data = data + psetvar[index][0]+'='+psetvar[index][1]+'\n'
             rc = sendmultiblock(data.encode(), BLKSIZE, RC_SUCCESS)
             return RC_SUCCESS
@@ -842,7 +790,8 @@ def getMSXPiVar(devname = 'PATH'):
     return devval
     
 def pwifi():
-    print("pwifi")
+    print("pwifi()")
+    
     global psetvar
     wifissid = getMSXPiVar('WIFISSID')
     wifipass = getMSXPiVar('WIFIPWD')
@@ -857,13 +806,13 @@ def pwifi():
         return RC_SUCCESS
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
-        if hostType == "pi":
+        if hostType == "RaspberryPi":
             wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
             prun(wifisetcmd)
         else:
             sendmultiblock(b'Parameter not supported in this platform', BLKSIZE, RC_SUCCESS)
     else:
-        if hostType == "pi":
+        if hostType == "RaspberryPi":
             prun("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
         else:
             prun("ipconfig")
@@ -879,7 +828,7 @@ def pver():
     
 def irc():
 
-    print("irc")
+    print("irc()")
 
     global allchann,psetvar,channel,ircsock
     ircserver = getMSXPiVar('IRCADDR')
@@ -889,14 +838,11 @@ def irc():
     rc,data = recvdata()
     if rc != RC_SUCCESS:
         return rc
-        
     if data[0] == 0:
         cmd=''
     else:
         cmd = data.decode().split("\x00")[0].lower()
-    
     rc = RC_SUCCNOSTD
-    
     try:
         if cmd[:4] == 'conn':
             ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -924,27 +870,18 @@ def irc():
             if jchannel in allchann:
                 ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
                 channel = jchannel
-
             ircsock.setblocking(0);
             ircsock.send(("JOIN " + jchannel + "\r\n").encode())
-
             ircmsg = 'Pi:Ok\n'
             rc = RC_SUCCNOSTD
-        
             ircsock.setblocking(0);
             sendmultiblock(ircmsg.encode(), BLKSIZE, rc)
-
         elif cmd[:4] == 'read':
-  
-            print("irc:read")
-            
             ircmsg = 'Pi:Error'
-            
             try:
                 ircmsg = ircsock.recv(2048).decode()
                 if len(ircmsg)>1:
                     ircmsg = ircmsg.strip('\n\r')
-
                 if ircmsg.find("PING :") != -1:
                     ircmsgList = ircmsg.split(":")
                     idx=0
@@ -966,22 +903,17 @@ def irc():
                     ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
                     ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
                     rc = RC_SUCCESS
-
             except socket.error as e:
                 err = e.args[0]
                 print("irc read exception:",err,str(e))
                 ircmsg = 'Pi:Ok\n'
                 rc = RC_SUCCNOSTD
-    
-            sendmultiblock(ircmsg.encode(), BLKSIZE, rc)
-            
+            sendmultiblock(ircmsg.encode(), BLKSIZE, rc)        
         elif cmd[:5] == 'names':
-            print("names:",cmd)
             ircsock.send((cmd+"\r\n").encode())
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
-            print("names:",ircmsg)
             ircmsg = "Users on channel " #+ ircmsg.split('=',1)[1]
             sendmultiblock(ircmsg.encode(), BLKSIZE, RC_SUCCESS)
         elif cmd[:4] == 'quit':
@@ -989,7 +921,6 @@ def irc():
             ircsock.close()
             sendmultiblock("Pi:leaving room\r\n".encode(),BLKSIZE, RC_SUCCESS)
         elif cmd[:4] == 'part':
-            print("part:")
             ircsock.send(("/part\r\n").encode())
             ircsock.close()
             sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE, RC_SUCCESS)
@@ -1001,7 +932,7 @@ def irc():
         sendmultiblock("Pi:"+str(e).encode(), BLKSIZE, rc)
 
 def py():
-    print('python')
+    print('python()')
     rc,data = recvdata(BLKSIZE)
     cmd = data.decode().split("\x00")[0]
     if rc == RC_SUCCESS:
@@ -1018,7 +949,7 @@ def py():
         sendmultiblock('Pi:Error'.encode(), BLKSIZE, rc)
         
 def dosinit():
-    
+    print("dosinit()")    
     global msxdos1boot
         
     rc,data = recvdata(BLKSIZE)
@@ -1028,12 +959,11 @@ def dosinit():
             dskioini()
         else:
             msxdos1boot = False
-    
-    #print (hex(rc))
+ 
     return rc
     
 def dskioini():
-    print("dskioini")
+    print("dskioini()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
     
@@ -1045,7 +975,7 @@ def dskioini():
     rc , drive1Data = msxdos_inihrd(getMSXPiVar('DriveB'))
 
 def dskiords():
-    print("dskiords")
+    print("dskiords()")
 
     DOSSCTSZ = SECTORSIZE - 3
     
@@ -1080,7 +1010,7 @@ def dskiords():
             break
  
 def dskiowrs():
-    print("dskiowrs")
+    print("dskiowrs()")
     
     DOSSCTSZ = SECTORSIZE - 3
     
@@ -1112,7 +1042,7 @@ def dskiowrs():
             break
                   
 def dskiosct():
-    print("dskiosct")
+    print("dskiosct()")
 
     DOSSCTSZ = SECTORSIZE - 3
     
@@ -1173,9 +1103,9 @@ def dskiosct():
 def recvdata(bytecounter = BLKSIZE):
 
     global hostType
-    print(f"recvdata():")
+    print(f"recvdata()")
 
-    if hostType == "pi":
+    if hostType == "RaspberryPi":
         th = threading.Timer(3.0, exitDueToSyncError)
             
     retries = GLOBALRETRIES
@@ -1213,13 +1143,13 @@ def recvdata(bytecounter = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             #print("recvdata: checksum is a match")
-            if hostType == "pi":
+            if hostType == "RaspberryPi":
                 th.cancel()
             break
         else:
             rc = RC_TXERROR
             print("recvdata: checksum error")
-            if hostType == "pi":
+            if hostType == "RaspberryPi":
                 th.start()
         
     return rc,data
@@ -1227,9 +1157,9 @@ def recvdata(bytecounter = BLKSIZE):
 def senddata(data, blocksize = BLKSIZE):
 
     global hostType
-    print(f"senddata():")
+    print(f"senddata()")
     
-    if hostType == "pi":
+    if hostType == "RaspberryPi":
         th = threading.Timer(3.0, exitDueToSyncError)
         th.start()
     
@@ -1274,7 +1204,7 @@ def senddata(data, blocksize = BLKSIZE):
         if (thissum == msxsum):
             rc = RC_SUCCESS
             #print("senddata: checksum is a match")
-            if hostType == "pi":
+            if hostType == "RaspberryPi":
                 th.cancel()
             break
         else:
@@ -1293,8 +1223,8 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
     
     # If buffer small or equal to BLKSIZE
     if numblocks == 1:  # Only one block to transfer
-        print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
-        print(f"buf = {buf}")
+        #print(f"1 block rc = {hex(rc)} , buf size = {len(buf)} blocksize = {blocksize}")
+        #print(f"buf = {buf}")
         data = bytearray(blocksize)
         data[0] = rc
         data[1] = int(len(buf) % 256)
@@ -1306,7 +1236,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
         thisblk = 0
         print(f"sendmultiblock(): Blocks to send = {numblocks}")
         while thisblk < numblocks:
-            print(f"sendmultiblock(): block {thisblk}")
+            #print(f"sendmultiblock(): block {thisblk}")
             data = bytearray(blocksize)
             if thisblk + 1 == numblocks:
                 data[0] = rc # Last block - send original RC
@@ -1322,7 +1252,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
             
             # monitor disconnections on non-Raspberry Pi platforms
             
-            if hostType == "pi":
+            if hostType == "RaspberryPi":
                 rc = senddata(data,blocksize)
                 if rc == RC_FAILED:
                     return RC_FAILED
@@ -1353,7 +1283,7 @@ def sendmultiblock(buf, blocksize = BLKSIZE, rc = RC_SUCCESS):
 #  Some commands (such as chatgpt.com) must have a parameter,
 #  therefore needParam must be True
 def readParameters(errorMsg, needParm=False):
-    print("readparms():")
+    #print("readparms():")
     rc, data = recvdata(BLKSIZE)
 
     if rc != RC_SUCCESS:
@@ -1369,25 +1299,28 @@ def readParameters(errorMsg, needParm=False):
         sendmultiblock(encodederrorMsg, BLKSIZE, RC_FAILED)
         return RC_FAILED, None
 
-    print(f"Parameters:{parms}")
+    #print(f"Parameters:{parms}")
     return RC_SUCCESS, parms
 
 def prestart():
-    if hostType == "pi":
+    print("prestart()")
+    if hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
         exitDueToSyncError()
     else:
         print("Command not supported in this platform")
         
 def preboot():
-    if hostType == "pi":
+    print("preboot()")
+    if hostType == "RaspberryPi":
         print("Rebooting Raspberry Pi")
         os.system("sudo reboot")
     else:
         print("Command not supported in this platform")
         
 def pshut():
-    if hostType == "pi":
+    print("pshut()")
+    if hostType == "RaspberryPi":
         print("Shutting down Raspberry Pi")
         os.system("sudo shutdown -h now")
     else:
@@ -1470,15 +1403,24 @@ def chatgpt():
         sendmultiblock(error_msg.encode(), BLKSIZE, RC_FAILED)
   
 def initialize_connection():
-    """Set up the server socket and wait for a client connection."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    s.bind((HOST, PORT))
-    s.listen(1)
-    print(f"[MSXPi Server Non-Raspberry Pi Platform:{hostType}] Listening on {HOST}:{PORT}...")
-    conn, addr = s.accept()
-    print(f"** MSX Connected to {addr} **")
-    return conn
+    if hostType == "RaspberryPi":
+        import RPi.GPIO as GPIO
+        init_spi_bitbang()
+        GPIO.output(RPI_READY, GPIO.LOW)
+        # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
+        GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=pshut, bouncetime=200)
+        print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
+        return None
+    else:
+        """Set up the server socket and wait for a client connection."""
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((HOST, PORT))
+        s.listen(1)
+        print(f"[MSXPi Server on {hostType}] Listening on {HOST}:{PORT}...")
+        conn, addr = s.accept()
+        print(f" ** MSX Connected to {addr} **\n")
+        return conn
 
 def ShowSecurityDisclaimer():
     print("\n=====================================================================================")
@@ -1486,19 +1428,23 @@ def ShowSecurityDisclaimer():
     print("It allows the MSX to:\n")
     print(" * List/read (any) file from this computer or network (via the the PDIR/PCOPY commands).\n")
     print(" * Execute arbitrary(!) shell commands (via the PRUN command).\n")
-    print(" * Configure the WiFi settings (Raspberry Pi only via the PSET/PWIFI commands) .\n")
-    print("\nSome of the commands in Raspberry Pi require elevation of privileges using sudo.")
-    print("The server will not execute such commands in the other non-Raspberry Pi platforms,")
-    print("and in some cases when supported by the command, a message will be returned to the MSX")
-    print("informing that the command is not supported.")
+    if hostType == "RaspberryPi":
+        print(" * Configure the WiFi settings (via the PSET/PWIFI commands).\n")
+    print("Some very few commands designed specifically for Raspberry Pi requires elevation of")
+    print("privileges using sudo - these commands will not be executed in the PC platforms and")
+    print("when possible, a message will be returned to the MSX informing that the command is")
+    print("not supported.")
+    print("However notice that using PRUN, the MSX user can execute any commands in the host,")
+    print("bypassing the controls in the native MSXPi commands.")
     print("=======================================================================================\n")   
 
 """ ============================================================================
-    msxpi-server.py
-    main program starts here
+    MSXPi Server (msxpi-server.py) main program starts here
     ============================================================================
 """
 
+# This section reads the persistent user configuration from msxpi.ini configuration file.
+# When msxpi.ini does not exist, it populates the memory variables with default values.
 if exists(MSXPIHOME+'/msxpi.ini'):
     f = open(MSXPIHOME+'/msxpi.ini','r')
     idx = 0
@@ -1547,13 +1493,12 @@ else:
            ['RPI_READY','25'], \
            ['OPENAIKEY','']]
 
-# irc
-channel = "#msxpi"
-allchann = []
-ircsock = None
-errcount = 0
-msxdos1boot = False
+print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 
+# Initialize the server
+hostType = detect_host()
+ShowSecurityDisclaimer()
+conn = initialize_connection()
 # GPIO Pins is now defined by the user
 SPI_CS = int(getMSXPiVar("SPI_CS"))
 SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
@@ -1561,27 +1506,13 @@ SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
-print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
-
-ShowSecurityDisclaimer()
-
-hostType = detect_host()
-
-if hostType == "pi":
-    import RPi.GPIO as GPIO
-    init_spi_bitbang()
-    GPIO.output(RPI_READY, GPIO.LOW)
-    # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
-    GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=pshut, bouncetime=200)
-    print(f"[MSXPi Server on Raspberry Pi Platform] GPIO initialized\n")
-else:
-    conn = initialize_connection()
-
+# Start MSXPi Server main loop - wait command and execute.
+# Set a interrupt for Control+C to exit the program gracefully and cleaning GPIO
+# status (on Raspberry PI)
 try:
     while True:
-
         try:
-            print("st_recvcmd: waiting command")
+            print("MSXPi Server: Waiting Command")
             rc,buf = recvdata(CMDSIZE)
 
             if (rc == RC_SUCCESS):
@@ -1589,8 +1520,6 @@ try:
                     fullcmd=''
                 else:
                     fullcmd = buf.decode().split("\x00")[0]
-
-                #print(f"Received command: {fullcmd}")
                 cmd = fullcmd.split()[0].lower()
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
@@ -1599,11 +1528,10 @@ try:
                 globals()[cmd.strip()]()
         except Exception as e:
             errcount += 1
-            print(str(e))
+            print(f"MSXPi Server: {str(e)}")
             recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, RC_FAILED)
-
 except KeyboardInterrupt:
     if detect_host() == "Raspberry Pi":
         GPIO.cleanup() # cleanup all GPIO
-    print("Terminating msxpi-server")
+    print(f"MSXPi Server: Terminating")
