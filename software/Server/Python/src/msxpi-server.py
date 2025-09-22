@@ -676,7 +676,7 @@ def pplay():
     if rc != RC_SUCCESS:
         return RC_SUCCESS
         
-    if hostType != "Raspberry Pi": 
+    if hostType != "RaspberryPi": 
         sendmultiblock("Command not supported in this platform".encode(), BLKSIZE, RC_SUCCESS)
         return RC_SUCCESS
         
@@ -702,7 +702,7 @@ def pvol():
     print("pvol()")
     rc, data = readParameters("This command requires a parameter", True)
     if rc == RC_SUCCESS:
-        if hostType == "Raspberry Pi": 
+        if hostType == "RaspberryPi": 
             rc = prun("mixer set PCM -- " + data)
             return RC_SUCCESS
         else:
@@ -1318,7 +1318,7 @@ def preboot():
     else:
         print("Command not supported in this platform")
         
-def pshut():
+def pshut(cb=None):
     print("pshut()")
     if hostType == "RaspberryPi":
         print("Shutting down Raspberry Pi")
@@ -1404,7 +1404,6 @@ def chatgpt():
   
 def initialize_connection():
     if hostType == "RaspberryPi":
-        import RPi.GPIO as GPIO
         init_spi_bitbang()
         GPIO.output(RPI_READY, GPIO.LOW)
         # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
@@ -1498,13 +1497,15 @@ print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 # Initialize the server
 hostType = detect_host()
 ShowSecurityDisclaimer()
-conn = initialize_connection()
+if hostType == "RaspberryPi":
+        import RPi.GPIO as GPIO
 # GPIO Pins is now defined by the user
 SPI_CS = int(getMSXPiVar("SPI_CS"))
 SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
 SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
+conn = initialize_connection()
 
 # Start MSXPi Server main loop - wait command and execute.
 # Set a interrupt for Control+C to exit the program gracefully and cleaning GPIO
@@ -1532,6 +1533,6 @@ try:
             recvdata(BLKSIZE)       # Read & discard parameters to avoid sync errors
             sendmultiblock(("Pi:Error - "+str(e)).encode(),BLKSIZE, RC_FAILED)
 except KeyboardInterrupt:
-    if detect_host() == "Raspberry Pi":
+    if detect_host() == "RaspberryPi":
         GPIO.cleanup() # cleanup all GPIO
     print(f"MSXPi Server: Terminating")
