@@ -121,6 +121,7 @@ conn = None
 
 hostType = "RaspberryPi"
 RPI_SHUTDOWN = 26
+press_time = None
 
 def detect_host():
     system = platform.system()
@@ -1318,16 +1319,32 @@ def preboot():
     else:
         print("Command not supported in this platform")
         
-def pshut(cb=None):
+def pshut():
     print("pshut()")
     if hostType == "RaspberryPi":
         print("Shutting down Raspberry Pi")
         os.system("sudo shutdown -h now")
     else:
         print("Command not supported in this platform")
-    
+
+def button_handler(channel):
+    start = time.time()
+    # Wait for release
+    while GPIO.input(RPI_SHUTDOWN) == GPIO.LOW:
+        time.sleep(0.01)
+    duration = time.time() - start
+
+    if duration >= 3:
+        print("Shutdown triggered")
+        os.system("sudo shutdown -h now")
+    else:
+        print("Reboot triggered")
+        os.system("sudo reboot")
+
+   
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")
+    GPIO.cleanup() # cleanup all GPIO
     os.system("/home/pi/msxpi/kill.sh")
 
 def updateIniFile(fname,memvar):
@@ -1407,7 +1424,7 @@ def initialize_connection():
         init_spi_bitbang()
         GPIO.output(RPI_READY, GPIO.LOW)
         # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
-        GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=pshut, bouncetime=200)
+        GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=button_handler, bouncetime=200)
         print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
         return None
     else:
