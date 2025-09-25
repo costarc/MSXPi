@@ -46,7 +46,6 @@
 ; Other than using these functions you will have to create your
 ; own commands, using OUT/IN directly to the I/O ports.
 ; ==================================================================
-
 ;-----------------------
 ; CHKPIRDY             |
 ;-----------------------
@@ -54,9 +53,9 @@ CHKPIRDY:
         ld      a,7
         out    ($AA),a
         in      a,($A9)
-        bit     2,a                         ; Test ESC key 
+        bit     2,a                 ; Test ESC key 
         scf
-        ret     z
+        ret		z
         in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
         or      a
         ret     z
@@ -70,10 +69,11 @@ CHKPIRDY:
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE2
-			push	af
-			add		a,48
-			out		($98),a
-			pop		af
+			; debug
+			;push	af
+			;add		a,48
+			;out		($98),a
+			;pop		af
 			cp		1
 			jr		z,PIREADBYTE       ; Pi not ready - keep trying
 			cp		2                  ; openMSX extension will return 2
@@ -123,6 +123,15 @@ PIEXCHANGEBYTE:
             in      a,(DATA_PORT1)     ; read byte
             ret
 
+; resetMSXPI
+; Called on beginning of every command
+; In openMSX implementation, will clear the queue 
+; avoiding checksum loop after an interruption
+resetMSXPI:
+		ld		a,$FF
+		out		(CONTROL_PORT1),a
+		ret
+		
 ; Input:
 ; A = byte to calculate CRC
 ; HL' = Current CRC 
@@ -184,6 +193,7 @@ CLEARBUF:
 ;   af,bc,de,hl are modified
 ;
 SENDPICMD:
+		CALL	resetMSXPI
         EX      DE,HL
         PUSH    BC
         LD      BC,BLKSIZE
@@ -607,6 +617,7 @@ SENDPARMS2:
 ; DE = Command name, terminated in zero
 ; Size of buffer is fixed (CMDSIZE) but command can be up to 8 chars
 SENDCOMMAND:
+		call    resetMSXPI
         ld      hl,buf
         ex      de,hl
         ld      bc,CMDSIZE

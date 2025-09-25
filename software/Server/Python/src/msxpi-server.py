@@ -52,7 +52,7 @@ from io import StringIO
 from contextlib import redirect_stdout
 
 version = "1.2"
-BuildId = "20250910.790"
+BuildId = "20250923.792"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -194,7 +194,7 @@ def SPI_MASTER_transfer_byte(byte_out=None):
 
         tick_sclk()
     else:
-        #conn.settimeout(3.0)  # Set timeout once, e.g. during setup
+        conn.settimeout(3.0)
         if byte_out is not None:
             # print("SPI_MASTER_transfer_byte(): Non-Raspberry Pi conn.sendall")
             conn.sendall(bytes([byte_out]))
@@ -1152,7 +1152,8 @@ def recvdata(bytecounter = BLKSIZE):
             print("recvdata: checksum error")
             if hostType == "RaspberryPi":
                 th.start()
-        
+    
+    print("exiting recvdata")
     return rc,data
 
 def senddata(data, blocksize = BLKSIZE):
