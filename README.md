@@ -167,21 +167,19 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
- 
 MSXPi v1.2 Release Notes
 ========================
+- Added support in the software for the extension MSXPi for openMSX
 - Added Pull-Up resistors to SPI_CS & SPI_RDY
-- Added Push-button to Shutdown Raspberry Pi (via interruption)
-- Added RESET button (may not be safe for all MSX models)
+- Added Push-button to Shutdown and Reboot Raspberry Pi (via interruption)
+- Removed MSX RESET button from the interface
 - Added diode in the 5V rail - allow Raspberry Pi to be powered
   via USB without leaking to the MSX
 - Changed the 5V rail capacitor to 10uF
-- CPLD logic (MSXPi firmware) optimised to reduce logic gate count
+- Made optimisation to the CPLD firmware to save some logic gates
 - Extensive changes to all software for stability
-- Added support in the software for the extension MSXPi for openMSX
 - Added new build file msxpibios.rom with MSXPi BIOS for BASIC CALL commands
 - Lots of bug fixes to the code
-
 
 MSXPi v1.1 Release Notes
 ========================
