@@ -1,3 +1,6 @@
+1.2.Rev.1 - Removed MSX Reset button
+            Added Raspberry Pi Shutdown & Reset button via GPIO&Interrupt
+			Added Pull Ups to CS & READY Signals
 1.1.Rev.1 - Added jumpers to switch also SPI-RDY signal
             Added line for Reset signal - may not be safe for all MSX models
 1.1.Rev.0 - Replaced Raspberry Pi mounting holes by 40 Pin Socket
