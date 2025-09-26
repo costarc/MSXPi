@@ -10676,24 +10676,24 @@
 		(sheetfile "msxpi.kicad_sch")
 		(attr through_hole)
 		(fp_line
-			(start -48.95 13.4)
-			(end -48.95 -28.6)
+			(start -48.85 13.4)
+			(end -48.85 -28.6)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "15ac4cc2-fb9f-472f-9897-ce4dfde396df")
+			(uuid "91fc8e7b-115f-470a-a283-103580a111d2")
 		)
 		(fp_line
-			(start -48.95 13.4)
+			(start -48.85 13.4)
 			(end -38.66 13.4)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "c41ef374-65e0-47c8-826a-d1a59582d30e")
+			(uuid "489d6294-f8e8-4831-80ae-307f1cb83065")
 		)
 		(fp_line
 			(start -38.66 13.4)
@@ -10703,7 +10703,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "b2a777c0-e564-4e13-9315-6553878bfee3")
+			(uuid "b4187232-9236-46f3-849d-0fb92bc993aa")
 		)
 		(fp_line
 			(start -38.66 25.388435)
@@ -10713,7 +10713,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "109feb3b-2924-4e44-8092-d984bd582d09")
+			(uuid "848f948b-91b8-4ef4-a683-8d209dfd78d9")
 		)
 		(fp_line
 			(start -26.42 34.091713)
@@ -10723,7 +10723,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "cf6a5e20-090b-42ab-a9cf-838a36ff5b86")
+			(uuid "4f48c57a-20e4-4333-bcc4-352177867c9c")
 		)
 		(fp_line
 			(start -26.42 34.091713)
@@ -10733,7 +10733,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "b89e2939-72a5-4959-b874-4c7f50eeec50")
+			(uuid "7eddf4c1-d6fe-48c2-9398-4d5c932dcf4e")
 		)
 		(fp_line
 			(start -26.268836 34.609987)
@@ -10743,7 +10743,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "be26c210-435d-4fe9-b921-caa65f1f1427")
+			(uuid "d1c4afdc-3a0b-44ca-87d2-f598cc08d9a2")
 		)
 		(fp_line
 			(start -25.815346 35.041883)
@@ -10753,7 +10753,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "1cef1bf5-9531-4ec8-ab82-ff3ccae31543")
+			(uuid "07e65eca-e08c-48dc-8376-2ed1e093d54f")
 		)
 		(fp_line
 			(start -24.892279 35.390806)
@@ -10763,7 +10763,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "918d71e8-0dea-40ca-968f-91c387f86e37")
+			(uuid "55256d4f-95dc-46ee-ad34-8b599f2f48ad")
 		)
 		(fp_line
 			(start 37.500957 35.390806)
@@ -10773,7 +10773,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "53c5d3b7-10a4-4333-8e85-eae1659b427e")
+			(uuid "d7962f43-167a-447d-b097-aed438a83e30")
 		)
 		(fp_line
 			(start 38.24498 35.044512)
@@ -10783,7 +10783,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "fb56847b-0989-4e99-89d1-c4a96a7932d0")
+			(uuid "d140303d-c167-4ce0-988e-227e67ad1c30")
 		)
 		(fp_line
 			(start 38.647705 34.674006)
@@ -10793,7 +10793,7 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "e4a073d8-6f43-4edc-ac45-166f7b5085e9")
+			(uuid "faf58803-ab89-42fd-8574-e08ffdad8462")
 		)
 		(fp_line
 			(start 39.03 25.388435)
@@ -10803,37 +10803,37 @@
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "95b63294-6976-47c5-b1f6-7b13bf5983ef")
+			(uuid "fea523c1-fe90-4725-9eff-06abc0b0d232")
 		)
 		(fp_line
 			(start 39.03 25.388435)
-			(end 50.95 25.388435)
+			(end 50.85 25.388435)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "1dc7378b-ef0f-41d2-b925-3f44658c40b4")
+			(uuid "6c97ae46-3c78-4203-a939-8e002dd55965")
 		)
 		(fp_line
-			(start 50.95 -28.6)
-			(end -48.95 -28.6)
+			(start 50.85 -28.6)
+			(end -48.85 -28.6)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "946207f2-9512-499d-bb76-75a20c0ff3d0")
+			(uuid "1a9ce5f1-2266-4778-85c4-f409c8beb54e")
 		)
 		(fp_line
-			(start 50.95 -28.6)
-			(end 50.95 25.388435)
+			(start 50.85 -28.6)
+			(end 50.85 25.388435)
 			(stroke
 				(width 0.12)
 				(type solid)
 			)
 			(layer "Edge.Cuts")
-			(uuid "989a4da0-aceb-4ff0-8592-1f96e3683e87")
+			(uuid "aa9b2806-84cd-4ef2-8992-8b3bb8e25da7")
 		)
 		(fp_circle
 			(center -21.66 13.5)
@@ -10844,7 +10844,7 @@
 			)
 			(fill no)
 			(layer "Edge.Cuts")
-			(uuid "ac98d86c-0f05-4fd3-b315-22ab029897c3")
+			(uuid "fcfd9e7b-ffbe-42a5-a49e-0008d7c106c9")
 		)
 		(fp_circle
 			(center 34.85 19.2)
@@ -10855,7 +10855,7 @@
 			)
 			(fill no)
 			(layer "Edge.Cuts")
-			(uuid "248ac13b-ef6a-4414-973e-6c5af3c3eb84")
+			(uuid "76c78bc2-bd43-4c88-bd2c-34cb90c9df1b")
 		)
 		(fp_circle
 			(center 45 3)
@@ -10866,7 +10866,7 @@
 			)
 			(fill no)
 			(layer "Edge.Cuts")
-			(uuid "ddc73e98-0edb-4ab1-b51e-99a0b07f0b83")
+			(uuid "9732846a-1ea7-4363-bf7f-d354582ee191")
 		)
 		(fp_text user "RCC @ 2025"
 			(at -31.878 23.004 0)

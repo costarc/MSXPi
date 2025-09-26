@@ -1,8 +1,8 @@
 #!/bin/sh
 
 export buildClientCommands="yes"
-export buildBIOS="yes"
-export buildOpenMSXConfig="yes"
+export buildBIOS="no"
+export buildOpenMSXConfig="no"
 export buildMSXStuff="no"
 export updateVersions="no"
 
