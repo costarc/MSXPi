@@ -19,7 +19,6 @@ export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
 export OPENMSXDISK=$HOME/Desktop/MSXPi/commands
 export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
 
-
 MSXPIHOME=/home/pi/msxpi
 export PI=raspberrypi
 
@@ -141,6 +140,13 @@ if [ $buildBIOS = "yes" ];then
   # Create an optonal 2-bank ROMs for the EEPROM
   cat $BIOSFILE > target/multirom.rom
   cat $ROMBANK2 >> target/multirom.rom
+  
+  if [ $buildOpenMSXConfig = "yes" ];then
+	# do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
+	SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
+	sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
+	cp target/msxpibios.rom openMSX/share/systemroms/extensions/msxpibios.rom
+  fi
 fi
 
 if [ $buildMSXStuff = "yes" ];then
@@ -168,18 +174,12 @@ if [ $buildMSXStuff = "yes" ];then
   done
 fi
 
-if [ $buildOpenMSXConfig = "yes" ];then
-  # Update sources for openMSX extensions - to keep up to date with openMSX fork
-  cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
-  cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
-  cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
-  cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
-  
-  # do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
-  SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-  sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
-  cp target/msxpibios.rom openMSX/share/systemroms/extensions/msxpibios.rom
-fi
+# Update sources for openMSX extensions - to keep up to date with openMSX fork
+cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
+cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
+cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
+cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
+
 
 
 
