@@ -1423,7 +1423,11 @@ def chatgpt():
 def initialize_connection():
     if hostType == "RaspberryPi":
         init_spi_bitbang()
+        # Blink LED to show that Raspberry PI is now On-Line
+        GPIO.output(RPI_READY, GPIO.HIGH)
+        time.sleep(0.2)  # 0.2 seconds = 200 milliseconds
         GPIO.output(RPI_READY, GPIO.LOW)
+        
         # Add falling edge detection on GPIO 26 - Shutdown request via MSXPi push button
         GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=button_handler, bouncetime=200)
         print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
