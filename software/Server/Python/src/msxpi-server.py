@@ -145,14 +145,6 @@ def detect_host():
         return system
 
 def init_spi_bitbang():
-
-    global SPI_CS
-    global SPI_SCLK
-    global SPI_MOSI
-    global SPI_MISO
-    global RPI_READY
-    global RPI_SHUTDOWN
-
 # Pin Setup:
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SPI_CS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
@@ -1520,7 +1512,7 @@ print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 hostType = detect_host()
 ShowSecurityDisclaimer()
 if hostType == "RaspberryPi":
-        import RPi.GPIO as GPIO
+    import RPi.GPIO as GPIO
 # GPIO Pins is now defined by the user
 SPI_CS = int(getMSXPiVar("SPI_CS"))
 SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))

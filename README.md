@@ -42,17 +42,16 @@ Prepare Raspberry Pi Using MSXPi SDCard Image
 
 
 ### Step 1: Download and install Raspberry Pi SD Card with MSXPi server software. 
-MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV2
+MSXPi SD Card image: https://tinyurl.com/MSXPi-SDCardV3
 
 
 ### Step 2: Write the image to a SD Card
-Use a SD Card with a minimum of 8GB.
+Use a SD Card with a minimum of 4GB.
 
-Use 7Zip to unzip the file, and use Raspberry PI Imager to write the image to 
-the SD Card (select option "Use Custom" in the Operating System drop box).
+Use 7Zip to unzip the file, and use Win32diskImager to write the image to 
+the SD Card.
 
-RPi Imager can be download from 
-https://www.raspberrypi.com/news/raspberry-pi-imager-imaging-utility/
+Win32diskImager can be download from https://win32diskimager.org
 
 
 ### Step 3: Install the MSXPi commands for MSX-DOS
@@ -121,10 +120,6 @@ libraries required by msxpi-server" section the reboot command), which requires
 compilation - this stage may take over an hour if done in the Pi Zero, therefore 
 you may choose to remove these from the MSXPI-Setup script before running it, and 
 do it at later time if you want to use ChatGPT with MSXPi.
-
-          mkdir /home/pi/msxpi
-
-          cd /home/pi/msxpi
 
           wget https://tinyurl.com/MSXPi-Setup
 
