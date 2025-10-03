@@ -72,7 +72,8 @@ fi
 # Install libraries required by msxpi-server
 # ------------------------------------------
 sudo apt-get update
-sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 aplay amixer smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
+sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
+python3 -m pip install --upgrade pip --break-system-packages
 
 # -------------------------
 # Enable remote ssh into Pi
@@ -144,7 +145,8 @@ rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi.ini -O msxpi.ini.new
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-JumperLeft.ini -O msxpi.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-JumperRight.ini
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
@@ -152,7 +154,6 @@ wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
-cp msxpi.ini.new msxpi.ini
 chmod 755 $MSXPIHOME/msxpi-server.py
 chmod 755 $MSXPIHOME/pplay.sh
 chmod 755 $MSXPIHOME/kill.sh
@@ -161,12 +162,14 @@ rm $MSXPIHOME/MSXPi-Setup > /dev/null 2>&1
 
 # Install Additional Python libraries required by msxpi-server
 # Define virtual environment path in user's home directory
-sudo python3 -m pip install --upgrade pip --break-system-packages
 sudo python3 -m pip install fs pyfatfs --break-system-packages
 
 # Apply dirty patch for it to work with MSX Disk images
-sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
-sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" /usr/local/lib/python3.9/dist-packages/pyfatfs/PyFat.py
+# Get the current Python major.minor version (e.g., 3.11)
+pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+pyFatPath="/usr/local/lib/python${pyver}/dist-packages/pyfatfs/PyFat.py"
+sudo sed -i "s/if signature != 0xaa55/#if signature != 0xaa55/" $pyFatPath
+sudo sed -i "s/raise PyFATException(f\"Invalid signature:/#raise PyFATException(f\"Invalid signature:/" $pyFatPath
 
 # changes to prevent sd corruption
 # disable swap
@@ -175,6 +178,6 @@ sudo dphys-swapfile uninstall
 sudo update-rc.d dphys-swapfile remove
 
 sudo apt autoremove
-#sudo systemctl stop msxpi-monitor
-#sudo systemctl start msxpi-monitor
+sudo systemctl stop msxpi-monitor
+sudo systemctl start msxpi-monitor
 sudo reboot

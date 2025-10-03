@@ -4,8 +4,8 @@
 # 2017-11-23 : Added ramdisk setup
 # 2017-11-18 : Added switch to python or C version
 
-MSXPIHOME=/home/msxpi
-FILELIST="senddatablock.msx uploaddata.msx secsenddata.msx ploadbin.msx pplay.sh pshut.sh"
+MSXPIHOME=/home/pi/msxpi
+FILELIST="pplay.sh"
 USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 
 if [[ $USEROOT -eq 1 ]];then
@@ -16,7 +16,12 @@ else
     OSCMDPREFIX="sudo "
 fi
 
-sudo kill -9 $(ps -ef | grep 'python3 /home/msxpi/msxpi-server.py' | grep -v grep  | awk '{print $2}')
+pid=$(ps -ef | grep '[m]sxpi-server.py' | awk '{print $2}')
+if [ -n "$pid" ]; then
+    sudo kill -9 "$pid"
+else
+    echo "No matching msxpi-server.py process found."
+fi
 
 msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 if [[ $msxpisrv -eq 1 ]];then
@@ -61,7 +66,7 @@ sleep 2
 state=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
 
 if [[ $state -eq 0 ]];then
-    msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
+    msxpid=$(ps -ef | grep '[m]sxpi-server' | awk '{print $2}')
     msxpid="$msxpid 99999"
     echo "killing $msxpid"
     set $msxpid 
@@ -77,7 +82,7 @@ if [[ $state -eq 0 ]];then
         /usr/bin/python3 ${MSXPIHOME}/msxpi-server.py &
     fi
     sleep 1
-    msxpid=$(ps -ef | grep msxpi-server | grep -v "grep" | awk '{print $2}')
+	msxpid=$(ps -ef | grep '[m]sxpi-server' | awk '{print $2}')
     msxpid="$msxpid 99999"
     set $msxpid 
     if [[ $# -gt 1 ]];then
