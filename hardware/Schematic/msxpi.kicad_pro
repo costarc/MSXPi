@@ -107,7 +107,7 @@
         "silk_over_copper": "warning",
         "silk_overlap": "warning",
         "skew_out_of_range": "error",
-        "solder_mask_bridge": "error",
+        "solder_mask_bridge": "warning",
         "starved_thermal": "error",
         "text_height": "warning",
         "text_on_edge_cuts": "error",
@@ -195,6 +195,9 @@
       "track_widths": [
         0.0,
         0.25,
+        0.3,
+        0.35,
+        0.4,
         0.5,
         0.75
       ],

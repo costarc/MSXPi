@@ -162,6 +162,14 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
+MSXPi v1.3 Release Notes
+========================
+This is mainly a PCB redesign.
+- Changed the EEPROM footprint from DIP to PLCC
+- Improved routing with power rails uninterrupted and wide.
+- 5V power rail (for PI and EEPROM) routed on the edge of the card to avoid EMI 
+- Bottom layer is now fully ground plane, with uninterrupted gnd plane across the PCB#
+
 MSXPi v1.2 Release Notes
 ========================
 - Added support in the software for the extension MSXPi for openMSX
