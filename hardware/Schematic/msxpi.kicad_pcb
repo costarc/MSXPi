@@ -9,8 +9,8 @@
 	(paper "A4")
 	(title_block
 		(title "MSXPi")
-		(date "2025-10-04")
-		(rev "1.3")
+		(date "2025-10-11")
+		(rev "1.3 Rev.1")
 		(company "RCC")
 	)
 	(layers
@@ -4757,7 +4757,7 @@
 			)
 		)
 		(property "Value" "10uF"
-			(at -1.45 3.68 180)
+			(at -0.869253 -4.598668 180)
 			(layer "F.SilkS")
 			(uuid "5b2ceb8e-21a6-45fe-bc84-96ca01d9e771")
 			(effects
@@ -19824,7 +19824,7 @@
 		)
 	)
 	(gr_text "V1.3"
-		(at 191.57 108.17 0)
+		(at 191.649477 107.894729 0)
 		(layer "F.SilkS")
 		(uuid "620c0318-076f-46e2-be94-36247dcf051c")
 		(effects
@@ -19911,7 +19911,19 @@
 			)
 		)
 	)
-	(gr_text "1. Remove jumper /SLT\n2. Boot into MSX-DOS\n3. Close jumper /SLT and A15\n4. Run: at28c256.com /s <slot> /f <filename>\nTo boot ROM 1: Close jumper /SLT & A15\nTo boot ROM 2: Close jumper /SLT & A14"
+	(gr_text "Rev.1"
+		(at 194.705171 108.689209 0)
+		(layer "F.SilkS")
+		(uuid "ff91f153-e76d-42e6-bb52-d7afd9c2ab90")
+		(effects
+			(font
+				(size 0.7 0.7)
+				(thickness 0.15)
+			)
+			(justify left bottom)
+		)
+	)
+	(gr_text "1. Remove jumper {dblquote}Enable{dblquote}\n2. Boot into MSX-DOS\n3. Close jumper {dblquote}Enable{dblquote} and {dblquote}Bank 2{dblquote}\n4. Run: at28c256.com /s <slot> /f <filename>\nTo boot ROM 1: Close jumper {dblquote}Enable{dblquote} and {dblquote}Bank 1{dblquote}\nTo boot ROM 2: Close jumper {dblquote}Enable{dblquote} and {dblquote}Bank 2{dblquote}"
 		(at 158.99 92.38 0)
 		(layer "B.SilkS")
 		(uuid "0a29771e-9cb8-4797-ad1b-b9209703fde0")
