@@ -162,6 +162,12 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
+MSXPi v1.2 Rev.1b Release Notes
+===============================
+- Activity LED now connects to RPi Ready signal - allows to see when RPi Server is online
+- SPI_RDY resistor changed to pull-down 
+- Re-routed power rails to minimise EMI & cross-signal interferences
+
 MSXPi v1.2 Release Notes
 ========================
 - Added support in the software for the extension MSXPi for openMSX
