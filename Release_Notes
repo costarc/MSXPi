@@ -5,6 +5,7 @@ This is mainly a PCB redesign.
 - Improved routing with power rails uninterrupted and wide.
 - 5V power rail (for PI and EEPROM) routed on the edge of the card to avoid EMI 
 - Bottom layer is now fully ground plane, with uninterrupted gnd plane across the PCB
+- Rev1: Updated silk in back of pcb to reflect new jumper names
 
 MSXPi v1.2 Release Notes
 ========================
