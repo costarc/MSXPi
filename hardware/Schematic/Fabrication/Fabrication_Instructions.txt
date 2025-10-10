@@ -14,6 +14,6 @@ Min Hole Size: 0.3mm
 Solder Mask: -> choose what you like, but some places charge more for this option.
 Silkscreen: White (change this color to something else if you had choose "White Solder Mask")
 => Edge connector: Yes, Bevelling: Yes - 30 Degrees
-=> Surface Finish: HASL lead free (you can choose instead gold immersion but will be a lot more expensive)
+=> Surface Finish: HASL with lead or HASL lead free (you may choose gold immersion but will be a lot more expensive)
 
 

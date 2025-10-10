@@ -6192,7 +6192,7 @@
 		)
 		(uuid "5e23da74-d2c9-4934-9868-3b8f69ffa243")
 	)
-	(text "MSXPi Interface V1.2 Rev.1\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-09-12"
+	(text "MSXPi Interface V1.2 Rev.1b\nRCC @ 2017 - 2025\n\nMSXPi interface - connect MSX computer to Raspberry Pi\nEEPROM AT28C256 re-writeatable from MSX-DOS\nEEPROM software: https://github.com/costarc/msxcart_flash32k\n\n2025-10-10"
 		(exclude_from_sim no)
 		(at 227.965 194.945 0)
 		(effects
@@ -6416,6 +6416,12 @@
 		(uuid "ddb1e689-9717-44e0-96c4-42e5b32050db")
 	)
 	(junction
+		(at 180.34 116.84)
+		(diameter 0)
+		(color 0 0 0 0)
+		(uuid "ee1c34a8-04cb-4021-8cff-5745fb3646ef")
+	)
+	(junction
 		(at 233.68 96.52)
 		(diameter 0)
 		(color 0 0 0 0)
@@ -6426,12 +6432,6 @@
 		(diameter 0)
 		(color 0 0 0 0)
 		(uuid "f82d87ec-bdf5-41c5-a33d-2ad2ca657007")
-	)
-	(junction
-		(at 180.34 116.84)
-		(diameter 0)
-		(color 0 0 0 0)
-		(uuid "fda4e558-5d67-48c3-9ae4-cd12f4d2889f")
 	)
 	(junction
 		(at 65.0929 82.55)
@@ -6771,6 +6771,16 @@
 	)
 	(wire
 		(pts
+			(xy 180.34 116.84) (xy 198.12 116.84)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "402fec97-5a91-4908-9aad-ea9f5aa2d9c5")
+	)
+	(wire
+		(pts
 			(xy 48.26 147.32) (xy 65.024 147.32)
 		)
 		(stroke
@@ -6788,16 +6798,6 @@
 			(type default)
 		)
 		(uuid "4606d4a7-3323-499d-9c5a-0ae044342664")
-	)
-	(wire
-		(pts
-			(xy 180.34 116.84) (xy 198.12 116.84)
-		)
-		(stroke
-			(width 0)
-			(type default)
-		)
-		(uuid "475c1f6c-bdf7-4133-af77-14c100ae6b06")
 	)
 	(wire
 		(pts
@@ -8689,7 +8689,7 @@
 			)
 		)
 	)
-	(global_label "SPI_CLK"
+	(global_label "SPI_RDY"
 		(shape input)
 		(at 164.338 145.796 0)
 		(fields_autoplaced yes)
@@ -8699,9 +8699,9 @@
 			)
 			(justify left)
 		)
-		(uuid "6cce9064-6315-4e42-a408-f35aff833a7f")
+		(uuid "6da97551-95d3-40c1-ae58-1022fabbc8e2")
 		(property "Intersheetrefs" "${INTERSHEET_REFS}"
-			(at 174.3711 145.7166 0)
+			(at 175.0037 145.796 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -10676,6 +10676,73 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDREF")
+		(at 180.34 127 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "09b49284-b9fc-44f0-8987-5f94aa90b970")
+		(property "Reference" "#PWR019"
+			(at 180.34 133.35 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 180.34 132.588 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 180.34 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 180.34 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 180.34 127 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "c235383b-e30c-4a72-a8d2-d78976e68660")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR019")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "msxpi-eagle-import:R-US_0207/7")
 		(at 179.07 40.64 90)
 		(unit 1)
@@ -11910,6 +11977,73 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDREF")
+		(at 285.75 24.765 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "405cc68d-fbdf-46e9-9024-74aa23d14640")
+		(property "Reference" "#PWR028"
+			(at 285.75 31.115 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 285.75 30.353 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 285.75 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 285.75 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 285.75 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "443cb4f5-7a38-4689-856d-fa553766f4c6")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR028")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "msxpi-eagle-import:C2,5-3")
 		(at 161.544 161.29 0)
 		(unit 1)
@@ -11973,6 +12107,73 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "C5")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GNDREF")
+		(at 303.53 24.765 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "4cb2380a-0ce4-458c-bcc8-94cbb2461462")
+		(property "Reference" "#PWR026"
+			(at 303.53 31.115 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 303.53 30.353 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 303.53 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 303.53 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 303.53 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "3f596cef-4161-4512-8c30-9d6314e1960d")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR026")
 					(unit 1)
 				)
 			)
@@ -12302,6 +12503,73 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDREF")
+		(at 295.91 12.065 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "582085e3-91a5-4a8f-9c83-abe9af6c552c")
+		(property "Reference" "#PWR030"
+			(at 295.91 5.715 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 295.91 6.477 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 295.91 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 295.91 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 295.91 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "91e11ebc-9d85-4a8d-a0d5-8ea598cbcf25")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR030")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "msxpi-eagle-import:PINHD-2X5/90")
 		(at 73.152 120.142 0)
 		(unit 1)
@@ -12599,6 +12867,73 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "U1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GNDREF")
+		(at 290.83 24.765 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "6b6ec207-edd7-4dc6-b767-feb60e74622c")
+		(property "Reference" "#PWR027"
+			(at 290.83 31.115 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 290.83 30.353 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 290.83 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 290.83 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 290.83 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "d689c647-b092-4674-a06a-8e8e49517dd1")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR027")
 					(unit 1)
 				)
 			)
@@ -12942,6 +13277,73 @@
 		)
 	)
 	(symbol
+		(lib_id "power:GNDREF")
+		(at 311.15 24.765 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "89ceff78-f99a-49f1-939e-dedca2ae20ed")
+		(property "Reference" "#PWR025"
+			(at 311.15 31.115 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 311.15 30.353 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 311.15 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 311.15 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 311.15 24.765 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "91a2a13a-83d2-4f94-803b-1310a3f73f06")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR025")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
 		(lib_id "power:+5V")
 		(at 115.316 20.32 0)
 		(unit 1)
@@ -13202,71 +13604,6 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "#PWR01")
-					(unit 1)
-				)
-			)
-		)
-	)
-	(symbol
-		(lib_id "power:+3.3V")
-		(at 180.34 106.68 0)
-		(unit 1)
-		(exclude_from_sim no)
-		(in_bom yes)
-		(on_board yes)
-		(dnp no)
-		(uuid "9f085047-dad7-4e52-8509-73e2042aba89")
-		(property "Reference" "#PWR025"
-			(at 180.34 110.49 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Value" "+3.3V"
-			(at 180.34 102.87 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-			)
-		)
-		(property "Footprint" ""
-			(at 180.34 106.68 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Datasheet" ""
-			(at 180.34 106.68 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(property "Description" ""
-			(at 180.34 106.68 0)
-			(effects
-				(font
-					(size 1.27 1.27)
-				)
-				(hide yes)
-			)
-		)
-		(pin "1"
-			(uuid "5b6420a1-ade7-4b18-862a-d02278b7c6bb")
-		)
-		(instances
-			(project "msxpi"
-				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
-					(reference "#PWR025")
 					(unit 1)
 				)
 			)
@@ -13736,6 +14073,73 @@
 			(project ""
 				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
 					(reference "#PWR02")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "power:GNDREF")
+		(at 278.13 12.065 180)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(uuid "c4db5ebb-730e-498c-b92b-fcb3d63acc73")
+		(property "Reference" "#PWR031"
+			(at 278.13 5.715 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Value" "GNDREF"
+			(at 278.13 6.477 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Footprint" ""
+			(at 278.13 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 278.13 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 278.13 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f87cb54e-88b7-4d35-928a-adf03a061564")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR031")
 					(unit 1)
 				)
 			)
@@ -14496,34 +14900,35 @@
 		)
 	)
 	(symbol
-		(lib_id "msxpi-eagle-import:R-US_0207/7")
-		(at 180.34 111.76 90)
+		(lib_id "power:GNDREF")
+		(at 316.23 12.065 180)
 		(unit 1)
 		(exclude_from_sim no)
 		(in_bom yes)
 		(on_board yes)
 		(dnp no)
-		(uuid "ea3e5dbe-f9a4-4c6f-ae05-5d78d06295b8")
-		(property "Reference" "R8"
-			(at 177.038 109.474 90)
+		(fields_autoplaced yes)
+		(uuid "e7404d64-bef1-431f-b43a-589b031f5c73")
+		(property "Reference" "#PWR029"
+			(at 316.23 5.715 0)
 			(effects
 				(font
-					(size 1.778 1.5113)
+					(size 1.27 1.27)
 				)
-				(justify left bottom)
+				(hide yes)
 			)
 		)
-		(property "Value" "10K"
-			(at 177.8 112.014 90)
+		(property "Value" "GNDREF"
+			(at 316.23 6.477 0)
 			(effects
 				(font
-					(size 1.778 1.5113)
+					(size 1.27 1.27)
 				)
-				(justify left bottom)
+				(hide yes)
 			)
 		)
-		(property "Footprint" "msxpi:0207_7"
-			(at 180.34 111.76 0)
+		(property "Footprint" ""
+			(at 316.23 12.065 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14532,7 +14937,7 @@
 			)
 		)
 		(property "Datasheet" ""
-			(at 180.34 111.76 0)
+			(at 316.23 12.065 0)
 			(effects
 				(font
 					(size 1.27 1.27)
@@ -14541,7 +14946,73 @@
 			)
 		)
 		(property "Description" ""
-			(at 180.34 111.76 0)
+			(at 316.23 12.065 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "8a13fcf9-c4ff-4ec7-88e5-f283012e9504")
+		)
+		(instances
+			(project "msxpi"
+				(path "/dcf41fe3-fcda-4e77-b54b-c0f65298232b"
+					(reference "#PWR029")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "msxpi-eagle-import:R-US_0207/7")
+		(at 180.34 121.92 90)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "ea3e5dbe-f9a4-4c6f-ae05-5d78d06295b8")
+		(property "Reference" "R8"
+			(at 177.038 119.634 90)
+			(effects
+				(font
+					(size 1.778 1.5113)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Value" "10K"
+			(at 177.8 122.174 90)
+			(effects
+				(font
+					(size 1.778 1.5113)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Footprint" "msxpi:0207_7"
+			(at 180.34 121.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 180.34 121.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 180.34 121.92 0)
 			(effects
 				(font
 					(size 1.27 1.27)
