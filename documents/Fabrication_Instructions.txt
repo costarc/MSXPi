@@ -4,8 +4,9 @@ The lines with "=>" are the only ones that must be changed - the others are defa
 The defaults will work quite well, but I recommend to change "Edge Connector" option when specifying the details for fabrication - see below.
 These instructions will result in the cheapest cost (around USD5 for 5 Units)
 
-=> Length: 99.90mm, Width: 64.50mm
-Layers: 2, Thickness: 1.6mm
+=> Length: 99.82mm, Width: 64.11mm
+==> Quantity: 10 pcs (will cost the same as 5 pcs)
+Layers: 2
 Material: FR-4
 FR4-TG: TG 150-160
 Thickness: 1.6
@@ -14,6 +15,6 @@ Min Hole Size: 0.3mm
 Solder Mask: -> choose what you like, but some places charge more for this option.
 Silkscreen: White (change this color to something else if you had choose "White Solder Mask")
 => Edge connector: Yes, Bevelling: Yes - 30 Degrees
-=> Surface Finish: HASL lead free (you can choose instead gold immersion but will be a lot more expensive)
+=> Surface Finish: HASL with lead or HASL without lead (you can choose gold immersion but will be a lot more expensive)
 
-
+Keep the default for all remaining options. 
