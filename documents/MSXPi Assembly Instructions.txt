@@ -1,0 +1,24 @@
+1. Solder LD117A voltage converter
+2. Short/solder SMD jumpers CS,CLK,MISO,MOSI,RDY
+3. Solder all resistors
+4. Solder CPLD socket, EEPROM, RPI Deader, JTAG connector
+5. Solder ceramic capacitors (104) and Electrolitic capacitors
+6. Solder all remaining parts (headers, push button, led, diode)
+7. Connect a USB-Blaster to the MSXPi JTAG connector and to a PC USB to program the CPLD:
+ - Recommended to use Quartus Version 13.0 SP1
+ - Open Quartus
+ - Select tools -> Programmer
+ - Mode should be selected already: JTAG
+ - Make sure you see the USB-Blaster in the "Hardware Setup..." before proceeding
+ - Click "Add File" from the left vertical menu/buttons
+ - Browse tp the folder where MSXPi.pof is (should be: \hardware\CPLD_Project\MSXPi.pof) and select it
+ - Tick the boxes "Program/Configure" and "Verify"
+ - Click "Start" from the left Menu/Buttons.
+ - Progress should move to 100% and Successful.
+8. Check CPLD programming from MSX Basic:
+  print inp(&h56)
+  This should return the firmware version - If it returns 255, the CPLD was not programmed correctly.
+
+Notes:
+- step 2: These jumpers allow to use a different set of GPIOs on the Raspberry Pi.
+- step 4: It's recommended to use a socket for the EEPROM, but not absolutely necessary. Using an EEPROM helps in case of a need to replace the EEPROM in the future.
