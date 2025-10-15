@@ -51,8 +51,8 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 
-version = "1.2"
-BuildId = "20250923.792"
+version = "1.3"
+BuildId = "20251016.005"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
@@ -1372,7 +1372,7 @@ def apitest():
 def chatgpt():
     print("chatgpt()")
     api_key = getMSXPiVar('OPENAIKEY')
-    if not api_key:
+    if not api_key or api_key == "Your OpenAI API Key":
         print('Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
         sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini', BLKSIZE, RC_FAILED)
         return RC_FAILED

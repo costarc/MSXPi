@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.1 
+; Version 1.3 
 ; ------------------------------------------------------------------------------
 ; MIT License
 ; 
@@ -108,9 +108,9 @@ iftable:
         dw      ifv9
         dw      ifvA
         dw      ifvB
-openMSX:dw      omsx
+		dw      ifv13
         dw      ifukn
-
+openMSX:dw      omsx
 ifv1:   DB      "(0001) Wired up prototype, EPM3064ALC-44",0
 ifv2:   DB      "(0010) Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44",0
 ifv3:   DB      "(0011) Limited 10-samples PCB, EPROM 27C256, EPM3064ALC-44",0
@@ -122,14 +122,15 @@ ifv8:   DB      "(1000) Limited 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84",0
 ifv9:   DB      "(1001) General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44",0
 ifvA:   DB      "(1010) General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44",0
 ifvB:   DB      "(1011) General Release V1.2 Rev 0, EEPROM AT28C256, EPM3064ALC-44",0
+ifv13:  DB      "(1100) General Release V1.3, EEPROM PLCC AT28C256, EPM3064ALC-44",0
 omsx:   DB      " (FE)  General Release V1.2 Rev 0, MSXPi Extension for openMSX",0
 ifukn:   DB      "Could not identify. Possibly an earlier version with old CPLD logic",0
 ifdummy:DB      "MSXPi not detected - may need firmware update",0
 
-HWVER:  DB      "Interface version:"
+HWVER:  DB      "PCB version:"
         DB      0
 
-SRVVER: DB      "msxpi-server version:"
+SRVVER: DB      "MSXPi Server version:"
         DB      0
 
 ROMCER: DB      "MSXPi ROM version:"
