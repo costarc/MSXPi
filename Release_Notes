@@ -1,4 +1,4 @@
-MSXPi v1.2 Rev.1b Release Notes
+MSXPi v1.2.1b Release Notes
 ===============================
 - Activity LED now connects to SPI_RDY signal - allows to see when RPi Server is online
 - SPI_RDY resistor changed to pull-down 
