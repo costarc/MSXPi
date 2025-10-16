@@ -1,175 +1,170 @@
--- MSXPi Interface
--- Version 1.2
--- ------------------------------------------------------------------------------
+-- ==============================================================================
+-- MSXPi Interface - Version 1.3
+-- ==============================================================================
 -- MIT License
--- 
 -- Copyright (c) 2015 - 2025 Ronivon Costa
--- 
--- Permission is hereby granted, free of charge, to any person obtaining a copy
--- of this software and associated documentation files (the "Software"), to deal
--- in the Software without restriction, including without limitation the rights
--- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
--- copies of the Software, and to permit persons to whom the Software is
--- furnished to do so, subject to the following conditions:
--- 
--- The above copyright notice and this permission notice shall be included in all
--- copies or substantial portions of the Software.
--- 
--- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
--- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
--- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
--- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
--- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
--- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
--- SOFTWARE.
--- -----------------------------------------------------------------------------
---
--- Ronivon Candido Costa
--- 22/10/2016
+-- Permission is hereby granted, free of charge, to use, copy, modify, merge,
+-- publish, distribute, sublicense, and/or sell copies of the Software.
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
+-- ==============================================================================
+
+-- ==============================================================================
+-- Project History
+-- ------------------------------------------------------------------------------
+-- Ronivon Candido Costa - 22/10/2016
 -- MSX_Interface using new proto board
--- Receives 8 bits on D bus, convert to serial and send to external IO (SPI pins)
-----------------------------------------------------------------------------------
--- CPLD: V0.5
--- MSX: bootv5.bin
--- Pi: msx.c (v1.5)
-----------------------------------------------------------------------------------
--- Version 0.5
--- For prototype 2, with Pi Zero attached on the cart.
--- Ports:
--- 07 - Data (read/write data)
--- 06 - Control:
---          (Write) 0xFF - Reset
---          (Write) 0x00 - Read command
---          (Read)       - SPI status, 0 = busy, 1 = data ready
---          
-----------------------------------------------------------------------------------
--- version 0.6
--- Added signal RDY to control data flow between MSX,CPLD and Pi.
--- SPI_RDY Low  = Ready
--- SPI_RDY HIGH = Busy
+-- CPLD: V0.5 | MSX: bootv5.bin | Pi: msx.c (v1.5)
 --
-----------------------------------------------------------------------------------
--- version 0.7
--- Added signal BUSDIR
-----------------------------------------------------------------------------------
--- Version 0.7 Rev 4 - 2017-07-22
--- Added package msxpi_package with PORTS definition
--- Modified ports (from 6,7,8) to range 0x56 - 0x5D
-----------------------------------------------------------------------------------
--- Version 1.0 Rev 0 - 2020-08-01
--- Added support to /Wait signal (using LED pin)
--- LED now is drived by SPI_CS signal
-----------------------------------------------------------------------------------
--- Version 1.0.1 - 2022-12-25
--- Firmaware version number updated to "1010" to identify new PCB v1.0.1"
--- No other changes made to this design
--- -------------------------------------------------------------------------------
-----------------------------------------------------------------------------------
--- Version 1.2 - 2025-09-06
--- Firmware version number updated to "1011"
--- Removed Reset logic to free logic gates
--- Logic optimization to reduce gate count
--- Compatible with MSXPi Extension for openMSX
--- Remove all unused ports from package and from design. Now will use only
---   ports 0x56, 0x57 and 0x5A
--- -------------------------------------------------------------------------------
--- MSXPI Versions:
--- 0001: Wired up prototype, EPM3064ALC-44
--- 0010: Semi-wired up prototype, EPROM 27C256, EPM3064ATC-44
--- 0011: Limited 10-samples PCB, EPROM 27C256, EPM3064ALC-44
--- 0100: Limited 1 sample PCB, EPROM 27C256, EPM3064ALC-44, 4 bits mode.
--- 0101: Limited 10 samples PCB Rev.3, EPROM 27C256, EPM3064ALC-44
--- 0110: Wired up prototype, EPROM 27C256, EPM7128SLC-84
--- 0111: General Release V0.7 Rev.4, EPROM 27C256, EPM3064ALC-44
--- 1000: Prototype 10 samples, Big v0.8.1 Rev.0, EPM7128SLC-84
--- 1001: General Release V1.0 Rev 0, EPROM 27C256, EPM3064ALC-44
--- 1010: General Release V1.1 Rev 0, EEPROM AT28C256, EPM3064ALC-44
--- 1011: Gate optimmizatoin and compatibiity with openMSX extention
--- ----------------------------------------------------------------------------------
-library ieee ;
-use ieee.std_logic_1164.all; 
+-- Version 0.5   - Initial prototype with Pi Zero
+-- Version 0.6   - Added SPI_RDY signal
+-- Version 0.7   - Added BUSDIR signal
+-- Version 0.7R4 - Added msxpi_package, port range 0x56–0x5D
+-- Version 1.0   - Added /WAIT signal (LED driven by SPI_CS)
+-- Version 1.0.1 - Firmware version "1010" for PCB v1.0.1
+-- Version 1.2.1b- Firmware version "1100", logic optimization, openMSX support
+-- Versoin 1.3   - Firmware version "1101", more logic optimization & PLCC AT28C256
+-- ==============================================================================
+
+-- ==============================================================================
+-- MSXPi Versions
+-- ------------------------------------------------------------------------------
+-- 0001–1011: Various prototypes and releases using EPM3064 and EPM7128
+-- ==============================================================================
+
+-- ==============================================================================
+-- Libraries
+-- ==============================================================================
+library ieee;
+use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.msxpi_package.all;
 
-ENTITY MSXPi IS
-PORT ( 
-    D           : INOUT STD_LOGIC_VECTOR(7 DOWNTO 0);
-    A           : IN STD_LOGIC_VECTOR(7 DOWNTO 0);
-    IORQ_n      : IN STD_LOGIC;
-    RD_n        : IN STD_LOGIC;
-    WR_n        : IN STD_LOGIC;
-    BUSDIR_n    : OUT STD_LOGIC;
-    WAIT_n      : OUT STD_LOGIC;
-    --
-    SPI_CS      : OUT STD_LOGIC;
-    SPI_SCLK    : IN STD_LOGIC;
-    SPI_MOSI    : OUT STD_LOGIC;
-    SPI_MISO    : IN STD_LOGIC;
-    SPI_RDY     : IN STD_LOGIC);
-END MSXPi;
+-- ==============================================================================
+-- Entity Declaration
+-- ==============================================================================
+entity MSXPi is
+    port (
+        D           : inout std_logic_vector(7 downto 0);
+        A           : in    std_logic_vector(7 downto 0);
+        IORQ_n      : in    std_logic;
+        RD_n        : in    std_logic;
+        WR_n        : in    std_logic;
+        BUSDIR_n    : out   std_logic;
+        WAIT_n      : out   std_logic;
+        SPI_CS      : out   std_logic;
+        SPI_SCLK    : in    std_logic;
+        SPI_MOSI    : out   std_logic;
+        SPI_MISO    : in    std_logic;
+        SPI_RDY     : in    std_logic
+    );
+end MSXPi;
 
+-- ==============================================================================
+-- Architecture
+-- ==============================================================================
 architecture rtl of MSXPi is
+
+    -- FSM definition
     type fsm_type is (idle, prepare, transferring);
-    signal spi_state    : fsm_type := idle;
-    signal readoper     : std_logic;
-    signal writeoper    : std_logic;
-    signal spi_en       : std_logic;
-    signal D_buff_msx   : std_logic_vector(7 downto 0);
-    signal D_buff_pi    : std_logic_vector(7 downto 0);
-    signal RESET        : std_logic;
-    signal spibitcount_s: std_logic_vector(2 downto 0) := "000";
-    signal D_buff_msx_r : std_logic_vector(7 downto 0);
-    signal SPI_en_s     : STD_LOGIC := '0';
-    signal SPI_RDY_s    : STD_LOGIC;
-    
+    signal spi_state        : fsm_type := idle;
+
+    -- Control signals
+    signal readoper         : std_logic;
+    signal writeoper        : std_logic;
+    signal spi_en           : std_logic;
+    signal RESET            : std_logic;
+
+    -- Data buffers
+    signal D_buff_msx       : std_logic_vector(7 downto 0);
+    signal D_buff_pi        : std_logic_vector(7 downto 0);
+    signal D_buff_msx_r     : std_logic_vector(7 downto 0);
+    signal D_out            : std_logic_vector(7 downto 0);
+
+    -- SPI control
+    signal SPI_en_s         : std_logic := '0';
+    signal SPI_RDY_s        : std_logic;
+    signal bitcount         : unsigned(2 downto 0) := (others => '0');
+
+    -- Address decode helper
+    signal is_ctrl_or_data  : std_logic;
+
 begin
 
-    WAIT_n <= 'Z';
-    BUSDIR_n <= '0' when (readoper = '1' and (A = CTRLPORT1 or A = DATAPORT1)) else '1';
-    readoper   <= not (IORQ_n or RD_n);
-    writeoper  <= not (IORQ_n or WR_n);
-    spi_en     <= '1' when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1) else
-                  '0';
+    -- ==========================================================================
+    -- Port Decoding and Control
+    -- ==========================================================================
+    WAIT_n       <= 'Z';  -- Maintain in Tri-State - not driven by MSXPi
+    is_ctrl_or_data <= '1' when A = CTRLPORT1 or A = DATAPORT1 else '0';
 
-    -- SPI_en_s = '1' means SPI is busy
-    -- SPI_RDY  = '1' means Pi is Busy
-    SPI_RDY_s <= SPI_en_s or (not SPI_RDY);
-    RESET <= '1' when writeoper = '1' and A = CTRLPORT1 and D = x"FF" else '0';
-    D_buff_msx <= D when writeoper = '1' and (A = CTRLPORT1 or A = DATAPORT1);
-    D <= "0000000" & SPI_RDY_s when (readoper = '1' and A = CTRLPORT1) else  
-        D_buff_pi when readoper = '1' and A = DATAPORT1 else
-        "0000" & MSXPIVer when (readoper = '1' and A = CTRLPORT2) else 
-        "ZZZZZZZZ";
+    BUSDIR_n     <= '0' when (readoper = '1' and is_ctrl_or_data = '1') else '1';
+    readoper     <= not (IORQ_n or RD_n);
+    writeoper    <= not (IORQ_n or WR_n);
+    spi_en       <= '1' when (writeoper = '1' and is_ctrl_or_data = '1') else '0';
 
-spi:process(SPI_SCLK,readoper,writeoper)
-begin
-    if RESET = '1' then
-        SPI_en_s <= '0';
-        D_buff_pi <= "00000000";
-        spi_state <= idle;
-    elsif (SPI_en_s = '0' and spi_en = '1') then
-        SPI_en_s <= '1';
-        spibitcount_s <= "000";
-        spi_state <= prepare;
-    elsif rising_edge(SPI_SCLK) then
-        case spi_state is
-            when idle =>
-                SPI_en_s <= '0';
-            when prepare  =>
-                D_buff_msx_r <= D_buff_msx;
-                spi_state <= transferring;
-            when transferring =>
-                D_buff_pi <= D_buff_pi(6 downto 0) & SPI_MISO;
-                SPI_MOSI <= D_buff_msx_r(7);
-                D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
-                spibitcount_s <= std_logic_vector(unsigned(spibitcount_s) + 1);
-                if spibitcount_s = "111" then
-                         spi_state <= idle;
-                end if;
-        end case;
-    end if;
+    -- SPI status logic
+    SPI_RDY_s    <= SPI_en_s or (not SPI_RDY);
 
-    SPI_CS <= not SPI_en_s;
+    -- Reset condition
+    RESET        <= '1' when (writeoper = '1' and A = CTRLPORT1 and D = x"FF") else '0';
 
-end process;
+    -- MSX write buffer
+    D_buff_msx   <= D when (writeoper = '1' and is_ctrl_or_data = '1');
+
+    -- ==========================================================================
+    -- D Bus Output Logic
+    -- ==========================================================================
+    process(A, SPI_RDY_s, D_buff_pi)
+    begin
+        if A = CTRLPORT1 then
+            D_out <= "0000000" & SPI_RDY_s;
+        elsif A = DATAPORT1 then
+            D_out <= D_buff_pi;
+        elsif A = CTRLPORT2 then
+            D_out <= "0000" & MSXPIVer;
+        else
+            D_out <= (others => 'Z');
+        end if;
+    end process;
+
+    D <= D_out when readoper = '1' else (others => 'Z');
+
+    -- ==========================================================================
+    -- SPI Serialization & Transfer Process
+    -- ==========================================================================
+    spi: process(RESET, SPI_SCLK, readoper, writeoper, SPI_en_s, spi_en)
+    begin
+        if RESET = '1' then
+            SPI_en_s     <= '0';
+            D_buff_pi    <= "00000000";
+            spi_state    <= idle;
+
+        elsif (SPI_en_s = '0' and spi_en = '1') then
+            SPI_en_s     <= '1';
+            bitcount     <= "000";
+            spi_state    <= prepare;
+
+        elsif rising_edge(SPI_SCLK) then
+            case spi_state is
+                when idle =>
+                    SPI_en_s <= '0';
+
+                when prepare =>
+                    D_buff_msx_r <= D_buff_msx;
+                    spi_state    <= transferring;
+
+                when transferring =>
+                    D_buff_pi      <= D_buff_pi(6 downto 0) & SPI_MISO;
+                    SPI_MOSI       <= D_buff_msx_r(7);
+                    D_buff_msx_r(7 downto 1) <= D_buff_msx_r(6 downto 0);
+                    bitcount       <= bitcount + 1;
+
+                    if bitcount = "111" then
+                        spi_state <= idle;
+                    end if;
+            end case;
+        end if;
+
+        SPI_CS <= not SPI_en_s;
+    end process;
+
 end rtl;

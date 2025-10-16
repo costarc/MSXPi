@@ -51,8 +51,8 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 
-version = "1.2"
-BuildId = "20250923.792"
+version = "1.3"
+BuildId = "20251016.005"
 
 CMDSIZE = 3 + 9
 MSGSIZE = 3 + 128
