@@ -4,7 +4,7 @@
 40 '*                             *
 50 '*      Cotacao do Dolar       *
 60 '*                             *
-70 '*   (C) 2019  By  Retropix    *
+70 '* (C) 2019-2025  By  Retropix *
 80 '*                             *
 90 '*******************************
 94 CLEAR1000,49152!
@@ -26,7 +26,7 @@
 210 '---------- desenha tela principal -------------
 220 LOCATE  0,0
 230 PRINT "X";:FORL=2TO29:PRINT"W";:NEXT:PRINT"R";:FORL=31TO78:PRINT"W";:NEXT:PRINT"Y"
-240 PRINT "V";"  MSXPi Dolar - vers. 1.0   ";"V"+SPACE$(10);"(c) 2019 - Retropix Brasil";SPACE$(12);"V"
+240 PRINT "V";"  MSXPi Dolar - vers. 1.1   ";"V"+SPACE$(9);"(c) 2019-2025 Retropix Brasil";SPACE$(10);"V"
 250 PRINT "T";:FORL=2TO29:PRINT"W";:NEXT:PRINT"Q";:FORL=31TO78:PRINT"W";:NEXT:PRINT"S"
 260 FOR N = 4 TO 20
 270  PRINT "V";SPACE$(77);"V"
@@ -40,7 +40,7 @@
 350 ON ERROR GOTO 570
 360 LOCATE33,10:PRINT"Carregando..."
 370 A=&HC000
-380 CALL MSXPI("2,c000,prun wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d="+C$)
+380 CALL MSXPI("2,c000,prun curl -s http://www.retropix.com.br/repository/apis/cotacao.php?d="+C$)
 390  C$="":LIN=4
 400 GOSUB 150
 410 IF (CHR$(PEEK(&HC003))+CHR$(PEEK(&HC004))="-1")THENLOCATE17,10:PRINT"Nenhuma cotacao foi encontada para essa data.":LOCATE31,12:PRINT"Tente outra data."
@@ -59,7 +59,7 @@
 540 ON ERROR GOTO:CLS:END
 550 '
 560 '---- Paliativo para reiniciar o msxpi e deixa-lo aceitar um novo comando
-570 CALL MSXPI("2,c000,prun wget -O- -q http://www.retropix.com.br/repository/apis/cotacao.php?d1="+C$)
+570 CALL MSXPI("2,c000,prun curl -s http://www.retropix.com.br/repository/apis/cotacao.php?d1="+C$)
 580 RESUME 390
 590 '
 600 '--- rotina de tratamento de entrada de dados ---

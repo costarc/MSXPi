@@ -5,5 +5,5 @@ package MSXPi_package is
     constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
     constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
     constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-    constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1100";
+    constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1101";
 end MSXPi_package;

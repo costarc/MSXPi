@@ -21,8 +21,8 @@
 -- Version 0.7R4 - Added msxpi_package, port range 0x56–0x5D
 -- Version 1.0   - Added /WAIT signal (LED driven by SPI_CS)
 -- Version 1.0.1 - Firmware version "1010" for PCB v1.0.1
--- Version 1.2   - Firmware version "1011", logic optimization, openMSX support
--- Versoin 1.3   - Firmware version "1100", more logic optimization
+-- Version 1.2.1b- Firmware version "1100", logic optimisation, openMSX support
+-- Versoin 1.3   - Firmware version "1101", more logic optimisation & PLCC AT28C256
 -- ==============================================================================
 
 -- ==============================================================================

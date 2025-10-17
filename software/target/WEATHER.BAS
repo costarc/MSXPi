@@ -4,7 +4,7 @@
 40 '*                             *
 50 '*      Previsao do tempo      *
 60 '*                             *
-70 '*   (C) 2019  By  Retropix    *
+70 '* (C) 2019-2025  By  Retropix *
 80 '*                             *
 90 '*******************************
 95 onerrorgoto99
@@ -26,7 +26,7 @@
 220 '---------- desenha tela principal -------------
 230 LOCATE  0,0
 240 PRINT "X";:FORL=2TO29:PRINT"W";:NEXT:PRINT"R";:FORL=31TO78:PRINT"W";:NEXT:PRINT"Y"
-250 PRINT "V";" MSXPi Weather - versao 1.0 ";"V"+SPACE$(10);"(c) 2019 - Retropix Brasil";SPACE$(12);"V"
+250 PRINT "V";" MSXPi Weather - versao 1.1 ";"V"+SPACE$(9);"(c) 2019-2025 Retropix Brasil";SPACE$(10);"V"
 260 PRINT "T";:FORL=2TO29:PRINT"W";:NEXT:PRINT"Q";:FORL=31TO78:PRINT"W";:NEXT:PRINT"S"
 270 FOR N = 4 TO 20
 280  PRINT "V";SPACE$(77);"V"
@@ -40,7 +40,7 @@
 360 ON ERROR GOTO 1170
 370 LOCATE35,10:PRINT"Loading..."
 380 A=&HC000
-390 CALL MSXPI("2,C000,prun wget -O- -q wttr.in/"+C$+"?0nT")
+390 CALL MSXPI("2,C000,prun curl -s https://wttr.in/"+C$+"?0nT"):REM CALL MSXPI("2,C000,prun wget -O- -q wttr.in/"+C$+"?0nT")
 400  C$="":LIN=4:RW=0: 'recebeu uma previsao de tempo 0 nao 1 sim
 410 IF PEEK(&HC003)=ASC("W")THENRW=1
 420 GOSUB 150
@@ -118,7 +118,7 @@
 1140 C$=R$:RETURN
 1150 '
 1160 '---- Paliativo para reiniciar o msxpi e deixa-lo aceitar um novo comando
-1170 CALL MSXPI("2,C000,prun wget -O- -q wttr.in/recife?0nT")
+1170 CALL MSXPI("2,C000,prun curl -s https://wttr.in/recife?0nT"):REM CALL MSXPI("2,C000,prun wget -O- -q wttr.in/recife?0nT")
 1180 RESUME 400
 1190 '
 1200 '---- rotina para lower case ----
