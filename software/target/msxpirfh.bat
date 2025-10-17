@@ -6,7 +6,6 @@ pcopy m:at28c256.com
 pcopy m:chatgpt.com
 pcopy m:dosinit.com
 pcopy m:msxpbios.rom
-pcopy m:msxpibios.rom
 pcopy m:msxpidos.rom
 pcopy m:msxpiext.bin
 pcopy m:msxpiupd.bat
@@ -33,3 +32,4 @@ echo
 echo Restarting msxpi-server.py
 prestart
 pver
+
