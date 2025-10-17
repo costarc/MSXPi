@@ -9,8 +9,8 @@
 	(paper "A4")
 	(title_block
 		(title "MSXPi")
-		(date "2025-09-28")
-		(rev "1.2 Rev 1b")
+		(date "2025-10-16")
+		(rev "1.2.1b")
 		(company "RCC")
 	)
 	(layers
@@ -20241,8 +20241,8 @@
 			)
 		)
 	)
-	(gr_text "V1.2 Rev.1b"
-		(at 192.024 123.952 0)
+	(gr_text "V1.2.1b"
+		(at 193.676814 123.518106 0)
 		(layer "F.SilkS")
 		(uuid "620c0318-076f-46e2-be94-36247dcf051c")
 		(effects
