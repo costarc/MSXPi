@@ -149,7 +149,7 @@ Steps to Setup and Try MSXPi in openMSX
    Some work is needed on the msxpi-server side to make those commands
    work on Python running in a host that is not Linux.
 
-9. Create a local /home/pi/msxpi/msxpi.ini
+9. Create a local /home/pi/msxpi/msxpi.ini - this file must be in the same Windows Drive where msxpi-server is stored.
    This file is used to persist some MSXPi configuration. Create the
    folder in your computer (under Windows the path is C:\home\pi\msxpi)
    and save this file inside it:
