@@ -368,9 +368,11 @@ def prun(cmd = ''):
             return RC_FAILED
     cmd = cmd.replace('::','|')
     rc = RC_SUCCESS
+
     try:
-        if hostType == "Windows":
-            cmd = cmd.replace("/", "\\")  
+        if hostType == "Windows" and "http" not in cmd:
+            cmd = cmd.replace("/", "\\")
+
         p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
         buf = p.stdout.read().decode()
         err = (p.stderr.read().decode())
@@ -1536,6 +1538,7 @@ try:
                 else:
                     fullcmd = buf.decode().split("\x00")[0]
                 cmd = fullcmd.split()[0].lower()
+
                 parms = fullcmd[len(cmd)+1:]
                 # Executes the command (first word in the string)
                 # And passes the whole string (including command name) to the function
