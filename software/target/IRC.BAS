@@ -7,6 +7,7 @@
 80 goto 100
 90 bload "msxpiext.bin",r
 100 ' DO NOT DELETE THIS LINE
+105 WIDTH80
 110 GOSUB 6000:GOSUB6100 ' Define FunctIon Keys and RC mappings
 115 CH$="":NK$="* msxpi *"
 120 PRINT "MSXPi IRC Client"

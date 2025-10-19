@@ -164,12 +164,21 @@ https://github.com/costarc/MSXPi/tree/master/documents
 
 MSXPi v1.3 Release Notes
 ========================
-This is mainly a PCB redesign.
+This is mainly a PCB redesign and firmware om the CPLD. From v1.3, firmware (msxpi.pof) is no longer compatible with previous versions due to pin mapping changes.
+- Changed CPLD pin mappings to optimize PCB routing
 - Changed the EEPROM footprint from DIP to PLCC
 - Improved routing with power rails uninterrupted and wide.
 - 5V power rail (for PI and EEPROM) routed on the edge of the card to avoid EMI 
 - Bottom layer is now fully ground plane, with uninterrupted gnd plane across the PCB#
 - Rev1: Updated silk in back of pcb to reflect new jumper names
+
+MSXPi v1.2.1b Release Notes
+===============================
+- Activity LED now connects to RPi Ready signal - allows to see when RPi Server is online
+- SPI_RDY resistor changed to pull-down 
+- Re-routed power rails to minimise EMI & cross-signal interferences
+- BASIC programs updated to run also under openMSX; defaults to 80 columns
+- Firmware (CPLD) logic updated but keeping compatibility with previous versions; version "1100"
 
 MSXPi v1.2 Release Notes
 ========================

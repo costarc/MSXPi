@@ -4,7 +4,7 @@ export buildClientCommands="yes"
 export buildBIOS="yes"
 export buildOpenMSXConfig="yes"
 export buildMSXStuff="yes"
-export updateVersions="yes"
+export updateVersions="no"
 
 XMLPATH=openMSX/share/extensions
 OPENMSXSRC=../../openMSX/openMSX
@@ -179,7 +179,3 @@ cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
 cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
 cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
 cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
-
-
-
-
