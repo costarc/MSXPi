@@ -145,13 +145,15 @@ rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-JumperLeft.ini -O msxpi.ini
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-JumperRight.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperLeft.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperRight.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperRight_PCBV1.1Rev.0
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
+cp msxpi-JumperLeft.ini msxpi.ini
 mv msxpiboot.dsk $MSXPIHOME/disks/
 mv tools.dsk $MSXPIHOME/disks/
 chmod 755 $MSXPIHOME/msxpi-server.py
