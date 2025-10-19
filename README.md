@@ -167,6 +167,8 @@ MSXPi v1.2 Rev.1b Release Notes
 - Activity LED now connects to RPi Ready signal - allows to see when RPi Server is online
 - SPI_RDY resistor changed to pull-down 
 - Re-routed power rails to minimise EMI & cross-signal interferences
+- BASIC programs updated to run also under openMSX; defaults to 80 columns
+- Firmware (CPLD) logic updated but keeping compatibility with previous versions; version "1100"
 
 MSXPi v1.2 Release Notes
 ========================
