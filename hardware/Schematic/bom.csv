@@ -1,17 +1,17 @@
-"Reference","Value","Datasheet","Footprint","Qty","DNP"
-"C1,C2,C3,C4,C5,C6,C7,C10,C11","104","","msxpi:C2.5-3","9",""
-"C8,C9","10uF","~","Capacitor_THT:CP_Radial_D5.0mm_P2.00mm","2",""
-"D5","1N5817","http://www.vishay.com/docs/88525/1n5817.pdf","Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal","1",""
-"J1","MSXCART1","","Roni Footprints:MSX_CART_SW_Official_3Holes","1",""
-"J2","JTAG","","Connector_IDC:IDC-Header_2x05_P2.54mm_Horizontal","1",""
-"J3","ROM_SWITCH","~","Connector_PinHeader_2.54mm:PinHeader_2x03_P2.54mm_Vertical","1",""
-"J4","Raspberry Pi GPIO","~","Roni Footprints:PinSocket_2x20_P2.54mm_Vertical","1",""
-"JP3,JP4,JP5,JP6,JP7","Jumper_3_Open","~","Jumper:SolderJumper-3_P1.3mm_Open_Pad1.0x1.5mm","5",""
-"LED1","LED3MM","","msxpi:LED3MM","1",""
-"R1,R2,R3,R4,R8,R9","10K","","msxpi:0207_7","6",""
-"R5,R6","10k","","msxpi:0207_7","2",""
-"R7","470","","msxpi:0207_7","1",""
-"SW2","Shutdown","~","Roni Footprints:SW_PUSH_6mm_2Holes","1",""
-"U1","LD117A","","Package_TO_SOT_SMD:SOT-223-3_TabPin2","1",""
-"U2","EPM3064ALC44","","msxpi:PLCC-S44","1",""
-"U4","AT28C256_PLCC32","","Package_LCC:PLCC-32_THT-Socket","1",""
+Reference,Value,P/N or Link,Footprint,Qty
+"C1,C2,C3,C4,C5,C6,C7,C10,C11",0.1uF,Multiple sources,Ceramic Capacitor code “104”,9
+"C8,C9",10uF,https://www.aliexpress.com/item/1005002533909480.html,Capacitor_THT:CP_Radial_D5.0mm_P2.00mm,2
+D5,1N5817,https://www.aliexpress.com/item/1005001552094086.html,Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal,1
+J2,JTAG,https://www.aliexpress.com/item/1005005509699672.html,Connector_IDC:IDC-Header_2x05_P2.54mm_Horizontal,1
+J3,ROM_SWITCH,https://www.aliexpress.com/item/1005006733621288.html,Connector_PinHeader_2.54mm:PinHeader_2x03_P2.54mm_Vertical,1
+J4,Raspberry Pi GPIO,https://www.aliexpress.com/item/1005008966856219.html,PinSocket_2x20_P2.54mm_Vertical,1
+LED1,LED3MM,Multiple sources,LED3MM,1
+"R1,R2,R3,R4,R8,R9",10KOhm,https://www.aliexpress.com/item/32315929780.html,Resistor THT 6mm,6
+"R5,R6",10kOhm,https://www.aliexpress.com/item/32315929780.html,Resistor THT 6mm,2
+R7,470 Ohm,https://www.aliexpress.com/item/32317115890.html,Resistor THT 6mm,1
+SW2,Shutdown/Reset,https://www.aliexpress.com/item/1005006804318686.html,Tactile Push Button 6x6x5 2Pin,1
+U1,LD117A,Multiple sources / Recommended Mouser/Digikey,3v3 Regulator Package_TO_SOT_SMD:SOT-223-3,1
+U2,EPM3064ALC44,Multiple sources / Recommended Mouser/Digikey,CPLD Altera EPM3064ALC44 PLCC Package,1
+,Socket PLCC-44 DIP,https://www.aliexpress.com/item/1005006107285280.html,Socket for CPLD EPM3064ALC44 DIP,
+U4,AT28C256_PLCC32,https://www.aliexpress.com/item/1005007853008289.html,EEPROM ATMEL AT28C256 PLCC Package,1
+,Socket PLCC-32 DIP,https://www.aliexpress.com/item/1005006107285280.html,Socket for EEPROM AT28C256 PLCC DIP,
