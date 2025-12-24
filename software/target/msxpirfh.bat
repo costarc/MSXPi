@@ -1,6 +1,7 @@
 pcopy m:API.BAS
 pcopy m:DOLAR.BAS
 pcopy m:IRC.BAS
+pcopy m:RASTRO.BAS
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:chatgpt.com
@@ -20,6 +21,7 @@ pcopy m:prun.com
 pcopy m:pset.com
 pcopy m:pshut.com
 pcopy m:pver.com
+pcopy m:pver2.com
 pcopy m:pvol.com
 pcopy m:pwifi.com
 pcopy m:template.com

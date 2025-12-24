@@ -1,9 +1,9 @@
 #!/bin/bash
 
-export buildClientCommands="yes"
+export buildClientCommands="no"
 export buildBIOS="yes"
-export buildOpenMSXConfig="yes"
-export buildMSXStuff="yes"
+export buildOpenMSXConfig="no"
+export buildMSXStuff="no"
 export updateVersions="no"
 
 XMLPATH=openMSX/share/extensions
@@ -120,6 +120,8 @@ if [ $buildClientCommands = "yes" ];then
   $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pshut.com.asm    -o ./target/pshut.com
   $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/chatgpt.com.asm  -o ./target/chatgpt.com
   $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/ploadr.com.asm   -o ./target/ploadr.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pver2.com.asm    -o ./target/pver2.com
+  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/p.com.asm        -o ./target/p.com
 fi
 
 if [ $buildBIOS = "yes" ];then

@@ -46,21 +46,35 @@
 ; Other than using these functions you will have to create your
 ; own commands, using OUT/IN directly to the I/O ports.
 ; ==================================================================
-;-----------------------
-; CHKPIRDY             |
-;-----------------------
+; -----------------------
+; CHKPIRDY
+; -----------------------
+; Returns:
+;   C = 1  → ESC pressed (error)
+;   C = 0  → OK, CONTROL_PORT1 is 0 or 2
+; Uses: A
+; -----------------------
 CHKPIRDY:
+        ; --- Check ESC key (row 7, bit 2) ---
         ld      a,7
-        out    ($AA),a
+        out     ($AA),a
         in      a,($A9)
-        bit     2,a                 ; Test ESC key 
-        scf
-        ret		z
-        in      a,(CONTROL_PORT1)  ; verify spirdy register on the msxinterface
-        or      a
-        ret     z
-        cp      2
-        jr      nz,CHKPIRDY
+        bit     2,a
+        jr      nz,CHKPIRDY_NO_ESC    ; bit=1 → key not pressed
+        scf                             ; ESC pressed → error
+        ret
+
+; --- ESC not pressed, check MSXPi ready state ---
+CHKPIRDY_NO_ESC:
+        in      a,(CONTROL_PORT1)
+        cp      0
+        jr      z,CHKPIRDY_OK         ; 0 → MSXPi physical interface, OK
+
+        cp      2                     ; 2 → openMSX interface, OK
+        jr      nz,CHKPIRDY           ; anything else → recheck ESC + ready
+
+CHKPIRDY_OK:
+        and     a                     ; clear carry (success)
         ret
 
 ;-----------------------
@@ -68,33 +82,32 @@ CHKPIRDY:
 ;-----------------------
 PIREADBYTE:
             call    CHKPIRDY
-            jr      c,PIREADBYTE2
-			; debug
-			;push	af
-			;add		a,48
-			;out		($98),a
-			;pop		af
-			cp		1
-			jr		z,PIREADBYTE       ; Pi not ready - keep trying
-			cp		2                  ; openMSX extension will return 2
-			                           ; when data is available for reading
-			jr      z,PIREADBYTE1      ; is openMSX extension - read data
-		    or		a
-			jr		nz,PIREADBYTE      ; Status not 0, keep trying - otherwise:
-			in		a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
-			                           ; or MSXPi extension in openMSX
-			cp		$FE                ; openMSX will return $FE
-			jr		z,PIREADBYTE       ; openMSX does not have data ready when status = 0
-			                           ; need to keep trying			
-PIREADBYTE1:
+            jr      nc,PIREADBYTE1	   ; PI Responding
+PIREADBYTE_ESC:
+			ld 		a,$FF
+			ret                        ; Return error - ESC Pressed
+PIREADBYTE1:			
             xor     a                  ; clear A - but not really necessary
             out     (CONTROL_PORT1),a  ; send read command to the interface
-            call    CHKPIRDY           ; wait interface transfer data to pi and
-                                       ; pi app processing
-                                       ; no ret c is required here, because in a,(7) 
-                                       ; does not reset c flag
+			
+			call    CHKPIRDY
+			jr		c,PIREADBYTE_ESC   ; ESC Pressed
+		    ; Verify if it is openMSX or real MSXPi hardware
+			push	af				   ; save CHKPIRDY state temporarily
+			in		a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
+			cp		$FE                ; openMSX will return $FE
+			jr		c,PIREADBYTE_SUCC  ; iT IS PHYSICAL msxpI
+			pop		af				   ; restore CHKPIRDY state
 PIREADBYTE2:
-            in      a,(DATA_PORT1)     ; read byte - probably has nothign useful since
+			call    CHKPIRDY
+			jr		c,PIREADBYTE_ESC   ; ESC Pressed
+			cp		2
+			jr		nz,PIREADBYTE2
+			push    af
+PIREADBYTE_SUCC:
+			pop		af
+			or		a				   ; reset carry flag
+            in      a,(DATA_PORT1)     ; read byte - probably has nothing useful since
 			                           ; there was an error in the comms
             ret                        ; return in a the byte received
 
@@ -267,7 +280,6 @@ GETPARMS2:
         DJNZ    GETPARMS1
         RET
 
-
 ;---------------------------------------------------------------
 ; RECVDATA- SENDDATA
 ;---------------------------------------------------------------
@@ -362,9 +374,542 @@ SENDD0:
         jr      nz,SENDRETRY     ;go for another retry
         scf                                 ; differ, set flag for Error
         ret
-             
+
+; ---------------------------------------------------------
+; SENDDATA2 (single-block, size <= MAXBUFSIZE)
+;   DE = src pointer
+;   BC = size (number of bytes to send)
+;
+; Output:
+;   NC: success, DE = src + size
+;   C : error
+;
+; Uses:
+;   AF, BC, DE, HL
+; ---------------------------------------------------------
+SENDDATA2:
+
+; -------------------------
+; 1. Initial handshake
+; -------------------------
+SD2_HS_LOOP:
+    ld      a,READY
+    call    PIWRITEBYTE
+    jr      c,SD2_HS_ERR
+
+    call    PIREADBYTE
+    jr      c,SD2_HS_ERR
+	
+    cp      READY_ACK
+    jr      nz,SD2_HS_LOOP          ; wait until READY_ACK
+
+    ; Send msxmaxbuf (MAXBUFSIZE)
+    ld      a,MAXBUFSIZE_LO
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    ld      a,MAXBUFSIZE_HI
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+; -------------------------
+; 2. Single-block header
+; -------------------------
+    ld      a,RC_SUCCESS            ; header_rc
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    ld      a,c                     ; length low
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    ld      a,b                     ; length high
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    ld      a,0                     ; block_index = 0
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    ld      hl,0                    ; HL = checksum
+
+; -------------------------
+; 2b. Payload loop
+; -------------------------
+SD2_SEND_LOOP:
+    ld      a,b
+    or      c
+    jr      z,SD2_SEND_DONE         ; all bytes sent
+    ld      a,(de)                  ; A = payload byte
+	push    de
+    push    bc
+	ld      e,a                     ; e = payload copy
+	call    PIWRITEBYTE
+	jr      nc,SD2_SEND_LOOP1
+    pop     bc
+	pop     de
+	jr      SD2_CONN_ERR
+SD2_SEND_LOOP1:
+    ld      a,e						; a = payload copy
+    ld      b,0
+    ld      c,a
+    add     hl,bc
+    pop     bc
+	pop     de 
+	inc     de
+    dec     bc
+    jr      SD2_SEND_LOOP
+
+
+; -------------------------
+; Errors
+; -------------------------
+SD2_CHKSUM_ERR:
+    scf
+    ret
+
+SD2_HS_ERR:
+    scf
+    ret
+
+SD2_CONN_ERR:
+    scf
+    ret
+
+; -------------------------
+; 2c. Checksum exchange
+; -------------------------
+SD2_SEND_DONE:
+    ld      a,l
+    add     a,h                     ; (low + high) & 0xFF
+    ld      l,a                     ; L = localChecksum
+
+    ld      a,l                     ; send local checksum
+    call    PIWRITEBYTE
+    jr      c,SD2_CONN_ERR
+
+    call    PIREADBYTE              ; receive remote checksum
+    jr      c,SD2_CONN_ERR
+
+    cp      l                       ; compare with localChecksum
+    jr      nz,SD2_CHKSUM_ERR
+
+; -------------------------
+; 3. Status handshake
+; -------------------------
+    call    PIREADBYTE              ; expect READY
+    jr      c,SD2_HS_ERR
+    cp      READY
+    jr      nz,SD2_HS_ERR
+
+    call    PIREADBYTE              ; expect status_from_python
+    jr      c,SD2_CONN_ERR
+    cp      RC_SUCCESS
+    jr      nz,SD2_CONN_ERR
+
+    ld      a,READY_ACK             ; send READY_ACK
+    call    PIWRITEBYTE
+    jr      c,SD2_HS_ERR
+
+    or      a                        ; clear carry
+    ret
+
+; ================================================================
+;  RECVDATA2_ONEBLOCK
+;  Receive exactly one block from Python using the DATA2 protocol.
+;
+;  INPUT:
+;     A  = expected_block_index
+;     DE = destination pointer
+;     BC = maxbuf (expected block size / MSX max payload)
+;
+;  OUTPUT:
+;     Carry = 0 → success
+;     Carry = 1 → failure
+;     A  = RC_* return code
+;     DE = advanced pointer after storing payload
+;     BC = actual block length received
+;     HL = destroyed
+;
+;  LOCALS (IX-based stack frame, 8 bytes):
+;     (IX+0) = expected_block_index
+;     (IX+1) = header_rc
+;     (IX+2) = localChecksum
+;     (IX+3) = remoteChecksum
+;     (IX+4) = maxbuf_lo
+;     (IX+5) = maxbuf_hi
+;     (IX+6) = length_lo
+;     (IX+7) = length_hi
+; ================================================================
+
+RECVDATA2_ONEBLOCK:
+
+    ; ------------------------------------------------------------
+    ; Allocate 8-byte local frame on stack
+    ; ------------------------------------------------------------
+    push    bc
+    push    de
+    push    hl
+    push    af              ; 4 pushes = 8 bytes
+
+    ld      ix,0
+    add     ix,sp           ; IX -> base of locals
+
+    ; Store expected_block_index and maxbuf
+    ld      (ix+0),a        ; expected_block_index
+    ld      (ix+4),c        ; maxbuf_lo
+    ld      (ix+5),b        ; maxbuf_hi
+
+
+; ------------------------------------------------------------
+; 1. INITIAL HANDSHAKE
+;    MSX -> READY
+;    Python -> READY_ACK
+;    MSX -> maxbuf_lo, maxbuf_hi
+; ------------------------------------------------------------
+
+r2_handshake_loop:
+    ld      a,READY
+    call    PIWRITEBYTE
+    jr      c,r2_handshake_err
+
+    call    PIREADBYTE
+    jr      c,r2_handshake_err
+    cp      READY_ACK
+    jr      nz,r2_handshake_loop
+
+    ; Handshake OK → send maxbuf (original BC from locals)
+    ld      a,(ix+4)        ; maxbuf_lo
+    call    PIWRITEBYTE
+    jr      c,r2_conn_err
+
+    ld      a,(ix+5)        ; maxbuf_hi
+    call    PIWRITEBYTE
+    jr      c,r2_conn_err
+
+
+; ------------------------------------------------------------
+; 2. READ HEADER
+;    header_rc, length_lo, length_hi, block_index
+; ------------------------------------------------------------
+
+    ; header_rc
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+    ld      (ix+1),a        ; header_rc
+
+    ; length low
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+    ld      c,a             ; BC = length (low in C)
+    ld      (ix+6),a        ; length_lo
+
+    ; length high
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+    ld      b,a             ; BC = length (high in B)
+    ld      (ix+7),a        ; length_hi
+
+    ; block_index
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+    ; A = received block_index
+    cp      (ix+0)          ; compare with expected_block_index
+    jr      nz,r2_unexpecteddata
+
+
+; ------------------------------------------------------------
+; 3. VALIDATE LENGTH  (length <= maxbuf ?)
+; ------------------------------------------------------------
+    ; Compare BC (length) with maxbuf (from locals)
+    ld      a,b
+    cp      (ix+5)          ; compare high bytes
+    jr      c,r2_len_ok     ; length_hi < maxbuf_hi → OK
+    jr      nz,r2_bufovflw  ; length_hi > maxbuf_hi → overflow
+
+    ; high bytes equal → compare low
+    ld      a,c
+    cp      (ix+4)
+    jr      c,r2_len_ok     ; length_lo < maxbuf_lo → OK
+    jr      z,r2_len_ok     ; equal → OK
+
+    ; length_lo > maxbuf_lo → overflow
+    jr      r2_bufovflw
+
+
+
+; ------------------------------------------------------------
+; ERROR PATHS
+; ------------------------------------------------------------
+r2_unexpecteddata:
+    ld      a,RC_UNEXPECTEDDATA
+    scf
+    jr      r2_exit
+
+r2_bufovflw:
+    ld      a,RC_BUFOVFLW
+    scf
+    jr      r2_exit
+
+r2_chksum_err:
+    ; You don't have RC_CHKSUM_ERR; map to RC_FAILED
+    ld      a,RC_FAILED
+    scf
+    jr      r2_exit
+
+r2_handshake_err:
+    ld      a,RC_HANDSHAKEERR
+    scf
+    jr      r2_exit
+
+r2_conn_err:
+    ld      a,RC_CONNERR
+    scf
+    jr      r2_exit
+	
+r2_len_ok:
+    ; BC already holds length, which we also want to return.
+
+
+; ------------------------------------------------------------
+; 4. RECEIVE PAYLOAD + CHECKSUM ACCUMULATION
+; ------------------------------------------------------------
+    ld      hl,0            ; checksum accumulator
+
+r2_payload_loop:
+    ld      a,b
+    or      c
+    jr      z,r2_payload_done   ; BC == 0 → done
+
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+
+    ld      (de),a
+    inc     de
+
+    ; HL += A
+    add     a,l
+    ld      l,a
+    jr      nc,r2_ck_nocarry
+    inc     h
+r2_ck_nocarry:
+
+    dec     bc
+    jr      r2_payload_loop
+
+r2_payload_done:
+
+
+; ------------------------------------------------------------
+; 5. FOLD CHECKSUM (16-bit → 8-bit)
+;    localChecksum = (L + H) & 0xFF
+; ------------------------------------------------------------
+    ld      a,l
+    add     a,h
+    ld      (ix+2),a        ; localChecksum
+
+
+; ------------------------------------------------------------
+; 6. RECEIVE REMOTE CHECKSUM
+; ------------------------------------------------------------
+    call    PIREADBYTE
+    jr      c,r2_conn_err
+    ld      (ix+3),a        ; remoteChecksum
+
+
+; ------------------------------------------------------------
+; 7. SEND LOCAL CHECKSUM BACK
+; ------------------------------------------------------------
+    ld      a,(ix+2)        ; localChecksum
+    call    PIWRITEBYTE
+    jr      c,r2_conn_err
+
+
+; ------------------------------------------------------------
+; 8. COMPARE CHECKSUMS
+; ------------------------------------------------------------
+    ld      a,(ix+2)        ; localChecksum
+    cp      (ix+3)          ; remoteChecksum
+    jr      nz,r2_chksum_err
+
+
+; ------------------------------------------------------------
+; 9. STATUS HANDSHAKE AFTER GOOD BLOCK
+;    MSX -> READY
+;    MSX -> status_for_next (RC_SUCCESS)
+;    Python -> READY_ACK
+; ------------------------------------------------------------
+    ld      a,READY
+    call    PIWRITEBYTE
+    jr      c,r2_handshake_err
+
+    ld      a,RC_SUCCESS
+    call    PIWRITEBYTE
+    jr      c,r2_conn_err
+
+    call    PIREADBYTE
+    jr      c,r2_handshake_err
+    cp      READY_ACK
+    jr      nz,r2_handshake_err
+
+
+; ------------------------------------------------------------
+; 10. INTERPRET header_rc FOR CALLER
+;     header_rc:
+;       RC_SUCCESS → last block
+;       RC_READY   → more blocks to come
+;       else       → RC_CONNERR
+; ------------------------------------------------------------
+    ld      a,(ix+1)        ; header_rc
+    cp      RC_SUCCESS
+    jr      z,r2_success
+
+    cp      RC_READY
+    jr      z,r2_ready
+
+    jr      r2_conn_err
+
+
+; ------------------------------------------------------------
+; SUCCESS PATHS
+; ------------------------------------------------------------
+r2_success:
+    ld      a,RC_SUCCESS
+    or      a               ; clear carry
+    jr      r2_exit
+
+r2_ready:
+    ld      a,RC_READY
+    or      a               ; clear carry
+    jr      r2_exit
+
+; ------------------------------------------------------------
+; COMMON EXIT: restore stack, preserve A and flags
+; ------------------------------------------------------------
+r2_exit:
+    push    af
+    push    ix
+    pop     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    pop     af
+    ld      sp,hl
+    ret
+
+; ---------------------------------------------------------
+; SendPCommand
+;
+; Input:
+;   None - it picks the command from MSX-DOS command line
+;
+; Output:
+;   NC: success (carry from SENDDATA2)
+;   C:  error (empty string or SENDDATA2 error)
+;   DE: advanced by SENDDATA2 on success
+;
+; Uses:
+;   AF, BC, DE, HL
+; ---------------------------------------------------------
+SendPCommand:
+	ld		de,$80
+	ld		a,(de)
+	ld 		c,a 
+	ld 		b,0 
+	inc     de 
+	call    SendCommandToMSXPi
+	ret
+	
+; ---------------------------------------------------------
+; SendCommandToMSXPi
+;
+; Input:
+;   DE = pointer to zero-terminated command string
+;
+; Output:
+;   NC: success (carry from SENDDATA2)
+;   C:  error (empty string or SENDDATA2 error)
+;   DE: advanced by SENDDATA2 on success
+;
+; Uses:
+;   AF, BC, DE, HL
+; ---------------------------------------------------------
+SendCommandToMSXPi:
+
+    ; Check empty first char
+    ld      a,(de)
+    or      a
+    jr      nz,SCM_HaveFirst
+
+    scf                     ; empty → error
+    ret
+
+SCM_HaveFirst:
+    ; HL = walk pointer, BC = length
+    ld      hl,0            ; BC will be length, so clear it
+    ld      b,h
+    ld      c,l
+
+    push    de              ; save original start pointer
+
+SCM_CountLoop:
+    ld      a,(de)
+    or      a
+    jr      z,SCM_CountDone
+
+    inc     de
+    inc     bc              ; length++
+    jr      SCM_CountLoop
+
+SCM_CountDone:
+    pop     de              ; restore DE = start of string
+
+    ld      a,b
+    or      c
+    jr      nz,SCM_HaveLength
+
+    ; length == 0 (shouldn't happen if first char non-zero, but be safe)
+    scf
+    ret
+
+SCM_HaveLength:
+    ; DE = src, BC = size
+    call    SENDDATA2
+    ret                     ; propagate carry from SENDDATA2
+
+
 ;-----------------------
-; PRINT                |
+; printstdout
+;-----------------------
+printstdout:
+    push    bc					; maxbufsize expected
+	xor		a					; block number
+	push	de					; save buffer address
+	call	RECVDATA2_ONEBLOCK	; Read 1 block
+	ld		l,a					; save return code
+	ld 		a,TEXTTERMINATOR 
+	ld		(de),a 				; Terminator for text
+	ld      a,l
+	pop 	de 					; restore buffer address
+	pop 	hl 					; restore maxbufsize
+	ret		c 					; Error reading data
+	push    af					; save return code
+	push    hl					; push msxbufsize again to stack
+	ex 		de,hl 				; HL = buffer to print
+	call    PRINT
+	pop     bc					; maxbufsize
+	pop     af					; return code
+	cp      RC_READY			; Is there another block?
+	jr      z,printstdout
+	ret
+
+;-----------------------
+; PRINT
 ;-----------------------
 PRINT:
         ld      a,(hl)      ;get a character to print
@@ -688,3 +1233,7 @@ DELAY1:
         POP     HL
         POP     DE
         RET
+		
+		DS 		128
+heap_top: equ     $
+		

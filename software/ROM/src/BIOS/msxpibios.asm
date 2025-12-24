@@ -208,7 +208,7 @@ CALL_MSXPI1:
 ; RC = RC_FAILED: Pi error. Message available to print
 ; RC = RC_READY: Pi processing succeed - data available and there is another block
 ; RC = RC_SUCCESS : Pi processing succeed - data available and this is last block
-; RC = RC_TXERROR : Error in the connection with RPi
+; RC = RC_CONNERR : Error in the connection with RPi
 ;
 ; Send commands (in CALL parameters) to RPi
         
@@ -219,7 +219,7 @@ CALL_MSXPI1:
 CALL_MSXPI2_ERR:
         POP     AF
 CALL_MSXPISERR:
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (HL),A
         POP     HL
         OR      A
@@ -239,7 +239,7 @@ CALL_PRINTBUF:
         ld      bc,BLKSIZE
         call    RECVDATA
         pop     hl
-        ld      a,RC_TXERROR
+        ld      a,RC_CONNERR
         jr      c,CALL_MSXPI2_ERR
         pop     af
         push    hl
@@ -358,7 +358,7 @@ MSXPISEND1:
         CALL    SENDDATA
         POP     DE
         JR      NC,MSXPISEND2
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (DE),A
 MSXPISEND2:
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
@@ -388,7 +388,7 @@ MSXPIRECV1:
         CALL    RECVDATA
         POP     DE
         JR      NC,MSXPIRECV2
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (DE),A
 MSXPIRECV2:
         POP     HL

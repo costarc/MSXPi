@@ -93,27 +93,16 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        call    initDiskSystem
+        ;call    WaitaBit
         scf
         ret
-        
-initDiskSystem:
-        call    CHKPIRDY
-        ret     c
-initLoop:
-        call    sendInitCmd
-        jr      c,waitPiBoot
-        call    sendInitCmd
-        jr      c,waitPiBoot
-        ret
-waitPiBoot:
-        ld      bc,5
+WaitaBit:
+        ld      b,1
+WaitLoop:
+		push    bc
         call    DELAY
-        jr      initLoop
-sendInitCmd:
-        ld      bc,CMDSIZE
-        ld      de,DOS_INI
-        call    SENDDATA
+		pop 	bc
+		djnz  	WaitLoop
         ret
         
 ; START OF -----------------------------
@@ -191,16 +180,15 @@ DSKIO_WRITE:
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
-        ld      bc,CMDSIZE
         ld      de,DOS_WSEC
-        call    SENDDATA          ; Send sector write command "DSKIOWRS"
+        call    SendCommandToMSXPi ; Send sector write command "DSKIOWRS"
         jr      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
 DSKIO_WRITE_LOOP:
         push	bc
-        ld      bc,SECTORSIZE - 3
-        call    SENDDATA	      ; Send the sectors (write to disk
+        ld      bc,SECTORSIZE
+        call    SENDDATA2	      ; Send the sectors (write to disk
         pop     bc
         jr      c, DSKIO_ERR1
         djnz    DSKIO_WRITE_LOOP
@@ -237,17 +225,20 @@ DSKIO_READ:
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
         jr      c,DSKIO_ERR
-        ld      bc,CMDSIZE
         ld      de,DOS_RSEC
-        call    SENDDATA          ; Send sector read command "DSKIORDS"
+        call    SendCommandToMSXPi ; Send sector read command "DSKIORDS"
         jr      c,DSKIO_ERR
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
+		push    af
         push	bc
-        ld	    bc,SECTORSIZE - 3
-        call    RECVDATA	  ; Send the sectors (write to disk)
+        ld	    bc,SECTORSIZE
+		xor     a
+        call    RECVDATA2_ONEBLOCK	
         pop	    bc
+		pop 	hl
+		ld      a,h
         jr	    c, DSKIO_ERR1
         djnz	DSKIO_READ_LOOP
         or	    a
@@ -286,9 +277,8 @@ DSKIO_SECTINFO:
         push    de
         push    bc
         push	af
-        ld      bc,CMDSIZE
         LD      de,DOS_SECI
-        call    SENDDATA
+        call    SendCommandToMSXPi
         jr      nc,DSKIO_SECTINFO1
 DSKIO_SEC_ERR:
         pop     af
@@ -313,7 +303,8 @@ DSKIO_SECTINFO1:
 	push	ix
 	pop     de
 	ld	    bc,5
-	call	SENDDATA
+	call	SENDDATA2
+	and     a
 	ret
         
 ; END OF ------------------------------
@@ -618,7 +609,7 @@ CALL_MSXPI1:
 ; RC = RC_FAILED: Pi error. Message available to print
 ; RC = RC_READY: Pi processing succeed - data available and there is another block
 ; RC = RC_SUCCESS : Pi processing succeed - data available and this is last block
-; RC = RC_TXERROR : Error in the connection with RPi
+; RC = RC_CONNERR : Error in the connection with RPi
 ;
 ; Send commands (in CALL parameters) to RPi
         
@@ -629,7 +620,7 @@ CALL_MSXPI1:
 CALL_MSXPI2_ERR:
         POP     AF
 CALL_MSXPISERR:
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (HL),A
         POP     HL
         OR      A
@@ -649,7 +640,7 @@ CALL_PRINTBUF:
         ld      bc,BLKSIZE
         call    RECVDATA
         pop     hl
-        ld      a,RC_TXERROR
+        ld      a,RC_CONNERR
         jr      c,CALL_MSXPI2_ERR
         pop     af
         push    hl
@@ -768,7 +759,7 @@ MSXPISEND1:
         CALL    SENDDATA
         POP     DE
         JR      NC,MSXPISEND2
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (DE),A
 MSXPISEND2:
 ; skip the parameters before returning: ("xxxx") = 8 positions to skip
@@ -798,7 +789,7 @@ MSXPIRECV1:
         CALL    RECVDATA
         POP     DE
         JR      NC,MSXPIRECV2
-        LD      A,RC_TXERROR
+        LD      A,RC_CONNERR
         LD      (DE),A
 MSXPIRECV2:
         POP     HL
@@ -920,6 +911,5 @@ DOS_FMT:    DB  "dskiofmt",0,0,0,0
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
 INCLUDE msxpi_bios.asm
-INCLUDE debug.asm
-;INCLUDE debug-rom.asm
+
 

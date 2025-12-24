@@ -40,6 +40,7 @@ private:
 	// Queues & synchronization
 	mutable std::mutex mtx;
 	cb_queue<byte> rxQueue;
+	size_t MAX_QUEUE_SIZE = 1024 * 1024;
 
 	// MSXPi logic
 	bool readRequested = false;
