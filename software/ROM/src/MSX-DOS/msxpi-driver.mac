@@ -93,16 +93,7 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        ;call    WaitaBit
         scf
-        ret
-WaitaBit:
-        ld      b,1
-WaitLoop:
-		push    bc
-        call    DELAY
-		pop 	bc
-		djnz  	WaitLoop
         ret
         
 ; START OF -----------------------------
@@ -188,7 +179,7 @@ DSKIO_WRITE:
 DSKIO_WRITE_LOOP:
         push	bc
         ld      bc,SECTORSIZE
-        call    SENDDATA2	      ; Send the sectors (write to disk
+        call    senddata	      ; Send the sectors (write to disk
         pop     bc
         jr      c, DSKIO_ERR1
         djnz    DSKIO_WRITE_LOOP
@@ -235,7 +226,7 @@ DSKIO_READ_LOOP:
         push	bc
         ld	    bc,SECTORSIZE
 		xor     a
-        call    RECVDATA2_ONEBLOCK	
+        call    RECVDATA_ONEBLOCK	
         pop	    bc
 		pop 	hl
 		ld      a,h
@@ -303,7 +294,7 @@ DSKIO_SECTINFO1:
 	push	ix
 	pop     de
 	ld	    bc,5
-	call	SENDDATA2
+	call	senddata
 	and     a
 	ret
         
@@ -614,7 +605,7 @@ CALL_MSXPI1:
 ; Send commands (in CALL parameters) to RPi
         
         PUSH    HL
-        CALL    SENDPICMD
+        CALL    SendCommandToMSXPi
         POP     DE
         JR      NC,CALL_MSXPI3
 CALL_MSXPI2_ERR:
@@ -638,7 +629,7 @@ CALL_PRINTBUF:
         call    CLEARBUF
         push    de
         ld      bc,BLKSIZE
-        call    RECVDATA
+        call    RECVDATA_ONEBLOCK
         pop     hl
         ld      a,RC_CONNERR
         jr      c,CALL_MSXPI2_ERR
@@ -672,7 +663,7 @@ CALL_PRINTBUF:
 CALL_MSXPISAVE:
         PUSH    DE
         LD      BC,BLKSIZE
-        CALL    RECVDATA
+        CALL    RECVDATA_ONEBLOCK
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
         LD      A,(HL)
@@ -681,7 +672,7 @@ CALL_MSXPISAVE:
 CALL_MSXPISAVE2:
         PUSH    DE
         LD      BC,BLKSIZE
-        CALL    RECVDATA
+        CALL    RECVDATA_ONEBLOCK
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
         LD      A,(HL)
@@ -768,7 +759,7 @@ MSXPISEND2:
         RET
 
 ;----------------------------------------
-; Call MSXPI BIOS function RECVDATA     |
+; Call MSXPI BIOS function RECVDATA_ONEBLOCK     |
 ;----------------------------------------
 _MSXPIRECV:
         CALL    EVALTXTPARAM    ; Evaluate text parameter
@@ -786,7 +777,7 @@ _MSXPIRECV:
 MSXPIRECV1:
         PUSH    DE
         LD      BC,BLKSIZE
-        CALL    RECVDATA
+        CALL    RECVDATA_ONEBLOCK
         POP     DE
         JR      NC,MSXPIRECV2
         LD      A,RC_CONNERR
@@ -833,13 +824,13 @@ BIOSENTRYADDR:  EQU     $
         DW      _MSXPI
         DW      _MSXPISEND
         DW      _MSXPIRECV
-        DW      RECVDATA
+        DW      RECVDATA_ONEBLOCK
         DW      SENDDATA
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
         DW      PIEXCHANGEBYTE
-        DW      SENDPICMD
+        DW      SendCommandToMSXPi
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER

@@ -1,7 +1,7 @@
 ﻿#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../fusion-c/header/msx_fusion.h"
+#include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../header/msxpi.h"
 
 // pprintf: print a string followed by a number
@@ -723,41 +723,16 @@ void printstdout(uint16_t maxbufsize)
     uint16_t block_size;
     uint16_t block_index = 0;
 
-    //Print("\n[MSX] printstdout(): starting\n");
-
     while (1) {
-
-        //Print("[MSX] Calling RECVDATA2_ONEBLOCK...\n");
-
-        rc = RECVDATA2_ONEBLOCK(STREAM_BUF, &block_size, maxbufsize);
-        /*
-        Print("[MSX] RECVDATA2_ONEBLOCK returned rc=");
-        PrintNumber(rc);
-        Print(" block_size=");
-        PrintNumber(block_size);
-        Print("\n");
-
-        if (rc == RC_HANDSHAKEERR) Print("[MSX] RC_HANDSHAKEERR\n");
-        if (rc == RC_CONNERR)      Print("[MSX] RC_CONNERR\n");
-        if (rc == RC_CHKSUM_ERR)   Print("[MSX] RC_CHKSUM_ERR\n");
-        if (rc == RC_BUFOVFLW)     Print("[MSX] RC_BUFOVFLW\n");
-        if (rc == RC_READY)        Print("[MSX] RC_READY (more blocks)\n");
-        if (rc == RC_SUCCESS)      Print("[MSX] RC_SUCCESS (last block)\n");
-        */
-        if (block_size < STREAM_BUF_SIZE)
-            STREAM_BUF[block_size] = '\0';
+        uint8_t* buffer = (uint8_t*)(get_max_buffer_size() + 100);
+        rc = RECVDATA2_ONEBLOCK(buffer, &block_size, maxbufsize);
+        if (block_size < maxbufsize)
+            buffer[block_size] = '\0';
         else
-            STREAM_BUF[STREAM_BUF_SIZE - 1] = '\0';
-
-        //Print("[MSX] Block contents: ");
-		Print(STREAM_BUF); Print("\n");
-        //Print("\n");
-
+            buffer[maxbufsize - 1] = '\0';
+		Print(buffer);
         if (rc != RC_READY) {
-            //Print("[MSX] No more blocks, exiting loop.\n");
             break;
         }
     }
-
-    //Print("[MSX] printstdout(): done.\n");
 }

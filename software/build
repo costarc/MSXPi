@@ -2,7 +2,7 @@
 
 export buildClientCommands="no"
 export buildBIOS="yes"
-export buildOpenMSXConfig="no"
+export buildOpenMSXConfig="yes"
 export buildMSXStuff="no"
 export updateVersions="no"
 
@@ -11,7 +11,7 @@ OPENMSXSRC=../../openMSX/openMSX
 export HOME=../../../..
 export BIOS=ROM/src/BIOS/msxpibios.asm
 export ROMBANK1=$HOME/Dev/MSX/gameroms/ROAD.ROM
-export BIOSFILE=target/msxpbios.rom
+export BIOSFILE=target/msxpidos.rom
 export ZMAC_PATH=$HOME/Dev/zmac
 export HEX2BIN_PATH=$HOME/Dev/bin
 export Z80ASM_PATH=$HOME/Dev/z80asm-1.8
@@ -129,18 +129,18 @@ if [ $buildBIOS = "yes" ];then
   $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
   
   UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
-  UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm   
-  UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm 
-  UpdateBuildId    ./Server/Python/src/msxpi-server.py
+  #UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm   
+  #UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm 
+  #UpdateBuildId    ./Server/Python/src/msxpi-server.py
   
   # Build MSX-DOS Driver
   [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
   
   # Build BIOS
-  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpbios.rom
+  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpibios.asm  -o ./target/msxpbios.rom
   
   # Build BASIC BIOS Extension
-  $Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
+  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
 
   # Create an optional 2-bank ROMs for the EEPROM
   
@@ -151,7 +151,7 @@ if [ $buildBIOS = "yes" ];then
 	# do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
 	SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
 	sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
-	cp $BIOSFILE openMSX/share/systemroms/extensions/msxpibios.rom
+	cp $BIOSFILE openMSX/share/systemroms/extensions/msxpidos.rom
   fi
 fi
 

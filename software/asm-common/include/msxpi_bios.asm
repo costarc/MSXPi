@@ -169,214 +169,9 @@ nextbit16:
         djnz rotate16 ; 13/8t - loop over 8 bits
         exx
         ret
-
-; Clear buffer area
-; Input:
-; BC = buffer size
-; DE = Buffer Address
-;
-CLEARBUF:
-        push    bc
-        push    de
-        push    hl
-        ld      h,d
-        ld      l,e
-        inc     de
-        xor     a
-        ld      (hl),a
-        ldir
-        pop     hl
-        pop     de
-        pop     bc
-        ret
-        
-;-----------------------
-; SENDPICMD            |
-;-----------------------
-; Send a command to Raspberry Pi
-; This routine allocate BLKSIZE bytes at the top of th RAM
-; This buffer is used for command & parameters transfer
-; Input:
-;   de = should contain the command string
-;   hl = buffer address - optional. if zero, will use buffer at top of ram
-;   B = size of command + parameters
-; Output:
-;   Flag C set if there was a communication error
-;   hl = buffer address (never zero)
-;   af,bc,de,hl are modified
-;
-SENDPICMD:
-		CALL	resetMSXPI
-        EX      DE,HL
-        PUSH    BC
-        LD      BC,BLKSIZE
-        CALL    CLEARBUF
-        POP     BC
-
-; Call GETCMD, which will parse the whole string in the CALL command area,
-; get only the first string and send as Command - the remaining of the string
-; will be the parameters
-; The Command string is copied to the transfer buffer area (DE) and then
-; SENDCOMMAND is called
-
-        PUSH    DE
-        CALL    GETCMD
-        POP     DE
-        PUSH    HL              ; Next parmameters address
-        PUSH    DE
-        PUSH    BC
-        LD      BC,CMDSIZE
-        CALL    SENDDATA
-        POP     BC
-        POP     DE
-        POP     HL
-        RET     C
-; Clear the buffer again, and pass the remaining of the string
-; as parameters to RPi
-
-        PUSH    BC
-        LD      BC,BLKSIZE
-        CALL    CLEARBUF
-        POP     BC
-
-        PUSH    DE
-        CALL    GETPARMS
-        POP     DE
-        LD      BC,BLKSIZE
-        CALL    SENDDATA
-        RET
-        
-GETCMD:
-        LD      A,(HL)
-        CP      ' '
-        RET     Z
-        CP      $22             ; QUOTE (")
-        RET     Z
-        CP      ')'
-        RET     Z
-        LD      (DE),A
-        INC     DE
-        INC     HL
-        DEC     B
-        JR      NZ,GETCMD
-        RET
-GETPARMS:
-        XOR     A
-        CP      B
-        RET     Z
-        LD      A,(HL)
-        CP      ' '
-        JR      Z,GETPARMS2
-GETPARMS1:
-        LD      A,(HL)
-        CP      $22
-        JR      Z,GETPARMS2
-        CP      ')'
-        JR      Z,GETPARMS2
-        LD      (DE),A
-        INC     DE
-GETPARMS2:
-        INC     HL
-        DJNZ    GETPARMS1
-        RET
-
-;---------------------------------------------------------------
-; RECVDATA- SENDDATA
-;---------------------------------------------------------------
-; 01/03/2023
-;
-; Receive / Send BC bytes of data plus a checksum (1 byte)
-; Calculates teh checksum locally as data is coming, and send it back.
-; Compares the local checksum with received checksum, and
-; if they differ return with C flag set.
-; Will retry transmisison a number of times: GLOBALRETRIES
-;
-; Input:
-;   de = memory address for the data
-;   bc = block size
-; Output:
-;   Flag C set if error
-;  DE next available address
-RECVDATA:
-RECVDATABLOCK:
-        ld      a,GLOBALRETRIES
-RECVRETRY:
-        di
-        dec     a
-        push    af                      ; save number of retries left
-        ld      a,READY
-        call    PIWRITEBYTE             ; send Sync byte
-        ld      hl,0                    ; will store checksum in HL
-RECV0:
-        push    bc
-        call    PIREADBYTE
-        ld      (de),a
-        inc     de
-        ld      b,0
-        ld      c,a
-        add     hl,bc                   ; calculating the CRC
-        pop     bc
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,RECV0
-        call    PIREADBYTE      ; read checksum byte from msxpi server
-        ld      c,a
-        ld      a,l
-        add     a,h
-        ld      l,a
-        call    PIWRITEBYTE     ; send checksum calculated here
-        ld      a,c                         ; get MSXPi chksum
-        pop     bc                      ; number of retries in B
-        ei
-        cp      l                           ; compare checksum
-        ret     z                           ; return if match, C is 0
-        ld      a,b
-        or      a
-        jr      nz,RECVRETRY     ;go for another retry
-        scf                                 ; differ, set flag for Error
-        ret
-
-SENDDATA:
-SENDDATABLOCK:
-        ld      a,GLOBALRETRIES
-SENDRETRY:
-        di
-        dec     a
-        push    af                      ; save number of retries left
-        ld      a,READY
-        call    PIWRITEBYTE
-        ld      hl,0                       ; will store checksum in HL
-SENDD0:
-        push    bc
-        ld      a,(de)
-        inc     de
-        ld      b,0
-        ld      c,a
-        add     hl,bc
-        call    PIWRITEBYTE
-        pop     bc
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,SENDD0
-        ld      a,l
-        add     a,h                         ; sum two bytes of checksum to obtain final cum
-        ld      l,a
-        call    PIWRITEBYTE     ; send checksum calculated here
-        call    PIREADBYTE      ; read checksum byte from msxpi server
-        pop     bc                      ; Number of retries left in B
-        ei
-        cp      l                           ; compare checksum
-        ret     z                           ; return if match, C is 0
-        ld      a,b                         ; Check retries left
-        or      a
-        jr      nz,SENDRETRY     ;go for another retry
-        scf                                 ; differ, set flag for Error
-        ret
-
+       
 ; ---------------------------------------------------------
-; SENDDATA2 (single-block, size <= MAXBUFSIZE)
+; SENDDATA (single-block, size <= MAXBUFSIZE)
 ;   DE = src pointer
 ;   BC = size (number of bytes to send)
 ;
@@ -387,7 +182,7 @@ SENDD0:
 ; Uses:
 ;   AF, BC, DE, HL
 ; ---------------------------------------------------------
-SENDDATA2:
+SENDDATA:
 
 ; -------------------------
 ; 1. Initial handshake
@@ -515,7 +310,7 @@ SD2_SEND_DONE:
     ret
 
 ; ================================================================
-;  RECVDATA2_ONEBLOCK
+;  RECVDATA_ONEBLOCK
 ;  Receive exactly one block from Python using the DATA2 protocol.
 ;
 ;  INPUT:
@@ -542,7 +337,7 @@ SD2_SEND_DONE:
 ;     (IX+7) = length_hi
 ; ================================================================
 
-RECVDATA2_ONEBLOCK:
+RECVDATA_ONEBLOCK:
 
     ; ------------------------------------------------------------
     ; Allocate 8-byte local frame on stack
@@ -809,9 +604,9 @@ r2_exit:
 ;   None - it picks the command from MSX-DOS command line
 ;
 ; Output:
-;   NC: success (carry from SENDDATA2)
-;   C:  error (empty string or SENDDATA2 error)
-;   DE: advanced by SENDDATA2 on success
+;   NC: success (carry from SENDDATA)
+;   C:  error (empty string or SENDDATA error)
+;   DE: advanced by SENDDATA on success
 ;
 ; Uses:
 ;   AF, BC, DE, HL
@@ -832,9 +627,9 @@ SendPCommand:
 ;   DE = pointer to zero-terminated command string
 ;
 ; Output:
-;   NC: success (carry from SENDDATA2)
-;   C:  error (empty string or SENDDATA2 error)
-;   DE: advanced by SENDDATA2 on success
+;   NC: success (carry from SENDDATA)
+;   C:  error (empty string or SENDDATA error)
+;   DE: advanced by SENDDATA on success
 ;
 ; Uses:
 ;   AF, BC, DE, HL
@@ -879,18 +674,18 @@ SCM_CountDone:
 
 SCM_HaveLength:
     ; DE = src, BC = size
-    call    SENDDATA2
-    ret                     ; propagate carry from SENDDATA2
+    call    SENDDATA
+    ret                     ; propagate carry from SENDDATA
 
 
 ;-----------------------
-; printstdout
+; PRINTPISTDOUT
 ;-----------------------
-printstdout:
+PRINTPISTDOUT:
     push    bc					; maxbufsize expected
 	xor		a					; block number
 	push	de					; save buffer address
-	call	RECVDATA2_ONEBLOCK	; Read 1 block
+	call	RECVDATA_ONEBLOCK	; Read 1 block
 	ld		l,a					; save return code
 	ld 		a,TEXTTERMINATOR 
 	ld		(de),a 				; Terminator for text
@@ -905,7 +700,7 @@ printstdout:
 	pop     bc					; maxbufsize
 	pop     af					; return code
 	cp      RC_READY			; Is there another block?
-	jr      z,printstdout
+	jr      z,PRINTPISTDOUT
 	ret
 
 ;-----------------------
@@ -963,46 +758,6 @@ PRINTNUMERIC:
 PRINTNUM1:
         add     a,d
         call    PUTCHAR
-        ret
-
-; =================================================================
-; PRINTPISTDOUT 
-; Read buffer of BC lenght and print to screen. Terminates also if zero detected
-; Inputs: (PRINTPISTDOUT0)
-;  A = 0: Data contain header
-;  DE: Buffer address
-;  BC: Buffer lenght
-; Changes: AF,BC,HL
-; =================================================================
-PRINTPISTDOUT:
-        ld      a,(de)
-        or      a
-        scf
-        ret     z
-        cp      10
-        jr      nz,printchar
-        push    bc
-        call    PUTCHAR
-        pop     bc
-        ld      a,13
-printchar:
-        call    PUTCHAR
-        inc     de
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,PRINTPISTDOUT
-        or      a
-        ret
-
-NOSTDOUT: 
-        call    PIREADBYTE
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,NOSTDOUT
-        call    PIREADBYTE      ; read two extra bytes with the Checksum/CRC
-        call    PIREADBYTE
         ret
 
 STRTOHEX:
@@ -1132,107 +887,25 @@ PARMSEVAL2:
         LD      HL,0
         RET
 
-SENDPARMS:
-; check if there are parameters in the command line
-        ld      hl,$80
-        ld      a,(hl)
-        ld      b,a
-        or      a
-        jr      z,SENDPARMS2
-
-; b contain number of chars passed as arguments in the command
-        inc     hl
-        call    EATSPACES
-        jr      c,SENDPARMS2
-        ld      de,buf
-; Move CLI parameters to buffer
-SENDPARMS1:
-        ld      a,(hl)
-        ld      (de),a
-        inc     hl
-        inc     de
-        djnz    SENDPARMS1
-SENDPARMS2:
-        ld      de,buf
-        ld      bc,BLKSIZE
-        call    SENDDATA
-        ret
-
-; Send a simple command to MSXPi
-; DE = Command name, terminated in zero
-; Size of buffer is fixed (CMDSIZE) but command can be up to 8 chars
-SENDCOMMAND:
-		call    resetMSXPI
-        ld      hl,buf
-        ex      de,hl
-        ld      bc,CMDSIZE
-        push    hl
-        call    CLEARBUF
-        pop     hl
-        ld      b,CMDSIZE - 1
-SENDCOMMAND0:                       ; Move command to buffer area
-        ld      a,(hl)
-        LD      (de),a
-        or      a
-        jr      z,SENDCOMMAND1
-        inc     hl
-        inc     de
-        djnz    SENDCOMMAND0
-SENDCOMMAND1:
-        ld      bc,CMDSIZE
-        ld      de,buf
-        call    SENDDATA
-        ret
-
-SETBUF:
+; Clear buffer area
+; Input:
+; BC = buffer size
+; DE = Buffer Address
+;
+CLEARBUF:
+        push    bc
         push    de
-        call    CLEARBUF
-        pop     hl
-        ld      de,buf
-SETBUF0:
-        ld      a,(hl)
-        ld      (de),a
-        inc     hl
+        push    hl
+        ld      h,d
+        ld      l,e
         inc     de
-        or      a
-        jr      nz,SETBUF0
+        xor     a
+        ld      (hl),a
+        ldir
+        pop     hl
+        pop     de
+        pop     bc
         ret
-                
-EATSPACES:
-        ld      a,(hl)
-        cp      32
-        jr      nz,EATSPACEEND
-        inc     hl
-        djnz    EATSPACES
-        scf
-        ret
-EATSPACEEND:
-        or      a
-        ret
-
-DELAY:
-        PUSH    DE
-        PUSH    HL
-DELAY0:
-        PUSH    BC
-        LD          BC,$FFFF
-DELAY1:
-        EXX
-        EXX
-        EXX
-        EXX
-        DEC     BC
-        LD      A,B
-        OR      C
-        JR      NZ,DELAY1
-        POP     BC
-        DEC     BC
-        LD         A,B
-        OR      C
-        JR      NZ,DELAY0
-        POP     HL
-        POP     DE
-        RET
 		
 		DS 		128
 heap_top: equ     $
