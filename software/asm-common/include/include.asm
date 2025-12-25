@@ -21,7 +21,7 @@ READY_ACK:      EQU $A0
 SENDNEXT:       EQU $A1
 ENDTRANSFER:    EQU $A2
 READY:          EQU $AA
-ABORT:          EQU $AD
+RC_CHKSUM_ERR:  EQU $AD
 BUSY:           EQU $AE
 
 RC_SUCCESS:        EQU $E0

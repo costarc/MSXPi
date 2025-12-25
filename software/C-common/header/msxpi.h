@@ -10,7 +10,7 @@
 #define GLOBALRETRIES		1     // adjust as needed
 #define MAX_BLOCK_RETRIES	3
 #define BLKSIZE				512   // buffer size for data transfer
-#define MAXBUFSIZE			8*1024  // 8 KB buffer size
+#define MAXBUFSIZE			8192  // 8 KB buffer size
 
 #define READY_ACK			0xA0
 #define SENDNEXT			0xA1
@@ -59,4 +59,4 @@ uint8_t parseConnError(const uint8_t rc);
 uint16_t get_sp(void) __naked;
 uint16_t get_max_buffer_size(void);
 uint8_t* get_buffer_ptr(void);
-void printstdout(uint16_t maxbufsize);
+void printstdout(uint8_t* buffer, uint16_t maxbufsize);

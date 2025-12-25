@@ -125,7 +125,8 @@ int main(void)
             SetDateTime();
         }
         else {
-			printstdout(BLKSIZE);
+            uint8_t* buf = (uint8_t*)(get_max_buffer_size() + 100);
+            printstdout(buf, BLKSIZE);
         }
     } else {
 		Print("Connection error\n");

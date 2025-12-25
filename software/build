@@ -1,8 +1,8 @@
 #!/bin/bash
 
 export buildClientCommands="no"
-export buildBIOS="yes"
-export buildOpenMSXConfig="yes"
+export buildBIOS="no"
+export buildOpenMSXConfig="no"
 export buildMSXStuff="no"
 export updateVersions="no"
 
@@ -152,6 +152,8 @@ if [ $buildBIOS = "yes" ];then
 	SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
 	sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
 	cp $BIOSFILE openMSX/share/systemroms/extensions/msxpidos.rom
+	cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/msxpidos.rom
+	cp $XMLPATH/MSXPi.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
   fi
 fi
 
@@ -181,3 +183,6 @@ cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
 cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
 cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
 cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
+
+$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
+cp target/pdir.com ../../../../Dev/MSX/MSXPi/diska22/

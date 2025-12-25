@@ -389,9 +389,9 @@ def dir(data):
             parser = MyHTMLParser()
             parser.feed(htmldata)
             buf = " ".join(parser.HTMLDATA)
-            rc = sendmultiblock(buf.encode(), BLKSIZE)
+            rc = sendmultiblock(buf.encode(), MAXBUFSIZE)
     except Exception as e:
-        sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE)
+        sendmultiblock(('Pi:Error - ' + str(e)).encode(), MAXBUFSIZE)
 
     return RC_SUCCESS
 
@@ -426,7 +426,7 @@ def cd(data):
                 rc = sendmultiblock(path.encode(), BLKSIZE)
     except Exception as e:
         print("pcd:"+str(e))
-        sendmultiblock((RC_FAILED, 'Pi:Error - ' + str(e)).encode())
+        sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE)
 
     return RC_SUCCESS
     
@@ -900,11 +900,11 @@ def irc():
             ircsock.setblocking(0);
             ircsock.send(buf)
             ircmsg = 'Connected to ' + ircserver
-            sendmultiblock(ircmsg.encode(), BLKSIZE, RC_SUCCESS)
+            sendmultiblock(ircmsg.encode(), BLKSIZE)
         elif cmd[:3] == "msg":
             ircsock.setblocking(0);
             ircsock.send(("PRIVMSG "+cmd[4:] +"\r\n").encode())
-            sendmultiblock("Pi:Ok\n".encode(), BLKSIZE, RC_SUCCNOSTD)
+            sendmultiblock("Pi:Ok\n".encode(), BLKSIZE)
         elif cmd[:4] == 'join':
             jparm = cmd.split(' ')
             jchannel = jparm[1]
@@ -916,7 +916,7 @@ def irc():
             ircmsg = 'Pi:Ok\n'
             rc = RC_SUCCNOSTD
             ircsock.setblocking(0);
-            sendmultiblock(ircmsg.encode(), BLKSIZE, rc)
+            sendmultiblock(ircmsg.encode(), BLKSIZE)
         elif cmd[:4] == 'read':
             ircmsg = 'Pi:Error'
             try:
@@ -949,28 +949,28 @@ def irc():
                 print("irc read exception:",err,str(e))
                 ircmsg = 'Pi:Ok\n'
                 rc = RC_SUCCNOSTD
-            sendmultiblock(ircmsg.encode(), BLKSIZE, rc)        
+            sendmultiblock(ircmsg.encode(), BLKSIZE)        
         elif cmd[:5] == 'names':
             ircsock.send((cmd+"\r\n").encode())
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
             ircmsg = "Users on channel " #+ ircmsg.split('=',1)[1]
-            sendmultiblock(ircmsg.encode(), BLKSIZE, RC_SUCCESS)
+            sendmultiblock(ircmsg.encode(), BLKSIZE)
         elif cmd[:4] == 'quit':
             ircsock.send(("/quit\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\r\n".encode(),BLKSIZE, RC_SUCCESS)
+            sendmultiblock("Pi:leaving room\r\n".encode(),BLKSIZE)
         elif cmd[:4] == 'part':
             ircsock.send(("/part\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE, RC_SUCCESS)
+            sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE)
         else:
             print("irc:no valid command received")
-            sendmultiblock("Pi:No valid command received".encode(),BLKSIZE, rc)
+            sendmultiblock("Pi:No valid command received".encode(),BLKSIZE)
     except Exception as e:
         print("irc:Caught exception"+str(e))
-        sendmultiblock("Pi:"+str(e).encode(), BLKSIZE, rc)
+        sendmultiblock("Pi:"+str(e).encode(), BLKSIZE)
         
 def dosinit(parms = None):
     print("dosinit()")    
@@ -1662,7 +1662,7 @@ def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_ind
             break
 
     # Receive msxmaxbuf
-    #print("senddata_oneblock(): Receiving msxmaxbuf from MSX")
+    print("senddata_oneblock(): Receiving msxmaxbuf from MSX")
     rc, low = SPI_ByteTransfer()
     if rc != RC_SUCCESS:
         return RC_CONNERR
@@ -1671,16 +1671,16 @@ def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_ind
         return RC_CONNERR
 
     msxmaxbuf = low | (high << 8)
-    #print(f"senddata_oneblock(): MSX max payload size per block = {msxmaxbuf}")
+    print(f"senddata_oneblock(): MSX max payload size per block = {msxmaxbuf}")
     if length > msxmaxbuf:
         return RC_INVALIDDATASIZE
 
     # 2. Send exactly one block with retries
     attempts = 0
-    #print("senddata_oneblock(): Sending block data with retries if needed")
+    print("senddata_oneblock(): Sending block data with retries if needed")
     while True:
         # header_rc
-        #print(f"senddata_oneblock(): Sending header_rc={hex(header_rc)}")
+        print(f"senddata_oneblock(): Sending header_rc={hex(header_rc)}")
         rc, _ = SPI_ByteTransfer(header_rc)
         if rc != RC_SUCCESS:
             return RC_CONNERR
@@ -1721,6 +1721,7 @@ def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_ind
         if rc != RC_SUCCESS:
             return RC_CONNERR
 
+        print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
         if msxsum == local_sum:
             # block accepted
             break
@@ -1733,21 +1734,23 @@ def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_ind
     # 3. Status handshake after GOOD block
     # MSX (receiver) does: READY, status_for_next, expects READY_ACK.
     # Python (sender) must: read READY, read status, send READY_ACK.
-    #print("senddata_oneblock(): Performing status handshake")
+    print("senddata_oneblock(): Performing status handshake")
     rc, ready = SPI_ByteTransfer()
-    #print(f"senddata_oneblock(): rc = {hex(rc)} and byte = {ready}")
+    print(f"senddata_oneblock(): MSX Handshake = {ready}")
     if rc != RC_SUCCESS:
         return RC_HANDSHAKEERR
     if ready != READY:
         return RC_HANDSHAKEERR
 
     rc, status_from_msx = SPI_ByteTransfer()
+    print(f"senddata_oneblock(): MSX Status = {status_from_msx}")
     if rc != RC_SUCCESS:
         return RC_CONNERR
     if status_from_msx != RC_SUCCESS:
         return RC_CONNERR
 
     # send READY_ACK
+    print("senddata_oneblock(): Sending READY_ACK to MSX")
     SPI_ByteTransfer(READY_ACK)
 
     # 4. Interpret header_rc (what we told MSX)
@@ -1786,7 +1789,7 @@ def sendmultiblock(payload: bytes, maxbufsize = BLOCKSIZE):
             header = RC_SUCCESS
 
         # Send one block
-        #print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
+        print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
         rc = senddata_oneblock(block, maxbufsize, header, block_index)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer

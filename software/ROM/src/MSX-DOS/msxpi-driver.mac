@@ -596,7 +596,7 @@ CALL_MSXPI1:
 ; Routine explanation:
 ; MSX Send the command to RPi
 ; RPi reply with data block (BLKSIZE) with the following structure:
-; | RC | LSB | MSB | DATA |
+; | RC | LSB | MSB | INDEX | DATA |
 ; RC = RC_FAILED: Pi error. Message available to print
 ; RC = RC_READY: Pi processing succeed - data available and there is another block
 ; RC = RC_SUCCESS : Pi processing succeed - data available and this is last block
@@ -605,6 +605,7 @@ CALL_MSXPI1:
 ; Send commands (in CALL parameters) to RPi
         
         PUSH    HL
+        call    TerminateStringWithZero
         CALL    SendCommandToMSXPi
         POP     DE
         JR      NC,CALL_MSXPI3
@@ -620,58 +621,34 @@ CALL_MSXPI3:
         POP     AF
         CP      '2'
         JR      Z,CALL_MSXPISAVE
-        LD      C,A
 ; Will print RPi response to screen
-CALL_PRINTBUF:
-        ld      a,c                 ; stdout option
-        push    af
         ld      bc,BLKSIZE
-        call    CLEARBUF
-        push    de
-        ld      bc,BLKSIZE
-        call    RECVDATA_ONEBLOCK
-        pop     hl
-        ld      a,RC_CONNERR
-        jr      c,CALL_MSXPI2_ERR
-        pop     af
-        push    hl
-        push    af
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        inc     hl
-        ld      d,h
-        ld      e,l
-        pop     af
-        pop     hl
-        push    af
-        push    hl
-        ld      bc,BLKSIZE
-        cp      '0'                      ; should print ?
-        call    nz,PRINTPISTDOUT
-        pop     de
-        pop     af
-        ld      c,a
-        ld      a,(de)
-        cp      RC_READY
-        jr      z,CALL_PRINTBUF
+        xor     a
+        call	PRINTPISTDOUT
+        ld      a,'1'
+        out  (98h),a
         pop     hl
         or      a
         ret
         
 CALL_MSXPISAVE:
         PUSH    DE
-        LD      BC,BLKSIZE
+        INC     DE
+        INC     DE
+        INC     DE ; Lave space for  header
+        LD      HL,0 			; Clear total size
+        PUSH    HL
+
+        XOR	    A                       ; BLOCK INDEX
+SAVETOMEM:
+        LD      BC,BLKSIZE              ; Bytes to read on each block
         CALL    RECVDATA_ONEBLOCK
+        CALL    DBGBC
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
-        LD      A,(HL)
-        CP      RC_READY
-        JR      NZ,CALL_MSXPISAVEXIT    ; No more data to trasnfer
 CALL_MSXPISAVE2:
-        PUSH    DE
-        LD      BC,BLKSIZE
+        PUSH    DE                      ; save next block address
+        LD      BC,BLKSIZE              ; 
         CALL    RECVDATA_ONEBLOCK
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
@@ -692,7 +669,20 @@ CALL_MSXPISAVEXIT:
         POP     HL
         OR      A
         RET
-        
+ 
+TerminateStringWithZero:
+        PUSH	HL
+        PUSH	DE
+        LD	    H,D
+        LD      L,E
+        LD      E,B
+        LD      D,0
+        ADD     HL,DE
+        LD      (HL),0
+        POP     DE
+        POP     HL
+        RET
+
 ; SUMBLOCKSIZES
 ; Add size of each block to the block address
 ; Note that it the data to receive is too big,
@@ -790,7 +780,7 @@ MSXPIRECV2:
 ;-----------------------
 ; call GETPOINTERS      |
 ;-----------------------
-; Return in hl the Entry address of th routine indexed in A
+; Return in hl the Entry address of the routine indexed in A
 ; Input:
 ;  A = Routine index
 ; Output:
@@ -829,7 +819,6 @@ BIOSENTRYADDR:  EQU     $
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
-        DW      PIEXCHANGEBYTE
         DW      SendCommandToMSXPi
         DW      PRINT
         DW      PRINTNLINE

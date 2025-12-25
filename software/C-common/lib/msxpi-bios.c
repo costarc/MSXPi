@@ -717,22 +717,23 @@ char* u16_to_ascii(uint16_t value, char* buf)
     return buf;
 }
 
-void printstdout(uint16_t maxbufsize)
+void printstdout(uint8_t* buffer, uint16_t maxbufsize)
 {
     uint8_t  rc;
     uint16_t block_size;
-    uint16_t block_index = 0;
 
     while (1) {
-        uint8_t* buffer = (uint8_t*)(get_max_buffer_size() + 100);
+
         rc = RECVDATA2_ONEBLOCK(buffer, &block_size, maxbufsize);
+
         if (block_size < maxbufsize)
             buffer[block_size] = '\0';
         else
             buffer[maxbufsize - 1] = '\0';
-		Print(buffer);
-        if (rc != RC_READY) {
+
+        Print(buffer);
+
+        if (rc != RC_READY)
             break;
-        }
     }
 }

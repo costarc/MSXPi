@@ -1,0 +1,64 @@
+;|===========================================================================|
+;|                                                                           |
+;| MSXPi Interface                                                           |
+;|                                                                           |
+;| Version : 1.1                                                             |
+;|                                                                           |
+;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
+;|                                                                           |
+;| All rights reserved                                                       |
+;|                                                                           |
+;| Redistribution and use in source and compiled forms, with or without      |
+;| modification, are permitted under GPL license.                            |
+;|                                                                           |
+;|===========================================================================|
+;|                                                                           |
+;| This file is part of MSXPi Interface project.                             |
+;|                                                                           |
+;| MSX PI Interface is free software: you can redistribute it and/or modify  |
+;| it under the terms of the GNU General Public License as published by      |
+;| the Free Software Foundation, either version 3 of the License, or         |
+;| (at your option) any later version.                                       |
+;|                                                                           |
+;| MSX PI Interface is distributed in the hope that it will be useful,       |
+;| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
+;| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
+;| GNU General Public License for more details.                              |
+;|                                                                           |
+;| You should have received a copy of the GNU General Public License         |
+;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
+;|===========================================================================|
+;
+; File history :
+; 0.2   : Structural changes to support a simplified transfer protocol with error detection
+; 0.1    : Initial version.
+;
+; This is a generic template for MSX-DOS command to interact with MSXPi
+; This command must have a equivalent function in the msxpi-server.py program
+; The function name must be the same defined in the "command" string in this program
+;
+
+DSKBLOCKSIZE:   EQU 1
+
+        org     $0100
+        ld      de,command
+        call    SendCommandToMSXPi
+        jr      c, PRINTPIERR
+		xor		a 
+		ld		bc,MAXBUFSIZE
+		ld		de,buf
+		call    PRINTPISTDOUT
+		ret
+PRINTPIERR:
+        LD      HL,PICOMMERR
+        JP      PRINT
+
+command:    DB      "dir",0
+PICOMMERR:  db      "Communication error",0
+
+INCLUDE "include.asm"
+INCLUDE "putchar-clients.asm"
+INCLUDE "msxpi_bios.asm"
+INCLUDE "debug.asm"
+
+buf:    equ     $
