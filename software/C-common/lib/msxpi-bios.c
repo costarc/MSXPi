@@ -235,7 +235,7 @@ uint8_t RECVDATA2(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
     }
 }
 
-uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
+uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
 {
     uint8_t  rc;
     uint8_t  header_rc;
@@ -244,7 +244,7 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
     static uint8_t  expected_block_index = 0;
     uint16_t checksum;
     uint8_t  localChecksum, remoteChecksum;
-    uint16_t length;
+    uint16_t this_blocksize;
     uint8_t  status_for_next;
 
     // -------------------------
@@ -268,10 +268,9 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
     }
     //Print("[MSX] Handshake: Finished\n");
 
-    // Send msxmaxbuf (max payload bytes per block)
-    //uint16_t msxmaxbuf = *maxbufsize;
-    if (PIWRITEBYTE(maxbufsize & 0xFF) != RC_SUCCESS)        return RC_CONNERR;
-    if (PIWRITEBYTE((maxbufsize >> 8) & 0xFF) != RC_SUCCESS) return RC_CONNERR;
+    // Send msx_blocksize (max payload bytes per block)
+    if (PIWRITEBYTE(msx_blocksize & 0xFF) != RC_SUCCESS) return RC_CONNERR;
+    if (PIWRITEBYTE((msx_blocksize >> 8) & 0xFF) != RC_SUCCESS) return RC_CONNERR;
 
     // -------------------------
     // 2. Read exactly one block
@@ -282,14 +281,14 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
     rc = PIREADBYTE(&header_rc);
     if (rc != RC_SUCCESS) return RC_CONNERR;
 
-    // --- length low/high ---
+    // --- this_blocksize low/high ---
     rc = PIREADBYTE(&byte);
     if (rc != RC_SUCCESS) return RC_CONNERR;
-    length = byte;
+    this_blocksize = byte;
 
     rc = PIREADBYTE(&byte);
     if (rc != RC_SUCCESS) return RC_CONNERR;
-    length |= ((uint16_t)byte << 8);
+    this_blocksize |= ((uint16_t)byte << 8);
 
     // --- block_index ---
     rc = PIREADBYTE(&block_index);
@@ -300,16 +299,16 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
         return RC_CONNERR;
     }
 
-    if (length > maxbufsize) {
+    if (this_blocksize > msx_blocksize) {
         return RC_BUFOVFLW;
     }
 
-    *size = length;  // size of this block
+    *size = this_blocksize;  // size of this block
 
     // --- Payload ---
     //Print("[MSX] Starting the payload loop\n");
     checksum = 0;
-    for (uint16_t i = 0; i < length; i++) {
+    for (uint16_t i = 0; i < this_blocksize; i++) {
         rc = PIREADBYTE(&byte);
         if (rc != RC_SUCCESS) return RC_CONNERR;
         dest[i] = byte;
@@ -386,10 +385,10 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize)
 //
 // Then per block:
 //   MSX   -> header_rc           (RC_READY or RC_SUCCESS)
-//   MSX   -> length_low
-//   MSX   -> length_high
+//   MSX   -> this_blocksize_low
+//   MSX   -> this_blocksize_high
 //   MSX   -> block_index
-//   MSX   -> payload[length]
+//   MSX   -> payload[this_blocksize]
 //   MSX   -> localChecksum       (from MSX checksum calculation)
 //   Python-> remoteChecksum      (Python's view of checksum)
 //   (If remoteChecksum != localChecksum, MSX resends same block)
@@ -411,7 +410,7 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
     uint16_t offset = 0;          // committed bytes sent from src[]
     uint16_t msxmaxbuf;
     uint16_t remaining;
-    uint16_t length;
+    uint16_t this_blocksize;
     uint16_t checksum;
     uint8_t  localChecksum, remoteChecksum;
     uint8_t  status_from_python;
@@ -445,14 +444,14 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
     // 2. Block send loop
     // -------------------------
     while (offset < size) {
-        // Compute length for this block (max msxmaxbuf or remaining bytes)
+        // Compute this_blocksize for this block (max msxmaxbuf or remaining bytes)
         remaining = size - offset;
         if (remaining > msxmaxbuf) {
-            length = msxmaxbuf;
+            this_blocksize = msxmaxbuf;
             header_rc = RC_READY;   // more blocks will follow
         }
         else {
-            length = remaining;
+            this_blocksize = remaining;
             header_rc = RC_SUCCESS; // this is the last block
         }
 
@@ -462,12 +461,12 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
             rc = PIWRITEBYTE(header_rc);
             if (rc != RC_SUCCESS) return RC_CONNERR;
 
-            // --- Length low ---
-            rc = PIWRITEBYTE((uint8_t)(length & 0xFF));
+            // --- this_blocksize low ---
+            rc = PIWRITEBYTE((uint8_t)(this_blocksize & 0xFF));
             if (rc != RC_SUCCESS) return RC_CONNERR;
 
-            // --- Length high ---
-            rc = PIWRITEBYTE((uint8_t)((length >> 8) & 0xFF));
+            // --- this_blocksize high ---
+            rc = PIWRITEBYTE((uint8_t)((this_blocksize >> 8) & 0xFF));
             if (rc != RC_SUCCESS) return RC_CONNERR;
 
             // --- Block index ---
@@ -476,7 +475,7 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
 
             // --- Payload + checksum accumulation ---
             checksum = 0;
-            for (uint16_t i = 0; i < length; i++) {
+            for (uint16_t i = 0; i < this_blocksize; i++) {
                 uint8_t b = src[offset + i];
                 rc = PIWRITEBYTE(b);
                 if (rc != RC_SUCCESS) return RC_CONNERR;
@@ -511,7 +510,7 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
         }
 
         // Commit this block
-        offset += length;
+        offset += this_blocksize;
         block_index++;
 
         // -------------------------

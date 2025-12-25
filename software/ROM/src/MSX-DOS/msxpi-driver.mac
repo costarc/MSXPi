@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.3                                                             |
+;| Version : 1.4                                                             |
 ;|                                                                           |
 ;| Copyright (c) 2015-2025 Ronivon Candido Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.2 (2025)
+; MSXPi Driver v1.4 (2025)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -443,34 +443,34 @@ OEMSTA:
 CALLHAND:
  
     PUSH    HL
-    LD  HL,CALL_TABLE         ; Table with "_" instructions
+    LD      HL,CALL_TABLE     ; Table with "_" instructions
 .CHKCMD:
-    LD  DE,PROCNM
-.LOOP:  LD  A,(DE)
-    CP  (HL)
-    JR  NZ,.TONEXTCMD   ; Not equal
-    INC DE
-    INC HL
-    AND A
-    JR  NZ,.LOOP    ; No end of instruction name, go checking
-    LD  E,(HL)
-    INC HL
-    LD  D,(HL)
-    POP HL      ; routine address
+    LD      DE,PROCNM
+.LOOP       LD  A,(DE)
+    CP      (HL)
+    JR      NZ,.TONEXTCMD   ; Not equal
+    INC     DE
+    INC     HL
+    AND     A
+    JR      NZ,.LOOP        ; No end of instruction name, go checking
+    LD      E,(HL)
+    INC     HL
+    LD      D,(HL)          
+    POP     HL              ; routine address
     CALL    GETPREVCHAR
-    CALL    .CALLDE     ; Call routine
-    AND A
+    CALL    .CALLDE         ; Call routine
+    AND     A
     RET
  
 .TONEXTCMD:
-    LD  C,0FFH
-    XOR A
+    LD      C,0FFH
+    XOR     A
     CPIR            ; Skip to end of instruction name
-    INC HL
-    INC HL      ; Skip address
-    CP  (HL)
-    JR  NZ,.CHKCMD  ; Not end of table, go checking
-    POP HL
+    INC     HL
+    INC     HL      ; Skip address
+    CP      (HL)
+    JR      NZ,.CHKCMD  ; Not end of table, go checking
+    POP     HL
     SCF
     RET
  
@@ -555,43 +555,21 @@ _MSXPIVER:
 ;--------------------------------------------------------------------
 ; Verify if command has STD parameters specified
 ; Examples:
-; call mspxi("pdir")  -> will print the output
-; call mspxi("0,pdir")  -> will not print the output
-; call msxpi("1,pdir")  -> will print the output to screen
-; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
+; call mspxi("0,xxxx,pdir")  -> ignores the response
+; call msxpi("1,xxxx,pdir")  -> print the respinse to screen
+; call msxpi("2,E000,pdir")  -> store response data in memmory address passed
 _MSXPI:
         CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL
-        CALL    GETSTRPNT
-        EX      DE,HL
-        CALL    PARMSEVAL
-        
-; Now that it processed the parameters, check if Buffer address was passed
-; If not passed, will allocate a buffer of size BLOCKSIZE at the top of the ram
-; Output: IX = HL = Buffer address
-        PUSH    AF
-        LD      A,H
-        OR      L
-        JR      NZ,CALL_BUFFERPASSED
-        LD      HL,(HIMEM)
-        PUSH    BC
-        LD      BC,BLKSIZE
-        OR      A               ; reset C to avoid carry being used in the SBC command
-        SBC     HL,BC           ; Allocate Buffer on top of RAM
-        DEC     HL
-        DEC     HL
-        DEC     HL
-        POP     BC
-CALL_BUFFERPASSED:
-        PUSH    HL
-        POP     IX              ; IX = WORK AREA ( BYTES )
-
-CALL_MSXPI1:
+        PUSH    HL              ; Save for BASIC
+        CALL    GETSTRPNT       ; Get the address of the paramaters
+        EX      DE,HL           ; Switch to DE as required by next routines
+        CALL    PARSE_CALL_PARAMETERS
+                                ; Validate and get all paremeters in the call command
+        JR      C,CALL_SYNTAX_ERROR ; Return to BASIC with ERROR  
 ; Registers at this point:
 ; A  = contain the output required for the command
-; B  = contain number of chars in the command
 ; DE = contain string address of command to send to RPi
-; HL = IX = contain buffer address to store data from RPi (if provided by user, otherwise 0)
+; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
 ;
 ; Routine explanation:
 ; MSX Send the command to RPi
@@ -605,33 +583,34 @@ CALL_MSXPI1:
 ; Send commands (in CALL parameters) to RPi
         
         PUSH    HL
-        call    TerminateStringWithZero
+        PUSH    AF
         CALL    SendCommandToMSXPi
-        POP     DE
-        JR      NC,CALL_MSXPI3
-CALL_MSXPI2_ERR:
+        JR      NC,CALL_SUCCESS
         POP     AF
-CALL_MSXPISERR:
-        LD      A,RC_CONNERR
-        LD      (HL),A
         POP     HL
-        OR      A
+        LD      A,RC_CONNERR
+        LD      (HL),A              ; Store error code in the Header area for user
+        POP     HL                  ; BASIC Pointer
+        AND     A
         RET
-CALL_MSXPI3:
-        POP     AF
+CALL_SUCCESS:
+        pop     af
+        pop     de
         CP      '2'
-        JR      Z,CALL_MSXPISAVE
+        JR      Z,CALL_MSXPISAVEDATA
 ; Will print RPi response to screen
         ld      bc,BLKSIZE
-        xor     a
+        xor     a               ; block = 0
         call	PRINTPISTDOUT
-        ld      a,'1'
-        out  (98h),a
-        pop     hl
-        or      a
+        pop     hl              ; BASIC pointer
+        and     a
         ret
-        
-CALL_MSXPISAVE:
+CALL_SYNTAX_ERROR:
+        LD      E,2
+        LD      IX,ERRHAND  ; Call the Basic error handler
+        JP      CALBAS
+
+CALL_MSXPISAVEDATA:
         PUSH    DE
         INC     DE
         INC     DE
@@ -643,7 +622,6 @@ CALL_MSXPISAVE:
 SAVETOMEM:
         LD      BC,BLKSIZE              ; Bytes to read on each block
         CALL    RECVDATA_ONEBLOCK
-        CALL    DBGBC
         POP     HL                      ; HL = Start of buffer, DE=Address next block
         JR      C,CALL_MSXPISERR
 CALL_MSXPISAVE2:
@@ -669,18 +647,90 @@ CALL_MSXPISAVEXIT:
         POP     HL
         OR      A
         RET
+CALL_MSXPISERR: ret
  
-TerminateStringWithZero:
-        PUSH	HL
-        PUSH	DE
-        LD	    H,D
-        LD      L,E
-        LD      E,B
-        LD      D,0
-        ADD     HL,DE
-        LD      (HL),0
-        POP     DE
+; Evaluate CALL Commands to check for optional parameters
+; Returns Buffer address in HL (or HL=0000 if parameter not found)
+; Input:
+;  DE = Call full command (after the ")
+; Output:
+;  A = Output type (as below cases)
+;  DE = Point to start of command to send to RPi (pdir in the case below)
+;  HL = Address of buffer to store data if stdout = 2
+;
+; Cases:
+; call mspxi("0,xxxx,pdir")  -> ignores the response
+; call msxpi("1,xxxx,pdir")  -> print the respinse to screen
+; call msxpi("2,E000,pdir")  -> store response data in memmory address passed
+; 
+PARSE_CALL_PARAMETERS:
+        LD      A,(DE)
+        ; First parameters must be 0,1 or 2 - otherwise return error.
+        CP      '0' 
+        RET     C
+        CP      '3'
+        JR      C,STDOUT_OK
+        SCF                 ; STDOUT > 2 -> error
+        RET
+STDOUT_OK:
+        LD      H,A
+        INC     DE
+        LD      A,(DE)
+        CP      ','         ;Check for comma after stdout parameter
+        SCF
+        RET     NZ          ; Syntax error - missing comma
+        INC     DE          ; Point to Address provided in call command
+; Convert ascii chars pointed by HL to hex. Return value in HL
+; Flag C is set if there was an error
+        CALL    STRTOHEX    ; Return with DE pointing to next char in string
+                            ; BC = Address converted from String
+                            ; Flag C: set if error
+                            ; All registers preserved
+
+        RET     C           ; Conversion error - Exit
+        CALL    ExtractCommand  ; Copy the command to temporary buffer
+                                ; Required to terminate the command with Zero
+                                ; Return address in DE
+        
+        LD      A,H         ; A = stdout value
+        LD      H,B          
+        LD      L,C         ; HL = Buffer address passed in call command
+                            ; DE = Addres of command terminated in zero
+        AND     A
+        RET
+
+; Extract command from CALL
+; DE = Address of string passed in CALL (after "0,xxxx,")
+ExtractCommand:
+        PUSH    HL
+        PUSH    BC
+        LD      BC,256
+        LD      HL,(HIMEM)
+        OR      A
+        SBC     HL,BC       ; HL = Start of buffer to store the command temporarily
+        PUSH    HL          ; HL = Start of buffer to store the command temporarily
+EC_Loop:
+        LD      A,(DE)
+        CP      '"'         ; End of parameters
+        JR      Z,EC_Success
+        CP      ')'
+        JR      Z ,EC_ExitError  ; Error - Missing quote at end of command
+        LD      (HL),A
+        INC     HL
+        INC     DE
+        JR      EC_Loop
+EC_Success:
+        LD      (HL),0      ; Termination for the command
+        POP     DE          ; Restore new address for command
+        POP     BC
         POP     HL
+        AND     A           ; Success
+        RET
+EC_ExitError:
+        POP     HL
+        POP     BC
+        POP     HL
+        SCF                 ; Error
         RET
 
 ; SUMBLOCKSIZES
@@ -891,5 +941,5 @@ DOS_FMT:    DB  "dskiofmt",0,0,0,0
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
 INCLUDE msxpi_bios.asm
-
+INCLUDE DEBUG.ASM
 

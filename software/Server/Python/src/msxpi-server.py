@@ -333,7 +333,7 @@ def ini_fcb(fname,fsize):
     buf = bytearray()
     buf.extend(msxdrive.to_bytes(1,'little'))
     buf.extend(msxfcbfname.encode())
-    rc = sendmultiblock(buf, BLKSIZE)   
+    rc = sendmultiblock(buf)   
     return rc
 
 def run(cmd = ''):
@@ -341,7 +341,7 @@ def run(cmd = ''):
     
     global hostType
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        rc = sendmultiblock("Syntax: run <command> <::> command. To  pipe a command to other, use :: instead of |", BLKSIZE)
+        rc = sendmultiblock("Syntax: run <command> <::> command. To  pipe a command to other, use :: instead of |")
         return RC_FAILED
 
     cmd = cmd.replace('::','|')
@@ -360,11 +360,11 @@ def run(cmd = ''):
         elif len(buf) == 0:
             rc = RC_SUCCESS
             buf = "Pi:Ok"
-        sendmultiblock(buf.encode(), BLKSIZE)
+        sendmultiblock(buf.encode())
         return rc
     except Exception as e:
         print("run: exception:"+str(e))
-        sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE)
+        sendmultiblock(("Pi:Error - "+str(e)).encode())
         return rc
 
 def dir(data):
@@ -389,9 +389,9 @@ def dir(data):
             parser = MyHTMLParser()
             parser.feed(htmldata)
             buf = " ".join(parser.HTMLDATA)
-            rc = sendmultiblock(buf.encode(), MAXBUFSIZE)
+            rc = sendmultiblock(buf.encode())
     except Exception as e:
-        sendmultiblock(('Pi:Error - ' + str(e)).encode(), MAXBUFSIZE)
+        sendmultiblock(('Pi:Error - ' + str(e)).encode())
 
     return RC_SUCCESS
 
@@ -406,27 +406,27 @@ def cd(data):
         userPath = data 
     try:
         if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
-            rc = sendmultiblock(basepath.encode(), BLKSIZE)
+            rc = sendmultiblock(basepath.encode())
         elif (userPath.strip() == ".."):
             newpath = basepath.rsplit('/', 1)[0]
             if (newpath == ''):
                 newpath = '/'
             setMSXPiVar('PATH',newpath)
-            rc = sendmultiblock(newpath.encode(), BLKSIZE)
+            rc = sendmultiblock(newpath.encode())
         else:
             pathType, path = pathExpander(userPath, basepath)
             if pathType == 0:
                 if (os.path.isdir(path)):
                     setMSXPiVar('PATH',path)
-                    rc = sendmultiblock(path.encode(), BLKSIZE)
+                    rc = sendmultiblock(path.encode())
                 else:
-                    sendmultiblock("Pi:Error - not a folder".encode(), BLKSIZE)
+                    sendmultiblock("Pi:Error - not a folder".encode())
             else:
                 setMSXPiVar('PATH',path)
-                rc = sendmultiblock(path.encode(), BLKSIZE)
+                rc = sendmultiblock(path.encode())
     except Exception as e:
         print("pcd:"+str(e))
-        sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE)
+        sendmultiblock(('Pi:Error - ' + str(e)).encode())
 
     return RC_SUCCESS
     
@@ -485,7 +485,7 @@ def pcopy(msxcmd = "pcopy"):
             filesize = len(buf)
         except Exception as e:
             err = 'Pi:Error - ' + str(e)
-            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode(), BLKSIZE, RC_FAILED)
+            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode())
             return RC_FAILED
     else:
         try:
@@ -655,17 +655,17 @@ def date(parms = None):
     print(f"Parsed Time: {pdate[4]:02d}:{pdate[5]:02d}:{pdate[6]:02d}")
 
     # Now send to MSX
-    sendmultiblock(pdate, BLKSIZE)
+    sendmultiblock(pdate)
 
 def play(data):
     print(f"pplay(): {data}")
     
     if not data:
-        rc = sendmultiblock("Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3", BLKSIZE)
+        rc = sendmultiblock("Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3")
         return RC_FAILED
        
     if hostType != "RaspberryPi": 
-        sendmultiblock("Command not supported in this platform".encode(), BLKSIZE)
+        sendmultiblock("Command not supported in this platform".encode())
         return RC_SUCCESS
         
     parmslist = data.split(" ")
@@ -680,9 +680,9 @@ def play(data):
         buf = subprocess.check_output(['/home/pi/msxpi/pplay.sh',getMSXPiVar('PATH'),cmd,parms])
         if buf == b'':
             buf = b'\x0a'
-        sendmultiblock(buf, BLKSIZE)
+        sendmultiblock(buf)
     except subprocess.CalledProcessError as e:
-        sendmultiblock(("Pi:Error - "+str(e)).encode(), BLKSIZE)
+        sendmultiblock(("Pi:Error - "+str(e)).encode())
 
     return RC_SUCCESS
     
@@ -690,7 +690,7 @@ def vol(data):
     print(f"pvol(): {data}")
 
     if not data:
-        rc = sendmultiblock("This command requires a parameter", BLKSIZE)
+        rc = sendmultiblock("This command requires a parameter")
         return RC_FAILED
 
     if rc == RC_SUCCESS:
@@ -698,7 +698,7 @@ def vol(data):
             rc = run("mixer set PCM -- " + data)
             return RC_SUCCESS
         else:
-            sendmultiblock("Command not supported in this platform".encode(), BLKSIZE)
+            sendmultiblock("Command not supported in this platform".encode())
     return RC_SUCCESS
     
 def set(data):
@@ -715,7 +715,7 @@ def set(data):
         out = ""
         for name, value in psetvar:
             out += f"{name}={value}\n"
-        return sendmultiblock(out.encode(), BLKSIZE)
+        return sendmultiblock(out.encode())
 
     # Split into tokens
     parts = data.split()
@@ -733,7 +733,7 @@ def set(data):
             "set varname /d          Delete variable\n"
             "set /h                  Show this help"
         )
-        return sendmultiblock(helptext.encode(), BLKSIZE)
+        return sendmultiblock(helptext.encode())
 
     # Now treat first token as variable name
     varname = parts[0]
@@ -745,8 +745,8 @@ def set(data):
     if len(parts) == 1:
         for name, value in psetvar:
             if name.upper() == varname_upper:
-                return sendmultiblock(f"{name}={value}".encode(), BLKSIZE)
-        return sendmultiblock(f"{varname} not found".encode(), BLKSIZE)
+                return sendmultiblock(f"{name}={value}".encode())
+        return sendmultiblock(f"{varname} not found".encode())
 
     # ---------------------------------------------------------
     # 3. Per-variable help:  set wifi /h
@@ -758,7 +758,7 @@ def set(data):
             "set varname value       Set variable\n"
             "set varname /d          Delete variable\n"
         )
-        return sendmultiblock(helptext.encode(), BLKSIZE)
+        return sendmultiblock(helptext.encode())
 
     # ---------------------------------------------------------
     # 4. Delete variable:  set wifi /d
@@ -766,7 +766,7 @@ def set(data):
     if parts[1].lower() in ("/d", "/delete"):
         print(f"Deleting variable {varname}")
         rc = setMSXPiVar(varname, "")  # empty value = delete
-        return sendmultiblock("Pi:Ok".encode(), BLKSIZE)
+        return sendmultiblock("Pi:Ok".encode())
 
     # ---------------------------------------------------------
     # 5. Set or update variable:  set wifi MYSSID
@@ -786,9 +786,9 @@ def set(data):
             rc, drive1Data = msxdos_inihrd(varvalue)
             updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
-        return sendmultiblock("Pi:Ok".encode(), BLKSIZE)
+        return sendmultiblock("Pi:Ok".encode())
 
-    return sendmultiblock("Pi:Error".encode(), BLKSIZE)
+    return sendmultiblock("Pi:Error".encode())
 
 def setMSXPiVar(pvar='', pvalue=''):
     global psetvar
@@ -841,7 +841,7 @@ def wifi(cmd):
     wificountry = getMSXPiVar('WIFICOUNTRY')
 
     if (cmd[:2] == "/h"):
-        sendmultiblock("Pi:Usage:\npwifi display | set".encode(), BLKSIZE)
+        sendmultiblock("Pi:Usage:\npwifi display | set".encode())
         return RC_SUCCESS
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
@@ -849,7 +849,7 @@ def wifi(cmd):
             wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
             run(wifisetcmd)
         else:
-            sendmultiblock(b'Parameter not supported in this platform', BLKSIZE)
+            sendmultiblock(b'Parameter not supported in this platform')
     else:
         if hostType == "RaspberryPi":
             run("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
@@ -863,7 +863,7 @@ def ver(parms = None):
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+ BuildId
     print("Sending version info:",ver)
-    RC = sendmultiblock(ver.encode(), BLKSIZE)
+    RC = sendmultiblock(ver.encode())
     print(f"pver(): returning rc = {hex(rc)}")
     return rc
     
@@ -900,11 +900,11 @@ def irc():
             ircsock.setblocking(0);
             ircsock.send(buf)
             ircmsg = 'Connected to ' + ircserver
-            sendmultiblock(ircmsg.encode(), BLKSIZE)
+            sendmultiblock(ircmsg.encode())
         elif cmd[:3] == "msg":
             ircsock.setblocking(0);
             ircsock.send(("PRIVMSG "+cmd[4:] +"\r\n").encode())
-            sendmultiblock("Pi:Ok\n".encode(), BLKSIZE)
+            sendmultiblock("Pi:Ok\n".encode())
         elif cmd[:4] == 'join':
             jparm = cmd.split(' ')
             jchannel = jparm[1]
@@ -916,7 +916,7 @@ def irc():
             ircmsg = 'Pi:Ok\n'
             rc = RC_SUCCNOSTD
             ircsock.setblocking(0);
-            sendmultiblock(ircmsg.encode(), BLKSIZE)
+            sendmultiblock(ircmsg.encode())
         elif cmd[:4] == 'read':
             ircmsg = 'Pi:Error'
             try:
@@ -949,28 +949,28 @@ def irc():
                 print("irc read exception:",err,str(e))
                 ircmsg = 'Pi:Ok\n'
                 rc = RC_SUCCNOSTD
-            sendmultiblock(ircmsg.encode(), BLKSIZE)        
+            sendmultiblock(ircmsg.encode())        
         elif cmd[:5] == 'names':
             ircsock.send((cmd+"\r\n").encode())
             ircmsg = ''
             ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
             ircmsg = ircmsg.strip('\n\r')
             ircmsg = "Users on channel " #+ ircmsg.split('=',1)[1]
-            sendmultiblock(ircmsg.encode(), BLKSIZE)
+            sendmultiblock(ircmsg.encode())
         elif cmd[:4] == 'quit':
             ircsock.send(("/quit\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\r\n".encode(),BLKSIZE)
+            sendmultiblock("Pi:leaving room\r\n".encode())
         elif cmd[:4] == 'part':
             ircsock.send(("/part\r\n").encode())
             ircsock.close()
-            sendmultiblock("Pi:leaving room\n".encode(),BLKSIZE)
+            sendmultiblock("Pi:leaving room\n".encode())
         else:
             print("irc:no valid command received")
-            sendmultiblock("Pi:No valid command received".encode(),BLKSIZE)
+            sendmultiblock("Pi:No valid command received".encode())
     except Exception as e:
         print("irc:Caught exception"+str(e))
-        sendmultiblock("Pi:"+str(e).encode(), BLKSIZE)
+        sendmultiblock("Pi:"+str(e).encode())
         
 def dosinit(parms = None):
     print("dosinit()")    
@@ -1022,7 +1022,7 @@ def dskiords(parms = None):
         else:
             buf = drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)]
 
-        rc = sendmultiblock(buf,SECTORSIZE)
+        rc = sendmultiblock(buf)
         sectorcnt += 1
         
         if  rc == RC_SUCCESS:
@@ -1645,36 +1645,15 @@ def recvdata2_oneblock(maxbufsize):
 
     return (RC_CONNERR, None)                 # unexpected header
 
-def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_index: int = 0) -> int:
-    print(f"senddata_oneblock()") #"Sending block {block_index}, header_rc={hex(header_rc)}, length={len(payload)}")
+def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0) -> int:
+    print(f"senddata_oneblock()") #"Sending block {block_index}, header_rc={hex(header_rc)}, length={msx_blocksize}")
     length = len(payload)
-    if length > maxbufsize:
+    if length > msx_blocksize:
         return RC_INVALIDDATASIZE
 
     # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
-    #print("senddata_oneblock(): Waiting for READY from MSX")
-    while True:
-        rc, byte = SPI_ByteTransfer()
-        if rc != RC_SUCCESS:
-            continue  # ignore noise
-        if byte == READY:
-            SPI_ByteTransfer(READY_ACK)
-            break
-
-    # Receive msxmaxbuf
-    print("senddata_oneblock(): Receiving msxmaxbuf from MSX")
-    rc, low = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return RC_CONNERR
-    rc, high = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return RC_CONNERR
-
-    msxmaxbuf = low | (high << 8)
-    print(f"senddata_oneblock(): MSX max payload size per block = {msxmaxbuf}")
-    if length > msxmaxbuf:
-        return RC_INVALIDDATASIZE
-
+    # Is performed by sendmultiblock() once before calling this function.
+    
     # 2. Send exactly one block with retries
     attempts = 0
     print("senddata_oneblock(): Sending block data with retries if needed")
@@ -1760,7 +1739,32 @@ def senddata_oneblock(payload: bytes, maxbufsize: int, header_rc: int, block_ind
         return RC_READY     # more blocks follow
     return RC_CONNERR       # unexpected header
 
-def sendmultiblock(payload: bytes, maxbufsize = BLOCKSIZE):
+
+def PerformHandshake():
+    # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
+    #print("PerformHandshake(): Waiting for READY from MSX")
+    while True:
+        rc, byte = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            continue  # ignore noise
+        if byte == READY:
+            SPI_ByteTransfer(READY_ACK)
+            break
+
+    # Receive msx_blocksize
+    print("PerformHandshake(): Receiving msx_blocksize from MSX")
+    rc, low = SPI_ByteTransfer()
+    if rc != RC_SUCCESS:
+        return RC_CONNERR, 0
+    rc, high = SPI_ByteTransfer()
+    if rc != RC_SUCCESS:
+        return RC_CONNERR, 0
+
+    msx_blocksize = low | (high << 8)
+
+    return RC_SUCCESS, msx_blocksize
+
+def sendmultiblock(payload: bytes):
     """
     Sends a large payload to the MSX in multiple blocks using senddata_oneblock().
 
@@ -1774,12 +1778,19 @@ def sendmultiblock(payload: bytes, maxbufsize = BLOCKSIZE):
     if total_len == 0:
         return RC_INVALIDDATASIZE  # or RC_SUCCESS if you want to allow empty transfers
 
+    # Perform handshake for each block
+    # Moved here to allow dynamic msx_blocksize per block,
+    # Set by MSX each time.
+    rc, msx_blocksize = PerformHandshake()
+    if rc != RC_SUCCESS:
+        return rc
+
     offset = 0
     block_index = 0
-
     while offset < total_len:
+
         # Determine slice for this block
-        end = min(offset + maxbufsize, total_len)
+        end = min(offset + msx_blocksize, total_len)
         block = payload[offset:end]
 
         # header_rc: RC_READY for intermediate blocks, RC_SUCCESS for last block
@@ -1790,7 +1801,7 @@ def sendmultiblock(payload: bytes, maxbufsize = BLOCKSIZE):
 
         # Send one block
         print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
-        rc = senddata_oneblock(block, maxbufsize, header, block_index)
+        rc = senddata_oneblock(block, msx_blocksize, header, block_index)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer
             return rc
@@ -1808,14 +1819,14 @@ def readParameters(errorMsg, needParm=False):
     if rc != RC_SUCCESS:
         print(f"Pi:Error reading parameters")
         encodederrorMsg = ('Pi:Error reading parameters').encode()
-        sendmultiblock(encodederrorMsg, BLKSIZE)
+        sendmultiblock(encodederrorMsg)
         return RC_FAILED, None
 
     parms = data.decode().split("\x00")[0].strip()
     if needParm and not parms:
         print(f"Pi:Error - {errorMsg}")
         encodederrorMsg = ('Pi:Error - ' + errorMsg).encode()
-        sendmultiblock(encodederrorMsg, BLKSIZE)
+        sendmultiblock(encodederrorMsg)
         return RC_FAILED, None
 
     #print(f"Parameters:{parms}")
@@ -1877,7 +1888,7 @@ def chatgpt(query):
     api_key = getMSXPiVar('OPENAIKEY')
     if not api_key or api_key == "Your OpenAI API Key":
         print('Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
-        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini', BLKSIZE)
+        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
         return RC_FAILED
 
     model_engine = "gpt-3.5-turbo"
@@ -1900,13 +1911,13 @@ def chatgpt(query):
         openai_response = response.json()
         if "choices" in openai_response:
             response_text = openai_response["choices"][0]["message"]["content"]
-            sendmultiblock(response_text.encode(), BLKSIZE)
+            sendmultiblock(response_text.encode())
         else:
-            sendmultiblock(openai_response.encode(), BLKSIZE)
+            sendmultiblock(openai_response.encode())
     except Exception as e:
         error_msg = f"Pi:Error - {str(e)}"
         print(error_msg)
-        sendmultiblock(error_msg.encode(), BLKSIZE)
+        sendmultiblock(error_msg.encode())
 
 def fetch_and_uncompress(url: str):
     """
@@ -2271,11 +2282,11 @@ def template(parms = None):
     if len(response) > BLKSIZE:
         # if longer than BLKSIZE, use multiblock
         # No need to pad - sendmultiblock handles it
-        rc = sendmultiblock(response.encode(), BLKSIZE)
+        rc = sendmultiblock(response.encode())
     else:
         # Because this is text, we pad with nulls to avoid garbage at the end
         padded = response.encode().ljust(BLKSIZE, b'\x00')
-        rc = sendmultiblock(padded, BLKSIZE)
+        rc = sendmultiblock(padded)
     
     return
 
@@ -2394,7 +2405,7 @@ try:
             except Exception as e:
                 errcount += 1
                 print(f"MSXPi Server: {str(e)}")
-                sendmultiblock(("Pi:Error - " + str(e)).encode(), BLKSIZE)
+                sendmultiblock(("Pi:Error - " + str(e)).encode())
                 # SPI mode continues, no reconnection logic
 
     else:
@@ -2431,7 +2442,7 @@ try:
                 errcount += 1
                 print(f"MSXPi Server: {str(e)}")
                 try:
-                    sendmultiblock(("Pi:Error - " + str(e)).encode(), BLKSIZE)
+                    sendmultiblock(("Pi:Error - " + str(e)).encode())
                 except Exception:
                     pass  # ignore if connection is already dead
             finally:

@@ -126,7 +126,7 @@ int main(void)
         }
         else {
             uint8_t* buf = (uint8_t*)(get_max_buffer_size() + 100);
-            printstdout(buf, BLKSIZE);
+            printstdout(buf, MAXBUFSIZE);
         }
     } else {
 		Print("Connection error\n");

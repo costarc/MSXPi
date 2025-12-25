@@ -280,13 +280,13 @@ SD2_SEND_DONE:
 ;
 ;  A  = expected_block_index
 ;  DE = dest pointer
-;  BC = maxbuf
+;  BC = msx_blocksize
 ; ================================================================
 
 RECVDATA_ONEBLOCK:
     push    af          ; expected_index
     push    de          ; original dest
-    push    bc          ; maxbuf
+    push    bc          ; msx_blocksize
 ; ------------------------------------------------------------
 ; 1. INITIAL HANDSHAKE
 ; ------------------------------------------------------------
@@ -301,9 +301,8 @@ r2_handshake_loop:
     cp      READY_ACK
     jr      nz, r2_handshake_loop
 
-    ; send maxbuf (from stack)
-    pop     bc              ; BC = maxbuf
-    push    bc
+    ; send msx_blocksize (from stack)
+    pop     bc              ; BC = msx_blocksize
     ld      a, c
     call    PIWRITEBYTE
     jr      c, r2_conn_err
@@ -332,34 +331,23 @@ r2_handshake_loop:
     ld      l, a            ; L = received_index
 
     ; Recover original values
-    pop     de              ; DE = maxbuf
-    pop     ix              ; IX = original dest
+    pop     de              ; de = original dest
     pop     af              ; A = expected_index
 
     push    af              ; re-stack for exit
-    push    ix              ; dest
-    push    de              ; maxbuf
-
+    push    de              ; dest
+    push    bc              ; msx_blocksize received from server
+                            ; last block is usually smaller thant the msx_blocksize sent to server
     ; Check index
     cp      l
-    jr      nz, r2_unexpecteddata
-
-    ; Check length <= maxbuf  (BC <= DE?)
-    ; Compute (maxbuf - length) and see if negative
-    ld      a, e
-    sub     c
-    ld      a, d
-    sbc     a, b
-    jr      c, r2_bufovflw
-
+    jr      nz, r2_unexpecteddata   ; index sent by server must match msx index
 ; ------------------------------------------------------------
 ; 3. PAYLOAD + CHECKSUM
 ; ------------------------------------------------------------
 
     ; now:
-    ; BC = length
-    ; IX = dest
-    ; DE = maxbuf (unused after check)
+    ; BC = length of this block
+    ; DE = dest
     ; H = header_rc
     ; L = received_index
     ; AF on stack (expected index)
@@ -378,8 +366,8 @@ r2_payload_loop:
     call    PIREADBYTE
     jr      c, r2_conn_err
 
-    ld      (ix+0), a
-    inc     ix
+    ld      (de), a
+    inc     de
 
     ; HL += A
     add     a, l
@@ -423,9 +411,9 @@ r2_conn_err:
 ; ------------------------------------------------------------
 
 r2_exit:
-    pop     iy      ; length (or junk if error, but BC is "don't care" on error)
-    pop     de      ; dest (advanced if success)
-    pop     iy      ; expected index (discarded)
+    pop     bc      ; length of this block  or original block if error
+    pop     de      ; dest (advanced if success or original address)
+    pop     af      ; index = original index
     ret
 
 r2_payload_done:
@@ -445,13 +433,11 @@ r2_payload_done:
     call    PIWRITEBYTE
     jr      c, r2_conn_err
 
-    ; Advance DE for caller: DE = final dest = IX
-    pop     de              ; maxbuf (discard)
-    pop     de              ; dest (we don't want original)
-    pop     af              ; expected index
-    push    af
+    ; Advance DE for caller: DE = final dest
+    pop     ix              ; original msx_blocksize (discard)
+    pop     ix              ; original dest (discard)
 
-    push    ix              ; new dest
+    push    de              ; new dest
     push    bc              ; length again
 
 ; ------------------------------------------------------------
@@ -549,7 +535,6 @@ PRINTPISTDOUT0:
     push    bc					; maxbufsize expected
 	push	de					; save buffer address
 	call	RECVDATA_ONEBLOCK	; Read 1 block
-    call    DBGBC
 	ld		l,a					; save return code
 	ld 		a,TEXTTERMINATOR 
 	ld		(de),a 				; Terminator for text
@@ -634,7 +619,13 @@ PRINTNUM1:
 
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer HL to hex
-        PUSH    DE
+; Preserves HL
+; Output:
+; BC = The hex value converted
+; DE = Points to next char in the string addess
+        PUSH    HL
+        LD      H,D
+        LD      L,E
         LD      DE,0
         LD      A,(HL)
         CALL    ATOHEX
@@ -661,12 +652,17 @@ STRTOHEX:
         LD      E,A
         INC     HL
         LD      A,(HL)
+        INC     HL          ; ";"
+        INC     HL          ; "COMMAND"
         CALL    ATOHEX
         JR      C,STREXIT
         OR      E
-        LD      H,D
-        LD      L,A
-STREXIT:POP     DE
+        LD      B,D         ; BC = Converted hex value
+        LD      C,A
+        LD      D,H
+        LD      E,L         ; DE = Next char in the string - should be the command
+STREXIT:
+        POP     HL
         RET
 ATOHEX:
         CP      '0'
@@ -691,72 +687,6 @@ ATOHL:
         RET
 ATOHERR:
         SCF
-        RET
-
-; Evaluate CALL Commands to check for optional parameters
-; Returns Buffer address in HL (or HL=0000 if parameter not found)
-; Input:
-;  DE = Call full command (after the ")
-; Output:
-;  A = Output type (as below cases)
-;  DE = Point to start of command to send to RPi (pdir in the case below)
-;  HL = Address of buffer to store data if stdout = 2
-;
-; Cases:
-; call mspxi("pdir")  -> will print the output
-; call mspxi("0,pdir")  -> will not print the output
-; call msxpi("1,pdir")  -> will print the output to screen
-; call msxpi("2,F000,pdir")  -> will store output in buffer (MSXPICALLBUF - $E3D8)
-; 
-PARMSEVAL:
-        INC     DE
-        LD      A,(DE)
-        DEC     DE
-        CP      ','
-        LD      A,'1'
-        JR      NZ,PARMSEVAL1      ; no output device privided, USE DEFAULT
-        LD      A,(DE)
-        PUSH    AF                 ; save output device
-        INC     DE
-        INC     DE
-        DEC     B
-        DEC     B
-        POP     AF
-PARMSEVAL1:
-        PUSH    AF
-; Check if a buffer address has been passed
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE
-        INC     DE
-        LD      A,(DE)
-        CP      ','
-        JR      NZ,PARMSEVAL2       ; no buffer address provided
-
-; CALL has a buffer address in this format:
-; CALL MSXPI("XXXX,COMMAND")
-; Move pointer to start of command
-        INC     DE                  ; Point to command (pdir)
-        DEC     B                   ;
-        DEC     B
-        DEC     B
-        DEC     B
-        DEC     B
-        POP     HL
-; Convert ascii chars pointed by HL to hex. Return value in HL
-; Flag C is set if there was an error
-        CALL    STRTOHEX
-        POP     AF
-        RET
-
-; CALL did not have buffer address.
-; We set this case with 00 n the stack
-PARMSEVAL2:
-        POP     DE 
-        POP     AF
-;Buffer not passed in CALL, then we set adddress to 0000
-        LD      HL,0
         RET
 
 ; Clear buffer area
