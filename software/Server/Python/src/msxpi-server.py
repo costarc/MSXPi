@@ -227,7 +227,7 @@ def SPI_ByteTransfer(byte_out=None):
                 return RC_CONNERR, None
 
     
-            #print(f"Received: {chr(byte_in)}")
+            print(f"Received: {chr(byte_in)}")
     return RC_SUCCESS,byte_in
     
 # create a subclass and override the handler methods
@@ -2400,7 +2400,7 @@ try:
                     buf = buf.decode()
                     cmd, *rest = buf.split()
                     parms = " ".join(rest)
-                    globals()[cmd](parms)
+                    globals()[cmd.lower()](parms)
 
             except Exception as e:
                 errcount += 1
@@ -2430,7 +2430,7 @@ try:
                         buf = buf.decode()
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
-                        globals()[cmd](parms)
+                        globals()[cmd.lower()](parms)
                     else:
                         # handle protocol-level rc if you use RC_CONNERR, etc.
                         # e.g., break on connection error

@@ -290,7 +290,6 @@ RECVDATA_ONEBLOCK:
 ; ------------------------------------------------------------
 ; 1. INITIAL HANDSHAKE
 ; ------------------------------------------------------------
-
 r2_handshake_loop:
     ld      a, READY
     call    PIWRITEBYTE
@@ -333,8 +332,6 @@ r2_handshake_loop:
     ; Recover original values
     pop     de              ; de = original dest
     pop     af              ; A = expected_index
-
-    push    af              ; re-stack for exit
     push    de              ; dest
     push    bc              ; msx_blocksize received from server
                             ; last block is usually smaller thant the msx_blocksize sent to server
@@ -344,7 +341,6 @@ r2_handshake_loop:
 ; ------------------------------------------------------------
 ; 3. PAYLOAD + CHECKSUM
 ; ------------------------------------------------------------
-
     ; now:
     ; BC = length of this block
     ; DE = dest
@@ -411,9 +407,8 @@ r2_conn_err:
 ; ------------------------------------------------------------
 
 r2_exit:
-    pop     bc      ; length of this block  or original block if error
+    pop     hl      ; discard
     pop     de      ; dest (advanced if success or original address)
-    pop     af      ; index = original index
     ret
 
 r2_payload_done:
@@ -556,10 +551,29 @@ PRINTPISTDOUT0:
 	cp      RC_READY			; Is there another block?
 	ret     nz					; No more blocks, return    
     push	iy					; save block number
-    pop		af					; restore return code
+    pop		af					; restore index
     inc		a					; next block number
 	JR      PRINTPISTDOUT0
 
+STDOUTTONULL:
+	xor		a					; block number
+STDOUTTONULL0:
+    push	af					; save block number
+    push    bc					; maxbufsize expected
+	push	de					; save buffer address
+	call	RECVDATA_ONEBLOCK	; Read 1 block
+    pop     de
+    pop     bc
+    pop     hl
+    cp      RC_SUCCESS
+    ret     z
+    cp      RC_READY
+    scf
+    ret     nz                  ; some error ocurred
+    ld      a,h
+    inc		a					; next block number
+	JR      STDOUTTONULL0    
+    
 ;-----------------------
 ; PRINT
 ;-----------------------

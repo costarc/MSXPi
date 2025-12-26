@@ -596,59 +596,114 @@ _MSXPI:
 CALL_SUCCESS:
         pop     af
         pop     de
+        cp      '0'
+        jr     z,CALL_DiscardResponse
         CP      '2'
         JR      Z,CALL_MSXPISAVEDATA
-; Will print RPi response to screen
-        ld      bc,BLKSIZE
+
+; ---------------------------------
+; Print response to screen
+; ---------------------------------
+        ld      bc,MAXBUFSIZE
         xor     a               ; block = 0
         call	PRINTPISTDOUT
         pop     hl              ; BASIC pointer
         and     a
         ret
-CALL_SYNTAX_ERROR:
+; ---------------------------------
+; Consume response discarding it
+; ---------------------------------
+CALL_DiscardResponse:
+        ld      bc,MAXBUFSIZE
+        xor     a               ; block = 0
+        call	STDOUTTONULL
+        pop     hl              ; BASIC pointer
+        and     a
+        ret
+
+; ============================================================
+; CALL_MSXPISAVEDATA
+; Receive data blocks into buffer at DE.
+; First 3 bytes reserved for header:
+;   [0] = final return code
+;   [1..2] = total size (low/high)
+; ============================================================
+
+CALL_MSXPISAVEDATA:
+        PUSH    DE              ; save base buffer address
+        LD      HL,0            ; clear total size accumulator
+
+
+        INC     DE              ; skip header space
+        INC     DE
+        INC     DE
+
+        XOR     A               ; block index = 0
+RECV_LOOP:
+        PUSH    AF
+        PUSH    HL              ; keep total size on stack
+        LD      BC,MAXBUFSIZE   ; request max block size
+        CALL    RECVDATA_ONEBLOCK
+        JR      C,RECV_ERROR    ; carry set = error, stop
+
+        ; HL not used here, DE updated by RECVDATA_ONEBLOCK
+        ; BC = size of block just read
+        POP     HL              ; HL = current total size
+        CALL DBGHL
+        CALL DBGBC
+        ADD     HL,BC           ; add block size
+        CALL    DBGHL
+        ; check return code in A
+        CP      RC_READY
+        JR      Z,RECV_NEXT     ; another block, continue
+
+        CP      RC_SUCCESS
+        JR      Z,RECV_DONE     ; transfer complete
+
+        ; any other code = error
+        JR      RECV_ERROR
+
+RECV_NEXT:
+        POP     AF
+        INC     A               ; next block index
+        JR      RECV_LOOP
+
+; ------------------------------------------------------------
+; Successful completion: write header
+; ------------------------------------------------------------
+RECV_DONE:
+        POP     BC              ; Discard index
+                                ; HL = total size
+        POP     DE              ; DE = base buffer address
+
+        LD      (DE),A          ; [0] = RC_SUCCESS
+        INC     DE
+        LD      A,L
+        LD      (DE),A          ; [1] = total size low
+        INC     DE
+        LD      A,H
+        LD      (DE),A          ; [2] = total size high
+
+        POP     HL              ; BASIC pointer
+
+        AND     A
+        ret
+
+; ------------------------------------------------------------
+; Error exit
+; ------------------------------------------------------------
+RECV_ERROR:
+        POP     AF
+        POP     HL              ; discard total size
+        POP     DE              ; restore buffer base
+        SCF                     ; set carry = error
+        RET
+ 
+ CALL_SYNTAX_ERROR:
         LD      E,2
         LD      IX,ERRHAND  ; Call the Basic error handler
         JP      CALBAS
 
-CALL_MSXPISAVEDATA:
-        PUSH    DE
-        INC     DE
-        INC     DE
-        INC     DE ; Lave space for  header
-        LD      HL,0 			; Clear total size
-        PUSH    HL
-
-        XOR	    A                       ; BLOCK INDEX
-SAVETOMEM:
-        LD      BC,BLKSIZE              ; Bytes to read on each block
-        CALL    RECVDATA_ONEBLOCK
-        POP     HL                      ; HL = Start of buffer, DE=Address next block
-        JR      C,CALL_MSXPISERR
-CALL_MSXPISAVE2:
-        PUSH    DE                      ; save next block address
-        LD      BC,BLKSIZE              ; 
-        CALL    RECVDATA_ONEBLOCK
-        POP     HL                      ; HL = Start of buffer, DE=Address next block
-        JR      C,CALL_MSXPISERR
-        LD      A,(HL)
-        LD      (IX + 0),A              ; Update return code
-        CALL    SUMBLOCKSIZES           ; Add block size to full data block size
-        DEC     DE
-        DEC     DE
-        DEC     DE
-        PUSH    DE
-        LD      BC,BLKSIZE
-        CALL    SHIFTDATA
-        POP     DE
-        LD      A,(IX + 0)
-        CP      RC_READY
-        JR      Z,CALL_MSXPISAVE2
-CALL_MSXPISAVEXIT:
-        POP     HL
-        OR      A
-        RET
-CALL_MSXPISERR: ret
- 
 ; Evaluate CALL Commands to check for optional parameters
 ; Returns Buffer address in HL (or HL=0000 if parameter not found)
 ; Input:
