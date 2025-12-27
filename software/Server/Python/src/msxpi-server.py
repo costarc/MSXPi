@@ -72,9 +72,9 @@ MAX_BLOCK_RETRIES   = 3
 SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
-SYNCTIMEOUT         = 15
-BYTETRANSFTIMEOUT   = 15
-SYNCTRANSFTIMEOUT   = 15.0
+SYNCTIMEOUT         = 30
+BYTETRANSFTIMEOUT   = 30
+SYNCTRANSFTIMEOUT   = 30
 DISABLETIMEOUT      = False
 READY_ACK           = 0xA0
 SENDNEXT            = 0xA1
@@ -2380,14 +2380,9 @@ SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
 
-server_socket = initialize_connection()
-
-# Start MSXPi Server main loop - wait command and execute.
-# Set a interrupt for Control+C to exit the program gracefully and cleaning GPIO
-# status (on Raspberry PI)
 try:
     if hostType == "RaspberryPi":
-        # Existing SPI main loop goes here unchanged
+        # SPI mode: keep trying forever
         while True:
             try:
                 print("MSXPi Server: Waiting Command")
@@ -2401,21 +2396,27 @@ try:
                     cmd, *rest = buf.split()
                     parms = " ".join(rest)
                     globals()[cmd.lower()](parms)
-
+                elif rc == RC_CONNERR:
+                    # explicit reconnect trigger
+                    print("MSXPi Server: Connection error, reinitializing...")
+                    initialize_connection()
             except Exception as e:
                 errcount += 1
                 print(f"MSXPi Server: {str(e)}")
-                sendmultiblock(("Pi:Error - " + str(e)).encode())
-                # SPI mode continues, no reconnection logic
+                try:
+                    sendmultiblock(("Pi:Error - " + str(e)).encode())
+                except Exception:
+                    pass
+                # reinitialize SPI link after error
+                initialize_connection()
 
     else:
-        # TCP mode: accept loop
+        # TCP mode: accept loop with reconnection
         while True:
             print("MSXPi Server: Waiting for MSX connection...")
+            server_socket = initialize_connection()
             conn, addr = server_socket.accept()
             print(f" ** MSX Connected to {addr} **\n")
-
-            # Make conn visible to recvdata2()/sendmultiblock if they rely on a global
             globals()['conn'] = conn
 
             try:
@@ -2425,16 +2426,15 @@ try:
                     rc, buf = recvdata2()
                     print(f"MSXPi Server: Command received: {buf} (rc={hex(rc)})")
 
-                    if rc == RC_SUCCESS:
+                    if rc == RC_SUCCESS and buf is not None:
                         DISABLETIMEOUT = False
                         buf = buf.decode()
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
                         globals()[cmd.lower()](parms)
-                    else:
-                        # handle protocol-level rc if you use RC_CONNERR, etc.
-                        # e.g., break on connection error
-                        pass
+                    elif rc == RC_CONNERR:
+                        print("MSXPi Server: Protocol error, forcing reconnect")
+                        break  # exit inner loop to reaccept
 
             except (ConnectionResetError, BrokenPipeError, OSError) as e:
                 print(f"MSXPi Server: connection lost: {e}")
@@ -2444,7 +2444,7 @@ try:
                 try:
                     sendmultiblock(("Pi:Error - " + str(e)).encode())
                 except Exception:
-                    pass  # ignore if connection is already dead
+                    pass
             finally:
                 try:
                     conn.close()

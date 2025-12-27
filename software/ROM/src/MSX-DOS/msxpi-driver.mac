@@ -4,7 +4,7 @@
 ;|                                                                           |
 ;| Version : 1.4                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2025 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)       |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -93,7 +93,7 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        scf
+        and     a
         ret
         
 ; START OF -----------------------------
@@ -151,13 +151,7 @@ INIENV:
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 ;
 DSKIO:
-
-        JR	NC,DSKIO_READ
-
-; END OF -------------------------------
-; MSXPi DSKIO Routine           |
-;---------------------------------------
-
+        JR      NC,DSKIO_READ
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -242,6 +236,7 @@ DSKIO_ERR1:
         ld      a,12
         scf
         ret
+
 ; END OF ------------------------------
 ; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
@@ -793,17 +788,6 @@ STDOUT_OK:
         AND     A
         RET
 
-    DBG:
-    PUSH AF
-    PUSH BC
-    PUSH DE
-    PUSH HL
-    CALL PRINT
-    POP HL
-    POP DE
-    POP BC
-    POP AF
-    RET
 ; Extract command from CALL
 ; DE = Address of string passed in CALL (after "0,xxxx,")
 ExtractCommand:
@@ -875,5 +859,3 @@ DOS_FMT:    DB  "dskiofmt",0,0,0,0
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
 INCLUDE msxpi_bios.asm
-;INCLUDE DEBUG.ASM
-
