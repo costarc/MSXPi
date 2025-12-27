@@ -225,6 +225,7 @@ DSKIO_READ_LOOP:
 		push    af
         push	bc
         ld	    bc,SECTORSIZE
+        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
 		xor     a
         call    RECVDATA_ONEBLOCK	
         pop	    bc
@@ -547,9 +548,19 @@ _MSXPIVER:
         push    hl
         ld      hl,MSXPIVERSION
         call    PRINT
+        ld      de,vercommand
+        call    SendCommandToMSXPi
+        ld		bc,128
+		ld		HL,(HIMEM)
+        or      a
+        sbc     hl,bc
+        ld      d,h
+        ld      e,l
+		call    PRINTPISTDOUT
         pop     hl
         ret
-        
+vercommand:
+        db      'ver',0
 ;--------------------------------------------------------------------
 ; Call MSXPI BIOS function                                          |
 ;--------------------------------------------------------------------
@@ -584,6 +595,8 @@ _MSXPI:
         
         PUSH    HL
         PUSH    AF
+        PUSH    DE
+        POP     HL
         CALL    SendCommandToMSXPi
         JR      NC,CALL_SUCCESS
         POP     AF
@@ -597,7 +610,7 @@ CALL_SUCCESS:
         pop     af
         pop     de
         cp      '0'
-        jr     z,CALL_DiscardResponse
+        jr      z,CALL_DiscardResponse
         CP      '2'
         JR      Z,CALL_MSXPISAVEDATA
 
@@ -631,28 +644,23 @@ CALL_DiscardResponse:
 
 CALL_MSXPISAVEDATA:
         PUSH    DE              ; save base buffer address
-        LD      HL,0            ; clear total size accumulator
-
-
         INC     DE              ; skip header space
         INC     DE
         INC     DE
-
+        LD      BC,MAXBUFSIZE   ; request max block size
+        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
         XOR     A               ; block index = 0
+        LD      HL,0            ; clear total size accumulator
 RECV_LOOP:
         PUSH    AF
         PUSH    HL              ; keep total size on stack
-        LD      BC,MAXBUFSIZE   ; request max block size
         CALL    RECVDATA_ONEBLOCK
         JR      C,RECV_ERROR    ; carry set = error, stop
 
         ; HL not used here, DE updated by RECVDATA_ONEBLOCK
         ; BC = size of block just read
         POP     HL              ; HL = current total size
-        CALL DBGHL
-        CALL DBGBC
         ADD     HL,BC           ; add block size
-        CALL    DBGHL
         ; check return code in A
         CP      RC_READY
         JR      Z,RECV_NEXT     ; another block, continue
@@ -730,61 +738,87 @@ PARSE_CALL_PARAMETERS:
 STDOUT_OK:
         LD      H,A
         INC     DE
+        DEC     B
+        SCF
+        RET     Z
         LD      A,(DE)
         CP      ','         ;Check for comma after stdout parameter
         SCF
         RET     NZ          ; Syntax error - missing comma
         INC     DE          ; Point to Address provided in call command
-; Convert ascii chars pointed by HL to hex. Return value in HL
+        DEC     B
+        SCF
+        RET     Z
+; Convert ascii chars pointed by DE to hex. Return value in BC
 ; Flag C is set if there was an error
+        PUSH    BC          ; Save B = number of characters remaing in command
         CALL    STRTOHEX    ; Return with DE pointing to next char in string
                             ; BC = Address converted from String
                             ; Flag C: set if error
-                            ; All registers preserved
-
+        POP     IY          ; Temporaryly save B in IY
         RET     C           ; Conversion error - Exit
-        CALL    ExtractCommand  ; Copy the command to temporary buffer
-                                ; Required to terminate the command with Zero
+        PUSH    BC
+        POP     IX          ; IX = = Address converted from String
+        PUSH    IY
+        POP     BC          ; B = number of characters remaing in command
+        DEC     B
+        DEC     B
+        DEC     B
+        DEC     B
+        DEC     B
+        SCF
+        RET     Z           ; Syntax error
+        PUSH    HL          ; Save parameters
+        PUSH    IX
+        POP     HL          ; User buffer in HL - Will be used in ExtractCommand
+        CALL    ExtractCommand  ; Copy the command from DE to HL
+                                ; Return new buffer address in DE
+                                ; Add zero to end of command
                                 ; Return address in DE
-        
+        POP     HL          ; Restore parameters
         LD      A,H         ; A = stdout value
-        LD      H,B          
-        LD      L,C         ; HL = Buffer address passed in call command
+        PUSH    IX
+        POP     HL          ; HL = Buffer address passed in call command
                             ; DE = Addres of command terminated in zero
         AND     A
         RET
 
+    DBG:
+    PUSH AF
+    PUSH BC
+    PUSH DE
+    PUSH HL
+    CALL PRINT
+    POP HL
+    POP DE
+    POP BC
+    POP AF
+    RET
 ; Extract command from CALL
 ; DE = Address of string passed in CALL (after "0,xxxx,")
 ExtractCommand:
         PUSH    HL
-        PUSH    BC
-        LD      BC,256
-        LD      HL,(HIMEM)
-        OR      A
-        SBC     HL,BC       ; HL = Start of buffer to store the command temporarily
-        PUSH    HL          ; HL = Start of buffer to store the command temporarily
 EC_Loop:
         LD      A,(DE)
         CP      '"'         ; End of parameters
         JR      Z,EC_Success
-        CP      ')'
-        JR      Z ,EC_ExitError  ; Error - Missing quote at end of command
         LD      (HL),A
         INC     HL
         INC     DE
-        JR      EC_Loop
+        DEC     B
+        JR      NZ,EC_Loop
 EC_Success:
         LD      (HL),0      ; Termination for the command
-        POP     DE          ; Restore new address for command
-        POP     BC
-        POP     HL
+        POP     HL          ; Restore base address of command
+        LD      D,H
+        LD      E,L
         AND     A           ; Success
         RET
 EC_ExitError:
+        LD      (HL),0      ; Termination for the command
         POP     HL
-        POP     BC
-        POP     HL
+        LD      D,H
+        LD      E,L
         SCF                 ; Error
         RET
 
@@ -872,6 +906,8 @@ _MSXPIRECV:
 MSXPIRECV1:
         PUSH    DE
         LD      BC,BLKSIZE
+        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
+        XOR     A
         CALL    RECVDATA_ONEBLOCK
         POP     DE
         JR      NC,MSXPIRECV2
@@ -939,7 +975,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.3"
 BuildId: DB ".20251016.005"
         DB      13,10
-        DB      "    RCC (c) 2015-2025",0
+        DB      "    RCC (c) 2015-2025",13,10,0
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPISEND MSXPIRECV MSXPIVER ",13,10,0
 

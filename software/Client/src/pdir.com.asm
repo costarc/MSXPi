@@ -53,7 +53,7 @@ PRINTPIERR:
         LD      HL,PICOMMERR
         JP      PRINT
 
-command:    DB      "dir",0
+command:    DB      "dir /Windows/System32",0
 PICOMMERR:  db      "Communication error",0
 
 INCLUDE "include.asm"

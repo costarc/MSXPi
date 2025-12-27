@@ -283,20 +283,20 @@ SD2_SEND_DONE:
 ;  BC = msx_blocksize
 ; ================================================================
 
-RECVDATA_ONEBLOCK:
+PerformHandshake:
     push    af          ; expected_index
     push    de          ; original dest
     push    bc          ; msx_blocksize
-; ------------------------------------------------------------
-; 1. INITIAL HANDSHAKE
-; ------------------------------------------------------------
+
+
 r2_handshake_loop:
+
     ld      a, READY
     call    PIWRITEBYTE
-    jr      c, r2_conn_err   ; write must succeed
+    jr      c, handshake_err   ; write must succeed
 
     call    PIREADBYTE
-    jr      c, r2_conn_err
+    jr      c, handshake_err
     cp      READY_ACK
     jr      nz, r2_handshake_loop
 
@@ -304,10 +304,27 @@ r2_handshake_loop:
     pop     bc              ; BC = msx_blocksize
     ld      a, c
     call    PIWRITEBYTE
-    jr      c, r2_conn_err
+    jr      c, handshake_exit
     ld      a, b
     call    PIWRITEBYTE
-    jr      c, r2_conn_err
+    ; C flag set if error
+handshake_exit:
+    pop     de
+    pop     af
+    ret
+handshake_err:
+    pop     bc
+    jr      handshake_exit
+
+
+RECVDATA_ONEBLOCK:
+    push    af          ; expected_index
+    push    de          ; original dest
+
+; ------------------------------------------------------------
+; 1. INITIAL HANDSHAKE
+; ------------------------------------------------------------
+; must have been performed before calling this function
 
 ; ------------------------------------------------------------
 ; 2. HEADER: [RC][LEN_LO][LEN_HI][INDEX]
@@ -524,6 +541,7 @@ SCM_HaveLength:
 ; PRINTPISTDOUT
 ;-----------------------
 PRINTPISTDOUT:
+    call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
 	xor		a					; block number
 PRINTPISTDOUT0:
     push	af					; save block number
@@ -556,6 +574,7 @@ PRINTPISTDOUT0:
 	JR      PRINTPISTDOUT0
 
 STDOUTTONULL:
+    call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
 	xor		a					; block number
 STDOUTTONULL0:
     push	af					; save block number
@@ -632,7 +651,7 @@ PRINTNUM1:
         ret
 
 STRTOHEX:
-; Convert the 4 bytes ascii values in buffer HL to hex
+; Convert the 4 bytes ascii values in buffer DE to hex
 ; Preserves HL
 ; Output:
 ; BC = The hex value converted

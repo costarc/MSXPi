@@ -235,25 +235,10 @@ uint8_t RECVDATA2(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
     }
 }
 
-uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
-{
-    uint8_t  rc;
-    uint8_t  header_rc;
-    uint8_t  byte;
-    uint8_t  block_index;
-    static uint8_t  expected_block_index = 0;
-    uint16_t checksum;
-    uint8_t  localChecksum, remoteChecksum;
-    uint16_t this_blocksize;
-    uint8_t  status_for_next;
-
-    // -------------------------
-    // 1. Initial handshake
-    // MSX -> READY
-    // Python -> READY_ACK
-    // MSX -> msxmaxbuf_low, msxmaxbuf_high
-    // -------------------------
+uint8_t PerformHandshake(uint16_t msx_blocksize) {
     //Print("[MSX] Handshake: sending READY\n");
+    uint8_t  rc;
+    uint8_t  byte;
     while (1) {
         rc = PIWRITEBYTE(READY);
         if (rc != RC_SUCCESS) return RC_HANDSHAKEERR;
@@ -272,6 +257,34 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize
     if (PIWRITEBYTE(msx_blocksize & 0xFF) != RC_SUCCESS) return RC_CONNERR;
     if (PIWRITEBYTE((msx_blocksize >> 8) & 0xFF) != RC_SUCCESS) return RC_CONNERR;
 
+    return RC_SUCCESS;
+
+}
+
+uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
+{
+    uint8_t  rc;
+    uint8_t  header_rc;
+    uint8_t  byte;
+    uint8_t  block_index;
+    static uint8_t  expected_block_index = 0;
+    uint16_t checksum;
+    uint8_t  localChecksum, remoteChecksum;
+    uint16_t this_blocksize;
+    uint8_t  status_for_next;
+
+    // -------------------------
+    // 1. Initial handshake must be have done before calling this functtion
+    // MSX -> READY
+    // Python -> READY_ACK
+    // MSX -> msxmaxbuf_low, msxmaxbuf_high
+    // -------------------------
+    /* // Call like this:
+    rc = PerformHandshake(msx_blocksize);
+    if (rc != RC_SUCCESS)
+        return rc;
+    */
+    
     // -------------------------
     // 2. Read exactly one block
     // -------------------------
@@ -716,10 +729,14 @@ char* u16_to_ascii(uint16_t value, char* buf)
     return buf;
 }
 
-void printstdout(uint8_t* buffer, uint16_t maxbufsize)
+uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize)
 {
     uint8_t  rc;
     uint16_t block_size;
+
+    rc = PerformHandshake(maxbufsize);
+    if (rc != RC_SUCCESS)
+        return rc;
 
     while (1) {
 
@@ -735,4 +752,6 @@ void printstdout(uint8_t* buffer, uint16_t maxbufsize)
         if (rc != RC_READY)
             break;
     }
+
+    return RC_SUCCESS;
 }

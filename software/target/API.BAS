@@ -48,7 +48,7 @@
 103 PRINT:PRINT"Starting Example 1":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory, printing to screen"
 110 A=1                      ' this is the stdout parameter - print to screen
 120 B=BF                 ' This is the buffer address
-130 C$="pdir"                ' Command to execute
+130 C$="dir"                ' Command to execute
 140 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 150 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 153 PRINT:PRINT"Example 1 finished:";HEX$(RC)
@@ -57,7 +57,7 @@
 202 PRINT:PRINT"Starting Example 2":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory - Read the buffer using BASIC"
 210 A=2                      ' this is the stdout parameter - save to buffer only, do not print
 220 B=BF                     ' This is the buffer address
-230 C$="pdir"                ' Command to execute
+230 C$="dir"                ' Command to execute
 240 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 250 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 253 IF RC=-1 THEN GOTO260
@@ -69,7 +69,7 @@
 310 A=2                      ' this is the stdout parameter - save to buffer only, do not print
 320 B=BF                 ' This is the buffer address
 325 C=40                     ' Number of chars to retrn in C$
-330 C$="pdir"                ' Command to execute
+330 C$="dir"                ' Command to execute
 340 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 350 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 353 IF RC=-1 THEN GOTO365

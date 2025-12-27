@@ -227,7 +227,7 @@ def SPI_ByteTransfer(byte_out=None):
                 return RC_CONNERR, None
 
     
-            print(f"Received: {chr(byte_in)}")
+            #print(f"Received: {chr(byte_in)}")
     return RC_SUCCESS,byte_in
     
 # create a subclass and override the handler methods

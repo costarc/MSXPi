@@ -59,4 +59,4 @@ uint8_t parseConnError(const uint8_t rc);
 uint16_t get_sp(void) __naked;
 uint16_t get_max_buffer_size(void);
 uint8_t* get_buffer_ptr(void);
-void printstdout(uint8_t* buffer, uint16_t maxbufsize);
+uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize);
