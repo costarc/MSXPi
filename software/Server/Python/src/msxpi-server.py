@@ -861,7 +861,7 @@ def wifi(cmd):
 def ver(parms = None):
     print("pver()")
     global version,build
-    ver = "MSXPi Server Version "+version+" Build "+ BuildId
+    ver = "MSXPi Server Version "+version+" Build "+ BuildId + "\n";
     print("Sending version info:",ver)
     RC = sendmultiblock(ver.encode())
     print(f"pver(): returning rc = {hex(rc)}")
