@@ -1,0 +1,8 @@
+machine Philips_NMS_8245
+ext MSXDOS2
+ext MSXPi
+bind F12 cycle videosource
+plug joyporta mouse 
+plug printerport simpl 
+diska target/disks/msxpiboot.dsk
+set speed 300

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-export buildClientCommands="yes"
-export buildBIOS="yes"
-export buildOpenMSXConfig="yes"
-export buildMSXStuff="no"
+export buildClientCommands="no"
+export buildBIOS="no"
+export buildOpenMSXConfig="no"
+export buildMSXdiskImage="no"
 export updateVersions="no"
 
 XMLPATH=openMSX/share/extensions
@@ -129,43 +129,34 @@ if [ $buildBIOS = "yes" ];then
   
   #cat $ROMBANK1 > target/multirom.rom
   #cat $BIOSFILE >> target/multirom.rom
-  
-  if [ $buildOpenMSXConfig = "yes" ];then
-	# do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
-	SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-	sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
-	cp $BIOSFILE openMSX/share/systemroms/extensions/msxpidos.rom
-	cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/msxpidos.rom
-	cp $XMLPATH/MSXPi.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
-  fi
 fi
 
-if [ $buildMSXStuff = "yes" ];then
+if [ $buildOpenMSXConfig = "yes" ];then
+  # do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
+  SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
+  sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > $XMLPATH/MSXPi.xml
+  cp $BIOSFILE openMSX/share/systemroms/extensions/msxpidos.rom
+  cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/msxpidos.rom
+  cp $XMLPATH/MSXPi.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
+  # Update sources for openMSX extensions - to keep up to date with openMSX fork
+  cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
+  cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
+  cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
+  cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
+fi
+
+if [ $buildMSXdiskImage = "yes" ];then
   genUpdateBatch
-  # Update build ID
-  cp target/disks/blank.dsk target/disks/msxpiboot.dsk
-  cp target/disks/blank.dsk target/disks/tools.dsk
-
   # Generate msxpiboot.dsk disk image
-  for file in `ls $HOME/Dev/MSX/MSXDOS13/`
+  python3 dsktool.py format target/disks/msxpiboot.dsk
+  python3 dsktool.py format target/disks/tools.dsk
+  python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/msxpiboot.dsk:MSXDOS.SYS"
+  python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/msxpiboot.dsk:COMMAND.COM"
+  
+  for file in `ls target/*.com target/*.BAS`
   do
-    echo $file
-    [ -f $HOME/Dev/MSX/MSXDOS13/$file ] && python3 -W ignore $HOME/Dev/github/MSXPi/software/dsktool.py copy $HOME/Dev/MSX/MSXDOS13/$file target/disks/msxpiboot.dsk:/$file
-    [ -f $HOME/Dev/MSX/MSXDOS13/$file ] && python3 -W ignore $HOME/Dev/github/MSXPi/software/dsktool.py copy $HOME/Dev/MSX/MSXDOS13/$file target/disks/tools.dsk:/$file
-  done
-
-  # Add the MSXPi commands and ROM only to msxpiboot.dsk
-  for file in `ls target/`
-  do
-    [ -f target/$file ] && python3 -W ignore ./dsktool.py copy target/$file target/disks/msxpiboot.dsk:/$file
+    fname="${file##*/}"
+    [ -f $file ] && python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"
   done
 fi
 
-# Update sources for openMSX extensions - to keep up to date with openMSX fork
-cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
-cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
-cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
-cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
-
-$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pdir.com.asm     -o ./target/pdir.com
-cp target/*.com ../../../../Dev/MSX/MSXPi/diska22/

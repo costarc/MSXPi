@@ -20,7 +20,7 @@
         <ROM id="MSXPi BIOS">
           <mem base="0x4000" size="0x4000"/>
           <rom>
-            <sha1>5ae678517b3054f5aab82cf4446f55f50db36132</sha1>
+            <sha1>e388f68200fdb8d4fdf60c82f8ac07dfc8271b35</sha1>
             <filename>msxpibios.rom</filename>
           </rom>
         </ROM>

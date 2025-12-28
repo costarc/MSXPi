@@ -63,5 +63,5 @@ del %TARGETDIR%\..\%sourcename%.rel
 echo Done.
 :Emulator
 Set MyProcess=openmsx.exe
-tasklist | find /i "%MyProcess%">nul  && (echo %MyProcess% Already running) || start ..\..\..\MSX\MSXPi\openMSX\openmsx.exe -script ..\..\..\MSX-C\WorkingFolder\openMSX\emul_start_config.txt
+tasklist | find /i "%MyProcess%">nul  && (echo %MyProcess% Already running) || start ..\..\..\MSX\MSXPi\openMSX\openmsx.exe -script emul_start_config.txt
 :_end_
