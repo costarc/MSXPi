@@ -29,7 +29,8 @@ int main(void)
     */
     uint8_t rc = SendCommandToMSXPi("template", true);
     if (rc == RC_SUCCESS || rc == RC_FAILED) {
-        printstdout((uint16_t)BLKSIZE);
+        uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
+        printstdout(buffer, MAXBUFSIZE);
     }
 
     return 0;

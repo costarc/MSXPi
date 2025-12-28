@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.1                                                             |
+;| Version : 1.4                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)               |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -28,16 +28,6 @@
 ;| You should have received a copy of the GNU General Public License         |
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
-;
-; File history :
-; 0.2   : Structural changes to support a simplified transfer protocol with error detection
-; 0.1    : Initial version.
-;
-; This is a generic template for MSX-DOS command to interact with MSXPi
-; This command must have a equivalent function in the msxpi-server.py program
-; The function name must be the same defined in the "command" string in this program
-;
-
 DSKBLOCKSIZE:   EQU 1
 
         org     $0100

@@ -8,14 +8,12 @@
 void pprintf(char* text, uint16_t value) {
     Print(text);          // print the string
     PrintNumber(value);   // print the number
-    Print("\n");
 }
 
 // pprints: print a string followed by a string value
 void pprints(char* text, char* value) {
     Print(text);          // print the string
     Print(value);   // print the number
-    Print("\n");
 }
 
 // This function prints text at specified (x,y) position faster
@@ -99,7 +97,7 @@ uint8_t PIWRITEBYTE(uint8_t byte) {
     return rc;
 }
 
-uint8_t RECVDATA2(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
+uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
     uint8_t  rc;
     uint8_t  header_rc;
     uint8_t  byte;
@@ -261,7 +259,7 @@ uint8_t PerformHandshake(uint16_t msx_blocksize) {
 
 }
 
-uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
+uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
 {
     uint8_t  rc;
     uint8_t  header_rc;
@@ -389,7 +387,7 @@ uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize
 // SENDDATA2
 // MSX is the SENDER, Python is the RECEIVER.
 //
-// Protocol (mirrors RECVDATA2 / Python SENDDATA2):
+// Protocol (mirrors RECVDATA / Python SENDDATA2):
 //
 // Initial handshake:
 //   MSX   -> READY
@@ -529,7 +527,7 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
         // -------------------------
         // 3. Status handshake after each GOOD block
         //
-        // Mirror of MSX RECVDATA2 (where MSX sends status_for_next):
+        // Mirror of MSX RECVDATA (where MSX sends status_for_next):
         // Here, Python is the receiver, so Python sends status_for_next:
         //
         //   Python -> READY
@@ -740,7 +738,7 @@ uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize)
 
     while (1) {
 
-        rc = RECVDATA2_ONEBLOCK(buffer, &block_size, maxbufsize);
+        rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
 
         if (block_size < maxbufsize)
             buffer[block_size] = '\0';

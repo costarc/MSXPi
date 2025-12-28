@@ -54,8 +54,8 @@ from io import StringIO
 from contextlib import redirect_stdout
 import shutil
 
-version = "1.3"
-BuildId = "20251016.005"
+version = "1.4"
+BuildId = "20251228.010"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1372,7 +1372,7 @@ def senddata(header_rc, payload):
         return RC_FAILED
 
     msxmaxbuf = msxmaxbuf_low | (msxmaxbuf_high << 8)
-    print(f"senddata: MSX max payload size per block = {msxmaxbuf}")
+    print(f"senddata: This block size = {msxmaxbuf}")
 
     # -------------------------
     # 2. Block send loop
@@ -1646,7 +1646,7 @@ def recvdata2_oneblock(maxbufsize):
     return (RC_CONNERR, None)                 # unexpected header
 
 def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0) -> int:
-    print(f"senddata_oneblock()") #"Sending block {block_index}, header_rc={hex(header_rc)}, length={msx_blocksize}")
+    #print(f"senddata_oneblock()") #"Sending block {block_index}, header_rc={hex(header_rc)}, length={msx_blocksize}")
     length = len(payload)
     if length > msx_blocksize:
         return RC_INVALIDDATASIZE
@@ -1656,10 +1656,10 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     
     # 2. Send exactly one block with retries
     attempts = 0
-    print("senddata_oneblock(): Sending block data with retries if needed")
+    #print("senddata_oneblock(): Sending block data with retries if needed")
     while True:
         # header_rc
-        print(f"senddata_oneblock(): Sending header_rc={hex(header_rc)}")
+        #print(f"senddata_oneblock(): Sending header_rc={hex(header_rc)}")
         rc, _ = SPI_ByteTransfer(header_rc)
         if rc != RC_SUCCESS:
             return RC_CONNERR
@@ -1678,6 +1678,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
             return RC_CONNERR
 
         # payload
+        print(f"senddata_oneblock(): Sending block {block_index + 1} with size {length}")
         chksum = 0
         for b in payload:
             rc, _ = SPI_ByteTransfer(b)
@@ -1700,7 +1701,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         if rc != RC_SUCCESS:
             return RC_CONNERR
 
-        print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
+        #print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
         if msxsum == local_sum:
             # block accepted
             break
@@ -1713,16 +1714,16 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     # 3. Status handshake after GOOD block
     # MSX (receiver) does: READY, status_for_next, expects READY_ACK.
     # Python (sender) must: read READY, read status, send READY_ACK.
-    print("senddata_oneblock(): Performing status handshake")
+    #print("senddata_oneblock(): Performing pos-transfer status handshake")
     rc, ready = SPI_ByteTransfer()
-    print(f"senddata_oneblock(): MSX Handshake = {ready}")
+    #print(f"senddata_oneblock(): MSX Handshake = {ready}")
     if rc != RC_SUCCESS:
         return RC_HANDSHAKEERR
     if ready != READY:
         return RC_HANDSHAKEERR
 
     rc, status_from_msx = SPI_ByteTransfer()
-    print(f"senddata_oneblock(): MSX Status = {status_from_msx}")
+    #print(f"senddata_oneblock(): MSX Status = {status_from_msx}")
     if rc != RC_SUCCESS:
         return RC_CONNERR
     if status_from_msx != RC_SUCCESS:
@@ -1752,7 +1753,7 @@ def PerformHandshake():
             break
 
     # Receive msx_blocksize
-    print("PerformHandshake(): Receiving msx_blocksize from MSX")
+    #print("PerformHandshake(): Receiving msx_blocksize from MSX")
     rc, low = SPI_ByteTransfer()
     if rc != RC_SUCCESS:
         return RC_CONNERR, 0
@@ -1773,7 +1774,7 @@ def sendmultiblock(payload: bytes):
       RC_CONNERR / RC_HANDSHAKEERR / RC_CHKSUM_ERR → protocol failure
     """
 
-    print("sendmultiblock()")
+    #print("sendmultiblock()")
     total_len = len(payload)
     if total_len == 0:
         return RC_INVALIDDATASIZE  # or RC_SUCCESS if you want to allow empty transfers
@@ -1787,6 +1788,7 @@ def sendmultiblock(payload: bytes):
 
     offset = 0
     block_index = 0
+    print(f"sendmultiblock(): Sending {(total_len/msx_blocksize)} blocks of {msx_blocksize} bytes")
     while offset < total_len:
 
         # Determine slice for this block
@@ -1800,7 +1802,7 @@ def sendmultiblock(payload: bytes):
             header = RC_SUCCESS
 
         # Send one block
-        print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
+        #print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
         rc = senddata_oneblock(block, msx_blocksize, header, block_index)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer
@@ -2196,8 +2198,8 @@ def msxarchive(parms = None):
     DISABLETIMEOUT = True # Disable transfers timeout for MSX Archive browsing
     cmd = "1"
     text = get_page(files, pages, page, ncolumns)
-    rc = senddata(RC_SUCCESS, text.encode().ljust(PAGESIZE, b'\x00'))
-    print(text)
+    rc = sendmultiblock(text.encode().ljust(PAGESIZE, b'\x00'))
+
     while True:   
         rc, parm = recvdata2();
         parm = parm.decode(errors="ignore").split("\x00", 1)[0]
@@ -2234,6 +2236,8 @@ def msxarchive(parms = None):
                     rc, buf = fetch_and_uncompress(f"{url}/{filename}")
                     if rc == RC_SUCCESS:
                         text = "File fetched and uncompressed successfully."
+                        rc = sendmultiblock(buf)
+                        return RC_SUCCESS
                     else:
                         text = buf
             except (ValueError, TypeError):
@@ -2241,7 +2245,7 @@ def msxarchive(parms = None):
                 text = f"Invalid input: {cmd}"
         
         rc = senddata(RC_SUCCESS, text.encode().ljust(PAGESIZE, b'\x00'))
-        print(text)
+        #print(text)
 
     DISABLETIMEOUT = False # Restore timeout setting
 

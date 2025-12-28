@@ -38,8 +38,8 @@
 #define CHK_STATE_0       0
 #define CHK_STATE_2       2
 
-#define STREAM_BUF ((uint8_t*)0x4000)
-#define STREAM_BUF_SIZE 8192
+#define PAGE0ADDRESS ((uint8_t*)0x4000)
+#define PAGE1ADDRESS ((uint8_t*)0x8000)
 
 extern unsigned int heap_top;
 void pprintf(char* text, uint16_t value);
@@ -49,11 +49,10 @@ char* GetCmdLineParameters(void);
 uint8_t CHKPIRDY(void);
 uint8_t PIREADBYTE(uint8_t* byte);
 uint8_t PIWRITEBYTE(uint8_t data);
-uint8_t RECVDATA(uint8_t* buffer, uint16_t size);
-uint8_t SENDDATA(uint8_t* buffer, uint16_t size);
-uint8_t RECVDATA2(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize);
-uint8_t RECVDATA2_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize);
-uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
+uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize);
+uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize);
+uint8_t SENDDATA(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
+uint8_t PerformHandshake(uint16_t msx_blocksize);
 uint8_t SendCommandToMSXPi(const char* cmd, bool appendDOSParameters);
 uint8_t parseConnError(const uint8_t rc);
 uint16_t get_sp(void) __naked;

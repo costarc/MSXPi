@@ -44,9 +44,9 @@ uint8_t processLocalCommands(void) {
         P_Help();
         return RC_TERMINATE;
     } else if (StrCompare(cmd, "/M") == 0 || StrCompare(cmd, "/m") == 0 || StrCompare(cmd, "ViewMemory") == 0) {
-        uint8_t* buf = get_buffer_ptr();
+        uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
         uint16_t sp = get_sp();
-        pprintf("Start of Free RAM = ", (uint16_t)buf);
+        pprintf("Start of Free RAM = ", (uint16_t)buffer);
         pprintf("Stack Point       = ", (uint16_t)sp);
         pprintf("TAP               = ", ReadTPA());
         pprintf("SP                = ", ReadSP());
@@ -78,11 +78,11 @@ int SetTimeFromMSXPi(char hour, char min, char sec) __naked {
 }
 
 void SetDateTime(void) {
-    uint16_t block_size;            // Will hold size of received block - Updated by RECVDATA2_ONEBLOCK
+    uint16_t block_size;            // Will hold size of received block - Updated by RECVDATA_ONEBLOCK
     uint16_t block_index = 0;       // Current block index - always zero
 
-    uint8_t* buffer = (uint8_t*)(get_max_buffer_size() + 100);
-    uint8_t rc = RECVDATA2_ONEBLOCK(buffer, &block_size, BLKSIZE);
+    uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
+    uint8_t rc = RECVDATA_ONEBLOCK(buffer, &block_size, BLKSIZE);
 
     uint16_t year = buffer[2] | (buffer[3] << 8);
     char hour = buffer[4];
@@ -125,8 +125,8 @@ int main(void)
             SetDateTime();
         }
         else {
-            uint8_t* buf = (uint8_t*)(get_max_buffer_size() + 100);
-            printstdout(buf, MAXBUFSIZE);
+            uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
+            printstdout(buffer, MAXBUFSIZE);
         }
     } else {
 		Print("Connection error\n");

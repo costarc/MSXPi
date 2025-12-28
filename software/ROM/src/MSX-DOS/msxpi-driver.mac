@@ -821,8 +821,8 @@ EC_ExitError:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.3"
-BuildId: DB ".20251016.005"
+        DB      13,10,"MSXPi BIOS v1.4"
+BuildId: DB ".20251228.010"
         DB      13,10
         DB      "    RCC (c) 2015-2025",13,10,0
 MSXPIHelpMsg:
