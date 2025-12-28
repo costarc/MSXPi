@@ -20,6 +20,11 @@ below.
 Quick Start Guide
 =================
 
+Version 1.4 breaks software compatibility with previous ROMS and server. 
+Upgrade the whole pack (ROM, msxpi-server and clientcommands). There is no need
+to update the CPLD firmware - it is unchanged in this release.
+The documentation is very outdated - for reference, look the new source code,
+they have plenty of information for developers.
 
 This Quick Start Guide is updated to V1.2 of the Software and Interface.
 
@@ -161,6 +166,15 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
+
+MSXPi v1.4 Release Notes
+========================
+Mostly a Software major overhauling.
+- C BIOS now available
+- Replaced all p<commands> by p <command>, now developed in C
+- Most block data transfers re-written for easy of use and stability
+- MSX-DOS1 is back
+- BASIC BIOS simplified, now there is only one command: CALL MSXPI 
 
 MSXPi v1.3 Release Notes
 ========================

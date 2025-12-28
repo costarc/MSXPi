@@ -1,3 +1,11 @@
+MSXPi v1.4 Release Notes
+========================
+Mostly a Software major overhauling.
+- C BIOS now available
+- Replaced all p<commands> by p <command>, now developed in C
+- Most block data transfers re-written for easy of use and stability
+- MSX-DOS1 is back
+- BASIC BIOS simplified, now there is only one command: CALL MSXPI 
 MSXPi v1.3 Release Notes
 ========================
 This is mainly a PCB redesign and firmware om the CPLD. From v1.3, firmware (msxpi.pof) is no longer compatible with previous versions due to pin mapping changes.
