@@ -671,6 +671,9 @@ RECV_LOOP:
         CP      RC_SUCCESS
         JR      Z,RECV_DONE     ; transfer complete
 
+        CP      RC_SUCCNOSTD
+        JR      Z,RECV_DONE     ; transfer complete
+
         ; any other code = error
         JR      RECV_ERROR
 
@@ -822,7 +825,7 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.4"
-BuildId: DB ".20251228.010"
+BuildId: DB ".20260115.012"
         DB      13,10
         DB      "    RCC (c) 2015-2025",13,10,0
 MSXPIHelpMsg:

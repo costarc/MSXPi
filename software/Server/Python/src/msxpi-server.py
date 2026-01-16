@@ -54,6 +54,14 @@ from io import StringIO
 from contextlib import redirect_stdout
 import shutil
 
+# Import IRC client wrappers (module-level functions prefixed with "irc_")
+# Guarded import so server still runs even if irc_client is absent or raises at import.
+''''try:
+    from irc_client import *  # brings irc_connect, irc_read_unread, etc. into globals()
+    print("IRC client integrated: irc_* commands available")
+except Exception as _e:
+    print(f"Warning: failed to import irc_client module: {_e}")
+    '''
 version = "1.4"
 BuildId = "20251228.010"
 
@@ -866,112 +874,7 @@ def ver(parms = None):
     RC = sendmultiblock(ver.encode())
     print(f"pver(): returning rc = {hex(rc)}")
     return rc
-    
-def irc():
-
-    print("irc()")
-
-    global allchann,psetvar,channel,ircsock
-    ircserver = getMSXPiVar('IRCADDR')
-    ircport = int(getMSXPiVar('IRCPORT'))
-    msxpinick =  getMSXPiVar('IRCNICK')
-    
-    rc,data = recvdata()
-    if rc != RC_SUCCESS:
-        return rc
-    if data[0] == 0:
-        cmd=''
-    else:
-        cmd = data.decode().split("\x00")[0].lower()
-    rc = RC_SUCCNOSTD
-    try:
-        if cmd[:4] == 'conn':
-            ircsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            jparm = cmd.split(' ')
-            jnick = jparm[1]
-            if (jnick == 'none'):
-                jnick = msxpinick
-            ircsock.connect((ircserver, ircport))
-            buf = bytearray()
-            buf.extend(("USER "+ jnick +" "+ jnick +" "+ jnick + " " + jnick + "\r\n").encode())
-            ircsock.send(buf)
-            buf = bytearray()
-            buf.extend(("NICK "+ jnick +"\r\n").encode())
-            ircsock.setblocking(0);
-            ircsock.send(buf)
-            ircmsg = 'Connected to ' + ircserver
-            sendmultiblock(ircmsg.encode())
-        elif cmd[:3] == "msg":
-            ircsock.setblocking(0);
-            ircsock.send(("PRIVMSG "+cmd[4:] +"\r\n").encode())
-            sendmultiblock("Pi:Ok\n".encode())
-        elif cmd[:4] == 'join':
-            jparm = cmd.split(' ')
-            jchannel = jparm[1]
-            if jchannel in allchann:
-                ircmsg = 'Already joined - setting to current. List of channels:' + str(allchann).replace('bytearray(b','').replace(')','')
-                channel = jchannel
-            ircsock.setblocking(0);
-            ircsock.send(("JOIN " + jchannel + "\r\n").encode())
-            ircmsg = 'Pi:Ok\n'
-            rc = RC_SUCCNOSTD
-            ircsock.setblocking(0);
-            sendmultiblock(ircmsg.encode())
-        elif cmd[:4] == 'read':
-            ircmsg = 'Pi:Error'
-            try:
-                ircmsg = ircsock.recv(2048).decode()
-                if len(ircmsg)>1:
-                    ircmsg = ircmsg.strip('\n\r')
-                if ircmsg.find("PING :") != -1:
-                    ircmsgList = ircmsg.split(":")
-                    idx=0
-                    pingReply = 'PONG'
-                    for msg in ircmsgList:
-                        if 'PING' in msg:
-                            pingReply = ircmsgList[idx + 1]
-                        idx += 1
-                    ircsock.setblocking(0);
-                    ircsock.send(("PONG :"+pingReply+"\r\n").encode())
-                    rc = RC_SUCCNOSTD
-                if ircmsg.find("PRIVMSG") != -1:
-                    ircname = ircmsg.split('!',1)[0][1:]
-                    ircchidxs = ircmsg.find('PRIVMSG')+8
-                    ircchidxe = ircmsg[ircchidxs:].find(':')
-                    ircchann = ircmsg[ircchidxs:ircchidxs+ircchidxe-1]
-                    if msxpinick in ircchann:
-                        ircchann = 'private'
-                    ircremmsg = ircmsg[ircchidxs+ircchidxe+1:]
-                    ircmsg = '<' + ircchann + '> ' + ircname + ' -> ' + ircremmsg
-                    rc = RC_SUCCESS
-            except socket.error as e:
-                err = e.args[0]
-                print("irc read exception:",err,str(e))
-                ircmsg = 'Pi:Ok\n'
-                rc = RC_SUCCNOSTD
-            sendmultiblock(ircmsg.encode())        
-        elif cmd[:5] == 'names':
-            ircsock.send((cmd+"\r\n").encode())
-            ircmsg = ''
-            ircmsg = ircmsg + ircsock.recv(2048).decode("UTF-8")
-            ircmsg = ircmsg.strip('\n\r')
-            ircmsg = "Users on channel " #+ ircmsg.split('=',1)[1]
-            sendmultiblock(ircmsg.encode())
-        elif cmd[:4] == 'quit':
-            ircsock.send(("/quit\r\n").encode())
-            ircsock.close()
-            sendmultiblock("Pi:leaving room\r\n".encode())
-        elif cmd[:4] == 'part':
-            ircsock.send(("/part\r\n").encode())
-            ircsock.close()
-            sendmultiblock("Pi:leaving room\n".encode())
-        else:
-            print("irc:no valid command received")
-            sendmultiblock("Pi:No valid command received".encode())
-    except Exception as e:
-        print("irc:Caught exception"+str(e))
-        sendmultiblock("Pi:"+str(e).encode())
-        
+           
 def dosinit(parms = None):
     print("dosinit()")    
     global msxdos1boot
@@ -1678,7 +1581,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
             return RC_CONNERR
 
         # payload
-        print(f"senddata_oneblock(): Sending block {block_index + 1} with size {length}")
+        #print(f"senddata_oneblock(): Sending block {block_index + 1} with size {length}")
         chksum = 0
         for b in payload:
             rc, _ = SPI_ByteTransfer(b)
@@ -1730,7 +1633,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         return RC_CONNERR
 
     # send READY_ACK
-    print("senddata_oneblock(): Sending READY_ACK to MSX")
+    #print("senddata_oneblock(): Sending READY_ACK to MSX")
     SPI_ByteTransfer(READY_ACK)
 
     # 4. Interpret header_rc (what we told MSX)
@@ -1765,7 +1668,7 @@ def PerformHandshake():
 
     return RC_SUCCESS, msx_blocksize
 
-def sendmultiblock(payload: bytes):
+def sendmultiblock(payload: bytes, header_rc = None):
     """
     Sends a large payload to the MSX in multiple blocks using senddata_oneblock().
 
@@ -1788,7 +1691,7 @@ def sendmultiblock(payload: bytes):
 
     offset = 0
     block_index = 0
-    print(f"sendmultiblock(): Sending {(total_len/msx_blocksize)} blocks of {msx_blocksize} bytes")
+    #print(f"sendmultiblock(): Sending {(total_len/msx_blocksize)} blocks of {msx_blocksize} bytes")
     while offset < total_len:
 
         # Determine slice for this block
@@ -1796,14 +1699,16 @@ def sendmultiblock(payload: bytes):
         block = payload[offset:end]
 
         # header_rc: RC_READY for intermediate blocks, RC_SUCCESS for last block
-        if end < total_len:
-            header = RC_READY
+        if not header_rc == None:
+            block_rc = header_rc
+        elif end < total_len:
+            block_rc = RC_READY
         else:
-            header = RC_SUCCESS
+            block_rc = RC_SUCCESS
 
         # Send one block
-        #print(f"sendmultiblock(): Sending block {block_index}, header={header}, length={len(block)}")
-        rc = senddata_oneblock(block, msx_blocksize, header, block_index)
+        #print(f"sendmultiblock(): Sending block {block_index}, header_rc={hex(block_rc)}, length={len(block)}")
+        rc = senddata_oneblock(block, msx_blocksize, block_rc, block_index)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer
             return rc
@@ -2294,6 +2199,336 @@ def template(parms = None):
     
     return
 
+def irc(parms):
+    print(f"irc():{parms!r}")
+
+    global ircsock
+
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def sendmsg(text: str, rc=RC_SUCCESS):
+        #print(f"[irc] sendmsg: text={text!r}, rc={rc}")
+        sendmultiblock(text.encode(), rc)
+
+    def not_connected():
+        #print("[irc] not_connected()")
+        sendmsg("Pi:Er:Not connected", RC_SUCCNOSTD)
+        return RC_SUCCNOSTD
+
+    # ------------------------------------------------------------
+    # Decode command
+    # ------------------------------------------------------------
+    if not parms:
+        cmd = ""
+    else:
+        if isinstance(parms, (bytes, bytearray)):
+            cmd = parms.decode(errors="ignore").strip().lower()
+        else:
+            cmd = str(parms).strip().lower()
+
+    ircserver = getMSXPiVar("IRCADDR")
+    ircport   = int(getMSXPiVar("IRCPORT"))
+    msxnick   = getMSXPiVar("IRCNICK")
+
+    #print(f"[irc] cmd='{cmd}', server={ircserver}, port={ircport}, nick={msxnick}")
+
+    try:
+        # ------------------------------------------------------------
+        # CONNECT
+        # ------------------------------------------------------------
+        if cmd.lower().startswith("conn"):
+            #print("[irc] CONNECT branch")
+            parts = cmd.split()
+            jnick = parts[1] if len(parts) > 1 else msxnick
+            if jnick == "none":
+                jnick = msxnick
+            #print(f"[irc] connect nick={jnick}")
+
+            # Close previous
+            if ircsock is not None:
+                #print("[irc] closing previous socket")
+                try:
+                    ircsock.close()
+                except Exception as e:
+                    print(f"[irc] error closing previous socket: {e}")
+
+            try:
+                #print(f"[irc] creating socket to {(ircserver, ircport)}")
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect((ircserver, ircport))
+                #print("[irc] socket connected")
+            except Exception as e:
+                print(f"[irc] connect exception: {e}")
+                ircsock = None
+                sendmsg("Pi:Er:Connect error: " + str(e), RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            ircsock = s
+            ircsock.setblocking(False)
+            #print("[irc] socket set to non-blocking")
+
+            user_line = f"USER {jnick} 0 * :{jnick}\r\n"
+            nick_line = f"NICK {jnick}\r\n"
+            #print(f"[irc] >> {user_line!r}")
+            ircsock.send(user_line.encode())
+            #print(f"[irc] >> {nick_line!r}")
+            ircsock.send(nick_line.encode())
+
+            sendmsg("Pi:Ok:Connected to " + ircserver, RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+      
+        # ------------------------------------------------------------
+        # SEND MESSAGE
+        # ------------------------------------------------------------
+        elif cmd.startswith("say"):
+            print("[irc] MSG branch")
+            if ircsock is None:
+                return not_connected()
+        
+            raw = cmd[4:].strip()
+            print(f"[irc] msg raw='{raw}'")
+            
+            parts = raw.split(maxsplit=1)
+            if len(parts) == 2:
+                target, text = parts
+            else:
+                sendmsg("Pi:Er:Bad format", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+            
+            # Detect /names
+            if text.lower().startswith("/names"):
+                print("[irc] /names detected")
+                try:
+                    line = f"NAMES {target}\r\n"
+                    print(f"[irc] >> {line!r}")
+                    ircsock.send(line.encode())
+                except Exception as e:
+                    print(f"[irc] NAMES send exception: {e}")
+                    sendmsg("Pi:Er:NAMES error: " + str(e), RC_SUCCNOSTD)
+                    return RC_SUCCNOSTD
+            
+                sendmsg("Pi:Ok:NAMES sent", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+        
+            # Normal SAY → PRIVMSG
+            try:
+                line = f"PRIVMSG {raw}\r\n"
+                print(f"[irc] >> {line!r}")
+                ircsock.send(line.encode())
+            except Exception as e:
+                print(f"[irc] send exception: {e}")
+                sendmsg("Pi:Er:Send error: " + str(e), RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+        
+            sendmsg("Pi:Ok:Sent", RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+
+        # ------------------------------------------------------------
+        # JOIN
+        # ------------------------------------------------------------
+        elif cmd.lower().startswith("join"):
+            #print("[irc] JOIN branch")
+            if ircsock is None:
+                #print("[irc] JOIN but ircsock is None")
+                return not_connected()
+
+            parts = cmd.split()
+            #print(f"[irc] join parts={parts}")
+            if len(parts) < 2:
+                sendmsg("Pi:Er:Missing channel", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            chan = parts[1]
+            try:
+                line = f"JOIN {chan}\r\n"
+                #print(f"[irc] >> {line!r}")
+                ircsock.send(line.encode())
+            except Exception as e:
+                print(f"[irc] join exception: {e}")
+                sendmsg("Pi:Er:Join error: " + str(e), RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            sendmsg("Pi:Ok:Joined", RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+
+        # ------------------------------------------------------------
+        # READ
+        # ------------------------------------------------------------
+        elif cmd.lower().startswith("read"):
+            #print("[irc] READ branch")
+            if ircsock is None:
+                #print("[irc] READ but ircsock is None")
+                sendmsg("Pi:Er:Not connected", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            try:
+                data = ircsock.recv(2048)
+                #print(f"[irc] recv raw={data!r}")
+            except BlockingIOError:
+                #print("[irc] recv BlockingIOError (no data yet)")
+                sendmsg("Pi:Ok:BlockingIOError", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+            except Exception as e:
+                print(f"[irc] recv exception: {e}")
+                sendmsg("Pi:Er:Read error: " + str(e), RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            if not data:
+                #print("[irc] recv: empty data (connection closed?)")
+                sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            raw = data.decode(errors="ignore")
+            #print(f"[irc] decoded raw={raw!r}")
+            if not raw.strip():
+                #print("[irc] decoded raw is only whitespace")
+                sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                return RC_SUCCNOSTD
+
+            lines = raw.replace("\r", "").split("\n")
+            #print(f"{lines!r}")
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                print(f"[irc] line='{line}'")
+
+                # PING
+                if line.startswith("PING :"):
+                    token = line[6:]
+                    #print(f"[irc] PING detected, token={token!r}")
+                    try:
+                        pong = f"PONG :{token}\r\n"
+                        #print(f"[irc] >> {pong!r}")
+                        ircsock.send(pong.encode())
+                    except Exception as e:
+                        print(f"[irc] PONG send exception: {e}")
+                    sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                    return RC_SUCCNOSTD
+
+                # NAMES reply (353)
+                if " 353 " in line:
+                    print("[irc] NAMES list detected")
+                    # Example: :server 353 msxpi = #openmsx :nick1 nick2 nick3
+                    try:
+                        parts = line.split(" :", 1)
+                        if len(parts) == 2:
+                            users = parts[1]
+                            sendmsg("Pi:Ok:Users " + users, RC_SUCCESS)
+                            print(f"[irc] NAMES parsed: users={users!r}")
+                            return RC_SUCCESS
+                    except Exception as e:
+                        print(f"[irc] NAMES parse exception: {e}")
+                        sendmsg("Pi:Ok:Users", RC_SUCCESS)
+                        return RC_SUCCESS
+                
+                # End of NAMES list (366)
+                if " 366 " in line:
+                    print("[irc] End of NAMES list")
+                    sendmsg("Pi:Ok:EndUsers", RC_SUCCESS)
+                    return RC_SUCCESS
+
+                # JOIN reply from server
+                if " JOIN " in line:
+                    #print("[irc] JOIN event detected")
+                    try:
+                        # Example: :msxpi!~msxpi@host JOIN #openmsx
+                        prefix, rest = line[1:].split(" ", 1)
+                        nick = prefix.split("!", 1)[0]
+                        chan = rest.split("JOIN", 1)[1].strip()
+                        #print(f"[irc] JOIN parsed: nick={nick!r}, chan={chan!r}")
+                    except Exception as e:
+                        print(f"[irc] JOIN parse exception: {e}")
+                        sendmsg("Pi:Ok:Joined", RC_SUCCESS)
+                        return RC_SUCCESS
+
+                    # If it's our own JOIN
+                    if nick.lower() == msxnick.lower():
+                        sendmsg(f"Pi:Ok:Joined {chan}", RC_SUCCESS)
+                        return RC_SUCCESS
+
+                    # Someone else joined the channel
+                    sendmsg(f"Pi:Ok:{nick} joined {chan}", RC_SUCCESS)
+                    return RC_SUCCESS
+
+                # Registration complete (end of MOTD)
+                if "End of message of the day" in line:
+                    #print("[irc] Registration complete — ready to JOIN")
+                    irc_registered = True
+                    sendmsg("Pi:Ok:Ready", RC_SUCCNOSTD)
+                    return RC_SUCCNOSTD
+
+                # PRIVMSG
+                if " PRIVMSG " in line:
+                    print("[irc] PRIVMSG detected")
+                    try:
+                        prefix, rest = line[1:].split(" ", 1)
+                        nick = prefix.split("!", 1)[0]
+                        print(f"[irc] prefix={prefix!r}, nick={nick!r}, rest={rest!r}")
+                    except Exception as e:
+                        #print(f"[irc] PRIVMSG parse prefix exception: {e}")
+                        sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
+
+                    if " :" not in rest:
+                        #print("[irc] PRIVMSG rest has no ' :' separator")
+                        sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
+
+                    before, text = rest.split(" :", 1)
+                    parts = before.split()
+                    #print(f"[irc] before={before!r}, text={text!r}, parts={parts!r}")
+                    if len(parts) < 2 or parts[0].upper() != "PRIVMSG":
+                        #print("[irc] PRIVMSG parts invalid")
+                        sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
+
+                    target = parts[1]
+                    if msxnick in target:
+                        target = "private"
+
+                    formatted = f"<{target}> {nick} -> {text}"
+                    #print(f"[irc] formatted message={formatted!r}")
+                    sendmsg("Pi:Ok:" + formatted, RC_SUCCESS)
+                    return RC_SUCCESS
+
+            #print("[irc] no meaningful lines found")
+            sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+
+        # ------------------------------------------------------------
+        # QUIT
+        # ------------------------------------------------------------
+        elif cmd.lower().startswith("quit") or cmd.lower().startswith("part"):
+            #print("[irc] QUIT/PART branch")
+            if ircsock is not None:
+                try:
+                    #print("[irc] >> b'QUIT\\r\\n'")
+                    ircsock.send(b"QUIT\r\n")
+                    ircsock.close()
+                    #print("[irc] socket closed")
+                except Exception as e:
+                    print(f"[irc] quit/close exception: {e}")
+                ircsock = None
+
+            sendmsg("Pi:leaving room", RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+
+        # ------------------------------------------------------------
+        # UNKNOWN
+        # ------------------------------------------------------------
+        else:
+            print(f"[irc] UNKNOWN command: {cmd!r}")
+            sendmsg("Pi:No valid command received", RC_SUCCNOSTD)
+            return RC_SUCCNOSTD
+
+    except Exception as e:
+        print("[irc] Caught top-level exception:", e)
+        sendmsg("Pi:" + str(e), RC_SUCCNOSTD)
+        return RC_SUCCNOSTD
+
+
 def initialize_connection():
     if hostType == "RaspberryPi":
         init_spi_bitbang()
@@ -2399,14 +2634,42 @@ try:
                     buf = buf.decode()
                     cmd, *rest = buf.split()
                     parms = " ".join(rest)
-                    globals()[cmd.lower()](parms)
+                    try:
+                        result = globals()[cmd.lower()](parms)
+                        # If handler returned a string or bytes, send it back to MSX
+                        if isinstance(result, str):
+                            try:
+                                sendmultiblock(result.encode())
+                            except Exception:
+                                # best-effort: ignore send errors here (original design often sends inside handler)
+                                pass
+                        elif isinstance(result, bytes):
+                            try:
+                                sendmultiblock(result)
+                            except Exception:
+                                pass
+                    except KeyError as e:
+                        # Unknown command name
+                        err = f"Unknown command: {cmd}"
+                        print(err)
+                        try:
+                            sendmultiblock(err.encode())
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        err = "Pi:Error - " + str(e)
+                        print(f"MSXPi Server Command error: {str(e)}")
+                        try:
+                            sendmultiblock(err.encode())
+                        except Exception:
+                            pass
                 elif rc == RC_CONNERR:
                     # explicit reconnect trigger
                     print("MSXPi Server: Connection error, reinitializing...")
                     initialize_connection()
             except Exception as e:
                 errcount += 1
-                print(f"MSXPi Server: {str(e)}")
+                print(f"MSXPi Server Command error: {str(e)}")
                 try:
                     sendmultiblock(("Pi:Error - " + str(e)).encode())
                 except Exception:
@@ -2435,7 +2698,35 @@ try:
                         buf = buf.decode()
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
-                        globals()[cmd.lower()](parms)
+                        try:
+                            result = globals()[cmd.lower()](parms)
+                            # If handler returned a string or bytes, send it back to MSX
+                            if isinstance(result, str):
+                                try:
+                                    sendmultiblock(result.encode())
+                                except Exception:
+                                    # best-effort: ignore send errors here (original design often sends inside handler)
+                                    pass
+                            elif isinstance(result, bytes):
+                                try:
+                                    sendmultiblock(result)
+                                except Exception:
+                                    pass
+                        except KeyError as e:
+                            # Unknown command name
+                            err = f"MSXPi Server Error: Unknown command {cmd}"
+                            print(err)
+                            try:
+                                sendmultiblock(err.encode())
+                            except Exception:
+                                pass
+                        except Exception as e:
+                            err = "Pi:Error - " + str(e)
+                            print(f"MSXPi Server Command error: {str(e)}")
+                            try:
+                                sendmultiblock(err.encode())
+                            except Exception:
+                                pass
                     elif rc == RC_CONNERR:
                         print("MSXPi Server: Protocol error, forcing reconnect")
                         break  # exit inner loop to reaccept
@@ -2444,7 +2735,7 @@ try:
                 print(f"MSXPi Server: connection lost: {e}")
             except Exception as e:
                 errcount += 1
-                print(f"MSXPi Server: {str(e)}")
+                print(f"MSXPi Server Error: {str(e)}")
                 try:
                     sendmultiblock(("Pi:Error - " + str(e)).encode())
                 except Exception:

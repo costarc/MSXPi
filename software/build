@@ -1,10 +1,10 @@
 #!/bin/bash
 
 export buildClientCommands="no"
-export buildBIOS="no"
-export buildOpenMSXConfig="no"
+export buildBIOS="yes"
+export buildOpenMSXConfig="yes"
 export buildMSXdiskImage="no"
-export updateVersions="no"
+export updateVersions="yes"
 
 XMLPATH=openMSX/share/extensions
 OPENMSXSRC=../../openMSX/openMSX

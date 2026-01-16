@@ -48,7 +48,7 @@ IF NOT EXIST %sourcename%.ihx GOTO _end_
 echo ... Compilation OK
 
 %HEX2BIN% -e com %sourcename%.ihx
-
+echo on
 copy %sourcename%.com %TARGETDIR%\%sourcename%.com /y
 copy %sourcename%.com %FLOPPYA%\%sourcename%.com /y
 del %TARGETDIR%\..\%sourcename%.com
