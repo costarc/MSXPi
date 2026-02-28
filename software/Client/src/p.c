@@ -82,15 +82,20 @@ void SetDateTime(void) {
     uint16_t block_index = 0;       // Current block index - always zero
 
     uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
-    uint8_t rc = RECVDATA_ONEBLOCK(buffer, &block_size, BLKSIZE);
 
-    uint16_t year = buffer[2] | (buffer[3] << 8);
-    char hour = buffer[4];
-    char min = buffer[5];
-    char sec = buffer[6];
+    uint8_t rc = PerformHandshake(BLKSIZE);
+    if (rc != RC_SUCCESS)
+        return;
+
+    rc = RECVDATA_ONEBLOCK(buffer, &block_size, BLKSIZE);
 
     if (rc == RC_SUCCESS) {
-        int year = buffer[2] | (buffer[3] << 8);
+        
+        char hour = buffer[4];
+        char min = buffer[5];
+        char sec = buffer[6];
+
+        uint16_t year = buffer[2] | (buffer[3] << 8);
         char month = buffer[1];
         char day = buffer[0];
         int ret = SetDate(year, month, day);

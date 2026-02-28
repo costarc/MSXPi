@@ -745,7 +745,7 @@ int main(void)
     /* initial refresh */
     refresh_channels();
     /* ensure we use a safe channel pointer (fallback to DEFAULT_CHANNEL) */
-    refresh_users_for_channel(channels_count ? channels[current_channel_idx] : DEFAULT_CHANNEL);
+    //refresh_users_for_channel(channels_count ? channels[current_channel_idx] : DEFAULT_CHANNEL);
     refresh_messages_for_channel(channels_count ? channels[current_channel_idx] : DEFAULT_CHANNEL);
     draw_top_and_channels();
     draw_users();

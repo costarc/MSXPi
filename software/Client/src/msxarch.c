@@ -155,6 +155,7 @@ const unsigned char* showMenu(const unsigned char* options[], int count) {
 
     // Display menu
     Print("=== MENU ===\n");
+    Print("!! msxarch is only a proof of concept, and can only load linear ROMs up to 32KB. Will not work with any memory-mapped game !!\n\n");
     for (int i = 0; i < count; i++) {
         PrintNumber(i + 1);
         Print(". "); Print(options[i]); Print("\n");   // print option text
@@ -203,9 +204,6 @@ int main(void) {
 
     const unsigned char* items[] = {
         "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/roms/msx1",
-        "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/roms/msx2",
-        "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/msx1",
-        "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/turbo_r",
         "Exit"
     };
 

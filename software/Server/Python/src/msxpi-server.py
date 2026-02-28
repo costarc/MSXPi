@@ -63,7 +63,7 @@ except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
 version = "1.4"
-BuildId = "20251228.010"
+BuildId = "20260228.011"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -635,7 +635,7 @@ def date(parms = None):
     pdate = bytearray(8)
     now = datetime.datetime.now()
 
-    # Fill buffer in MSX‑expected order
+    # Fill buffer in MSX expected order
     pdate[0] = now.day
     pdate[1] = now.month
     pdate[2] = now.year & 0xFF
@@ -667,14 +667,14 @@ def date(parms = None):
 
 def play(data):
     print(f"pplay(): {data}")
-    
+       
+    if hostType != "RaspberryPi": 
+        sendmultiblock("Command not supported by this platform".encode())
+        return RC_SUCCESS
+
     if not data:
         rc = sendmultiblock("Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3")
         return RC_FAILED
-       
-    if hostType != "RaspberryPi": 
-        sendmultiblock("Command not supported in this platform".encode())
-        return RC_SUCCESS
         
     parmslist = data.split(" ")
     cmd = parmslist[0]
@@ -694,19 +694,15 @@ def play(data):
 
     return RC_SUCCESS
     
-def vol(data):
+def vol(data=None):
     print(f"pvol(): {data}")
 
-    if not data:
-        rc = sendmultiblock("This command requires a parameter")
-        return RC_FAILED
-
-    if rc == RC_SUCCESS:
-        if hostType == "RaspberryPi": 
-            rc = run("mixer set PCM -- " + data)
-            return RC_SUCCESS
-        else:
-            sendmultiblock("Command not supported in this platform".encode())
+    if hostType == "RaspberryPi": 
+        rc = run("mixer set PCM -- " + data)
+        sendmultiblock("Pi:Ok")
+        return RC_SUCCESS
+    else:
+        sendmultiblock("Command not supported by this platform".encode())
     return RC_SUCCESS
     
 def set(data):
@@ -1739,29 +1735,33 @@ def readParameters(errorMsg, needParm=False):
     #print(f"Parameters:{parms}")
     return RC_SUCCESS, parms
 
-def restart():
+def restart(parm=None):
     print("prestart()")
     if hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
+        sendmultiblock(b'Pi:Ok')
         exitDueToSyncError()
     else:
-        print("Command not supported in this platform")
+        print("Command not supported by this platform")
+        sendmultiblock(b'Command not supported by this platform')
         
-def reboot():
+def reboot(parm=None):
     print("preboot()")
     if hostType == "RaspberryPi":
         print("Rebooting Raspberry Pi")
         os.system("sudo reboot")
     else:
-        print("Command not supported in this platform")
+        print("Command not supported by this platform")
+        sendmultiblock(b'Command not supported by this platform')
         
-def shut():
+def shut(parm=None):
     print("pshut()")
     if hostType == "RaspberryPi":
         print("Shutting down Raspberry Pi")
         os.system("sudo shutdown -h now")
     else:
-        print("Command not supported in this platform")
+        print("Command not supported by this platform")
+        sendmultiblock(b'Command not supported by this platform')
 
 def button_handler(channel):
     start = time.time()
@@ -1834,8 +1834,7 @@ def fetch_and_uncompress(url: str):
     and buf is the resulting .rom file contents as bytes.
     """
     tmpdir = "/tmp/msxpi"
-    os.makedirs(tmpdir, exist_ok=True)
-
+    
     filename = os.path.basename(url)
     cached_path = os.path.join(tmpdir, filename)
 
@@ -1866,10 +1865,7 @@ def fetch_and_uncompress(url: str):
 
     # Otherwise, prepare extraction
     extract_dir = os.path.join(tmpdir, "extract")
-    if os.path.exists(extract_dir):
-        shutil.rmtree(extract_dir)
-    os.makedirs(extract_dir)
-
+    os.makedirs(extract_dir, exist_ok=True)
     system = platform.system().lower()
 
     if ext == "zip":
@@ -1882,13 +1878,13 @@ def fetch_and_uncompress(url: str):
         if system == "windows":
             cmd = ["7z.exe", "e", cached_path, "-aoa", f"-o{extract_dir}"]
         else:
-            cmd = ["lha", "xq", cached_path, extract_dir]
+            cmd = ["lha", "xq", cached_path]
 
     elif ext == "pma":
         if system == "windows":
             cmd = ["7z.exe", "e", cached_path, "-aoa", f"-o{extract_dir}"]
         else:
-            cmd = ["pma", "x", cached_path, extract_dir]
+            cmd = ["pma", "x", cached_path]
 
     elif ext == "arj":
         if system == "windows":
@@ -1902,7 +1898,8 @@ def fetch_and_uncompress(url: str):
 
     # Run extraction
     try:
-        subprocess.run(cmd, check=True)
+        print(f"Extrating file with command: {cmd}")
+        subprocess.run(cmd, cwd=extract_dir, check=True)
     except subprocess.CalledProcessError as e:
         print(f"Extraction failed: {e}")
         return RC_FAILED, f"Extraction failed: {e}"

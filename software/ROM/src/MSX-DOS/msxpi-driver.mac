@@ -93,6 +93,15 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
+        ld      b,3
+INIDELAY:
+        ld      hl,0
+INIDELAY1:
+        dec     hl
+        ld      a,h
+        or      l
+        jr      nz,INIDELAY1
+        djnz    INIDELAY
         and     a
         ret
         
@@ -825,16 +834,16 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.4"
-BuildId: DB ".20260115.012"
+BuildId: DB ".20260228.011"
         DB      13,10
-        DB      "    RCC (c) 2015-2025",13,10,0
+        DB      "    RCC (c) 2015-2026",13,10,0
 MSXPIHelpMsg:
         DB      "Commands available:",13,10
         DB      "MSXPI MSXPIVER ",13,10
         DB      "Examples:",13,10
-        DB      "CALL MSXPI(",34,"0,C000,pdir",34,") -> Execute command and ignores the response",13,10
-        DB      "CALL MSXPI(",34,"1,C000,pdir",34,") -> Execute command and print the response to screen",13,10
-        DB      "CALL MSXPI(",34,"2,C000,pdir",34,") -> Execute command and store response data in given memory address+3",13,10,0
+        DB      "CALL MSXPI(",34,"0,C000,dir",34,") -> Execute command and ignores the response",13,10
+        DB      "CALL MSXPI(",34,"1,C000,dir",34,") -> Execute command and print the response to screen",13,10
+        DB      "CALL MSXPI(",34,"2,C000,dir",34,") -> Execute command and store response data in given memory address+3",13,10,0
 
 ; ================================================================
 ; Table of Commands available/implemented
