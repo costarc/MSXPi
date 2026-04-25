@@ -21,7 +21,7 @@ Quick Start Guide
 =================
 
 Version 1.4 breaks software compatibility with previous ROMS and server. 
-Upgrade the whole pack (ROM, msxpi-server and clientcommands). There is no need
+Upgrade the whole pack (ROM, msxpi-server and client commands). There is no need
 to update the CPLD firmware - it is unchanged in this release.
 The documentation is very outdated - for reference, look the new source code,
 they have plenty of information for developers.
@@ -69,13 +69,13 @@ After this basic setup, you should be able to use the MSXPi ".com" commands
 from your MSX. To unleash full MSXPi power, configure the 
 Raspberry Pi Zero W WiFi:
 
-          pset WIFISSID Your Wifi Name
+          p set WIFISSID Your Wifi Name
  
-          pset WIFIPWD YourWifiPassword
+          p set WIFIPWD YourWifiPassword
  
-          pwifi set
+          p wifi set
  
-          preboot
+          p reboot
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will 
  expand the filesystem in the SD and initialise the Linux system - following 

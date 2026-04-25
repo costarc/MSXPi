@@ -19,17 +19,17 @@
 24 ' Returns:'
 23 ' C$ = If A = 1, will return the contents of the buffer in C$
 24 '
-30 ' MSXPISEND - Send a block of binary data to RPi (256 bytes) Line 12000-
+30 ' MSXPISEND (discontinued) - Send a block of binary data to RPi (256 bytes) Line 12000-
 32 ' B = buffer address: Hexadecimal memory address (ex: &hC000) containing the data to send
 34 ' Returns:
 35 ' RC = return code: -1 = Connection Error, 0 = Success
 36 '
-30 ' MSXPIRECV - Receive a block of binary data to RPi (256 bytes) Line 13000-
+30 ' MSXPIRECV (discontinued) - Receive a block of binary data to RPi (256 bytes) Line 13000-
 32 ' B = buffer address: Hexadecimal memory address (ex: &hC000) to store the data received
 34 ' Returns:
 35 ' RC = return code: -1 = Connection Error, 0 = Success
 37 '
-40 ' STORESTR - Store a string in a buffer - Line 14000-
+40 ' STORESTR (discontinued) - Store a string in a buffer - Line 14000-
 42 ' B = buffer address: Hexadecimal memory address (ex: &hC000) to store the data received
 42 ' C$ = String to store, maximum 256 bytes (not sure MSX supoprt strings this size though)
 44 ' Returns:
