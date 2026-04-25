@@ -140,6 +140,9 @@
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions>/SAFESEH:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
@@ -169,6 +172,9 @@
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -209,6 +215,9 @@
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions>/SAFESEH:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -249,6 +258,9 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Developer|Win32'">
     <ClCompile>
@@ -280,6 +292,9 @@
       <TargetMachine>MachineX86</TargetMachine>
       <AdditionalOptions>/SAFESEH:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Developer|x64'">
     <Midl>
@@ -310,6 +325,9 @@
       <SubSystem>Windows</SubSystem>
       <TargetMachine>MachineX64</TargetMachine>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>ActiveCodePageUTF8.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="$(OpenMSXSrcDir)\3rdparty\ImGuiFileDialog\ImGuiFileDialog.cc" />
@@ -451,7 +469,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\file\GZFileAdapter.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\LocalFile.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\LocalFileReference.cc" />
-    <ClCompile Include="$(OpenMSXSrcDir)\file\PreCacheFile.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\file\MappedFile.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\ZipFileAdapter.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\file\ZlibInflate.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\ide\AbstractIDEDevice.cc" />
@@ -496,6 +514,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiOsdIcons.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiPalette.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiPlot.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiRasterViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiReverseBar.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSettings.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSoundChip.cc" />
@@ -876,7 +895,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\SVIPrinterPort.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\SVIPPI.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\MSXCielTurbo.cc" />
-	<ClCompile Include="$(OpenMSXSrcDir)\MSXPiDevice.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\MSXPiDevice.cc" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(OpenMSXSrcDir)\3rdparty\ImGuiFileDialog/CustomFont.h" />
@@ -1037,7 +1056,7 @@
     <None Include="$(OpenMSXSrcDir)\file\GZFileAdapter.hh" />
     <None Include="$(OpenMSXSrcDir)\file\LocalFile.hh" />
     <None Include="$(OpenMSXSrcDir)\file\LocalFileReference.hh" />
-    <None Include="$(OpenMSXSrcDir)\file\PreCacheFile.hh" />
+    <None Include="$(OpenMSXSrcDir)\file\MappedFile.hh" />
     <None Include="$(OpenMSXSrcDir)\file\ReadDir.hh" />
     <None Include="$(OpenMSXSrcDir)\file\ZipFileAdapter.hh" />
     <None Include="$(OpenMSXSrcDir)\file\ZlibInflate.hh" />
@@ -1088,6 +1107,7 @@
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiPalette.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiPlot.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiPart.hh" />
+    <None Include="$(OpenMSXSrcDir)\imgui\ImGuiRasterViewer.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiReverseBar.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiSettings.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiSoundChip.hh" />
@@ -1662,7 +1682,7 @@ popd</Command>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="$(OpenMSXSrcDir)\sound\fake_windows.h" />
-	<ClInclude Include="$(OpenMSXSrcDir)\MSXPiDevice.hh" />
+    <ClInclude Include="$(OpenMSXSrcDir)\MSXPiDevice.hh" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

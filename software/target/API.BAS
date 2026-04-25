@@ -19,17 +19,17 @@
 24 ' Returns:'
 23 ' C$ = If A = 1, will return the contents of the buffer in C$
 24 '
-30 ' MSXPISEND - Send a block of binary data to RPi (256 bytes) Line 12000-
+30 ' MSXPISEND (discontinued) - Send a block of binary data to RPi (256 bytes) Line 12000-
 32 ' B = buffer address: Hexadecimal memory address (ex: &hC000) containing the data to send
 34 ' Returns:
 35 ' RC = return code: -1 = Connection Error, 0 = Success
 36 '
-30 ' MSXPIRECV - Receive a block of binary data to RPi (256 bytes) Line 13000-
+30 ' MSXPIRECV (discontinued) - Receive a block of binary data to RPi (256 bytes) Line 13000-
 32 ' B = buffer address: Hexadecimal memory address (ex: &hC000) to store the data received
 34 ' Returns:
 35 ' RC = return code: -1 = Connection Error, 0 = Success
 37 '
-40 ' STORESTR - Store a string in a buffer - Line 14000-
+40 ' STORESTR (discontinued) - Store a string in a buffer - Line 14000-
 42 ' B = buffer address: Hexadecimal memory address (ex: &hC000) to store the data received
 42 ' C$ = String to store, maximum 256 bytes (not sure MSX supoprt strings this size though)
 44 ' Returns:
@@ -48,7 +48,7 @@
 103 PRINT:PRINT"Starting Example 1":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory, printing to screen"
 110 A=1                      ' this is the stdout parameter - print to screen
 120 B=BF                 ' This is the buffer address
-130 C$="pdir"                ' Command to execute
+130 C$="dir"                ' Command to execute
 140 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 150 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 153 PRINT:PRINT"Example 1 finished:";HEX$(RC)
@@ -57,7 +57,7 @@
 202 PRINT:PRINT"Starting Example 2":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory - Read the buffer using BASIC"
 210 A=2                      ' this is the stdout parameter - save to buffer only, do not print
 220 B=BF                     ' This is the buffer address
-230 C$="pdir"                ' Command to execute
+230 C$="dir"                ' Command to execute
 240 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 250 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 253 IF RC=-1 THEN GOTO260
@@ -69,7 +69,7 @@
 310 A=2                      ' this is the stdout parameter - save to buffer only, do not print
 320 B=BF                 ' This is the buffer address
 325 C=40                     ' Number of chars to retrn in C$
-330 C$="pdir"                ' Command to execute
+330 C$="dir"                ' Command to execute
 340 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 350 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 353 IF RC=-1 THEN GOTO365

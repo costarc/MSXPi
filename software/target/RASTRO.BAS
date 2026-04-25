@@ -44,7 +44,7 @@
 400 ON ERROR GOTO 740
 410 LOCATE33,10:PRINT"Carregando..."
 420 A=&HC000
-430 CALL MSXPI("2,c000,prun curl -s http://www.retropix.com.br/repository/apis/rastro.php?codigo="+C$)
+430 CALL MSXPI("2,c000,run curl -s http://www.retropix.com.br/repository/apis/rastro.php?codigo="+C$)
 440 GOSUB 200
 450 IF (PEEK(&HC000="-1")THENLOCATE22,10:PRINT"Objeto de informado nao encontrado.":LOCATE25,12:PRINT"Tente outro codigo de objeto.":GOTO610
 460 IF (CHR$(PEEK(&HC002))+CHR$(PEEK(&HC003))+CHR$(PEEK(&HC004))+CHR$(PEEK(&HC005))="Pi:E")THENLOCATE17,11:PRINT"Falha na comunicacao, tente novamente!":GOSUB200:GOTO610
@@ -76,7 +76,7 @@
 720 GOTO680
 730 '
 740 '---- Paliativo para reiniciar o msxpi e deixa-lo aceitar um novo comando
-750 CALL MSXPI("2,&Hc000,prun sudo wget -O- -q http://www.retropix.com.br/repository/apis/rastro.php?codigo="+C$)
+750 CALL MSXPI("2,&Hc000,run sudo wget -O- -q http://www.retropix.com.br/repository/apis/rastro.php?codigo="+C$)
 760 RESUME 440
 770 '
 780 '--- rotina de tratamento de entrada de dados ---
@@ -109,4 +109,3 @@
 1050 VPOKE V+6,&B11111100
 1060 VPOKE V+7,&B11111100
 1070 RETURN
-

@@ -20,6 +20,11 @@ below.
 Quick Start Guide
 =================
 
+Version 1.4 breaks software compatibility with previous ROMS and server. 
+Upgrade the whole pack (ROM, msxpi-server and client commands). There is no need
+to update the CPLD firmware - it is unchanged in this release.
+The documentation is very outdated - for reference, look the new source code,
+they have plenty of information for developers.
 
 This Quick Start Guide is updated to V1.2 of the Software and Interface.
 
@@ -64,13 +69,13 @@ After this basic setup, you should be able to use the MSXPi ".com" commands
 from your MSX. To unleash full MSXPi power, configure the 
 Raspberry Pi Zero W WiFi:
 
-          pset WIFISSID Your Wifi Name
+          p set WIFISSID Your Wifi Name
  
-          pset WIFIPWD YourWifiPassword
+          p set WIFIPWD YourWifiPassword
  
-          pwifi set
+          p wifi set
  
-          preboot
+          p reboot
  
  Note: The first reboot may take longer than 3 minutes, because Raspbian will 
  expand the filesystem in the SD and initialise the Linux system - following 
@@ -161,6 +166,25 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
+
+MSXPi v1.4 Release Notes
+========================
+Mostly a Software major overhauling.
+- C BIOS now available
+- Replaced all p<commands> by p <command>, now developed in C
+- Most block data transfers re-written for easy of use and stability
+- MSX-DOS1 is back
+- BASIC BIOS simplified, now there is only one command: CALL MSXPI 
+
+MSXPi v1.3 Release Notes
+========================
+This is mainly a PCB redesign and firmware om the CPLD. From v1.3, firmware (msxpi.pof) is no longer compatible with previous versions due to pin mapping changes.
+- Changed CPLD pin mappings to optimize PCB routing
+- Changed the EEPROM footprint from DIP to PLCC
+- Improved routing with power rails uninterrupted and wide.
+- 5V power rail (for PI and EEPROM) routed on the edge of the card to avoid EMI 
+- Bottom layer is now fully ground plane, with uninterrupted gnd plane across the PCB#
+- Rev1: Updated silk in back of pcb to reflect new jumper names
 
 MSXPi v1.2.1b Release Notes
 ===============================

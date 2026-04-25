@@ -143,7 +143,6 @@ void MSXPiDevice::readLoop()
 		std::lock_guard lock(mtx);
 
 		// skip excess bytes
-		static constexpr size_t MAX_QUEUE_SIZE = 16 * 1024;
 		for (auto i : xrange(std::min<size_t>(n, MAX_QUEUE_SIZE - rxQueue.size()))) {
 			rxQueue.push_back(buf[i]);
 		}
