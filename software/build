@@ -1,8 +1,8 @@
 #!/bin/bash
 
 export buildClientCommands="yes"
-export buildBIOS="yes"
-export buildOpenMSXConfig="yes"
+export buildBIOS="no"
+export buildOpenMSXConfig="no"
 export buildMSXdiskImage="yes"
 export updateVersions="no"
 
@@ -154,7 +154,7 @@ if [ $buildMSXdiskImage = "yes" ];then
   python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/msxpiboot.dsk:COMMAND.COM"
   python3 dsktool.py copy "target/msxpidos.rom" "target/disks/msxpiboot.dsk:MSXPIDOS.ROM"
   
-  for file in `ls target/*.com target/*.BAS`
+  for file in `ls target/*.com target/*.BAS target/*.ini`
   do
     fname="${file##*/}"
     [ -f $file ] && python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"

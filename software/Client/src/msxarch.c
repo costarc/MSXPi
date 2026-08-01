@@ -7,6 +7,12 @@
 #define PAGESIZE (22 * 80)
 #define INPUTLEN 4
 
+// Repository list config file
+#define INI_FILENAME     "MSXARCH.INI"
+#define INI_BUFFER_SIZE  1024
+#define MAX_REPOS        8
+#define MAX_URL_LEN      100
+
 #define KEY_UP    0x1E   // Fusion-C scancode for Up arrow
 #define KEY_DOWN  0x1F   // Fusion-C scancode for Down arrow
 #define KEY_ENTER 0x0D    // ASCII code for Enter/Return
@@ -179,6 +185,76 @@ void sendQuit() {
     uint8_t rc = SendCommandToMSXPi("Q", false);
 }
 
+static FCB iniFcb;
+static char iniBuffer[INI_BUFFER_SIZE];
+static char repoList[MAX_REPOS][MAX_URL_LEN];
+
+// Fills an FCB's name/ext fields (8.3 format) from a plain filename string
+static void SetFcbFilename(FCB* fcb, const char* filename) {
+    uint16_t i;
+    uint8_t j;
+    uint8_t* raw = (uint8_t*)fcb;
+
+    for (i = 0; i < sizeof(FCB); i++) raw[i] = 0;
+    for (i = 0; i < 8; i++) fcb->name[i] = ' ';
+    for (i = 0; i < 3; i++) fcb->ext[i] = ' ';
+
+    i = 0;
+    while (filename[i] != '\0' && filename[i] != '.' && i < 8) {
+        fcb->name[i] = filename[i];
+        i++;
+    }
+    if (filename[i] == '.') {
+        i++;
+        for (j = 0; filename[i] != '\0' && j < 3; i++, j++) {
+            fcb->ext[j] = filename[i];
+        }
+    }
+}
+
+// Reads INI_FILENAME (one repository URL per line, blank lines and lines
+// starting with ';' or '#' ignored) into repoList[]. Returns the number of
+// URLs found, or 0 if the file is missing/empty so the caller can fall back
+// to a built-in default.
+static int LoadRepositoryList(void) {
+    int count = 0;
+    int col = 0;
+    unsigned int bytesRead;
+    unsigned int pos;
+
+    SetFcbFilename(&iniFcb, INI_FILENAME);
+
+    if (fcb_open(&iniFcb) != FCB_SUCCESS) {
+        return 0;
+    }
+
+    bytesRead = fcb_read(&iniFcb, iniBuffer, INI_BUFFER_SIZE - 1);
+    fcb_close(&iniFcb);
+
+    for (pos = 0; pos <= bytesRead && count < MAX_REPOS; pos++) {
+        // Synthesize a trailing newline so the last line flushes even
+        // when the file doesn't end with one.
+        char c = (pos < bytesRead) ? iniBuffer[pos] : '\n';
+
+        if (c == '\r') continue;
+
+        if (c == '\n') {
+            repoList[count][col] = '\0';
+            if (col > 0 && repoList[count][0] != ';' && repoList[count][0] != '#') {
+                count++;
+            }
+            col = 0;
+            continue;
+        }
+
+        if (col < MAX_URL_LEN - 1) {
+            repoList[count][col++] = c;
+        }
+    }
+
+    return count;
+}
+
 uint8_t loadrom() {
     uint8_t  rc;
     uint8_t  index = 1;
@@ -202,12 +278,22 @@ int main(void) {
 
     Width(80);
 
-    const unsigned char* items[] = {
-        "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/roms/msx1",
-        "Exit"
-    };
+    const unsigned char* items[MAX_REPOS + 1];
+    int repoCount = LoadRepositoryList();
+    int i;
 
-    int itemCount = sizeof(items) / sizeof(items[0]);
+    if (repoCount == 0) {
+        // MSXARCH.INI missing or empty: fall back to the original default
+        StrCopy(repoList[0], "https://web.archive.org/web/20241204120811/https://www.msxarchive.nl/pub/msx/games/roms/msx1");
+        repoCount = 1;
+    }
+
+    for (i = 0; i < repoCount; i++) {
+        items[i] = (const unsigned char*)repoList[i];
+    }
+    items[repoCount] = "Exit";
+
+    int itemCount = repoCount + 1;
     //char inputVar[5];
     char parameters[BLKSIZE + 1];
     const unsigned char* selected = showMenu(items, itemCount);

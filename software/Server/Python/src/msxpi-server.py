@@ -29,6 +29,7 @@ from tarfile import BLOCKSIZE
 import time
 import subprocess
 from urllib.request import urlopen
+from urllib.parse import unquote
 import requests
 import mmap
 # import fcntl # does not work in Windows
@@ -1945,33 +1946,64 @@ def msxarchive(parms = None):
         """Fetch file list from the given URL and return filenames without extensions.
         Skip header (first line) and empty lines."""
 
-        url = url + "/" + index
-        cached_file = "/tmp/msxpi/" + url.replace(":", "_").replace("/", "+")
-        
-        if not os.path.exists(cached_file):
-            print(f"not cached: {cached_file}")
+        CACHE_TTL_SECONDS = 3600
+
+        index_url = url + "/" + index
+        cached_file = "/tmp/msxpi/" + index_url.replace(":", "_").replace("/", "+")
+
+        cache_exists = os.path.exists(cached_file)
+        cache_expired = cache_exists and (time.time() - os.path.getmtime(cached_file)) > CACHE_TTL_SECONDS
+
+        if not cache_exists or cache_expired:
+            print(f"cache expired: {cached_file}" if cache_expired else f"not cached: {cached_file}")
             # Download from the URL
-            response = requests.get(url)
+            response = requests.get(index_url)
 
             if response.status_code == 200:
                 # Success: parse the content
                 lines = response.text.splitlines()
+            elif response.status_code == 404:
+                # No index file published (e.g. a plain directory server with
+                # no 00index.txt, like a local test HTTP server): fall back to
+                # the server's own auto-generated directory listing instead.
+                print(f"{index} not found, falling back to directory listing at: {url}/")
+                dir_response = requests.get(url + "/")
+                if dir_response.status_code != 200:
+                    print(f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}")
+                    files = f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}"
+                    return RC_FAILED,files
+
+                class DirListingParser(HTMLParser):
+                    def __init__(self):
+                        super().__init__()
+                        self.hrefs = []
+                    def handle_starttag(self, tag, attrs):
+                        if tag == 'a':
+                            href = dict(attrs).get('href')
+                            if href:
+                                self.hrefs.append(href)
+
+                parser = DirListingParser()
+                parser.feed(dir_response.text)
+                entries = [unquote(h) for h in parser.hrefs if h != '..' and not h.endswith('/')]
+
+                # Prepend a placeholder header line since the parsing loop
+                # below always skips line 0 (matches the plain-text index format).
+                lines = ["# directory listing"] + entries
             else:
                 # Failure: print error message
                 print(f"Download failed: HTTP {response.status_code} - {response.reason}")
                 files = f"Download failed: HTTP {response.status_code} - {response.reason}"
                 return RC_FAILED,files
 
-            lines = response.text.splitlines()
-
             # Save to cache for future use
             os.makedirs(os.path.dirname(cached_file), exist_ok=True)
             with open(cached_file, "w", encoding="utf-8") as f:
-                f.write(response.text)
-        
+                f.write("\n".join(lines))
+
         else:
             # Read from cache
-            print(f"Reading from cache: {url}")
+            print(f"Reading from cache: {index_url}")
             with open(cached_file, "r", encoding="utf-8") as f:
                 lines = f.read().splitlines()
 
