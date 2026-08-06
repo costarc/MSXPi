@@ -147,11 +147,29 @@ resetMSXPI:
 ;
 ; Uses:
 ;   AF, BC, DE, HL
+;
+; Retries the block (up to GLOBALRETRIES times, see
+; asm-common/include/include.asm) on a checksum mismatch, matching
+; recvdata2()/recvdata2_oneblock()'s own resend expectation on the Python
+; side - see SENDDATA's own comment at the mismatch branch below.
 ; ---------------------------------------------------------
 SENDDATA:
+    ; Preserve the original src/size on the STACK, not in a fixed memory
+    ; variable: this file is sometimes linked straight into ROM (e.g. as
+    ; part of MSX-DOS/msxpidos.rom), where a `ld (nn),a`-style static
+    ; would silently fail to write. The CPU stack always lives in RAM
+    ; regardless of where the executing code sits - push/pop/call/ret
+    ; require that - so it's safe here. IX holds the retry counter for
+    ; the same reason (a register, not memory); IX/IY are otherwise
+    ; unused in this routine.
+    push    de              ; [de(orig src)]
+    push    bc              ; [bc(orig size), de(orig src)]
+    ld      ix,0            ; IX = retry_count
 
 ; -------------------------
-; 1. Initial handshake
+; 1. Initial handshake (once per call, not repeated on retry - matches
+; recvdata2()'s own structure: its handshake runs once, outside the
+; block-receive loop that a retry re-enters)
 ; -------------------------
 SD2_HS_LOOP:
     ld      a,READY
@@ -160,7 +178,7 @@ SD2_HS_LOOP:
 
     call    PIREADBYTE
     jr      c,SD2_HS_ERR
-	
+
     cp      READY_ACK
     jr      nz,SD2_HS_LOOP          ; wait until READY_ACK
 
@@ -172,6 +190,16 @@ SD2_HS_LOOP:
     ld      a,MAXBUFSIZE_HI
     call    PIWRITEBYTE
     jr      c,SD2_CONN_ERR
+
+SD2_RETRY:
+    ; "Peek" the stack-preserved originals without losing them: pop them
+    ; off, then push them straight back. This attempt's working copy ends
+    ; up in bc/de (about to be consumed by the send loop below), while the
+    ; stack keeps holding the pristine originals in case of a further retry.
+    pop     bc
+    pop     de
+    push    de
+    push    bc
 
 ; -------------------------
 ; 2. Single-block header
@@ -225,17 +253,13 @@ SD2_SEND_LOOP1:
 ; -------------------------
 ; Errors
 ; -------------------------
-SD2_CHKSUM_ERR:
-    scf
-    ret
-
 SD2_HS_ERR:
     scf
-    ret
+    jr      SD2_EXIT
 
 SD2_CONN_ERR:
     scf
-    ret
+    jr      SD2_EXIT
 
 ; -------------------------
 ; 2c. Checksum exchange
@@ -253,8 +277,31 @@ SD2_SEND_DONE:
     jr      c,SD2_CONN_ERR
 
     cp      l                       ; compare with localChecksum
-    jr      nz,SD2_CHKSUM_ERR
+    jr      z,SD2_CHK_OK
 
+; -------------------------
+; Checksum mismatch: Python's receivers (recvdata2/recvdata2_oneblock)
+; always loop back to await a fresh header on mismatch (see their own
+; comments) - resend the whole block from scratch, up to GLOBALRETRIES
+; times (asm-common/include/include.asm), instead of erroring out on the
+; first bad block like before.
+; -------------------------
+    push    ix
+    pop     hl
+    inc     l
+    ld      h,0
+    push    hl
+    pop     ix              ; IX = retry_count + 1
+    ld      a,l
+    cp      GLOBALRETRIES
+    jr      nc,SD2_CHKSUM_ERR
+    jr      SD2_RETRY
+
+SD2_CHKSUM_ERR:
+    scf
+    jr      SD2_EXIT
+
+SD2_CHK_OK:
 ; -------------------------
 ; 3. Status handshake
 ; -------------------------
@@ -272,15 +319,30 @@ SD2_SEND_DONE:
     call    PIWRITEBYTE
     jr      c,SD2_HS_ERR
 
-    or      a                        ; clear carry
+    or      a                        ; clear carry (success)
+
+SD2_EXIT:
+    ; DE/BC here are whatever the last attempt left them as - the advanced
+    ; src pointer and consumed (=0) size on success (matching this
+    ; routine's documented contract), unspecified on error. Either way,
+    ; discard the two stack-preserved originals underneath - not needed
+    ; any more. `pop rr` doesn't touch flags, so the scf/or a from
+    ; whichever path got here survives through to ret.
+    pop     hl
+    pop     hl
     ret
 
 ; ================================================================
-;  RECVDATA_ONEBLOCK (minimal, no retries)
+;  RECVDATA_ONEBLOCK
 ;
 ;  A  = expected_block_index
 ;  DE = dest pointer
 ;  BC = msx_blocksize
+;
+;  Retries the current block (up to GLOBALRETRIES times, see
+;  asm-common/include/include.asm) on a checksum mismatch, matching
+;  senddata_oneblock()'s own resend behavior on the Python side - see
+;  RECVDATA_ONEBLOCK's own comment at the mismatch branch below.
 ; ================================================================
 
 PerformHandshake:
@@ -318,14 +380,25 @@ handshake_err:
 
 
 RECVDATA_ONEBLOCK:
-    push    af          ; expected_index
-    push    de          ; original dest
+    ; DE (dest) stays in the primary register for the whole call - safe,
+    ; since PIREADBYTE/PIWRITEBYTE/CHKPIRDY only ever touch AF, never
+    ; BC/DE/HL. expected_index and the retry counter can't live in a fixed
+    ; memory variable either (this file is sometimes linked straight into
+    ; ROM - see SENDDATA's own comment) - IY holds expected_index and IX
+    ; the retry counter instead, both untouched by exx and by every
+    ; PIREADBYTE/PIWRITEBYTE call in this routine.
+    ld      l,a
+    ld      h,0
+    push    hl
+    pop     iy              ; IY = expected_index
+    ld      ix,0            ; IX = retry_count
 
 ; ------------------------------------------------------------
 ; 1. INITIAL HANDSHAKE
 ; ------------------------------------------------------------
 ; must have been performed before calling this function
 
+r2_retry:
 ; ------------------------------------------------------------
 ; 2. HEADER: [RC][LEN_LO][LEN_HI][INDEX]
 ; ------------------------------------------------------------
@@ -344,16 +417,17 @@ RECVDATA_ONEBLOCK:
 
     call    PIREADBYTE      ; block_index
     jr      c, r2_conn_err
-    ld      l, a            ; L = received_index
-
-    ; Recover original values
-    pop     de              ; de = original dest
-    pop     af              ; A = expected_index
-    push    de              ; dest
-    push    bc              ; msx_blocksize received from server
-                            ; last block is usually smaller thant the msx_blocksize sent to server
-    ; Check index
-    cp      l
+    ; A = received_index. B,C(length)/D,E(dest)/H(header_rc) are all live
+    ; and can't be spared - bridge the comparison against IY through the
+    ; (still-unused-at-this-point) shadow set and the stack: exx doesn't
+    ; touch AF, so a plain push/pop carries A safely across it.
+    push    af
+    exx
+    push    iy
+    pop     hl              ; shadow L' = expected_index
+    pop     af              ; A = received_index again
+    cp      l                ; compare against shadow L' = expected_index
+    exx                      ; back to primary - bc/de/h untouched throughout
     jr      nz, r2_unexpecteddata   ; index sent by server must match msx index
 ; ------------------------------------------------------------
 ; 3. PAYLOAD + CHECKSUM
@@ -363,12 +437,10 @@ RECVDATA_ONEBLOCK:
     ; DE = dest
     ; H = header_rc
     ; L = received_index
-    ; AF on stack (expected index)
-    ; dest, maxbuf also on stack
     push    bc
     push    de
     exx 				  ; save length (BC) and RC (h) for later
-    pop     de            
+    pop     de
     pop     bc            ; restore length
     ld      hl, 0         ; 16-bit checksum accumulator
 r2_payload_loop:
@@ -377,7 +449,7 @@ r2_payload_loop:
     jr      z, r2_payload_done
 
     call    PIREADBYTE
-    jr      c, r2_conn_err
+    jr      c, r2_conn_err_x
 
     ld      (de), a
     inc     de
@@ -392,40 +464,41 @@ r2_no_carry:
     jr      r2_payload_loop
 
 ; ------------------------------------------------------------
-; ERROR PATHS
+; ERROR PATHS - phase 1 (before the shadow-register section below): stack
+; is untouched here, safe to return directly.
 ; ------------------------------------------------------------
-
-r2_chksum_err:
-    ld      a, RC_CHKSUM_ERR
-    scf
-    jr      r2_exit
 
 r2_unexpecteddata:
     ld      a, RC_UNEXPECTEDDATA
     scf
-    jr      r2_exit
+    ret
 
 r2_bufovflw:
     ld      a, RC_BUFOVFLW
     scf
-    jr      r2_exit
-
-r2_handshake_err:
-    ld      a, RC_HANDSHAKEERR
-    scf
-    jr      r2_exit
+    ret
 
 r2_conn_err:
     ld      a, RC_CONNERR
     scf
+    ret
 
 ; ------------------------------------------------------------
-; EXIT: clean stack & return
+; ERROR PATHS - phase 2 (inside the shadow-register section, exx active):
+; must exx back to primary before returning, or the caller inherits our
+; shadow bc'/de'/hl' instead of its own registers, and loses H (header_rc).
 ; ------------------------------------------------------------
 
-r2_exit:
-    pop     hl      ; discard
-    pop     de      ; dest (advanced if success or original address)
+r2_conn_err_x:
+    exx
+    ld      a, RC_CONNERR
+    scf
+    ret
+
+r2_handshake_err_x:
+    exx
+    ld      a, RC_HANDSHAKEERR
+    scf
     ret
 
 r2_payload_done:
@@ -436,21 +509,51 @@ r2_payload_done:
 
     ; Receive Python's local_sum
     call    PIREADBYTE
-    jr      c, r2_conn_err
+    jr      c, r2_conn_err_x
     cp      l
-    jr      nz, r2_chksum_err
+    jr      z, r2_chk_ok
 
+; ------------------------------------------------------------
+; CHECKSUM MISMATCH: echo our (mismatched) checksum anyway - Python's
+; sender (senddata_oneblock) always does a paired read right after sending
+; its own checksum, so it must get a byte here or it blocks waiting for
+; one. Python will see the mismatch on its own end too (our echoed L won't
+; match what it sent) and resend the entire block from scratch - so, like
+; SENDDATA's own retry, go back to r2_retry and wait for a fresh header
+; instead of erroring out on the first bad block.
+; ------------------------------------------------------------
+    ld      a, l
+    call    PIWRITEBYTE
+    jr      c, r2_conn_err_x
+
+    exx                     ; back to primary - this attempt's shadow
+                             ; de'/bc'/hl' are stale for a retry anyway.
+                             ; H(header_rc)/B,C(length)/D,E(dest) are stale
+                             ; here too, but get freshly re-read at
+                             ; r2_retry before anything reads them again -
+                             ; so HL is free to use as a bridge for IX.
+    push    ix
+    pop     hl
+    inc     l
+    ld      h,0
+    push    hl
+    pop     ix               ; IX = retry_count + 1
+    ld      a,l
+    cp      GLOBALRETRIES
+    jr      nc, r2_chksum_err
+    jr      r2_retry
+
+r2_chksum_err:
+    ; already back in primary set (exx'd above)
+    ld      a, RC_CHKSUM_ERR
+    scf
+    ret
+
+r2_chk_ok:
     ; Send our checksum back
     ld      a, l
     call    PIWRITEBYTE
-    jr      c, r2_conn_err
-
-    ; Advance DE for caller: DE = final dest
-    pop     ix              ; original msx_blocksize (discard)
-    pop     ix              ; original dest (discard)
-
-    push    de              ; new dest
-    push    bc              ; length again
+    jr      c, r2_conn_err_x
 
 ; ------------------------------------------------------------
 ; 4. STATUS HANDSHAKE (match Python)
@@ -459,7 +562,7 @@ r2_payload_done:
     ; MSX must send: READY, status_for_next, then expect READY_ACK
     ld      a, READY
     call    PIWRITEBYTE
-    jr      c, r2_conn_err
+    jr      c, r2_conn_err_x
 
     ; Use header_rc we got from Python (in H) as status_for_next,
     ; BUT your Python expects status_from_msx == RC_SUCCESS.
@@ -467,18 +570,24 @@ r2_payload_done:
 
     ld      a, RC_SUCCESS
     call    PIWRITEBYTE
-    jr      c, r2_conn_err
+    jr      c, r2_conn_err_x
 
     ; Read READY_ACK from Python
     call    PIREADBYTE
-    jr      c, r2_conn_err
+    jr      c, r2_conn_err_x
     cp      READY_ACK
-    jr      nz, r2_handshake_err
-    ; Success
-    exx                     ; Get back original BC (length) and RC (H)
+    jr      nz, r2_handshake_err_x
+
+    ; Success: DE (shadow) = advanced dest, BC (shadow) = 0
+    push    de
+    push    bc
+    exx                     ; back to primary: get back original BC
+                             ; (length) and RC (H)
+    pop     hl               ; discard (=0)
+    pop     de               ; DE = advanced dest, for the caller
     ld      a, h            ; A = header_rc
     or      a               ; clear carry
-    jr      r2_exit
+    ret
 
 ; ---------------------------------------------------------
 ; SendCommandToMSXPi
