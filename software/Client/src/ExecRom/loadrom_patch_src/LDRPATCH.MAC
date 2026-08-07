@@ -115,7 +115,15 @@ optpatch_done:
 ;     boundary the server itself already uses to classify MAPPER_PLAIN -
 ;     not this patch deciding plain-vs-mapped, just passing the real size
 ;     through the same threshold LOADROM's own unmodified check already
-;     uses for a local file.
+;     uses for a local file. The actual write into that buffer offset is
+;     deferred to the F_SNEXT return (searchpatch_concrete), not done
+;     right after being computed here in F_SFIRST - LOADROM's own
+;     per-match display-formatting call ($10AFh, which runs *between*
+;     F_SFIRST returning and F_SNEXT being called, to build the "<name>
+;     is loading." display line) writes into that same offset itself
+;     (confirmed via disassembly: an ASCII 'K', consistent with a "nnK"
+;     file-size display), clobbering an earlier write there. See
+;     netroutebyte's own comment for the full trace.
 ;
 ; F_SFIRST (first call) reports success (index 0, Z set) once the header
 ; is fetched and validated; F_SNEXT (second call) reports no more matches
@@ -175,7 +183,21 @@ searchpatch_concrete:
         ld a,c
         cp 011h         ; F_SFIRST?
         jr z,searchpatch_first
-        ld a,0FFh       ; F_SNEXT (or anything else in network mode):
+        ; F_SNEXT (or anything else in network mode): no more matches.
+        ; The routing byte LOADROM reads at ($146Bh)+16 gets written HERE,
+        ; not during F_SFIRST - see netroutebyte's own comment for why:
+        ; LOADROM's own per-match display-formatting call ($10AFh, run
+        ; between F_SFIRST returning and F_SNEXT being called) writes
+        ; into the same buffer offset while building its own display
+        ; string, clobbering an earlier write. This F_SNEXT return is the
+        ; last thing that runs before LOADROM's own CP $61h check, so
+        ; nothing has a chance to overwrite it again after this.
+        ld a,(netroutebyte)
+        ld hl,(0146Bh)
+        ld de,010h
+        add hl,de
+        ld (hl),a
+        ld a,0FFh
         or a            ; no more matches - NZ.
         ret
 
@@ -297,13 +319,15 @@ searchpatch_shift:
 searchpatch_blkok:
         ld (netblkcount),a
 
-        ; Routing byte at ($146Bh)+16: LOADROM's own CP $61h check
-        ; (mapped-ROM path if >= $61h) reads this to decide plain vs
-        ; mapped. Rather than deciding that ourselves, this passes
-        ; through the real size using the exact same 32768-byte boundary
-        ; the server itself already uses to classify MAPPER_PLAIN - not
-        ; an independent judgment call, just translating the real size
-        ; into the same threshold LOADROM's own check is built around.
+        ; Routing byte LOADROM reads at ($146Bh)+16 (CP $61h - mapped-ROM
+        ; path if >= $61h): only computed here, from the real totalSize
+        ; against the exact same 32768-byte boundary the server itself
+        ; already uses to classify MAPPER_PLAIN - not this patch deciding
+        ; plain-vs-mapped, just translating the real size into the same
+        ; threshold LOADROM's own check is built around. The actual write
+        ; into LOADROM's buffer happens later, in searchpatch_concrete's
+        ; F_SNEXT return - see netroutebyte's own comment for why it
+        ; can't happen here, right after being computed.
         ld a,(08008h)   ; totalSize bits 16-23 - nonzero means
         or a            ; definitely > 32768 (>= 65536)
         jr nz,searchpatch_mapped
@@ -319,10 +343,7 @@ searchpatch_mapped:
 searchpatch_plainrt:
         xor a
 searchpatch_setrt:
-        ld hl,(0146Bh)
-        ld de,010h
-        add hl,de
-        ld (hl),a
+        ld (netroutebyte),a
 
         xor a           ; success, index 0 -> Z flag set
         ret
@@ -686,6 +707,17 @@ btd_skip_t:
 netmode:    db 0
 netblkidx:  db 0
 netblkcount: db 2   ; overwritten by searchpatch_first from the header's real totalSize
+netroutebyte: db 0   ; computed by searchpatch_first, written into LOADROM's
+                     ; own ($146Bh)+16 buffer later, by searchpatch_concrete's
+                     ; F_SNEXT return - see searchpatch_concrete's own comment.
+                     ; Can't be written immediately after being computed:
+                     ; LOADROM's own per-match display-formatting call
+                     ; ($10AFh, run between F_SFIRST returning and F_SNEXT
+                     ; being called) writes into that same buffer offset
+                     ; while building its own display string (confirmed via
+                     ; disassembly: writing a byte that decodes as ASCII 'K',
+                     ; consistent with a "nnK" file-size display), clobbering
+                     ; an earlier write there.
 netfilename: ds 13   ; "NAME.EXT",0 - 8.3 filename, persists across every
                      ; per-block request (searchpatch_first populates it once)
 cmdploadr:  db "ploadr ",0
