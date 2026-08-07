@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.4                                                             |
+;| Version : 1.5                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2026 Ronivon Costa (ronivon@outlook.com)               |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -833,8 +833,8 @@ EC_ExitError:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.4"
-BuildId: DB ".20260228.011"
+        DB      13,10,"MSXPi BIOS v1.5"
+BuildId: DB ".20260806.016"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 MSXPIHelpMsg:

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 export buildClientCommands="yes"
-export buildBIOS="no"
-export buildOpenMSXConfig="no"
+export buildBIOS="yes"
+export buildOpenMSXConfig="yes"
 export buildMSXdiskImage="yes"
-export updateVersions="no"
+export updateVersions="yes"
 
 XMLPATH=openMSX/share/extensions
 OPENMSXSRC=../../openMSX/openMSX
@@ -109,13 +109,18 @@ fi
 
 if [ $buildBIOS = "yes" ];then
   echo "Compiling MSXPi BIOS and MSX-DOS ROM"
-  $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-  
+
+  # Bump BuildIds BEFORE compiling, not after - msx-dos.mac includes
+  # msxpi-driver.mac, so the id must already be updated in the source
+  # before zmac runs, or the compiled ROM bakes in the previous run's id
+  # and the bump only takes effect on the *next* build.
   UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
-  UpdateBuildIdASM /ROM/src/BIOS/msxpibios.asm   
-  UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm 
+  UpdateBuildIdASM ./ROM/src/BIOS/msxpibios.asm
+  UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
   UpdateBuildId    ./Server/Python/src/msxpi-server.py
-  
+
+  $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
+
   # Build MSX-DOS Driver
   [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/msxpidos.rom
   

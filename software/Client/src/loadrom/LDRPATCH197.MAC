@@ -1,0 +1,549 @@
+; ---------------------------------------------------------------------------
+; LDRPATCH197.MAC - appended code for a network-loading patch of the
+; third-party LOADROM.COM v1.97 by Trunks & Victor (6016 bytes, loaded at
+; 0100h). Rebased from LDRPATCH.MAC (which targets v1.0, 5023 bytes) after
+; confirming v1.97 supports the same three MegaROM mapper families (Konami/
+; SCC, ASCII8, ASCII16) plus plain, no more - the rebase is purely to pick
+; up v1.97's many hardware/EI-mode/auto-detect robustness fixes (see its
+; own readme.txt changelog v1.82-v1.97), on the theory that some of this
+; project's still-open "successful load, then crash to DOS on handoff"
+; bug may be an v1.0 bug already fixed upstream, not something introduced
+; by this patch.
+;
+; Same design principle as the v1.0 patch throughout: this code never
+; decides plain-vs-mapped, bank count, bank size, or anything else about
+; the ROM itself - it only resolves a filename and delivers sequential
+; blocks on demand. Everything downstream is entirely LOADROM's own
+; unmodified logic, exactly as it already works for a local file.
+;
+; Patch sites (all in the original LOADROM.COM v1.97, addresses confirmed
+; via disassembly - see loadrom197_full.asm in the session scratchpad).
+; v1.97's internals are a real evolution from v1.0, not just relocated
+; code - notably:
+;   - No command-line option scanner survives in v1.97 (removed once type
+;     auto-detection matured at v1.94 - confirmed via readme.txt and the
+;     embedded usage string, which dropped "[/1][/C]"). This patch scans
+;     the raw command tail itself for "/N" instead of hooking into
+;     LOADROM's own (now nonexistent) option loop.
+;   - v1.97 tries MSX-DOS2 FFIRST/FNEXT ($40h/$41h) first for its menu
+;     display, but *every* path - success, failure, or DOS2 unsupported -
+;     falls through to the same old CP/M-style F_SFIRST/F_SNEXT ($11h/
+;     $12h) as the authoritative "find and load this file" mechanism
+;     (confirmed via control-flow trace: 074Fh/0761h/0790h all reach
+;     0792h). So only the old-style pair needs patching, matching v1.0's
+;     own two-site search patch exactly - the DOS2 menu-building loop is
+;     left completely alone.
+;   - The search-result buffer is no longer a fixed compile-time address
+;     (v1.0 used 146Bh directly) - v1.97 computes it once at startup and
+;     stores a pointer to it at the fixed location 16FCh. That pointer
+;     itself never changes after startup, so reading (16FCh) fresh in
+;     each patched routine is exactly as reliable as v1.0's fixed
+;     address, without any register-liveness assumptions across the
+;     display-formatting call between F_SFIRST and F_SNEXT (see below).
+;
+;   00676h (3 bytes, was: CALL 13B7h [C=0Fh -> F_OPEN of ROM-SORT.DSC])
+;       -> CALL netinit
+;       This is LOADROM's own first unconditional BDOS call after entry -
+;       used here purely as a safe, always-executed-once hook point to
+;       scan the raw command tail (0080h/0082h) for "/N" and set netmode,
+;       before falling through to the original DSC-file open unchanged.
+;       (v1.97 has no option-scanner tail to hook the way v1.0 did.)
+;   0079Bh, 007AFh (3 bytes each, was: CALL 13B4h [C=11h -> old-style
+;       F_SFIRST / C=12h -> F_SNEXT, both against the default FCB])
+;       -> CALL searchpatch
+;       Same role as v1.0's searchpatch at 0754h/0768h: synthesizes a
+;       single matching directory-entry-shaped record (name+ext at
+;       buffer+1, routing byte at buffer+16 - same layout v1.0 used,
+;       confirmed via disassembly of LOADROM's own 0A45h "<name> is
+;       loading." routine) instead of performing a real search. The
+;       routing-byte write is deferred to the F_SNEXT return exactly as
+;       in v1.0 - v1.97 has its own equivalent per-match display-
+;       formatting call (1309h, run between F_SFIRST returning and
+;       F_SNEXT being called, to pad/format the display columns) that
+;       writes into the same buffer offset range, so writing any earlier
+;       would just get clobbered the same way v1.0's 10AFh did.
+;   00A7Dh (plain-ROM path) (3 bytes, was: CALL 13B4h [C=0Fh -> F_OPEN])
+;       -> CALL openpatch
+;   00E4Fh (mapped-ROM path's own F_OPEN, same original bytes as 00A7Dh)
+;       -> CALL openpatch_mapped
+;   00A92h, 00AA0h (plain-ROM path) and 00E83h (mapped-ROM path) (3 bytes
+;       each, all were: CALL 13A7h [SetDTA(8000h) + BDOS F_RDBLK into
+;       4000h, the v1.97 combo-routine equivalent of v1.0's 114Dh])
+;       -> CALL readpatch (same routine, all sites) - logic unchanged
+;       from v1.0's readpatch: v1.97's mapped-path loop (0E15h-ish) checks
+;       HL after the call and loops until HL=0, the exact same EOF
+;       convention v1.0's own mapped loop used, so v1.0's readpatch_net
+;       (HL=0 on exhausted/failed, HL=nonzero otherwise) ports unchanged.
+;   00EC7h (mapped-ROM loop's own loop-exit F_CLOSE, 3 bytes, was: CALL
+;       13B4h [C=10h -> F_CLOSE])
+;       -> CALL closepatch
+; ---------------------------------------------------------------------------
+
+; org: the original v1.97 file is 6016 bytes (0100h-187Fh, i.e. it ends at
+; 0100h+1780h=1880h). Its own tail is mostly the embedded help/changelog
+; text and small lookup tables (confirmed via disassembly - no runtime
+; scratch buffer analogous to v1.0's zero-filled tail was found right at
+; the end), so this patch simply appends after the real end with a small
+; round-up gap, same spirit as v1.0's org choice.
+        org 01900h
+
+; ---------------------------------------------------------------------------
+; netinit - patched in at LOADROM's own first BDOS call (00676h, opening
+; ROM-SORT.DSC). Scans the raw, DOS-parsed command tail (0080h = length
+; byte, 0082h = text, confirmed via disassembly of LOADROM's own path-
+; extraction loop at 0718h-072Dh which reads the same buffer) for "/N"
+; (either case), sets netmode, then falls through to the original
+; CALL 13B7h this patch overwrote - C and DE are already loaded by the
+; caller (C=0Fh, DE=16D2h) and untouched by this scan, so the original
+; DSC-file open proceeds exactly as before regardless of netmode.
+; ---------------------------------------------------------------------------
+netinit:
+        push af
+        push bc
+        push hl
+        ld hl,00082h
+        ld a,(00080h)
+        or a
+        jr z,netinit_done
+        ld b,a
+netinit_scan:
+        ld a,(hl)
+        cp '/'
+        jr nz,netinit_next
+        push hl
+        inc hl
+        ld a,(hl)
+        and 0DFh        ; uppercase
+        cp 'N'
+        pop hl
+        jr nz,netinit_next
+        ld a,1
+        ld (netmode),a
+        jr netinit_done
+netinit_next:
+        inc hl
+        djnz netinit_scan
+netinit_done:
+        pop hl
+        pop bc
+        pop af
+        call 013B7h
+        ret
+
+; ---------------------------------------------------------------------------
+; searchpatch - patched in at the old-style F_SFIRST (0799h->call at
+; 079Bh, C=11h) and F_SNEXT (07ADh->call at 07AFh, C=12h) call sites -
+; see netinit's header comment and this file's own top-of-file notes for
+; why only this pair needs patching in v1.97.
+; ---------------------------------------------------------------------------
+searchpatch:
+        ld a,(netmode)
+        or a
+        jr nz,searchpatch_net
+        call 013B4h
+        ret
+
+searchpatch_net:
+        push bc
+        ld hl,0005Dh
+        ld b,11
+searchpatch_qloop:
+        ld a,(hl)
+        cp '?'
+        jr z,searchpatch_defer
+        inc hl
+        djnz searchpatch_qloop
+
+        ld hl,0005Dh
+        ld b,11
+searchpatch_bloop:
+        ld a,(hl)
+        cp ' '
+        jr nz,searchpatch_concrete
+        inc hl
+        djnz searchpatch_bloop
+        ; fell through without finding a non-space byte - FCB is blank
+searchpatch_defer:
+        pop bc
+        call 013B4h
+        ret
+
+searchpatch_concrete:
+        pop bc
+        ld a,c
+        cp 011h         ; F_SFIRST?
+        jr z,searchpatch_first
+        ; F_SNEXT (or anything else in network mode): no more matches.
+        ; The routing byte LOADROM reads at (16FCh)+16 gets written HERE,
+        ; not during F_SFIRST - v1.97's own per-match display-formatting
+        ; call (1309h, run between F_SFIRST returning and F_SNEXT being
+        ; called) writes into the same buffer offset while padding its
+        ; display columns, clobbering an earlier write. This F_SNEXT
+        ; return is the last thing that runs before LOADROM's own
+        ; CP 61h check, so nothing has a chance to overwrite it again.
+        ld a,(netroutebyte)
+        ld hl,(016FCh)
+        ld de,010h
+        add hl,de
+        ld (hl),a
+        ld a,0FFh
+        or a            ; no more matches - NZ.
+        ret
+
+searchpatch_first:
+        ; Copy FCB name+ext into the search-result buffer unconditionally
+        ; - needed for the "<name> is loading." print regardless of
+        ; plain/mapped routing or success/failure below. Buffer layout
+        ; confirmed via disassembly of LOADROM's own 0A45h routine:
+        ; (16FCh)+1 = name+ext start (11 bytes), same relative layout
+        ; v1.0 used at (146Bh)+1.
+        ld hl,(016FCh)
+        inc hl
+        ex de,hl
+        ld hl,0005Dh
+        ld bc,00Bh
+        ldir
+
+        ; Ask the server for this file's real header now (moved here from
+        ; F_OPEN) - same reasoning as v1.0's searchpatch_first: the
+        ; routing decision below needs the real totalSize, and F_SFIRST
+        ; runs before the plain-vs-mapped fork, so by the time F_OPEN
+        ; itself runs (whichever path got taken), there's nothing left to
+        ; validate - F_OPEN becomes trivial (see openpatch).
+        ld hl,0005Dh
+        ld de,netfilename
+        ld b,8
+sf_onamlp: ld a,(hl)
+        cp ' '
+        jr z,sf_onamsk
+        ld (de),a
+        inc de
+sf_onamsk: inc hl
+        djnz sf_onamlp
+        ld a,'.'
+        ld (de),a
+        inc de
+        ld hl,00065h
+        ld b,3
+sf_oextlp: ld a,(hl)
+        cp ' '
+        jr z,sf_oextsk
+        ld (de),a
+        inc de
+sf_oextsk: inc hl
+        djnz sf_oextlp
+        xor a
+        ld (de),a
+
+        ; Builds "ploadr <netfilename> H",0 into cmdbuf - see
+        ; buildcmd_header's own comment.
+        call buildcmd_header
+
+        ; DI across the whole command+handshake+block exchange - see
+        ; the v1.0 patch's own extensive comment on why (ordinary
+        ; foreground DOS code, not a driver context; CHKPIRDY's keyboard-
+        ; matrix ESC poll races the BIOS's own periodic keyboard scan if
+        ; an interrupt lands mid-exchange). EI on every exit path below.
+        ld de,cmdbuf
+        di
+        call SendCommandToMSXPi
+        jp c,searchpatch_neterr1
+
+        ld bc,02000h
+        call PerformHandshake
+
+        xor a
+        ld de,08000h
+        ld bc,02000h
+        call RECVDATA_ONEBLOCK
+        ei
+        jp c,searchpatch_fail
+
+        ld a,(08000h)   ; magic
+        cp 052h         ; 'R'
+        jp nz,searchpatch_fail
+
+        ld a,(08002h)   ; mapperType - only checked for MAPPER_REJECTED
+        cp 0FFh
+        jp z,searchpatch_fail
+
+        ; netblkcount = ceil(totalSize / 16384), same as v1.0.
+        ld hl,(08006h)
+        ld de,03FFFh
+        add hl,de
+        ld a,(08008h)
+        adc a,0
+        ld b,a
+        ld c,14
+searchpatch_shift:
+        srl b
+        rr h
+        rr l
+        dec c
+        jr nz,searchpatch_shift
+        ld a,l
+        or a
+        jr nz,searchpatch_blkok
+        ld a,1          ; guard against a pathological 0
+searchpatch_blkok:
+        ld (netblkcount),a
+
+        ; Routing byte LOADROM reads at (16FCh)+16 (CP 61h - mapped-ROM
+        ; path if >= 61h) - same 32768-byte boundary the server itself
+        ; uses to classify MAPPER_PLAIN. Actual write deferred to
+        ; searchpatch_concrete's F_SNEXT return - see its own comment.
+        ld a,(08008h)   ; totalSize bits 16-23 - nonzero means
+        or a            ; definitely > 32768 (>= 65536)
+        jr nz,searchpatch_mapped
+        ld hl,(08006h)
+        ld de,08000h    ; 32768
+        or a
+        sbc hl,de
+        jr c,searchpatch_plainrt   ; totalSize < 32768
+        jr z,searchpatch_plainrt  ; totalSize == 32768 (exactly 2 blocks)
+searchpatch_mapped:
+        ld a,0FFh
+        jr searchpatch_setrt
+searchpatch_plainrt:
+        xor a
+searchpatch_setrt:
+        ld (netroutebyte),a
+
+        xor a           ; success, index 0 -> Z flag set
+        ret
+
+searchpatch_neterr1:
+        ei
+        jp searchpatch_fail
+
+searchpatch_fail:
+        ld a,0FFh       ; NZ, matching F_SFIRST's own "not found" convention
+        or a
+        ret
+
+; ---------------------------------------------------------------------------
+; openpatch / openpatch_mapped - patched in at the two F_OPEN call sites:
+; the plain-ROM path's (00A7Dh, openpatch) and the mapped-ROM path's
+; (00E4Fh, openpatch_mapped). Same split-for-DI-only reasoning as v1.0's
+; patch - see openpatch_mapped's own comment below.
+; ---------------------------------------------------------------------------
+openpatch:
+        ld a,(netmode)
+        or a
+        jr nz,openpatch_net
+        call 013B4h
+        ret
+
+openpatch_net:
+        xor a           ; success: Z set, mimicking F_OPEN's own convention
+        ret
+
+openpatch_mapped:
+        ld a,(netmode)
+        or a
+        jr nz,openpatch_mapped_net
+        call 013B4h
+        ret
+
+openpatch_mapped_net:
+        di
+        xor a           ; success: Z set (DI doesn't touch flags)
+        ret
+
+; ---------------------------------------------------------------------------
+; closepatch - patched in at the mapped-ROM loop's own loop-exit F_CLOSE
+; call site (00EC7h, C=10h already set by the caller) - the counterpart
+; to openpatch_mapped's DI.
+; ---------------------------------------------------------------------------
+closepatch:
+        ld a,(netmode)
+        or a
+        jr z,closepatch_disk
+        ei
+closepatch_disk:
+        call 013B4h
+        ret
+
+; ---------------------------------------------------------------------------
+; readpatch - patched in at all three block-read call sites: the plain-
+; ROM path's (00A92h, 00AA0h) and the mapped-ROM path's (00E83h). Logic
+; ported unchanged from the v1.0 patch - v1.97's mapped-path loop checks
+; HL after the call and loops until HL=0, the exact same EOF convention
+; v1.0's own mapped loop used (confirmed via disassembly of 0E83h-0E8Eh:
+; "LD A,H / OR L / JR Z,..." immediately after the call).
+; ---------------------------------------------------------------------------
+readpatch:
+        ld a,(netmode)
+        or a
+        jr nz,readpatch_net
+        call 013A7h
+        ret
+
+readpatch_net:
+        ld a,(netblkidx)
+        ld hl,netblkcount
+        cp (hl)
+        jr c,readpatch_net_more   ; netblkidx < netblkcount: real data left
+        ld hl,0                   ; done - report EOF (Z flag from the CP
+        ret                       ; above is untouched by LD HL,nn)
+
+readpatch_net_more:
+        ; Builds "ploadr <netfilename> <netblkidx> 16384",0 into cmdbuf.
+        call buildcmd_block
+
+        ld de,cmdbuf
+        di
+        call SendCommandToMSXPi
+        jr c,readpatch_neterr_ei
+
+        ld de,08000h
+        ld bc,04000h    ; 16384
+        call PerformHandshake
+        jr c,readpatch_neterr_ei
+
+        ; RECVDATA_ONEBLOCK's own "expected_block_index" parameter (A) is
+        ; session-relative, not ROM-relative - see the v1.0 patch's own
+        ; extensive comment on this (same server-side sendmultiblock()
+        ; behavior, unchanged).
+        xor a
+        ld de,08000h
+        ld bc,04000h
+        call RECVDATA_ONEBLOCK
+        ei
+        jr c,readpatch_neterr
+        ld hl,netblkidx
+        inc (hl)
+        ret
+
+readpatch_neterr_ei:
+        ei
+        jr readpatch_neterr
+
+readpatch_neterr:
+        ld a,(netblkcount)
+        ld (netblkidx),a
+        ld hl,0
+        ret
+
+; ---------------------------------------------------------------------------
+; buildcmd_header / buildcmd_block - unchanged from the v1.0 patch.
+; ---------------------------------------------------------------------------
+buildcmd_prefix:
+        ld hl,cmdploadr
+        ld de,cmdbuf
+        ld bc,7
+        ldir
+        ld hl,netfilename
+bcp_copyname:
+        ld a,(hl)
+        or a
+        jr z,bcp_nameend
+        ld (de),a
+        inc hl
+        inc de
+        jr bcp_copyname
+bcp_nameend:
+        ret
+
+buildcmd_header:
+        call buildcmd_prefix
+        ld a,' '
+        ld (de),a
+        inc de
+        ld a,'H'
+        ld (de),a
+        inc de
+        xor a
+        ld (de),a
+        ret
+
+buildcmd_block:
+        call buildcmd_prefix
+        ld a,' '
+        ld (de),a
+        inc de
+        ld a,(netblkidx)
+        call byte_to_dec
+        ld a,' '
+        ld (de),a
+        inc de
+        ld hl,cmdblksize
+bcb_copysize:
+        ld a,(hl)
+        or a
+        jr z,bcb_sizeend
+        ld (de),a
+        inc hl
+        inc de
+        jr bcb_copysize
+bcb_sizeend:
+        xor a
+        ld (de),a
+        ret
+
+; byte_to_dec - unchanged from the v1.0 patch.
+byte_to_dec:
+        ld b,0
+btd_hundreds:
+        cp 100
+        jr c,btd_tens_start
+        sub 100
+        inc b
+        jr btd_hundreds
+btd_tens_start:
+        ld c,0
+        push af
+        ld a,b
+        or a
+        jr z,btd_skip_h
+        add a,'0'
+        ld (de),a
+        inc de
+btd_skip_h:
+        pop af
+btd_tens:
+        cp 10
+        jr c,btd_units
+        sub 10
+        inc c
+        jr btd_tens
+btd_units:
+        push af
+        ld a,c
+        or a
+        jr nz,btd_print_t
+        ld a,b
+        or a
+        jr z,btd_skip_t
+btd_print_t:
+        ld a,c
+        add a,'0'
+        ld (de),a
+        inc de
+btd_skip_t:
+        pop af
+        add a,'0'
+        ld (de),a
+        inc de
+        ret
+
+; ---------------------------------------------------------------------------
+; state + scratch
+; ---------------------------------------------------------------------------
+netmode:    db 0
+netblkidx:  db 0
+netblkcount: db 2   ; overwritten by searchpatch_first from the header's real totalSize
+netroutebyte: db 0   ; computed by searchpatch_first, written into LOADROM's
+                     ; own (16FCh)+16 buffer later, by searchpatch_concrete's
+                     ; F_SNEXT return - see searchpatch_concrete's own comment.
+netfilename: ds 13   ; "NAME.EXT",0 - 8.3 filename, persists across every
+                     ; per-block request (searchpatch_first populates it once)
+cmdploadr:  db "ploadr ",0
+cmdblksize: db "16384",0
+cmdbuf:     ds 32
+
+        include "msxpi_include.asm"
+        include "msxpi_putchar.asm"
+        include "msxpi_bios.asm"
+
+        end

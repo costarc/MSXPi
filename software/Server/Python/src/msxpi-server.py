@@ -358,7 +358,7 @@ def pathExpander(path, basepath = ''):
         newpath = newpath.replace('//','/')
     else:
         urltype = 1 # this is a network path
-        newpath = basepath + "/" + path
+        newpath = basepath.rstrip('/') + "/" + path
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -2174,7 +2174,17 @@ def ploadr(parms = None):
     if not filename:
         return reject("Pi:Error - no filename given")
 
+    # filename arrives already uppercased by MS-DOS's own FCB parsing (the
+    # original typed case is gone by the time this command runs, not
+    # something this patch can recover) - lowercase it before resolving
+    # against a network path, since remote archives conventionally use
+    # lowercase filenames and would 404 on a case-sensitive host otherwise.
+    # Local filesystem paths are left alone - those may be genuinely
+    # case-sensitive in the other direction (a real lowercase-only file
+    # living under a path a user typed in whatever case).
     pathType, filepath = pathExpander(filename, basepath)
+    if pathType == 1 and filename != filename.lower():
+        pathType, filepath = pathExpander(filename.lower(), basepath)
     rc, buf = fetch_and_uncompress(filepath)
     if rc != RC_SUCCESS:
         reason = buf if isinstance(buf, str) else "Pi:Error - fetch failed"
