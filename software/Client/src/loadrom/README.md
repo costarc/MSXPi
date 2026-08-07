@@ -96,19 +96,29 @@ version (not included in this repo - not this project's to redistribute).
 
 ```bash
 # v1.0 -> LOADRPI.COM
-zmac -I . LDRPATCH.MAC
+zmac -I . -I ../../../asm-common/include LDRPATCH.MAC
 hex2bin -s 1900 zout/LDRPATCH.hex
 python patch_loadrom.py <original LOADROM.COM v1.0> zout/LDRPATCH.bin LOADRPI.COM zout/LDRPATCH.lst
 
 # v1.97 -> LOADROM.COM
-zmac -I . LDRPATCH197.MAC
+zmac -I . -I ../../../asm-common/include LDRPATCH197.MAC
 hex2bin -s 1900 zout/LDRPATCH197.hex
 python patch_loadrom197.py <original LOADROM.COM v1.97> zout/LDRPATCH197.bin LOADROM.COM zout/LDRPATCH197.lst
 ```
 
-The three `msxpi_*.asm` files each `.MAC` file includes (shared MSXPi BIOS
-glue code, not specific to either LOADROM version) live alongside them in
-this same directory.
+Of the three files each `.MAC` includes, two (`include.asm`, `msxpi_bios.asm`
+- shared MSXPi protocol constants and BIOS glue, not specific to either
+LOADROM version) are the project's own canonical copies in
+`asm-common/include/`, resolved via the second `-I` above rather than
+duplicated here. The third, `msxpi_putchar.asm`, is kept as a local copy
+in this directory rather than referencing `asm-common/include/putchar-
+msxdos.asm`: the two aren't equivalent - this patch's copy calls the
+BDOS console-output function directly (`CALL 5`, matching how every BDOS
+call elsewhere in these `.MAC` files and in LOADROM itself works, since
+this is a plain `.COM` program under MSX-DOS, not a device driver or ROM
+context), where `putchar-msxdos.asm` calls `$A2` instead - not a BDOS
+entry point (that's always `CALL 5`); it looks like the MSX BIOS `CHPUT`
+vector, which needs a different calling context than this patch has.
 
 Both patcher scripts verify the source file's exact length and the exact
 original bytes at every patch site before writing anything, and refuse to

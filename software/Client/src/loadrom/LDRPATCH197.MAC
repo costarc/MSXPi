@@ -542,7 +542,7 @@ cmdploadr:  db "ploadr ",0
 cmdblksize: db "16384",0
 cmdbuf:     ds 32
 
-        include "msxpi_include.asm"
+        include "include.asm"
         include "msxpi_putchar.asm"
         include "msxpi_bios.asm"
 
