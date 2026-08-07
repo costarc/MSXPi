@@ -109,6 +109,8 @@
 
 10000 ' ==========================         SENDCOMMAND(A,B,C$,D$)          ===================================
 10001 ' ON ERROR GOTO 10900
-10002 IFA=0THENCALLMSXPI("0,"+HEX$(B)+","+C$+" "+D$)ELSEIFA=1THENCALLMSXPI("1,"+HEX$(B)+","+C$+" "+D$)ELSECALLMSXPI("2,"+HEX$(B)+","+C$+" "+D$)
-10004 RC=PEEK(B):RETURN
+10002 IFA=0THENCALLMSXPI("0,"+HEX$(B)+","+C$+" "+D$):GOTO 10010
+10003 IFA=1THENCALLMSXPI("1,"+HEX$(B)+","+C$+" "+D$):GOTO 10010
+10004 CALLMSXPI("2,"+HEX$(B)+","+C$+" "+D$)
+10010 RC=PEEK(B):RETURN
 10900 RC=-1:RETURN

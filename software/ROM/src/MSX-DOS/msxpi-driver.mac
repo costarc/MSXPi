@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.4 (2025)
+; MSXPi Driver v1.5 (2026)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57

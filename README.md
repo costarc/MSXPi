@@ -167,6 +167,15 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
+MSXPi v1.5 Release Notes
+========================
+Network MegaROM loading, replacing the old disk-only ExecRom loader.
+- New `ploadr` command (msxpi-server.py) and `ploadr.com` client: load a ROM by filename over the MSXPi network, resolved against the current path the same way `p cd`/`p dir` already work
+- `loadrom/LOADROM.COM`: a binary patch of the third-party LOADROM.COM (v1.97) adding MSXPi network loading (`/N`) for plain ROMs and MegaROMs (Konami/Konami SCC, ASCII8, ASCII16) alongside its existing local-disk loading - see `Client/src/loadrom/README.md` for how it works and why
+- Per-block transfer protocol, with checksum-mismatch retry added to SENDDATA/RECVDATA_ONEBLOCK
+- Server-side path-resolution fixes: a double-slash bug when joining network paths, and case-sensitive remote filenames now resolved correctly against typed-uppercase (FCB) input
+- Retired `Client/src/ExecRom` (EXECROM.MAC and its old disk-only MegaROM loading) entirely - superseded by the above
+
 MSXPi v1.4 Release Notes
 ========================
 Mostly a Software major overhauling.
