@@ -530,7 +530,22 @@ readpatch_net_more:
         call PerformHandshake
         jr c,readpatch_neterr_ei
 
-        ld a,(netblkidx)
+        ; RECVDATA_ONEBLOCK's own "expected_block_index" parameter (A) is
+        ; session-relative, not ROM-relative: sendmultiblock()'s own
+        ; block_index counter always starts at 0 for a fresh call (see
+        ; ploadr()'s per-block branch in msxpi-server.py - it hands
+        ; senddata_oneblock a single chunk via sendmultiblock, whose loop
+        ; runs exactly once with block_index=0 regardless of which ROM
+        ; offset that chunk came from). netblkidx (the ROM-level counter)
+        ; only belongs in the command string (buildcmd_block, above) that
+        ; tells the server which offset to slice - passing it here too
+        ; was the actual bug: it happened to match by coincidence on
+        ; block 0 (0==0), then mismatched on every block after, failing
+        ; RECVDATA_ONEBLOCK's own index check before the payload loop
+        ; even starts and desyncing the rest of the exchange (observed as
+        ; the MSX echoing a stray READY byte, $AAh=170, where the server
+        ; expected a checksum).
+        xor a
         ld de,08000h
         ld bc,04000h
         call RECVDATA_ONEBLOCK
