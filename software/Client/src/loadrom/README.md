@@ -47,7 +47,7 @@ as it already works for a local file.
 |---|---|---|
 | Targets | LOADROM.COM v1.0 (1998, 5023 bytes) | LOADROM.COM v1.97 (2015, 6016 bytes) |
 | Patcher | `patch_loadrom.py` | `patch_loadrom197.py` |
-| Output | `LOADRPI.COM` | `LOADROM.COM` (rebranded banner: "loadrom 2.0P") |
+| Output | `LOADRPI.COM` (source kept, binary not currently built/deployed) | `LOADROM.COM` (rebranded banner: "loadrom 2.0P") |
 
 The v1.97 patch's *output* filename is deliberately the same `LOADROM.COM`
 as the unpatched original it's built *from* - don't confuse the two: the
@@ -69,9 +69,11 @@ already fixed upstream rather than something this patch introduced.
 Testing on real hardware bore this out: MSXPIDOS+RAM2MB, previously
 failing on every mapped ROM tested, now loads the large majority of
 tested MegaROMs (Konami/SCC, ASCII8, ASCII16 alike) successfully via the
-v1.97-based patch. Both generations are kept - `LOADRPI.COM` isn't
-obsolete, since some hardware/DOS configurations may still behave
-differently between the two upstream versions.
+v1.97-based patch. `LOADROM.COM` (v1.97-based) is the only binary
+currently built and deployed to the disk images; `LDRPATCH.MAC`/
+`patch_loadrom.py` (v1.0-based) are kept as source in case a future
+hardware/DOS configuration needs falling back to it, but `LOADRPI.COM`
+itself isn't shipped.
 
 v1.97's internals turned out to be a real evolution from v1.0, not just
 relocated code, so the two `.MAC` files are not just address tables -
@@ -91,11 +93,13 @@ drift out of sync with the actual code.
 
 Requires [zmac](http://48k.ca/zmac.html) and
 [hex2bin](https://github.com/jhlagado/hex2bin) on `PATH` (or invoke by
-full path), plus a genuine, unmodified LOADROM.COM of the matching
-version (not included in this repo - not this project's to redistribute).
+full path). The genuine, unmodified LOADROM.COM v1.97 this patch is built
+against is included as `v1.97/loadrom.com` (a pristine copy, never
+patched - see Credits above); v1.0's original isn't included here and
+would need to be supplied separately to rebuild `LOADRPI.COM`.
 
 ```bash
-# v1.0 -> LOADRPI.COM
+# v1.0 -> LOADRPI.COM (needs a v1.0 original supplied separately)
 zmac -I . -I ../../../asm-common/include LDRPATCH.MAC
 hex2bin -s 1900 zout/LDRPATCH.hex
 python patch_loadrom.py <original LOADROM.COM v1.0> zout/LDRPATCH.bin LOADRPI.COM zout/LDRPATCH.lst
@@ -103,7 +107,7 @@ python patch_loadrom.py <original LOADROM.COM v1.0> zout/LDRPATCH.bin LOADRPI.CO
 # v1.97 -> LOADROM.COM
 zmac -I . -I ../../../asm-common/include LDRPATCH197.MAC
 hex2bin -s 1900 zout/LDRPATCH197.hex
-python patch_loadrom197.py <original LOADROM.COM v1.97> zout/LDRPATCH197.bin LOADROM.COM zout/LDRPATCH197.lst
+python patch_loadrom197.py v1.97/loadrom.com zout/LDRPATCH197.bin LOADROM.COM zout/LDRPATCH197.lst
 ```
 
 Of the three files each `.MAC` includes, two (`include.asm`, `msxpi_bios.asm`

@@ -5,8 +5,6 @@ pcopy m:RASTRO.BAS
 pcopy m:STOCKS.BAS
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
-pcopy m:execorig.com
-pcopy m:execrom.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxchat.com
