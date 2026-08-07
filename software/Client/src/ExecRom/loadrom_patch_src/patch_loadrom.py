@@ -29,11 +29,22 @@ PATCHES = [
     (0x0A12, bytes([0xCD, 0x4D, 0x11]), "readpatch", 0xCD),
     # block read #2: CALL $114D -> CALL readpatch
     (0x0A20, bytes([0xCD, 0x4D, 0x11]), "readpatch", 0xCD),
-    # F_SFIRST (plain-ROM path's own preliminary local search): CALL
-    # $115A -> CALL searchpatch
+    # F_SFIRST (the shared preliminary local search - both plain and
+    # mapped paths reach this before their own fork): CALL $115A ->
+    # CALL searchpatch
     (0x0754, bytes([0xCD, 0x5A, 0x11]), "searchpatch", 0xCD),
     # F_SNEXT (same search loop): CALL $115A -> CALL searchpatch
     (0x0768, bytes([0xCD, 0x5A, 0x11]), "searchpatch", 0xCD),
+    # F_OPEN (mapped-ROM path's own, separate from the plain path's):
+    # CALL $115A -> CALL openpatch_mapped (DIs in network mode - see its
+    # own comment in LDRPATCH.MAC)
+    (0x0E00, bytes([0xCD, 0x5A, 0x11]), "openpatch_mapped", 0xCD),
+    # block read (mapped-ROM path's own, inside its segment-allocation
+    # loop): CALL $114D -> CALL readpatch
+    (0x0E2D, bytes([0xCD, 0x4D, 0x11]), "readpatch", 0xCD),
+    # F_CLOSE (mapped-ROM path's own loop-exit): CALL $115A ->
+    # CALL closepatch (EIs in network mode - matches openpatch_mapped's DI)
+    (0x0E50, bytes([0xCD, 0x5A, 0x11]), "closepatch", 0xCD),
 ]
 
 

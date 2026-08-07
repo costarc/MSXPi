@@ -2163,7 +2163,8 @@ def ploadr(parms = None):
     "p cd <path>"."""
     print(f"ploadr(): {parms}")
     basepath = getMSXPiVar('PATH')
-    filename = (parms or '').strip()
+    parts = (parms or '').strip().split()
+    filename = parts[0] if parts else ''
 
     def reject(reason):
         print(reason)
@@ -2194,6 +2195,35 @@ def ploadr(parms = None):
               f"{bank_size_kb}KB banks, {bank_count} banks")
         header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
 
+    # Per-block body request: "ploadr <file> <index> <blocksize>" - slices
+    # the already-cached buffer and sends exactly one block, then returns,
+    # so the dispatch loop is back at "Waiting Command" between every
+    # block instead of staying monolithically inside one ploadr() call for
+    # the whole transfer. That matters because msxpi-server.py's command
+    # dispatch is single-threaded/synchronous (see the main loop) - while
+    # ploadr() used to hold the conversation open across the entire body,
+    # any real disk access the DOS kernel needed mid-transfer (its DSKCHG
+    # contract requires re-validating on disk-related calls) had nowhere
+    # correct to land and would desync the wire. Per-block requests close
+    # that window entirely, the same way dskiords/dskiosct already do.
+    if len(parts) >= 3:
+        block_index = int(parts[1])
+        block_size = int(parts[2])
+        offset = block_index * block_size
+        chunk = buf[offset:offset + block_size]
+        is_last = (offset + len(chunk)) >= len(buf)
+        header_rc = RC_SUCCESS if is_last else RC_READY
+        return sendmultiblock(chunk, header_rc=header_rc)
+
+    # Header-only request: "ploadr <file> H" - used by LOADRPI.COM's
+    # searchpatch_first, which needs just the header to decide plain-vs-
+    # mapped routing and block count before requesting the body above,
+    # one block at a time.
+    if len(parts) == 2 and parts[1].upper() == 'H':
+        return sendmultiblock(header)
+
+    # Legacy whole-file request: "ploadr <file>" (no extra params) -
+    # unchanged, still used by ploadr.c's plain-ROM path.
     rc = sendmultiblock(header)
     if rc != RC_SUCCESS:
         return rc
