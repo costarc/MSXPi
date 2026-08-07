@@ -1,6 +1,7 @@
 pcopy m:API.BAS
 pcopy m:DOLAR.BAS
 pcopy m:IRC.BAS
+pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
 pcopy m:STOCKS.BAS
 pcopy m:WEATHER.BAS
@@ -12,6 +13,7 @@ pcopy m:msxpibios.rom
 pcopy m:msxpidos.rom
 pcopy m:msxpiupd.bat
 pcopy m:p.com
+pcopy m:ploadr.com
 pcopy m:template.com
 pcopy m:pcopy.com
 echo  

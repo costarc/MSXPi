@@ -158,8 +158,14 @@ if [ $buildMSXdiskImage = "yes" ];then
   python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/msxpiboot.dsk:MSXDOS.SYS"
   python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/msxpiboot.dsk:COMMAND.COM"
   python3 dsktool.py copy "target/msxpidos.rom" "target/disks/msxpiboot.dsk:MSXPIDOS.ROM"
-  
-  for file in `ls target/*.com target/*.BAS target/*.ini`
+
+  # LOADROM.COM (the MSXPi network-loading patch of LOADROM.COM v1.97 -
+  # see Client/src/loadrom/README.md) lives under Client/src/loadrom/,
+  # not target/ like every other client .com - stage it into target/
+  # first so the glob below picks it up like everything else.
+  cp Client/src/loadrom/LOADROM.COM target/LOADROM.COM
+
+  for file in `ls target/*.com target/*.COM target/*.BAS target/*.ini`
   do
     fname="${file##*/}"
     [ -f $file ] && python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"
