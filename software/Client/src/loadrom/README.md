@@ -27,7 +27,7 @@ LOADROM itself supports; this patch doesn't add mapper coverage LOADROM
 didn't already have). Invoke with `/N` on the command line, e.g.:
 
 ```
-LOADRP97 ZANACEX.ROM /N
+LOADROM USAS.ROM /N
 ```
 
 Without `/N`, the patched binary behaves exactly like the unmodified
@@ -47,7 +47,16 @@ as it already works for a local file.
 |---|---|---|
 | Targets | LOADROM.COM v1.0 (1998, 5023 bytes) | LOADROM.COM v1.97 (2015, 6016 bytes) |
 | Patcher | `patch_loadrom.py` | `patch_loadrom197.py` |
-| Output | `LOADRPI.COM` | `LOADRP97.COM` (rebranded banner: "loadrom 2.0P") |
+| Output | `LOADRPI.COM` | `LOADROM.COM` (rebranded banner: "loadrom 2.0P") |
+
+The v1.97 patch's *output* filename is deliberately the same `LOADROM.COM`
+as the unpatched original it's built *from* - don't confuse the two: the
+unpatched original is an input to `patch_loadrom197.py` (supplied
+separately, not part of this repo - see Building, below), while
+`Client/src/loadrom/LOADROM.COM` in this repo is always the patched
+result. On the deployed disk images, the patched `LOADROM.COM` replaces
+the unpatched original entirely - there's no unpatched copy kept
+alongside it there.
 
 v1.97 was targeted as a second generation after v1.0-based testing turned
 up a hard-to-pin-down "loads cleanly, then crashes to DOS on handoff" bug
@@ -91,10 +100,10 @@ zmac -I . LDRPATCH.MAC
 hex2bin -s 1900 zout/LDRPATCH.hex
 python patch_loadrom.py <original LOADROM.COM v1.0> zout/LDRPATCH.bin LOADRPI.COM zout/LDRPATCH.lst
 
-# v1.97 -> LOADRP97.COM
+# v1.97 -> LOADROM.COM
 zmac -I . LDRPATCH197.MAC
 hex2bin -s 1900 zout/LDRPATCH197.hex
-python patch_loadrom197.py <original LOADROM.COM v1.97> zout/LDRPATCH197.bin LOADRP97.COM zout/LDRPATCH197.lst
+python patch_loadrom197.py <original LOADROM.COM v1.97> zout/LDRPATCH197.bin LOADROM.COM zout/LDRPATCH197.lst
 ```
 
 The three `msxpi_*.asm` files each `.MAC` file includes (shared MSXPi BIOS
