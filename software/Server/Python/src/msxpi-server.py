@@ -65,8 +65,8 @@ import filecmp
 except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
-version = "1.4"
-BuildId = "20260228.011"
+version = "1.5"
+BuildId = "20260806.016"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -358,7 +358,7 @@ def pathExpander(path, basepath = ''):
         newpath = newpath.replace('//','/')
     else:
         urltype = 1 # this is a network path
-        newpath = basepath + "/" + path
+        newpath = basepath.rstrip('/') + "/" + path
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -2151,17 +2151,20 @@ def fetch_and_uncompress(url: str):
 
     return RC_SUCCESS, buf
 
-def execrom(parms = None):
+def ploadr(parms = None):
     """Fetch a single ROM by filename (resolved against the current MSXPi
     path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
     getMSXPiVar('PATH')) and send it back using the mapper-aware ROM header
     protocol (see build_rom_header/detect_mapper). This is the direct,
     non-interactive counterpart to msxarchive's browse-and-select flow -
-    used by the EXECROM client's /W option, e.g. "execrom /W zanacex.rom"
-    resolves against whatever path was last set via "p cd <path>"."""
-    print(f"execrom(): {parms}")
+    used by ploadr.com and by EXECROM.MAC's /W option (as "execrom", kept
+    as an alias below for backward compatibility), e.g. "ploadr
+    zanacex.rom" resolves against whatever path was last set via
+    "p cd <path>"."""
+    print(f"ploadr(): {parms}")
     basepath = getMSXPiVar('PATH')
-    filename = (parms or '').strip()
+    parts = (parms or '').strip().split()
+    filename = parts[0] if parts else ''
 
     def reject(reason):
         print(reason)
@@ -2171,7 +2174,17 @@ def execrom(parms = None):
     if not filename:
         return reject("Pi:Error - no filename given")
 
+    # filename arrives already uppercased by MS-DOS's own FCB parsing (the
+    # original typed case is gone by the time this command runs, not
+    # something this patch can recover) - lowercase it before resolving
+    # against a network path, since remote archives conventionally use
+    # lowercase filenames and would 404 on a case-sensitive host otherwise.
+    # Local filesystem paths are left alone - those may be genuinely
+    # case-sensitive in the other direction (a real lowercase-only file
+    # living under a path a user typed in whatever case).
     pathType, filepath = pathExpander(filename, basepath)
+    if pathType == 1 and filename != filename.lower():
+        pathType, filepath = pathExpander(filename.lower(), basepath)
     rc, buf = fetch_and_uncompress(filepath)
     if rc != RC_SUCCESS:
         reason = buf if isinstance(buf, str) else "Pi:Error - fetch failed"
@@ -2192,11 +2205,46 @@ def execrom(parms = None):
               f"{bank_size_kb}KB banks, {bank_count} banks")
         header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
 
+    # Per-block body request: "ploadr <file> <index> <blocksize>" - slices
+    # the already-cached buffer and sends exactly one block, then returns,
+    # so the dispatch loop is back at "Waiting Command" between every
+    # block instead of staying monolithically inside one ploadr() call for
+    # the whole transfer. That matters because msxpi-server.py's command
+    # dispatch is single-threaded/synchronous (see the main loop) - while
+    # ploadr() used to hold the conversation open across the entire body,
+    # any real disk access the DOS kernel needed mid-transfer (its DSKCHG
+    # contract requires re-validating on disk-related calls) had nowhere
+    # correct to land and would desync the wire. Per-block requests close
+    # that window entirely, the same way dskiords/dskiosct already do.
+    if len(parts) >= 3:
+        block_index = int(parts[1])
+        block_size = int(parts[2])
+        offset = block_index * block_size
+        chunk = buf[offset:offset + block_size]
+        is_last = (offset + len(chunk)) >= len(buf)
+        header_rc = RC_SUCCESS if is_last else RC_READY
+        return sendmultiblock(chunk, header_rc=header_rc)
+
+    # Header-only request: "ploadr <file> H" - used by LOADRPI.COM's
+    # searchpatch_first, which needs just the header to decide plain-vs-
+    # mapped routing and block count before requesting the body above,
+    # one block at a time.
+    if len(parts) == 2 and parts[1].upper() == 'H':
+        return sendmultiblock(header)
+
+    # Legacy whole-file request: "ploadr <file>" (no extra params) -
+    # unchanged, still used by ploadr.c's plain-ROM path.
     rc = sendmultiblock(header)
     if rc != RC_SUCCESS:
         return rc
     rc = sendmultiblock(buf)
     return RC_SUCCESS
+
+# Backward-compatible alias - EXECROM.MAC's /W option and msxarch.c still
+# send "execrom <filename>"; the command dispatcher (globals()[cmd.lower()])
+# resolves purely by name, so this keeps them working under ploadr()'s
+# renamed implementation without needing their own changes.
+execrom = ploadr
 
 def msxarchive(parms = None):
     stored_screen = ""  # local variable inside ploadr
