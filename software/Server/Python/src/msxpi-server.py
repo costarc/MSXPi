@@ -65,8 +65,8 @@ import filecmp
 except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
-version = "1.4"
-BuildId = "20260228.011"
+version = "1.5"
+BuildId = "20260806.016"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -2151,15 +2151,17 @@ def fetch_and_uncompress(url: str):
 
     return RC_SUCCESS, buf
 
-def execrom(parms = None):
+def ploadr(parms = None):
     """Fetch a single ROM by filename (resolved against the current MSXPi
     path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
     getMSXPiVar('PATH')) and send it back using the mapper-aware ROM header
     protocol (see build_rom_header/detect_mapper). This is the direct,
     non-interactive counterpart to msxarchive's browse-and-select flow -
-    used by the EXECROM client's /W option, e.g. "execrom /W zanacex.rom"
-    resolves against whatever path was last set via "p cd <path>"."""
-    print(f"execrom(): {parms}")
+    used by ploadr.com and by EXECROM.MAC's /W option (as "execrom", kept
+    as an alias below for backward compatibility), e.g. "ploadr
+    zanacex.rom" resolves against whatever path was last set via
+    "p cd <path>"."""
+    print(f"ploadr(): {parms}")
     basepath = getMSXPiVar('PATH')
     filename = (parms or '').strip()
 
@@ -2197,6 +2199,12 @@ def execrom(parms = None):
         return rc
     rc = sendmultiblock(buf)
     return RC_SUCCESS
+
+# Backward-compatible alias - EXECROM.MAC's /W option and msxarch.c still
+# send "execrom <filename>"; the command dispatcher (globals()[cmd.lower()])
+# resolves purely by name, so this keeps them working under ploadr()'s
+# renamed implementation without needing their own changes.
+execrom = ploadr
 
 def msxarchive(parms = None):
     stored_screen = ""  # local variable inside ploadr
