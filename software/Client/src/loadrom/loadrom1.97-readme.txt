@@ -1,0 +1,23 @@
+LOADROM v 1.97
+
+by Victor Martinez & Trunks
+
+I want to share this new version of LOADROM. Last version plublished was 1.80.
+
+Requerimentes:
+
+512 Kbytes Main RAM for MegaROMs cartridges....  work better.
+
+Changelog from v 1.80:
+
+	"  Ver 1.82 : EI mode autodetected !"
+	"  Ver 1.93 : Detect SCC in expanded SLOT"
+	"  	    Detect Panasonic 2+ Turbo Z80"
+	"  Ver 1.94 : Auto detect MROM Type Mapper"
+	"  Ver 1.95 : EI mode autodetect in ASCII 16k MROM Type Mapper"
+	"  Ver 1.96 : 15-20% faster with KONAMI MROMs"
+	"                  10-30% less use of memory"
+	" Ver 1.97 : 10% faster with KONAMI MROMs"
+
+Note: There is a lot of games that don't work correctly!! But if you don't own a flash cartridge, you can try it.
+

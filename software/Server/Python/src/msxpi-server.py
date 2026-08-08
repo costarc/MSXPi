@@ -28,7 +28,9 @@ from fileinput import filename
 from tarfile import BLOCKSIZE
 import time
 import subprocess
+import struct
 from urllib.request import urlopen
+from urllib.parse import unquote
 import requests
 import mmap
 # import fcntl # does not work in Windows
@@ -53,6 +55,7 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 import shutil
+import filecmp
 
 # Import IRC client wrappers (module-level functions prefixed with "irc_")
 # Guarded import so server still runs even if irc_client is absent or raises at import.
@@ -62,8 +65,8 @@ import shutil
 except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
-version = "1.4"
-BuildId = "20260228.011"
+version = "1.5"
+BuildId = "20260808.020"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -107,6 +110,69 @@ RC_FAILNOSTD        =    0xEC
 RC_TERMINATE        =    0xED
 RC_UNEXPECTEDDATA   =    0xEE
 RC_UNDEFINED        =    0xEF
+
+# ROM header sent to the MSX immediately before a ROM image, so the client
+# knows how to load it (plain linear copy vs. mapper-aware loading).
+ROM_HEADER_MAGIC    =    0x52   # 'R'
+ROM_HEADER_VERSION  =    1
+ROM_HEADER_SIZE     =    16
+MAPPER_PLAIN        =    0      # linear ROM, loaded exactly as today
+MAPPER_KONAMI       =    1      # 8K banks
+MAPPER_ASCII8       =    2      # 8K banks
+MAPPER_ASCII16      =    3      # 16K banks
+MAPPER_REJECTED     =    0xFF   # selection rejected; reason string follows the header, no ROM body
+PLAIN_ROM_MAX_SIZE  =    32768  # client's fixed load window for MAPPER_PLAIN
+ROM_MAX_SIZE         =    1048576  # sanity cap for mapped ROMs (1MB covers all commercial Konami/ASCII8/ASCII16 megaROMs)
+
+def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
+    """Pack the fixed 16-byte ROM header: magic, protocol version, mapper
+    type, bank size (KB), bank count, and total ROM size in bytes.
+    mapper_type MAPPER_PLAIN keeps today's client behavior unchanged;
+    the other values are reserved for mapper-aware loading (not yet
+    implemented client-side)."""
+    return struct.pack("<BBBBHI6x", ROM_HEADER_MAGIC, ROM_HEADER_VERSION,
+                        mapper_type, bank_size_kb, bank_count, total_size)
+
+# Bank-select write addresses (as LD (nn),A / 0x32 lo hi) each mapper type
+# responds to. ASCII8 and ASCII16 both use 0x6000/0x7000, so those two
+# addresses alone don't distinguish them - 0x6800/0x7800 are ASCII8-only,
+# 0x8000/0xA000 are Konami-only, and 0x5000/0x9000/0xB000 are Konami SCC
+# only (SCC also uses 0x7000, which overlaps ASCII8/16). Konami SCC is
+# reported as plain MAPPER_KONAMI (same 8K banks, same LD (nn),A bank-select
+# mechanism the wire protocol/transfer cares about - the SCC sound chip's
+# own registers don't affect bank-switch addresses or chunking at all).
+# The client (EXECROM's /W option) detects SCC-ness itself from the ROM's
+# own content via its existing disk-load signature table (checkon/konatab -
+# the same lookup a disk-sourced Konami SCC load already used), so nothing
+# server-side needs to flag it specially.
+# This is a heuristic (opcode-pattern scan, not a hash database), so it
+# can misidentify unusual/hand-rolled ROMs - good enough for the common
+# commercial mapper layouts.
+KONAMI_SCC_UNIQUE_ADDRS = (0x5000, 0x9000, 0xB000)
+KONAMI_UNIQUE_ADDRS     = (0x8000, 0xA000)
+ASCII8_UNIQUE_ADDRS     = (0x6800, 0x7800)
+ASCII16_ADDRS           = (0x6000, 0x7000)
+
+def detect_mapper(rom_bytes):
+    """Scan rom_bytes for bank-select write patterns and guess the mapper
+    type. Returns (mapper_type, bank_size_kb) or (None, None) if nothing
+    recognizable/supported was found (caller should treat the ROM as
+    unsupported)."""
+    write_addrs = set()
+    for i in range(len(rom_bytes) - 2):
+        if rom_bytes[i] == 0x32:  # LD (nn),A
+            write_addrs.add(rom_bytes[i + 1] | (rom_bytes[i + 2] << 8))
+
+    if any(a in write_addrs for a in ASCII8_UNIQUE_ADDRS):
+        return MAPPER_ASCII8, 8
+    if any(a in write_addrs for a in KONAMI_SCC_UNIQUE_ADDRS):
+        return MAPPER_KONAMI, 8  # Konami SCC - see this table's own comment
+    if any(a in write_addrs for a in KONAMI_UNIQUE_ADDRS):
+        return MAPPER_KONAMI, 8
+    if any(a in write_addrs for a in ASCII16_ADDRS):
+        return MAPPER_ASCII16, 16
+
+    return None, None
 
 st_init             =    0       # waiting loop, waiting for a command
 st_cmd              =    1       # transfering data for a command
@@ -292,23 +358,92 @@ def pathExpander(path, basepath = ''):
         newpath = newpath.replace('//','/')
     else:
         urltype = 1 # this is a network path
-        newpath = basepath + "/" + path
+        newpath = basepath.rstrip('/') + "/" + path
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
     print("msxdos_inihrd()")
-    
+
     if ('disk' in vars() or 'disk' in globals()):
         disk.flush()
-    size = os.path.getsize(filename)
+
+    if not filename or not os.path.exists(filename):
+        return RC_FAILED, ''
+
+    # Mount from a private staging copy rather than mmap'ing the canonical
+    # path directly. mmap keeps a Windows file handle open for as long as
+    # the server runs, which blocks anything else (e.g. a rebuild) from
+    # overwriting that same file. DriveA/DriveB still report and can be
+    # freely rewritten at the canonical path; only this internal copy -
+    # refreshed on every mount/reload - is ever actually locked open.
+    #
+    # Each mount gets its own uniquely-named staging file (globals.mounts_count
+    # as a counter), rather than reusing one fixed name: a reload while the
+    # previous mmap is still open (nothing here explicitly closes it first)
+    # would otherwise try to overwrite that same still-locked staging file,
+    # hitting the exact Windows locking problem this is meant to avoid.
+    global mount_counter, mounted_paths
+    mount_counter = globals().get("mount_counter", 0) + 1
+    mounted_paths = globals().get("mounted_paths", {})
+    staging_dir = os.path.join("/tmp/msxpi", "mounted")
+    os.makedirs(staging_dir, exist_ok=True)
+    staging_path = os.path.join(staging_dir, f"{mount_counter}_{os.path.basename(filename)}")
+    shutil.copyfile(filename, staging_path)
+    # Recorded so any writes made during the session can be synced back to
+    # the canonical file on a clean shutdown (see sync_mounted_writes_back()).
+    mounted_paths[filename] = staging_path
+
+    size = os.path.getsize(staging_path)
     if (size>0):
-        fd = os.open(filename, os.O_RDWR)
+        fd = os.open(staging_path, os.O_RDWR)
         disk = mmap.mmap(fd, size, access=access)
         rc = RC_SUCCESS
-    else:   
+    else:
         disk = ''
         rc = RC_FAILED
     return rc,disk
+
+def sync_mounted_writes_back():
+    """Called on a clean shutdown (Ctrl+C -> KeyboardInterrupt below). Any
+    drive mounted via msxdos_inihrd() actually lives in a private staging
+    copy (see its own comment) so that writes made during the session -
+    e.g. an MSX program saving a file to drive A - never touched the
+    canonical DriveA/DriveB path and would otherwise be silently lost the
+    next time the drive is (re)mounted. For each tracked (canonical,
+    staging) pair, flush the still-open mmap and copy the staging file
+    back over the canonical one if its content actually changed.
+
+    Note: this only runs on a graceful stop (Ctrl+C). A force-kill (Task
+    Manager "End Task", Stop-Process -Force, etc.) terminates the process
+    without giving Python a chance to run this, so writes from a
+    force-killed session are lost - stop the server with Ctrl+C to keep
+    them.
+    """
+    global drive0Data, drive1Data, mounted_paths
+
+    mounted_paths = globals().get("mounted_paths", {})
+    if not mounted_paths:
+        return
+
+    # Flush whichever mmap objects are currently live so their staging
+    # files on disk reflect any in-memory writes before comparing.
+    for disk in (drive0Data, drive1Data):
+        if disk and disk != '':
+            try:
+                disk.flush()
+            except Exception:
+                pass
+
+    for canonical_path, staging_path in mounted_paths.items():
+        try:
+            if not os.path.exists(staging_path):
+                continue
+            if os.path.exists(canonical_path) and filecmp.cmp(canonical_path, staging_path, shallow=False):
+                continue  # unchanged, nothing to sync
+            shutil.copyfile(staging_path, canonical_path)
+            print(f"sync_mounted_writes_back(): synced changes back to {canonical_path}")
+        except Exception as e:
+            print(f"sync_mounted_writes_back(): failed to sync {canonical_path}: {e}")
 
 def dos83format(fname):
     name = '        '
@@ -887,15 +1022,52 @@ def dosinit(parms = None):
     
 def dskioini(parms = None):
     print("dskioini()")
-    
+
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
-    
+
     # Initialize disk system parameters
     msxdos1boot = True
     sectorInfo = [0,0,0,0]
     # Load the disk images into a memory mapped variable
     rc , drive0Data = msxdos_inihrd(getMSXPiVar('DriveA'))
     rc , drive1Data = msxdos_inihrd(getMSXPiVar('DriveB'))
+
+def reload(parms = None):
+    """Re-opens the DriveA/DriveB disk image file (mmap) from its
+    current path, without needing to restart the server. Mirrors what
+    'pset DriveA <path>' already does when the variable is (re)assigned
+    (msxdos_inihrd() re-mmaps the file) - useful after rebuilding a disk
+    image on disk, since the existing mmap otherwise keeps the file
+    handle open and doesn't pick up changes (and blocks overwriting the
+    file from outside). Usage: reload A:  or  reload B:
+    """
+    print(f"reload(): {parms!r}")
+    global drive0Data, drive1Data
+
+    driveLetter = (parms or "").strip().upper().rstrip(":").rstrip("\x00")
+
+    if driveLetter == "A":
+        varname, varname_upper = "DriveA", "A"
+    elif driveLetter == "B":
+        varname, varname_upper = "DriveB", "B"
+    else:
+        return sendmultiblock(b"Pi:Error - usage: reload A: or reload B:")
+
+    path = getMSXPiVar(varname)
+    if not path:
+        return sendmultiblock(f"Pi:Error - {varname} is not set".encode())
+
+    rc, data = msxdos_inihrd(path)
+    if rc != RC_SUCCESS:
+        return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
+
+    if varname_upper == "A":
+        drive0Data = data
+    else:
+        drive1Data = data
+
+    print(f"reload(): {varname} reloaded from {path}")
+    return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
 def dskiords(parms = None):
     print("dskiords()")
@@ -1558,32 +1730,43 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     #print("senddata_oneblock(): Sending block data with retries if needed")
     while True:
         # header_rc
-        #print(f"senddata_oneblock(): Sending header_rc={hex(header_rc)}")
+        print(f"senddata_oneblock(): sending header_rc={hex(header_rc)}")
         rc, _ = SPI_ByteTransfer(header_rc)
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending header_rc")
             return RC_CONNERR
+        print("senddata_oneblock(): header_rc sent OK")
 
         # length low/high
         rc, _ = SPI_ByteTransfer(length & 0xFF)
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending length low byte")
             return RC_CONNERR
         rc, _ = SPI_ByteTransfer((length >> 8) & 0xFF)
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending length high byte")
             return RC_CONNERR
+        print(f"senddata_oneblock(): length={length} sent OK")
 
         # block_index
         rc, _ = SPI_ByteTransfer(block_index & 0xFF)
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending block_index")
             return RC_CONNERR
+        print(f"senddata_oneblock(): block_index={block_index} sent OK, starting payload ({length} bytes)")
 
         # payload
-        #print(f"senddata_oneblock(): Sending block {block_index + 1} with size {length}")
         chksum = 0
-        for b in payload:
+        for idx, b in enumerate(payload):
             rc, _ = SPI_ByteTransfer(b)
             if rc != RC_SUCCESS:
+                print(f"senddata_oneblock(): FAILED sending payload byte at offset {idx} (of {length})")
                 return RC_CONNERR
             chksum += b
+            if idx > 0 and idx % 2048 == 0:
+                print(f"senddata_oneblock(): payload progress {idx}/{length} bytes sent")
+
+        print(f"senddata_oneblock(): payload complete, {length} bytes sent")
 
         # local checksum
         right = chksum & 0xFF
@@ -1593,14 +1776,17 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         # send checksum
         rc, _ = SPI_ByteTransfer(local_sum)
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending local checksum")
             return RC_CONNERR
+        print(f"senddata_oneblock(): local checksum={local_sum} sent, waiting for MSX checksum")
 
         # receive MSX checksum
         rc, msxsum = SPI_ByteTransfer()
         if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED receiving MSX checksum")
             return RC_CONNERR
 
-        #print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
+        print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
         if msxsum == local_sum:
             # block accepted
             break
@@ -1650,6 +1836,8 @@ def PerformHandshake():
         if byte == READY:
             SPI_ByteTransfer(READY_ACK)
             break
+        else:
+            print(f"PerformHandshake(): discarded stray byte {hex(byte)} while waiting for READY")
 
     # Receive msx_blocksize
     #print("PerformHandshake(): Receiving msx_blocksize from MSX")
@@ -1661,6 +1849,7 @@ def PerformHandshake():
         return RC_CONNERR, 0
 
     msx_blocksize = low | (high << 8)
+    print(f"PerformHandshake(): msx_blocksize={msx_blocksize}")
 
     return RC_SUCCESS, msx_blocksize
 
@@ -1695,11 +1884,21 @@ def sendmultiblock(payload: bytes, header_rc = None):
         end = min(offset + msx_blocksize, total_len)
         block = payload[offset:end]
 
-        # header_rc: RC_READY for intermediate blocks, RC_SUCCESS for last block
-        if not header_rc == None:
-            block_rc = header_rc
-        elif end < total_len:
+        # header_rc: RC_READY for intermediate blocks, RC_SUCCESS (or the
+        # caller's override) for the last block. An explicit override must
+        # NEVER apply to an intermediate block - the client's receive loop
+        # (RECVDATA_ONEBLOCK/RECV_LOOP) uses "not RC_READY" as its signal
+        # that a block is the last one, so tagging an early block with e.g.
+        # RC_SUCCNOSTD would make the client stop receiving mid-transfer
+        # while this loop keeps sending - a protocol desync. This is only
+        # reachable when a payload spans more than one block; every current
+        # caller of an explicit header_rc sends a single-block payload, so
+        # for them "last block" and "first block" are the same block and
+        # this is behaviorally identical to before.
+        if end < total_len:
             block_rc = RC_READY
+        elif not header_rc == None:
+            block_rc = header_rc
         else:
             block_rc = RC_SUCCESS
 
@@ -1735,6 +1934,19 @@ def readParameters(errorMsg, needParm=False):
 
     #print(f"Parameters:{parms}")
     return RC_SUCCESS, parms
+
+def q(parm=None):
+    """Client-side quit notification (see sendQuit() in msxarch.c/p.c). The
+    client sends this and, on most paths, exits back to DOS immediately
+    afterward without waiting for/completing a reply - so this must return
+    None (no sendmultiblock reply attempted). Previously there was no "q"
+    handler at all, so this hit the KeyError/"Unknown command" path, which
+    tried to sendmultiblock() an error string to a client that had already
+    gone away - leaving the server mid-handshake with nobody listening,
+    corrupting the next session's protocol state (surfaced as garbage
+    checksums, a forced reconnect, and a "Disk error reading drive A" on
+    whatever ran next)."""
+    print("q(): client quit")
 
 def restart(parm=None):
     print("prestart()")
@@ -1827,29 +2039,47 @@ def chatgpt(query):
         print(error_msg)
         sendmultiblock(error_msg.encode())
 
+def is_local_path(s: str) -> bool:
+    """A repository entry is a local filesystem path (e.g. /home/roms or
+    C:\\Users\\roniv\\Dev\\MSX\\gameroms) rather than an HTTP(S) archive URL
+    if it doesn't start with a scheme. Lets msxarchive() browse/load ROMs
+    straight off disk where the server runs, with no local web server
+    needed."""
+    return not (s.startswith("http://") or s.startswith("https://"))
+
+
 def fetch_and_uncompress(url: str):
     """
-    Download a compressed file from URL into /tmp/msxpi (cache).
+    Download a compressed file from URL into /tmp/msxpi (cache), or - if
+    url is a local filesystem path - copy it into the same cache instead.
     Detect compression type by extension and uncompress.
     Return (rc, buf) where rc is RC_SUCCESS or RC_FAILED,
     and buf is the resulting .rom file contents as bytes.
     """
     tmpdir = "/tmp/msxpi"
-    
+
     filename = os.path.basename(url)
     cached_path = os.path.join(tmpdir, filename)
 
-    # Download only if not cached
+    # Download/copy only if not cached
     if not os.path.exists(cached_path):
-        try:
-            resp = requests.get(url, stream=True)
-            resp.raise_for_status()
-            with open(cached_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        except Exception as e:
-            print(f"Download failed: {e}")
-            return RC_FAILED, f"Download failed: {e}"
+        if is_local_path(url):
+            try:
+                os.makedirs(tmpdir, exist_ok=True)
+                shutil.copyfile(url, cached_path)
+            except Exception as e:
+                print(f"Local read failed: {e}")
+                return RC_FAILED, f"Local read failed: {e}"
+        else:
+            try:
+                resp = requests.get(url, stream=True)
+                resp.raise_for_status()
+                with open(cached_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            except Exception as e:
+                print(f"Download failed: {e}")
+                return RC_FAILED, f"Download failed: {e}"
     else:
         print(f"Using cached file: {cached_path}")
 
@@ -1934,6 +2164,101 @@ def fetch_and_uncompress(url: str):
 
     return RC_SUCCESS, buf
 
+def ploadr(parms = None):
+    """Fetch a single ROM by filename (resolved against the current MSXPi
+    path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
+    getMSXPiVar('PATH')) and send it back using the mapper-aware ROM header
+    protocol (see build_rom_header/detect_mapper). This is the direct,
+    non-interactive counterpart to msxarchive's browse-and-select flow -
+    used by ploadr.com and by EXECROM.MAC's /W option (as "execrom", kept
+    as an alias below for backward compatibility), e.g. "ploadr
+    zanacex.rom" resolves against whatever path was last set via
+    "p cd <path>"."""
+    print(f"ploadr(): {parms}")
+    basepath = getMSXPiVar('PATH')
+    parts = (parms or '').strip().split()
+    filename = parts[0] if parts else ''
+
+    def reject(reason):
+        print(reason)
+        header = build_rom_header(MAPPER_REJECTED, 0, 0, 0)
+        return sendmultiblock(header + reason.encode())
+
+    if not filename:
+        return reject("Pi:Error - no filename given")
+
+    # filename arrives already uppercased by MS-DOS's own FCB parsing (the
+    # original typed case is gone by the time this command runs, not
+    # something this patch can recover) - lowercase it before resolving
+    # against a network path, since remote archives conventionally use
+    # lowercase filenames and would 404 on a case-sensitive host otherwise.
+    # Local filesystem paths are left alone - those may be genuinely
+    # case-sensitive in the other direction (a real lowercase-only file
+    # living under a path a user typed in whatever case).
+    pathType, filepath = pathExpander(filename, basepath)
+    if pathType == 1 and filename != filename.lower():
+        pathType, filepath = pathExpander(filename.lower(), basepath)
+    rc, buf = fetch_and_uncompress(filepath)
+    if rc != RC_SUCCESS:
+        reason = buf if isinstance(buf, str) else "Pi:Error - fetch failed"
+        return reject(reason)
+
+    if len(buf) <= PLAIN_ROM_MAX_SIZE:
+        header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
+    else:
+        mapper_type, bank_size_kb = detect_mapper(buf)
+        if mapper_type is None:
+            return reject(f"{filename} ({len(buf)} bytes): unrecognized "
+                          f"mapper - not supported yet.")
+        if len(buf) > ROM_MAX_SIZE:
+            return reject(f"{filename} ({len(buf)} bytes) exceeds the "
+                          f"{ROM_MAX_SIZE} byte cap.")
+        bank_count = len(buf) // (bank_size_kb * 1024)
+        print(f"{filename}: detected mapper type {mapper_type}, "
+              f"{bank_size_kb}KB banks, {bank_count} banks")
+        header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
+
+    # Per-block body request: "ploadr <file> <index> <blocksize>" - slices
+    # the already-cached buffer and sends exactly one block, then returns,
+    # so the dispatch loop is back at "Waiting Command" between every
+    # block instead of staying monolithically inside one ploadr() call for
+    # the whole transfer. That matters because msxpi-server.py's command
+    # dispatch is single-threaded/synchronous (see the main loop) - while
+    # ploadr() used to hold the conversation open across the entire body,
+    # any real disk access the DOS kernel needed mid-transfer (its DSKCHG
+    # contract requires re-validating on disk-related calls) had nowhere
+    # correct to land and would desync the wire. Per-block requests close
+    # that window entirely, the same way dskiords/dskiosct already do.
+    if len(parts) >= 3:
+        block_index = int(parts[1])
+        block_size = int(parts[2])
+        offset = block_index * block_size
+        chunk = buf[offset:offset + block_size]
+        is_last = (offset + len(chunk)) >= len(buf)
+        header_rc = RC_SUCCESS if is_last else RC_READY
+        return sendmultiblock(chunk, header_rc=header_rc)
+
+    # Header-only request: "ploadr <file> H" - used by LOADRPI.COM's
+    # searchpatch_first, which needs just the header to decide plain-vs-
+    # mapped routing and block count before requesting the body above,
+    # one block at a time.
+    if len(parts) == 2 and parts[1].upper() == 'H':
+        return sendmultiblock(header)
+
+    # Legacy whole-file request: "ploadr <file>" (no extra params) -
+    # unchanged, still used by ploadr.c's plain-ROM path.
+    rc = sendmultiblock(header)
+    if rc != RC_SUCCESS:
+        return rc
+    rc = sendmultiblock(buf)
+    return RC_SUCCESS
+
+# Backward-compatible alias - EXECROM.MAC's /W option and msxarch.c still
+# send "execrom <filename>"; the command dispatcher (globals()[cmd.lower()])
+# resolves purely by name, so this keeps them working under ploadr()'s
+# renamed implementation without needing their own changes.
+execrom = ploadr
+
 def msxarchive(parms = None):
     stored_screen = ""  # local variable inside ploadr
     nrows = 22
@@ -1941,37 +2266,80 @@ def msxarchive(parms = None):
     columnwidth = 14
     indexFile = "00index.txt"
 
+    ROM_FILE_EXTENSIONS = (".rom", ".zip", ".lzh", ".pma", ".arj")
+
     def fetch_file_list(url: str, index: str):
         """Fetch file list from the given URL and return filenames without extensions.
         Skip header (first line) and empty lines."""
 
-        url = url + "/" + index
-        cached_file = "/tmp/msxpi/" + url.replace(":", "_").replace("/", "+")
-        
-        if not os.path.exists(cached_file):
-            print(f"not cached: {cached_file}")
+        if is_local_path(url):
+            try:
+                entries = os.listdir(url)
+            except Exception as e:
+                print(f"Failed to list directory {url}: {e}")
+                return RC_FAILED, f"Failed to list directory: {e}"
+            files = sorted(f for f in entries
+                            if f.lower().endswith(ROM_FILE_EXTENSIONS))
+            return RC_SUCCESS, files
+
+        CACHE_TTL_SECONDS = 3600
+
+        index_url = url + "/" + index
+        cached_file = "/tmp/msxpi/" + index_url.replace(":", "_").replace("/", "+")
+
+        cache_exists = os.path.exists(cached_file)
+        cache_expired = cache_exists and (time.time() - os.path.getmtime(cached_file)) > CACHE_TTL_SECONDS
+
+        if not cache_exists or cache_expired:
+            print(f"cache expired: {cached_file}" if cache_expired else f"not cached: {cached_file}")
             # Download from the URL
-            response = requests.get(url)
+            response = requests.get(index_url)
 
             if response.status_code == 200:
                 # Success: parse the content
                 lines = response.text.splitlines()
+            elif response.status_code == 404:
+                # No index file published (e.g. a plain directory server with
+                # no 00index.txt, like a local test HTTP server): fall back to
+                # the server's own auto-generated directory listing instead.
+                print(f"{index} not found, falling back to directory listing at: {url}/")
+                dir_response = requests.get(url + "/")
+                if dir_response.status_code != 200:
+                    print(f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}")
+                    files = f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}"
+                    return RC_FAILED,files
+
+                class DirListingParser(HTMLParser):
+                    def __init__(self):
+                        super().__init__()
+                        self.hrefs = []
+                    def handle_starttag(self, tag, attrs):
+                        if tag == 'a':
+                            href = dict(attrs).get('href')
+                            if href:
+                                self.hrefs.append(href)
+
+                parser = DirListingParser()
+                parser.feed(dir_response.text)
+                entries = [unquote(h) for h in parser.hrefs if h != '..' and not h.endswith('/')]
+
+                # Prepend a placeholder header line since the parsing loop
+                # below always skips line 0 (matches the plain-text index format).
+                lines = ["# directory listing"] + entries
             else:
                 # Failure: print error message
                 print(f"Download failed: HTTP {response.status_code} - {response.reason}")
                 files = f"Download failed: HTTP {response.status_code} - {response.reason}"
                 return RC_FAILED,files
 
-            lines = response.text.splitlines()
-
             # Save to cache for future use
             os.makedirs(os.path.dirname(cached_file), exist_ok=True)
             with open(cached_file, "w", encoding="utf-8") as f:
-                f.write(response.text)
-        
+                f.write("\n".join(lines))
+
         else:
             # Read from cache
-            print(f"Reading from cache: {url}")
+            print(f"Reading from cache: {index_url}")
             with open(cached_file, "r", encoding="utf-8") as f:
                 lines = f.read().splitlines()
 
@@ -2103,54 +2471,85 @@ def msxarchive(parms = None):
     text = get_page(files, pages, page, ncolumns)
     rc = sendmultiblock(text.encode().ljust(PAGESIZE, b'\x00'))
 
-    while True:   
-        rc, parm = recvdata2();
-        parm = parm.decode(errors="ignore").split("\x00", 1)[0]
-        cmd = str(parm).lower()  # normalize to string for command checks
+    try:
+        while True:
+            rc, parm = recvdata2();
+            parm = parm.decode(errors="ignore").split("\x00", 1)[0]
+            cmd = str(parm).lower()  # normalize to string for command checks
 
-        if cmd == "n" or cmd == "N":
-            # go to next page
-            page = int(current_page) + 1
-            if page > get_total_pages(pages):
-                page = 1
+            if cmd == "n" or cmd == "N":
+                # go to next page
+                page = int(current_page) + 1
+                if page > get_total_pages(pages):
+                    page = 1
     
-            current_page = page
-            text = get_page(files, pages, page, ncolumns)
+                current_page = page
+                text = get_page(files, pages, page, ncolumns)
 
-        elif cmd == "p" or cmd == "P":
-            # go to previous page
-            page = int(current_page) - 1
-            if page < 1:
-                page = get_total_pages(pages)
-            current_page = page
-            text = get_page(files, pages, page, ncolumns)
+            elif cmd == "p" or cmd == "P":
+                # go to previous page
+                page = int(current_page) - 1
+                if page < 1:
+                    page = get_total_pages(pages)
+                current_page = page
+                text = get_page(files, pages, page, ncolumns)
 
-        elif cmd == "q" or cmd == "Q":
-            break
-        else:
-            try:
-                file_num = int(parm)
+            elif cmd == "q" or cmd == "Q":
+                break
+            else:
+                # Every outcome of a numeric selection (load, or reject with a
+                # reason) ends the archive session, so each one always sends the
+                # 16-byte ROM header first - the client now unconditionally
+                # expects it right after sending a file number. Rejections carry
+                # MAPPER_REJECTED plus a short reason string instead of a ROM body,
+                # so the client never mistakes a plain-text reply for ROM data.
+                def reject(reason):
+                    print(reason)
+                    header = build_rom_header(MAPPER_REJECTED, 0, 0, 0)
+                    sendmultiblock(header + reason.encode())
+                    return RC_FAILED
+
+                try:
+                    file_num = int(parm)
+                except (ValueError, TypeError):
+                    return reject(f"Invalid input: {cmd}")
+
                 if file_num < 1 or file_num > get_total_files(files):
-                    print(f"File {file_num} does not exist.")
-                    text = f"File {file_num} does not exist."
-                else:
-                    filename = get_fileName(files, file_num)
-                    print(f"Selected file: {filename}")
-                    rc, buf = fetch_and_uncompress(f"{url}/{filename}")
-                    if rc == RC_SUCCESS:
-                        text = "File fetched and uncompressed successfully."
-                        rc = sendmultiblock(buf)
-                        return RC_SUCCESS
-                    else:
-                        text = buf
-            except (ValueError, TypeError):
-                print(f"Invalid input: {cmd}")
-                text = f"Invalid input: {cmd}"
-        
-        rc = senddata(RC_SUCCESS, text.encode().ljust(PAGESIZE, b'\x00'))
-        #print(text)
+                    return reject(f"File {file_num} does not exist.")
 
-    DISABLETIMEOUT = False # Restore timeout setting
+                filename = get_fileName(files, file_num)
+                print(f"Selected file: {filename}")
+                filepath = os.path.join(url, filename) if is_local_path(url) else f"{url}/{filename}"
+                rc, buf = fetch_and_uncompress(filepath)
+                if rc != RC_SUCCESS:
+                    return reject(buf)
+
+                if len(buf) <= PLAIN_ROM_MAX_SIZE:
+                    header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
+                else:
+                    mapper_type, bank_size_kb = detect_mapper(buf)
+                    if mapper_type is None:
+                        return reject(f"{filename} ({len(buf)} bytes): unrecognized "
+                                      f"mapper - not supported yet.")
+                    if len(buf) > ROM_MAX_SIZE:
+                        return reject(f"{filename} ({len(buf)} bytes) exceeds the "
+                                      f"{ROM_MAX_SIZE} byte cap.")
+                    bank_count = len(buf) // (bank_size_kb * 1024)
+                    print(f"{filename}: detected mapper type {mapper_type}, "
+                          f"{bank_size_kb}KB banks, {bank_count} banks")
+                    header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
+
+                rc = sendmultiblock(header)
+                if rc != RC_SUCCESS:
+                    return rc
+                rc = sendmultiblock(buf)
+                return RC_SUCCESS
+
+            rc = senddata(RC_SUCCESS, text.encode().ljust(PAGESIZE, b'\x00'))
+            #print(text)
+
+    finally:
+        DISABLETIMEOUT = False # Restore timeout setting
 
 def ShowSecurityDisclaimer(parms = None):
     print("\n=====================================================================================")
@@ -2365,7 +2764,7 @@ def irc(parms):
                 #print(f"[irc] recv raw={data!r}")
             except BlockingIOError:
                 #print("[irc] recv BlockingIOError (no data yet)")
-                sendmsg("Pi:Ok:BlockingIOError", RC_SUCCNOSTD)
+                sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
             except Exception as e:
                 print(f"[irc] recv exception: {e}")
@@ -2418,23 +2817,30 @@ def irc(parms):
                             return RC_SUCCESS
                     except Exception as e:
                         print(f"[irc] NAMES parse exception: {e}")
-                        sendmsg("Pi:Ok:Users", RC_SUCCESS)
-                        return RC_SUCCESS
-                
-                # End of NAMES list (366)
+                        sendmsg("Pi:Ok:Users", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
+
+                # End of NAMES list (366) - housekeeping marker only, no
+                # content for the user to see, so RC_SUCCNOSTD like the
+                # other "nothing interesting" acks (e.g. "NAMES sent")
                 if " 366 " in line:
                     print("[irc] End of NAMES list")
-                    sendmsg("Pi:Ok:EndUsers", RC_SUCCESS)
-                    return RC_SUCCESS
+                    sendmsg("Pi:Ok:EndUsers", RC_SUCCNOSTD)
+                    return RC_SUCCNOSTD
 
                 # JOIN reply from server
                 if " JOIN " in line:
                     #print("[irc] JOIN event detected")
                     try:
                         # Example: :msxpi!~msxpi@host JOIN #openmsx
+                        # With extended-join capability, the server can
+                        # append more fields after the channel (account
+                        # name, then :realname) - take only the first
+                        # whitespace-delimited token so those don't leak
+                        # into the channel name shown to the user.
                         prefix, rest = line[1:].split(" ", 1)
                         nick = prefix.split("!", 1)[0]
-                        chan = rest.split("JOIN", 1)[1].strip()
+                        chan = rest.split("JOIN", 1)[1].strip().split(" ", 1)[0]
                         #print(f"[irc] JOIN parsed: nick={nick!r}, chan={chan!r}")
                     except Exception as e:
                         print(f"[irc] JOIN parse exception: {e}")
@@ -2485,6 +2891,21 @@ def irc(parms):
                     target = parts[1]
                     if msxnick in target:
                         target = "private"
+
+                    # CTCP requests (VERSION, PING, TIME, CLIENTINFO, etc.)
+                    # are wrapped in \x01...\x01 - these are automated
+                    # client-fingerprinting probes from bots/clients, not
+                    # real chat content, so don't surface them. CTCP ACTION
+                    # (/me) is real content though - unwrap and show that.
+                    if text.startswith("\x01"):
+                        ctcp = text.strip("\x01")
+                        if ctcp.upper().startswith("ACTION "):
+                            text = "* " + nick + " " + ctcp[7:]
+                            sendmsg("Pi:Ok:<" + target + "> " + text, RC_SUCCESS)
+                            return RC_SUCCESS
+                        print(f"[irc] CTCP request from {nick} ignored: {ctcp!r}")
+                        sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
 
                     formatted = f"<{target}> {nick} -> {text}"
                     #print(f"[irc] formatted message={formatted!r}")
@@ -3639,4 +4060,5 @@ except KeyboardInterrupt:
             server_socket.close()
     except Exception:
         pass
+    sync_mounted_writes_back()
     print("MSXPi Server: Terminating")

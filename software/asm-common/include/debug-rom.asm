@@ -89,6 +89,20 @@ ROM_DBGHL:
         EI
         RET
 
+ROM_DBGA:
+        PUSH    AF
+        PUSH    BC
+        PUSH    DE
+        PUSH    HL
+        CALL    ROM_PRINTNUMBER    ; A still holds the caller's value here
+        LD      A,'#'
+        CALL    ROM_PUTCHAR
+        POP     HL
+        POP     DE
+        POP     BC
+        POP     AF
+        RET
+
 ;-----------------------
 ; ROM_PRINTNUMBER          |
 ;-----------------------
@@ -123,14 +137,16 @@ ROM_PRINTNUM1:
         call    ROM_PUTCHAR
         ret
         
-BDOS:   EQU     5
 ROM_PUTCHAR:
         push    bc
         push    de
         push    hl
         ld      e,a
         ld      c,2
-        call    BDOS
+        call    $A2             ; matches putchar_msxdos.asm's PUTCHAR -
+                                ; the standard "call 5" BDOS entry isn't
+                                ; safe to use from a ROM-resident routine
+                                ; invoked mid-CALL from BASIC
         pop     hl
         pop     de
         pop     bc

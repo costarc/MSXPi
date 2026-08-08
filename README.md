@@ -167,6 +167,17 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
+MSXPi v1.5 Release Notes
+========================
+Network MegaROM loading, replacing the old disk-only "ploadr" command.
+- "loadrom/LOADROM.COM": a binary patch of the third-party LOADROM.COM (v1.97) adding MSXPi network loading ("/N") for plain ROMs and MegaROMs (Konami/Konami SCC, ASCII8, ASCII16) alongside its existing local-disk loading - see "Client/src/loadrom/README.md" for how it works and why
+- Per-block transfer protocol, with checksum-mismatch retry added to SENDDATA/RECVDATA_ONEBLOCK
+- Server-side path-resolution fixes: a double-slash bug when joining network paths, and case-sensitive remote filenames now resolved correctly against typed-uppercase (FCB) input
+Reliability fixes for `CALL MSXPI("2,...")` (save-response-to-buffer mode) and the IRC client.
+- Fixed several real bugs that made mode "2" responses unreliable or crash-prone: a failed transfer could leave stale buffer data that got misread as a valid response, and two register-preservation bugs in the low-level receive routine could corrupt the reported response code or size - most visible on short messages or slower/larger transfers
+- IRC.BAS: fixed a buffer memory-safety issue, a blank line that appeared on every periodic NAMES refresh, and CTCP probes (VERSION, PING, etc.) from other clients/bots are now filtered server-side instead of showing up as chat noise
+- msxpi-server.py: fixed JOIN notifications picking up extra IRCv3 fields into the channel name, and a multi-block transfer desync when a command handler sends an explicit status code
+
 MSXPi v1.4 Release Notes
 ========================
 Mostly a Software major overhauling.

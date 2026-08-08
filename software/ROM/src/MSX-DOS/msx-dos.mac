@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.4 (2017,2025);
+; MSXPi Driver v1.5 (2017,2026);
 ;
 ; DOS 1.x kernel
 ;
@@ -125,7 +125,7 @@ XF1E2	equ	0F1E2H			; WBOOT, warm boot DOS system
 XF1E8	equ	0F1E8H			; start handler in DOS memory
 XF1F4	equ	0F1F4H			; validate FCB filename
 YF1F7	equ	0F1F7H			; reserved devicenames
-YF20B	equ	0F20BH			; ´direntry´ for devices
+YF20B	equ	0F20BH			; ï¿½direntryï¿½ for devices
 YF22B	equ	0F22BH			; days in month table
 YF237	equ	0F237H			; BDOS console output columnpos
 YF238	equ	0F238H			; console columnpos at start of lineinput
@@ -1097,7 +1097,7 @@ A43C3:	ld	(de),a
 	inc	iy
 	djnz	A43BB
 	ld	a,080H
-	ld	(de),a			; ´orginal DR byte´ b7 set (ignore fileattribute)
+	ld	(de),a			; ï¿½orginal DR byteï¿½ b7 set (ignore fileattribute)
 	call	A425A			; check if devicename
 	jr	nc,A4408		; yep, end rename with error
 	ld	a,(YF2B8)
@@ -4205,8 +4205,8 @@ A5681:	push	hl
 A5694:	pop	hl
 	ret
 ;
-;	defb	"€‚ƒ„…†‡ˆ‰Š‹Œ‘’“”•–—˜™š›œŸ ¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹"
-T5696:	defb	"€šEAA€EEEIII’’O™OUUY™š›œŸAIOU¥¥¦§¨©ª«¬­®¯°°²²´´¶¶¸¸"
+;	defb	"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
+T5696:	defb	"ï¿½ï¿½EAï¿½Aï¿½ï¿½EEEIIIï¿½ï¿½ï¿½ï¿½ï¿½Oï¿½OUUYï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½AIOUï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½"
 
 ;	  Subroutine unsupported CP/M BDOS calls
 ;	     Inputs  
@@ -4473,7 +4473,7 @@ A58A8:	call	A622D			; hook H.LOPD when H.CLEA is hooked (for register system bot
 	ld	a,00DH
 	ld	(KBUF+316),a		; ???
 	ld	a,7
-	ld	(YF345),a		; max number of FCB´s is 7
+	ld	(YF345),a		; max number of FCBï¿½s is 7
 	ld	hl,1461
 	ld	(YF33B),hl		; default date when no clockchip is 1-1-1984
 	ld	b,008H
@@ -4854,7 +4854,7 @@ A5BA0:	ld	sp,0C200H
 	call	A5F86
 	defb	13,10
     defb    "Disk BASIC version 1.0",13,10
-    defb    "MSXPi Driver v1.4",13,10,0
+    defb    "MSXPi Driver v1.5",13,10,0
 	ld	hl,M.4173
 	push	hl			; after the RUN command completes
 	ld	hl,BUF+9
@@ -4876,7 +4876,7 @@ A5C16:	ld	hl,T72AE
 	ld	(HIMEM),hl
 	ld	a,(YF345)
 	ld	c,a
-	ld	b,000H			; number of FCB´s
+	ld	b,000H			; number of FCBï¿½s
 	ld	de,37
 	call	A4916			; * 37
 	call	A5EB8			; allocate basic memory
@@ -5529,7 +5529,7 @@ A607B:	pop	hl
 
 ; Unused code
 ;
-; looks like the previous jump is a patch, may be the ´ei´ instruction at the end of the patch was forgotten ??
+; looks like the previous jump is a patch, may be the ï¿½eiï¿½ instruction at the end of the patch was forgotten ??
 ; patch code does not fit here, 1 byte too less
 
 	nop

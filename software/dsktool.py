@@ -198,6 +198,46 @@ def find_free_dir_entry(f) -> int:
     raise RuntimeError("No free directory entries")
 
 
+def find_existing_dir_entry(f, name: str, ext: str):
+    """Returns (position, starting_cluster) for a live (non-deleted) entry
+    matching name/ext (both already 8.3-padded/uppercased), or None if no
+    such entry exists. Without this, injecting a file under a name already
+    present on the disk just consumed a fresh directory slot and fresh
+    clusters every time instead of replacing the old ones - leaving the old
+    entry (and old, now-orphaned data) still on disk and still first in
+    directory order, so DOS would keep running/reading the stale version
+    forever no matter how many times a new one was injected afterward."""
+    f.seek(root_dir_offset())
+    for i in range(ROOT_DIR_ENTRIES):
+        pos = f.tell()
+        entry = f.read(32)
+        if len(entry) < 32 or entry[0] == 0x00:
+            break
+        if entry[0] == 0xE5:
+            continue
+        entry_name = entry[0:8].decode("ascii", errors="ignore")
+        entry_ext = entry[8:11].decode("ascii", errors="ignore")
+        if entry_name == name and entry_ext == ext:
+            start_cluster = struct.unpack_from("<H", entry, 26)[0]
+            return pos, start_cluster
+    return None
+
+
+def free_cluster_chain(fat: bytearray, start_cluster: int):
+    """Walks a FAT12 chain starting at start_cluster, marking every
+    cluster in it free (0x000). start_cluster == 0 means an empty file
+    (no clusters were ever allocated) - nothing to do."""
+    cluster = start_cluster
+    seen = set()
+    while cluster >= FIRST_DATA_CLUSTER and cluster not in seen:
+        seen.add(cluster)
+        next_cluster = fat12_get_entry(fat, cluster)
+        fat12_set_entry(fat, cluster, 0x000)
+        if next_cluster >= 0xFF8:  # end of chain
+            break
+        cluster = next_cluster
+
+
 # ---------- BPB parsing ----------
 
 def parse_bpb(boot: bytes):
@@ -302,6 +342,18 @@ def inject_file(srcfile: str, dskfile: str, targetname: str):
         apply_bpb_to_globals(bpb)
 
         fat = read_fat(f)
+
+        # If a file with this name already exists, free its old cluster
+        # chain and reuse its directory slot instead of leaving it in
+        # place and appending a brand new entry - otherwise the old,
+        # stale copy stays on disk (and stays first in directory order,
+        # so DOS keeps finding and running/reading it instead of the new
+        # one) no matter how many times this is run.
+        existing = find_existing_dir_entry(f, name, ext)
+        if existing is not None:
+            existing_pos, existing_start_cluster = existing
+            free_cluster_chain(fat, existing_start_cluster)
+
         clusters = allocate_clusters(fat, num_clusters)
 
         # write data into clusters
@@ -320,8 +372,9 @@ def inject_file(srcfile: str, dskfile: str, targetname: str):
         # update FATs
         write_fat(f, fat)
 
-        # create directory entry with correct offsets
-        dir_pos = find_free_dir_entry(f)
+        # reuse the existing entry's own slot if this is an overwrite,
+        # otherwise claim a fresh one
+        dir_pos = existing_pos if existing is not None else find_free_dir_entry(f)
         f.seek(dir_pos)
         f.write(name.encode("ascii"))   # 0-7
         f.write(ext.encode("ascii"))    # 8-10

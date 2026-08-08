@@ -2,9 +2,9 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.4                                                             |
+;| Version : 1.5                                                             |
 ;|                                                                           |
-;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)       |
+;| Copyright (c) 2015-2026 Ronivon Costa (ronivon@outlook.com)               |
 ;|                                                                           |
 ;| All rights reserved                                                       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.4 (2025)
+; MSXPi Driver v1.5 (2026)
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -588,7 +588,7 @@ _MSXPI:
         EX      DE,HL           ; Switch to DE as required by next routines
         CALL    PARSE_CALL_PARAMETERS
                                 ; Validate and get all paremeters in the call command
-        JR      C,CALL_SYNTAX_ERROR ; Return to BASIC with ERROR  
+        JP      C,CALL_SYNTAX_ERROR ; Return to BASIC with ERROR
 ; Registers at this point:
 ; A  = contain the output required for the command
 ; DE = contain string address of command to send to RPi
@@ -604,7 +604,7 @@ _MSXPI:
 ; RC = RC_CONNERR : Error in the connection with RPi
 ;
 ; Send commands (in CALL parameters) to RPi
-        
+
         PUSH    HL
         PUSH    AF
         PUSH    DE
@@ -614,7 +614,15 @@ _MSXPI:
         POP     AF
         POP     HL
         LD      A,RC_CONNERR
-        LD      (HL),A              ; Store error code in the Header area for user
+        LD      (HL),A              ; [0] = error code, for callers checking
+        INC     HL                  ; PEEK(B) without also checking carry
+        XOR     A
+        LD      (HL),A              ; [1] = size low = 0, so a caller that
+        INC     HL                  ; skips the carry check too (like a
+        LD      (HL),A              ; bare PEEK(B+1)+256*PEEK(B+2)) gets a
+                                    ; safe empty-size loop instead of
+                                    ; whatever command text ExtractCommand
+                                    ; left sitting in the buffer
         POP     HL                  ; BASIC Pointer
         AND     A
         RET
@@ -667,24 +675,23 @@ RECV_LOOP:
         PUSH    AF
         PUSH    HL              ; keep total size on stack
         CALL    RECVDATA_ONEBLOCK
-        JR      C,RECV_ERROR    ; carry set = error, stop
-
+        JR      NC,RECV_OK
+        POP     HL              ; discard total size - match RECV_ERROR's
+                                ; expected stack depth (BlockIdx,BufAddr,BasicPtr)
+        JR      RECV_ERROR      ; carry set = error, stop
+RECV_OK:
         ; HL not used here, DE updated by RECVDATA_ONEBLOCK
         ; BC = size of block just read
         POP     HL              ; HL = current total size
         ADD     HL,BC           ; add block size
-        ; check return code in A
+        ; check return code in A - matches PRINTPISTDOUT's own check
+        ; (cp RC_READY / ret nz): RC_READY means another block follows,
+        ; anything else means this was the last block. RECVDATA_ONEBLOCK
+        ; already caught real transport failures via carry, so the RC
+        ; value itself doesn't need to match a specific terminal code.
         CP      RC_READY
         JR      Z,RECV_NEXT     ; another block, continue
-
-        CP      RC_SUCCESS
-        JR      Z,RECV_DONE     ; transfer complete
-
-        CP      RC_SUCCNOSTD
-        JR      Z,RECV_DONE     ; transfer complete
-
-        ; any other code = error
-        JR      RECV_ERROR
+        JR      RECV_DONE       ; transfer complete
 
 RECV_NEXT:
         POP     AF
@@ -716,12 +723,21 @@ RECV_DONE:
 ; Error exit
 ; ------------------------------------------------------------
 RECV_ERROR:
-        POP     AF
-        POP     HL              ; discard total size
+        LD      C,A             ; preserve error/status code - about to be
+                                ; clobbered by the POP AF below
+        POP     AF              ; discard block index
         POP     DE              ; restore buffer base
+        LD      A,C
+        LD      (DE),A          ; [0] = error code, so a caller reading the
+        INC     DE              ; header after a failed transfer sees a
+        XOR     A               ; real error instead of whatever was left in
+        LD      (DE),A          ; the buffer (this call's own command text,
+        INC     DE              ; copied in by ExtractCommand, or a previous
+        LD      (DE),A          ; call's real data at the same address)
+        POP     HL              ; restore BASIC pointer, matching RECV_DONE
         SCF                     ; set carry = error
         RET
- 
+
  CALL_SYNTAX_ERROR:
         CALL    _MSXPIHELP
         POP     HL
@@ -833,8 +849,8 @@ EC_ExitError:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.4"
-BuildId: DB ".20260228.011"
+        DB      13,10,"MSXPi BIOS v1.5"
+BuildId: DB ".20260808.020"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 MSXPIHelpMsg:

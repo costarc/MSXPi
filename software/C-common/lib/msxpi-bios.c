@@ -317,7 +317,6 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
     *size = this_blocksize;  // size of this block
 
     // --- Payload ---
-    //Print("[MSX] Starting the payload loop\n");
     checksum = 0;
     for (uint16_t i = 0; i < this_blocksize; i++) {
         rc = PIREADBYTE(&byte);
@@ -325,7 +324,6 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
         dest[i] = byte;
         checksum += byte;
     }
-    //Print("[MSX] Completed payload loop\n");
 
     // Local checksum (folded 16-bit sum → 8-bit)
     uint8_t right = (uint8_t)(checksum & 0xFF);
@@ -337,7 +335,8 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
     if (rc != RC_SUCCESS) return RC_CONNERR;
 
     // --- Send local checksum back ---
-    if (PIWRITEBYTE(localChecksum) != RC_SUCCESS) return RC_CONNERR;
+    rc = PIWRITEBYTE(localChecksum);
+    if (rc != RC_SUCCESS) return RC_CONNERR;
 
     if (remoteChecksum != localChecksum) {
         // Single attempt failed; Python may decide to resend the block
@@ -348,7 +347,6 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
     // Block accepted
     status_for_next = RC_SUCCESS;
     expected_block_index++;
-    //Print("[MSX] Accepted block\n");
 
     // -------------------------
     // 3. Status handshake after GOOD block
@@ -618,7 +616,14 @@ uint8_t SendCommandToMSXPi(const char* cmd, bool appendTail) {
     // ---------------------------------------------------------
     // 2. Build final buffer
     // ---------------------------------------------------------
-    static char buffer[MAXBUFSIZE];
+    // Pinned to a fixed address rather than left to normal _DATA packing:
+    // callers doing mapper-aware ROM loading (msxarch.c) Put_PN a
+    // dedicated segment into page 2 (0x8000-0xBFFF) for the duration of
+    // that work, specifically to relocate this 8K buffer (the single
+    // largest consumer of _DATA) out of the way, since the linker's
+    // normal packing pushed it - and everything after it - past 0x4000,
+    // into memory that mapper-loading's own Put_PN(1,...) calls corrupt.
+    static __at(0x8000) char buffer[MAXBUFSIZE];
     uint16_t total = 0;
 
     // Copy primary

@@ -25,6 +25,7 @@ void P_Help(void)
         "reboot - Reboot MSXPi",
         "shut   - Shutdown MSXPi",
         "restart- Restart MSXPi server",
+        "reload A: or reload B: - Reload a drive's disk image from disk",
 
         "chatgpt - Interact with ChatGPT",
         NULL

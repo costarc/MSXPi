@@ -1,7 +1,6 @@
 machine Philips_NMS_8245
-ext MSXDOS2
 ext MSXPi
+ext Ram2Mb
 bind F12 cycle videosource
-plug joyporta mouse 
-plug printerport simpl 
-set speed 300
+plug printerport simpl
+set speed 100
