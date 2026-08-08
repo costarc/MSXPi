@@ -66,7 +66,7 @@ except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
 version = "1.5"
-BuildId = "20260807.018"
+BuildId = "20260808.020"
 
 CMDSIZE = 9
 MSGSIZE = 128
