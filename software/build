@@ -4,7 +4,7 @@ export buildClientCommands="yes"
 export buildBIOS="yes"
 export buildOpenMSXConfig="yes"
 export buildMSXdiskImage="yes"
-export updateVersions="yes"
+export updateVersions="NO"
 
 XMLPATH=openMSX/share/extensions
 OPENMSXSRC=../../openMSX/openMSX
@@ -34,7 +34,7 @@ UpdateBuildId() {
         if [ "$rc" = 0 ]; then
             newdefine="BuildId = \"${today}.${newbuild}\""
             # Escape special characters in $curdefine for literal match
-            esc_curdefine=$(printf '%s\n' "$curdefine" | sed 's/[.[\*^$/]/\\&/g')
+            esc_curdefine=$(printf '%s\n' "$curdefine" | sed 's/[.[\*^$/]/\\\\&/g')
             sed "s|$esc_curdefine|$newdefine|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
             echo "New BuildId for $1: $today.$newbuild"
         fi
@@ -58,7 +58,7 @@ UpdateBuildIdASM() {
     
         if [ "$rc" = 0 ]; then
             newdefine="BuildId: DB \".${today}.${newbuild}\""
-            esc_curdefine=$(printf '%s\n' "$curdefine" | sed 's/[.[\*^$/]/\\&/g')
+            esc_curdefine=$(printf '%s\n' "$curdefine" | sed 's/[.[\*^$/]/\\\\&/g')
             sed "s|$esc_curdefine|$newdefine|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
             echo "New BuildId for $1: .${today}.${newbuild}"
         fi

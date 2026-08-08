@@ -4,6 +4,7 @@ pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
 pcopy m:STOCKS.BAS
+pcopy m:TESTDIR.BAS
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:msxarch.com

@@ -1836,6 +1836,8 @@ def PerformHandshake():
         if byte == READY:
             SPI_ByteTransfer(READY_ACK)
             break
+        else:
+            print(f"PerformHandshake(): discarded stray byte {hex(byte)} while waiting for READY")
 
     # Receive msx_blocksize
     #print("PerformHandshake(): Receiving msx_blocksize from MSX")
@@ -1847,6 +1849,7 @@ def PerformHandshake():
         return RC_CONNERR, 0
 
     msx_blocksize = low | (high << 8)
+    print(f"PerformHandshake(): msx_blocksize={msx_blocksize}")
 
     return RC_SUCCESS, msx_blocksize
 
@@ -1881,11 +1884,21 @@ def sendmultiblock(payload: bytes, header_rc = None):
         end = min(offset + msx_blocksize, total_len)
         block = payload[offset:end]
 
-        # header_rc: RC_READY for intermediate blocks, RC_SUCCESS for last block
-        if not header_rc == None:
-            block_rc = header_rc
-        elif end < total_len:
+        # header_rc: RC_READY for intermediate blocks, RC_SUCCESS (or the
+        # caller's override) for the last block. An explicit override must
+        # NEVER apply to an intermediate block - the client's receive loop
+        # (RECVDATA_ONEBLOCK/RECV_LOOP) uses "not RC_READY" as its signal
+        # that a block is the last one, so tagging an early block with e.g.
+        # RC_SUCCNOSTD would make the client stop receiving mid-transfer
+        # while this loop keeps sending - a protocol desync. This is only
+        # reachable when a payload spans more than one block; every current
+        # caller of an explicit header_rc sends a single-block payload, so
+        # for them "last block" and "first block" are the same block and
+        # this is behaviorally identical to before.
+        if end < total_len:
             block_rc = RC_READY
+        elif not header_rc == None:
+            block_rc = header_rc
         else:
             block_rc = RC_SUCCESS
 
@@ -2751,7 +2764,7 @@ def irc(parms):
                 #print(f"[irc] recv raw={data!r}")
             except BlockingIOError:
                 #print("[irc] recv BlockingIOError (no data yet)")
-                sendmsg("Pi:Ok:BlockingIOError", RC_SUCCNOSTD)
+                sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
             except Exception as e:
                 print(f"[irc] recv exception: {e}")
@@ -2804,23 +2817,30 @@ def irc(parms):
                             return RC_SUCCESS
                     except Exception as e:
                         print(f"[irc] NAMES parse exception: {e}")
-                        sendmsg("Pi:Ok:Users", RC_SUCCESS)
-                        return RC_SUCCESS
-                
-                # End of NAMES list (366)
+                        sendmsg("Pi:Ok:Users", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
+
+                # End of NAMES list (366) - housekeeping marker only, no
+                # content for the user to see, so RC_SUCCNOSTD like the
+                # other "nothing interesting" acks (e.g. "NAMES sent")
                 if " 366 " in line:
                     print("[irc] End of NAMES list")
-                    sendmsg("Pi:Ok:EndUsers", RC_SUCCESS)
-                    return RC_SUCCESS
+                    sendmsg("Pi:Ok:EndUsers", RC_SUCCNOSTD)
+                    return RC_SUCCNOSTD
 
                 # JOIN reply from server
                 if " JOIN " in line:
                     #print("[irc] JOIN event detected")
                     try:
                         # Example: :msxpi!~msxpi@host JOIN #openmsx
+                        # With extended-join capability, the server can
+                        # append more fields after the channel (account
+                        # name, then :realname) - take only the first
+                        # whitespace-delimited token so those don't leak
+                        # into the channel name shown to the user.
                         prefix, rest = line[1:].split(" ", 1)
                         nick = prefix.split("!", 1)[0]
-                        chan = rest.split("JOIN", 1)[1].strip()
+                        chan = rest.split("JOIN", 1)[1].strip().split(" ", 1)[0]
                         #print(f"[irc] JOIN parsed: nick={nick!r}, chan={chan!r}")
                     except Exception as e:
                         print(f"[irc] JOIN parse exception: {e}")
@@ -2871,6 +2891,21 @@ def irc(parms):
                     target = parts[1]
                     if msxnick in target:
                         target = "private"
+
+                    # CTCP requests (VERSION, PING, TIME, CLIENTINFO, etc.)
+                    # are wrapped in \x01...\x01 - these are automated
+                    # client-fingerprinting probes from bots/clients, not
+                    # real chat content, so don't surface them. CTCP ACTION
+                    # (/me) is real content though - unwrap and show that.
+                    if text.startswith("\x01"):
+                        ctcp = text.strip("\x01")
+                        if ctcp.upper().startswith("ACTION "):
+                            text = "* " + nick + " " + ctcp[7:]
+                            sendmsg("Pi:Ok:<" + target + "> " + text, RC_SUCCESS)
+                            return RC_SUCCESS
+                        print(f"[irc] CTCP request from {nick} ignored: {ctcp!r}")
+                        sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
+                        return RC_SUCCNOSTD
 
                     formatted = f"<{target}> {nick} -> {text}"
                     #print(f"[irc] formatted message={formatted!r}")

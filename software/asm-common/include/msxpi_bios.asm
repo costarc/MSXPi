@@ -405,7 +405,22 @@ r2_retry:
 
     call    PIREADBYTE      ; header_rc
     jr      c, r2_conn_err
-    ld      h, a            ; H = header_rc
+    push    ix              ; GETWRK clobbers IX (retry_count)
+    push    de              ; and DE isn't verified safe across its
+                            ; internal kernel calls either
+    push    af
+    call    GETWRK          ; HL = IX = driver workarea (offset 5+ is free -
+                            ; DSKIO_SECTINFO only ever uses offsets 0-4, and
+                            ; never runs concurrently with a CALL MSXPI)
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl              ; HL = workarea+5
+    pop     af
+    ld      (hl),a          ; stash header_rc in safe RAM
+    pop     de              ; restore dest pointer
+    pop     ix              ; restore retry_count
 
     call    PIREADBYTE      ; length low
     jr      c, r2_conn_err
@@ -414,20 +429,44 @@ r2_retry:
     call    PIREADBYTE      ; length high
     jr      c, r2_conn_err
     ld      b, a            ; BC = length
+    push    ix              ; GETWRK clobbers IX (retry_count)
+    push    de              ; and DE isn't verified safe across its
+                            ; internal kernel calls either
+    push    bc
+    call    GETWRK          ; HL = IX = driver workarea (offset 6-7 is
+                            ; free - see the header_rc stash above for
+                            ; offset 5, and DSKIO_SECTINFO's offsets 0-4)
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl              ; HL = workarea+6
+    pop     bc
+    ld      (hl),c
+    inc     hl
+    ld      (hl),b          ; stash length (lo,hi) in safe RAM - length
+                            ; has the exact same vulnerability header_rc
+                            ; had: it sits untouched in the inactive
+                            ; register bank across the same long payload
+                            ; wait, and the success return trusts it
+                            ; survived via exx alone
+    pop     de              ; restore dest pointer
+    pop     ix              ; restore retry_count
 
     call    PIREADBYTE      ; block_index
     jr      c, r2_conn_err
-    ; A = received_index. B,C(length)/D,E(dest)/H(header_rc) are all live
-    ; and can't be spared - bridge the comparison against IY through the
-    ; (still-unused-at-this-point) shadow set and the stack: exx doesn't
-    ; touch AF, so a plain push/pop carries A safely across it.
+    ; A = received_index. B,C(length)/D,E(dest) are both live and can't be
+    ; spared - bridge the comparison against IY through the (still-unused-
+    ; at-this-point) shadow set and the stack: exx doesn't touch AF, so a
+    ; plain push/pop carries A safely across it.
     push    af
     exx
     push    iy
     pop     hl              ; shadow L' = expected_index
     pop     af              ; A = received_index again
     cp      l                ; compare against shadow L' = expected_index
-    exx                      ; back to primary - bc/de/h untouched throughout
+    exx                      ; back to primary - bc/de untouched throughout
     jr      nz, r2_unexpecteddata   ; index sent by server must match msx index
 ; ------------------------------------------------------------
 ; 3. PAYLOAD + CHECKSUM
@@ -435,11 +474,11 @@ r2_retry:
     ; now:
     ; BC = length of this block
     ; DE = dest
-    ; H = header_rc
     ; L = received_index
     push    bc
     push    de
-    exx 				  ; save length (BC) and RC (h) for later
+    exx 				  ; save length (BC) for later - the payload loop
+                          ; needs BC/DE as its own working registers
     pop     de
     pop     bc            ; restore length
     ld      hl, 0         ; 16-bit checksum accumulator
@@ -486,7 +525,7 @@ r2_conn_err:
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 2 (inside the shadow-register section, exx active):
 ; must exx back to primary before returning, or the caller inherits our
-; shadow bc'/de'/hl' instead of its own registers, and loses H (header_rc).
+; shadow bc'/de'/hl' instead of its own registers.
 ; ------------------------------------------------------------
 
 r2_conn_err_x:
@@ -528,10 +567,10 @@ r2_payload_done:
 
     exx                     ; back to primary - this attempt's shadow
                              ; de'/bc'/hl' are stale for a retry anyway.
-                             ; H(header_rc)/B,C(length)/D,E(dest) are stale
-                             ; here too, but get freshly re-read at
-                             ; r2_retry before anything reads them again -
-                             ; so HL is free to use as a bridge for IX.
+                             ; B,C(length)/D,E(dest) are stale here too, but
+                             ; get freshly re-read at r2_retry before
+                             ; anything reads them again - so HL is free to
+                             ; use as a bridge for IX.
     push    ix
     pop     hl
     inc     l
@@ -541,7 +580,7 @@ r2_payload_done:
     ld      a,l
     cp      GLOBALRETRIES
     jr      nc, r2_chksum_err
-    jr      r2_retry
+    jp      r2_retry
 
 r2_chksum_err:
     ; already back in primary set (exx'd above)
@@ -564,9 +603,8 @@ r2_chk_ok:
     call    PIWRITEBYTE
     jr      c, r2_conn_err_x
 
-    ; Use header_rc we got from Python (in H) as status_for_next,
-    ; BUT your Python expects status_from_msx == RC_SUCCESS.
-    ; For now, always report RC_SUCCESS to keep it simple:
+    ; Python expects status_from_msx == RC_SUCCESS, so always report that
+    ; regardless of the header_rc it sent us:
 
     ld      a, RC_SUCCESS
     call    PIWRITEBYTE
@@ -581,11 +619,25 @@ r2_chk_ok:
     ; Success: DE (shadow) = advanced dest, BC (shadow) = 0
     push    de
     push    bc
-    exx                     ; back to primary: get back original BC
-                             ; (length) and RC (H)
+    exx                     ; back to primary bank - matches what the
+                            ; caller expects active on return; its own
+                            ; BC/DE aren't trusted for anything below,
+                            ; both get overwritten from safe RAM instead
     pop     hl               ; discard (=0)
     pop     de               ; DE = advanced dest, for the caller
-    ld      a, h            ; A = header_rc
+    push    de              ; preserve dest pointer across GETWRK
+    call    GETWRK          ; HL = IX = driver workarea
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl
+    inc     hl              ; HL = workarea+5
+    ld      a,(hl)          ; A = header_rc, retrieved from safe RAM
+    inc     hl              ; HL = workarea+6
+    ld      c,(hl)
+    inc     hl              ; HL = workarea+7
+    ld      b,(hl)          ; BC = length, retrieved from safe RAM
+    pop     de              ; restore dest pointer
     or      a               ; clear carry
     ret
 

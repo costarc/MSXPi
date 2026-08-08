@@ -176,6 +176,11 @@ Network MegaROM loading, replacing the old disk-only ExecRom loader.
 - Server-side path-resolution fixes: a double-slash bug when joining network paths, and case-sensitive remote filenames now resolved correctly against typed-uppercase (FCB) input
 - Retired `Client/src/ExecRom` (EXECROM.MAC and its old disk-only MegaROM loading) entirely - superseded by the above
 
+Reliability fixes for `CALL MSXPI("2,...")` (save-response-to-buffer mode) and the IRC client.
+- Fixed several real bugs that made mode "2" responses unreliable or crash-prone: a failed transfer could leave stale buffer data that got misread as a valid response, and two register-preservation bugs in the low-level receive routine could corrupt the reported response code or size - most visible on short messages or slower/larger transfers
+- IRC.BAS: fixed a buffer memory-safety issue, a blank line that appeared on every periodic NAMES refresh, and CTCP probes (VERSION, PING, etc.) from other clients/bots are now filtered server-side instead of showing up as chat noise
+- msxpi-server.py: fixed JOIN notifications picking up extra IRCv3 fields into the channel name, and a multi-block transfer desync when a command handler sends an explicit status code
+
 MSXPi v1.4 Release Notes
 ========================
 Mostly a Software major overhauling.
