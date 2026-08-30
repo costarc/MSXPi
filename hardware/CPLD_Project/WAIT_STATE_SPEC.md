@@ -1,7 +1,7 @@
 # MSXPi CPLD — Hardware Flow Control via /WAIT
 
 **Specification for a separate work stream.**
-Target firmware: MSXPi CPLD v1.4 (`MSXPIVer = "1110"`)
+Target firmware: MSXPi CPLD v1.6 (`MSXPIVer = "1110"`)
 Baseline: v1.3 (`MSXPIVer = "1101"`), `hardware/CPLD_Project/MSXPi.vhd`
 Date: 2026-08-30
 

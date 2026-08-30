@@ -28,10 +28,15 @@
 -- Version 1.2   - Firmware version "1011" for PCB V1.1, 1.2"
 -- Version 1.2.1b- Firmware version "1100", logic optimisation, openMSX support
 -- Version 1.3   - Firmware version "1101", more logic optimisation & PLCC AT28C256
+-- Version 1.4   - not released (numbering realigned, see below)
+-- Version 1.5   - not released (numbering realigned, see below)
 -- Version 1.6   - Firmware version "1110", hardware flow control via /WAIT
 --                 (WAIT_STATE_SPEC.md), and the SPI engine rebuilt around a
---                 sentinel shift register.  MSXPIVer stays "1110": it is a
---                 4-bit hardware-generation code, not a release number, and
+--                 sentinel shift register.  Numbered 1.6 rather than 1.4 so the
+--                 CPLD firmware version tracks the BIOS/release version instead
+--                 of running on its own sequence - 1.4 and 1.5 are deliberately
+--                 skipped and were never released.  MSXPIVer stays "1110": it is
+--                 a 4-bit hardware-generation code, not a release number, and
 --                 only one value is left in the field.  See
 --                 WAIT_STATE_IMPLEMENTATION.md section 4.
 -- ==============================================================================

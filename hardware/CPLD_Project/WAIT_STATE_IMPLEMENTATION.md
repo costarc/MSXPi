@@ -132,6 +132,11 @@ setting change costs nothing if you ever rebuild v1.3 from this .qsf.
 | `OUT ($56),$FF` | existing reset — **also forces the mode OFF** (FR-5) |
 | `IN ($57)` | `$0E` when off, `$8E` when on |
 
+**Version numbering.** The CPLD firmware jumps 1.3 -> 1.6, skipping 1.4 and 1.5,
+so that it tracks the BIOS/release version rather than running on its own
+sequence. Neither 1.4 nor 1.5 was released. `MSXPIVer` is unaffected: it stays
+`"1110"` because it identifies the hardware generation, not the release.
+
 `$57` bit layout:
 
 | Bits | Meaning |
