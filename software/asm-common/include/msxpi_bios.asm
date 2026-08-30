@@ -424,11 +424,11 @@ r2_retry:
 
     call    PIREADBYTE      ; header_rc
     jr      c, r2_conn_err
-    push    ix              ; GETWRK clobbers IX (retry_count)
+    push    ix              ; MSXPI_GETSTASH clobbers IX (retry_count)
     push    de              ; and DE isn't verified safe across its
                             ; internal kernel calls either
     push    af
-    call    GETWRK          ; HL = IX = driver workarea (offset 5+ is free -
+    call    MSXPI_GETSTASH          ; HL = IX = driver workarea (offset 5+ is free -
                             ; DSKIO_SECTINFO only ever uses offsets 0-4, and
                             ; never runs concurrently with a CALL MSXPI)
     inc     hl
@@ -448,11 +448,11 @@ r2_retry:
     call    PIREADBYTE      ; length high
     jr      c, r2_conn_err
     ld      b, a            ; BC = length
-    push    ix              ; GETWRK clobbers IX (retry_count)
+    push    ix              ; MSXPI_GETSTASH clobbers IX (retry_count)
     push    de              ; and DE isn't verified safe across its
                             ; internal kernel calls either
     push    bc
-    call    GETWRK          ; HL = IX = driver workarea (offset 6-7 is
+    call    MSXPI_GETSTASH          ; HL = IX = driver workarea (offset 6-7 is
                             ; free - see the header_rc stash above for
                             ; offset 5, and DSKIO_SECTINFO's offsets 0-4)
     inc     hl
@@ -644,8 +644,8 @@ r2_chk_ok:
                             ; both get overwritten from safe RAM instead
     pop     hl               ; discard (=0)
     pop     de               ; DE = advanced dest, for the caller
-    push    de              ; preserve dest pointer across GETWRK
-    call    GETWRK          ; HL = IX = driver workarea
+    push    de              ; preserve dest pointer across MSXPI_GETSTASH
+    call    MSXPI_GETSTASH          ; HL = IX = driver workarea
     inc     hl
     inc     hl
     inc     hl
@@ -925,3 +925,53 @@ CLEARBUF:
 		DS 		128
 heap_top: equ     $
 		
+
+;-----------------------
+; MSXPI_GETSTASH       |
+;-----------------------
+; RECVDATA_ONEBLOCK needs 3 bytes of RAM (offsets 5,6,7 of the block this
+; returns) to stash header_rc and length across the payload loop - they
+; can't stay in the inactive register bank, and this file is linked into
+; several very different contexts, so there is no one place that is RAM
+; in all of them. The includer must therefore say which it is, BEFORE the
+; include line:
+;
+;   MSXPI_DRIVER    equ 1   ; linked into the MSX-DOS/Nextor disk driver -
+;                           ; use the driver workarea via the kernel's
+;                           ; GETWRK. Offsets 5+ are free there:
+;                           ; DSKIO_SECTINFO only ever uses 0-4, and never
+;                           ; runs concurrently with a CALL MSXPI.
+;   MSXPI_RAM_STASH equ 1   ; linked into a plain .COM under MSX-DOS (or
+;                           ; anything else running from RAM) - GETWRK
+;                           ; doesn't exist there, so use the local buffer
+;                           ; below. NOT valid for a ROM link: the writes
+;                           ; would silently do nothing (see SENDDATA).
+;
+; Defining neither is a hard assembly error rather than a silent default,
+; because the wrong choice fails silently at runtime, not at build time.
+;
+; Contract, identical either way: returns HL = IX = base of a block whose
+; offsets 5..7 are free for this routine. Clobbers AF/HL/IX only - callers
+; push whatever else they need around it.
+ ifdef MSXPI_DRIVER
+MSXPI_GETSTASH equ GETWRK       ; a plain alias, not a trampoline - the
+                                ; driver build stays byte-identical to
+                                ; what it was before this indirection
+ else
+  ifdef MSXPI_RAM_STASH
+MSXPI_GETSTASH:
+            ld      hl,MSXPI_STASH_BUF
+            push    hl
+            pop     ix
+            ret
+MSXPI_STASH_BUF:
+            ; emitted as real bytes, not a ds reservation: a trailing ds
+            ; is dropped from the .hex/.bin, which would leave the buffer
+            ; sitting just past the end of the loaded .COM image, in RAM
+            ; the host program is free to use for its own buffers.
+            db      0,0,0,0,0   ; offsets 0-4 unused - kept only so the
+            db      0,0,0       ; offsets match the driver workarea layout
+  else
+            dw      MSXPI_DRIVER_or_MSXPI_RAM_STASH_must_be_defined
+  endif
+ endif

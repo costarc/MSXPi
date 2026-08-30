@@ -66,7 +66,7 @@ except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
 version = "1.6"
-BuildId = "20260830.003"
+BuildId = "20260830.001"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -234,199 +234,12 @@ def init_spi_bitbang():
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
     GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    _init_fast_gpio()
-
-# =============================================================================
-# CHANGE 1 + 2: faster GPIO path for the SPI bit-bang.
-#
-# CHANGE 1  The time.sleep(0.00001) that used to sit inside tick_sclk() is gone.
-#           A 10 us sleep really costs 55-100 us on Linux (scheduler granularity),
-#           and it was called twice per byte - roughly 140 us of the ~250 us that
-#           a byte took.  The CPLD needs a clock pulse of a few NANOseconds; two
-#           consecutive GPIO writes are already microseconds apart, so the sleep
-#           bought nothing at all.
-#
-# CHANGE 2  The per-bit GPIO calls now go straight to the BCM GPIO registers
-#           through /dev/gpiomem instead of through RPi.GPIO.  Each RPi.GPIO call
-#           costs ~3 us of Python + C-extension overhead; a direct register write
-#           costs ~0.2-0.3 us.  There are ~38 of them per byte.
-#
-# Deliberately NOT bypassed: pin direction, pull-ups and cleanup still go through
-# RPi.GPIO.  Only the hot inner loop is fast-pathed.  That matters - the /WAIT
-# safety story depends on GPIO.cleanup() releasing RPI_READY so the board's R8
-# 10K pulldown can drag it low, and on SPI_CS keeping R9's pull-up.  Re-implementing
-# direction/cleanup here would put that at risk for no measurable gain.
-#
-# Falls back to the original RPi.GPIO path automatically if anything is off:
-# /dev/gpiomem missing or unreadable, a pin number >= 32, a Pi 5 (BCM2712/RP1 has
-# a completely different GPIO block), or the self-test failing.  You can also
-# force the old path for an A/B measurement:
-#
-#     MSXPI_SLOW_GPIO=1 ./msxpi-server.py
-#
-# BCM2835/6/7 and BCM2711 GPIO register offsets, as 32-bit word indices:
-_GPSET0 = 0x1C >> 2      # write 1 to set   a pin high
-_GPCLR0 = 0x28 >> 2      # write 1 to clear a pin low
-_GPLEV0 = 0x34 >> 2      # read pin levels
-
-_FAST_GPIO = False
-_GPIO_REG  = None
-
-# ---------------------------------------------------------------------------
-# Profiler.  Enable with MSXPI_PROFILE=1.  Answers one question: how much of the
-# wall-clock time is actually spent inside SPI_ByteTransfer()?
-#
-# 8 KB in 9.6 s is ~1.17 ms/byte, but SPI_ByteTransfer() should be nowhere near
-# that.  If "in transfer" comes back as a small fraction of elapsed, the cost is
-# in the protocol/Python layers above, or in waiting for the MSX - and no amount
-# of GPIO tuning will touch it.
-_PROFILE   = bool(os.environ.get("MSXPI_PROFILE"))
-_prof_n    = 0        # transfers completed
-_prof_busy = 0.0      # seconds inside SPI_ByteTransfer, total
-_prof_spin = 0.0      # of which: spinning on SPI_CS, i.e. waiting for the MSX
-_prof_t0   = None     # wall clock at the first transfer
-_PROF_EVERY = 1024
-
-
-def _prof_report(force=False):
-    global _prof_n, _prof_busy, _prof_spin, _prof_t0
-    if not _prof_n:
-        return
-    if not force and (_prof_n % _PROF_EVERY):
-        return
-    elapsed = time.perf_counter() - _prof_t0
-    per = _prof_busy / _prof_n * 1e6
-    spin = _prof_spin / _prof_n * 1e6
-    print(f"[prof] {_prof_n} bytes | wall {elapsed:.2f}s "
-          f"({elapsed / _prof_n * 1e6:.0f} us/byte) | "
-          f"in SPI_ByteTransfer {_prof_busy:.2f}s ({per:.0f} us/byte, "
-          f"{100.0 * _prof_busy / elapsed:.1f}% of wall) | "
-          f"of which spinning on CS {spin:.0f} us/byte | "
-          f"unaccounted {100.0 * (elapsed - _prof_busy) / elapsed:.1f}%")
-_M_SCLK = _M_MISO = _M_MOSI = _M_CS = _M_RDY = 0
-
-
-def _init_fast_gpio():
-    """Map /dev/gpiomem and verify it really drives this board's pins.
-
-    Called from init_spi_bitbang(), i.e. after RPi.GPIO has set the directions
-    and after the pin numbers have been read from the config file.
-    """
-    global _FAST_GPIO, _GPIO_REG
-    global _M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY
-
-    _FAST_GPIO = False
-
-    if os.environ.get("MSXPI_SLOW_GPIO"):
-        print("init_fast_gpio(): MSXPI_SLOW_GPIO set - using the original RPi.GPIO path")
-        return
-
-    pins = (SPI_SCLK, SPI_MISO, SPI_MOSI, SPI_CS, RPI_READY)
-    if any(p is None or p < 0 or p > 31 for p in pins):
-        print(f"init_fast_gpio(): pin(s) outside GPIO0-31 {pins} - staying on RPi.GPIO")
-        return
-
-    try:
-        import ctypes
-        fd = os.open("/dev/gpiomem", os.O_RDWR | os.O_SYNC)
-        try:
-            mm = mmap.mmap(fd, 4096, mmap.MAP_SHARED,
-                           mmap.PROT_READ | mmap.PROT_WRITE, offset=0)
-        finally:
-            os.close(fd)
-        reg = (ctypes.c_uint32 * 1024).from_buffer(mm)
-
-        m_rdy = 1 << RPI_READY
-
-        # Self-test: drive RPI_READY through the register window and read it back
-        # through RPi.GPIO.  If the offsets or the SoC are wrong this fails here
-        # rather than silently corrupting every transfer.
-        reg[_GPSET0] = m_rdy
-        hi_ok = (GPIO.input(RPI_READY) == 1)
-        reg[_GPCLR0] = m_rdy
-        lo_ok = (GPIO.input(RPI_READY) == 0)
-        if not (hi_ok and lo_ok):
-            raise RuntimeError(f"register self-test failed (high={hi_ok} low={lo_ok})")
-
-        _GPIO_REG = reg
-        _M_SCLK = 1 << SPI_SCLK
-        _M_MISO = 1 << SPI_MISO
-        _M_MOSI = 1 << SPI_MOSI
-        _M_CS   = 1 << SPI_CS
-        _M_RDY  = m_rdy
-        _FAST_GPIO = True
-        print("init_fast_gpio(): direct /dev/gpiomem path active (self-test passed)")
-
-    except Exception as e:
-        print(f"init_fast_gpio(): falling back to RPi.GPIO ({e})")
-        _FAST_GPIO = False
-
-
-def _spi_byte_fast(byte_out=None):
-    """Bit-identical to the RPi.GPIO loop below, straight to the registers.
-
-    Same edge map the CPLD expects and msxpi-server has always produced:
-      leading tick, 8 data bits (MSB first, MOSI sampled while SCLK is high),
-      trailing tick.
-    """
-    reg = _GPIO_REG
-    SET = _GPSET0
-    CLR = _GPCLR0
-    LEV = _GPLEV0
-    m_sclk = _M_SCLK
-    m_miso = _M_MISO
-    m_mosi = _M_MOSI
-
-    byte_in = 0
-
-    global _prof_n, _prof_busy, _prof_spin, _prof_t0
-    if _PROFILE:
-        _t_enter = time.perf_counter()
-        if _prof_t0 is None:
-            _prof_t0 = _t_enter
-
-    reg[SET] = _M_RDY                       # RPI_READY high
-    while reg[LEV] & _M_CS:                 # spin until the CPLD asserts CS
-        pass
-
-    if _PROFILE:
-        _t_spun = time.perf_counter()
-
-    reg[SET] = m_sclk                       # leading tick
-    reg[CLR] = m_sclk
-
-    for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
-        if byte_out is not None and (byte_out & bit):
-            reg[SET] = m_miso
-        else:
-            reg[CLR] = m_miso               # passive receive drives MISO low
-        reg[SET] = m_sclk
-        if reg[LEV] & m_mosi:
-            byte_in |= bit
-        reg[CLR] = m_sclk
-
-    reg[SET] = m_sclk                       # trailing tick
-    reg[CLR] = m_sclk
-    reg[CLR] = _M_RDY                       # RPI_READY low
-
-    if _PROFILE:
-        _t_done = time.perf_counter()
-        _prof_n += 1
-        _prof_busy += _t_done - _t_enter
-        _prof_spin += _t_spun - _t_enter
-        _prof_report()
-
-    return RC_SUCCESS, byte_in
-
 
 def tick_sclk():
 
     global SPI_SCLK
-    if _FAST_GPIO:
-        _GPIO_REG[_GPSET0] = _M_SCLK
-        _GPIO_REG[_GPCLR0] = _M_SCLK
-        return
     GPIO.output(SPI_SCLK, GPIO.HIGH)
+    time.sleep(0.00001)
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
 def SPI_ByteTransfer(byte_out=None):
@@ -436,9 +249,6 @@ def SPI_ByteTransfer(byte_out=None):
     if hostType == "RaspberryPi":
         # GPIO-based SPI emulation
         global SPI_CS, RPI_READY
-
-        if _FAST_GPIO:
-            return _spi_byte_fast(byte_out)
 
         GPIO.output(RPI_READY, GPIO.HIGH)
         while GPIO.input(SPI_CS):

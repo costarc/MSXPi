@@ -241,6 +241,7 @@ REGINDEX:   dw  0
 
 INCLUDE "include.asm"
 INCLUDE "putchar-clients.asm"
+MSXPI_RAM_STASH equ 1   ; msxpi_bios.asm: plain .COM, no GETWRK - stash in local RAM
 INCLUDE "msxpi_bios.asm"
 ;INCLUDE "debug.asm"
 

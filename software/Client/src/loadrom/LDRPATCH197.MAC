@@ -544,6 +544,7 @@ cmdbuf:     ds 32
 
         include "include.asm"
         include "msxpi_putchar.asm"
+MSXPI_RAM_STASH equ 1   ; msxpi_bios.asm: plain .COM, no GETWRK - stash in local RAM
         include "msxpi_bios.asm"
 
         end

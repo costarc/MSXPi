@@ -850,7 +850,7 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.5"
-BuildId: DB ".20260808.020"
+BuildId: DB ".20260830.003"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 MSXPIHelpMsg:
@@ -886,4 +886,5 @@ DOS_FMT:    DB  "dskiofmt",0,0,0,0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
+MSXPI_DRIVER    equ 1   ; msxpi_bios.asm: stash via the driver workarea (GETWRK)
 INCLUDE msxpi_bios.asm

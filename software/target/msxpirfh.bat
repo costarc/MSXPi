@@ -11,7 +11,6 @@ pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxchat.com
 pcopy m:msxpibios.rom
-pcopy m:msxpidos.rom
 pcopy m:msxpiupd.bat
 pcopy m:p.com
 pcopy m:ploadr.com
