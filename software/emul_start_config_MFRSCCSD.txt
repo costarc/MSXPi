@@ -1,0 +1,5 @@
+machine Canon_V-25
+ext MegaFlashROM_SCC+_SD
+bind F12 cycle videosource
+plug printerport simpl
+set speed 100
