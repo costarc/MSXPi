@@ -50,66 +50,85 @@
 ; CHKPIRDY
 ; -----------------------
 ; Returns:
-;   C = 1  → ESC pressed (error)
-;   C = 0  → OK, CONTROL_PORT1 is 0 or 2
+;   C = 1  -> ESC pressed (error)
+;   C = 0  -> OK, CONTROL_PORT1 is 0 or 2 (value left in A)
 ; Uses: A
 ; -----------------------
+; The ESC scan used to sit INSIDE the poll loop, so it re-ran on every pass
+; while waiting for the Pi - 37 of the 93 T-states per pass, and the loop can
+; spin many times per byte. It is now done once per call instead. ESC is still
+; sampled twice per transferred byte (once per CHKPIRDY call), which is far
+; more often than a human can react to, while the spin itself drops from
+; 93 to 41 T-states.
+;
+; A counter would have been the obvious way to amortise it further, but this
+; routine may NOT use one: RECVDATA_ONEBLOCK below documents that CHKPIRDY /
+; PIREADBYTE / PIWRITEBYTE only ever touch AF and never BC/DE/HL, and its
+; shadow-register bookkeeping depends on that. djnz would clobber B. A static
+; counter in RAM is out too - this file is sometimes linked straight into ROM,
+; where a write would silently do nothing (see SENDDATA's comment). Checking
+; once per call needs no state at all.
+; -----------------------
 CHKPIRDY:
-        ; --- Check ESC key (row 7, bit 2) ---
+        ; --- Check ESC key once per call (row 7, bit 2) ---
         ld      a,7
         out     ($AA),a
         in      a,($A9)
         bit     2,a
-        jr      nz,CHKPIRDY_NO_ESC    ; bit=1 → key not pressed
-        scf                             ; ESC pressed → error
-        ret
+        jr      z,CHKPIRDY_ESC        ; bit=0 -> ESC pressed
 
-; --- ESC not pressed, check MSXPi ready state ---
-CHKPIRDY_NO_ESC:
+; --- Tight poll: nothing in here but the port read ---
+CHKPIRDY_POLL:
         in      a,(CONTROL_PORT1)
-        cp      0
-        jr      z,CHKPIRDY_OK         ; 0 → MSXPi physical interface, OK
-
-        cp      2                     ; 2 → openMSX interface, OK
-        jr      nz,CHKPIRDY           ; anything else → recheck ESC + ready
+        or      a                     ; 0 -> MSXPi physical interface, OK
+        jr      z,CHKPIRDY_OK
+        cp      2                     ; 2 -> openMSX interface, OK
+        jr      nz,CHKPIRDY_POLL
 
 CHKPIRDY_OK:
-        and     a                     ; clear carry (success)
+        and     a                     ; clear carry, A preserved for caller
+        ret
+
+CHKPIRDY_ESC:
+        scf                           ; ESC pressed -> error
         ret
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
+; The push/pop pairs that used to bracket the $57 check were only balancing
+; the stack between the two paths into PIREADBYTE_SUCC - the saved AF was
+; overwritten by the IN below on one path and unused on the other. Removing
+; them costs nothing and saves 21 T-states on every byte.
 PIREADBYTE:
             call    CHKPIRDY
-            jr      nc,PIREADBYTE1	   ; PI Responding
-PIREADBYTE_ESC:
-			ld 		a,$FF
-			ret                        ; Return error - ESC Pressed
-PIREADBYTE1:			
-            xor     a                  ; clear A - but not really necessary
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+
+            xor     a
             out     (CONTROL_PORT1),a  ; send read command to the interface
-			
-			call    CHKPIRDY
-			jr		c,PIREADBYTE_ESC   ; ESC Pressed
-		    ; Verify if it is openMSX or real MSXPi hardware
-			push	af				   ; save CHKPIRDY state temporarily
-			in		a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
-			cp		$FE                ; openMSX will return $FE
-			jr		c,PIREADBYTE_SUCC  ; iT IS PHYSICAL msxpI
-			pop		af				   ; restore CHKPIRDY state
-PIREADBYTE2:
-			call    CHKPIRDY
-			jr		c,PIREADBYTE_ESC   ; ESC Pressed
-			cp		2
-			jr		nz,PIREADBYTE2
-			push    af
+
+            call    CHKPIRDY
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+
+            ; Verify if it is openMSX or real MSXPi hardware
+            in      a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
+            cp      $FE                ; openMSX will return $FE
+            jr      c,PIREADBYTE_SUCC  ; below $FE -> physical MSXPi
+
+PIREADBYTE2:                           ; openMSX: wait for state 2
+            call    CHKPIRDY
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+            cp      2
+            jr      nz,PIREADBYTE2
+
 PIREADBYTE_SUCC:
-			pop		af
-			or		a				   ; reset carry flag
-            in      a,(DATA_PORT1)     ; read byte - probably has nothing useful since
-			                           ; there was an error in the comms
+            or      a                  ; reset carry flag
+            in      a,(DATA_PORT1)     ; read byte
             ret                        ; return in a the byte received
+
+PIREADBYTE_ESC:
+            ld      a,$FF
+            ret                        ; carry still set by CHKPIRDY
 
 ;-----------------------
 ; PIWRITEBYTE          |

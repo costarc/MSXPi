@@ -3,8 +3,8 @@
 MSXPi GPIO micro-benchmark: RPi.GPIO vs direct /dev/gpiomem register access.
 
 Measures the per-operation cost of the two GPIO paths and projects what a byte
-costs on each, so you can decide whether msxpi-server-fast.py is worth adopting
-before wiring it into a real session.
+costs on each, so the effect of any change to the GPIO path can be measured
+rather than estimated.
 
   sudo ./msxpi-gpio-bench.py
 
@@ -107,7 +107,7 @@ def main():
             os.close(fd)
         reg = (ctypes.c_uint32 * 1024).from_buffer(mm)
 
-        # self-test, same one msxpi-server-fast.py uses
+        # self-test, same one msxpi-server.py uses
         m_rdy = 1 << RPI_READY
         reg[GPSET0] = m_rdy
         hi_ok = GPIO.input(RPI_READY) == 1
