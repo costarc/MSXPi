@@ -40,8 +40,9 @@ JIFFY:      equ     0FC9Eh
 
 ITERATIONS: equ     2048
 
-FN_RESET:      equ  1
-FN_GET_NETSTAT: equ 3
+FN_RESET:       equ 1
+FN_GET_NETSTAT: equ 3          ; 3 bytes on the wire: opcode + RC + state
+FN_GET_HWADD:   equ 2          ; 8 bytes: opcode + RC + six address bytes
 FN_SET_MODE:   equ  128         ; implementation-specific
 MODE_REPORT:    equ 0
 MODE_POLL_HW:   equ 1
@@ -129,22 +130,46 @@ RESET_MSXPI:    equ 0FFh
 ; Only one polled backend can work on any given machine - MODE_POLL_HW on real
 ; hardware, MODE_POLL_OMSX under openMSX - and there is no reliable way to ask
 ; from here.  So run all three and let the OK count say which figures are real.
-            ld      de,WAIT_S
+; Each backend is measured at TWO payload sizes.  A transaction costs
+; fixed + n*b, and with a single size those cannot be separated - which is how
+; a 7% difference got mistaken for the whole story.  ETH_GET_NETSTAT moves 3
+; bytes and ETH_GET_HWADD moves 8, so:
+;
+;     b     = (t8 - t3) / 5        per-byte cost
+;     fixed = t3 - 3*b             per-transaction overhead
+;
+; The per-byte figure is what decides frame throughput in Phase 6; the fixed
+; cost is Python dispatch on the Pi and is paid once per frame, not per byte.
+            ld      a,FN_GET_NETSTAT
+            ld      (BENCH_FN),a
+            ld      de,WAIT3_S
             ld      c,_STROUT
             call    BDOS
             ld      b,MODE_WAIT
             call    RUN_PASS
 
-            ld      de,POLLED_S
+            ld      a,FN_GET_HWADD
+            ld      (BENCH_FN),a
+            ld      de,WAIT8_S
+            ld      c,_STROUT
+            call    BDOS
+            ld      b,MODE_WAIT
+            call    RUN_PASS
+
+            ld      a,FN_GET_NETSTAT
+            ld      (BENCH_FN),a
+            ld      de,POLL3_S
             ld      c,_STROUT
             call    BDOS
             ld      b,MODE_POLL_HW
             call    RUN_PASS
 
-            ld      de,POLLOM_S
+            ld      a,FN_GET_HWADD
+            ld      (BENCH_FN),a
+            ld      de,POLL8_S
             ld      c,_STROUT
             call    BDOS
-            ld      b,MODE_POLL_OMSX
+            ld      b,MODE_POLL_HW
             call    RUN_PASS
 
 ; --- Restore whatever the installer had detected ----------------------------
@@ -194,7 +219,7 @@ RUN_PASS:
             ld      bc,ITERATIONS
 .loop:
             push    bc
-            ld      a,FN_GET_NETSTAT
+            ld      a,(BENCH_FN)
             call    CALL_UNAPI
             ; Force interrupts back on.  We are unambiguously in foreground
             ; here, so this is safe - and the UNAPI RAM helper has to disable
@@ -205,7 +230,17 @@ RUN_PASS:
             ; zero while the transfers themselves keep working.  That is
             ; exactly the signature this benchmark kept producing.
             ei
-            or      a                       ; A=1 link answered, 0 it did not
+            ; ETH_GET_NETSTAT reports success in A; ETH_GET_HWADD returns the
+            ; address in L-H-E-D-C-B, and L is non-zero only on a real fetch
+            ; because the cache is seeded with zeros.
+            ld      c,a
+            ld      a,(BENCH_FN)
+            cp      FN_GET_HWADD
+            ld      a,c
+            jr      nz,.checka
+            ld      a,l
+.checka:
+            or      a
             jr      z,.notok
             ld      hl,(OK_COUNT)
             inc     hl
@@ -295,6 +330,7 @@ IMP_ENTRY:  dw      0
 T_START:    dw      0
 OK_COUNT:   dw      0
 ORIG_MODE:  db      0
+BENCH_FN:   db      3
 
 UNAPI_ID:   db      "ETHERNET",0
 UNAPI_ID_LEN: equ   $-UNAPI_ID
@@ -303,6 +339,10 @@ BANNER_S:   db      "ETHBENCH - 2048 x ETH_GET_NETSTAT",13,10
             db      "jiffies then OK count, hex.",13,10
             db      "OK must be 0800 or timing is void.",13,10,13,10,"$"
 CTRL_S:     db      "ctrl:   $"
+WAIT3_S:    db      "W-3by:  $"
+WAIT8_S:    db      "W-8by:  $"
+POLL3_S:    db      "P-3by:  $"
+POLL8_S:    db      "P-8by:  $"
 POLLED_S:   db      "poll-hw:$"
 POLLOM_S:   db      "poll-om:$"
 WAIT_S:     db      "/WAIT:  $"

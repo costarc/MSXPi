@@ -17,7 +17,7 @@ harness::at_dos_prompt {
                 set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
                 foreach l [harness::screen_lines] { puts $fh "|$l" }
                 close $fh
-                harness::assert_screen_contains "ran-all" "poll-om:"
+                harness::assert_screen_contains "ran-all" "P-8by:"
                 harness::assert_screen_contains "wait-pass-valid" "ok=0800"
                 harness::done
             }
