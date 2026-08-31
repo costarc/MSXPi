@@ -340,3 +340,62 @@ Nothing in Phases 2–4 depends on it.
 | O3 | Canon V-25 cartridge-slot mapper routing check (V-8/V-9 only routed page 2) | you, 5 min |
 | O4 | openMSX config with `MSXPi` **and** `MegaFlashROM_SCC+_SD` together | Phase 2 |
 | O5 | Stale `$1E` comment in `MSXPi.vhd` | trivial |
+
+
+---
+
+## 9. Interrupts are disabled on return from every UNAPI call
+
+Not a defect in this driver, in RAMHELPR, or in UNAPI - it is the MSX platform
+contract, and it is worth writing down because it is invisible until it bites.
+
+The RAM helper's inter-segment call reaches a segment-resident implementation
+through the BIOS:
+
+```
+CALLRAM__1:
+        call    GET_P1__1
+        ld      a,iyl
+        call    PUT_P1__1
+        call    CALSLT          ; <-- BIOS $001C
+        pop     af
+        call    PUT_P1__1
+        ret
+```
+
+`CALSLT` (like `RDSLT` and `WRSLT`) disables interrupts and does not re-enable
+them. So **every call into a RAM-segment UNAPI implementation returns with
+interrupts disabled**, on every MSX, for every implementation - Konamiman's
+examples included. Re-enabling is the caller's job.
+
+Observed as: ETHBENCH reported zero elapsed jiffies for thousands of
+transactions that were demonstrably working, because JIFFY had stopped being
+updated. A control delay loop in the same program, run moments earlier, read
+~37 jiffies. Adding an `ei` after each call made the timings appear.
+
+### Why it matters for InterNestor Lite
+
+INL runs from the timer interrupt. A foreground client that leaves interrupts
+off between UNAPI calls stops that interrupt firing, so:
+
+1. INL never processes incoming frames,
+2. so `TCP_RCV` never returns data,
+3. so the client keeps polling,
+4. so interrupts stay off.
+
+A deadlock, presenting as "the network hangs", with neither component looking
+broken. Stock clients avoid it by re-enabling interrupts, which is why they work
+in the field - but it must be verified rather than assumed, with a real client,
+early in Phase 6.
+
+### What this driver does about it
+
+Nothing, deliberately. It has no interrupt dependence: every spin is bounded,
+there are no timers, and `ETH_LOCK` no longer uses `di` (see the note there for
+why the obvious `ld a,i` idiom is worse than useless). It behaves identically
+whether interrupts are on or off, so the only correct place to fix this is the
+caller.
+
+Our own test programs do re-enable interrupts around their loops - see
+ETHBENCH's `RUN_PASS` - which is what a well-behaved foreground client has to
+do anyway.
