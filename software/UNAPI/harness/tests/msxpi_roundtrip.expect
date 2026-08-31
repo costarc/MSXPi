@@ -1,0 +1,5 @@
+# The server must have seen the command, sent a block, and agreed on the checksum.
+pver()
+senddata_oneblock(): payload complete
+local checksum=159, MSX checksum=159
+pver(): returning rc = 0xe0

@@ -46,3 +46,7 @@ software/zout/**
 *.lst
 *lock.*
 
+
+# Python bytecode
+__pycache__/
+*.pyc

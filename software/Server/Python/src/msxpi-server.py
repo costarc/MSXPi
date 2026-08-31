@@ -65,6 +65,61 @@ import filecmp
 except Exception as _e:
     print(f"Warning: failed to import irc_client module: {_e}")
     '''
+# ---------------------------------------------------------------------------
+# Ethernet UNAPI shuttle (msxpi_eth.py).
+#
+# Guarded like the IRC import: the server must still run if the module is
+# missing.  eth_handle_opcode() is called from recvdata2()'s wait-for-READY
+# loop, i.e. from the byte that loop was about to discard, so it must be cheap
+# and must report False for anything that is not one of its opcodes.
+#
+# The shuttle is built lazily on the first opcode rather than at import: the
+# transport functions it closes over (SPI_ByteTransfer / SPI_BurstOut) are
+# defined further down this file, and on a Pi the GPIO setup has not run yet at
+# import time.
+# ---------------------------------------------------------------------------
+try:
+    import msxpi_eth as _eth_mod
+except Exception as _e:
+    _eth_mod = None
+    print(f"Warning: failed to import msxpi_eth module: {_e}")
+
+_eth_shuttle = None
+
+
+def eth_get_shuttle():
+    """The EthShuttle, created on first use.  None if the module is absent."""
+    global _eth_shuttle
+    if _eth_mod is None:
+        return None
+    if _eth_shuttle is None:
+        link = _eth_mod.make_link(log=print)
+        _eth_shuttle = _eth_mod.EthShuttle(
+            link,
+            read_byte=SPI_ByteTransfer,
+            # The shuttle's contract is 0 = success (see msxpi_eth.EthShuttle).
+            # It deliberately does not know about this file's RC_* values, and
+            # RC_SUCCESS is 0xE0 - truthy - so it must be mapped, not passed
+            # through, or every write would look like a failure.
+            write_byte=lambda v: 0 if SPI_ByteTransfer(v)[0] == RC_SUCCESS else 1,
+            write_burst=lambda d: 0 if SPI_BurstOut(d) == RC_SUCCESS else 1,
+            log=print)
+        print("eth: Ethernet UNAPI shuttle ready (%s)"
+              % type(link).__name__)
+    return _eth_shuttle
+
+
+def eth_handle_opcode(opcode):
+    """True if `opcode` was an Ethernet UNAPI op and has been served."""
+    if _eth_mod is None or opcode not in _eth_mod.OPCODES:
+        return False
+    try:
+        return eth_get_shuttle().handle(opcode)
+    except Exception as e:
+        print(f"eth: error serving opcode {hex(opcode)}: {e}")
+        return True   # consumed; do not fall through to the garbage branch
+
+
 version = "1.6"
 BuildId = "20260830.003"
 
@@ -417,6 +472,62 @@ def _spi_byte_fast(byte_out=None):
         _prof_report()
 
     return RC_SUCCESS, byte_in
+
+
+def SPI_BurstOut(data):
+    """Send a run of bytes with RPI_READY held high for the whole run.
+
+    This is what makes hardware /WAIT usable.  The CPLD asserts /WAIT only
+    while SPI_RDY is high (MSXPi.vhd: wait_assert <= wait_mode and SPI_RDY and
+    spi_en and ...), and SPI_ByteTransfer() raises and drops RPI_READY around
+    every single byte.  In that inter-byte gap an INIR read on the MSX would
+    NOT stall and would silently return a stale byte, desynchronising the
+    stream.  Holding RDY up across the burst closes that window.
+
+    Returns RC_SUCCESS, or an error code.  Falls back to per-byte transfers
+    when the fast GPIO path is not available, which is correct but slow.
+    """
+    global conn, hostType
+
+    if hostType != "RaspberryPi":
+        # openMSX / socket mode: the device is a plain TCP client, there is no
+        # RDY line to hold and sendall() is already the fast path.
+        try:
+            conn.sendall(bytes(data))
+            return RC_SUCCESS
+        except Exception:
+            return RC_CONNERR
+
+    if not _FAST_GPIO:
+        for b in bytearray(data):
+            rc, _ = SPI_ByteTransfer(b)
+            if rc != RC_SUCCESS:
+                return rc
+        return RC_SUCCESS
+
+    reg = _GPIO_REG
+    SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
+    m_sclk, m_miso, m_cs = _M_SCLK, _M_MISO, _M_CS
+
+    reg[SET] = _M_RDY                       # up once, for the whole burst
+    try:
+        for byte_out in bytearray(data):
+            while reg[LEV] & m_cs:          # each byte is still its own
+                pass                        # CPLD transfer, so CS still cycles
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
+            for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
+                if byte_out & bit:
+                    reg[SET] = m_miso
+                else:
+                    reg[CLR] = m_miso
+                reg[SET] = m_sclk
+                reg[CLR] = m_sclk
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
+    finally:
+        reg[CLR] = _M_RDY                   # and down exactly once
+    return RC_SUCCESS
 
 
 def tick_sclk():
@@ -1376,6 +1487,13 @@ def recvdata2(maxbufsize = 8192):
             # Send READY_ACK back
             SPI_ByteTransfer(READY_ACK)
             break
+        elif eth_handle_opcode(pibyte):
+            # An Ethernet UNAPI fast/bulk op (msxpi_eth.py).  It has already
+            # been served in full and is not a command, so keep waiting for
+            # READY rather than returning to the dispatch loop.  This branch
+            # used to silently discard the byte, which is exactly why the
+            # opcode range was chosen to live here.
+            continue
         else:
             # Ignore garbage and keep waiting for READY
             continue

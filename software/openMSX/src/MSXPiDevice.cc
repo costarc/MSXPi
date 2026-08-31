@@ -1,5 +1,6 @@
 #include "MSXPiDevice.hh"
 #include "Timer.hh"
+#include <chrono>
 #include "xrange.hh"
 #include <algorithm>
 #include <array>
@@ -36,6 +37,7 @@ void MSXPiDevice::reset(EmuTime /*time*/)
 	std::lock_guard lock(mtx);
 	rxQueue.clear();
 	readRequested = false;
+	waitMode = false;
 }
 
 byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
@@ -45,6 +47,31 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 	case 0x57: // Version
 		return peekIO(port, time);
 	case 0x5A: // Data
+		if (waitMode) {
+			// Hardware /WAIT: the read itself starts the transfer and
+			// stalls the Z80 until the byte is available.  Blocking the
+			// emulation thread here IS the stall - that is exactly what
+			// the real CPLD does to the CPU.
+			//
+			// The wait is bounded so that a dead or absent server cannot
+			// freeze openMSX.  Real hardware degrades the same way: with
+			// SPI_RDY low the CPLD never starts a transfer, never
+			// asserts /WAIT, and the read returns a stale byte.
+			// NOT named WAIT_TIMEOUT: that is a Win32 macro (258L from
+			// winbase.h) and the name would silently expand to a constant.
+			static constexpr auto RX_STALL_TIMEOUT = std::chrono::milliseconds(250);
+			std::unique_lock lock(mtx);
+			readRequested = false;
+			if (rxQueue.empty()) {
+				rxCv.wait_for(lock, RX_STALL_TIMEOUT, [&] {
+					return !rxQueue.empty() || shouldStop.load();
+				});
+			}
+			if (!rxQueue.empty()) {
+				return rxQueue.pop_front();
+			}
+			return 0xff;
+		}
 		if (readRequested) {
 			readRequested = false;
 			std::lock_guard lock(mtx);
@@ -70,8 +97,16 @@ byte MSXPiDevice::peekIO(uint16_t port, EmuTime /*time*/) const
 			if (!rxQueue.empty()) return 0x02; // byte available
 		}
 		return 0x00;
-	case 0x57: // Version
-		return 0xFE; // Used to know when its the extension and not the actual physical interface
+	case 0x57: // Version + wait-mode read-back
+		// $FE stays the default ON PURPOSE.  msxpi_bios.asm:97 detects
+		// openMSX by testing $57 against $FE, so every existing binary
+		// keeps working exactly as before.  Real hardware reads $0E here;
+		// emulation deliberately diverges to preserve that detection.
+		//
+		// $8E - the same value real CPLD v1.6 returns with the mode on -
+		// only ever appears after software has explicitly opted in by
+		// writing $01, which no legacy program does.
+		return waitMode ? 0x8E : 0xFE;
 	case 0x5A: // data
 		if (readRequested) {
 			std::lock_guard lock(mtx);
@@ -90,11 +125,22 @@ void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime time)
 	switch (port & 0xff) {
 	case 0x56: // control
 		if (value == 0xFF) {
-			reset(time);
+			reset(time); // also clears waitMode, as the CPLD does
 			break;
 		}
 		if (sock != OPENMSX_INVALID_SOCKET) {
 			readRequested = true;
+		}
+		break;
+	case 0x57: // wait-mode register (CPLD v1.6)
+		// Only $01 sets it and only $00 clears it; every other value is a
+		// no-op, matching the CPLD's mode_reg process.
+		if (value == 0x01) {
+			std::lock_guard lock(mtx);
+			waitMode = true;
+		} else if (value == 0x00) {
+			std::lock_guard lock(mtx);
+			waitMode = false;
 		}
 		break;
 	case 0x5A: // data
@@ -148,6 +194,7 @@ void MSXPiDevice::readLoop()
 		for (auto i : xrange(std::min<size_t>(n, MAX_QUEUE_SIZE - rxQueue.size()))) {
 			rxQueue.push_back(buf[i]);
 		}
+		rxCv.notify_one(); // release a wait-mode read blocked in readIO
 	}
 }
 
