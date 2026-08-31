@@ -87,6 +87,18 @@ except Exception as _e:
 _eth_shuttle = None
 
 
+# Module-level rather than lambdas built per shuttle: one less Python frame on
+# every reply. The shuttle's contract is 0 = success (see msxpi_eth.EthShuttle);
+# RC_SUCCESS is 0xE0 - truthy - so it must be mapped, not passed through, or
+# every write would look like a failure.
+def _eth_write_byte(v):
+    return 0 if SPI_ByteTransfer(v)[0] == RC_SUCCESS else 1
+
+
+def _eth_write_burst(data):
+    return 0 if SPI_BurstOut(data) == RC_SUCCESS else 1
+
+
 def eth_get_shuttle():
     """The EthShuttle, created on first use.  None if the module is absent."""
     global _eth_shuttle
@@ -101,20 +113,37 @@ def eth_get_shuttle():
             # It deliberately does not know about this file's RC_* values, and
             # RC_SUCCESS is 0xE0 - truthy - so it must be mapped, not passed
             # through, or every write would look like a failure.
-            write_byte=lambda v: 0 if SPI_ByteTransfer(v)[0] == RC_SUCCESS else 1,
-            write_burst=lambda d: 0 if SPI_BurstOut(d) == RC_SUCCESS else 1,
+            write_byte=_eth_write_byte,
+            write_burst=_eth_write_burst,
             log=print)
         print("eth: Ethernet UNAPI shuttle ready (%s)"
               % type(link).__name__)
     return _eth_shuttle
 
 
+# Hoisted out of eth_handle_opcode: the membership test below runs on EVERY
+# byte recvdata2() reads while waiting for READY, so it is on the path for all
+# traffic and not just for opcodes. A module-global frozenset lookup avoids an
+# attribute lookup on _eth_mod each time.
+_eth_opcodes = _eth_mod.OPCODES if _eth_mod is not None else frozenset()
+_eth_handle = None      # the shuttle's bound handle(), cached on first use
+
+
 def eth_handle_opcode(opcode):
     """True if `opcode` was an Ethernet UNAPI op and has been served."""
-    if _eth_mod is None or opcode not in _eth_mod.OPCODES:
+    if opcode not in _eth_opcodes:
         return False
+    global _eth_handle
+    if _eth_handle is None:
+        shuttle = eth_get_shuttle()
+        if shuttle is None:
+            return False
+        # Cache the bound method: saves a function call plus an attribute
+        # lookup per opcode, on a path where the per-transaction fixed cost is
+        # what dominates short transactions.
+        _eth_handle = shuttle.handle
     try:
-        return eth_get_shuttle().handle(opcode)
+        return _eth_handle(opcode)
     except Exception as e:
         print(f"eth: error serving opcode {hex(opcode)}: {e}")
         return True   # consumed; do not fall through to the garbage branch

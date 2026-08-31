@@ -50,8 +50,12 @@ OP_GET_FRAME   = 0xC6   # bulk
 OP_SEND_FRAME  = 0xC7   # bulk
 OP_RESET       = 0xC8
 
-OPCODES = (OP_PROBE, OP_GET_HWADD, OP_GET_NETSTAT, OP_NET_ONOFF, OP_FILTERS,
-           OP_IN_STATUS, OP_GET_FRAME, OP_SEND_FRAME, OP_RESET)
+# frozenset, not a tuple: this is tested against EVERY byte the server reads
+# while waiting for READY, so a linear scan is paid on all ordinary traffic too,
+# not just on opcodes.
+OPCODES = frozenset((OP_PROBE, OP_GET_HWADD, OP_GET_NETSTAT, OP_NET_ONOFF,
+                     OP_FILTERS, OP_IN_STATUS, OP_GET_FRAME, OP_SEND_FRAME,
+                     OP_RESET))
 
 # Fast ops answer with [RC] followed by a fixed number of data bytes.  The
 # length is a property of the opcode, known to both sides in advance, so there
@@ -302,6 +306,41 @@ class EthShuttle(object):
         self._burst = write_burst
         self._log = log or (lambda *a: None)
 
+        # Dict dispatch, built once, instead of an if/elif chain walked on every
+        # opcode. Bound methods are stored directly so a call costs one dict
+        # lookup rather than up to nine comparisons plus an attribute lookup.
+        #
+        # Worth doing because the per-transaction fixed cost - not the per-byte
+        # cost - dominates short transactions, and ETH_IN_STATUS is a 6-byte
+        # transaction InterNestor Lite issues sixty times a second.
+        self._dispatch = {
+            OP_PROBE:       self._op_probe,
+            OP_GET_HWADD:   self._op_get_hwadd,
+            OP_GET_NETSTAT: self._op_get_netstat,
+            OP_NET_ONOFF:   self._op_net_onoff,
+            OP_FILTERS:     self._op_filters,
+            OP_RESET:       self._op_reset,
+            OP_IN_STATUS:   self._op_in_status,
+            OP_GET_FRAME:   self._op_get_frame,
+            OP_SEND_FRAME:  self._op_send_frame,
+        }
+
+        # Replies that never change are built once here rather than being
+        # reassembled per call.
+        self._probe_reply = bytes([ETH_RC_OK]) + b"ETH" + bytes([PROTO_VERSION])
+        self._netstat_up   = bytes([ETH_RC_OK, 1])
+        self._netstat_down = bytes([ETH_RC_OK, 0])
+
+    def _op_probe(self):
+        self._write_many(self._probe_reply)
+
+    def _op_get_hwadd(self):
+        self._fast(ETH_RC_OK, self.link.mac)
+
+    def _op_get_netstat(self):
+        self._write_many(self._netstat_up if self.link.link_up()
+                         else self._netstat_down)
+
     # --- helpers ------------------------------------------------------------
 
     def _write_many(self, data):
@@ -330,27 +369,10 @@ class EthShuttle(object):
         Called from the byte the server was about to discard, so an opcode we
         do not recognise must be reported as not-ours and left alone.
         """
-        if opcode not in OPCODES:
+        handler = self._dispatch.get(opcode)
+        if handler is None:
             return False
-
-        if opcode == OP_PROBE:
-            self._fast(ETH_RC_OK, b"ETH" + bytes([PROTO_VERSION]))
-        elif opcode == OP_GET_HWADD:
-            self._fast(ETH_RC_OK, self.link.mac)
-        elif opcode == OP_GET_NETSTAT:
-            self._fast(ETH_RC_OK, bytes([1 if self.link.link_up() else 0]))
-        elif opcode == OP_NET_ONOFF:
-            self._op_net_onoff()
-        elif opcode == OP_FILTERS:
-            self._op_filters()
-        elif opcode == OP_RESET:
-            self._op_reset()
-        elif opcode == OP_IN_STATUS:
-            self._op_in_status()
-        elif opcode == OP_GET_FRAME:
-            self._op_get_frame()
-        elif opcode == OP_SEND_FRAME:
-            self._op_send_frame()
+        handler()
         return True
 
     def _fast(self, rc, payload):
