@@ -82,22 +82,28 @@ ETH_DEAD:   db      0               ; link declared dead after a timeout
 ; --- ETH_LOCK: try to take the transaction lock.
 ; Out: CF=0 acquired, CF=1 busy or link dead.  Corrupts AF.
 ;
-; The test-and-set must be atomic against the timer interrupt, hence DI.  The
-; interrupt state is saved and restored rather than blindly re-enabled: this is
-; called both from the foreground (interrupts on) and from INL's ISR
-; (interrupts off), and an unconditional EI in the latter case would let the
-; interrupt handler re-enter itself.
+; NO `di` HERE, AND THAT IS DELIBERATE.
 ;
-; Interrupts are NOT held off for the body of a transaction - only for this
-; test-and-set.  A 1514-byte frame with interrupts disabled would be tens of
-; milliseconds and would wreck the 50/60 Hz clock; the busy flag is what makes
-; that unnecessary, because an interrupting caller simply loses the race and
-; backs off.
+; The obvious implementation captures IFF2 with `ld a,i`, disables interrupts
+; around the test-and-set, and restores them from P/V.  That is actively
+; harmful on a Z80: `ld a,i` CLEARS P/V if an interrupt arrives while it is
+; executing.  The restore then concludes "interrupts were off", skips the EI,
+; and they stay off FOR EVER.  It cost a whole hardware debugging round - every
+; ETHBENCH timing came back as zero jiffies because JIFFY had stopped being
+; updated, while the transfers themselves were working perfectly.
+;
+; The lock does not need interrupts disabled, because the two contexts are
+; asymmetric: the MSX timer interrupt runs to completion and cannot be
+; preempted by the foreground.
+;
+;   - Foreground interrupted between the read and the write: the ISR sees 0,
+;     takes the lock, finishes, releases, and only THEN does the foreground
+;     resume and store 1.  Sequential, never overlapping.
+;   - Foreground already stored 1: the ISR reads 1 and backs off.
+;
+; `ld (ETH_BUSY),a` is a single instruction, so there is no torn write. That is
+; the whole argument.
 ETH_LOCK:
-            ld      a,i                     ; P/V = IFF2
-            push    af
-            di
-
             ld      a,(ETH_DEAD)
             or      a
             jr      nz,.refuse
@@ -106,15 +112,10 @@ ETH_LOCK:
             jr      nz,.refuse
 
             ld      a,1
-            ld      (ETH_BUSY),a
-            pop     af
-            call    ETH_RESTORE_INT
+            ld      (ETH_BUSY),a            ; single instruction: atomic enough
             or      a                       ; CF=0: acquired
             ret
-
 .refuse:
-            pop     af
-            call    ETH_RESTORE_INT
             scf
             ret
 
@@ -124,17 +125,6 @@ ETH_UNLOCK:
             xor     a
             ld      (ETH_BUSY),a
             pop     af
-            ret
-
-; --- ETH_RESTORE_INT: re-enable interrupts only if P/V says they were on.
-;
-; The `ld a,i` P/V erratum (an interrupt taken during the instruction clears
-; P/V) can only ever make this leave interrupts disabled when they were on,
-; which the next EI in the BIOS interrupt path corrects.  It cannot enable
-; interrupts that were off, which is the direction that would actually break.
-ETH_RESTORE_INT:
-            ret     po                      ; P/V clear: they were off
-            ei
             ret
 
 ; =============================================================================

@@ -99,6 +99,32 @@ RESET_MSXPI:    equ 0FFh
             call    CALL_UNAPI
             ld      (ORIG_MODE),a
 
+; --- Control: time a pure delay loop that touches nothing ------------------
+; If this reads 0000 then JIFFY is not advancing at all and EVERY figure below
+; is void - which is exactly what happened when the driver's lock left
+; interrupts disabled: the transfers worked, but the clock had stopped.
+; Expect roughly 001A (26) jiffies here.
+            ld      de,CTRL_S
+            ld      c,_STROUT
+            call    BDOS
+            ld      hl,(JIFFY)
+            ld      (T_START),hl
+            ld      bc,0                    ; 65536 iterations, ~0.44 s
+.delay:
+            dec     bc
+            ld      a,b
+            or      c
+            jr      nz,.delay
+            ld      hl,(JIFFY)
+            ld      de,(T_START)
+            or      a
+            sbc     hl,de
+            ld      a,h
+            call    PRINT_HEX8
+            ld      a,l
+            call    PRINT_HEX8
+            call    NEWLINE
+
 ; --- All three backends -----------------------------------------------------
 ; Only one polled backend can work on any given machine - MODE_POLL_HW on real
 ; hardware, MODE_POLL_OMSX under openMSX - and there is no reliable way to ask
@@ -267,6 +293,7 @@ UNAPI_ID_LEN: equ   $-UNAPI_ID
 BANNER_S:   db      "ETHBENCH - 2048 x ETH_GET_NETSTAT",13,10
             db      "jiffies then OK count, hex.",13,10
             db      "OK must be 0800 or timing is void.",13,10,13,10,"$"
+CTRL_S:     db      "ctrl:   $"
 POLLED_S:   db      "poll-hw:$"
 POLLOM_S:   db      "poll-om:$"
 WAIT_S:     db      "/WAIT:  $"
