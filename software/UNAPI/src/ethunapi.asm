@@ -43,6 +43,31 @@ MODE_POLL_OMSX: equ   2
             ld      c,_STROUT
             call    BDOS
 
+; --- "ETHUNAPI P" forces the polled transport ------------------------------
+; Hardware /WAIT is faster but it is the only mode that can hang the machine:
+; the CPLD holds /WAIT for exactly as long as the Pi holds RPI_READY, with no
+; timeout, so a Pi that stops clocking mid-transfer stalls the Z80 for ever.
+; The installer proves the link before enabling it, but that only covers the
+; moment of installation - a later caller, InterNestor Lite included, can still
+; meet a Pi that has gone away.
+;
+; So: a way to opt out. Polled is bounded everywhere and cannot hang, which
+; makes it the right choice while bringing anything new up.
+            ld      a,(0080h)               ; DOS command tail length
+            or      a
+            jr      z,.no_arg
+            ld      hl,0082h                ; first character after the space
+            ld      a,(hl)
+            and     11011111b               ; crude upper-case
+            cp      "P"
+            jr      nz,.no_arg
+            ld      a,1
+            ld      (FORCE_POLLED),a
+            ld      de,FORCED_S
+            ld      c,_STROUT
+            call    BDOS
+.no_arg:
+
 ; -----------------------------------------------------------------------------
 ; 1. Locate the RAM helper
 ; -----------------------------------------------------------------------------
@@ -210,6 +235,9 @@ ALLOC_OK:
 
             ; The link is alive. Now see whether the CPLD offers hardware
             ; /WAIT, and if it does, verify that too before keeping it.
+            ld      a,(FORCE_POLLED)
+            or      a
+            jr      nz,.keep_polled         ; "ETHUNAPI P" - stay bounded
             ld      a,WAITMODE_ON
             out     (CTRL2),a
             in      a,(CTRL2)
@@ -340,6 +368,7 @@ HELPER_ADD:         dw      0
 MAPTAB_ADD:         dw      0
 MAPTAB_ENTRY_SIZE:  db      0
 DETECTED_MODE:      db      0
+FORCE_POLLED:       db      0
 
 ; --- Mapper support routine jump table, filled in at run time ---------------
 ALL_SEG:    ds      3
@@ -380,6 +409,7 @@ MODE_WAIT_S:   db   "Transport: hardware /WAIT",13,10,"$"
 MODE_POLLED_S: db   "Transport: polled",13,10,"$"
 MODE_OMSX_S:   db   "Transport: polled (openMSX)",13,10,"$"
 MODE_NONE_S:   db   "Transport: NONE - link did not answer",13,10,"$"
+FORCED_S:      db   "Forcing polled transport (P)",13,10,"$"
 
 UNAPI_ID_STR:
             db      "ETHERNET",0
