@@ -97,6 +97,7 @@ ETH_OP:
             or      a
             jr      nz,.fail
 .done:
+            call    ETH_OK                  ; break any run of failures
             call    ETH_END
             call    ETH_UNLOCK
             or      a                       ; CF=0

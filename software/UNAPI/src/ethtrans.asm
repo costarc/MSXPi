@@ -73,7 +73,21 @@ MODE_POLL_OMSX: equ   2     ; polled, openMSX ($56 = 2 when a byte is queued)
 ; =============================================================================
 ETH_MODE:   db      0               ; one of MODE_* above
 ETH_BUSY:   db      0               ; re-entrancy flag
-ETH_DEAD:   db      0               ; link declared dead after a timeout
+ETH_DEAD:   db      0               ; link given up on after repeated failures
+ETH_FAILCNT: db     0               ; CONSECUTIVE failures; any success clears it
+
+; How many consecutive failures before declaring the link dead.
+;
+; Latching on the FIRST failure was wrong.  On real hardware a transaction
+; fails roughly once every 1400-2000 calls, and latching immediately turned
+; that single glitch into permanent loss of networking: ETHBENCH reported 2032
+; of 2048, meaning it worked 2032 times and then every remaining call was
+; refused.  For InterNestor Lite, polling ETH_IN_STATUS sixty times a second,
+; that would mean the network dies within the first minute and never returns.
+;
+; A transient deserves a retry; a genuinely absent Pi still gets given up on
+; quickly, since eight consecutive timeouts cost well under a second.
+ETH_MAXFAIL:  equ   8
 
 ; =============================================================================
 ; Locking
@@ -168,19 +182,59 @@ ETH_END:
             pop     af
             ret
 
-; --- ETH_FAIL: called on any timeout.  Latches the link dead so the next ISR
-; entry costs nothing, drops wait mode, and returns CF=1.  Corrupts AF.
+; --- ETH_FAIL: one failed transaction.  Counts it, and only gives up on the
+; link once ETH_MAXFAIL of them happen back to back.  Drops wait mode and
+; returns CF=1.  Corrupts AF.
 ETH_FAIL:
+            call    ETH_RESYNC
+            ld      a,(ETH_FAILCNT)
+            inc     a
+            ld      (ETH_FAILCNT),a
+            cp      ETH_MAXFAIL
+            jr      c,.notdead
             ld      a,1
             ld      (ETH_DEAD),a
+.notdead:
             call    ETH_END
             scf
+            ret
+
+; --- ETH_OK: one successful transaction.  Clears the consecutive-failure run.
+; Preserves every register and the flags.
+ETH_OK:
+            push    af
+            xor     a
+            ld      (ETH_FAILCNT),a
+            pop     af
+            ret
+
+; --- ETH_RESYNC: put the device back to a known state after a failure.
+;
+; A failed transaction is NOT self-contained.  Whatever bytes of the reply the
+; MSX did not collect stay queued, so the next transaction reads them instead
+; of its own, fails in turn, and the run cascades - one glitch becomes total
+; loss.  Injecting a stale read once per 500 in emulation showed exactly that:
+; roughly eight isolated faults, spread far apart, still killed the link inside
+; 250 calls because each one poisoned its successors.
+;
+; Writing $FF to $56 is the existing MSXPi reset - resetMSXPI does the same at
+; the start of every command - and clears the CPLD transfer state and any byte
+; waiting to be read.  It also clears wait mode, which ETH_END does anyway.
+;
+; This is why tolerating consecutive failures is not on its own enough: without
+; the resync the failures are never independent.
+ETH_RESYNC:
+            push    af
+            ld      a,0FFh
+            out     (CTRL1),a
+            pop     af
             ret
 
 ; --- ETH_REVIVE: clear the dead flag.  ETH_RESET uses this.  Corrupts AF.
 ETH_REVIVE:
             xor     a
             ld      (ETH_DEAD),a
+            ld      (ETH_FAILCNT),a
             ret
 
 ; =============================================================================
