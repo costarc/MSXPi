@@ -207,10 +207,14 @@ FN_GETINFO:
 ; Data
 ; =============================================================================
 
-; Locally-administered MAC (bit 1 of the first octet set), spelling "MSXPi".
-; Must match msxpi_eth.BaseLink's default; Phase 5 replaces this with the value
-; read from the Pi via OP_GET_HWADD.
-MACADDR:    db      02h,4Dh,53h,58h,50h,69h
+; Cache for the address fetched from the Pi via OP_GET_HWADD.
+;
+; Deliberately all zeros, NOT msxpi_eth.BaseLink's 02:4D:53:58:50:69 default.
+; ETH_GET_HWADD falls back to this cache when the transaction fails, so seeding
+; it with the value the Pi would have sent made a dead link indistinguishable
+; from a live one - a diagnostic printed the "correct" MAC either way. With
+; zeros here, a non-zero address is proof that a real fetch succeeded.
+MACADDR:    db      000h,000h,000h,000h,000h,000h
 
 ; The identifier must be zero-terminated and is compared case-insensitively.
 UNAPI_ID:
