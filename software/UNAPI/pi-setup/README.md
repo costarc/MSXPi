@@ -1,6 +1,6 @@
 # Pi-side network setup
 
-`msxpi-net-setup.sh` gives the MSX a route to the internet through a Pi that is
+`msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that is
 on **WiFi**, and `INL.CFG` is the matching InterNestor Lite configuration.
 
 Run the script with `sudo` on the Pi, then copy `INL.CFG` onto the MSX disk
@@ -41,7 +41,7 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 
 ## Order of operations
 
-1. `sudo ./msxpi-net-setup.sh` on the Pi
+1. `sudo ./msxpi-tcpip-setup.sh` on the Pi
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
 3. on the MSX: `MSR I`, `ETHUNAPI`, `INL I`
 4. `inl s` to confirm the addresses

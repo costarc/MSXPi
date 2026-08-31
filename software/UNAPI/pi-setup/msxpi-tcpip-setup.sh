@@ -2,8 +2,8 @@
 # =============================================================================
 # MSXPi Ethernet UNAPI - Pi-side network setup (WiFi host)
 # =============================================================================
-#   sudo ./msxpi-net-setup.sh          bring it up
-#   sudo ./msxpi-net-setup.sh down     tear it down
+#   sudo ./msxpi-tcpip-setup.sh          bring it up
+#   sudo ./msxpi-tcpip-setup.sh down     tear it down
 #
 # Gives the MSX a route to the internet through a Pi that is on WiFi.
 #
