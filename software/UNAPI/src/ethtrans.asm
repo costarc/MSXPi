@@ -201,6 +201,8 @@ ETH_TX:
             cp      MODE_WAIT
             jr      nz,.polled
 
+            call    ETH_WAIT_READY          ; see the note in ETH_RX_BLOCK
+            jr      c,.timeout
             ld      a,e                     ; wait mode: the OUT stalls us
             out     (DATA1),a
             jr      .ok
@@ -228,8 +230,15 @@ ETH_RX:
             cp      MODE_WAIT
             jr      nz,.polled
 
+            push    bc
+            call    ETH_WAIT_READY          ; see the note in ETH_RX_BLOCK
+            pop     bc
+            jr      c,.rxfail
             in      a,(DATA1)               ; wait mode: the IN stalls us
             or      a                       ; preserves A, clears CF
+            ret
+.rxfail:
+            scf
             ret
 
 .polled:
@@ -331,6 +340,23 @@ ETH_WAIT_DATA:
 ; formulation (test the high byte, else send C bytes) sends 256 spurious bytes
 ; when C is zero.
 
+; WHY THE READY WAIT BEFORE A BURST
+;
+; The CPLD only starts a transfer, and therefore only asserts /WAIT, while
+; SPI_RDY is high - and the Pi raises RPI_READY only once it is actually inside
+; a transfer routine.  After receiving our opcode byte it DROPS RDY, runs the
+; Python dispatch (recvdata2 -> eth_handle_opcode -> shuttle -> _write_many),
+; and only then does SPI_BurstOut raise RDY again for the reply.
+;
+; An INIR issued the instant the opcode OUT completes races that dispatch. If
+; RDY is still low the reads neither stall nor transfer, and the burst returns
+; garbage at full speed.  That is why hardware /WAIT measured as intermittent -
+; 2028 of 2048 on one run, 369 on the next.
+;
+; Waiting once per burst, not per byte, keeps INIR at 21 T-states inside the
+; run: SPI_BurstOut holds RDY high for the whole reply, so only the boundary
+; needs guarding.
+
 ; --- ETH_TX_BLOCK: send BC bytes from HL.
 ; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
 ETH_TX_BLOCK:
@@ -341,6 +367,13 @@ ETH_TX_BLOCK:
             ld      a,(ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled
+
+            push    bc                      ; ETH_WAIT_READY corrupts BC
+            push    hl
+            call    ETH_WAIT_READY
+            pop     hl
+            pop     bc
+            ret     c
 
 .wloop:
             ld      a,b
@@ -387,6 +420,13 @@ ETH_RX_BLOCK:
             ld      a,(ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled
+
+            push    bc                      ; ETH_WAIT_READY corrupts BC
+            push    hl
+            call    ETH_WAIT_READY
+            pop     hl
+            pop     bc
+            ret     c
 
 .wloop:
             ld      a,b
