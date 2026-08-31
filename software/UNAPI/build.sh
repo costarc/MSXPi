@@ -53,7 +53,10 @@ fi
 
 # The UNAPI RAM helper must be on the disk too: the driver refuses to install
 # without it.  This is Konamiman's stock RAMHELPR.COM, not something we build.
-RAMHELPR="${RAMHELPR:-C:/Users/roniv/Dev/github/Multicore/Computers/SM-X/sdcreate/network/UNAPI/RAMHELPR.COM}"
+# Vendored in bin/ so it exists on any machine that has this repo - notably the
+# Pi, which has no copy of the Multicore tree.  Override with RAMHELPR=... to
+# use a different one.
+RAMHELPR="${RAMHELPR:-$HERE/bin/RAMHELPR.COM}"
 
 echo "--- copying to $(basename "$DISK")"
 # dsktool.py splits its target on the FIRST ':', which on Windows would eat the
