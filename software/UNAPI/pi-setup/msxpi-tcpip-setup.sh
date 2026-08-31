@@ -111,9 +111,15 @@ subnet, so the addresses are set by hand):
 or put the same lines, minus the leading "inl", in INL.CFG next to INL.COM and
 they are applied at install time. Check with "inl s", then:
 
-    ping $TAP_IP        from the MSX - proves the link and NAT box
     telnet bbs.hispamsx.org
 
-If ping to $TAP_IP works but names do not resolve, DNS is the problem, not the
-driver: try an IP address directly first.
+INL.COM has no outgoing ping command - only a switch for replying to incoming
+ones, which is on by default. So test the link from THIS side instead:
+
+    ping $MSX_IP        run on the Pi, not the MSX
+
+That covers the whole path - TAP, server, opcode protocol, driver, INL - with
+nothing to type on the MSX. If it replies, the transport is fine and anything
+left is IP configuration or DNS. Names failing while an IP address works means
+DNS, not the driver.
 EOF

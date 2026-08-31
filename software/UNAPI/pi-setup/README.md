@@ -45,7 +45,26 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
 3. on the MSX: `MSR I`, `ETHUNAPI`, `INL I`
 4. `inl s` to confirm the addresses
-5. `ping 192.168.99.1` - proves the link and the NAT box before blaming DNS
+5. **From the Pi**, `ping 192.168.99.2` - see below
 6. `telnet bbs.hispamsx.org`
+
+## Testing the link before telnet
+
+INL.COM has **no outgoing ping command** - it only has a switch for whether to
+*reply* to incoming ones, and replying is on by default. So the link test runs
+the other way round:
+
+    ping 192.168.99.2        # from the Pi, to the MSX
+
+That exercises the whole path - Pi, TAP, msxpi-server, the opcode protocol, the
+driver, InterNestor Lite, and back - without needing anything typed on the MSX.
+If it replies, the transport works and anything remaining is IP configuration
+or DNS.
+
+Other stock clients worth trying before telnet, all in
+`Dev/github/Multicore/.../SM-X/sdcreate/network/UNAPI/`:
+
+    HOST.COM      resolve a name - isolates DNS from everything else
+    TCPCON.COM    open a TCP connection - isolates TCP from telnet's UI
 
 Nothing here survives a reboot; wire it into systemd once the values are settled.
