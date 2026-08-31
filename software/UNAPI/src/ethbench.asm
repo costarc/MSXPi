@@ -196,6 +196,15 @@ RUN_PASS:
             push    bc
             ld      a,FN_GET_NETSTAT
             call    CALL_UNAPI
+            ; Force interrupts back on.  We are unambiguously in foreground
+            ; here, so this is safe - and the UNAPI RAM helper has to disable
+            ; them while it swaps the mapper segment.  If it restores IFF2 with
+            ; `ld a,i` it hits the erratum that clears P/V when an interrupt
+            ; lands during the instruction, and after the first occurrence
+            ; interrupts stay off: JIFFY stops, and every timing below reads
+            ; zero while the transfers themselves keep working.  That is
+            ; exactly the signature this benchmark kept producing.
+            ei
             or      a                       ; A=1 link answered, 0 it did not
             jr      z,.notok
             ld      hl,(OK_COUNT)
