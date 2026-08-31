@@ -503,6 +503,12 @@ def _spi_byte_fast(byte_out=None):
     return RC_SUCCESS, byte_in
 
 
+# How long to wait for the MSX to collect a burst before giving up on it.
+# Generous next to a per-byte time of tens of microseconds, but short enough
+# that an abandoned burst cannot wedge the server.
+BURST_CS_TIMEOUT = 0.25     # seconds
+
+
 def SPI_BurstOut(data):
     """Send a run of bytes with RPI_READY held high for the whole run.
 
@@ -538,11 +544,27 @@ def SPI_BurstOut(data):
     SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
     m_sclk, m_miso, m_cs = _M_SCLK, _M_MISO, _M_CS
 
+    # Bounded, unlike SPI_ByteTransfer's spin.  That one waits forever on
+    # purpose - it is the server idling for the next command - but a burst is
+    # different: the MSX has committed to reading N bytes, and if it stops
+    # early there is nobody left to assert CS.  The driver DOES stop early: on
+    # a failed transaction it resynchronises by writing $FF to $56 and
+    # abandoning the rest of the reply.  Without a bound the Pi then spins at
+    # 100% CPU for ever, which on a single-core Pi starves everything else -
+    # including sshd, which drops the session.
+    deadline = time.perf_counter() + BURST_CS_TIMEOUT
+
     reg[SET] = _M_RDY                       # up once, for the whole burst
     try:
         for byte_out in bytearray(data):
+            spins = 0
             while reg[LEV] & m_cs:          # each byte is still its own
-                pass                        # CPLD transfer, so CS still cycles
+                                            # CPLD transfer, so CS still cycles
+                spins += 1
+                # perf_counter() is far too slow to call every iteration, and
+                # this loop is the hot path; check it rarely instead.
+                if not (spins & 0x3FF) and time.perf_counter() > deadline:
+                    return RC_FAILED
             reg[SET] = m_sclk
             reg[CLR] = m_sclk
             for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
