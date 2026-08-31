@@ -37,11 +37,22 @@ MIN_FRAME_LEN:  equ     16
 ;      B = argument byte, sent only when C is non-zero
 ;      C = 0 no argument, non-zero send B
 ;      D = number of reply bytes to read into ETH_BUF
+;      E = 0 accept any reply, 1 require ETH_BUF[0] == ETH_RC_OK
 ; Out: CF=0 success, ETH_BUF holds the reply
-;      CF=1 failure (busy, link dead, not ready, or timeout)
+;      CF=1 failure (busy, link dead, not ready, timeout, or bad result code)
 ;
 ; Always returns with the lock released and wait mode off.  The "busy" exit
 ; must NOT unlock - the lock belongs to whoever we lost the race to.
+;
+; THE RESULT-CODE CHECK IS NOT OPTIONAL PARANOIA.  In wait mode ETH_RX cannot
+; fail: `in a,($5A)` returns whatever is on the bus, so a dead or
+; desynchronised link yields garbage that looks like a perfectly good
+; transaction.  On real hardware that produced ETH_GET_NETSTAT returning 4Dh -
+; a leftover byte from the previous reply's MAC address - and a benchmark
+; reporting 2048 of 2048 calls "successful" in zero elapsed time.  Every fast
+; op answers with a result code first, so checking it is what turns a silent
+; wrong answer into an honest failure.  E=0 is only for ETH_IN_STATUS, whose
+; reply has no result-code byte.
 ETH_OP:
             ld      (ETH_OPC),a
             ld      a,b
@@ -50,6 +61,8 @@ ETH_OP:
             ld      (ETH_HASARG),a
             ld      a,d
             ld      (ETH_RLEN),a
+            ld      a,e
+            ld      (ETH_CHKRC),a
 
             call    ETH_LOCK
             ret     c                       ; busy or dead - do not unlock
@@ -76,6 +89,13 @@ ETH_OP:
             ld      hl,ETH_BUF
             call    ETH_RX_BLOCK
             jr      c,.fail
+
+            ld      a,(ETH_CHKRC)
+            or      a
+            jr      z,.done
+            ld      a,(ETH_BUF)             ; result code must be ETH_RC_OK
+            or      a
+            jr      nz,.fail
 .done:
             call    ETH_END
             call    ETH_UNLOCK
@@ -106,6 +126,7 @@ FN_RESET:
             ; and every later transaction then reads shifted data - a silent
             ; desync rather than a clean failure.
             ld      d,2
+            ld      e,1
             call    ETH_OP
             ret
 
@@ -120,6 +141,7 @@ FN_GET_HWADD:
             ld      b,0
             ld      c,0
             ld      d,7                     ; RC + 6 address bytes
+            ld      e,1
             call    ETH_OP
             jr      c,.cached               ; on failure report what we know
 
@@ -152,6 +174,7 @@ FN_GET_NETSTAT:
             ld      b,0
             ld      c,0
             ld      d,2                     ; RC + state
+            ld      e,1
             call    ETH_OP
             jr      c,.down
             ld      a,(ETH_BUF+1)
@@ -171,6 +194,7 @@ FN_NET_ONOFF:
             ld      a,OP_NET_ONOFF
             ld      c,1                     ; B already holds the argument
             ld      d,2
+            ld      e,1
             call    ETH_OP
             jr      c,.unknown
             ld      a,(ETH_BUF+1)
@@ -199,6 +223,7 @@ FN_FILTERS:
             ld      a,OP_FILTERS
             ld      c,1
             ld      d,2
+            ld      e,1
             call    ETH_OP
             jr      c,.unknown
             ld      a,(ETH_BUF+1)
@@ -229,6 +254,7 @@ FN_IN_STATUS:
             ld      b,0
             ld      c,0
             ld      d,5                     ; flag, len lo/hi, ethertype hi/lo
+            ld      e,0
             call    ETH_OP
             jr      c,.none
 
@@ -508,6 +534,7 @@ ETH_OPC:        db      0
 ETH_ARG:        db      0
 ETH_HASARG:     db      0
 ETH_RLEN:       db      0
+ETH_CHKRC:      db      0
 ETH_DEST:       dw      0
 ETH_SRC:        dw      0
 ETH_FLEN:       dw      0
