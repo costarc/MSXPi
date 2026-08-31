@@ -176,69 +176,74 @@ ALLOC_OK:
 ; including msxpi_bios.asm:97, which decides "is this openMSX?" by testing $57
 ; against $FE - must never find the device in a state it does not expect.  The
 ; driver turns it on again per transaction, inside its own lock.
-; The probe must come FIRST, before any attempt to identify the device by its
-; $57 value: an openMSX with wait-mode support still reads $FE until software
-; opts in, so testing for $FE up front would misclassify it as polled.
+; ORDER MATTERS, AND NOT FOR TIDINESS.
+;
+; Wait mode must NEVER be enabled until a POLLED transaction has already
+; succeeded, because the polled path is bounded and the wait path is not.
+;
+; The CPLD has no /WAIT timeout - `wait_assert <= wait_mode and SPI_RDY and
+; spi_en and ...` - so /WAIT is held for exactly as long as the Pi holds
+; RPI_READY high. RPI_READY is a GPIO and KEEPS ITS LAST LEVEL when the server
+; exits. If it happens to be left high with nothing clocking, one IN ($5A) in
+; wait mode stalls the Z80 for ever and the machine is dead until a power
+; cycle. Probing $57 does not protect against this: it proves the CPLD
+; implements the mode register, not that anything is alive on the other end.
+;
+; A polled transaction cannot hang - every wait in it is counted - and it fails
+; cleanly in exactly the case that matters: with RPI_READY stuck high and no
+; clocking, $56 reads ready, the OUT starts a transfer, and the following
+; bounded wait times out.
+;
+; So: work out which polled backend this device needs, prove the link with it,
+; and only then try to upgrade to /WAIT.
+
+            in      a,(CTRL2)
+            cp      VER_OPENMSX             ; $FE -> openMSX
+            ld      a,MODE_POLL_HW
+            jr      c,.try_polled           ; below $FE -> real hardware
+            ld      a,MODE_POLL_OMSX
+.try_polled:
+            ld      (ETH_MODE),a
+            ld      (DETECTED_MODE),a
+            call    ETH_VERIFY
+            jr      c,.verify_failed        ; nothing answers at all
+
+            ; The link is alive. Now see whether the CPLD offers hardware
+            ; /WAIT, and if it does, verify that too before keeping it.
             ld      a,WAITMODE_ON
             out     (CTRL2),a
             in      a,(CTRL2)
-            cp      VER_WAIT_ON         ; $8E - real CPLD v1.6 confirms the mode
-            jr      z,.mode_wait
-            cp      VER_WAIT_ON_OMSX    ; $FF - openMSX confirms it
-            jr      z,.mode_wait
+            cp      VER_WAIT_ON             ; $8E - real CPLD v1.6
+            jr      z,.try_wait
+            cp      VER_WAIT_ON_OMSX        ; $FF - openMSX
+            jr      nz,.keep_polled
 
-            xor     a                   ; not supported; put it back and look again
-            out     (CTRL2),a
-            in      a,(CTRL2)
-            cp      VER_OPENMSX         ; $FE - stock openMSX
-            jr      z,.mode_omsx
-            ld      a,MODE_POLL_HW
-            jr      .mode_store
-.mode_omsx:
-            ld      a,MODE_POLL_OMSX
-            jr      .mode_store
-.mode_wait:
+.try_wait:
             ld      a,MODE_WAIT
-.mode_store:
             ld      (ETH_MODE),a
             ld      (DETECTED_MODE),a
-
-; --- Now PROVE it, instead of trusting what $57 claimed --------------------
-; The segment is still paged in at page 1, so its routines can be called
-; directly.  ETH_VERIFY runs one OP_PROBE and checks for the 'E','T','H'
-; signature.
-;
-; This is not belt-and-braces.  On real hardware $57 correctly reports that the
-; CPLD implements wait mode, and wait mode is then intermittent anyway, because
-; the Pi drops RPI_READY between bytes: a read landing in that gap neither
-; stalls nor transfers.  The installer used to select /WAIT on that evidence
-; and the driver simply did not work, while a forced-polled benchmark on the
-; same machine passed 2048 of 2048.  Believing the capability bit is what cost
-; that.
             call    ETH_VERIFY
-            jr      nc,.mode_ok             ; it works, keep it
+            jr      nc,.mode_ok             ; /WAIT works, keep it
 
-            ; It does not.  Fall back to whichever polled backend suits this
-            ; device and verify that too.
-            ld      a,(DETECTED_MODE)
-            cp      MODE_WAIT
-            jr      nz,.verify_failed       ; already polled and still broken
-
+            ; It does not. Fall back to the polled backend we already proved.
             in      a,(CTRL2)
             cp      VER_OPENMSX
             ld      a,MODE_POLL_HW
-            jr      c,.fb_store             ; below $FE: real hardware
+            jr      c,.fb
             ld      a,MODE_POLL_OMSX
-.fb_store:
+.fb:
             ld      (ETH_MODE),a
             ld      (DETECTED_MODE),a
-            call    ETH_VERIFY
-            jr      nc,.mode_ok
+            jr      .mode_ok
+
+.keep_polled:
+            jr      .mode_ok
+
 .verify_failed:
             ld      a,0FFh                  ; nothing works - say so plainly
             ld      (DETECTED_MODE),a
 .mode_ok:
-            xor     a                   ; and leave wait mode off
+            xor     a                       ; always leave wait mode off
             out     (CTRL2),a
 
 ; -----------------------------------------------------------------------------
