@@ -25,7 +25,13 @@ TIMEOUT="${TIMEOUT:-300}"
 # Ubuntu has no bare `python`; Git Bash on Windows has no `python3`.
 PYTHON="${PYTHON:-python}"
 
-MACHINE="Canon_V-25"
+# Canon_V-25 has only a 64K mapper, so the harness had to add ram2mb - which
+# lands the mapper in a DIFFERENT SLOT from page-1 RAM. InterNestor Lite's
+# "am I installed?" check compares the implementation's slot against RAMAD1
+# (F344h) and skips anything that does not match, so with a separate mapper
+# card it reports "not installed" however well everything else works.
+# MACHINE=Philips_NMS_8245 has 128K in the main slot and needs no ram2mb.
+MACHINE="${MACHINE:-Canon_V-25}"
 
 # Hardware profile.  HW=msxpi (default) serves the disk over MSXPi, which is the
 # existing working setup and what every phase before InterNestor Lite needs.
@@ -37,6 +43,7 @@ MACHINE="Canon_V-25"
 HW="${HW:-msxpi}"
 case "$HW" in
     msxpi) EXTS=(-ext MSXPi -ext ram2mb) ;;
+    msxpi128) EXTS=(-ext MSXPi) ;;   # machine already has >=128K in the RAM slot
     mfr)   EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi) ;;
     *)     echo "unknown HW='$HW' (want msxpi or mfr)"; exit 1 ;;
 esac
