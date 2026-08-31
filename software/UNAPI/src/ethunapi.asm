@@ -202,7 +202,43 @@ ALLOC_OK:
 .mode_store:
             ld      (ETH_MODE),a
             ld      (DETECTED_MODE),a
-            xor     a                   ; and leave it off
+
+; --- Now PROVE it, instead of trusting what $57 claimed --------------------
+; The segment is still paged in at page 1, so its routines can be called
+; directly.  ETH_VERIFY runs one OP_PROBE and checks for the 'E','T','H'
+; signature.
+;
+; This is not belt-and-braces.  On real hardware $57 correctly reports that the
+; CPLD implements wait mode, and wait mode is then intermittent anyway, because
+; the Pi drops RPI_READY between bytes: a read landing in that gap neither
+; stalls nor transfers.  The installer used to select /WAIT on that evidence
+; and the driver simply did not work, while a forced-polled benchmark on the
+; same machine passed 2048 of 2048.  Believing the capability bit is what cost
+; that.
+            call    ETH_VERIFY
+            jr      nc,.mode_ok             ; it works, keep it
+
+            ; It does not.  Fall back to whichever polled backend suits this
+            ; device and verify that too.
+            ld      a,(DETECTED_MODE)
+            cp      MODE_WAIT
+            jr      nz,.verify_failed       ; already polled and still broken
+
+            in      a,(CTRL2)
+            cp      VER_OPENMSX
+            ld      a,MODE_POLL_HW
+            jr      c,.fb_store             ; below $FE: real hardware
+            ld      a,MODE_POLL_OMSX
+.fb_store:
+            ld      (ETH_MODE),a
+            ld      (DETECTED_MODE),a
+            call    ETH_VERIFY
+            jr      nc,.mode_ok
+.verify_failed:
+            ld      a,0FFh                  ; nothing works - say so plainly
+            ld      (DETECTED_MODE),a
+.mode_ok:
+            xor     a                   ; and leave wait mode off
             out     (CTRL2),a
 
 ; -----------------------------------------------------------------------------
@@ -268,6 +304,9 @@ MAPFND:
             jr      z,.report
             cp      MODE_POLL_OMSX
             ld      de,MODE_OMSX_S
+            jr      z,.report
+            cp      0FFh
+            ld      de,MODE_NONE_S
             jr      z,.report
             ld      de,MODE_POLLED_S
 .report:
@@ -335,6 +374,7 @@ OK_S:       db      "Installed.",13,10,"$"
 MODE_WAIT_S:   db   "Transport: hardware /WAIT",13,10,"$"
 MODE_POLLED_S: db   "Transport: polled",13,10,"$"
 MODE_OMSX_S:   db   "Transport: polled (openMSX)",13,10,"$"
+MODE_NONE_S:   db   "Transport: NONE - link did not answer",13,10,"$"
 
 UNAPI_ID_STR:
             db      "ETHERNET",0

@@ -245,3 +245,4 @@ SEG_CODE_END:
             export  SEG_CODE_START
             export  SEG_CODE_END
             export  ETH_MODE
+            export  ETH_VERIFY

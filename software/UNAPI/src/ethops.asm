@@ -506,6 +506,44 @@ FN_SET_HWADD:
             jp      FN_GET_HWADD
 
 ; =============================================================================
+; ETH_VERIFY - prove the selected transport actually works
+; =============================================================================
+; Out: CF=0 the link answered correctly, CF=1 it did not.  Corrupts AF.
+;
+; Runs one OP_PROBE and checks for the 'E','T','H' signature.  Port $57 saying
+; "wait mode supported" only means the CPLD implements the register - on real
+; hardware /WAIT then turned out to be intermittent, because the Pi drops
+; RPI_READY between bytes and an IN ($5A) landing in that gap neither stalls
+; nor transfers.  Detection that believes $57 selected a backend that does not
+; work; this is what makes it check.
+;
+; The signature matters: a stale or floating bus can produce a zero result code
+; by luck, but not three specific ASCII bytes in order.
+ETH_VERIFY:
+            call    ETH_REVIVE              ; clear any latched failure first
+            ld      a,OP_PROBE
+            ld      b,0
+            ld      c,0
+            ld      d,5                     ; RC + 'E','T','H',version
+            ld      e,1
+            call    ETH_OP
+            ret     c
+            ld      a,(ETH_BUF+1)
+            cp      "E"
+            jr      nz,.bad
+            ld      a,(ETH_BUF+2)
+            cp      "T"
+            jr      nz,.bad
+            ld      a,(ETH_BUF+3)
+            cp      "H"
+            jr      nz,.bad
+            or      a                       ; CF=0
+            ret
+.bad:
+            scf
+            ret
+
+; =============================================================================
 ; 128: implementation-specific - force the transport mode
 ; =============================================================================
 ; In:  B = 0 report only, 1 force polled-hardware, 2 force /WAIT,
