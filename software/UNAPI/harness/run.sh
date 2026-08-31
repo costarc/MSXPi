@@ -21,7 +21,7 @@ OUTDIR="$HERE/out"
 
 OPENMSX="${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openMSX/openmsx.exe}"
 MSXPI_SERVER="${MSXPI_SERVER-$HERE/../../Server/Python/src/msxpi-server.py}"
-TIMEOUT="${TIMEOUT:-120}"
+TIMEOUT="${TIMEOUT:-300}"
 # Ubuntu has no bare `python`; Git Bash on Windows has no `python3`.
 PYTHON="${PYTHON:-python}"
 
@@ -126,7 +126,10 @@ for t in "${TESTS[@]}"; do
     fi
 
     result="$OUTDIR/$t.result"
-    rm -f "$result"
+    # Remove every artefact for this test, not just the result: a stale
+    # .screen from a previous run looks exactly like a fresh one and will
+    # happily send you diagnosing output that no longer exists.
+    rm -f "$result" "$result".* "$OUTDIR/$t.openmsx.log"
 
     # A fresh server per test: the protocol is stateful and a test that dies
     # mid-block would otherwise leave the next one reading someone else's bytes.

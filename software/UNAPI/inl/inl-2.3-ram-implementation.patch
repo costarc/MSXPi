@@ -1,0 +1,35 @@
+--- INL-TRAN.ASM	2026-08-30 10:54:25.119940700 +0100
++++ C:/Users/roniv/AppData/Local/Temp/claude/C--Temp-MSX-FPGA-Hat/3b14f88a-f590-430e-89c0-c2cef443419d/scratchpad/inl/INL-TRAN.ASM	2026-08-31 13:23:30.561120700 +0100
+@@ -829,8 +829,19 @@
+ 	ld	(_UN_ADDRESS),hl
+ 
+ 	cp	#FF
+-	jr	nz,SRCHUNAPI_2
+-	;ld	a,#FF
++	jr	z,SRCHUNAPI_2	;PATCHED: was "jr nz". The RAM helper is needed when
++				;the implementation IS in a segment (seg != FF),
++				;not when it is not. As shipped, _UN_RAMCALL stays
++				;0 for RAM implementations and "jp (ix)" below
++				;jumps to address 0. See INL's own comment at
++				;"JP to CALSLT if segment is #FF, to UN_RAMCALL
++				;otherwise".
++	ld	a,#FF		;PATCHED: was commented out. It was redundant only
++				;because the old test fell through with A already
++				;#FF; with the test corrected we must set it.
++	ld	hl,0		;PATCHED: the RAM helper query is A=FF, DE=2222h,
++				;HL=0. HL currently holds the entry point, which
++				;has already been saved to _UN_ADDRESS.
+ 	call	EXTBIO
+ 	ld	(_UN_RAMCALL),hl
+ SRCHUNAPI_2:
+@@ -852,6 +863,10 @@
+ 	jr	z,IS_ROM
+ 	ld	b,a
+ 	ld	ix,(_UN_RAMCALL)	;RAMCALL: In: A=Slot, HL=Dir, B=Seg; Out: A=Data
++	inc	ix			;PATCHED: _UN_RAMCALL is the helper's jump
++	inc	ix			;table base, whose +0 is CALL_MAP (used
++	inc	ix			;correctly at EXEUNAP3). The byte-read
++					;wanted here is RD_MAP, which is at +3.
+ IS_ROM:
+ 
+ 	;>> Here IX contains READHL, RDSLT or UN_RAMCALL,
