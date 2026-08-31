@@ -26,7 +26,10 @@ IMP_V_S:    equ     1
 ; Highest standard routine number.  The Ethernet UNAPI defines routines 0..11
 ; (ETH_GETINFO through ETH_SET_HWADD).  No implementation-specific routines.
 MAX_FN:     equ     11
-MAX_IMPFN:  equ     0
+; One implementation-specific routine, 128: force the transport mode.  Purely a
+; diagnostic - it exists so a benchmark can measure polled against hardware
+; /WAIT on the same machine in the same run.
+MAX_IMPFN:  equ     128
 
             org     4000h
 
@@ -132,7 +135,14 @@ UNAPI_ENTRY:
             push    af
             ld      hl,FN_TABLE
             bit     7,a
-            jr      nz,UNDEFINED        ; no implementation-specific routines
+            jr      z,.standard
+            ld      hl,IMPFN_TABLE      ; 128.. : implementation-specific
+            and     01111111b
+            cp      MAX_IMPFN-128
+            jr      z,OK_FNUM
+            jr      nc,UNDEFINED
+            jr      OK_FNUM
+.standard:
             cp      MAX_FN
             jr      z,OK_FNUM
             jr      nc,UNDEFINED
@@ -172,6 +182,10 @@ FN_TABLE:
             dw      FN_SEND_FRAME       ; 9  ETH_SEND_FRAME
             dw      FN_OUT_STATUS       ; 10 ETH_OUT_STATUS
             dw      FN_SET_HWADD        ; 11 ETH_SET_HWADD
+
+; --- Implementation-specific ------------------------------------------------
+IMPFN_TABLE:
+            dw      FN_SET_MODE         ; 128 force/report the transport mode
 
 ; =============================================================================
 ; Routines

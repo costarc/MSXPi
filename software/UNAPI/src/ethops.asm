@@ -100,7 +100,12 @@ FN_RESET:
             ld      a,OP_RESET
             ld      b,0
             ld      c,0
-            ld      d,1
+            ; TWO bytes, not one: every fast op replies with a result code
+            ; followed by its payload, and OP_RESET's payload is one byte.
+            ; Reading only the result code leaves the payload byte on the wire,
+            ; and every later transaction then reads shifted data - a silent
+            ; desync rather than a clean failure.
+            ld      d,2
             call    ETH_OP
             ret
 
@@ -473,6 +478,28 @@ FN_OUT_STATUS:
 ; nothing and return the current address exactly as ETH_GET_HWADD would.
 FN_SET_HWADD:
             jp      FN_GET_HWADD
+
+; =============================================================================
+; 128: implementation-specific - force the transport mode
+; =============================================================================
+; In:  B = 0 report only, 1 force polled-hardware, 2 force /WAIT,
+;          3 force polled-openMSX
+; Out: A = the mode in effect BEFORE this call
+;
+; Diagnostic only.  It exists so ETHBENCH can time the same transfer loop under
+; each backend on one machine, which is the only way to know what hardware
+; /WAIT is actually worth rather than inferring it.
+FN_SET_MODE:
+            ld      a,(ETH_MODE)
+            push    af
+            ld      a,b
+            or      a
+            jr      z,.report
+            dec     a                   ; 1 -> 0 polled hw, 2 -> 1 wait,
+            ld      (ETH_MODE),a        ; 3 -> 2 polled openMSX
+.report:
+            pop     af
+            ret
 
 ; =============================================================================
 ; Scratch

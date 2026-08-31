@@ -34,6 +34,9 @@ echo "--- assembling installer"
 echo "--- assembling discovery test client"
 "$SJASM" ethtest.asm ETHTEST.COM ethtest.lst
 
+echo "--- assembling transport benchmark"
+"$SJASM" ethbench.asm ETHBENCH.COM ethbench.lst
+
 size_seg=$(wc -c < ethseg.bin)
 size_com=$(wc -c < ETHUNAPI.COM)
 echo "    ethseg.bin   $size_seg bytes"
@@ -60,6 +63,7 @@ DSK="$(basename "$DISK")"
 cd "$(dirname "$DISK")"
 python "$DSKTOOL" copy "$SRC/ETHUNAPI.COM" "$DSK:ETHUNAPI.COM"
 python "$DSKTOOL" copy "$SRC/ETHTEST.COM"  "$DSK:ETHTEST.COM"
+python "$DSKTOOL" copy "$SRC/ETHBENCH.COM" "$DSK:ETHBENCH.COM"
 if [ -f "$RAMHELPR" ]; then
     python "$DSKTOOL" copy "$RAMHELPR" "$DSK:RAMHELPR.COM"
 else
