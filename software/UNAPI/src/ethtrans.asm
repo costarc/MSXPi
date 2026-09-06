@@ -59,8 +59,21 @@ VER_OPENMSX:  equ   0FEh
 ; Polled-mode spin limit, in iterations of an ~30 T-state loop.  2048 is about
 ; 17 ms at 3.58 MHz: comfortably longer than the Pi's worst observed per-byte
 ; latency, and short enough that a single failure does not eat several
-; interrupt slots.  It only ever runs to completion when something is broken,
-; and the first timeout latches ETH_DEAD so it does not run again.
+; interrupt slots.  It only ever runs to completion when something is broken.
+;
+; The live value is (ix+o_ETH_TMO), counted in units of 256 iterations, and
+; NOT because anyone wanted it adjustable: the very first transaction after a
+; cold boot is much slower than every later one, because the other end builds
+; its Ethernet shuttle lazily - importing the module and opening the TAP
+; device - when the first opcode arrives.  With a fixed 17 ms budget that
+; first transaction times out, and then the reply lands in a queue nobody is
+; reading: every later transaction reads the previous one's answer.  That is
+; not a lost call, it is permanent desync, and it is what made ETHTEST report
+; the probe's "ETH" signature as the MAC address.
+;
+; So the work area starts at zero, which this loop reads as the LONGEST
+; budget (65536 iterations, about half a second), and ETH_DETECT drops it to
+; the normal value once the link has answered once.
 ETH_TIMEOUT:  equ   2048
 
 ; ETH_MODE values.
@@ -71,10 +84,16 @@ MODE_POLL_OMSX: equ   2     ; polled, openMSX ($56 = 2 when a byte is queued)
 ; =============================================================================
 ; State
 ; =============================================================================
-ETH_MODE:   db      0               ; one of MODE_* above
-ETH_BUSY:   db      0               ; re-entrancy flag
-ETH_DEAD:   db      0               ; link given up on after repeated failures
-ETH_FAILCNT: db     0               ; CONSECUTIVE failures; any success clears it
+; Every mutable byte lives in the work area IX points at - see
+; asm-common/include/unapi_wrk.inc for the offsets and for why.  The ROM build
+; cannot write to itself, and keeping a separate ROM copy of this file was not
+; an option, so BOTH builds reach their state through IX.
+;
+; MODE_UNKNOWN is what the ROM build starts with.  The transport cannot be
+; probed at INIENV time, because on real hardware the Pi is usually still
+; booting then and a probe would fail and lock us into the slow backend for
+; the rest of the session; detection is deferred to the first UNAPI call.
+MODE_UNKNOWN:   equ   0FFh
 
 ; How many consecutive failures before declaring the link dead.
 ;
@@ -88,6 +107,19 @@ ETH_FAILCNT: db     0               ; CONSECUTIVE failures; any success clears i
 ; A transient deserves a retry; a genuinely absent Pi still gets given up on
 ; quickly, since eight consecutive timeouts cost well under a second.
 ETH_MAXFAIL:  equ   8
+
+; Drain limits for ETH_RESYNC.  ETH_DRAINTMO is the HIGH byte of the spin
+; counter (see ETH_WAIT_READY), so 1 is ~256 iterations, a couple of
+; milliseconds - long enough for a byte the other end has already queued to
+; appear, short enough that a clean link is not punished.  ETH_DRAINMAX is
+; sized for a whole stranded reply: a maximum Ethernet frame plus its header,
+; not merely a few stray bytes.
+; How many refused calls to sit out before a dead link gets another chance.
+; 128 is about 2.5 s at INL's polling rate.
+ETH_RETRYAFTER: equ 128
+
+ETH_DRAINTMO: equ   1
+ETH_DRAINMAX: equ   1600
 
 ; =============================================================================
 ; Locking
@@ -118,16 +150,43 @@ ETH_MAXFAIL:  equ   8
 ; `ld (ETH_BUSY),a` is a single instruction, so there is no torn write. That is
 ; the whole argument.
 ETH_LOCK:
-            ld      a,(ETH_DEAD)
+            ; The disk owns the link right now - back off.  Reporting "nothing
+            ; to do" is the right answer for the ISR: it simply tries again on
+            ; the next tick, and the frame is still waiting in the Pi's queue.
+            ld      a,(ix+o_LINK_BUSY)
             or      a
             jr      nz,.refuse
-            ld      a,(ETH_BUSY)
+            ; A dead link is no longer a one-way door.  ETH_DEAD used to be
+            ; cleared only by ETH_RESET or ETH_DETECT, and InterNestor Lite
+            ; calls neither once installed - so a single burst of eight
+            ; failures killed networking for the rest of the session, and the
+            ; only cure was running ETHTEST to force a reset.  That is a very
+            ; poor answer to what is usually a transient glitch, especially now
+            ; that ETH_RESYNC drains the stranded reply that caused it.
+            ;
+            ; So count refusals while dead and let one attempt through every
+            ; ETH_RETRYAFTER of them.  o_ETH_FAILCNT is reused rather than
+            ; spending another byte of the DOS work area: it is only meaningful
+            ; while the link is alive, and ETH_REVIVE zeroes it on the way out.
+            ; At INL's 50/60 Hz polling that is a retry every ~2.5 seconds - it
+            ; recovers on its own, without hammering a link that is genuinely
+            ; down.
+            ld      a,(ix+o_ETH_DEAD)
+            or      a
+            jr      z,.alive
+            inc     (ix+o_ETH_FAILCNT)
+            ld      a,(ix+o_ETH_FAILCNT)
+            cp      ETH_RETRYAFTER
+            jr      c,.refuse
+            call    ETH_REVIVE              ; clears DEAD and FAILCNT; keeps
+                                            ; every register and the flags
+.alive:
+            ld      a,(ix+o_ETH_BUSY)
             or      a
             jr      nz,.refuse
 
-            ld      a,1
-            ld      (ETH_BUSY),a            ; single instruction: atomic enough
-            or      a                       ; CF=0: acquired
+            ld      (ix+o_ETH_BUSY),1       ; single instruction: atomic enough
+            or      a                       ; A is still 0 here: CF=0, acquired
             ret
 .refuse:
             scf
@@ -135,10 +194,7 @@ ETH_LOCK:
 
 ; --- ETH_UNLOCK: release the lock.  Preserves every register and the flags.
 ETH_UNLOCK:
-            push    af
-            xor     a
-            ld      (ETH_BUSY),a
-            pop     af
+            ld      (ix+o_ETH_BUSY),0
             ret
 
 ; =============================================================================
@@ -154,7 +210,7 @@ ETH_UNLOCK:
 ; SPI_RDY low the CPLD does not start a transfer and does not stall, so an
 ; INIR would run at full speed and return garbage.
 ETH_BEGIN:
-            ld      a,(ETH_MODE)
+            ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled_ok           ; polled modes check per byte
 
@@ -173,7 +229,7 @@ ETH_BEGIN:
 ; --- ETH_END: leave the device exactly as we found it.  Preserves all regs.
 ETH_END:
             push    af
-            ld      a,(ETH_MODE)
+            ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.done
             xor     a                       ; wait mode off
@@ -187,13 +243,11 @@ ETH_END:
 ; returns CF=1.  Corrupts AF.
 ETH_FAIL:
             call    ETH_RESYNC
-            ld      a,(ETH_FAILCNT)
-            inc     a
-            ld      (ETH_FAILCNT),a
+            inc     (ix+o_ETH_FAILCNT)
+            ld      a,(ix+o_ETH_FAILCNT)
             cp      ETH_MAXFAIL
             jr      c,.notdead
-            ld      a,1
-            ld      (ETH_DEAD),a
+            ld      (ix+o_ETH_DEAD),1
 .notdead:
             call    ETH_END
             scf
@@ -202,10 +256,7 @@ ETH_FAIL:
 ; --- ETH_OK: one successful transaction.  Clears the consecutive-failure run.
 ; Preserves every register and the flags.
 ETH_OK:
-            push    af
-            xor     a
-            ld      (ETH_FAILCNT),a
-            pop     af
+            ld      (ix+o_ETH_FAILCNT),0
             ret
 
 ; --- ETH_RESYNC: put the device back to a known state after a failure.
@@ -223,18 +274,64 @@ ETH_OK:
 ;
 ; This is why tolerating consecutive failures is not on its own enough: without
 ; the resync the failures are never independent.
+;
+; It is not a complete answer either.  It resets OUR side; a reply the other
+; end had already produced is still sitting in its buffer, and under openMSX -
+; where the link is a socket rather than a device the MSX clocks - nothing here
+; can drain it.  That is exactly how the first cold-boot probe used to poison
+; every transaction after it; see ETH_TIMEOUT above for what actually fixed
+; that.  If the failure recurs, a bounded read-and-discard loop here, while $56
+; still reports a byte queued, is the next thing to try.
 ETH_RESYNC:
             push    af
+            push    bc
+            push    de
             ld      a,0FFh
-            out     (CTRL1),a
+            out     (CTRL1),a           ; clear OUR side first, as before
+
+            ; Then drain THEIR side.  Writing $FF resets the CPLD but says
+            ; nothing to msxpi-server.py, which is a separate process with its
+            ; own state machine: a reply it has already produced is still
+            ; queued, and the next command - very often a DSKIO, since the disk
+            ; shares this link - reads that instead of its own answer.  On real
+            ; hardware that surfaced as MSX-DOS asking to "Insert a DOS disk in
+            ; the default drive" right after quitting a network program, with
+            ; the Ethernet side still perfectly healthy.
+            ;
+            ; There is no status bit for "bytes are waiting" that is meaningful
+            ; before a read is requested - $56 reads 0 both when idle and when
+            ; a byte is ready - so the only way to ask is to request one and
+            ; see.  The loop therefore ends the moment a request times out,
+            ; which on an already-clean link costs a single short spin.
+            ld      e,(ix+o_ETH_TMO)    ; save the normal timeout
+            ld      (ix+o_ETH_TMO),ETH_DRAINTMO
+            ld      bc,ETH_DRAINMAX
+.drain:
+            push    bc
+            call    ETH_RX
+            pop     bc
+            jr      c,.drained          ; nothing came - both ends in step
+            dec     bc
+            ld      a,b
+            or      c
+            jr      nz,.drain
+.drained:
+            ld      (ix+o_ETH_TMO),e    ; restore
+            ld      a,0FFh
+            out     (CTRL1),a           ; the losing ETH_RX left a read
+                                        ; request outstanding; clear it
+            pop     de
+            pop     bc
             pop     af
             ret
 
-; --- ETH_REVIVE: clear the dead flag.  ETH_RESET uses this.  Corrupts AF.
+; --- ETH_REVIVE: clear the dead flag and the failure run.  ETH_RESET uses
+; this, and so does ETH_DETECT as its last act - which is why it must preserve
+; every register AND the flags: ETH_DETECT's carry, saying whether anything
+; answered at all, has to survive it.
 ETH_REVIVE:
-            xor     a
-            ld      (ETH_DEAD),a
-            ld      (ETH_FAILCNT),a
+            ld      (ix+o_ETH_DEAD),0
+            ld      (ix+o_ETH_FAILCNT),0
             ret
 
 ; =============================================================================
@@ -244,29 +341,23 @@ ETH_REVIVE:
 ; --- ETH_TX: send A.
 ; Out: CF=1 on timeout.  Corrupts AF.  BC/DE/HL preserved.
 ;
+; There is no mode test here, and there does not need to be: sending is the
+; same instruction sequence either way.  The only difference is invisible to
+; this code - in wait mode the OUT itself stalls the Z80 until the transfer
+; completes, in polled mode it returns at once and the NEXT ETH_WAIT_READY
+; is what waits.  (An earlier version branched on the mode into two literally
+; identical blocks.)
+;
 ; The byte is parked in E, not C: ETH_WAIT_READY corrupts BC, so keeping it
 ; there would destroy the very byte being sent.
 ETH_TX:
             push    bc
             push    de
             ld      e,a
-
-            ld      a,(ETH_MODE)
-            cp      MODE_WAIT
-            jr      nz,.polled
-
             call    ETH_WAIT_READY          ; see the note in ETH_RX_BLOCK
-            jr      c,.timeout
-            ld      a,e                     ; wait mode: the OUT stalls us
-            out     (DATA1),a
-            jr      .ok
-
-.polled:
-            call    ETH_WAIT_READY
             jr      c,.timeout
             ld      a,e
             out     (DATA1),a
-.ok:
             pop     de
             pop     bc
             or      a                       ; CF=0
@@ -279,33 +370,25 @@ ETH_TX:
 
 ; --- ETH_RX: receive into A.
 ; Out: CF=1 on timeout.  Corrupts AF.  BC/DE/HL preserved.
+;
+; Receiving DOES differ by mode, but only by the middle step: in wait mode the
+; IN both starts the transfer and stalls us, while a polled backend has to ask
+; for the byte first and then wait for it to arrive.
 ETH_RX:
-            ld      a,(ETH_MODE)
-            cp      MODE_WAIT
-            jr      nz,.polled
-
-            push    bc
-            call    ETH_WAIT_READY          ; see the note in ETH_RX_BLOCK
-            pop     bc
-            jr      c,.rxfail
-            in      a,(DATA1)               ; wait mode: the IN stalls us
-            or      a                       ; preserves A, clears CF
-            ret
-.rxfail:
-            scf
-            ret
-
-.polled:
             push    bc
             call    ETH_WAIT_READY          ; device must be idle first
             jr      c,.timeout
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_WAIT
+            jr      z,.get
             xor     a
             out     (CTRL1),a               ; request a byte
             call    ETH_WAIT_DATA
             jr      c,.timeout
+.get:
             in      a,(DATA1)
             pop     bc
-            or      a
+            or      a                       ; preserves A, clears CF
             ret
 .timeout:
             pop     bc
@@ -318,7 +401,8 @@ ETH_RX:
 ; matching the stock CHKPIRDY.  Waiting for 0 alone would deadlock under
 ; openMSX whenever a byte was still sitting in the queue.
 ETH_WAIT_READY:
-            ld      bc,ETH_TIMEOUT
+            ld      c,0
+            ld      b,(ix+o_ETH_TMO)
 .loop:
             in      a,(CTRL1)
             or      a
@@ -349,37 +433,25 @@ ETH_WAIT_READY:
 ; immediately and read $FF - MSXPiDevice::readIO's "no data ready" filler -
 ; producing a perfectly successful transaction full of garbage.  That is why
 ; ETH_MODE distinguishes polled-openMSX (2) from polled-hardware (0).
+;
+; ONE loop serves both, because MODE_POLL_HW and MODE_POLL_OMSX were given
+; the values 0 and 2 - exactly the $56 reading each of them has to wait for.
+; That is a deliberate coupling and the only reason those two constants have
+; the values they do: any new polled backend must either keep the property or
+; this routine needs a separate "ready value" byte in the work area.  Only the
+; polled paths of ETH_RX reach here, so MODE_WAIT never appears in (ix).
 ETH_WAIT_DATA:
-            ld      a,(ETH_MODE)
-            cp      MODE_POLL_OMSX
-            jr      z,.openmsx
-
-            ld      bc,ETH_TIMEOUT
-.hwloop:
+            ld      c,0
+            ld      b,(ix+o_ETH_TMO)
+.loop:
             in      a,(CTRL1)
-            or      a
-            ret     z                       ; transfer done, CF=0
+            cp      (ix+o_ETH_MODE)
+            ret     z                       ; byte available, CF=0
             dec     bc
             ld      a,b
             or      c
-            jr      nz,.hwloop
+            jr      nz,.loop
             scf
-            ret
-
-.openmsx:
-            ld      bc,ETH_TIMEOUT
-.omloop:
-            in      a,(CTRL1)
-            cp      2
-            jr      z,.omok
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,.omloop
-            scf
-            ret
-.omok:
-            or      a                       ; CF=0
             ret
 
 ; =============================================================================
@@ -411,58 +483,12 @@ ETH_WAIT_DATA:
 ; run: SPI_BurstOut holds RDY high for the whole reply, so only the boundary
 ; needs guarding.
 
-; --- ETH_TX_BLOCK: send BC bytes from HL.
-; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
-ETH_TX_BLOCK:
-            ld      a,b
-            or      c
-            ret     z                       ; nothing to do, CF=0
-
-            ld      a,(ETH_MODE)
-            cp      MODE_WAIT
-            jr      nz,.polled
-
-            push    bc                      ; ETH_WAIT_READY corrupts BC
-            push    hl
-            call    ETH_WAIT_READY
-            pop     hl
-            pop     bc
-            ret     c
-
-.wloop:
-            ld      a,b
-            or      a
-            jr      z,.wlast                ; fewer than 256 bytes left
-            push    bc
-            ld      b,0                     ; B=0 means 256 iterations
-            ld      c,DATA1
-            otir
-            pop     bc
-            dec     b
-            jr      .wloop
-.wlast:
-            ld      a,c
-            or      a
-            ret     z                       ; exact multiple of 256: done
-            ld      b,c
-            ld      c,DATA1
-            otir
-            or      a
-            ret
-
-.polled:
-            push    bc
-            ld      a,(hl)
-            call    ETH_TX
-            pop     bc
-            ret     c
-            inc     hl
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,.polled
-            or      a
-            ret
+; There is no ETH_TX_BLOCK.  One existed and was never called: every send
+; goes through ETH_TX_SUM, which has to see each byte to accumulate the
+; checksum the Pi verifies.  Sending a frame therefore costs a CALL per byte
+; instead of OTIR's 21 T-states - the obvious fix is to sum the buffer in one
+; pass and then OTIR it in a second, but that is a change to a path that has
+; never carried a real frame, so it is left for when one does.
 
 ; --- ETH_RX_BLOCK: receive BC bytes into HL.
 ; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
@@ -471,7 +497,7 @@ ETH_RX_BLOCK:
             or      c
             ret     z
 
-            ld      a,(ETH_MODE)
+            ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled
 
