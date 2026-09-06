@@ -150,10 +150,16 @@ PIWRITEBYTE_ERR:
 ; Called on beginning of every command
 ; In openMSX implementation, will clear the queue 
 ; avoiding checksum loop after an interruption
+; Not assembled into the ROM: the disk driver never calls resetMSXPI, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 resetMSXPI:
 		ld		a,$FF
 		out		(CONTROL_PORT1),a
 		ret
+ endif
 		      
 ; ---------------------------------------------------------
 ; SENDDATA (single-block, size <= MAXBUFSIZE)
@@ -248,7 +254,7 @@ SD2_SEND_LOOP:
     ld      a,b
     or      c
     jr      z,SD2_SEND_DONE         ; all bytes sent
-    ld      a,(de)                  ; A = payload byte
+    call    LOAD_BYTE               ; A = payload byte, page-1 safe
 	push    de
     push    bc
 	ld      e,a                     ; e = payload copy
@@ -443,11 +449,11 @@ r2_retry:
     pop     ix              ; restore retry_count
 
     call    PIREADBYTE      ; length low
-    jr      c, r2_conn_err
-    ld      c, a
+    jp      c, r2_conn_err  ; JP not JR: LOAD_BYTE/STORE_BYTE sit between here
+    ld      c, a            ; and the error paths, past relative-jump range
 
     call    PIREADBYTE      ; length high
-    jr      c, r2_conn_err
+    jp      c, r2_conn_err
     ld      b, a            ; BC = length
     push    ix              ; MSXPI_GETSTASH clobbers IX (retry_count)
     push    de              ; and DE isn't verified safe across its
@@ -527,6 +533,42 @@ r2_no_carry:
     jr      r2_payload_loop
 
 ; ------------------------------------------------------------
+; LOAD_BYTE - read A from (DE), correctly even when DE is in page 1
+; ------------------------------------------------------------
+; The mirror of STORE_BYTE, and needed for the same reason: while this driver
+; runs, #4000-#7FFF is our own EEPROM rather than RAM.  DSKIO_WRITE hands
+; SENDDATA the DOS transfer address, so writing a file larger than ~16 KB from
+; the TPA would have read OUR ROM and sent that to the Pi - silently writing
+; the wrong bytes into the disk image.  Not observed in the wild only because
+; the read path failed first, and loudly.
+;
+; RDSLT corrupts DE as well as AF and BC, so DE is saved here too - it is the
+; caller's source pointer and the send loop advances it.
+;
+; Only SENDDATA's payload loop uses this.  SendCommandToMSXPi also reads via
+; (DE), but always from a command string in this ROM, never from a caller's
+; buffer.
+LOAD_BYTE:
+    bit     7, d
+    jr      nz, LOAD_BYTE_1
+    bit     6, d
+    jr      z, LOAD_BYTE_1
+    push    hl
+    push    bc
+    push    de
+    ld      h, d
+    ld      l, e            ; HL = source address
+    ld      a, (RAMAD1)     ; A  = slot holding RAM in page 1
+    call    RDSLT           ; A  = data
+    pop     de
+    pop     bc
+    pop     hl
+    ret
+LOAD_BYTE_1:
+    ld      a, (de)
+    ret
+
+; ------------------------------------------------------------
 ; STORE_BYTE - write A to (DE), correctly even when DE is in page 1
 ; ------------------------------------------------------------
 ; When DE lands in #4000-#7FFF this ROM is banked in there - DOS reaches the
@@ -582,11 +624,6 @@ STORE_BYTE_1:
 
 r2_unexpecteddata:
     ld      a, RC_UNEXPECTEDDATA
-    scf
-    ret
-
-r2_bufovflw:
-    ld      a, RC_BUFOVFLW
     scf
     ret
 
@@ -843,6 +880,11 @@ PRINT1:
         inc     hl
         jr      PRINT
 
+; Not assembled into the ROM: the disk driver never calls PRINTNLINE, PRINTNUMBER or PRINTDIGIT, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 PRINTNLINE:
         ld      a,13
         call    PUTCHAR
@@ -883,6 +925,7 @@ PRINTNUM1:
         add     a,d
         call    PUTCHAR
         ret
+ endif
 
 STRTOHEX:
 ; Convert the 4 bytes ascii values in buffer DE to hex
@@ -961,6 +1004,11 @@ ATOHERR:
 ; BC = buffer size
 ; DE = Buffer Address
 ;
+; Not assembled into the ROM: the disk driver never calls CLEARBUF, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 CLEARBUF:
         push    bc
         push    de
@@ -975,6 +1023,7 @@ CLEARBUF:
         pop     de
         pop     bc
         ret
+ endif
 
 
 ;-----------------------

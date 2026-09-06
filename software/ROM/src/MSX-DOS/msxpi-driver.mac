@@ -31,6 +31,10 @@
 ;
 ; MSXPi Driver v1.5 (2026)
 
+; Work area layout and load address of the Ethernet UNAPI driver appended at
+; the end of this ROM.  Shared verbatim with the sjasm build of that driver.
+INCLUDE unapi_wrk.inc
+
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
 DATA_PORT1 EQU $5A
@@ -75,7 +79,11 @@ RC_OUTOFSYNC   EQU $E5
 ; 14	insufficient memory
 ; 16	other error
 
-MYSIZE		equ	9		; Size of environment
+; Size of the disk driver work area the kernel allocates for us.  Offsets
+; 0..4 are DSKIO_SECTINFO's, 5..7 are MSXPI_GETSTASH's, and everything from
+; UNAPI_WRK up belongs to the Ethernet UNAPI driver appended at the end of
+; this ROM - see asm-common/include/unapi_wrk.inc.
+MYSIZE		equ	UNAPI_WRKEND	; Size of environment
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -139,7 +147,13 @@ DRIVES:
 ;		depends on the hardware if this is needed.
 
 INIENV:
-        ret
+        ; Hand over to the Ethernet UNAPI driver at the end of this ROM: it
+        ; hooks EXTBIO and initialises its part of the work area, then
+        ; returns.  INIENV is the right moment - the kernel has by now
+        ; allocated the MYSIZE work area and stored it in SLTWRK, and the
+        ; EXTBIO hook has been initialised (by this diskrom or by whichever
+        ; one started the disk system first).
+        jp      UNAPI_ORG
 
 ; START OF -----------------------------
 ; MSXPi DSKIO Routine           |
@@ -159,7 +173,30 @@ INIENV:
 ;		B	if error, remaining sectors
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 ;
+; Option A, the shared-channel guard.  MSXPi is ONE channel: the disk and the
+; Ethernet UNAPI both drive ports 56/57/5A, and InterNestor Lite polls from the
+; 50/60Hz timer interrupt.  Without this, a timer tick landing part-way through
+; a block transfer makes the ISR issue its own IN ($5A) and both byte streams
+; desynchronise permanently - silently, onto a filesystem.
+;
+; A flag rather than DI: a 512-byte block is ~28ms and disabling interrupts for
+; that long would break JIFFY, key repeat and INL's own timers.  And a plain
+; flag is enough without any atomicity worry, for the same reason ETH_LOCK
+; needs no DI - the two contexts are asymmetric.  The foreground sets the flag
+; before touching a port; an interrupt arriving before that finds the link free
+; and completes its whole transaction before the foreground resumes, because
+; the ISR runs to completion and cannot itself be preempted.
+;
+; Wrapped around DSKIO as a whole rather than around the individual block
+; routines in msxpi_bios.asm: those nest and have several error exits each, so
+; bracketing them would need a depth counter and would be easy to get wrong.
+; DSKIO has one entry and every exit is a plain RET, so one CALL covers it.
 DSKIO:
+        call    LINK_BUSY_SET
+        call    DSKIO_BODY
+        jp      LINK_BUSY_CLR
+
+DSKIO_BODY:
         JR      NC,DSKIO_READ
 
 ; START OF ----------------------------
@@ -250,6 +287,31 @@ DSKIO_ERR1:
 ; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
 
+; --- Claim / release the link for the disk --------------------------------
+; Both preserve AF, BC, DE and HL, which matters at BOTH ends: on entry DSKIO
+; takes the drive in A and read/write in the CARRY flag, and on exit it returns
+; the error code in A and the carry.  IX is corrupted, which DSKIO's own
+; contract already permits.
+LINK_BUSY_SET:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK              ; HL = IX = this driver's work area
+        ld      (ix+o_LINK_BUSY),1
+        jr      LINK_BUSY_DONE
+LINK_BUSY_CLR:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK
+        ld      (ix+o_LINK_BUSY),0
+LINK_BUSY_DONE:
+        pop     hl
+        pop     bc
+        pop     af
+        ret
+
+
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
@@ -306,9 +368,6 @@ DSKIO_SECTINFO1:
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
-
-DSKIORDMSG:
-    DB      "DSKIO READ ERROR",13,10,0
 
 ; DSKCHG
 ;
@@ -399,14 +458,6 @@ DEFDPB	equ	DpbTable+18-1
 CHOICE:
 		ld		hl,0
 		ret
-
-; Choices not used by MSXPi driver
-ChoiceStr:	db	13,10
-		db	"1 - Choice A",13,10
-		db	"2 - Choice B",13,10
-        db	"3 - Choice C",13,10
-		db	13,10
-		db	0
 
 ; DSKFMT
 ;
@@ -853,9 +904,13 @@ MSXPIVERSION:
 BuildId: DB ".20260830.003"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
+; Shortened to reclaim ROM space; the CALL MSXPI feature itself is unchanged.
+; Keeps the syntax line, which is the part nobody can guess, and drops the
+; prose around it.
 MSXPIHelpMsg:
-        DB      "Commands available: MSXPIVER & MSXPI",13,10
-        DB      "CALL MSXPI(",34,"n,XXXX,dir",34,") where n=0 (suppress),1 (show),2 (store) and XXXX = Buffer address",13,10,0
+        DB      "MSXPIVER, MSXPI",13,10
+        DB      "CALL MSXPI(",34,"n,XXXX,dir",34,")",13,10
+        DB      "n=0 quiet 1 show 2 store, XXXX=buffer",13,10,0
 
 ; ================================================================
 ; Table of Commands available/implemented
@@ -872,15 +927,43 @@ CALL_TABLE:
 ENDOFCMDS:
         DB      00
 
-; Commands for MSX-DOS - sector transfers
-DOS_INI:    DB  "dskioini",0,0,0,0
+; Commands for MSX-DOS - sector transfers.  The protocol also defines
+; "dskioini", "dskiodrv" and "dskiofmt"; this driver never sends them, so
+; they are not carried here - the space went to the UNAPI driver below.
 DOS_RSEC:   DB  "dskiords",0,0,0,0
 DOS_WSEC:   DB  "dskiowrs",0,0,0,0
 DOS_SECI:   DB  "dskiosct",0,0,0,0
-DOS_DRV:    DB  "dskiodrv",0,0,0,0
-DOS_FMT:    DB  "dskiofmt",0,0,0,0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
 MSXPI_DRIVER    equ 1   ; msxpi_bios.asm: stash via the driver workarea (GETWRK)
 INCLUDE msxpi_bios.asm
+
+; ================================================================
+; Ethernet UNAPI driver
+; ================================================================
+; Assembled separately by sjasm (software/UNAPI/src/ethrom.asm) and dropped in
+; here as a binary, because the two builds cannot share one assembler: the
+; driver is also built for a mapped RAM segment by the .COM installer, from
+; the same sources, and those use sjasm syntax throughout.
+;
+; It is placed at a FIXED address rather than simply appended, so that both
+; directions of overflow are build errors instead of silent corruption:
+; MSXPi code growing past UNAPI_ORG, or the driver growing past the end of the
+; ROM.  If either assertion fires, either free space here (there is a lot of
+; comment-only ROM data left) or take the diagnostic routine 128 out of
+; ethcore.asm.
+;
+; The driver calls two kernel entry points by hardcoded address, because zmac
+; and sjasm have no way to share a symbol table.  Both live in the kernel half
+; of msx-dos.mac, entirely below this point, so nothing here can move them -
+; but assert it anyway, since the failure mode is a jump into whatever landed
+; at the old address.
+        ASSERT  GETSLT EQ 06016H         ; ethrom.asm GETSLT
+        ASSERT  GETWRK EQ 06025H         ; ethrom.asm GETWRK
+
+        ASSERT  $ LE UNAPI_ORG           ; MSXPi code has run into the driver
+        DEFS    UNAPI_ORG-$,0
+UNAPI_ROM_IMAGE:
+        INCBIN  ethrom.bin
+        ASSERT  $ LE 08000H              ; the driver has run off the ROM
