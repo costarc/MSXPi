@@ -77,6 +77,7 @@ FRMEVL:         EQU     $4C64
 FRESTR:         EQU     $67D0
 VALTYP:         EQU     $F663
 USR:            EQU     $F7F8
+RAMAD1:         EQU     $F342   ; slot of the RAM in page 1 - STORE_BYTE
 RAMAD3:         EQU     $F344
 ERRFLG:         EQU     $F414
 HIMEM:          EQU     $FC4A

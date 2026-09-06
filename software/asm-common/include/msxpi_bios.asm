@@ -423,7 +423,8 @@ r2_retry:
 ; ------------------------------------------------------------
 
     call    PIREADBYTE      ; header_rc
-    jr      c, r2_conn_err
+    jp      c, r2_conn_err  ; JP not JR: STORE_BYTE pushed the error paths
+                            ; out of relative-jump range
     push    ix              ; MSXPI_GETSTASH clobbers IX (retry_count)
     push    de              ; and DE isn't verified safe across its
                             ; internal kernel calls either
@@ -509,7 +510,11 @@ r2_payload_loop:
     call    PIREADBYTE
     jr      c, r2_conn_err_x
 
-    ld      (de), a
+    ; Store through STORE_BYTE, which handles a destination in page 1.
+    ; Cheaper than it looks: the fast path is two BIT tests and the same
+    ; LD (DE),A as before, and A survives it, so the checksum below is
+    ; unchanged.
+    call    STORE_BYTE
     inc     de
 
     ; HL += A
@@ -520,6 +525,55 @@ r2_payload_loop:
 r2_no_carry:
     dec     bc
     jr      r2_payload_loop
+
+; ------------------------------------------------------------
+; STORE_BYTE - write A to (DE), correctly even when DE is in page 1
+; ------------------------------------------------------------
+; When DE lands in #4000-#7FFF this ROM is banked in there - DOS reaches the
+; driver by inter-slot call, which selects our slot in page 1 - so a plain
+; LD (DE),A writes to the EEPROM and the byte is silently lost.
+;
+; Found on real hardware: loading a 26 KB .COM over MSXPi under MSX-DOS 1
+; failed at exactly relative sector 31 of a 50-sector read - destination
+; 0x100 + 31*512 = 0x3F00, the first sector to cross #4000.  Proven to track
+; the ADDRESS and not the disk: the same-sized INLSTOCK.COM, at completely
+; different absolute sectors, failed at the same relative index.  Every MSXPi
+; tool is under ~16 KB and so stays below #4000, which is why a driver this
+; old had never hit it.
+;
+; Decided per byte, not per block, because a block can begin in page 0 and
+; cross into page 1 part way through - exactly the failing case - and because
+; it keeps every caller of RECVDATA_ONEBLOCK correct without any of them
+; having to know about it.
+;
+; Preserves A, BC, DE and HL: the payload loop needs the byte for its
+; checksum and is using the other three as count, destination and running
+; sum.  WRSLT is documented to corrupt AF, BC and E, hence the saves.  It is
+; reached at 0014H, which is valid under MSX-DOS - the kernel keeps the
+; inter-slot entry points live in page-0 RAM.  WRSLT switches SLOTS only,
+; never mapper segments, so the segment DOS selected for page 1 stays put.
+STORE_BYTE:
+    bit     7, d
+    jr      nz, STORE_BYTE_1
+    bit     6, d
+    jr      z, STORE_BYTE_1
+    push    af
+    push    hl
+    push    bc
+    ld      h, d
+    ld      l, e            ; HL = destination
+    ld      e, a            ; E  = data
+    ld      a, (RAMAD1)     ; A  = slot holding RAM in page 1
+    call    WRSLT
+    ld      d, h
+    ld      e, l            ; DE = destination again (WRSLT keeps HL)
+    pop     bc
+    pop     hl
+    pop     af
+    ret
+STORE_BYTE_1:
+    ld      (de), a
+    ret
 
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack
@@ -921,10 +975,7 @@ CLEARBUF:
         pop     de
         pop     bc
         ret
-		
-		DS 		128
-heap_top: equ     $
-		
+
 
 ;-----------------------
 ; MSXPI_GETSTASH       |
