@@ -496,13 +496,23 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
     return RC_SUCCESS;
 }
 
-static void patchWindow(uint8_t* base, uint16_t targetAddr, void (*handler)(void)) {
+// A cartridge mapper decodes an address RANGE, not one address. Ranges taken
+// from EXECROM.MAC's own MegaROM table (git 173f41c2), which this project
+// already ships a working loader for:
+//     ASCII16 : 6000h-6FFFh (bank at 4000h), 7000h-7FFFh (bank at 8000h)
+//     ASCII8  : 6000h-67FFh, 6800h-6FFFh, 7000h-77FFh, 7800h-7FFFh
+//     Konami4 : 6000h, 8000h, A000h (single addresses)
+// Matching only the exact address misses most real switches on ASCII16:
+// ARCTIC.ROM switches via 6002h and was never patched at all; XEVIOUS.ROM
+// uses 18 different addresses of which only one is 7000h.
+static void patchWindow(uint8_t* base, uint16_t rangeLo, uint16_t rangeHi,
+                        void (*handler)(void)) {
     uint16_t i;
     uint16_t handlerAddr = (uint16_t)handler;
     for (i = 0; i < 0x4000 - 2; i++) {
         if (base[i] == 0x32) {
             uint16_t addr = (uint16_t)base[i + 1] | ((uint16_t)base[i + 2] << 8);
-            if (addr == targetAddr) {
+            if (addr >= rangeLo && addr <= rangeHi) {
                 base[i] = 0xCD;  // CALL nn
                 base[i + 1] = handlerAddr & 0xFF;
                 base[i + 2] = (handlerAddr >> 8) & 0xFF;
@@ -562,6 +572,36 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 #define RESIDENT_8K_WIN4_ADDR 0xFA80
 #define RESIDENT_SLOT_SIZE    0x40
 
+// The server patches the ROM's bank-switch writes into CALLs to our resident
+// handlers, so it has to know where they ended up. Derive the addresses from
+// the RESIDENT_ defines rather than hardcoding them anywhere else - if these
+// and the server's idea of them ever diverge, every patched CALL lands in the
+// wrong place.
+static void appendHex4(char* dst, uint16_t v) {
+    const char* h = "0123456789ABCDEF";
+    dst[0] = h[(v >> 12) & 15];
+    dst[1] = h[(v >> 8) & 15];
+    dst[2] = h[(v >> 4) & 15];
+    dst[3] = h[v & 15];
+}
+
+static void buildSelection(char* out, const char* number) {
+    static const uint16_t addr[6] = {
+        RESIDENT_8K_WIN1_ADDR, RESIDENT_8K_WIN2_ADDR,
+        RESIDENT_8K_WIN3_ADDR, RESIDENT_8K_WIN4_ADDR,
+        RESIDENT_PAGE1_ADDR,   RESIDENT_PAGE2_ADDR
+    };
+    uint8_t i = 0, j;
+    while (number[i]) { out[i] = number[i]; i++; }
+    for (j = 0; j < 6; j++) {
+        out[i++] = ' ';
+        appendHex4(out + i, addr[j]);
+        i += 4;
+    }
+    out[i] = 0;
+}
+
+
 // --- ASCII16 Resident Handlers ---
 void ascii16Page1Handler(void) __naked {
     __asm
@@ -616,8 +656,8 @@ static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
     uint16_t s;
     for (s = 0; s < segmentCount; s++) {
         PutPN_direct(1, storageSegments[s]);
-        patchWindow(PAGE1ADDRESS, 0x6000, (void (*)(void))RESIDENT_PAGE1_ADDR);
-        patchWindow(PAGE1ADDRESS, 0x7000, (void (*)(void))RESIDENT_PAGE2_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x6000, 0x6FFF, (void (*)(void))RESIDENT_PAGE1_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x7000, 0x7FFF, (void (*)(void))RESIDENT_PAGE2_ADDR);
         // Stray absolute stores into the cartridge window are no-ops on real
         // hardware but corrupt the image when it lives in RAM. Run this AFTER
         // the patchWindow() calls above, so the genuine bank-switch writes have
@@ -830,9 +870,9 @@ static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
     uint16_t s;
     for (s = 0; s < segmentCount; s++) {
         PutPN_direct(1, storageSegments[s]);
-        patchWindow(PAGE1ADDRESS, 0x6000, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
-        patchWindow(PAGE1ADDRESS, 0x8000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
-        patchWindow(PAGE1ADDRESS, 0xA000, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x6000, 0x6000, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x8000, 0x8000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
+        patchWindow(PAGE1ADDRESS, 0xA000, 0xA000, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
         // Stray absolute stores into the cartridge window are no-ops on real
         // hardware but corrupt the image when it lives in RAM. Run this AFTER
         // the patchWindow() calls above, so the genuine bank-switch writes have
@@ -848,10 +888,10 @@ static void patchAllStorageSegmentsAscii8(uint16_t segmentCount) {
     uint16_t s;
     for (s = 0; s < segmentCount; s++) {
         PutPN_direct(1, storageSegments[s]);
-        patchWindow(PAGE1ADDRESS, 0x6000, (void (*)(void))RESIDENT_8K_WIN1_ADDR);
-        patchWindow(PAGE1ADDRESS, 0x6800, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
-        patchWindow(PAGE1ADDRESS, 0x7000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
-        patchWindow(PAGE1ADDRESS, 0x7800, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x6000, 0x6000, (void (*)(void))RESIDENT_8K_WIN1_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x6800, 0x6800, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x7000, 0x7000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
+        patchWindow(PAGE1ADDRESS, 0x7800, 0x7800, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
         // Stray absolute stores into the cartridge window are no-ops on real
         // hardware but corrupt the image when it lives in RAM. Run this AFTER
         // the patchWindow() calls above, so the genuine bank-switch writes have
@@ -901,18 +941,21 @@ uint8_t loadMappedRom(RomHeader* hdr) {
         return rc;
     }
 
+    // The bank-switch writes are already CALLs to our resident handlers -
+    // msxpi-server patches the image before sending it, using the handler
+    // addresses buildSelection() supplied. Scanning here as well cost 16KB
+    // per storage segment on the Z80 (128KB of scanning for a 128KB ROM)
+    // before the game could start. relocateResidentHandlers* still runs:
+    // the handlers themselves must be copied into RAM.
     if (hdr->mapperType == MAPPER_ASCII16) {
         relocateResidentHandlers16K(storageCount);
-        patchAllStorageSegmentsAscii16(storageCount);
         PutPN_direct(1, storageSegments[0]);
         PutPN_direct(2, storageSegments[hdr->bankCount > 1 ? 1 : 0]);
     } else if (hdr->mapperType == MAPPER_KONAMI) {
         relocateResidentHandlers8K(storageCount);
-        patchAllStorageSegmentsKonami(storageCount);
         konamiInitialSetup(hdr->bankCount);
     } else if (hdr->mapperType == MAPPER_ASCII8) {
         relocateResidentHandlers8K(storageCount);
-        patchAllStorageSegmentsAscii8(storageCount);
         ascii8InitialSetup(hdr->bankCount);
     }
 
@@ -1055,7 +1098,11 @@ int main(void) {
             rc = SendCommandToMSXPi("P", false);
         }
         else {
-            rc = SendCommandToMSXPi(userNumber, false);
+            {
+                char selcmd[48];
+                buildSelection(selcmd, userNumber);
+                rc = SendCommandToMSXPi(selcmd, false);
+            }
             if (rc != RC_SUCCESS)
                 break;
 

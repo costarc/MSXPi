@@ -235,6 +235,37 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # This is a heuristic (opcode-pattern scan, not a hash database), so it
 # can misidentify unusual/hand-rolled ROMs - good enough for the common
 # commercial mapper layouts.
+from mapper_detect import (detect_mapper as _detect_mapper_v2,
+                            patch_bank_switches, PATCH_WINDOWS)
+
+# Handler addresses the MSX will have relocated its resident bank-switch code
+# to. The client sends its own with the selection so the two sides cannot
+# drift; these are only the fallback for an older client that sends none, in
+# which case the MSX patches the image itself as it used to.
+DEFAULT_HANDLERS = (0xF9C0, 0xFA00, 0xFA40, 0xFA80, 0xFAC0, 0xFB00)
+
+
+def handlers_for(mapper_type, h):
+    """Pick the handler list for this mapper, in PATCH_WINDOWS order.
+    h is (win1, win2, win3, win4, page1, page2)."""
+    if mapper_type == MAPPER_ASCII8:   return [h[0], h[1], h[2], h[3]]
+    if mapper_type == MAPPER_ASCII16:  return [h[4], h[5]]
+    if mapper_type == MAPPER_KONAMI:   return [h[1], h[2], h[3]]  # 6000h/8000h/A000h
+    return None
+
+
+def patch_for_msx(buf, mapper_type, handlers):
+    """Convert the ROM's bank-switch writes into CALLs to the MSX-side
+    handlers, so the MSX only has to store blocks and run. Scanning a 128KB ROM
+    on a 3.58MHz Z80 cost 16KB per storage segment before the game started."""
+    if not handlers or mapper_type not in PATCH_WINDOWS:
+        return buf, 0
+    hs = handlers_for(mapper_type, handlers)
+    if not hs:
+        return buf, 0
+    return patch_bank_switches(buf, mapper_type, hs)
+
+
 KONAMI_SCC_UNIQUE_ADDRS = (0x5000, 0x9000, 0xB000)
 KONAMI_UNIQUE_ADDRS     = (0x8000, 0xA000)
 ASCII8_UNIQUE_ADDRS     = (0x6800, 0x7800)
@@ -250,16 +281,12 @@ def detect_mapper(rom_bytes):
         if rom_bytes[i] == 0x32:  # LD (nn),A
             write_addrs.add(rom_bytes[i + 1] | (rom_bytes[i + 2] << 8))
 
-    if any(a in write_addrs for a in ASCII8_UNIQUE_ADDRS):
-        return MAPPER_ASCII8, 8
-    if any(a in write_addrs for a in KONAMI_SCC_UNIQUE_ADDRS):
-        return MAPPER_KONAMI, 8  # Konami SCC - see this table's own comment
-    if any(a in write_addrs for a in KONAMI_UNIQUE_ADDRS):
-        return MAPPER_KONAMI, 8
-    if any(a in write_addrs for a in ASCII16_ADDRS):
-        return MAPPER_ASCII16, 16
-
-    return None, None
+    # Delegated to mapper_detect: same exact-address chain as before, plus a
+    # repetition-based fallback for ROMs it rejects outright (BUBBLE.ROM and
+    # ISHTAR.ROM bank at 6FF8h/77F8h/7FF8h and 67FFh/77FFh respectively, so
+    # they never matched the exact addresses). See MEGAROM_MAPPER_NOTES.md.
+    del write_addrs
+    return _detect_mapper_v2(rom_bytes)
 
 st_init             =    0       # waiting loop, waiting for a command
 st_cmd              =    1       # transfering data for a command
@@ -2915,9 +2942,17 @@ def msxarchive(parms = None):
                     sendmultiblock(header + reason.encode())
                     return RC_FAILED
 
+                # The MSX appends the addresses it relocated its resident
+                # bank-switch handlers to, so this side can patch the image and
+                # the MSX does not have to scan it. Absent => old client, which
+                # patches for itself.
+                msx_handlers = None
                 try:
-                    file_num = int(parm)
-                except (ValueError, TypeError):
+                    fields = str(parm).split()
+                    file_num = int(fields[0])
+                    if len(fields) >= 7:
+                        msx_handlers = tuple(int(f, 16) for f in fields[1:7])
+                except (ValueError, TypeError, IndexError):
                     return reject(f"Invalid input: {cmd}")
 
                 if file_num < 1 or file_num > get_total_files(files):
@@ -2934,6 +2969,10 @@ def msxarchive(parms = None):
                     header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
                 else:
                     mapper_type, bank_size_kb = detect_mapper(buf)
+                    if mapper_type is not None and msx_handlers:
+                        buf, npatch = patch_for_msx(buf, mapper_type, msx_handlers)
+                        print(f"{filename}: patched {npatch} bank-switch sites "
+                              f"server-side")
                     if mapper_type is None:
                         return reject(f"{filename} ({len(buf)} bytes): unrecognized "
                                       f"mapper - not supported yet.")
