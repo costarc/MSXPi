@@ -57,6 +57,69 @@ from contextlib import redirect_stdout
 import shutil
 import filecmp
 
+
+version = "1.6"
+BuildId = "20260830.003"
+
+CMDSIZE = 9
+MSGSIZE = 128
+BLKSIZE = 512
+SECTORSIZE = 512
+BULKBLKSIZE = 3 + 4096
+MAXBUFSIZE = 48*1024       # 48 KB buffer in the MSX side
+
+SPI_SCLK_LOW_TIME = 0.001
+SPI_SCLK_HIGH_TIME = 0.001
+
+GLOBALRETRIES       = 10
+MAX_BLOCK_RETRIES   = 3
+SPI_INT_TIME        = 3000
+PIWAITTIMEOUTOTHER  = 120     # seconds
+PIWAITTIMEOUTBIOS   = 60      # seconds
+SYNCTIMEOUT         = 30
+BYTETRANSFTIMEOUT   = 30
+SYNCTRANSFTIMEOUT   = 30
+DISABLETIMEOUT      = False
+READY_ACK           = 0xA0
+SENDNEXT            = 0xA1
+ENDTRANSFER         = 0xA2
+READY               = 0xAA
+RC_CHKSUM_ERR       = 0xAD
+WAIT                = 0xAE
+
+RC_SUCCESS          =    0xE0
+RC_INVALIDCOMMAND   =    0xE1
+RC_ESCPRESSED       =    0xE2
+RC_BUFOVFLW         =    0xE3
+RC_INVALIDDATASIZE  =    0xE4
+RC_HANDSHAKEERR     =    0xE5
+RC_FILENOTFOUND     =    0xE6
+RC_FAILED           =    0xE7
+RC_CONNERR          =    0xE8
+RC_WAIT             =    0xE9
+RC_READY            =    0xEA
+RC_SUCCNOSTD        =    0xEB
+RC_FAILNOSTD        =    0xEC
+RC_TERMINATE        =    0xED
+RC_UNEXPECTEDDATA   =    0xEE
+RC_UNDEFINED        =    0xEF
+
+# ROM header sent to the MSX immediately before a ROM image, so the client
+# knows how to load it (plain linear copy vs. mapper-aware loading).
+ROM_HEADER_MAGIC    =    0x52   # 'R'
+ROM_HEADER_VERSION  =    1
+ROM_HEADER_SIZE     =    16
+MAPPER_PLAIN        =    0      # linear ROM, loaded exactly as today
+MAPPER_KONAMI       =    1      # 8K banks
+MAPPER_ASCII8       =    2      # 8K banks
+MAPPER_ASCII16      =    3      # 16K banks
+MAPPER_REJECTED     =    0xFF   # selection rejected; reason string follows the header, no ROM body
+PLAIN_ROM_MAX_SIZE  =    32768  # client's fixed load window for MAPPER_PLAIN
+ROM_MAX_SIZE         =    1048576  # sanity cap for mapped ROMs (1MB covers all commercial Konami/ASCII8/ASCII16 megaROMs)
+
+# Force stdout to flush on every newline automatically
+sys.stdout.reconfigure(line_buffering=True)
+
 # Import IRC client wrappers (module-level functions prefixed with "irc_")
 # Guarded import so server still runs even if irc_client is absent or raises at import.
 ''''try:
@@ -147,66 +210,6 @@ def eth_handle_opcode(opcode):
     except Exception as e:
         print(f"eth: error serving opcode {hex(opcode)}: {e}")
         return True   # consumed; do not fall through to the garbage branch
-
-
-version = "1.6"
-BuildId = "20260830.003"
-
-CMDSIZE = 9
-MSGSIZE = 128
-BLKSIZE = 512
-SECTORSIZE = 512
-BULKBLKSIZE = 3 + 4096
-MAXBUFSIZE = 48*1024       # 48 KB buffer in the MSX side
-
-SPI_SCLK_LOW_TIME = 0.001
-SPI_SCLK_HIGH_TIME = 0.001
-
-GLOBALRETRIES       = 10
-MAX_BLOCK_RETRIES   = 3
-SPI_INT_TIME        = 3000
-PIWAITTIMEOUTOTHER  = 120     # seconds
-PIWAITTIMEOUTBIOS   = 60      # seconds
-SYNCTIMEOUT         = 30
-BYTETRANSFTIMEOUT   = 30
-SYNCTRANSFTIMEOUT   = 30
-DISABLETIMEOUT      = False
-READY_ACK           = 0xA0
-SENDNEXT            = 0xA1
-ENDTRANSFER         = 0xA2
-READY               = 0xAA
-RC_CHKSUM_ERR       = 0xAD
-WAIT                = 0xAE
-
-RC_SUCCESS          =    0xE0
-RC_INVALIDCOMMAND   =    0xE1
-RC_ESCPRESSED       =    0xE2
-RC_BUFOVFLW         =    0xE3
-RC_INVALIDDATASIZE  =    0xE4
-RC_HANDSHAKEERR     =    0xE5
-RC_FILENOTFOUND     =    0xE6
-RC_FAILED           =    0xE7
-RC_CONNERR          =    0xE8
-RC_WAIT             =    0xE9
-RC_READY            =    0xEA
-RC_SUCCNOSTD        =    0xEB
-RC_FAILNOSTD        =    0xEC
-RC_TERMINATE        =    0xED
-RC_UNEXPECTEDDATA   =    0xEE
-RC_UNDEFINED        =    0xEF
-
-# ROM header sent to the MSX immediately before a ROM image, so the client
-# knows how to load it (plain linear copy vs. mapper-aware loading).
-ROM_HEADER_MAGIC    =    0x52   # 'R'
-ROM_HEADER_VERSION  =    1
-ROM_HEADER_SIZE     =    16
-MAPPER_PLAIN        =    0      # linear ROM, loaded exactly as today
-MAPPER_KONAMI       =    1      # 8K banks
-MAPPER_ASCII8       =    2      # 8K banks
-MAPPER_ASCII16      =    3      # 16K banks
-MAPPER_REJECTED     =    0xFF   # selection rejected; reason string follows the header, no ROM body
-PLAIN_ROM_MAX_SIZE  =    32768  # client's fixed load window for MAPPER_PLAIN
-ROM_MAX_SIZE         =    1048576  # sanity cap for mapped ROMs (1MB covers all commercial Konami/ASCII8/ASCII16 megaROMs)
 
 def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
     """Pack the fixed 16-byte ROM header: magic, protocol version, mapper
@@ -714,7 +717,7 @@ def pathExpander(path, basepath = ''):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    print("msxdos_inihrd()")
+    #print("msxdos_inihrd()")
 
     if ('disk' in vars() or 'disk' in globals()):
         disk.flush()
@@ -810,7 +813,7 @@ def dos83format(fname):
     return name+ext
 
 def ini_fcb(fname,fsize):
-    print("ini_fcb()")
+    #print("ini_fcb()")
     
     fpath = fname.split(':')
     if len(fpath) == 1:
@@ -832,7 +835,7 @@ def ini_fcb(fname,fsize):
     return rc
 
 def run(cmd = ''):
-    print(f"run(): {cmd}")
+    #print(f"run(): {cmd}")
     
     global hostType
     if (cmd.strip() == '' or len(cmd.strip()) == 0):
@@ -863,7 +866,7 @@ def run(cmd = ''):
         return rc
 
 def dir(data):
-    print(f"pdir():{data}")
+    #print(f"pdir():{data}")
     
     basepath = getMSXPiVar('PATH')
   
@@ -891,7 +894,7 @@ def dir(data):
     return RC_SUCCESS
 
 def cd(data):
-    print(f"pcd(): {data}")
+    #print(f"pcd(): {data}")
     
     rc = RC_SUCCESS
     basepath = getMSXPiVar('PATH') 
@@ -924,190 +927,222 @@ def cd(data):
         sendmultiblock(('Pi:Error - ' + str(e)).encode())
 
     return RC_SUCCESS
-    
-def pcopy(msxcmd = "pcopy"):
-    print("pcopy()")
-    
-    global psetvar,GLOBALRETRIES,hostType
-    basepath = getMSXPiVar('PATH')
-    rc = RC_SUCCESS
-    
-    # Receive parameters - but before, prepare help message to pass
-    errorMsg = 'Syntax:\n'
-    if msxcmd == "pcopy":
-        errorMsg = errorMsg + 'pcopy </z> remotefile <localfile>\n'
-    elif msxcmd == "ploadr":
-        errorMsg = errorMsg + 'ploadr </z> remotefile\n'
-    errorMsg = errorMsg +'Valid devices:\n'
-    errorMsg = errorMsg +'/, path, http, ftp, nfs, smb, m:, r1:, r2:\n'
-    errorMsg = errorMsg + '/z decompress file\n'
-    errorMsg = errorMsg + 'm:, r1: r2: virtual remote devices'
 
-    rc, data = readParameters(errorMsg, True)   
+def pcopy_handshake() -> tuple[int, int]:
+    """Performs the initial handshake with MSX and receives msx_blocksize."""
+    # Wait for READY from MSX
+    while True:
+        rc, byte = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return RC_HANDSHAKEERR, 0
+        if byte == READY:
+            break
+
+    # Send READY_ACK back to MSX
+    rc, _ = SPI_ByteTransfer(READY_ACK)
     if rc != RC_SUCCESS:
-        return RC_FAILED
-    if not data:
-        userPath=''
+        return RC_HANDSHAKEERR, 0
+
+    # Receive msx_blocksize (low byte, high byte)
+    rc, low = SPI_ByteTransfer()
+    if rc != RC_SUCCESS:
+        return RC_CONNERR, 0
+
+    rc, high = SPI_ByteTransfer()
+    if rc != RC_SUCCESS:
+        return RC_CONNERR, 0
+
+    msx_blocksize = low | (high << 8)
+    return RC_SUCCESS, msx_blocksize
+
+PCOPY_CACHE = "/tmp/pcopy_session.bin"
+PCOPY_STATE = "/tmp/pcopy_state.txt"
+def pcopy(msxcmd="pcopy"):
+    #print(f"pcopy() called with msxcmd: '{msxcmd}'")
+
+    global psetvar, GLOBALRETRIES, hostType
+    basepath = getMSXPiVar('PATH')
+
+    # Helper to transmit error block payload to MSX
+    def send_error_block(err_msg, err_code):
+        print(f"Pi:Error - {err_msg}")
+        rc, msx_blocksize = pcopy_handshake()
+        if rc == RC_SUCCESS:
+            payload = err_msg.encode('ascii', errors='replace')
+            senddata_oneblock(payload, msx_blocksize, err_code, 0)
+        return err_code
+
+    # 1. Clean input payload and resolve global pcmd fallback
+    cmd_str = msxcmd.strip()
+    if cmd_str == "" or cmd_str.lower() == "pcopy":
+        pcmd_val = str(globals().get('pcmd', '')).strip()
+        if pcmd_val and pcmd_val.lower() != "pcopy":
+            cmd_str = pcmd_val
+
+    tokens = cmd_str.split()
+
+    # Remove 'pcopy' prefix if present
+    if tokens and tokens[0].lower().startswith("pcopy"):
+        parms = tokens[1:]
     else:
-        userPath = data
-    fname2 = ''
-    expandedFn = ''
-    parms = userPath.split()
-    pathType = 0
-    if '/z' in userPath.lower():
-        expand = True
-        pathType, path = pathExpander(parms[1], basepath)
-        if len(parms) > 2:
-            fname2 = parms[2]
-    else:
-        expand = False
-        if len(parms) > 1:
-            pathType, path = pathExpander(parms[0], basepath)
-            fname2 = parms[1]
-  
+        parms = tokens
+
+    if len(parms) < 1:
+        return send_error_block("Missing parameters", RC_INVALIDCOMMAND)
+
+    subcmd = parms[0].lower()
+
+    # =========================================================================
+    # PHASE 2: READBLOCK (Transfers one block and releases server loop)
+    # =========================================================================
+    if subcmd == "readblock":
+        if not os.path.exists(PCOPY_CACHE) or not os.path.exists(PCOPY_STATE):
+            return send_error_block("No active transfer session", RC_FAILED)
+
+        try:
+            with open(PCOPY_STATE, "r") as f:
+                state_parts = f.read().strip().split(",")
+                offset = int(state_parts[0])
+                block_index = int(state_parts[1])
+        except Exception as e:
+            return send_error_block(f"State read error: {str(e)}", RC_FAILED)
+
+        rc, msx_blocksize = pcopy_handshake()
+        if rc != RC_SUCCESS:
+            print("Pi:Error - Handshake failed during readblock")
+            return rc
+
+        filesize = os.path.getsize(PCOPY_CACHE)
+
+        with open(PCOPY_CACHE, "rb") as f:
+            f.seek(offset)
+            chunk = f.read(msx_blocksize)
+
+        new_offset = offset + len(chunk)
+        # Signal RC_SUCCESS on final block, RC_READY if more blocks remain
+        header_rc = RC_SUCCESS if new_offset >= filesize else RC_READY
+
+        senddata_oneblock(chunk, msx_blocksize, header_rc, block_index)
+
+        if header_rc == RC_SUCCESS:
+            # Transfer finished: Clean up session files
+            try:
+                os.remove(PCOPY_CACHE)
+                os.remove(PCOPY_STATE)
+            except OSError:
+                pass
         else:
-            pathType, path = pathExpander(parms[0], basepath)
-            if "/" in path:
-                fname2=path.split("/")[len(path.split("/"))-1]
-            elif ":" in path:
-                fname2=path.split(":")[0]
-            else:
-                fname2 = path
+            # Advance state for next readblock request
+            next_block_index = (block_index + 1) & 0xFF
+            with open(PCOPY_STATE, "w") as f:
+                f.write(f"{new_offset},{next_block_index}")
+
+        return RC_SUCCESS
+
+    # =========================================================================
+    # PHASE 1: INIT (Locates, decompresses, caches file & confirms readiness)
+    # =========================================================================
+    if subcmd == "init":
+        parms = parms[1:]
+        if len(parms) < 1:
+            return send_error_block("Missing source file for init", RC_INVALIDCOMMAND)
+
+    #print(f"pcopy: Init parsed parameters -> {parms}")
+    userPath = " ".join(parms)
+
+    # 2. Parse paths with smart source/target auto-detection
+    expand = '/z' in userPath.lower()
+
+    if expand:
+        src_param = parms[1] if len(parms) > 1 else parms[0]
+        tgt_param = parms[2] if len(parms) > 2 else ""
+    else:
+        src_param = parms[0]
+        tgt_param = parms[1] if len(parms) > 1 else ""
+
+    pathType, path = pathExpander(src_param, basepath)
+
+    # Auto-fallback: If src_param doesn't exist on Pi, check if tgt_param does
+    if pathType == 0 and not os.path.exists(path) and tgt_param != "":
+        alt_type, alt_path = pathExpander(tgt_param, basepath)
+        if alt_type == 0 and os.path.exists(alt_path):
+            #print(f"pcopy: Swapping inverted parameters -> Source: '{tgt_param}', Target: '{src_param}'")
+            src_param, tgt_param = tgt_param, src_param
+            pathType, path = alt_type, alt_path
+
+    # 3. Read source file contents
     if pathType == 0:
         try:
             with open(path, mode='rb') as f:
                 buf = f.read()
             filesize = len(buf)
         except Exception as e:
-            err = 'Pi:Error - ' + str(e)
-            rc = sendmultiblock(('Pi:Error - ' + str(e)).encode())
-            return RC_FAILED
+            err_code = RC_FILENOTFOUND if "[Errno 2]" in str(e) else RC_FAILED
+            return send_error_block(f"File error: {str(e)}", err_code)
     else:
         try:
             urlhandler = urlopen(path)
             buf = urlhandler.read()
             filesize = len(buf)
-            rc = RC_SUCCESS
         except Exception as e:
-            print(f"Pi:Error - {str(e)}")
-            rc = senddata(RC_FAILED, ('Pi:Error - ' + str(e)).encode())
-            return RC_FAILED
-    # if /z passed, will uncompress the file
-    if rc == RC_SUCCESS:
-        if expand:
-            tmpfn0 = path.split('/')
-            tmpfn = tmpfn0[len(tmpfn0)-1]
-            if hostType == "Windows":
-                os.system('del /Q "C:\\tmp\\msxpi\\*"')
-            else:
-                os.system('rm /tmp/msxpi/* 2>/dev/null')
-            tmpfile = open('/tmp/' + tmpfn, 'wb')
-            tmpfile.write(buf)
-            tmpfile.close()
-            # If not windows, uses lha to extrac lzh files
-            if ".lzh" in tmpfn:
-                if hostType == "Windows":
-                    cmd = 'lha -xfiw=/tmp/msxpi /tmp/' + tmpfn
-                else:
-                    cmd = '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
-                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-                perror = (p.stderr.read().decode())
-                rc = p.poll()
-                if rc!=0 and rc != None:
-                    rc = RC_FAILED
-            else:
-                # Will use 7-Zip for any file type under Windows
-                if hostType == "Windows":
-                    cmd = '7z.exe e /tmp/' + tmpfn + ' -aoa -o/tmp/msxpi/'
-                else:
-                    cmd = '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
-                p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
-                perror = (p.stderr.read().decode())
-                rc = p.poll()
-                if rc!=0:
-                    rc = RC_FAILED
-            romfiles = [f for f in os.listdir('/tmp/msxpi') if f.endswith(('.rom', '.ROM'))]
-            if romfiles:
-                fname1 = '/tmp/msxpi/' + romfiles[0]
-                
-                try:
-                    with open(fname1, mode='rb') as f:
-                        buf = f.read()
+            return send_error_block(f"URL error: {str(e)}", RC_FAILED)
 
-                    filesize = len(buf)
-                    rc = RC_SUCCESS
-                    
-                except Exception as e:
-                    rc = senddata((RC_FAILED, 'Pi:Error - ' + str(e)).encode())
-                    return RC_FAILED
-       
-            else:
-                print(f"Pi:Error - {perror}")
-                rc = senddata((RC_FAILED, 'Pi:Error - ' + perror).encode())
-                return RC_FAILED
-    
-    # If all good so far (including eventual decompress if needed)
-    # then send the file to MSX
-    if rc == RC_SUCCESS:
-        if filesize == 0:
-            rc = senddata(RC_FAILED, "Pi:Error - File size is zero bytes".encode())
-            return RC_FAILED
+    if filesize == 0:
+        return send_error_block("File size is zero bytes", RC_FAILED)
 
+    # 4. Decompress if /z option was specified
+    if expand:
+        tmpfn0 = path.split('/')
+        tmpfn = tmpfn0[-1]
+        if hostType == "Windows":
+            os.system('del /Q "C:\\tmp\\msxpi\\*"')
         else:
-            # Did we boot from the MSXPi ROM or another external drive?
-            if (not msxdos1boot) or msxcmd == "ploadr": # Boot was from an externdal drive OR it is PLOADR
-                if expand:
-                    if fname2 == '':
-                        rc = ini_fcb(expandedFn,filesize)
-                    else:
-                        rc = ini_fcb(fname2,filesize)
-                else:
-                    rc = ini_fcb(fname2,filesize)
-                if rc != RC_SUCCESS:
-                    print("pcopy: ini_fcb failed")
-                    return rc
-                
-                # This will send the file to MSX, for pcopy to write it to disk
-                rc = senddata(rc, buf)
-            
-            else:# Booted from MSXPi disk drive (disk images)
-                # this routine will write the file directly to the disk image in RPi
-                try:
-                    drive = getMSXPiVar('DriveA')
-                    fatfsfname = "fat:///"+getMSXPiVar('DriveA')        # Asumme Drive A:
-                    if fname2.upper().startswith("A:"):
-                        fname2 = fname2.split(":")
-                        if len(fname2[1]) > 0:
-                            fname2=fname2[1]           # Remove "A:" from name
-                        elif expandedFn != '':
-                            fname2 = expandedFn
-                        else:
-                            fname2=path.split("/")[len(path.split("/"))-1]           # Drive not passed in name
-                    elif fname2.upper().startswith("B:"):
-                        drive = getMSXPiVar('DriveB')
-                        fatfsfname = "fat:///"+getMSXPiVar('DriveB')    # Is Drive B:
-                        fname2 = fname2.split(":")
-                        if len(fname2[1]) > 0:
-                            fname2=fname2[1]           # Remove "B:" from name
-                        elif expandedFn != '':
-                            fname2 = expandedFn
-                        else:
-                            fname2=path.split("/")[len(path.split("/"))-1]           # Drive not passed in name
-                    elif expandedFn != '':
-                        fname2 = expandedFn
-                    elif fname2 == '':
-                        fname2=path.split("/")[len(path.split("/"))-1]
+            os.system('rm /tmp/msxpi/* 2>/dev/null')
 
-                    dskobj = open_fs(fatfsfname)
-                    dskobj.create(fname2,True)
-                    dskobj.writebytes(fname2,buf)
-                    msxdos_inihrd(drive)
-                    senddata(RC_TERMINATE, "Pi:Ok".encode())
-                except Exception as e:
-                    rc = senddata(RC_FAILED, ('Pi:Error - ' + str(e)).encode())
+        with open('/tmp/' + tmpfn, 'wb') as tmpfile:
+            tmpfile.write(buf)
 
-    return rc
+        if ".lzh" in tmpfn:
+            cmd = 'lha -xfiw=/tmp/msxpi /tmp/' + tmpfn if hostType == "Windows" else '/usr/bin/lhasa -xfiw=/tmp/msxpi /tmp/' + tmpfn
+        else:
+            cmd = '7z.exe e /tmp/' + tmpfn + ' -aoa -o/tmp/msxpi/' if hostType == "Windows" else '/usr/bin/unar -f -o /tmp/msxpi /tmp/' + tmpfn
 
+        p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
+        perror = p.stderr.read().decode()
+        rc = p.poll()
+        if rc is not None and rc != 0:
+            return send_error_block(f"Decompression failed: {perror}", RC_FAILED)
+
+        romfiles = [f for f in os.listdir('/tmp/msxpi') if f.endswith(('.rom', '.ROM'))]
+        if romfiles:
+            fname1 = '/tmp/msxpi/' + romfiles[0]
+            try:
+                with open(fname1, mode='rb') as f:
+                    buf = f.read()
+                filesize = len(buf)
+            except Exception as e:
+                return send_error_block(f"ROM read error: {str(e)}", RC_FAILED)
+        else:
+            return send_error_block(f"No ROM file in archive: {perror}", RC_FAILED)
+
+    # 5. Cache processed buffer and state for readblock calls
+    with open(PCOPY_CACHE, "wb") as f:
+        f.write(buf)
+
+    with open(PCOPY_STATE, "w") as f:
+        f.write("0,0")  # initial offset=0, block_index=0
+
+    # 6. Perform handshake and confirm initialization to MSX client
+    rc, msx_blocksize = pcopy_handshake()
+    if rc != RC_SUCCESS:
+        print("Pi:Error - Handshake failed during init")
+        return rc
+
+    # Send confirmation block back to MSX
+    senddata_oneblock(b"READY", msx_blocksize, RC_SUCCESS, 0)
+    #print("pcopy: Initialization complete")
+    return RC_SUCCESS
+    
 def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
     b = bytearray(size)
     b[0] = rc
@@ -1117,7 +1152,7 @@ def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
     return b
     
 def date(parms = None):
-    print("pdate()")
+    #print("pdate()")
 
     pdate = bytearray(8)
     now = datetime.datetime.now()
@@ -1135,25 +1170,25 @@ def date(parms = None):
     # -----------------------------
     # Debug print (MSX-style)
     # -----------------------------
-    print("Python buffer values before sending:")
-    print(f"buffer[0] Day:     {pdate[0]}")
-    print(f"buffer[1] Month:   {pdate[1]}")
-    print(f"buffer[2] YearLo:  {pdate[2]}")
-    print(f"buffer[3] YearHi:  {pdate[3]}")
-    print(f"buffer[4] Hour:    {pdate[4]}")
-    print(f"buffer[5] Minute:  {pdate[5]}")
-    print(f"buffer[6] Second:  {pdate[6]}")
-    print(f"buffer[7] Sec100:  {pdate[7]}")
+    #print("Python buffer values before sending:")
+    #print(f"buffer[0] Day:     {pdate[0]}")
+    #print(f"buffer[1] Month:   {pdate[1]}")
+    #print(f"buffer[2] YearLo:  {pdate[2]}")
+    #print(f"buffer[3] YearHi:  {pdate[3]}")
+    #print(f"buffer[4] Hour:    {pdate[4]}")
+    #print(f"buffer[5] Minute:  {pdate[5]}")
+    #print(f"buffer[6] Second:  {pdate[6]}")
+    #print(f"buffer[7] Sec100:  {pdate[7]}")
 
     year = pdate[2] | (pdate[3] << 8)
-    print(f"Parsed Date: {pdate[0]:02d}/{pdate[1]:02d}/{year}")
-    print(f"Parsed Time: {pdate[4]:02d}:{pdate[5]:02d}:{pdate[6]:02d}")
+    #print(f"Parsed Date: {pdate[0]:02d}/{pdate[1]:02d}/{year}")
+    #print(f"Parsed Time: {pdate[4]:02d}:{pdate[5]:02d}:{pdate[6]:02d}")
 
     # Now send to MSX
     sendmultiblock(pdate)
 
 def play(data):
-    print(f"pplay(): {data}")
+    #print(f"pplay(): {data}")
        
     if hostType != "RaspberryPi": 
         sendmultiblock("Command not supported by this platform".encode())
@@ -1182,7 +1217,7 @@ def play(data):
     return RC_SUCCESS
     
 def vol(data=None):
-    print(f"pvol(): {data}")
+    #print(f"pvol(): {data}")
 
     if hostType == "RaspberryPi": 
         rc = run("mixer set PCM -- " + data)
@@ -1193,7 +1228,7 @@ def vol(data=None):
     return RC_SUCCESS
     
 def pset(data):
-    print(f"pset(): {data}")
+    #print(f"pset(): {data}")
     global psetvar, drive0Data, drive1Data
 
     # Normalize input
@@ -1283,7 +1318,7 @@ def pset(data):
 
 def setMSXPiVar(pvar='', pvalue=''):
     global psetvar
-    print(f"setMSXPiVar(): var={pvar} value={pvalue}")
+    #print(f"setMSXPiVar(): var={pvar} value={pvalue}")
 
     # Normalize name for case-insensitive matching
     pvar_upper = pvar.upper()
@@ -1325,7 +1360,7 @@ def getMSXPiVar(devname = 'PATH'):
     return devval
     
 def wifi(cmd):
-    print(f"pwifi(): {cmd}")
+    #print(f"pwifi(): {cmd}")
     global psetvar
     wifissid = getMSXPiVar('WIFISSID')
     wifipass = getMSXPiVar('WIFIPWD')
@@ -1350,16 +1385,16 @@ def wifi(cmd):
     return RC_SUCCESS
 
 def ver(parms = None):
-    print("pver()")
+    #print("pver()")
     global version,build
     ver = "MSXPi Server Version "+version+" Build "+ BuildId + "\n";
     print("Sending version info:",ver)
     RC = sendmultiblock(ver.encode())
-    print(f"pver(): returning rc = {hex(rc)}")
+    #print(f"pver(): returning rc = {hex(rc)}")
     return rc
            
 def dosinit(parms = None):
-    print("dosinit()")    
+    #print("dosinit()")    
     global msxdos1boot
         
     rc,data = recvdata2()
@@ -1373,7 +1408,7 @@ def dosinit(parms = None):
     return rc
     
 def dskioini(parms = None):
-    print("dskioini()")
+    #print("dskioini() - MSX-DOS Boot Starting.")
 
     global msxdos1boot,sectorInfo,drive0Data,drive1Data
 
@@ -1393,7 +1428,7 @@ def reload(parms = None):
     handle open and doesn't pick up changes (and blocks overwriting the
     file from outside). Usage: reload A:  or  reload B:
     """
-    print(f"reload(): {parms!r}")
+    #print(f"reload(): {parms!r}")
     global drive0Data, drive1Data
 
     driveLetter = (parms or "").strip().upper().rstrip(":").rstrip("\x00")
@@ -1422,7 +1457,7 @@ def reload(parms = None):
     return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
 def dskiords(parms = None):
-    print("dskiords()")
+    #print("dskiords()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
@@ -1438,6 +1473,14 @@ def dskiords(parms = None):
     #print("dskiords:initialSector=",sectorInfo[3])
     #print("dskiords:blocksize=",SECTORSIZE)
     
+    # Multi-sector reads are the interesting case: MSX-DOS asks for one sector
+    # at a time for directory and FAT access, but uses B>1 for the body of a
+    # large file, so a defect in the per-sector handshake only shows up on big
+    # programs.  Logged unconditionally because the failure it diagnoses is
+    # intermittent on real hardware and there is no second chance to enable it.
+    print("dskiords: drive=%d sector=%d count=%d" %
+          (sectorInfo[0], sectorInfo[3], numsectors))
+
     while sectorcnt < numsectors:
         #print("dskiords:",sectorcnt)
         if sectorInfo[0] == 0:
@@ -1452,11 +1495,16 @@ def dskiords(parms = None):
             pass
             #print("dskiords: checksum is a match")
         else:
-            print("dskiords: checksum error")
+            # WHICH sector failed, not merely that one did: the distinction
+            # between "the first sector of a multi-sector call" and "a later
+            # one" separates a transport-timing fault from a handshake that
+            # cannot survive more than one sector per call.
+            print("dskiords: checksum error on sector %d of %d (abs %d), rc=%s"
+                  % (sectorcnt, numsectors, sectorInfo[3] + sectorcnt - 1, rc))
             break
  
 def dskiowrs(parms = None):
-    print("dskiowrs()")
+    #print("dskiowrs()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
@@ -1486,7 +1534,7 @@ def dskiowrs(parms = None):
             break
                   
 def dskiosct(parms = None):
-    print("dskiosct()")
+    #print("dskiosct()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
@@ -2076,7 +2124,7 @@ def recvdata2_oneblock(maxbufsize):
     return (RC_CONNERR, None)                 # unexpected header
 
 def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0) -> int:
-    print(f"senddata_oneblock(): Sending block {block_index}, header_rc={hex(header_rc)}, maxsize={msx_blocksize}")
+    #print(f"senddata_oneblock(): Sending block {block_index}, header_rc={hex(header_rc)}, maxsize={msx_blocksize}")
     length = len(payload)
     if length > msx_blocksize:
         return RC_INVALIDDATASIZE
@@ -2089,12 +2137,12 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     #print("senddata_oneblock(): Sending block data with retries if needed")
     while True:
         # header_rc
-        print(f"senddata_oneblock(): sending header_rc={hex(header_rc)}")
+        #print(f"senddata_oneblock(): sending header_rc={hex(header_rc)}")
         rc, _ = SPI_ByteTransfer(header_rc)
         if rc != RC_SUCCESS:
-            print("senddata_oneblock(): FAILED sending header_rc")
+            #print("senddata_oneblock(): FAILED sending header_rc")
             return RC_CONNERR
-        print("senddata_oneblock(): header_rc sent OK")
+        #print("senddata_oneblock(): header_rc sent OK")
 
         # length low/high
         rc, _ = SPI_ByteTransfer(length & 0xFF)
@@ -2105,14 +2153,14 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending length high byte")
             return RC_CONNERR
-        print(f"senddata_oneblock(): length={length} sent OK")
+        #print(f"senddata_oneblock(): length={length} sent OK")
 
         # block_index
         rc, _ = SPI_ByteTransfer(block_index & 0xFF)
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending block_index")
             return RC_CONNERR
-        print(f"senddata_oneblock(): block_index={block_index} sent OK, starting payload ({length} bytes)")
+        #print(f"senddata_oneblock(): block_index={block_index} sent OK, starting payload ({length} bytes)")
 
         # payload
         chksum = 0
@@ -2122,10 +2170,10 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
                 print(f"senddata_oneblock(): FAILED sending payload byte at offset {idx} (of {length})")
                 return RC_CONNERR
             chksum += b
-            if idx > 0 and idx % 2048 == 0:
-                print(f"senddata_oneblock(): payload progress {idx}/{length} bytes sent")
+            ##if idx > 0 and idx % 2048 == 0:
+            ##    print(f"senddata_oneblock(): payload progress {idx}/{length} bytes sent")
 
-        print(f"senddata_oneblock(): payload complete, {length} bytes sent")
+        #print(f"senddata_oneblock(): payload complete, {length} bytes sent")
 
         # local checksum
         right = chksum & 0xFF
@@ -2137,7 +2185,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending local checksum")
             return RC_CONNERR
-        print(f"senddata_oneblock(): local checksum={local_sum} sent, waiting for MSX checksum")
+        #print(f"senddata_oneblock(): local checksum={local_sum} sent, waiting for MSX checksum")
 
         # receive MSX checksum
         rc, msxsum = SPI_ByteTransfer()
@@ -2145,7 +2193,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
             print("senddata_oneblock(): FAILED receiving MSX checksum")
             return RC_CONNERR
 
-        print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
+        #print(f"senddata_oneblock(): local checksum={local_sum}, MSX checksum={msxsum}")
         if msxsum == local_sum:
             # block accepted
             break
@@ -2208,7 +2256,7 @@ def PerformHandshake():
         return RC_CONNERR, 0
 
     msx_blocksize = low | (high << 8)
-    print(f"PerformHandshake(): msx_blocksize={msx_blocksize}")
+    #print(f"PerformHandshake(): msx_blocksize={msx_blocksize}")
 
     return RC_SUCCESS, msx_blocksize
 
@@ -2221,9 +2269,7 @@ def sendmultiblock(payload: bytes, header_rc = None):
       RC_CONNERR / RC_HANDSHAKEERR / RC_CHKSUM_ERR → protocol failure
     """
 
-    #print("sendmultiblock()")
     total_len = len(payload)
-    print(total_len)
     if total_len == 0:
         return RC_INVALIDDATASIZE  # or RC_SUCCESS if you want to allow empty transfers
 
@@ -2262,7 +2308,7 @@ def sendmultiblock(payload: bytes, header_rc = None):
             block_rc = RC_SUCCESS
 
         # Send one block
-        print(f"sendmultiblock(): Sending block {block_index}, header_rc={hex(block_rc)}, length={len(block)}, MSX max blocksize = {msx_blocksize})")
+        #print(f"sendmultiblock(): Sending block {block_index}, header_rc={hex(block_rc)}, length={len(block)}, MSX max blocksize = {msx_blocksize})")
         rc = senddata_oneblock(block, msx_blocksize, block_rc, block_index)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer
@@ -2275,7 +2321,7 @@ def sendmultiblock(payload: bytes, header_rc = None):
     return RC_SUCCESS
 
 def readParameters(errorMsg, needParm=False):
-    print("readparms():")
+    #print("readparms():")
     rc, data = recvdata2()
 
     if rc != RC_SUCCESS:
@@ -2308,7 +2354,7 @@ def q(parm=None):
     print("q(): client quit")
 
 def restart(parm=None):
-    print("prestart()")
+    #print("prestart()")
     if hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
         sendmultiblock(b'Pi:Ok')
@@ -2318,7 +2364,7 @@ def restart(parm=None):
         sendmultiblock(b'Command not supported by this platform')
         
 def reboot(parm=None):
-    print("preboot()")
+    #print("preboot()")
     if hostType == "RaspberryPi":
         print("Rebooting Raspberry Pi")
         os.system("sudo reboot")
@@ -2327,7 +2373,7 @@ def reboot(parm=None):
         sendmultiblock(b'Command not supported by this platform')
         
 def shut(parm=None):
-    print("pshut()")
+    #print("pshut()")
     if hostType == "RaspberryPi":
         print("Shutting down Raspberry Pi")
         os.system("sudo shutdown -h now")
@@ -2362,7 +2408,7 @@ def updateIniFile(fname,memvar):
     f.close()
     
 def chatgpt(query):
-    print("chatgpt()")
+    #print("chatgpt()")
     print(query)
     api_key = getMSXPiVar('OPENAIKEY')
     if not api_key or api_key == "Your OpenAI API Key":
@@ -2523,6 +2569,7 @@ def fetch_and_uncompress(url: str):
 
     return RC_SUCCESS, buf
 
+   
 def ploadr(parms = None):
     """Fetch a single ROM by filename (resolved against the current MSXPi
     path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
@@ -2533,7 +2580,7 @@ def ploadr(parms = None):
     as an alias below for backward compatibility), e.g. "ploadr
     zanacex.rom" resolves against whatever path was last set via
     "p cd <path>"."""
-    print(f"ploadr(): {parms}")
+    #print(f"ploadr(): {parms}")
     basepath = getMSXPiVar('PATH')
     parts = (parms or '').strip().split()
     filename = parts[0] if parts else ''
@@ -2930,33 +2977,22 @@ def template(parms = None):
 
     # This method is a template for new commands
     # 
-    print("template()")
+    #print("template()")
 
     # If your MSX command send parameters, we go read them:
-    #rc, parms = readParameters("This command requires a parameter", True)
-    
-    print("Parameters received:", parms)
-
-    # parms is a bytes object
-    #parmstring = parms.split(b'\x00', 1)[0].decode('ascii')
-    print(f"Parameters received: {parms}")
+    if parms == None or parms == "":
+        print(f"Sending error message")
+        rc = sendmultiblock("This command requires a parameter".encode())
+        return
 
     response = f"Response from MSXPi: I received parameter '{parms}'"
     print(f"Sending back: {response}")
-
-    if len(response) > BLKSIZE:
-        # if longer than BLKSIZE, use multiblock
-        # No need to pad - sendmultiblock handles it
-        rc = sendmultiblock(response.encode())
-    else:
-        # Because this is text, we pad with nulls to avoid garbage at the end
-        padded = response.encode().ljust(BLKSIZE, b'\x00')
-        rc = sendmultiblock(padded)
+    rc = sendmultiblock(response.encode())
     
     return
 
 def irc(parms):
-    print(f"irc():{parms!r}")
+    #print(f"irc():{parms!r}")
 
     global ircsock
 
@@ -2994,7 +3030,7 @@ def irc(parms):
         # CONNECT
         # ------------------------------------------------------------
         if cmd.lower().startswith("conn"):
-            #print("[irc] CONNECT branch")
+            print("[irc] CONNECT")
             parts = cmd.split()
             jnick = parts[1] if len(parts) > 1 else msxnick
             if jnick == "none":
@@ -3038,12 +3074,12 @@ def irc(parms):
         # SEND MESSAGE
         # ------------------------------------------------------------
         elif cmd.startswith("say"):
-            print("[irc] MSG branch")
+            print("[irc] MSG")
             if ircsock is None:
                 return not_connected()
         
             raw = parms[4:].strip()
-            print(f"[irc] msg raw='{raw}'")
+            #print(f"[irc] msg raw='{raw}'")
             
             parts = raw.split(maxsplit=1)
             if len(parts) == 2:
@@ -3054,7 +3090,7 @@ def irc(parms):
             
             # Detect /names
             if text.lower().startswith("/names"):
-                print("[irc] /names detected")
+                print("[irc] /names")
                 try:
                     line = f"NAMES {target}\r\n"
                     print(f"[irc] >> {line!r}")
@@ -3070,21 +3106,21 @@ def irc(parms):
             # Normal SAY → PRIVMSG
             try:
                 line = f"PRIVMSG {raw}\r\n"
-                print(f"[irc] >> {line!r}")
+                #print(f"[irc] >> {line!r}")
                 ircsock.send(line.encode())
             except Exception as e:
                 print(f"[irc] send exception: {e}")
                 sendmsg("Pi:Er:Send error: " + str(e), RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
         
-            sendmsg("Pi:Ok:Sent", RC_SUCCNOSTD)
+            #sendmsg("Pi:Ok:Sent", RC_SUCCNOSTD)
             return RC_SUCCNOSTD
 
         # ------------------------------------------------------------
         # JOIN
         # ------------------------------------------------------------
         elif cmd.lower().startswith("join"):
-            #print("[irc] JOIN branch")
+            print("[irc] JOIN")
             if ircsock is None:
                 #print("[irc] JOIN but ircsock is None")
                 return not_connected()
@@ -3112,7 +3148,7 @@ def irc(parms):
         # READ
         # ------------------------------------------------------------
         elif cmd.lower().startswith("read"):
-            #print("[irc] READ branch")
+            print("[irc] READ")
             if ircsock is None:
                 #print("[irc] READ but ircsock is None")
                 sendmsg("Pi:Er:Not connected", RC_SUCCNOSTD)
@@ -3153,7 +3189,7 @@ def irc(parms):
                 # PING
                 if line.startswith("PING :"):
                     token = line[6:]
-                    #print(f"[irc] PING detected, token={token!r}")
+                    print(f"[irc] PING detected, token={token!r}")
                     try:
                         pong = f"PONG :{token}\r\n"
                         #print(f"[irc] >> {pong!r}")
@@ -3183,13 +3219,13 @@ def irc(parms):
                 # content for the user to see, so RC_SUCCNOSTD like the
                 # other "nothing interesting" acks (e.g. "NAMES sent")
                 if " 366 " in line:
-                    print("[irc] End of NAMES list")
+                    #print("[irc] End of NAMES list")
                     sendmsg("Pi:Ok:EndUsers", RC_SUCCNOSTD)
                     return RC_SUCCNOSTD
 
                 # JOIN reply from server
                 if " JOIN " in line:
-                    #print("[irc] JOIN event detected")
+                    print("[irc] JOIN")
                     try:
                         # Example: :msxpi!~msxpi@host JOIN #openmsx
                         # With extended-join capability, the server can
@@ -3224,11 +3260,11 @@ def irc(parms):
 
                 # PRIVMSG
                 if " PRIVMSG " in line:
-                    print("[irc] PRIVMSG detected")
+                    print("[irc] PRIVMSG")
                     try:
                         prefix, rest = line[1:].split(" ", 1)
                         nick = prefix.split("!", 1)[0]
-                        print(f"[irc] prefix={prefix!r}, nick={nick!r}, rest={rest!r}")
+                        #print(f"[irc] prefix={prefix!r}, nick={nick!r}, rest={rest!r}")
                     except Exception as e:
                         #print(f"[irc] PRIVMSG parse prefix exception: {e}")
                         sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
@@ -3262,7 +3298,7 @@ def irc(parms):
                             text = "* " + nick + " " + ctcp[7:]
                             sendmsg("Pi:Ok:<" + target + "> " + text, RC_SUCCESS)
                             return RC_SUCCESS
-                        print(f"[irc] CTCP request from {nick} ignored: {ctcp!r}")
+                        #print(f"[irc] CTCP request from {nick} ignored: {ctcp!r}")
                         sendmsg("Pi:Ok:No messages", RC_SUCCNOSTD)
                         return RC_SUCCNOSTD
 
@@ -3279,7 +3315,7 @@ def irc(parms):
         # QUIT
         # ------------------------------------------------------------
         elif cmd.lower().startswith("quit") or cmd.lower().startswith("part"):
-            #print("[irc] QUIT/PART branch")
+            print("[irc] QUIT/PART")
             if ircsock is not None:
                 try:
                     #print("[irc] >> b'QUIT\\r\\n'")
@@ -4284,9 +4320,9 @@ RPI_READY = int(getMSXPiVar("RPI_READY"))
 try:
     if hostType == "RaspberryPi":
         # SPI mode: keep trying forever
+        print(f"MSXPi Server waiting command:",end="")
         while True:
             try:
-                print("MSXPi Server: Waiting Command")
                 DISABLETIMEOUT = True
                 rc, buf = recvdata2()
                 #print(f"MSXPi Server: Command received: {buf} (rc={hex(rc)})")
@@ -4296,6 +4332,7 @@ try:
                     buf = buf.decode()
                     cmd, *rest = buf.split()
                     parms = " ".join(rest)
+                    print(f" -> {cmd} {parms}")
                     try:
                         result = globals()[cmd.lower()](parms)
                         # If handler returned a string or bytes, send it back to MSX
@@ -4310,6 +4347,9 @@ try:
                                 sendmultiblock(result)
                             except Exception:
                                 pass
+                                                        
+                        print("MSXPi Server waiting command:", end="", flush=True)
+                            
                     except KeyError as e:
                         # Unknown command name
                         err = f"Unknown command: {cmd}"
@@ -4348,9 +4388,9 @@ try:
             print(f" ** MSX Connected to {addr} **\n")
             globals()['conn'] = conn
 
+            print(f"MSXPi Server waiting command:",end="")
             try:
                 while True:
-                    print("MSXPi Server: Waiting Command")
                     DISABLETIMEOUT = True
                     rc, buf = recvdata2()
                     #print(f"MSXPi Server: Command received: {buf} (rc={hex(rc)})")
@@ -4360,6 +4400,7 @@ try:
                         buf = buf.decode()
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
+                        print(f" -> {cmd} {parms}")
                         try:
                             if (cmd.lower() == "set"): #workaround to avoid callign Linux "set" command
                                 cmd = "pset"
@@ -4376,6 +4417,9 @@ try:
                                     sendmultiblock(result)
                                 except Exception:
                                     pass
+                                    
+                            print("MSXPi Server waiting command:", end="", flush=True)
+                            
                         except KeyError as e:
                             # Unknown command name
                             err = f"MSXPi Server Error: Unknown command {cmd}"
