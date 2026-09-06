@@ -59,7 +59,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260830.003"
+BuildId = "20260906.007"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -4234,7 +4234,23 @@ def initialize_connection():
         time.sleep(0.2)
         GPIO.output(RPI_READY, GPIO.LOW)
 
-        GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING, callback=button_handler, bouncetime=200)
+        # Idempotent on purpose: this function is the error-recovery path for
+        # the command loop below, so it runs again on every glitch.  A second
+        # add_event_detect on the same channel raises "Conflicting edge
+        # detection already enabled", which used to escape and kill the
+        # server - turning one bad byte into a crash loop that the monitor
+        # restarted for ever, with the MSX unable to boot at all.
+        try:
+            GPIO.remove_event_detect(RPI_SHUTDOWN)
+        except Exception:
+            pass
+        try:
+            GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
+                                  callback=button_handler, bouncetime=200)
+        except Exception as e:
+            # Losing the shutdown button is a far smaller problem than losing
+            # the server, so carry on rather than raise.
+            print(f"MSXPi Server: shutdown button unavailable ({e})")
         print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n"
               f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
         return None
@@ -4329,7 +4345,8 @@ try:
 
                 if rc == RC_SUCCESS:
                     DISABLETIMEOUT = False
-                    buf = buf.decode()
+                        # see the SPI branch above: line noise must not be fatal
+                    buf = buf.decode('utf-8', 'replace')
                     cmd, *rest = buf.split()
                     parms = " ".join(rest)
                     print(f" -> {cmd} {parms}")
@@ -4397,7 +4414,11 @@ try:
 
                     if rc == RC_SUCCESS and buf is not None:
                         DISABLETIMEOUT = False
-                        buf = buf.decode()
+                        # errors='replace' rather than raising: a byte of line
+                        # noise then becomes an unrecognised command, which the
+                        # loop already handles by resyncing, instead of an
+                        # exception that tears down the connection.
+                        buf = buf.decode('utf-8', 'replace')
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
                         print(f" -> {cmd} {parms}")
