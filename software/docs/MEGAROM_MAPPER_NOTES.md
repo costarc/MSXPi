@@ -82,3 +82,57 @@ Only running it settles this.
   banks map one-to-one onto segments and a switch is a single `OUT`.
 * An obvious unimplemented win: the 8K handlers copy unconditionally, with no
   check for "this bank is already loaded". Games rewrite the same bank often.
+
+## Konami SCC — diagnosed, not yet fixed
+
+All five Konami ROMs that reach a graphics mode and then freeze (ALESTE,
+CONTRA, FANZONE2, MANBOW, USAS) are **Konami SCC**, which banks at completely
+different addresses from Konami4:
+
+| | bank-select addresses | switchable windows |
+|---|---|---|
+| Konami4 | `6000h`, `8000h`, `A000h` | 3 (the one at 4000h is fixed) |
+| Konami SCC | `5000-57FF`, `7000-77FF`, `9000-97FF`, `B000-B7FF` | 4 |
+
+`PATCH_WINDOWS[MAPPER_KONAMI]` only lists the Konami4 addresses, so their real
+bank switches are never converted. The writes land in RAM, no switch happens,
+and the game freezes the moment it needs a bank it does not already have.
+Measured site counts (`ld (nn),a` targets):
+
+    ANDROGYN   Konami4: 0    SCC: 62
+    ALESTE     Konami4: 0    SCC: 16
+    CONTRA     Konami4: 2    SCC: 26
+    FANZONE2   Konami4: 1    SCC: 15
+    MANBOW     Konami4: 0    SCC: 70
+
+**ANDROGYN's "RUNNING" verdict is therefore suspect**: it has zero Konami4
+sites, so nothing was patched for it either. It is probably animating a title
+screen out of the four banks `konamiInitialSetup` preloads and never getting
+any further.
+
+### Patching the SCC addresses alone makes it worse
+
+Tried, and CONTRA went from FROZEN (reached SCREEN 5) to NO_LAUNCH (INIT
+returns immediately). Both the 2KB ranges and the exact addresses did this.
+The reason is that **not every write to those addresses is a bank number**:
+
+    ld a,#3F
+    ld (9000h),a      ; enables the SCC sound chip
+
+CONTRA does this five times. With 16 banks, 63 unmasked indexes
+`table[63 >> 1] = table[31]`, far past the 8 valid entries, and maps a garbage
+segment. Real hardware masks the value to the ROM size (63 & 15 = 15).
+
+### Masking is required, and the obvious implementation regresses
+
+Adding `ld hl,#MASK / and (hl)` to the four 8K handlers needs
+`RESIDENT_SLOT_SIZE` grown from 0x40 to 0x50 (the largest handler reaches 80
+bytes). Doing that took **BILLIARD.ROM from RUNNING to hung** - a working
+ASCII8 ROM, which does not even use the SCC path. Cause not identified; the
+mask value, the table layout and the new addresses all check out on inspection,
+so something else about the slot resize or the extra resident byte is at fault.
+
+Reverted. The three facts above are solid and were each measured; the fix is
+not. Anyone picking this up should start by finding why the slot resize breaks
+an unrelated mapper, because masking is a prerequisite for SCC and probably for
+robustness generally.
