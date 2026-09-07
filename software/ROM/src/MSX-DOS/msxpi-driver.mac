@@ -217,6 +217,31 @@ DSKIO_WRITE:
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
 DSKIO_WRITE_LOOP:
+; Refuse a source in page 1 rather than sending nonsense.
+;
+; While this driver runs, #4000-#7FFF is our own EEPROM, not RAM - DOS reaches
+; the driver by inter-slot call, which selects our slot there.  SENDDATA reads
+; the caller's buffer with a plain LD A,(DE), so a transfer address in page 1
+; would read THIS ROM and write its contents into the disk image: silent
+; corruption that looks like a bad file rather than a driver fault.
+;
+; This is the write-side twin of the read-side bug that STORE_BYTE fixes, and
+; it is NOT fixed here - only detected.  A real fix needs SENDDATA to read
+; through RDSLT for disk data while still reading command strings normally,
+; since those live in this ROM and are sent through the same loop; that needs a
+; caller-set flag and a second payload loop, about 40 bytes against the 26 free.
+; Attempting it without the flag is what broke booting entirely: every command
+; to the Pi was read out of RAM instead of the ROM.
+;
+; D in 3Fh..7Fh covers both a sector starting in page 1 and one starting just
+; below it that crosses in.  Error 12 is the driver's existing "other error",
+; so DOS reports a write failure and nothing is written.
+        ld      a,d
+        cp      03Fh
+        jr      c,DSKIO_WRITE_OK
+        cp      080h
+        jp      c,DSKIO_ERR1
+DSKIO_WRITE_OK:
         push	bc
         ld      bc,SECTORSIZE
         call    senddata	      ; Send the sectors (write to disk
@@ -910,7 +935,7 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.5"
-BuildId: DB ".20260907.013"
+BuildId: DB ".20260907.014"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 ; Shortened to reclaim ROM space; the CALL MSXPI feature itself is unchanged.
