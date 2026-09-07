@@ -136,3 +136,40 @@ Reverted. The three facts above are solid and were each measured; the fix is
 not. Anyone picking this up should start by finding why the slot resize breaks
 an unrelated mapper, because masking is a prerequisite for SCC and probably for
 robustness generally.
+
+## Why growing RESIDENT_SLOT_SIZE breaks an unrelated mapper — answered
+
+The resident block cannot grow upwards. Measured by writing to a region with
+the layout otherwise untouched, and checking BILLIARD.ROM (ASCII8, which never
+uses the SCC path):
+
+| bytes written | BILLIARD |
+|---|---|
+| `F975-FABF` (the shipping layout) | runs |
+| `FAC0-FAFF` | hangs |
+| `FAD6-FAFF` (42 bytes) | hangs |
+
+So **the usable window is about `F975-FAD5`, ~352 bytes** — which is exactly
+what SofaRun uses (`ld de,0F975h / ld bc,0160h`, 0160h = 352). Two independent
+routes to the same boundary. Something the BIOS or the game needs lives
+immediately above it.
+
+Growing `RESIDENT_SLOT_SIZE` from 0x40 to 0x50 pushed the four 8K handlers from
+`F9C0-FABF` to `F9C0-FAFF`, over that edge. Nothing was wrong with the masking
+code or the slot arithmetic; the block simply ran out of room. Current usage is
+`F975-FABF` = 331 bytes, leaving roughly **22 bytes of headroom**.
+
+### What this means for masking
+
+Masking needs ~4 bytes per handler and the largest 8K handler already fills its
+0x40 slot exactly, so it cannot be bought by making slots bigger. It has to come
+out of the existing budget:
+
+* The four 8K handlers are nearly identical - they differ only in the
+  destination window and which port they borrow. Factoring the common body into
+  one routine with four small stubs would free well over 150 bytes.
+* `RESIDENT_TABLE_ADDR` reserves 64 entries (`MAX_STORAGE_SEGMENTS`), but even a
+  512KB ROM needs only 32. Halving it frees 32 bytes.
+
+Either is enough; the first is the better fix and would leave room for the
+per-window "bank already loaded" cache as well.
