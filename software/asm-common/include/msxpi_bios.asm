@@ -199,10 +199,10 @@ SENDDATA:
 SD2_HS_LOOP:
     ld      a,READY
     call    PIWRITEBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     call    PIREADBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     cp      READY_ACK
     jr      nz,SD2_HS_LOOP          ; wait until READY_ACK
@@ -210,11 +210,11 @@ SD2_HS_LOOP:
     ; Send msxmaxbuf (MAXBUFSIZE)
     ld      a,MAXBUFSIZE_LO
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,MAXBUFSIZE_HI
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
 SD2_RETRY:
     ; "Peek" the stack-preserved originals without losing them: pop them
@@ -231,21 +231,43 @@ SD2_RETRY:
 ; -------------------------
     ld      a,RC_SUCCESS            ; header_rc
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,c                     ; length low
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,b                     ; length high
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,0                     ; block_index = 0
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      hl,0                    ; HL = checksum
+
+; Disk data may live in page 1, where this ROM is banked in while the driver
+; runs, so LD A,(DE) would read the ROM and send ITS contents to the Pi.  The
+; command strings go through this same loop and DO live in the ROM, so the two
+; cannot be told apart by address: DSKIO_WRITE raises a flag around the data
+; transfer only.  Redirecting on address alone, without the flag, is what
+; corrupted every command to the Pi and stopped the machine booting.
+;
+; Read once, here, so the normal path below stays exactly as it was.  Only the
+; driver build has a work area to read - a .COM's stash stub is eight bytes and
+; this offset would be past its end - so the whole thing is behind the ifdef,
+; and .COM builds always take the plain loop, which is correct for them.
+ ifdef MSXPI_DRIVER
+    push    de
+    push    bc
+    call    MSXPI_GETSTASH          ; IX = driver work area
+    ld      a,(ix+o_SEND_P1)
+    pop     bc
+    pop     de
+    or      a
+    jr      nz,SD2P1_LOOP
+ endif
 
 ; -------------------------
 ; 2b. Payload loop
@@ -275,6 +297,55 @@ SD2_SEND_LOOP1:
     jr      SD2_SEND_LOOP
 
 
+ ifdef MSXPI_DRIVER
+; -------------------------
+; 2b'. Payload loop, page-1 aware
+; -------------------------
+; Identical to SD2_SEND_LOOP except for where the byte comes from.  RDSLT
+; corrupts AF, BC and DE, and HL is carrying the checksum, so all three are
+; saved around it.
+SD2P1_LOOP:
+    ld      a,b
+    or      c
+    jr      z,SD2_SEND_DONE
+    bit     7,d
+    jr      nz,SD2P1_PLAIN
+    bit     6,d
+    jr      z,SD2P1_PLAIN
+    push    hl
+    push    bc
+    push    de
+    ld      h,d
+    ld      l,e                     ; HL = source address
+    ld      a,(RAMAD1)              ; A  = slot holding RAM in page 1
+    call    RDSLT                   ; A  = data
+    pop     de
+    pop     bc
+    pop     hl
+    jr      SD2P1_GOT
+SD2P1_PLAIN:
+    ld      a,(de)
+SD2P1_GOT:
+    push    de
+    push    bc
+    ld      e,a
+    call    PIWRITEBYTE
+    jr      nc,SD2P1_SENT
+    pop     bc
+    pop     de
+    jr      SD2_CONN_ERR
+SD2P1_SENT:
+    ld      a,e
+    ld      b,0
+    ld      c,a
+    add     hl,bc
+    pop     bc
+    pop     de
+    inc     de
+    dec     bc
+    jr      SD2P1_LOOP
+ endif
+
 ; -------------------------
 ; Errors
 ; -------------------------
@@ -296,10 +367,10 @@ SD2_SEND_DONE:
 
     ld      a,l                     ; send local checksum
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     call    PIREADBYTE              ; receive remote checksum
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     cp      l                       ; compare with localChecksum
     jr      z,SD2_CHK_OK
@@ -320,7 +391,7 @@ SD2_SEND_DONE:
     ld      a,l
     cp      GLOBALRETRIES
     jr      nc,SD2_CHKSUM_ERR
-    jr      SD2_RETRY
+    jp      SD2_RETRY
 
 SD2_CHKSUM_ERR:
     scf
@@ -331,18 +402,18 @@ SD2_CHK_OK:
 ; 3. Status handshake
 ; -------------------------
     call    PIREADBYTE              ; expect READY
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
     cp      READY
     jr      nz,SD2_HS_ERR
 
     call    PIREADBYTE              ; expect status_from_python
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
     cp      RC_SUCCESS
     jr      nz,SD2_CONN_ERR
 
     ld      a,READY_ACK             ; send READY_ACK
     call    PIWRITEBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     or      a                        ; clear carry (success)
 
