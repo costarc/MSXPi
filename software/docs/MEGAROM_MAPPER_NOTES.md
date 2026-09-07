@@ -173,3 +173,45 @@ out of the existing budget:
 
 Either is enough; the first is the better fix and would leave room for the
 per-window "bank already loaded" cache as well.
+
+## 8K handler refactor — implemented, buggy, parked as a patch
+
+`8k-handler-refactor.patch` collapses the four near-identical 8K handlers into
+four 6-byte stubs plus one shared body, and adds bank masking. It builds clean
+and the numbers work out:
+
+* `.COM` shrinks 270 bytes (13684 -> 13414)
+* the resident block drops from `F9C0-FABF` (256 bytes of handlers) to
+  `F9C0-FA3F` (~117 bytes), and with the ASCII16 handlers moved down to
+  `FA40`/`FA60` in 0x20 slots the whole block ends at **FA7F** - **86 bytes of
+  headroom** below the `FAD5` boundary, against 6 before.
+
+**But it regresses BILLIARD.ROM from RUNNING to hung, and I did not find why.**
+Bisected: with the mask byte forced to 0xFF (`and A,0FFh`, a no-op) it still
+hangs, so the fault is in the refactor, not in masking. Checked against the
+originals and found to match: stack discipline (the stub's `push hl` is popped
+last), the `bit 0,c` half-selection, the `cp #80h` page choice, stub offsets
+0/6/12/18, and the blob size (117 bytes, copied as 0x80).
+
+### One real bug found while reading, present in the SHIPPING code too
+
+    pop  af
+    jp   po, 7$        ; absolute address in the .COM image
+    ei
+  7$:
+
+`jp po` targets the address the blob was *assembled* at, not the `F9C0` copy it
+runs from. It only survives because games have interrupts enabled when they
+switch banks, so the branch is never taken - after `launchGame` maps page 0 to
+BIOS ROM, taking it would jump into the BIOS. `jr` has no P/V form, so the
+position-independent fix is to read the flag out of F:
+
+    pop  af
+    push af
+    pop  bc           ; C = F
+    bit  2, c         ; P/V
+    jr   z, 7$
+    ei
+  7$:
+
+That is worth doing regardless of the refactor.
