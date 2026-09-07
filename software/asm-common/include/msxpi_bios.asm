@@ -245,8 +245,6 @@ SD2_RETRY:
     call    PIWRITEBYTE
     jp      c,SD2_CONN_ERR
 
-    ld      hl,0                    ; HL = checksum
-
 ; Disk data may live in page 1, where this ROM is banked in while the driver
 ; runs, so LD A,(DE) would read the ROM and send ITS contents to the Pi.  The
 ; command strings go through this same loop and DO live in the ROM, so the two
@@ -266,7 +264,15 @@ SD2_RETRY:
     pop     bc
     pop     de
     or      a
+    ; HL last: MSXPI_GETSTASH returns the work-area address IN HL, so zeroing
+    ; the checksum before that call left it holding an address instead of 0 -
+    ; every block's checksum was then wrong, every transfer failed, and the
+    ; machine got no further than the boot splash.  LD does not touch flags,
+    ; so the test above survives.
+    ld      hl,0                    ; HL = checksum
     jr      nz,SD2P1_LOOP
+ else
+    ld      hl,0                    ; HL = checksum
  endif
 
 ; -------------------------
