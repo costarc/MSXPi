@@ -1,6 +1,6 @@
-machine Canon_V-25
+machine Panasonic_FS-A1WSX
 ext MSXPi
-ext Ram2Mb
+ext ram4mb
 bind F12 cycle videosource
 plug printerport simpl
 set speed 100

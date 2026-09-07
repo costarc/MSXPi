@@ -1,4 +1,5 @@
 #include "MSXPiDevice.hh"
+#include "MSXCPU.hh"
 #include "Timer.hh"
 #include <chrono>
 #include "xrange.hh"
@@ -9,6 +10,8 @@ namespace openmsx {
 
 MSXPiDevice::MSXPiDevice(const DeviceConfig& config)
 	: MSXDevice(config)
+	, waitCycles(unsigned(config.getChildDataAsInt("wait_cycles", 0)))
+	, rdyFailEvery(unsigned(config.getChildDataAsInt("rdy_fail_every", 0)))
 {
 	thread = std::thread(&MSXPiDevice::readLoop, this);
 	reset(EmuTime::dummy());
@@ -59,6 +62,23 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 			// asserts /WAIT, and the read returns a stale byte.
 			// NOT named WAIT_TIMEOUT: that is a Win32 macro (258L from
 			// winbase.h) and the name would silently expand to a constant.
+			// Charge the guest for the stall.  This is the idiomatic
+			// openMSX way to model wait states (MSXCPU::waitCyclesZ80,
+			// as used by VDP.cc and TurboRFDC.cc) and it advances
+			// EMULATED time, which blocking this thread does not.
+			//
+			// It cannot replace the block below: waitCycles takes a
+			// count known in advance, whereas the byte itself arrives
+			// from a socket whenever the server gets round to it.
+			if (waitCycles > 0) {
+				time = getCPU().waitCyclesZ80(time, waitCycles);
+			}
+
+			// Fault injection: emulate RPI_READY being low for this read.
+			if (rdyFailEvery && (++rdyCounter % rdyFailEvery) == 0) {
+				return 0xff; // stale bus, exactly as hardware does
+			}
+
 			static constexpr auto RX_STALL_TIMEOUT = std::chrono::milliseconds(250);
 			std::unique_lock lock(mtx);
 			readRequested = false;
@@ -98,15 +118,22 @@ byte MSXPiDevice::peekIO(uint16_t port, EmuTime /*time*/) const
 		}
 		return 0x00;
 	case 0x57: // Version + wait-mode read-back
-		// $FE stays the default ON PURPOSE.  msxpi_bios.asm:97 detects
-		// openMSX by testing $57 against $FE, so every existing binary
-		// keeps working exactly as before.  Real hardware reads $0E here;
-		// emulation deliberately diverges to preserve that detection.
+		// This port has to answer TWO questions at once: "is wait mode on?"
+		// and "am I openMSX or real hardware?".  msxpi_bios.asm:97 asks the
+		// second one on EVERY BYTE:
 		//
-		// $8E - the same value real CPLD v1.6 returns with the mode on -
-		// only ever appears after software has explicitly opted in by
-		// writing $01, which no legacy program does.
-		return waitMode ? 0x8E : 0xFE;
+		//     in a,($57) / cp $FE / jr c,physical_path
+		//
+		// so anything below $FE means "real hardware" to every existing
+		// binary.  Real CPLD v1.6 answers $0E and $8E; returning $8E here
+		// would therefore make stock MSXPi code take the physical-hardware
+		// path under emulation and read stale bytes.
+		//
+		// Hence $FE / $FF rather than $0E / $8E: both stay at or above $FE,
+		// so openMSX keeps identifying itself correctly in both states,
+		// while bit 0 still reports the mode.  Real hardware can never
+		// collide with these - the CPLD pins bit 6 low, capping $57 at $BF.
+		return waitMode ? 0xFF : 0xFE;
 	case 0x5A: // data
 		if (readRequested) {
 			std::lock_guard lock(mtx);
@@ -144,6 +171,11 @@ void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime time)
 		}
 		break;
 	case 0x5A: // data
+		// A write stalls the Z80 on real hardware exactly as a read does
+		// (the CPLD asserts /WAIT on spi_en, which a write also sets).
+		if (waitMode && waitCycles > 0) {
+			time = getCPU().waitCyclesZ80(time, waitCycles);
+		}
 		if (sock != OPENMSX_INVALID_SOCKET) {
 			auto res = sock_send(sock, reinterpret_cast<const char*>(&value), 1);
 			(void)res; // ignore error

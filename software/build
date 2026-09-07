@@ -2,10 +2,10 @@
 
 export buildClientCommands="yes"
 export buildBIOS="yes"
-export buildLoadrom="no"
-export buildOpenMSXConfig="no"
+export buildLoadrom="yes"
+export buildOpenMSXConfig="yes"
 export buildMSXdiskImage="yes"
-export updateVersions="no"
+export updateVersions="yes"
 
 export BIOSNAME=msxpibios
 OPENMSXSRC=../../openMSX/openMSX

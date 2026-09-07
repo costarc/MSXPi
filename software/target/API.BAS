@@ -36,28 +36,31 @@
 45 ' RC = return code: -1 = If any error occurred, 0 = Success
 50 ' DO NOT CHANGE FROM HERE TO LINE 99
 55 ' YOUR CODE SHOULD START AT LINE 101
-60 GOTO 15000 ' Define address for MSXPi buffer in the top of RAM and put in var BF
+60 CLEAR 200,(PEEK(&HFC4A)+256*PEEK(&HFC4B))-520
+61 BF=PEEK(&HFC4A)+256*PEEK(&HFC4B)
 65 ' DO NOT DELETE OR CHANGE THIS LINE NUMBER
-70 onerrorgoto90
-75 call msxpiver
-80 goto 100
-90 bload "msxpiext.bin",r
+70 ' onerrorgoto90
+75 ' call msxpiver
+80 ' goto 100
+90 ' bload "msxpiext.bin",r
 100 ' DO NOT DELETE THIS LINE
 101 ' ============================  Example Code - Using the API Routines  ===================================
 102 ' ====> 1 : Execute a DIR in the MSXPi "/home/pi/msxpi" directory, printing to screen
 103 PRINT:PRINT"Starting Example 1":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory, printing to screen"
+104 PRINT"CALL MSXPI("+chr$(34)+"1,C000,dir /home/pi/msxpi"+chr$(34)+")":INPUT$("Press Enter to send command..."):PRINT
 110 A=1                      ' this is the stdout parameter - print to screen
-120 B=BF                 ' This is the buffer address
-130 C$="dir"                ' Command to execute
+120 B=&HC000                 ' This is the buffer address
+130 C$="dir"                 ' Command to execute
 140 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 150 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 153 PRINT:PRINT"Example 1 finished:";HEX$(RC)
 199 '
 200 ' ====> 2 : Execute a DIR in the MSXPi "/home/pi/msxpi" directory - Read the buffer using BASIC routines
-202 PRINT:PRINT"Starting Example 2":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory - Read the buffer using BASIC"
+202 PRINT:PRINT"Starting Example 2":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory - Read the buffer using BASIC PEEK and PRINT to screen"
+203 PRINT"CALL MSXPI("+chr$(34)+"2,C000,dir /home/pi/msxpi"+chr$(34)+")":INPUT$("Press Enter to send command..."):PRINT
 210 A=2                      ' this is the stdout parameter - save to buffer only, do not print
-220 B=BF                     ' This is the buffer address
-230 C$="dir"                ' Command to execute
+220 B=&HC000                 ' This is the buffer address
+230 C$="dir"                 ' Command to execute
 240 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 250 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 253 IF RC=-1 THEN GOTO260
@@ -66,10 +69,11 @@
 299 '
 300 ' ====> 3 : Execute a DIR in the MSXPi "/home/pi/msxpi" directory - Read the buffer to a Variable
 302 PRINT:PRINT"Starting Example 3":PRINT"Execute a DIR in the MSXPi /home/pi/msxpi directory - Read the buffer to a Variable and print to screen"
+303 PRINT"CALL MSXPI("+chr$(34)+"2,C000,dir /home/pi/msxpi"+chr$(34)+")":INPUT$("Press Enter to send command..."):PRINT
 310 A=2                      ' this is the stdout parameter - save to buffer only, do not print
-320 B=BF                 ' This is the buffer address
-325 C=40                     ' Number of chars to retrn in C$
-330 C$="dir"                ' Command to execute
+320 B=&HC000                  ' This is the buffer address
+325 C=40                     ' Number of chars to return in C$
+330 C$="dir"                 ' Command to execute
 340 D$="/home/pi/msxpi"      ' Parameters to pass along with the command
 350 PRINT:GOSUB 10000        ' Call SENDCOMMAND
 353 IF RC=-1 THEN GOTO365
@@ -78,24 +82,18 @@
 365 PRINT:PRINT"Example 3 finished:";HEX$(RC)
 399 '
 400 ' ====> 4 : Execute command apitest, send parameters, receive reply e print to screen
-402 PRINT:PRINT"Starting Example 4":PRINT"Execute command APITEST, send parameters and additional data, receive reply e print to screen"
+402 PRINT:PRINT"Starting Example 4":PRINT"Execute command TEMPLATE, send parameters, receive reply and print to screen"
+403 PRINT"CALL MSXPI("+chr$(34)+"1,C000,template par1 par2 par3"+chr$(34)+")":INPUT$("Press Enter to send command..."):PRINT
 410 A=1                      ' this is the stdout parameter - save to buffer only, do not print
-420 B=BF                 ' This is the buffer address
-430 C$="apitest"             ' Command to execute
-440 D$="Parameters sent via CALL MSXPI"
+420 B=&HC000                   ' This is the buffer address
+430 C$="template"             ' Command to execute
+440 D$="par1 par2 par3"
 450 PRINT:GOSUB 10000        ' Send Command & parameters
-453 IF RC=-1 THEN GOTO495
-460 ' SEND Parameters to the TEMPLATE Command
-461 B=BF:C$="Additional data sent via CALL MSXPISEND":GOSUB14000:IFRC=-1THENGOTO495 ' Store C$ in buffer
-462 B=BF:GOSUB12000 ' SEND THE CONTENTS OF BUFFER TO PI (256 BYTES)
-464 IF RC=-1 THEN GOTO 495
-466 ?:B=BF:GOSUB13000 ' Read data from PI and store in buffer (256 BYTES)
-468 A=1:B=BF:GOSUB11000 ' Print the contents of the buffer
 495 PRINT:PRINT:PRINT"Example 4 finished:";HEX$(RC)
 999 END
 9999 ' ============================  API ROUTINES STARTS HERE - DO NOT CHANGE ===================================
 10000 ' ==========================         SENDCOMMAND(A,B,C$,D$)          ===================================
-10001 ON ERROR GOTO 10900
+10001 ' ON ERROR GOTO 10900
 10002 IFA=0THENCALLMSXPI("0,"+HEX$(B)+","+C$+" "+D$):GOTO 10010
 10003 IFA=1THENCALLMSXPI("1,"+HEX$(B)+","+C$+" "+D$):GOTO 10010
 10004 CALLMSXPI("2,"+HEX$(B)+","+C$+" "+D$)
@@ -103,7 +101,7 @@
 10900 RC=-1:RETURN
 10999 '
 11000 ' ==========================           PRINTSTDOUT(A,B,C$)          ===================================
-11001 ON ERROR GOTO 11250
+11001 ' ON ERROR GOTO 11250
 11010 IF B<&H9000 THEN RC=-1:Z2=0:RETURN
 11020 C$="":IF Z2=0 THEN S=PEEK(B+1)+256*PEEK(B+2):Z2=B+3       ' Re-use Z2 var from previous call.
 11022 Y=PEEK(Z2):Z2=Z2+1:IFA=0 THEN GOTO 11050
@@ -117,7 +115,7 @@
 11250 RC=-1:Z2=0:RETURN
 11999 '
 12000 ' ==========================                MSXPISEND(B)            ===================================
-12001 ON ERROR GOTO 12025
+12001 ' ON ERROR GOTO 12025
 12010 IF B<&H9000 THEN RC=-1:RETURN
 12012 CALL MSXPISEND(HEX$(B)):RC=0:RETURN
 12025 RC=-1:RETURN
@@ -131,8 +129,3 @@
 14000 ' ' ==========================             STORESTR(B,C$)            ===================================
 14010 IF B<&H9000 THEN RC=-1:RETURN
 14012 FOR Z=1TOLEN(C$):Y=ASC(MID$(C$,Z,1)):POKE(B+Z-1),Y:NEXTZ:POKE(B+Z-1),0:RC=0:Z=0:RETURN
-15000 ' DEFINE ADDRESS FOR MSXPI BUFFER
-15010 CLEAR 200,(PEEK(&HFC4A)+256*PEEK(&HFC4B))-520
-15020 BF=PEEK(&HFC4A)+256*PEEK(&HFC4B)
-15030 RETURN
-

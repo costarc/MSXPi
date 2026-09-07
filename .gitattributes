@@ -1,2 +1,17 @@
 * linguist-vendored
 *.js linguist-vendored=false
+# Shell scripts must keep LF endings.  Several of these run on the Raspberry Pi
+# (msxpi-tcpip-setup.sh) or under Git Bash / WSL, and CRLF breaks them outright
+# - the shebang picks up a stray \r and the shell reports "bad interpreter" or
+# "$'\r': command not found".  Windows tooling reintroduces CRLF very easily:
+# Python's open(...,'w') translates \n to \r\n by default, which is exactly how
+# these got broken once already.
+*.sh        text eol=lf
+software/build text eol=lf
+
+# INL.CFG is read by InterNestor Lite on the MSX and must be CRLF.  With LF
+# only, INL never finds a line boundary in it, reports "Cannot execute this
+# command from a configuration file" and then loops printing its banner - which
+# looks exactly like a hang in the UNAPI driver underneath.  build.sh converts
+# it on copy as well, belt and braces.
+*.CFG       text eol=crlf
