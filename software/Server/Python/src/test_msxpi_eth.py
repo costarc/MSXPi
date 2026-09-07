@@ -93,11 +93,16 @@ check("instatus-empty", bytes(t.outbox) == b"\x00\x00\x00\x00\x00",
 
 s, t, lk = shuttle()
 f = frame()
+# What the client must see: a TAP delivers frames unpadded, but real Ethernet
+# hardware never does, so the shuttle pads short frames up to the 64-byte
+# minimum.  The reported length and the delivered body must both be the padded
+# form - InterNestor Lite drops anything shorter (ETH_FILTERS bit 1).
+fpad = f + b"\x00" * max(0, E.RX_PAD_TO - len(f))
 lk.inject(f)
 s.handle(E.OP_IN_STATUS)
 out = bytes(t.outbox)
 check("instatus-flag", out[0] == 1)
-check("instatus-length", (out[1] | (out[2] << 8)) == len(f), len(f))
+check("instatus-length", (out[1] | (out[2] << 8)) == len(fpad), len(fpad))
 check("instatus-ethertype", (out[3] << 8 | out[4]) == 0x0800, hex(out[3] << 8 | out[4]))
 
 # --- GET_FRAME --------------------------------------------------------------
@@ -107,9 +112,9 @@ lk.inject(f)
 s.handle(E.OP_GET_FRAME)
 out = bytes(t.outbox)
 ln = out[0] | (out[1] << 8)
-check("getframe-length", ln == len(f), ln)
+check("getframe-length", ln == len(fpad), ln)
 check("getframe-noflags", out[2] == 0, out[2])
-check("getframe-body", out[3:3 + ln] == f)
+check("getframe-body", out[3:3 + ln] == fpad)
 check("getframe-checksum", out[3 + ln] == (sum(f) & 0xFF))
 check("getframe-consumed", lk.pending() == 0)
 
@@ -233,7 +238,19 @@ s, t, lk = shuttle(inbox=b"\x00\x06", burst=True)
 lk.inject(f)
 s.handle(E.OP_GET_FRAME)
 check("burst-used", len(t.bursts) == 1, t.bursts and len(t.bursts[0]))
-check("burst-carries-whole-reply", len(t.bursts[0]) == 3 + len(f) + 1)
+check("burst-carries-whole-reply", len(t.bursts[0]) == 3 + len(fpad) + 1)
+
+# --- short frames are padded to the Ethernet minimum ------------------------
+
+lk2 = E.MockLink()
+lk2.inject(b"\x01\x02\x03")
+short, _ = lk2.pop()
+check("rx-pad-short", len(short) == E.RX_PAD_TO, len(short))
+check("rx-pad-keeps-payload", short[:3] == b"\x01\x02\x03")
+check("rx-pad-zero-filled", set(short[3:]) == {0})
+lk2.inject(b"y" * 200)
+long_, _ = lk2.pop()
+check("rx-pad-leaves-long-alone", len(long_) == 200, len(long_))
 
 # --- CRC32 matches the known Ethernet FCS check value ----------------------
 # The CRC of the ASCII string "123456789" under this polynomial and bit order

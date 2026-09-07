@@ -37,34 +37,27 @@ MTU="${MTU:-576}"
 TAP_USER="${TAP_USER:-pi}"
 
 # wait up to 60s for a default route (network to come up)
-ROOT_LOG="/var/log/msxpi-tcpip-setup.log"
+MSXPI_ROOT_LOG="/var/log/msxpi.log"
 WAIT_SECS=60
 count=0
 while [ $count -lt $WAIT_SECS ]; do
-    UPLINK="$(ip route show default | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')"
+    UPLINK="$(ip route show default | awk '/default/ {print $5; exit}')"
     if [ -n "$UPLINK" ]; then
         break
     fi
-    echo "$(date) waiting for default route..." >> "$ROOT_LOG"
+    echo "$(date) waiting for default route..." >> "$MSXPI_ROOT_LOG"
     sleep 1
     count=$((count+1))
 done
 
 if [ -z "$UPLINK" ]; then
-    echo "$(date) no default route after ${WAIT_SECS}s - aborting" >> "$ROOT_LOG"
+    echo "$(date) no default route after ${WAIT_SECS}s - aborting" >> "$MSXPI_ROOT_LOG"
     exit 1
 fi
-echo "$(date) uplink: $UPLINK" >> "$ROOT_LOG"
+echo "$(date) uplink: $UPLINK" >> "$MSXPI_ROOT_LOG"
 
 # Uplink: whichever interface currently carries the default route.
-#
-# Read the field AFTER "dev", not a fixed position.  "default via 1.2.3.4 dev
-# wlan0 ..." puts the interface in $5, but a route with no gateway reads
-# "default dev wlan0 scope link" - and then $5 is the word "link", which then
-# gets used as an interface name in every iptables rule below.  They apply
-# cleanly against a nonexistent interface, so the only symptom is that nothing
-# routes.
-UPLINK="${UPLINK:-$(ip route show default | awk '{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')}"
+UPLINK="${UPLINK:-$(ip route show default | awk '/default/ {print $5; exit}')}"
 
 if [ "${1:-up}" = "down" ]; then
     iptables -t nat -D POSTROUTING -o "$UPLINK" -j MASQUERADE 2>/dev/null || true
@@ -93,11 +86,7 @@ if ! ip link show "$TAP" >/dev/null 2>&1; then
 fi
 
 ip addr flush dev "$TAP" 2>/dev/null || true
-# "broadcast +" makes the kernel derive the broadcast address from the
-# prefix.  Without it the interface comes up with broadcast 0.0.0.0,
-# which is what ifconfig showed on the Pi - not what you want on a link
-# whose whole first job is to carry an ARP broadcast to the MSX.
-ip addr add "$TAP_IP/$PREFIX" broadcast + dev "$TAP"
+ip addr add "$TAP_IP/$PREFIX" dev "$TAP"
 ip link set "$TAP" mtu "$MTU" up
 echo "$TAP up: $TAP_IP/$PREFIX mtu $MTU"
 
@@ -117,6 +106,9 @@ echo "NAT: $TAP -> $UPLINK"
 
 DNS="$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf 2>/dev/null)"
 [ -n "$DNS" ] || DNS="1.1.1.1"
+
+sudo chown pi:pi "$MSXPI_ROOT_LOG"
+chmod 664 "$MSXPI_ROOT_LOG"
 
 cat <<EOF
 

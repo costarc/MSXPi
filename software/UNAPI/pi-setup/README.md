@@ -43,7 +43,16 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 
 1. `sudo ./msxpi-tcpip-setup.sh` on the Pi
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
-3. on the MSX: `MSR I`, `ETHUNAPI`, `INL I`
+3. on the MSX: `INL I`.  The Ethernet UNAPI driver is in `msxpibios.rom` now,
+   so there is nothing to install first - `RAMHELPR` is not needed, and
+   `ETHUNAPI` will refuse because the ROM already registers an ETHERNET
+   implementation.  `ETHTEST` should print `Seg: FF`.
+
+   `MSR I` only under **MSX-DOS 1**.  Under Nextor or MSX-DOS 2 the mapper
+   support routines are already present and MSR is built to fail in that case
+   ("the installer will fail if these routines are already present" -
+   Konamiman's own note in `ramhelpr.asm`), so "mapper already installed" there
+   is MSR working correctly, not a problem to solve.
 4. `inl s` to confirm the addresses
 5. **From the Pi**, `ping 192.168.99.2` - see below
 6. `telnet bbs.hispamsx.org`

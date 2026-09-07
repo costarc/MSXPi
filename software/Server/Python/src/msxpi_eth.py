@@ -95,6 +95,21 @@ MIN_FRAME = 16
 # the CRC ourselves so padding stays consistent with the checksum.
 PAD_TO = 128
 
+# Receive-side padding, and a different job from PAD_TO above.
+#
+# Real Ethernet hardware never delivers a frame shorter than the 64-byte
+# minimum, because the SENDING NIC pads it. A TAP device has no NIC and does no
+# padding, so without this the MSX is handed 42-byte ARP frames that no real
+# card could ever produce - and Ethernet UNAPI ETH_FILTERS bit 1 ("accept small
+# frames, smaller than 64 bytes") explicitly entitles the client to drop them.
+#
+# InterNestor Lite does exactly that. On hardware it fetched every ARP request
+# for its own address - ETHTEST confirmed the queue was being drained - and
+# discarded all of them, so ETH_OUT_STATUS stayed at 0, "nothing sent since
+# reset", and the Pi's ARP went unanswered indefinitely. Receive worked
+# perfectly at every layer below; the frames were simply too short to be legal.
+RX_PAD_TO = 64
+
 
 # =============================================================================
 # CRC32 - same polynomial and bit order as CTapDriver::Crc32
@@ -140,6 +155,13 @@ class BaseLink(object):
         if len(frame) > MAX_FRAME:
             self.dropped += 1
             return
+        # Stand in for the sending NIC that a TAP device does not have.  Done
+        # here rather than at pop() so that the length ETH_IN_STATUS reports
+        # and the length ETH_GET_FRAME delivers are necessarily the same
+        # number - the client reads them as a pair and a mismatch would be a
+        # much nastier bug than the one this fixes.
+        if len(frame) < RX_PAD_TO:
+            frame = bytes(frame) + b"\x00" * (RX_PAD_TO - len(frame))
         with self.lock:
             # Spec: when the buffer is full, discard NEW frames and keep the
             # oldest.  Hence the explicit length check.

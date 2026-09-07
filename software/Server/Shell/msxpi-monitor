@@ -3,10 +3,27 @@
 #              Changed sleep from 5 to 2 seconds
 # 2017-11-23 : Added ramdisk setup
 # 2017-11-18 : Added switch to python or C version
+# 2026-09-02 : Added TCPIP/UNAPI setup; Added logging to /var/log/msxpi.log
 
 MSXPIHOME=/home/pi/msxpi
 FILELIST="pplay.sh"
 USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
+UNAPISETUP="/home/pi/msxpi/msxpi-tcpip-setup.sh"
+MSXPI_ROOT_LOG="/var/log/msxpi.log"
+
+if [[ -x "$UNAPISETUP" ]]; then
+    echo "$(date) Starting root script $UNAPISETUP" >> "$MSXPI_ROOT_LOG"
+    sudo nohup "$UNAPISETUP" >> "$MSXPI_ROOT_LOG" 2>&1 &
+else
+    echo "$(date) $UNAPISETUP not found or not executable" >> "$MSXPI_ROOT_LOG"
+fi
+
+# Ensure log file exists and user pi has full write permissions
+if [[ ! -f "$MSXPI_ROOT_LOG" ]]; then
+    sudo touch "$MSXPI_ROOT_LOG"
+fi
+sudo chown pi:pi "$MSXPI_ROOT_LOG"
+chmod 664 "$MSXPI_ROOT_LOG"
 
 if [[ $USEROOT -eq 1 ]];then
     PREFIX="sudo -i -u pi "
@@ -17,8 +34,8 @@ else
 fi
 
 pid=$(ps -ef | grep '[m]sxpi-server.py' | awk '{print $2}')
-if [ -n "$pid" ]; then
-    sudo kill -9 "$pid"
+if [[ -n "$pid" ]]; then
+    sudo kill -9 $pid
 else
     echo "No matching msxpi-server.py process found."
 fi
@@ -27,14 +44,14 @@ msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
 if [[ $msxpisrv -eq 1 ]];then
     MSXPISERVER="sudo $MSXPIHOME/msxpi-server"
 else
-    MSXPISERVER="/usr/bin/python3 $MSXPIHOME/msxpi-server.py"
+    MSXPISERVER="/usr/bin/python3 -u $MSXPIHOME/msxpi-server.py"
 fi
 
 # check if msxpi files are already installed in ramdisk
 if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
     if [[ $(/bin/df /media/ramdisk | /bin/grep -c ramdisk) -eq 0 ]]; then
         if [[ ! -e /media/ramdisk/ ]]; then
-            ${OSCMDPREFIX}mkdir /media/ramdisk
+            ${OSCMDPREFIX}mkdir -p /media/ramdisk
         fi
         echo y | ${OSCMDPREFIX}/sbin/mke2fs -q -m 0 /dev/ramdisk 1m
         ${OSCMDPREFIX}/bin/mount /dev/ramdisk /media/ramdisk
@@ -56,45 +73,30 @@ if [[ $# -eq 1 && $R -eq 1 ]]; then
 fi
 
 echo "Restarting msxpi-server"
-$MSXPISERVER &
+$MSXPISERVER >> "$MSXPI_ROOT_LOG" 2>&1 &
 
-rm /home/pi/msxpi/msxpi-update*
+rm -f /home/pi/msxpi/msxpi-update*
 
 while :
 do
-sleep 2
-state=$(ps -ef | grep msxpi-server | grep  -v grep | wc -l)
+    sleep 2
+    state=$(ps -ef | grep '[m]sxpi-server' | wc -l)
 
-if [[ $state -eq 0 ]];then
-    msxpid=$(ps -ef | grep '[m]sxpi-server' | awk '{print $2}')
-    msxpid="$msxpid 99999"
-    echo "killing $msxpid"
-    set $msxpid 
-    if [[ $# -gt 1 ]];then
-        kill -9 $msxpid
+    if [[ $state -eq 0 ]];then
+        echo "Restarting msxpi-server"
+        msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
+        if [[ $msxpisrv -eq 1 ]];then
+            sudo ${MSXPIHOME}/msxpi-server >> "$MSXPI_ROOT_LOG" 2>&1 &
+        else
+            /usr/bin/python3 -u ${MSXPIHOME}/msxpi-server.py >> "$MSXPI_ROOT_LOG" 2>&1 &
+        fi
+        
+        sleep 2
+        
+        # Check recent log entries for initialization failure
+        if tail -n 20 "$MSXPI_ROOT_LOG" | grep -q "initialisation failed"; then
+            echo "$(date) Initialization failed detected. Shutting down system." >> "$MSXPI_ROOT_LOG"
+            sudo shutdown -h now
+        fi
     fi
-
-    echo "Restarting msxpi-server"
-    msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
-    if [[ msxpisrv -eq 1 ]];then
-        ${MSXPIHOME}/msxpi-server &
-    else
-        /usr/bin/python3 ${MSXPIHOME}/msxpi-server.py &
-    fi
-    sleep 1
-	msxpid=$(ps -ef | grep '[m]sxpi-server' | awk '{print $2}')
-    msxpid="$msxpid 99999"
-    set $msxpid 
-    if [[ $# -gt 1 ]];then
-        kill -9 $msxpid
-    fi
-    if [[ msxpisrv -eq 1 ]];then
-        ret=$(${MSXPIHOME}/msxpi-server 2>&1 &)
-    else
-        ret=$(/usr/bin/python3 ${MSXPIHOME}/msxpi-server.py 2>&1 &)
-    fi
-    if [[ `echo $ret | grep -c "initialisation failed"` -eq 1 ]];then
-        shutdown -h now
-    fi
-fi
 done
