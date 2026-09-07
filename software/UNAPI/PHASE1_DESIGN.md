@@ -399,3 +399,291 @@ caller.
 Our own test programs do re-enable interrupts around their loops - see
 ETHBENCH's `RUN_PASS` - which is what a well-behaved foreground client has to
 do anyway.
+
+---
+
+# The driver moves into the ROM (2026-08-31)
+
+## Why
+
+InterNestor Lite's RAM-segment path is a dead end. Four defects turned up on
+real hardware in code no field implementation exercises: `_UN_RAMCALL` fetched
+only when the segment IS `$FF`, the implementation name read through `CALL_MAP`
+instead of `RD_MAP`, `INL S` reporting "not installed" while `UCOUNT` proves
+TCP/IP registers, and `INL I` hanging outright. Two are patched in `inl/`; the
+other two are not understood. Forcing our transport to the bounded polled path
+with `ETHUNAPI P` changed nothing, so the transport was exonerated and the
+fault is entirely in INL.
+
+A ROM implementation reports **segment `$FF`**, which puts every stock client -
+InterNestor Lite included - on the `CALSLT` path that ObsoNET and every other
+field implementation use. No INL patches, no RAM helper dependency, and no
+installer to run.
+
+The `.COM` installer stays as the option for people who cannot reflash.
+
+## Where it lives
+
+`target/msxpibios.rom` is built from `ROM/src/MSX-DOS/msxpi-driver.mac`, **not**
+from `ROM/src/BIOS/msxpibios.asm` - that trap has cost time before. The driver
+is assembled separately by sjasm and `INCBIN`'d into the free tail at a fixed
+`UNAPI_ORG`, with `ASSERT`s on both sides: MSXPi code must not reach
+`UNAPI_ORG`, and the image must end below `8000H`. Growth in either direction
+is a build error rather than a corrupt ROM.
+
+Two assemblers, because neither can do the whole job: zmac builds the ROM, and
+sjasm builds the driver - the same sources also produce the RAM variant, and
+they are sjasm syntax throughout. The driver calls the kernel's `GETSLT` and
+`GETWRK` by hardcoded address (the two assemblers cannot share a symbol table);
+`msxpi-driver.mac` `ASSERT`s both against the real labels.
+
+## Fitting it
+
+The free tail was 1,100 bytes and the driver was 1,240. What closed the gap:
+
+| | bytes |
+|---|---|
+| a dead `DS 128` in `msxpi_bios.asm` (`heap_top`, never referenced) | 128 |
+| `ChoiceStr` - "1 - Choice A" etc., and `CHOICE` returns HL=0 | 47 |
+| `DSKIORDMSG` - "DSKIO READ ERROR", never printed | 19 |
+| `DOS_INI`/`DOS_DRV`/`DOS_FMT` - protocol strings never sent | 36 |
+| `ETH_TX_BLOCK` - dead: every send goes through `ETH_TX_SUM` | 58 |
+| `ETH_TX`'s mode branch - both arms were literally identical | 17 |
+| `ETH_RX`'s two arms merged; they differ only in the middle step | 13 |
+| `ETH_WAIT_DATA`'s two polled loops merged into one | 23 |
+
+That is 341 bytes against a 158-byte shortfall, and the diagnostic routine 128
+survived. 38 bytes are still free below `8000H`.
+
+## State
+
+The ROM cannot write to itself, so every mutable byte moved into the disk
+driver work area - `MYSIZE` grew from 9 to 45 and `GETWRK` hands out the
+pointer. Offsets 0..7 stay with the disk driver (`DSKIO_SECTINFO` 0..4,
+`MSXPI_GETSTASH` 5..7); ours start at 8. `asm-common/include/unapi_wrk.inc`
+holds the layout and is included by **both** assemblers.
+
+**Both builds use it**, reached through `IX`. The RAM build could have kept
+absolute addresses, but then `ethtrans.asm` and `ethops.asm` would have needed
+two versions of every state access, and they would have drifted. MSX-UNAPI 2.3
+makes this legal: `IX`/`IY` "must not be used for input parameters" and are
+corrupted on return, precisely so inter-slot and inter-segment calls can use
+them. `UNAPI_ENTRY` sets `IX` once and every routine reads through it.
+
+## Initialisation
+
+From `INIENV`, not `INIHRD`. By the time the kernel calls `INIENV` it has
+allocated the `MYSIZE` work area and stored it in `SLTWRK` (so `GETWRK` works)
+and initialised the EXTBIO hook - either in this diskrom or in whichever one
+started the disk system first, so `HOKVLD` needs no checking. The hook becomes
+`RST 30h` + slot + address + `RET`, exactly five bytes, and the hook it
+displaces is kept in the work area. Installing twice would chain the hook to
+itself, so `INIENV` recognises its own handler and returns.
+
+## The transport is probed lazily, and that matters
+
+The `.COM` installer probes at install time. The ROM **cannot**: `INIENV` runs
+during disk-system initialisation, when on real hardware the Pi is usually
+still booting. A probe there would fail and pin the driver to the slow polled
+backend for the rest of the session. So `INIENV` writes `MODE_UNKNOWN` and the
+first UNAPI call runs `ETH_DETECT` - by which time the machine has booted off
+the Pi and the link is known good.
+
+That first transaction is still slower than every later one, because the other
+end builds its Ethernet shuttle lazily when the first opcode arrives. With the
+fixed 17 ms per-byte budget it **timed out**, and then the reply landed in a
+queue nobody was reading: every later transaction read the previous one's
+answer. Not a lost call - permanent desync. It showed up as ETHTEST printing
+the probe's own `ETH` signature as the MAC address:
+
+```
+MAC:   455448010002      <- 'E' 'T' 'H' 01, then the real reply starting
+Net:   00
+```
+
+Caught in emulation only because a cold `__pycache__` made the server's first
+`import msxpi_eth` slow enough; with the bytecode cached it passed. The fix is
+`(ix+o_ETH_TMO)`, the per-byte budget in units of 256 iterations: the work area
+starts zeroed, which the wait loops read as the **longest** budget (~0.5 s), and
+`ETH_DETECT` drops it to the normal value once the link has answered once.
+
+The underlying hazard is older and still there: a reply that arrives after we
+have given up on it poisons the next transaction, and `ETH_RESYNC` cannot
+retrieve bytes already buffered on the other side. `ETH_MAXFAIL` limits the
+damage; a bounded drain in `ETH_RESYNC` would be the real fix if this recurs.
+
+## What the tests now prove
+
+`unapi_discovery` runs `ETHTEST` from a **cold boot with nothing installed** -
+no `RAMHELPR`, no `ETHUNAPI` - and gets `Found: 01`, `Seg: FF`, the real MAC
+over the wire and `Net: 01`. `ETHTEST` and `ETHBENCH` both learned the `CALSLT`
+path and now treat the RAM helper as optional, needed only for a mapped
+segment.
+
+`unapi_install` pins the opposite: with the ROM driver present, `ETHUNAPI.COM`
+must refuse, because installing anyway would register a second implementation
+of the same API.
+
+## What INL does now
+
+`INL I` **completes** on the ROM path:
+
+```
+Searching Ethernet UNAPI implementation... OK
+Found MSXPi Ethernet UNAPI v0.1 at slot 1
+InterNestor Lite has been installed. Have fun! (^^)/
+```
+
+Against the RAM implementation it hung right after the "Found" line. That was
+defect (4), and going ROM fixed it - which is the whole justification for this
+change. `wsl_inl` now asserts it rather than merely running it.
+
+Defect (3) survives, and is now more interesting than it was. `INL S` still
+reports "InterNestor Lite is not installed" immediately after a successful
+`INL I`. Two explanations are ruled out:
+
+* **Not the RAM-segment path.** It behaves identically with the driver in ROM.
+* **Not the separate mapper card.** The standing theory was that INL's
+  residency check compares against `RAMAD1`, and the harness adds `ram2mb` to a
+  Canon V-25, putting the mapper in a different slot from page-1 RAM. Tested
+  with `MACHINE=Philips_NMS_8245 HW=msxpi128` - 128K in the main slot, no
+  `ram2mb`, mapper and page-1 RAM in the same slot - and `INL S` still says not
+  installed. The theory is dead; do not spend time on it again.
+
+`UCOUNT` proves the TCP/IP UNAPI does register, so INL itself is working and it
+is specifically INL's own status command that is confused. Whatever marker
+`INL S` looks for is not being left by `INL I` in this environment. It is not
+blocking: nothing depends on `INL S` except a human wanting reassurance.
+
+Still unproven: everything on real hardware, and anything that carries a real
+frame. Nothing network-facing has yet moved a single one - TapLink's reader
+thread, the CRC generation, frame padding and the queue policy are all still
+unexecuted.
+
+---
+
+# Validated on real hardware (2026-09-04)
+
+Canon V-25, MegaFlashROM SCC+SD in slot 1 running Nextor, MSXPi in slot 2,
+`msxpibios.rom` sha1 `3616e00a`.
+
+| test | result |
+|---|---|
+| `ETHTEST` from a cold boot, nothing installed | `Found: 01`, `Seg: FF`, `Rst: ok`, `Mode: 01`, real MAC, `Net: 01`, `P57: 0E` |
+| `INL I` | installs; `UCOUNT` reports ETHERNET `01` and TCP/IP `01` |
+| `ETHBENCH` | `ok=0800` on **every** line, `W-3by` included |
+| `ETHTEST` again, with INL resident | correct MAC and `Net: 01` |
+| `TESTRAM` | 512KB mapper passes |
+
+Three of those are firsts.
+
+**`W-3by` is no longer intermittent.** That 3-byte `/WAIT` transaction used to
+return `0800` in one run out of three, and it is the shape of `ETH_IN_STATUS`,
+which InterNestor Lite calls sixty times a second - the most exposed case in
+the whole design. It is now clean. The likely reasons are that detection proves
+`/WAIT` with a real probe transaction before selecting it, and that the Pi
+holds `RPI_READY` across the inter-byte gap.
+
+**Re-entrancy holds against a real interrupt-driven client.** `ETHTEST` run
+while INL is resident still gets correct answers, so foreground UNAPI calls and
+INL's timer-ISR polling of `ETH_IN_STATUS` coexist. That is what `ETH_LOCK` and
+the ISR-safe transport core were written for, and until now it had never been
+exercised by an actual ISR consumer - not on hardware, not in emulation.
+
+## What the `INL I` hang actually was
+
+`INL.CFG` line endings. LF only, where MSX text files need CRLF.
+
+Not the driver, not the transport, and not the RAM-vs-ROM segment path - all
+three had been suspected and all three were wrong. After installing, INL feeds
+`INL.CFG` back through its own command parser one line at a time; with no CR it
+never finds a line boundary, reports *"Cannot execute this command from a
+configuration file"*, and then loops printing its banner. On DOS 1 that shows
+as a visible loop; on Nextor it presents as a hang.
+
+Three-way A/B in emulation settles it: LF-only stops at "Found ... at slot N";
+no file at all installs cleanly; CRLF installs **and applies the static IP**.
+
+`UNAPI/build.sh` now converts the file at copy time rather than trusting the
+copy in the repo, because git's line-ending handling can rewrite it on
+checkout. `wsl_inl` asserts both that the install completed and that every
+config line was accepted - "has been installed" alone would not catch a config
+file that was silently skipped.
+
+## Still unproven
+
+Anything that carries a real frame. The MAC coming back as `024D53585069` is
+`msxpi_eth`'s built-in default, which means the Pi is running `MockLink`: it
+answers every opcode perfectly and moves no traffic, so the whole suite passes
+while nothing is connected. `TapLink`'s reader thread, the CRC generation,
+frame padding and the queue policy remain unexecuted.
+
+---
+
+# It works (2026-09-05)
+
+```
+64 bytes from 192.168.99.2: icmp_seq=1 ttl=64 time=59.6 ms
+64 bytes from 192.168.99.2: icmp_seq=2 ttl=64 time=40.2 ms
+```
+
+Canon V-25, MegaFlashROM SCC+SD in slot 1 running Nextor, MSXPi in slot 2,
+`msxpibios.rom` sha1 `cba6355e`, **stock** InterNestor Lite. ARP resolved by
+INL itself, ICMP echo answered.
+
+## The last bug was ours, and it was one instruction
+
+Both of InterNestor Lite's send sites do this:
+
+```asm
+	ld	d,1
+	ethnet	ETH_SEND_FRAME
+```
+
+`D=1` is asynchronous mode. `FN_SEND_FRAME` opened by rejecting it:
+
+```asm
+            ld      a,d
+            or      a
+            jr      z,.sync
+            ld      a,5                     ; async not supported
+            ret
+```
+
+So every reply INL ever composed was refused at the final instruction. It
+received frames correctly, parsed them correctly, decided to reply, and we said
+no — which is exactly why every layer underneath looked perfect while nothing
+came back.
+
+The fix sends synchronously whatever `D` says and returns 0. That is safe
+rather than a fudge: asynchronous mode only guarantees that transmission has
+*started*, so completing it first is a stronger guarantee than the caller asked
+for, and a caller polling `ETH_OUT_STATUS` gets `2`, "finished successfully".
+
+## Two things hid it, both self-inflicted
+
+**`ETH_OUT_STATUS` was lying by omission.** The async and bad-length paths
+return early without recording anything in `o_ETH_LASTSEND`, so routine 10
+reported `0` — "nothing sent since reset" — when the truth was "an attempt was
+refused and not recorded". That reading sent the investigation into INL's
+source for several cycles. A diagnostic that cannot distinguish "never called"
+from "called and rejected" is worse than no diagnostic.
+
+**`software/build` had `buildBIOS="no"`**, so the entire ROM block was skipped
+and `ROM/src/MSX-DOS/ethrom.bin` sat at a four-day-old build while driver
+changes appeared to be deployed. Any driver fix has to reach the ROM, and with
+that flag off it silently never does.
+
+## And one long-standing mystery closed
+
+`INL S` reporting "not installed" was **caused by the RAM-implementation
+patch**, not by this driver or the machine. Stock INL - built by reversing
+`inl/inl-2.3-ram-implementation.patch`, vendored as `bin/INLSTOCK.COM` -
+reports "installed and ACTIVE". Two explanations had already been ruled out for
+that defect; the real one was self-inflicted, which is the point of running
+stock software when the whole design goal was that stock software should work.
+
+## What is still unproven
+
+DNS, TCP and telnet. And NAT: the uplink-detection fix is in the repo but not
+deployed to the Pi, so nothing routes off-subnet yet. On-link traffic works.

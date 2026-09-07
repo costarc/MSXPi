@@ -25,12 +25,15 @@ TIMEOUT="${TIMEOUT:-300}"
 # Ubuntu has no bare `python`; Git Bash on Windows has no `python3`.
 PYTHON="${PYTHON:-python}"
 
-# Canon_V-25 has only a 64K mapper, so the harness had to add ram2mb - which
-# lands the mapper in a DIFFERENT SLOT from page-1 RAM. InterNestor Lite's
-# "am I installed?" check compares the implementation's slot against RAMAD1
-# (F344h) and skips anything that does not match, so with a separate mapper
-# card it reports "not installed" however well everything else works.
-# MACHINE=Philips_NMS_8245 has 128K in the main slot and needs no ram2mb.
+# Canon_V-25 has only a 64K mapper, so the harness adds ram2mb - which lands the
+# mapper in a DIFFERENT SLOT from page-1 RAM.
+#
+# That used to be the standing explanation for "INL S" reporting "not
+# installed": InterNestor Lite's residency check looks at RAMAD1 (F344h).  It
+# is NOT the explanation - MACHINE=Philips_NMS_8245 HW=msxpi128 has 128K in the
+# main slot, needs no ram2mb, and puts the mapper and page-1 RAM in the same
+# slot, and INL S still says not installed there.  Use that combination when
+# something genuinely looks slot-dependent; do not re-run it for INL S.
 MACHINE="${MACHINE:-Canon_V-25}"
 
 # Hardware profile.  HW=msxpi (default) serves the disk over MSXPi, which is the
@@ -41,10 +44,53 @@ MACHINE="${MACHINE:-Canon_V-25}"
 # 2.10 loads, finds no filesystem, and the machine ends up in SCREEN 8.  Building
 # a formatted SD image is a tracked follow-up.
 HW="${HW:-msxpi}"
+# Extra -command arguments a profile needs (inserting media, say).  Kept
+# separate from RENDER_ARGS, which is rebuilt from scratch further down.
+MEDIA_ARGS=()
 case "$HW" in
-    msxpi) EXTS=(-ext MSXPi -ext ram2mb) ;;
+    # DOS1 target: MSXPi in SLOT 2, booting MSX-DOS 1 from the Pi-served
+    # msxpiboot.dsk.  Extension order is slot order, so ram2mb goes first to
+    # take slot 1 and leave MSXPi in slot 2, matching the hardware - the
+    # driver then reports slot 2 as it does there.  ram2mb is also what
+    # supplies the memory mapper INL needs, which a bare V-25 does not have.
+    msxpi) EXTS=(-ext ram2mb -ext MSXPi) ;;
     msxpi128) EXTS=(-ext MSXPi) ;;   # machine already has >=128K in the RAM slot
-    mfr)   EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi) ;;
+    # The real target: MegaFlashROM SCC+SD in slot 1 running Nextor, MSXPi in
+    # slot 2 for the network only.  Extension order is slot order, so MFR must
+    # come first to land in slot 1 and match the hardware - the driver then
+    # reports slot 2, as it does on the real machine.
+    #
+    # Needs a FORMATTED Nextor SD image in SDIMG.  Without one openMSX
+    # auto-creates a blank SDcard1.sdc, Nextor finds no filesystem, and the
+    # machine ends up in SCREEN 8 garbage - which looks like a harness bug and
+    # is not one.
+    # DOS2 target: Canon V-25, MegaFlashROM SCC+SD in slot 1, MSXPi in slot 2,
+    # booting Nextor.  The Nextor tree lives as a host FOLDER and is baked into
+    # a hard-disk image by ./mknextorhd.sh - openMSX only does folder-as-disk
+    # for floppies, not for hd/SD devices.  Re-run that script whenever the
+    # tools in the folder change; nothing here detects staleness.
+    nextor)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        NEXTORHD="${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}"
+        [ -f "$NEXTORHD" ] || {
+            echo "no Nextor HD image at $NEXTORHD - run ./mknextorhd.sh first"
+            exit 1
+        }
+        MEDIA_ARGS=(-command "hdb {$NEXTORHD}")
+        ;;
+    mfr)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        if [ -n "${SDIMG:-}" ]; then
+            # Either a real .sdc image or a DIRECTORY - openMSX mounts a
+            # folder as the card's filesystem, which is how the Nextor boot
+            # tree is kept editable from the host side.
+            [ -e "$SDIMG" ] || { echo "SDIMG not found: $SDIMG"; exit 1; }
+            MEDIA_ARGS=(-command "sdcard1 insert {$SDIMG}")
+        else
+            echo "!! HW=mfr with no SDIMG set - Nextor will find no filesystem."
+            echo "   Set SDIMG=/path/to/nextor.sdc"
+        fi
+        ;;
     *)     echo "unknown HW='$HW' (want msxpi or mfr)"; exit 1 ;;
 esac
 
@@ -75,6 +121,10 @@ else
         # sets INCLUDE_WSL=1.
         case "$name" in
             wsl_*) [ "${INCLUDE_WSL:-0}" = "1" ] || continue ;;
+            # nextor_* model the DOS2 target and need HW=nextor plus the hard
+            # disk image ./mknextorhd.sh builds; they would fail on any other
+            # profile for reasons that have nothing to do with the driver.
+            nextor_*) [ "$HW" = "nextor" ] || continue ;;
         esac
         TESTS+=("$name")
     done
@@ -88,6 +138,18 @@ fi
 # --- server -----------------------------------------------------------------
 # The openMSX MSXPi device is a TCP client to 127.0.0.1:5000 (MSXPiDevice.cc),
 # so a server has to be listening or every MSXPi access reads stale bytes.
+# Refuse to start if something is ALREADY serving port 5000.  Three separate
+# debugging sessions were lost to this: a leftover msxpi-server or a stray
+# openMSX keeps the port, the harness's own server either loses the bind or is
+# bypassed entirely, and every test then fails looking like a machine that will
+# not boot - blank screen, no banner, nothing in the log to suggest a stale
+# process.  Cheap to detect, very expensive to diagnose.
+if "$PYTHON" -c "import socket,sys; sys.exit(0 if socket.socket().connect_ex(('127.0.0.1',5000))==0 else 1)" 2>/dev/null; then
+    echo "!! something is already listening on 127.0.0.1:5000"
+    echo "   stop it first - a leftover msxpi-server.py, or an openMSX still running"
+    exit 1
+fi
+
 SERVER_PID=""
 start_server() {
     [ -n "$MSXPI_SERVER" ] || return 0
@@ -144,7 +206,7 @@ for t in "${TESTS[@]}"; do
 
     MSXPI_HARNESS_OUT="$result" \
     timeout "$TIMEOUT" "$OPENMSX" \
-        -machine "$MACHINE" "${EXTS[@]}" "${RENDER_ARGS[@]}" \
+        -machine "$MACHINE" "${EXTS[@]}" "${MEDIA_ARGS[@]}" "${RENDER_ARGS[@]}" \
         -script "$HERE/lib/harness.tcl" \
         -script "$script" \
         >"$OUTDIR/$t.openmsx.log" 2>&1

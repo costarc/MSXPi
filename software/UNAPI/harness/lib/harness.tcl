@@ -138,6 +138,32 @@ proc harness::at_dos_prompt {body {timeout 40}} {
     harness::wait_for "A:" $timeout $body
 }
 
+# Nextor boots through AUTOEXEC.BAT into MultiMente, a full-screen file
+# manager, exactly as the real machine does.  ESC then RETURN leaves it for the
+# DOS prompt.  The wait before it is a fixed settle on purpose: MM draws in a
+# graphics mode, so there is no text on screen to wait for.
+proc harness::at_nextor_prompt {body {boot 28} {timeout 30}} {
+    # Nextor boots through AUTOEXEC.BAT into MultiMente, a full-screen file
+    # manager - exactly what the real machine does.  ESC then RETURN leaves it
+    # for the DOS prompt.  The wait before it is a fixed settle on purpose:
+    # MM draws in a graphics mode, so there is no text on screen to wait for.
+    #
+    # Each step is deferred with [list ...] rather than a braced body: the
+    # script an "after" runs is evaluated at global level, where this proc's
+    # locals do not exist, so a braced body referring to $body silently fails.
+    after time $boot [list harness::_mm_escape $timeout $body]
+}
+
+proc harness::_mm_escape {timeout body} {
+    type [format %c 27]
+    after time 2 [list harness::_mm_enter $timeout $body]
+}
+
+proc harness::_mm_enter {timeout body} {
+    type [format %c 13]
+    harness::wait_for "A:" $timeout $body
+}
+
 # Type a command at the DOS prompt, give it $settle emulated seconds to produce
 # output, then run $body.
 #
@@ -171,7 +197,16 @@ proc harness::at_idle_prompt {} {
     set lines [harness::screen_lines]
     for {set i [expr {[llength $lines] - 1}]} {$i >= 0} {incr i -1} {
         set l [string trim [lindex $lines $i]]
-        if {$l ne ""} { return [expr {$l eq "A:"}] }
+        if {$l eq ""} { continue }
+        # MSX-DOS 1 with COMMAND.COM shows "A:".  Nextor / MSX-DOS 2 with
+        # COMMAND2 and "set prompt on" shows a drive, a colon, a backslash and
+        # ">".  Accept either, on any drive letter, so a test running from B:
+        # is not silently reported as stuck.  The backslash is built with
+        # format rather than written literally: it has to survive this file
+        # being edited by tools that mangle escapes.
+        set bs [format %c 92]
+        set d [string index $l 0]
+        return [expr {$l eq "${d}:" || $l eq "${d}:${bs}>"}]
     }
     return 0
 }

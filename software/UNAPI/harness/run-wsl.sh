@@ -25,10 +25,17 @@ HERE_WSL="$(printf '%s' "$HERE_WIN" \
 # Clear anything a previously interrupted run left behind.  A surviving openmsx
 # keeps /opt/openMSX/bin/openmsx open, and the next `make install` then fails
 # with "Text file busy"; a surviving server holds port 5000.
-# pkill -x matches the PROCESS NAME exactly.  Do not use `pkill -f` with a path
-# here: this very command line contains "openMSX/bin/openmsx" in the OPENMSX=
-# assignment below, so a full-command-line match kills its own shell and the
-# run silently produces nothing.
+# For openmsx, pkill -x matches the PROCESS NAME exactly.  Do NOT use `pkill -f`
+# for it: this very command line contains "openMSX/bin/openmsx" in the OPENMSX=
+# assignment below, so a full-command-line match would kill its own shell and
+# the run would silently produce nothing.
+#
+# The SERVER is the opposite case and needs -f.  It runs as `python3 -u
+# msxpi-server.py`, so its process NAME is "python3" and `pkill -x
+# msxpi-server.py` never matched anything - a stale server survived every run,
+# the new one lost the bind with "Address already in use", and every test then
+# failed as a machine that would not boot.  "msxpi-server.py" does not appear
+# in this command line, so -f is safe here.
 exec wsl.exe -d "$DISTRO" -- bash -lc \
-  "pkill -x openmsx 2>/dev/null; pkill -x msxpi-server.py 2>/dev/null; \
+  "pkill -x openmsx 2>/dev/null; pkill -f 'msxpi-server\.py' 2>/dev/null; \
    cd '$HERE_WSL' && OPENMSX=/opt/openMSX/bin/openmsx PYTHON=python3 INCLUDE_WSL=1 ./run.sh $*"
