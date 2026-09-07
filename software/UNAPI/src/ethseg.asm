@@ -1,5 +1,5 @@
 ; =============================================================================
-; MSXPi Ethernet UNAPI - resident code
+; MSXPi Ethernet UNAPI - resident code, RAM (mapped segment) build
 ; =============================================================================
 ; This is the part that lives in a mapped RAM segment.  It is assembled as a
 ; standalone binary at 4000h and INCBIN'd by the installer (ethunapi.asm),
@@ -8,28 +8,21 @@
 ;
 ; Structure follows examples/unapi-ram.asm from the MSX-UNAPI specification.
 ;
-; Layout: this file holds the EXTBIO hook, the routine dispatch table and
-; ETH_GETINFO; ethtrans.asm holds the ISR-safe transport core; ethops.asm holds
-; the other eleven ETH_* routines.
+; This file holds only what is specific to the RAM build: the EXTBIO hook as
+; the RAM helper enters it, the slot/segment the installer patches in, and the
+; work area.  The entry point and dispatch table are in ethcore.asm, the
+; transport in ethtrans.asm and the routines in ethops.asm - all three shared
+; byte-for-byte with the ROM build (ethrom.asm).
+;
+; The ROM build is the primary one: reporting segment $FF is what puts
+; InterNestor Lite on its CALSLT path, the one every field implementation
+; uses.  This build stays as the option for people who cannot reflash.
 ; =============================================================================
 
 EXTBIO:     equ     0FFCAh
 ARG:        equ     0F847h
 
-; Ethernet UNAPI specification version implemented (1.1)
-API_V_P:    equ     1
-API_V_S:    equ     1
-; This implementation's own version
-IMP_V_P:    equ     0
-IMP_V_S:    equ     1
-
-; Highest standard routine number.  The Ethernet UNAPI defines routines 0..11
-; (ETH_GETINFO through ETH_SET_HWADD).  No implementation-specific routines.
-MAX_FN:     equ     11
-; One implementation-specific routine, 128: force the transport mode.  Purely a
-; diagnostic - it exists so a benchmark can measure polled against hardware
-; /WAIT on the same machine in the same run.
-MAX_IMPFN:  equ     128
+            include "../../asm-common/include/unapi_wrk.inc"
 
             org     4000h
 
@@ -106,12 +99,11 @@ JUMP_OLD:
             pop     af
             pop     bc
             pop     hl
-            ; Falls through into the saved hook, patched at install time.
-
-OLD_EXTBIO:
-            ds      5
+            jp      OLD_EXTBIO
 
 ; --- Patched by the installer once the segment is allocated -----------------
+; These two must stay adjacent and in this order: the installer writes both
+; with a single 16-bit store.
 MY_SLOT:    db      0
 MY_SEG:     db      0
 
@@ -123,98 +115,17 @@ TOUPPER:
             sub     20h
             ret
 
-; =============================================================================
-; UNAPI entry point
-; =============================================================================
-; A = routine number.  Dispatches through FN_TABLE, leaving every other
-; register untouched so each routine sees exactly what the caller passed.
-; An out-of-range routine number returns with all registers unmodified, as the
-; specification requires.
-UNAPI_ENTRY:
-            push    hl
-            push    af
-            ld      hl,FN_TABLE
-            bit     7,a
-            jr      z,.standard
-            ld      hl,IMPFN_TABLE      ; 128.. : implementation-specific
-            and     01111111b
-            cp      MAX_IMPFN-128
-            jr      z,OK_FNUM
-            jr      nc,UNDEFINED
-            jr      OK_FNUM
-.standard:
-            cp      MAX_FN
-            jr      z,OK_FNUM
-            jr      nc,UNDEFINED
-OK_FNUM:
-            add     a,a
-            push    de
-            ld      e,a
-            ld      d,0
-            add     hl,de
-            pop     de
-            ld      a,(hl)
-            inc     hl
-            ld      h,(hl)
-            ld      l,a
-            pop     af
-            ex      (sp),hl
+; --- ETH_WRK: point IX at the work area.
+; The ROM build gets this from the MSX-DOS kernel's GETWRK; here it is simply
+; a fixed address, so the shared code does not have to know which build it is
+; in.  Corrupts IX only, but the contract allows AF, BC and HL too.
+ETH_WRK:
+            ld      ix,ETH_STATE
             ret
-
-UNDEFINED:
-            pop     af
-            pop     hl
-            ret
-
-; =============================================================================
-; Routine table
-; =============================================================================
-FN_TABLE:
-            dw      FN_GETINFO          ; 0  ETH_GETINFO
-            dw      FN_RESET            ; 1  ETH_RESET
-            dw      FN_GET_HWADD        ; 2  ETH_GET_HWADD
-            dw      FN_GET_NETSTAT      ; 3  ETH_GET_NETSTAT
-            dw      FN_NET_ONOFF        ; 4  ETH_NET_ONOFF
-            dw      FN_DUPLEX           ; 5  ETH_DUPLEX
-            dw      FN_FILTERS          ; 6  ETH_FILTERS
-            dw      FN_IN_STATUS        ; 7  ETH_IN_STATUS
-            dw      FN_GET_FRAME        ; 8  ETH_GET_FRAME
-            dw      FN_SEND_FRAME       ; 9  ETH_SEND_FRAME
-            dw      FN_OUT_STATUS       ; 10 ETH_OUT_STATUS
-            dw      FN_SET_HWADD        ; 11 ETH_SET_HWADD
-
-; --- Implementation-specific ------------------------------------------------
-IMPFN_TABLE:
-            dw      FN_SET_MODE         ; 128 force/report the transport mode
-
-; =============================================================================
-; Routines
-; =============================================================================
-
-; --- 0: ETH_GETINFO --------------------------------------------------------
-; Mandatory and fully implemented even in Phase 4: the installer's
-; already-installed check calls it, and so does every discovery client.
-FN_GETINFO:
-            ld      hl,APIINFO
-            ld      de,API_V_P*256+API_V_S
-            ld      bc,IMP_V_P*256+IMP_V_S
-            ret
-
-; The remaining routines live in ethops.asm, included after the transport
-; core below - they need ETH_TX/ETH_RX and the lock, which are defined there.
 
 ; =============================================================================
 ; Data
 ; =============================================================================
-
-; Cache for the address fetched from the Pi via OP_GET_HWADD.
-;
-; Deliberately all zeros, NOT msxpi_eth.BaseLink's 02:4D:53:58:50:69 default.
-; ETH_GET_HWADD falls back to this cache when the transaction fails, so seeding
-; it with the value the Pi would have sent made a dead link indistinguishable
-; from a live one - a diagnostic printed the "correct" MAC either way. With
-; zeros here, a non-zero address is proof that a real fetch succeeded.
-MACADDR:    db      000h,000h,000h,000h,000h,000h
 
 ; The identifier must be zero-terminated and is compared case-insensitively.
 UNAPI_ID:
@@ -227,12 +138,29 @@ APIINFO:
             db      "MSXPi Ethernet UNAPI",0
 
 ; =============================================================================
-; Transport core (Phase 5a)
+; Shared with the ROM build
 ; =============================================================================
             include "ethtrans.asm"
             include "ethops.asm"
+            include "ethcore.asm"
 
 SEG_CODE_END:
+
+; =============================================================================
+; Work area
+; =============================================================================
+; Deliberately placed just PAST the image the installer copies, not inside it.
+; sjasm drops a trailing `ds` from the output binary, so a work area inside the
+; image would make the installer's `ldir` read past the end of ethseg.bin and
+; copy whatever followed it in memory.  Everything here is already zero: the
+; installer clears the whole segment before copying, and MACADDR in particular
+; MUST start as zeros so that a cached address is provably a fetched one.
+;
+; The first UNAPI_WRK bytes are unused here.  They exist so that the offsets in
+; unapi_wrk.inc, which in the ROM build have to skip the disk driver's own part
+; of its work area, are identical in both builds.
+ETH_STATE:      equ     SEG_CODE_END
+OLD_EXTBIO:     equ     ETH_STATE+o_OLD_EXTBIO
 
             export  DO_EXTBIO
             export  OLD_EXTBIO
@@ -244,5 +172,7 @@ SEG_CODE_END:
             export  UNAPI_ID_END
             export  SEG_CODE_START
             export  SEG_CODE_END
-            export  ETH_MODE
+            export  ETH_STATE
+            export  ETH_DETECT
+            export  ETH_POLLMODE
             export  ETH_VERIFY

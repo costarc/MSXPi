@@ -22,3 +22,43 @@ installed".
 
 If you would rather not carry someone else's binary in this repo, delete it and
 point build.sh at your own copy with the RAMHELPR environment variable.
+
+## TESTRAM.COM
+
+Mapper RAM tester, from the user's own Nextor tools tree.  Not built here and
+not UNAPI-related, but it lives in this folder because ../build.sh copies
+everything in bin/ onto msxpiboot.dsk - and ../../build regenerates that image
+from target/, so anything not copied from here is silently dropped on the next
+full build.  It is on the disk because InterNestor Lite needs a working memory
+mapper and "is the mapper actually good?" is worth being able to answer without
+a second boot.
+
+## Konamiman's UNAPI client tools
+
+`HOST.COM`, `TCPCON.COM`, `SNTP.COM`, `GETURL.COM`, `HGET.COM`, `TCPIP.COM`,
+`FTP.COM` - prebuilt, from Konamiman's MSX-UNAPI distribution by way of
+`Multicore/Computers/SM-X/sdcreate/network/UNAPI/`.  Not built here.
+
+Vendored because they are the acceptance tools for the TCP/IP layer and
+because that Multicore tree is not present on every machine that has this repo
+- notably the Pi.  They are also what makes each layer testable in isolation,
+which matters more than it sounds: telnet exercises DNS, TCP and a terminal
+emulator at once, so when it fails it says nothing useful.  Use them in
+increasing order of what they involve:
+
+    HOST <name>     resolve a name           - DNS only
+    TCPCON          open a TCP connection    - TCP without a terminal
+    SNTP            fetch the time           - a complete UDP round trip
+    GETURL <url>    fetch a URL              - DNS + TCP + HTTP
+    TELNET <host>   the full stack
+
+## INLSTOCK.COM
+
+InterNestor Lite 2.3 built from the sources in ../inl with the
+RAM-implementation patch REVERSED - i.e. genuinely stock, which is what the ROM
+driver was designed for.  26037 bytes, against the patched INL.COM's 26048.
+
+Worth keeping both: the patched build reports "InterNestor Lite is not
+installed" for `INL S` even when it is working perfectly, and the stock one
+does not.  That defect was blamed on this driver and on the machine for a long
+time before the patch turned out to be the cause.

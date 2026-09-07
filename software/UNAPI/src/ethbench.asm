@@ -34,6 +34,7 @@
 _TERM0:     equ     00h
 _STROUT:    equ     09h
 BDOS:       equ     0005h
+CALSLT:     equ     001Ch
 EXTBIO:     equ     0FFCAh
 ARG:        equ     0F847h
 JIFFY:      equ     0FC9Eh
@@ -59,16 +60,13 @@ RESET_MSXPI:    equ 0FFh
             call    BDOS
 
 ; --- Locate the RAM helper and the implementation ---------------------------
+; A missing helper is not fatal: a ROM implementation reports segment FFh and
+; is reached with CALSLT.  Only a RAM one needs the helper, checked below once
+; the segment is known.
             ld      de,2222h
             ld      hl,0
             ld      a,0FFh
             call    EXTBIO
-            ld      a,h
-            or      l
-            jr      nz,.helper_ok
-            ld      de,NOHELPER_S
-            jp      DIE
-.helper_ok:
             ld      (HELPER_ADD),hl
 
             ld      hl,UNAPI_ID
@@ -93,6 +91,16 @@ RESET_MSXPI:    equ 0FFh
             ld      a,b
             ld      (IMP_SEG),a
             ld      (IMP_ENTRY),hl
+
+            inc     a                       ; segment FFh -> in ROM
+            jr      z,.callable
+            ld      hl,(HELPER_ADD)
+            ld      a,h
+            or      l
+            jr      nz,.callable
+            ld      de,NOHELPER_S
+            jp      DIE
+.callable:
 
 ; --- Remember the mode the driver chose, so it can be put back --------------
             ld      b,MODE_REPORT
@@ -272,17 +280,30 @@ RUN_PASS:
             call    NEWLINE
             ret
 
-; --- CALL_UNAPI: invoke routine A via the RAM helper ------------------------
+; --- CALL_UNAPI: invoke routine A -------------------------------------------
+; Segment FFh means the implementation is in ROM and is reached with a plain
+; inter-slot call; anything else is a mapped RAM segment and goes through the
+; RAM helper's CALL_MAP.  Which one is in use matters to the numbers this
+; program prints: the helper's CALL_MAP costs a segment switch per call and
+; returns with interrupts disabled, CALSLT does neither.
 CALL_UNAPI:
             push    af
             ld      a,(IMP_SLOT)
             ld      iyh,a
-            ld      a,(IMP_SEG)
-            ld      iyl,a
             ld      ix,(IMP_ENTRY)
+            ld      a,(IMP_SEG)
+            inc     a
+            jr      z,.rom
+            dec     a
+            ld      iyl,a
             ld      hl,(HELPER_ADD)
             pop     af
             jp      (hl)
+.rom:
+            pop     af
+            call    CALSLT
+            ei
+            ret
 
 DIE:
             ld      c,_STROUT

@@ -22,18 +22,12 @@ EXTBIO:     equ     0FFCAh
 ARG:        equ     0F847h
 
             include "ethseg.exp"        ; symbol addresses inside the segment
+            include "../../asm-common/include/unapi_wrk.inc"
 
 SEG_SIZE:   equ     SEG_CODE_END-SEG_CODE_START
 
-CTRL2:          equ   57h
-WAITMODE_ON:    equ   01h
-; Wait mode confirmed.  Real hardware answers $8E; openMSX answers $FF, because
-; it must stay at or above $FE for msxpi_bios.asm:97's per-byte "am I openMSX?"
-; test to keep working while the mode is on.
-VER_WAIT_ON:      equ 8Eh
-VER_WAIT_ON_OMSX: equ 0FFh
-VER_OPENMSX:      equ 0FEh
-MODE_POLL_HW:   equ   0
+; Transport modes, for reporting only - the detection itself lives in the
+; driver (ETH_DETECT), which is shared with the ROM build.
 MODE_WAIT:      equ   1
 MODE_POLL_OMSX: equ   2
 
@@ -69,28 +63,14 @@ MODE_POLL_OMSX: equ   2
 .no_arg:
 
 ; -----------------------------------------------------------------------------
-; 1. Locate the RAM helper
+; 1. Refuse to install twice
 ; -----------------------------------------------------------------------------
-; EXTBIO with A=FFh, DE=2222h, HL=0 returns HL = helper jump table address and
-; BC = mappers table.  Every UNAPI implementation is required to chain rather
-; than answer A=FFh, which is what makes this work.
-            ld      de,2222h
-            ld      hl,0
-            ld      a,0FFh
-            call    EXTBIO
-            ld      a,h
-            or      l
-            jr      nz,HELPER_OK
-
-            ld      de,NOHELPER_S
-            jp      DIE
-HELPER_OK:
-            ld      (HELPER_ADD),hl
-            ld      (MAPTAB_ADD),bc
-
-; -----------------------------------------------------------------------------
-; 2. Refuse to install twice
-; -----------------------------------------------------------------------------
+; This runs FIRST, before the RAM helper is looked for, and the order matters
+; for the message the user gets.  Since the driver moved into msxpibios.rom the
+; overwhelmingly common reason to end up here is "the ROM already has it" - and
+; reporting a missing RAM helper instead sends people off installing RAMHELPR
+; to fix a problem they do not have.  Counting implementations needs no helper.
+;
 ; The specification's own example walks every installed implementation and
 ; compares names through the helper's RD_MAP routine.  This does the cheap
 ; version: if ANY "ETHERNET" implementation is already present, stop.  On this
@@ -115,6 +95,26 @@ HELPER_OK:
             ld      de,ALINST_S
             jp      DIE
 NOT_INSTALLED:
+
+; -----------------------------------------------------------------------------
+; 2. Locate the RAM helper
+; -----------------------------------------------------------------------------
+; EXTBIO with A=FFh, DE=2222h, HL=0 returns HL = helper jump table address and
+; BC = mappers table.  Every UNAPI implementation is required to chain rather
+; than answer A=FFh, which is what makes this work.
+            ld      de,2222h
+            ld      hl,0
+            ld      a,0FFh
+            call    EXTBIO
+            ld      a,h
+            or      l
+            jr      nz,HELPER_OK
+
+            ld      de,NOHELPER_S
+            jp      DIE
+HELPER_OK:
+            ld      (HELPER_ADD),hl
+            ld      (MAPTAB_ADD),bc
 
 ; -----------------------------------------------------------------------------
 ; 3. Obtain mapper support routines and allocate a segment
@@ -190,89 +190,31 @@ ALLOC_OK:
             ld      (MY_SLOT),hl        ; this writes both in one go
 
 ; -----------------------------------------------------------------------------
-; 4b. Detect the transport backend and patch ETH_MODE in the segment
+; 4b. Detect the transport backend
 ; -----------------------------------------------------------------------------
-; Ask the device to turn hardware /WAIT on and see whether it admits to it.
-; Real CPLD v1.6 answers $8E; older hardware ignores the write and still reads
-; $0D/$0E; stock openMSX ignores it and always reads $FE.  Only an exact $8E
-; counts, so there is no way to mistake one for another.
+; The segment is still paged in on page 1, so the driver's own detection code
+; can simply be called here.  It is the SAME code the ROM build runs, which is
+; the point: there is one probe sequence and one set of rules about when
+; hardware /WAIT may be enabled (see ETH_DETECT in ethcore.asm), not a copy
+; here that can drift from the one that ships in the ROM.
 ;
-; Wait mode is ALWAYS switched back off before returning.  Legacy software -
-; including msxpi_bios.asm:97, which decides "is this openMSX?" by testing $57
-; against $FE - must never find the device in a state it does not expect.  The
-; driver turns it on again per transaction, inside its own lock.
-; ORDER MATTERS, AND NOT FOR TIDINESS.
-;
-; Wait mode must NEVER be enabled until a POLLED transaction has already
-; succeeded, because the polled path is bounded and the wait path is not.
-;
-; The CPLD has no /WAIT timeout - `wait_assert <= wait_mode and SPI_RDY and
-; spi_en and ...` - so /WAIT is held for exactly as long as the Pi holds
-; RPI_READY high. RPI_READY is a GPIO and KEEPS ITS LAST LEVEL when the server
-; exits. If it happens to be left high with nothing clocking, one IN ($5A) in
-; wait mode stalls the Z80 for ever and the machine is dead until a power
-; cycle. Probing $57 does not protect against this: it proves the CPLD
-; implements the mode register, not that anything is alive on the other end.
-;
-; A polled transaction cannot hang - every wait in it is counted - and it fails
-; cleanly in exactly the case that matters: with RPI_READY stuck high and no
-; clocking, $56 reads ready, the OUT starts a transfer, and the following
-; bounded wait times out.
-;
-; So: work out which polled backend this device needs, prove the link with it,
-; and only then try to upgrade to /WAIT.
+; The ROM build runs it lazily, on the first UNAPI call, because at its
+; initialisation time the Pi is usually still booting.  Here the machine has
+; long since booted, so probing now is both safe and more useful: the
+; installer can say which backend was chosen.
+            ld      ix,ETH_STATE
+            call    ETH_DETECT
+            ld      a,0FFh                  ; nothing answered - say so plainly
+            jr      c,.report_mode
 
-            in      a,(CTRL2)
-            cp      VER_OPENMSX             ; $FE -> openMSX
-            ld      a,MODE_POLL_HW
-            jr      c,.try_polled           ; below $FE -> real hardware
-            ld      a,MODE_POLL_OMSX
-.try_polled:
-            ld      (ETH_MODE),a
-            ld      (DETECTED_MODE),a
-            call    ETH_VERIFY
-            jr      c,.verify_failed        ; nothing answers at all
-
-            ; The link is alive. Now see whether the CPLD offers hardware
-            ; /WAIT, and if it does, verify that too before keeping it.
             ld      a,(FORCE_POLLED)
             or      a
-            jr      nz,.keep_polled         ; "ETHUNAPI P" - stay bounded
-            ld      a,WAITMODE_ON
-            out     (CTRL2),a
-            in      a,(CTRL2)
-            cp      VER_WAIT_ON             ; $8E - real CPLD v1.6
-            jr      z,.try_wait
-            cp      VER_WAIT_ON_OMSX        ; $FF - openMSX
-            jr      nz,.keep_polled
-
-.try_wait:
-            ld      a,MODE_WAIT
-            ld      (ETH_MODE),a
+            jr      z,.keep
+            call    ETH_POLLMODE            ; "ETHUNAPI P" - stay bounded
+.keep:
+            ld      a,(ETH_STATE+o_ETH_MODE)
+.report_mode:
             ld      (DETECTED_MODE),a
-            call    ETH_VERIFY
-            jr      nc,.mode_ok             ; /WAIT works, keep it
-
-            ; It does not. Fall back to the polled backend we already proved.
-            in      a,(CTRL2)
-            cp      VER_OPENMSX
-            ld      a,MODE_POLL_HW
-            jr      c,.fb
-            ld      a,MODE_POLL_OMSX
-.fb:
-            ld      (ETH_MODE),a
-            ld      (DETECTED_MODE),a
-            jr      .mode_ok
-
-.keep_polled:
-            jr      .mode_ok
-
-.verify_failed:
-            ld      a,0FFh                  ; nothing works - say so plainly
-            ld      (DETECTED_MODE),a
-.mode_ok:
-            xor     a                       ; always leave wait mode off
-            out     (CTRL2),a
 
 ; -----------------------------------------------------------------------------
 ; 5. Chain and install the EXTBIO hook
