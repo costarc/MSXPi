@@ -53,7 +53,9 @@ uint8_t PIREADBYTE(uint8_t* byte);
 uint8_t PIWRITEBYTE(uint8_t data);
 uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize);
 uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize);
-uint8_t SENDDATA(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
+// The library defines SENDDATA2; this was declared as SENDDATA, which no
+// caller had exercised until pcopy started uploading.
+uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
 uint8_t PerformHandshake(uint16_t msx_blocksize);
 uint8_t SendCommandToMSXPi(const char* cmd, bool appendDOSParameters);
 uint8_t parseConnError(const uint8_t rc);

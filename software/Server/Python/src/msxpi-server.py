@@ -59,7 +59,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260907.019"
+BuildId = "20260907.020"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -984,6 +984,7 @@ def pcopy_handshake() -> tuple[int, int]:
 
 PCOPY_CACHE = "/tmp/pcopy_session.bin"
 PCOPY_STATE = "/tmp/pcopy_state.txt"
+PCOPY_PUT_STATE = "/tmp/pcopy_put_state.txt"
 def pcopy(msxcmd="pcopy"):
     #print(f"pcopy() called with msxcmd: '{msxcmd}'")
 
@@ -1064,6 +1065,84 @@ def pcopy(msxcmd="pcopy"):
             with open(PCOPY_STATE, "w") as f:
                 f.write(f"{new_offset},{next_block_index}")
 
+        return RC_SUCCESS
+
+    # =========================================================================
+    # UPLOAD: MSX -> Pi.   pcopy A:game.rom game.rom
+    # =========================================================================
+    # Mirrors the download side: "put" opens the destination and reports
+    # whether it could be created, "writeblock" takes one block, "putclose"
+    # finishes.  A separate close rather than a last-block flag, because the
+    # block protocol carries no header byte in this direction.
+    #
+    # The destination path is resolved against the MSXPi PATH variable exactly
+    # as a download source is, so "pcopy A:game.rom game.rom" lands beside the
+    # files a plain "pcopy game.rom" would read.  Local filesystem only - a
+    # URL target is rejected rather than silently written somewhere odd.
+    if subcmd == "put":
+        if len(parms) < 2:
+            return send_error_block("Missing destination for put", RC_INVALIDCOMMAND)
+        tgt_type, tgt_path = pathExpander(parms[1], basepath)
+        if tgt_type != 0:
+            return send_error_block("Only local paths can be written", RC_INVALIDCOMMAND)
+        try:
+            # Truncate now rather than on the first block, so a failure is
+            # reported while the MSX is still listening for it.
+            with open(tgt_path, "wb"):
+                pass
+            with open(PCOPY_PUT_STATE, "w") as f:
+                f.write(tgt_path)
+        except Exception as e:
+            return send_error_block(f"Cannot create {tgt_path}: {str(e)}", RC_FAILED)
+
+        print(f"pcopy: receiving into {tgt_path}")
+        rc, msx_blocksize = pcopy_handshake()
+        if rc != RC_SUCCESS:
+            return rc
+        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
+        return RC_SUCCESS
+
+    if subcmd == "writeblock":
+        if not os.path.exists(PCOPY_PUT_STATE):
+            return send_error_block("No active upload session", RC_FAILED)
+        try:
+            with open(PCOPY_PUT_STATE, "r") as f:
+                tgt_path = f.read().strip()
+        except Exception as e:
+            return send_error_block(f"State read error: {str(e)}", RC_FAILED)
+
+        # recvdata2_oneblock does its own handshake, matching SENDDATA2 on the
+        # MSX side, so nothing is done here before calling it.
+        rc, payload = recvdata2_oneblock(MAXBUFSIZE)
+        if payload is None:
+            print("pcopy: writeblock received nothing")
+            return RC_CONNERR
+        try:
+            with open(tgt_path, "ab") as f:
+                f.write(payload)
+        except Exception as e:
+            print(f"Pi:Error - write failed: {str(e)}")
+            return RC_FAILED
+        return RC_SUCCESS
+
+    if subcmd == "putclose":
+        tgt_path = ""
+        try:
+            if os.path.exists(PCOPY_PUT_STATE):
+                with open(PCOPY_PUT_STATE, "r") as f:
+                    tgt_path = f.read().strip()
+                os.remove(PCOPY_PUT_STATE)
+        except OSError:
+            pass
+        if tgt_path:
+            try:
+                print(f"pcopy: received {os.path.getsize(tgt_path)} bytes into {tgt_path}")
+            except OSError:
+                pass
+        rc, msx_blocksize = pcopy_handshake()
+        if rc != RC_SUCCESS:
+            return rc
+        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     # =========================================================================

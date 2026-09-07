@@ -102,6 +102,96 @@ static void init_fcb(FCB *fcb_ptr, const char *path) {
     p[15] = 0;
 }
 
+// ---------------------------------------------------------------------------
+// Upload: MSX drive -> Pi.   pcopy A:game.rom game.rom
+// ---------------------------------------------------------------------------
+// Three server subcommands mirroring the download side: "put" names the
+// destination and reports whether it could be created, "writeblock" carries one
+// block, and "putclose" ends the transfer.
+//
+// A separate close rather than a last-block flag, because the block protocol
+// carries no header byte in this direction and inventing one would change a
+// path the disk driver also uses.
+static uint8_t pcopy_upload(void) {
+    uint8_t rc;
+    uint16_t block_size;
+    uint16_t n;
+    uint8_t *buffer = get_buffer_ptr();
+    uint16_t maxbufsize = 16384;
+
+    init_fcb(&file, src);
+    if (fcb_open(&file) != 0) {
+    Print("Error: cannot open source file on MSX drive.\r\n");
+        return RC_FILENOTFOUND;
+    }
+
+    strcpy(full_cmd, "pcopy put ");
+    strcat(full_cmd, tgt);
+    rc = SendCommandToMSXPi(full_cmd, false);
+    if (rc != RC_SUCCESS) { fcb_close(&file); return parseConnError(rc); }
+
+    rc = PerformHandshake(maxbufsize);
+    if (rc != RC_SUCCESS) { fcb_close(&file); return parseConnError(rc); }
+
+    // The server explains itself in the payload - no such directory,
+    // read-only, and so on - so print it rather than a generic code.
+    rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+    if (rc != RC_SUCCESS) {
+        if (block_size < maxbufsize) buffer[block_size] = 0;
+        else buffer[maxbufsize - 1] = 0;
+        Print((char*)buffer);
+    Print("\r\n");
+        fcb_close(&file);
+        return rc;
+    }
+
+    pprintf("Copying (block size:", maxbufsize/1024);
+    pprints(" KB) to Pi:", tgt);
+    Print("\r\n");
+
+    while (1) {
+        n = fcb_read(&file, buffer, maxbufsize);
+        if (n == 0) break;                  // end of file
+
+        rc = SendCommandToMSXPi("pcopy writeblock", false);
+        if (rc != RC_SUCCESS) {
+    Print("Connection error during write.\r\n");
+            fcb_close(&file);
+            return parseConnError(rc);
+        }
+
+        Print(".");
+        rc = SENDDATA2(buffer, n, &maxbufsize);
+        if (rc != RC_SUCCESS) {
+    Print("Transfer aborted.\r\n");
+            fcb_close(&file);
+            return parseConnError(rc);
+        }
+
+        if (n < maxbufsize) break;          // short read: that was the last
+    }
+
+    fcb_close(&file);
+
+    // Close on the Pi even if nothing was sent, so no half-open file is left
+    // for the next transfer to trip over.
+    rc = SendCommandToMSXPi("pcopy putclose", false);
+    if (rc != RC_SUCCESS) return parseConnError(rc);
+    rc = PerformHandshake(maxbufsize);
+    if (rc != RC_SUCCESS) return parseConnError(rc);
+    rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+    if (rc != RC_SUCCESS) {
+        if (block_size < maxbufsize) buffer[block_size] = 0;
+        else buffer[maxbufsize - 1] = 0;
+        Print((char*)buffer);
+    Print("\r\n");
+        return rc;
+    }
+
+    Print("File copied to MSXPi successfully.\r\n");
+    return RC_SUCCESS;
+}
+
 static uint8_t pcopy_body(void) {
     uint8_t rc;
     uint16_t block_size;
@@ -115,8 +205,18 @@ static uint8_t pcopy_body(void) {
     parse_args(cmdTail, src, tgt);
 
     if (src[0] == '\0') {
-        Print("Usage: pcopy <source file> [drive:][target file]\r\n");
+        Print("Usage:\r\n");
+        Print("  pcopy <pi file> [drive:][target]   Pi  -> MSX\r\n");
+        Print("  pcopy <drive>:<file> <pi file>     MSX -> Pi\r\n");
         return RC_INVALIDCOMMAND;
+    }
+
+    // A drive letter on the SOURCE means the file is on the MSX: upload.
+    // The download form never has one there - its drive, if any, is on the
+    // target - so the two syntaxes cannot be confused.
+    if (src[1] == ':' &&
+        ((src[0] >= 'A' && src[0] <= 'Z') || (src[0] >= 'a' && src[0] <= 'z'))) {
+        return pcopy_upload();
     }
 
     // 3. PHASE 1: Send 'pcopy init' command to prepare session on Pi
