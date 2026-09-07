@@ -11,6 +11,7 @@
 #define MAX_BLOCK_RETRIES	3
 #define BLKSIZE				512   // buffer size for data transfer
 #define MAXBUFSIZE			8192  // 8 KB buffer size
+#define BUFADDRESS			0xC000
 
 #define READY_ACK			0xA0
 #define SENDNEXT			0xA1
@@ -38,8 +39,9 @@
 #define CHK_STATE_0       0
 #define CHK_STATE_2       2
 
-#define PAGE0ADDRESS ((uint8_t*)0x4000)
-#define PAGE1ADDRESS ((uint8_t*)0x8000)
+#define PAGE1ADDRESS ((uint8_t*)0x4000)
+#define PAGE2ADDRESS ((uint8_t*)0x8000)
+
 
 extern unsigned int heap_top;
 void pprintf(char* text, uint16_t value);
@@ -59,3 +61,10 @@ uint16_t get_sp(void) __naked;
 uint16_t get_max_buffer_size(void);
 uint8_t* get_buffer_ptr(void);
 uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize);
+
+// Shared-link guard - see msxpi-bios.c.  Claim before an exchange with the Pi
+// and release after, so the Ethernet UNAPI ISR does not transmit in the middle
+// of it.  No-ops when no Ethernet UNAPI is installed.
+void msxpi_link_claim(void) __naked;
+void msxpi_link_release(void) __naked;
+uint8_t msxpi_exchange(const char* cmd, bool appendTail, uint8_t* buffer, uint16_t maxbufsize);

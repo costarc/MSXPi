@@ -112,6 +112,18 @@ ETH_OP:
 ; state; ETH_REVIVE clears the "link dead" latch so a previously failed link
 ; gets another chance.
 FN_RESET:
+            ; Also release a leaked link claim.  Routine 129 hands the link to
+            ; a .COM, and a program that dies before releasing would otherwise
+            ; block this driver's ISR polling for ever, with no way back short
+            ; of a reboot.  A reset that left a stale claim held would not be
+            ; putting the implementation back to its initial state.
+            ;
+            ; Deliberately here rather than in ETH_REVIVE: ETH_DETECT calls
+            ; that too, and probing the device must not tear down a claim some
+            ; program is legitimately holding.  It must also stay ahead of
+            ; ETH_OP below, which takes ETH_LOCK - a lock this very flag would
+            ; otherwise refuse, leaving reset unable to clear it.
+            ld      (ix+o_LINK_BUSY),0
             call    ETH_REVIVE
             ld      (ix+o_ETH_LASTSEND),0        ; "no frames sent since last reset"
             ld      a,OP_RESET

@@ -56,7 +56,10 @@ o_ETH_BUF	EQU	UNAPI_WRK+29	; 7 - see below
 ; allocated by the disk kernel TWICE per initialisation, and on a machine with
 ; a built-in drive the memory below HIMEM is genuinely tight.
 o_LINK_BUSY	EQU	UNAPI_WRK+36
-UNAPI_WRKEND	EQU	UNAPI_WRK+37	; total size - this is MYSIZE in the ROM
+o_LINK_SAVE	EQU	UNAPI_WRK+37	; DSKIO's saved copy of o_LINK_BUSY - see
+				; LINK_BUSY_SET.  One slot is enough because
+				; DSKIO is not reentrant.
+UNAPI_WRKEND	EQU	UNAPI_WRK+38	; total size - this is MYSIZE in the ROM
 
 ; Where the assembled driver is placed inside the MSX-DOS driver ROM.
 ;

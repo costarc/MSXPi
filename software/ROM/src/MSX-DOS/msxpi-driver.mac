@@ -292,11 +292,19 @@ DSKIO_ERR1:
 ; takes the drive in A and read/write in the CARRY flag, and on exit it returns
 ; the error code in A and the carry.  IX is corrupted, which DSKIO's own
 ; contract already permits.
+; SAVE and RESTORE, not set-and-clear.  A .COM can now hold the link itself
+; through UNAPI routine 129, and such a program may well write to disk in the
+; middle of its transfer - pcopy does exactly that with every block it
+; receives.  Forcing the flag to 0 here would drop that program's claim while
+; it was still using the link, letting the ISR back in precisely where it does
+; the damage.  One save slot suffices: DSKIO is not reentrant.
 LINK_BUSY_SET:
         push    af
         push    bc
         push    hl
         call    GETWRK              ; HL = IX = this driver's work area
+        ld      a,(ix+o_LINK_BUSY)
+        ld      (ix+o_LINK_SAVE),a
         ld      (ix+o_LINK_BUSY),1
         jr      LINK_BUSY_DONE
 LINK_BUSY_CLR:
@@ -304,7 +312,8 @@ LINK_BUSY_CLR:
         push    bc
         push    hl
         call    GETWRK
-        ld      (ix+o_LINK_BUSY),0
+        ld      a,(ix+o_LINK_SAVE)
+        ld      (ix+o_LINK_BUSY),a
 LINK_BUSY_DONE:
         pop     hl
         pop     bc
@@ -901,7 +910,7 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.5"
-BuildId: DB ".20260830.003"
+BuildId: DB ".20260907.012"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 ; Shortened to reclaim ROM space; the CALL MSXPI feature itself is unchanged.

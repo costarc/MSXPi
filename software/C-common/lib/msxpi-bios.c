@@ -423,7 +423,8 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
         return RC_READY;
     }
     else {
-        return RC_CONNERR;  // unexpected header code
+		expected_block_index = 0;  // In case of an error, the block index is 0
+        return header_rc;  // returns the server return code
     }
 }
 
@@ -668,7 +669,7 @@ uint8_t SendCommandToMSXPi(const char* cmd, bool appendTail) {
     // largest consumer of _DATA) out of the way, since the linker's
     // normal packing pushed it - and everything after it - past 0x4000,
     // into memory that mapper-loading's own Put_PN(1,...) calls corrupt.
-    static __at(0x8000) char buffer[MAXBUFSIZE];
+    static __at(BUFADDRESS) char buffer[MAXBUFSIZE];
     uint16_t total = 0;
 
     // Copy primary
@@ -720,8 +721,11 @@ uint8_t parseConnError(const uint8_t rc) {
     else if (rc == RC_HANDSHAKEERR) {
         Print("Handshake error.");
     }
+    else if (rc == RC_FILENOTFOUND) {
+        Print("File not found on Pi server.");
+    }
     else if (rc != RC_SUCCESS && rc != RC_FAILED) {
-        pprintf("Unknown error: ", rc);
+        pprintf("Unknown error code: 0x", rc);
     }
     return rc;
 }
@@ -775,6 +779,148 @@ char* u16_to_ascii(uint16_t value, char* buf)
 
     buf[j] = 0;   // null terminate
     return buf;
+}
+
+
+// ============================================================================
+// Shared-link claim  (UNAPI implementation-specific routine 129)
+// ============================================================================
+// The MSXPi link carries the disk, these commands, AND the Ethernet UNAPI
+// driver.  Once InterNestor Lite is resident it polls ETH_IN_STATUS from the
+// 50/60 Hz timer interrupt, and that ISR will happily transmit in the middle
+// of one of our exchanges.  Observed on hardware: `p cd` printed its answer
+// and then hung, the server reporting a stray 0xC5 - OP_IN_STATUS - discarded
+// while it waited for READY.
+//
+// The window that has to be protected is the whole EXCHANGE, command through
+// response, not a block and not a handshake.  The failure above landed in the
+// turnaround: the MSX had sent `cd` and was idle waiting for the server to
+// execute it, so any per-operation claim would have been released right where
+// the damage happened.  Idle on the MSX does not mean the link is free.
+//
+// Discovery is the standard MSX-UNAPI procedure and is done once, then cached.
+// If no Ethernet UNAPI is installed there is no ISR to collide with, so these
+// become no-ops and tools keep working on machines without networking.
+
+// Discovery is repeated on every call, deliberately.
+//
+// The first version cached slot/segment/entry in statics and used a
+// "not looked yet" flag to discover once.  SDCC puts such statics in _DATA as
+// .ds, and with --no-std-crt0 that memory is NOT zeroed - so the flag started
+// as whatever the TPA happened to contain.  On real hardware that meant either
+// "already discovered", sending CALSLT to a garbage address and REBOOTING the
+// machine, or "no implementation", silently skipping the guard.  Both were
+// observed in the same session.
+//
+// Two EXTBIO calls per exchange cost microseconds against a Pi round trip
+// measured in milliseconds, so there is nothing to buy back by caching, and
+// nothing here now depends on startup zeroing.
+
+static uint16_t un_iy;         // low = segment, high = slot; loaded into IY
+static uint16_t un_entry;
+static uint16_t un_helper;
+static uint8_t  un_seg;
+static const char un_id[9] = "ETHERNET";
+
+void msxpi_link_claim(void) __naked
+{
+    __asm
+        ld      b,#1
+        jr      un_call
+    __endasm;
+}
+
+void msxpi_link_release(void) __naked
+{
+    __asm
+        ld      b,#0
+        ; falls through
+    un_call:
+        push    bc                  ; EXTBIO clobbers B
+
+        ; RAM helper address.  Absent is not fatal: an implementation in ROM
+        ; reports segment 0xFF and is reached with CALSLT, needing no helper.
+        ld      de,#0x2222
+        ld      hl,#0
+        ld      a,#0xFF
+        call    0xFFCA
+        ld      (_un_helper),hl
+
+        ; The identifier has to sit at ARG for the discovery call.
+        ld      hl,#_un_id
+        ld      de,#0xF847
+        ld      bc,#9
+        ldir
+
+        ld      de,#0x2222
+        xor     a
+        ld      b,#0
+        call    0xFFCA
+        ld      a,b
+        or      a
+        jr      z,un_call_none      ; no ETHERNET UNAPI: no ISR to collide with
+
+        ld      de,#0x2222
+        ld      a,#1
+        call    0xFFCA
+        ld      (_un_iy+1),a        ; slot -> IY high
+        ld      a,b
+        ld      (_un_seg),a
+        ld      (_un_iy),a          ; segment -> IY low (the helper wants it
+        ld      (_un_entry),hl      ; there; CALSLT ignores it)
+
+        ; Refuse to call into nothing.  Cheap, and the difference between a
+        ; no-op and a reset.
+        ld      a,h
+        or      l
+        jr      z,un_call_none
+
+        ld      iy,(_un_iy)
+        ld      ix,(_un_entry)
+        pop     bc                  ; B = claim flag again
+        ld      a,(_un_seg)
+        inc     a
+        jr      nz,un_call_ram
+        ld      a,#129
+        call    0x001C              ; CALSLT - the DOS kernel keeps the
+        ei                          ; inter-slot routines live in page-0 RAM
+        ret
+    un_call_ram:
+        ld      hl,(_un_helper)
+        ld      a,h
+        or      l
+        ret     z                   ; RAM implementation and no helper: the
+                                    ; call is impossible, so do nothing
+        ld      a,#129
+        jp      (hl)
+    un_call_none:
+        pop     bc
+        ret
+    __endasm;
+}
+
+// ----------------------------------------------------------------------------
+// msxpi_exchange: one command and its response, with the link held throughout.
+//
+// A wrapper rather than a claim/release pair sprinkled through the transport:
+// RECVDATA, RECVDATA_ONEBLOCK and SENDDATA2 have eighteen return points each,
+// and a release missed at any one of them would leak the claim and silently
+// stop the ISR polling for the rest of the session.  Here there is one entry
+// and one exit, so the release cannot be skipped.
+// ----------------------------------------------------------------------------
+uint8_t msxpi_exchange(const char* cmd, bool appendTail,
+                       uint8_t* buffer, uint16_t maxbufsize)
+{
+    uint8_t rc;
+    msxpi_link_claim();
+    rc = SendCommandToMSXPi(cmd, appendTail);
+    if (buffer != NULL) {
+        uint8_t rcFinal = parseConnError(rc);
+        if (rcFinal == RC_SUCCESS || rcFinal == RC_FAILED || rc == RC_BUFOVFLW)
+            printstdout(buffer, maxbufsize);
+    }
+    msxpi_link_release();
+    return rc;
 }
 
 uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize)

@@ -124,6 +124,14 @@ int main(void)
         return 0;
 
     const char* parms = GetCmdLineParameters();
+    // Hold the link across the WHOLE exchange - command, the server's
+    // execution, and the response.  msxpi_exchange() covers the common case,
+    // but the "date" branch below answers through SetDateTime() rather than
+    // printstdout(), so the pair is used directly here.  Both exits from the
+    // region are in view, which is the property that matters: a missed release
+    // would silently stop the Ethernet UNAPI ISR polling for the rest of the
+    // session.
+    msxpi_link_claim();
     uint8_t rc = SendCommandToMSXPi("", false);
 	uint8_t rcFinal = parseConnError(rc);
     if (rcFinal == RC_SUCCESS || rcFinal == RC_FAILED || rc == RC_BUFOVFLW) {
@@ -138,5 +146,7 @@ int main(void)
 		Print("Connection error\n");
     }
     
+    msxpi_link_release();
+
     return 0;
 }
