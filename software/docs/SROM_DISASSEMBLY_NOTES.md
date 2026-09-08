@@ -102,3 +102,71 @@ looks inherent without cartridge hardware.
   ~12 bytes and skips the copy whenever the requested bank is already mapped.
 * **Adopt save/restore of F975h-FAF5h** (technique 1) before anything else in
   that region.
+
+# Device survey: where RAM + hardware banking actually exists
+
+Checked against openMSX's device implementations, which mirror the real VHDL.
+
+## MegaFlashROM SCC+ SD — 512KB RAM mapper, but not natively banked
+
+    static constexpr unsigned MEMORY_MAPPER_SIZE = 512;   // KB
+    mapperIO ...  // handles ports 0xfc-0xff
+
+Real, and it is RAM. But the native MegaROM banking driven by the 7FFFh config
+register applies to **subslot 1, the 7104K flash**:
+
+    7,6  mapper mode: #00=SCC, #40=64K, #80=ASC8, #C0=ASC16
+    5    Konami mapper select (0=SCC, 1=normal)
+
+(Those bits are exactly the mode bytes SROM writes - 04h/24h/84h/C4h.) The
+512KB RAM is a plain 16KB memory mapper on FCh-FFh, so using it is equivalent
+to any mapper RAM and keeps the 8KB granularity problem.
+
+## Carnivore 2 — RAM **and** hardware banking
+
+`Carnivore2.cc` has four subdevices: MultiMapper, IDE, MemoryMapper, FmPac.
+MultiMapper is the configurable Konami/SCC/ASCII8/ASCII16 hardware, and it can
+read from RAM instead of flash:
+
+    auto [addr, mult] = decodeMultiMapper(address);
+    if (mult & 0x20) return ram[addr & 0x1fffff];   // 2MB RAM
+    else             return flash.read(addr, time);
+
+**Bit 5 of the bank's Mult register selects RAM.** That is RAM plus native
+hardware banking - no patching, no copying, no resident handlers, no 8KB
+granularity problem, no flash wear.
+
+### Register layout (from decodeMultiMapper and the power-up defaults)
+
+Four bank descriptors, 6 bytes each, starting at configRegs[0x06]:
+
+    +0  R<i>Mask
+    +1  R<i>Addr    bank-select address, high byte (50h -> 5000h)
+    +2  R<i>Reg     current bank number
+    +3  R<i>Mult    bit 3 = disable bank
+                    bit 5 = read from RAM instead of flash   <-- the one we want
+                    bit 6 = mirroring disabled
+                    bits 0-2 = sizeCode, size = 512 << sizeCode
+                               (4 -> 8KB, 5 -> 16KB, 7 -> 64KB)
+    +4  B<i>MaskR   bank number is masked with this: bank = Reg & MaskR
+    +5  B<i>AdrD    window address compare (40h -> 4000h)
+
+    configRegs[0x05]  AddrFR, a 64KB block offset added to every address
+    configRegs[0x28]  SLM_cfg, which subslot each subdevice appears in
+
+Power-up defaults show the encoding: R1Mask=F8h, R1Addr=50h, R1Reg=00h,
+R1Mult=85h (sizeCode 5 = 16KB, flash), B1MaskR=03h, B1AdrD=40h.
+
+Address decode: `bank = Reg & MaskR`, `addr = bank*size | (address & (size-1))`,
+plus `AddrFR * 0x10000`, masked to 8MB.
+
+## Consequence
+
+The device priority for msxarch should be:
+
+1. **Carnivore 2** - load the ROM into its 2MB RAM, program the four bank
+   descriptors for the game's mapper with Mult bit 5 set, jump. Nothing else.
+2. Plain memory mapper (ram4mb, MFR's 512KB, machine mapper RAM) - the current
+   copy-based emulation, which is where all the open bugs live.
+3. No expansion - plain ROMs up to 32KB only; refuse MegaROMs rather than
+   loading them and hanging.
