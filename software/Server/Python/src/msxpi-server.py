@@ -59,7 +59,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260907.021"
+BuildId = "20260908.024"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -77,8 +77,12 @@ SPI_INT_TIME        = 3000
 PIWAITTIMEOUTOTHER  = 120     # seconds
 PIWAITTIMEOUTBIOS   = 60      # seconds
 SYNCTIMEOUT         = 30
-BYTETRANSFTIMEOUT   = 30
-SYNCTRANSFTIMEOUT   = 30
+# 180, not 30: the MSX drains a block at a few hundred bytes a second, so an
+# 8 KB block can sit for the best part of a minute before the far end answers.
+# At 30 the server gave up mid-transfer and reported a checksum failure that
+# was really just impatience.
+BYTETRANSFTIMEOUT   = 180
+SYNCTRANSFTIMEOUT   = 180
 DISABLETIMEOUT      = False
 READY_ACK           = 0xA0
 SENDNEXT            = 0xA1
@@ -1115,8 +1119,9 @@ def pcopy(msxcmd="pcopy"):
         # MSX side, so nothing is done here before calling it.
         rc, payload = recvdata2_oneblock(MAXBUFSIZE)
         if payload is None:
-            print("pcopy: writeblock received nothing")
+            print("pcopy: writeblock received nothing (rc=%s)" % hex(rc if rc is not None else 0))
             return RC_CONNERR
+        print("pcopy: writeblock got %d bytes (rc=%s)" % (len(payload), hex(rc)))
         try:
             with open(tgt_path, "ab") as f:
                 f.write(payload)
@@ -2197,25 +2202,31 @@ def recvdata2_oneblock(maxbufsize):
     # -------------------------
     # 3. Status handshake after GOOD block
     #
-    # MSX -> READY
-    # MSX -> status_for_next
-    # Python -> READY_ACK
+    # The RECEIVER sends READY and the status, and the SENDER answers
+    # READY_ACK.  That is what the MSX does when IT receives (RECVDATA_ONEBLOCK
+    # in msxpi_bios.asm) and what senddata_oneblock() expects when Python
+    # sends, so here - with Python receiving - Python must send:
+    #
+    #   Python -> READY
+    #   Python -> status_for_next
+    #   MSX    -> READY_ACK
+    #
+    # This used to be written the other way round, with Python waiting for a
+    # READY the MSX was never going to send: both ends read, and the transfer
+    # died at the very last step with RC_HANDSHAKEERR - after the payload had
+    # arrived intact, which the caller then threw away.  It went unnoticed
+    # because nothing sent bulk data from the MSX to the Pi until pcopy learned
+    # to upload.
     # -------------------------
 
-    rc, ready = SPI_ByteTransfer()
+    SPI_ByteTransfer(READY)
+    SPI_ByteTransfer(RC_SUCCESS)
+
+    rc, ack = SPI_ByteTransfer()
     if rc != RC_SUCCESS:
         return (RC_HANDSHAKEERR, None)
-    if ready != READY:
+    if ack != READY_ACK:
         return (RC_HANDSHAKEERR, None)
-
-    rc, status_from_msx = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-    if status_from_msx != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    # Send READY_ACK
-    SPI_ByteTransfer(READY_ACK)
 
     # -------------------------
     # 4. Interpret header_rc

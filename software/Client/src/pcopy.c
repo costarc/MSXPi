@@ -117,7 +117,7 @@ static uint8_t pcopy_upload(void) {
     uint16_t block_size;
     uint16_t n;
     uint8_t *buffer = get_buffer_ptr();
-    uint16_t maxbufsize = 16384;
+    uint16_t maxbufsize = 8192;   // see pcopy_body: openMSX drops past 16 KB
 
     init_fcb(&file, src);
     if (fcb_open(&file) != 0) {
@@ -196,7 +196,14 @@ static uint8_t pcopy_body(void) {
     uint8_t rc;
     uint16_t block_size;
     uint8_t *buffer = get_buffer_ptr();
-	uint16_t maxbufsize = 16384;
+	// 8 KB, not 16 KB.  openMSX's MSXPiDevice caps its receive queue at
+	// 16 * 1024 and SILENTLY DISCARDS anything beyond it ("skip excess
+	// bytes"), and the server writes a whole block into the socket at once.
+	// A full 16 KB block plus its 4-byte header and checksum is 16389 bytes,
+	// so the tail of every such block - including the checksum the MSX then
+	// waits for - was thrown away, and the transfer hung.  Measured: 16256
+	// bytes transfers cleanly, 16383 does not.
+	uint16_t maxbufsize = 8192;
 
     // 1. Read command tail directly from MSX-DOS PSP memory
     get_dos_cmdline(cmdTail);

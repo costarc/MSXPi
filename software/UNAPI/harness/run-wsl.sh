@@ -25,6 +25,9 @@ HERE_WSL="$(printf '%s' "$HERE_WIN" \
 # Clear anything a previously interrupted run left behind.  A surviving openmsx
 # keeps /opt/openMSX/bin/openmsx open, and the next `make install` then fails
 # with "Text file busy"; a surviving server holds port 5000.
+# TIMEOUT is forwarded because they are set outside WSL: a long
+# transfer needs more than the default 300s, and without this the run was
+# killed at 300s and reported as NORESULT rather than as a slow pass.
 # For openmsx, pkill -x matches the PROCESS NAME exactly.  Do NOT use `pkill -f`
 # for it: this very command line contains "openMSX/bin/openmsx" in the OPENMSX=
 # assignment below, so a full-command-line match would kill its own shell and
@@ -38,4 +41,4 @@ HERE_WSL="$(printf '%s' "$HERE_WIN" \
 # in this command line, so -f is safe here.
 exec wsl.exe -d "$DISTRO" -- bash -lc \
   "pkill -x openmsx 2>/dev/null; pkill -f 'msxpi-server\.py' 2>/dev/null; \
-   cd '$HERE_WSL' && OPENMSX=/opt/openMSX/bin/openmsx PYTHON=python3 INCLUDE_WSL=1 ./run.sh $*"
+   cd '$HERE_WSL' && OPENMSX=/opt/openMSX/bin/openmsx PYTHON=python3 INCLUDE_WSL=1 TIMEOUT=${TIMEOUT:-300} ./run.sh $*"

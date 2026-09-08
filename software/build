@@ -212,6 +212,17 @@ if [ $buildOpenMSXConfig = "yes" ];then
   cp openMSX/share/extensions/MSXPi.$SHA.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
   cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom
   cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/$BIOSNAME.rom
+
+  # ...and under the plain names as well, which is what `-ext MSXPi` actually
+  # resolves to and what runmsx deploys into /opt/openMSX.  Only the per-SHA
+  # copies were being written here, so those two files kept whatever ROM they
+  # had: openMSX went on loading an OLD bios while the build reported success,
+  # and a harness run could pass against a ROM that no longer existed in the
+  # tree.  The per-SHA copies above are still kept, so an older machine
+  # configuration referring to one by hash continues to resolve.
+  cp openMSX/share/extensions/MSXPi.$SHA.xml openMSX/share/extensions/MSXPi.xml
+  cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.rom
+  echo "openMSX extension updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
   # Update sources for openMSX extensions - to keep up to date with openMSX fork
   cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
   cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
