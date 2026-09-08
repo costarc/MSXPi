@@ -123,6 +123,7 @@ static uint8_t pcopy_upload(void) {
     uint8_t rc;
     uint16_t block_size;
     uint16_t n;
+    const char *dest;
     uint8_t *buffer = get_buffer_ptr();
     // 16256, not 16384.  openMSX's MSXPiDevice caps its receive queue at
     // 16 * 1024 and SILENTLY DISCARDS the excess, and the server writes a
@@ -139,8 +140,18 @@ static uint8_t pcopy_upload(void) {
         return RC_FILENOTFOUND;
     }
 
+    // The Pi has no drive letters, so strip one if it reached here - from
+    // the default (pcopy A:GAME.ROM, target omitted) or typed outright.
+    // Without this the Pi was asked to create a file literally named
+    // "A:GAME.ROM".  Done here as well as in parse_args because this is
+    // the only place that knows the name is bound for the Pi.
+    dest = tgt;
+    if (dest[0] != '\0' && dest[1] == ':') {
+        dest += 2;
+    }
+
     strcpy(full_cmd, "pcopy put ");
-    strcat(full_cmd, tgt);
+    strcat(full_cmd, dest);
     rc = SendCommandToMSXPi(full_cmd, false);
     if (rc != RC_SUCCESS) { fcb_close(&file); return parseConnError(rc); }
 
@@ -160,7 +171,7 @@ static uint8_t pcopy_upload(void) {
     }
 
     pprintf("Copying (block size:", maxbufsize/1024);
-    pprints(" KB) to Pi:", tgt);
+    pprints(" KB) to Pi:", (char*)dest);
     Print("\r\n");
 
     while (1) {
