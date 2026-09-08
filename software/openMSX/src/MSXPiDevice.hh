@@ -41,7 +41,6 @@ private:
 	// Queues & synchronization
 	mutable std::mutex mtx;
 	std::condition_variable rxCv; // wakes a wait-mode read when a byte lands
-	std::condition_variable rxSpaceCv; // wakes the reader when the MSX drains
 	cb_queue<byte> rxQueue;
 
 	// MSXPi logic

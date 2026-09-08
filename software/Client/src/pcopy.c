@@ -125,14 +125,14 @@ static uint8_t pcopy_upload(void) {
     uint16_t n;
     const char *dest;
     uint8_t *buffer = get_buffer_ptr();
-    // 16256, not 16384.  openMSX's MSXPiDevice caps its receive queue at
-    // 16 * 1024 and SILENTLY DISCARDS the excess, and the server writes a
-    // whole block into the socket at once - so the wire block, which is the
-    // payload plus a 4-byte header and a checksum, has to stay under that.
-    // Measured: 16256 transfers cleanly, 16383 does not.  Bigger blocks are
-    // worth having: each one costs a full command round trip, so halving
-    // their number halves that overhead.
-    uint16_t maxbufsize = 16256;
+    // 16 KB.  The wire block is this plus a 4-byte header and a checksum.
+    // It used to be capped at 16256 because openMSX's MSXPiDevice held a
+    // 16 KB receive queue and SILENTLY DISCARDED the excess, so 16384 went
+    // five bytes over and every large download lost its tail.  That device
+    // now waits for room instead of dropping, so the size is ours to pick:
+    // bigger blocks mean fewer command round trips, and the MSX has about
+    // 47 KB free between this buffer and the stack.
+    uint16_t maxbufsize = 16384;
 
     init_fcb(&file, src);
     if (fcb_open(&file) != 0) {
@@ -170,8 +170,8 @@ static uint8_t pcopy_upload(void) {
         return rc;
     }
 
-    pprintf("Copying (block size:", maxbufsize/1024);
-    pprints(" KB) to Pi:", (char*)dest);
+    pprintf("Copying (block size:", maxbufsize);
+    pprints(" bytes) to Pi:", (char*)dest);
     Print("\r\n");
 
     while (1) {
@@ -231,14 +231,14 @@ static uint8_t pcopy_body(void) {
 	// so the tail of every such block - including the checksum the MSX then
 	// waits for - was thrown away, and the transfer hung.  Measured: 16256
 	// bytes transfers cleanly, 16383 does not.
-	// 16256, not 16384.  openMSX's MSXPiDevice caps its receive queue at
-	// 16 * 1024 and SILENTLY DISCARDS the excess, and the server writes a
-	// whole block into the socket at once - so the wire block, which is the
-	// payload plus a 4-byte header and a checksum, has to stay under that.
-	// Measured: 16256 transfers cleanly, 16383 does not.  Bigger blocks are
-	// worth having: each one costs a full command round trip, so halving
-	// their number halves that overhead.
-	uint16_t maxbufsize = 16256;
+	// 16 KB.  The wire block is this plus a 4-byte header and a checksum.
+	// It used to be capped at 16256 because openMSX's MSXPiDevice held a
+	// 16 KB receive queue and SILENTLY DISCARDED the excess, so 16384 went
+	// five bytes over and every large download lost its tail.  That device
+	// now waits for room instead of dropping, so the size is ours to pick:
+	// bigger blocks mean fewer command round trips, and the MSX has about
+	// 47 KB free between this buffer and the stack.
+	uint16_t maxbufsize = 16384;
 
     // 1. Read command tail directly from MSX-DOS PSP memory
     get_dos_cmdline(cmdTail);
@@ -298,7 +298,7 @@ static uint8_t pcopy_body(void) {
         return RC_FAILED;
     }
 
-    pprintf("Copying (block size:", maxbufsize/1024);pprints(" KB) to:", tgt);
+    pprintf("Copying (block size:", maxbufsize);pprints(" bytes) to:", tgt);
     Print("\r\n");
 
     // 5. PHASE 2: Fetch and write blocks iteratively

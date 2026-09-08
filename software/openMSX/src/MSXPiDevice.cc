@@ -4,7 +4,6 @@
 #include <chrono>
 #include "xrange.hh"
 #include <algorithm>
-#include <array>
 #include <vector>
 
 namespace openmsx {
@@ -22,10 +21,6 @@ MSXPiDevice::~MSXPiDevice()
 {
 	shouldStop = true;
 	close();
-	// poller.abort() below unblocks poll(), but nothing wakes a condition
-	// variable - without these, join() waits on a parked thread.
-	rxCv.notify_all();
-	rxSpaceCv.notify_all();
 	if (thread.joinable()) {
 		poller.abort();
 		thread.join();
@@ -46,7 +41,6 @@ void MSXPiDevice::reset(EmuTime /*time*/)
 	rxQueue.clear();
 	readRequested = false;
 	waitMode = false;
-	rxSpaceCv.notify_one(); // a machine reset frees the whole queue
 }
 
 byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
@@ -94,9 +88,7 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 				});
 			}
 			if (!rxQueue.empty()) {
-				auto b = rxQueue.pop_front();
-				rxSpaceCv.notify_one(); // room for the reader thread
-				return b;
+				return rxQueue.pop_front();
 			}
 			return 0xff;
 		}
@@ -104,9 +96,7 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 			readRequested = false;
 			std::lock_guard lock(mtx);
 			if (!rxQueue.empty()) {
-				auto b = rxQueue.pop_front();
-				rxSpaceCv.notify_one(); // room for the reader thread
-				return b;
+				return rxQueue.pop_front();
 			}
 		}
 		return 0xff; // No data ready
@@ -206,8 +196,8 @@ void MSXPiDevice::readLoop()
 	// MAX_QUEUE_SIZE is deliberately far larger than any single block: the
 	// queue only ever grows to what is actually used (cb_queue starts at zero
 	// capacity and doubles), so the ceiling costs nothing until a transfer
-	// needs it.  With the wait above it is a throughput knob, not a
-	// correctness limit - too small merely stalls, it no longer loses data.
+	// needs it.  Now that nothing is discarded it is a throughput knob rather
+	// than a correctness limit: too small merely stalls, it cannot lose data.
 	static constexpr size_t MAX_QUEUE_SIZE = 64 * 1024;
 	std::vector<char> buf(64 * 1024);
 
@@ -236,8 +226,8 @@ void MSXPiDevice::readLoop()
 			continue; // error or abort
 		}
 #endif
-		// Wait for room BEFORE reading, rather than reading and discarding
-		// what will not fit.  The old code capped the queue at 16 KB and threw
+		// Check for room BEFORE reading, and read only that much, rather than
+		// reading blindly and discarding what will not fit.  The old code capped the queue at 16 KB and threw
 		// the rest away - "skip excess bytes" - which meant the device silently
 		// lied about what it had received: the server had sent the bytes, the
 		// MSX never saw them, and nothing anywhere reported an error.  A block
@@ -250,27 +240,23 @@ void MSXPiDevice::readLoop()
 		// catches up.  That is also how real hardware behaves, where the GPIO
 		// transport is synchronous and the server can never run ahead.
 		//
-		// wait_for rather than wait, matching RX_STALL_TIMEOUT in readIO: a
-		// missed notify then costs a few milliseconds instead of parking this
-		// thread for ever.  It also guarantees the loop re-checks shouldStop,
-		// so the destructor's join() cannot hang - poller.abort() unblocks
-		// poll(), but nothing wakes a condition_variable.
-		// Read only as much as will fit.  Waiting for room for a WHOLE buffer
-		// would idle the reader whenever the queue held anything at all, since
-		// the buffer is the same size as the cap; asking for the free space
-		// keeps it working while still never overflowing.
 		size_t room;
 		{
-			static constexpr auto RX_SPACE_TIMEOUT = std::chrono::milliseconds(5);
-			std::unique_lock lock(mtx);
-			rxSpaceCv.wait_for(lock, RX_SPACE_TIMEOUT, [&] {
-				return shouldStop.load() || rxQueue.size() < MAX_QUEUE_SIZE;
-			});
-			if (shouldStop) break;
+			std::lock_guard lock(mtx);
 			room = MAX_QUEUE_SIZE - std::min(rxQueue.size(), MAX_QUEUE_SIZE);
-			if (room == 0) {
-				continue; // still full - let the MSX drain, try again
-			}
+		}
+		if (room == 0) {
+			// Full: let the MSX drain and look again.  A short sleep rather
+			// than a condition variable signalled from readIO, because that
+			// signal would fire on EVERY byte the MSX takes - and precisely
+			// when it matters, with the queue full, each one would wake this
+			// thread to read a single byte.  A syscall per byte is the
+			// opposite of what the back-pressure is for.  The MSX drains at a
+			// few hundred bytes a second, so polling costs nothing and the
+			// queue only fills in the first place if the server has run far
+			// ahead.
+			Timer::sleep(1'000); // 1 ms
+			continue;
 		}
 
 		auto n = sock_recv(sock, buf.data(), std::min(buf.size(), room));
