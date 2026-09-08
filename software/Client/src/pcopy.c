@@ -136,7 +136,7 @@ static uint8_t pcopy_upload(void) {
     // that is what breaks on hardware is unproven - MSX-DOS may buffer the
     // write itself and never pass that address on - but it is one fewer
     // difference between the two block sizes.
-    uint16_t maxbufsize = 8192;
+    uint16_t maxbufsize = 16384;
 
     init_fcb(&file, src);
     if (fcb_open(&file) != 0) {
@@ -332,6 +332,14 @@ static uint8_t pcopy_body(void) {
         Print(".");
         rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
 
+        // A failed receive can leave block_size and the buffer partially filled.
+        // Never commit that data to disk.
+        if (rc != RC_SUCCESS && rc != RC_READY) {
+            Print("\r\nTransfer aborted by server.\r\n");
+            fcb_close(&file);
+            return rc;
+        }
+
         // Write chunk to MSX disk (Pi server is now back in main loop and able to serve disk sectors)
         if (block_size > 0) {
             if (fcb_write(&file, buffer, block_size) != 0) {
@@ -343,10 +351,6 @@ static uint8_t pcopy_body(void) {
 
         if (rc == RC_SUCCESS) {
             break; // Final block received
-        } else if (rc != RC_READY) {
-            Print("\r\nTransfer aborted by server.\r\n");
-            fcb_close(&file);
-            return rc;
         }
     }
 

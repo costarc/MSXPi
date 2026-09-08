@@ -259,8 +259,12 @@ SD2_RETRY:
  ifdef MSXPI_DRIVER
     push    de
     push    bc
+    ; GETWRK returns the work-area pointer in IX, but IX holds our retry
+    ; count. Preserve it or the first checksum mismatch exhausts retries.
+    push    ix
     call    MSXPI_GETSTASH          ; IX = driver work area
     ld      a,(ix+o_SEND_P1)
+    pop     ix
     pop     bc
     pop     de
     or      a
