@@ -264,11 +264,25 @@ void MSXPiDevice::readLoop()
 			close();
 			continue;
 		}
-		std::lock_guard lock(mtx);
-		for (auto i : xrange(size_t(n))) {
-			rxQueue.push_back(buf[i]);
+		// Hand the bytes over in small batches rather than under one lock.
+		// The emulated Z80 takes this same mutex on EVERY status poll, so a
+		// reader holding it across tens of thousands of push_back calls - plus
+		// cb_queue's doubling reallocations, which move the whole buffer -
+		// stalls the CPU thread for exactly that long.  Emulation is throttled
+		// to 3.58 MHz, so every cycle lost waiting on the lock is real time the
+		// transfer never gets back.
+		//
+		// The socket read stays large: syscalls are worth batching, holding a
+		// mutex is not.
+		static constexpr size_t BATCH = 512;
+		for (size_t off = 0; off < size_t(n); off += BATCH) {
+			auto end = std::min(off + BATCH, size_t(n));
+			std::lock_guard lock(mtx);
+			for (auto i : xrange(off, end)) {
+				rxQueue.push_back(buf[i]);
+			}
+			rxCv.notify_one(); // release a wait-mode read blocked in readIO
 		}
-		rxCv.notify_one(); // release a wait-mode read blocked in readIO
 	}
 }
 

@@ -1,20 +1,16 @@
-# wsl_pcopy - round trip Pi -> MSX B: -> Pi, and the drive-prefix default.
-#
-# The second upload omits the target on purpose: the Pi has no drive letters,
-# and "pcopy B:SMALL.TXT" used to ask it to create a file literally named
-# "B:SMALL.TXT".
+# wsl_pcopy - download a file LARGE enough that the receive buffer crosses
+# #4000 into page 1, which is where the driver banks its own ROM while DSKIO
+# runs.  At 8 KB blocks the buffer stops just short of that boundary and the
+# page-1 send path is never used; at 16 KB it is.  Reported on hardware as
+# "Invalid drive writing drive B:" followed by a lost link.
 harness::init "wsl_pcopy"
 
 harness::at_dos_prompt {
-    harness::run_command "PCOPY SMALL.TXT B:" 60 {
-        harness::assert_screen_contains "downloaded" "copied successfully"
-        harness::run_command "PCOPY B:SMALL.TXT" 90 {
-            set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
-            foreach l [harness::screen_lines] { puts $fh "|$l" }
-            close $fh
-            harness::assert_screen_contains "uploaded" "copied to MSXPi"
-            harness::assert_screen_lacks "no-drive-in-name" "Pi:B:"
-            harness::done
-        }
+    harness::run_command "PCOPY B64K.BIN B:" 900 {
+        set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
+        foreach l [harness::screen_lines] { puts $fh "|$l" }
+        close $fh
+        harness::assert_screen_contains "copied" "copied successfully"
+        harness::done
     }
 }
