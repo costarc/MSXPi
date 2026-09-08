@@ -59,7 +59,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260908.028"
+BuildId = "20260908.029"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1147,6 +1147,10 @@ def pcopy(msxcmd="pcopy"):
         if payload is None:
             print("pcopy: writeblock received nothing (rc=%s)" % hex(rc if rc is not None else 0))
             return RC_CONNERR
+        # Logged per block on purpose: without it a failed upload shows only a
+        # run of identical "pcopy writeblock" lines, with no way to tell how
+        # far it got or whether the blocks were full.  One line per 16 KB.
+        print("pcopy: writeblock got %d bytes (rc=%s)" % (len(payload), hex(rc)))
         try:
             with open(tmp_path, "ab") as f:
                 f.write(payload)
@@ -1157,6 +1161,8 @@ def pcopy(msxcmd="pcopy"):
 
     if subcmd == "putclose":
         paths = globals().get("_pcopy_put_paths") or _pcopy_read_state()
+        if not paths:
+            print("pcopy: putclose with no session - nothing to finalise")
         globals()["_pcopy_put_paths"] = None
         try:
             os.remove(PCOPY_PUT_STATE)

@@ -209,10 +209,13 @@ static uint8_t pcopy_upload(void) {
     if (rc != RC_SUCCESS) return parseConnError(rc);
     rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
     if (rc != RC_SUCCESS) {
-        if (block_size < maxbufsize) buffer[block_size] = 0;
-        else buffer[maxbufsize - 1] = 0;
-        Print((char*)buffer);
-    Print("\r\n");
+        // Do NOT print the buffer here.  On a failed receive block_size is
+        // whatever it was last left as, and the buffer still holds the last
+        // 16 KB of the FILE - terminating it at a meaningless offset and
+        // printing that dumped a screenful of binary to the VDP, burying the
+        // actual error under a minute of scrolling.
+        pprintf("Error closing file on MSXPi, rc=", rc);
+        Print("\r\n");
         return rc;
     }
 
