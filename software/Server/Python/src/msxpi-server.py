@@ -59,7 +59,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260908.024"
+BuildId = "20260908.026"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -254,7 +254,7 @@ def handlers_for(mapper_type, h):
     h is (win1, win2, win3, win4, page1, page2)."""
     if mapper_type == MAPPER_ASCII8:   return [h[0], h[1], h[2], h[3]]
     if mapper_type == MAPPER_ASCII16:  return [h[4], h[5]]
-    if mapper_type == MAPPER_KONAMI:   return [h[1], h[2], h[3]]  # 6000h/8000h/A000h
+    if mapper_type == MAPPER_KONAMI:   return [h[1], h[2], h[3]]  # 6000/8000/A000 ranges
     return None
 
 
@@ -989,6 +989,22 @@ def pcopy_handshake() -> tuple[int, int]:
 PCOPY_CACHE = "/tmp/pcopy_session.bin"
 PCOPY_STATE = "/tmp/pcopy_state.txt"
 PCOPY_PUT_STATE = "/tmp/pcopy_put_state.txt"
+# Upload in progress: (target, temp).  Held in memory so a block does not cost
+# a filesystem read; PCOPY_PUT_STATE is the fallback after a restart.
+_pcopy_put_paths = None
+
+def _pcopy_read_state():
+    """(target, temp) from the state file, or None if there is no session."""
+    try:
+        if not os.path.exists(PCOPY_PUT_STATE):
+            return None
+        with open(PCOPY_PUT_STATE, "r") as f:
+            parts = [x.strip() for x in f.read().split("\n") if x.strip()]
+        if not parts:
+            return None
+        return (parts[0], parts[1] if len(parts) > 1 else parts[0])
+    except OSError:
+        return None
 def pcopy(msxcmd="pcopy"):
     #print(f"pcopy() called with msxcmd: '{msxcmd}'")
 
@@ -1089,15 +1105,21 @@ def pcopy(msxcmd="pcopy"):
         tgt_type, tgt_path = pathExpander(parms[1], basepath)
         if tgt_type != 0:
             return send_error_block("Only local paths can be written", RC_INVALIDCOMMAND)
+        # Write to a temporary name; the rename in putclose is what publishes
+        # the file.  Truncating the real target here destroyed a verified good
+        # copy when a later attempt failed part way - the file was left short
+        # but looked finished, and only its sha1 gave it away.  Creating the
+        # temp now still surfaces a permissions or missing-directory error
+        # while the MSX is still listening for it.
+        tmp_path = tgt_path + ".part"
         try:
-            # Truncate now rather than on the first block, so a failure is
-            # reported while the MSX is still listening for it.
-            with open(tgt_path, "wb"):
+            with open(tmp_path, "wb"):
                 pass
             with open(PCOPY_PUT_STATE, "w") as f:
-                f.write(tgt_path)
+                f.write(tgt_path + "\n" + tmp_path)
         except Exception as e:
-            return send_error_block(f"Cannot create {tgt_path}: {str(e)}", RC_FAILED)
+            return send_error_block(f"Cannot create {tmp_path}: {str(e)}", RC_FAILED)
+        globals()["_pcopy_put_paths"] = (tgt_path, tmp_path)
 
         print(f"pcopy: receiving into {tgt_path}")
         rc, msx_blocksize = pcopy_handshake()
@@ -1107,13 +1129,17 @@ def pcopy(msxcmd="pcopy"):
         return RC_SUCCESS
 
     if subcmd == "writeblock":
-        if not os.path.exists(PCOPY_PUT_STATE):
-            return send_error_block("No active upload session", RC_FAILED)
-        try:
-            with open(PCOPY_PUT_STATE, "r") as f:
-                tgt_path = f.read().strip()
-        except Exception as e:
-            return send_error_block(f"State read error: {str(e)}", RC_FAILED)
+        # Paths are cached in memory; the state file is only the fallback for
+        # a server restarted mid-transfer.  Re-reading it per block meant one
+        # SD-card open for every 8 KB - 64 of them on a 512 KB upload - and
+        # any transient filesystem error aborted the whole transfer.
+        paths = globals().get("_pcopy_put_paths")
+        if paths is None:
+            paths = _pcopy_read_state()
+            if paths is None:
+                return send_error_block("No active upload session", RC_FAILED)
+            globals()["_pcopy_put_paths"] = paths
+        tmp_path = paths[1]
 
         # recvdata2_oneblock does its own handshake, matching SENDDATA2 on the
         # MSX side, so nothing is done here before calling it.
@@ -1121,9 +1147,8 @@ def pcopy(msxcmd="pcopy"):
         if payload is None:
             print("pcopy: writeblock received nothing (rc=%s)" % hex(rc if rc is not None else 0))
             return RC_CONNERR
-        print("pcopy: writeblock got %d bytes (rc=%s)" % (len(payload), hex(rc)))
         try:
-            with open(tgt_path, "ab") as f:
+            with open(tmp_path, "ab") as f:
                 f.write(payload)
         except Exception as e:
             print(f"Pi:Error - write failed: {str(e)}")
@@ -1131,19 +1156,25 @@ def pcopy(msxcmd="pcopy"):
         return RC_SUCCESS
 
     if subcmd == "putclose":
-        tgt_path = ""
+        paths = globals().get("_pcopy_put_paths") or _pcopy_read_state()
+        globals()["_pcopy_put_paths"] = None
         try:
-            if os.path.exists(PCOPY_PUT_STATE):
-                with open(PCOPY_PUT_STATE, "r") as f:
-                    tgt_path = f.read().strip()
-                os.remove(PCOPY_PUT_STATE)
+            os.remove(PCOPY_PUT_STATE)
         except OSError:
             pass
-        if tgt_path:
-            try:
-                print(f"pcopy: received {os.path.getsize(tgt_path)} bytes into {tgt_path}")
-            except OSError:
-                pass
+
+        # The rename is what publishes the file.  Until it happens the target
+        # keeps whatever it held, so a transfer that died part way cannot pass
+        # for a good copy.
+        if paths:
+            tgt_path, tmp_path = paths
+            if os.path.exists(tmp_path):
+                try:
+                    size = os.path.getsize(tmp_path)
+                    os.replace(tmp_path, tgt_path)
+                    print(f"pcopy: received {size} bytes into {tgt_path}")
+                except OSError as e:
+                    print(f"Pi:Error - cannot finalise {tgt_path}: {str(e)}")
         rc, msx_blocksize = pcopy_handshake()
         if rc != RC_SUCCESS:
             return rc
@@ -2130,41 +2161,52 @@ def recvdata2_oneblock(maxbufsize):
     block_max = min(msxmaxbuf, maxbufsize)
 
     # -------------------------
-    # 2. Read exactly one block
+    # 2. Read exactly one block - header INCLUDED in each attempt
     # -------------------------
-
-    # --- header_rc ---
-    rc, header_rc = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    # --- length low/high ---
-    rc, lo = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    rc, hi = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    length = lo | (hi << 8)
-
-    if length > block_max:
-        return (RC_BUFOVFLW, None)
-
-    # --- block_index ---
-    rc, block_index = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    # For one-block variant, MSX enforces index = 0
-    if block_index != 0:
-        return (RC_CONNERR, None)
-
-    # --- Payload + checksum with retries ---
+    # SENDDATA2 resends the WHOLE block on a checksum mismatch: header_rc,
+    # length, index, payload and checksum.  That is also what
+    # senddata_oneblock() does when Python is the sender, and what
+    # RECVDATA_ONEBLOCK expects when the MSX receives - so the header must be
+    # re-read here on every attempt.
+    #
+    # Reading it once, outside the loop, made a single corrupted byte fatal:
+    # the MSX resent its four header bytes, this loop consumed them as the
+    # first four payload bytes, everything shifted by four, and every retry
+    # failed the same way.  After MAX_BLOCK_RETRIES the stream was so far out
+    # of step that the connection died and the server reinitialised over and
+    # over - seen on hardware about forty blocks into a 512 KB upload, where
+    # the retry should have absorbed one bad byte invisibly.
     attempts = 0
 
     while True:
+        # --- header_rc ---
+        rc, header_rc = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+
+        # --- length low/high ---
+        rc, lo = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+
+        rc, hi = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+
+        length = lo | (hi << 8)
+
+        if length > block_max:
+            return (RC_BUFOVFLW, None)
+
+        # --- block_index ---
+        rc, block_index = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+
+        # For one-block variant, MSX enforces index = 0
+        if block_index != 0:
+            return (RC_CONNERR, None)
+
         payload = bytearray(length)
         chksum = 0
 

@@ -52,9 +52,16 @@ static void parse_args(char *cmd, char *src_buf, char *tgt_buf) {
     }
     tgt_buf[i] = '\0';
 
-    // If target is omitted, default to source filename
+    // If target is omitted, default to the source filename - but WITHOUT any
+    // drive letter.  For an upload (pcopy A:GAME.ROM) the source carries one,
+    // and copying it verbatim asked the Pi to create a file literally named
+    // "A:GAME.ROM".
     if (tgt_buf[0] == '\0') {
-        strcpy(tgt_buf, src_buf);
+        if (src_buf[0] != '\0' && src_buf[1] == ':') {
+            strcpy(tgt_buf, src_buf + 2);
+        } else {
+            strcpy(tgt_buf, src_buf);
+        }
     } 
     // Handle drive specifier targets (e.g., "B:")
     else if (tgt_buf[1] == ':' && tgt_buf[2] == '\0') {
@@ -117,7 +124,14 @@ static uint8_t pcopy_upload(void) {
     uint16_t block_size;
     uint16_t n;
     uint8_t *buffer = get_buffer_ptr();
-    uint16_t maxbufsize = 8192;   // see pcopy_body: openMSX drops past 16 KB
+    // 16256, not 16384.  openMSX's MSXPiDevice caps its receive queue at
+    // 16 * 1024 and SILENTLY DISCARDS the excess, and the server writes a
+    // whole block into the socket at once - so the wire block, which is the
+    // payload plus a 4-byte header and a checksum, has to stay under that.
+    // Measured: 16256 transfers cleanly, 16383 does not.  Bigger blocks are
+    // worth having: each one costs a full command round trip, so halving
+    // their number halves that overhead.
+    uint16_t maxbufsize = 16256;
 
     init_fcb(&file, src);
     if (fcb_open(&file) != 0) {
@@ -168,7 +182,10 @@ static uint8_t pcopy_upload(void) {
             return parseConnError(rc);
         }
 
-        if (n < maxbufsize) break;          // short read: that was the last
+        // No "short read means EOF" shortcut here: fcb_read returning less
+        // than asked for is not a promise the file ended, and treating it as
+        // one would truncate the copy silently.  The n == 0 test above ends
+        // the loop correctly, at the cost of one extra call.
     }
 
     fcb_close(&file);
@@ -203,7 +220,14 @@ static uint8_t pcopy_body(void) {
 	// so the tail of every such block - including the checksum the MSX then
 	// waits for - was thrown away, and the transfer hung.  Measured: 16256
 	// bytes transfers cleanly, 16383 does not.
-	uint16_t maxbufsize = 8192;
+	// 16256, not 16384.  openMSX's MSXPiDevice caps its receive queue at
+	// 16 * 1024 and SILENTLY DISCARDS the excess, and the server writes a
+	// whole block into the socket at once - so the wire block, which is the
+	// payload plus a 4-byte header and a checksum, has to stay under that.
+	// Measured: 16256 transfers cleanly, 16383 does not.  Bigger blocks are
+	// worth having: each one costs a full command round trip, so halving
+	// their number halves that overhead.
+	uint16_t maxbufsize = 16256;
 
     // 1. Read command tail directly from MSX-DOS PSP memory
     get_dos_cmdline(cmdTail);

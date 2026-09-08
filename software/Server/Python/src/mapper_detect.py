@@ -50,7 +50,17 @@ PATCH_WINDOWS = {
     MAPPER_ASCII8:  [(0x6000, 0x67FF), (0x6800, 0x6FFF),
                      (0x7000, 0x77FF), (0x7800, 0x7FFF)],
     MAPPER_ASCII16: [(0x6000, 0x6FFF), (0x7000, 0x7FFF)],
-    MAPPER_KONAMI:  [(0x6000, 0x6000), (0x8000, 0x8000), (0xA000, 0xA000)],
+    # A Konami cartridge decodes an address RANGE, exactly like ASCII8/ASCII16 -
+    # matching only 6000h/8000h/A000h left most switches unpatched, and an
+    # unpatched switch means the game keeps running the bank it already had.
+    # CONTRA.ROM had 2 of its 46 sites patched, ANDROGYN.ROM 0 of 133.
+    # Three windows, not four: the Konami-SCC decode (7000-77FF, 9000-97FF,
+    # B000-B7FF) is a subset of these and picks the same window each time. Its
+    # fourth window, 5000-57FF (the bank at 4000h), is NOT covered - in a
+    # Konami4 ROM that range is ordinary ROM, and the handful of stores that
+    # land in it are data coincidences (LODERUN.ROM has 10, and it is Konami4),
+    # so patching them would corrupt the image. SCC needs its own mapper type.
+    MAPPER_KONAMI:  [(0x6000, 0x7FFF), (0x8000, 0x9FFF), (0xA000, 0xBFFF)],
 }
 
 # A genuine bank-select address is written over and over; a data coincidence
