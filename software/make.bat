@@ -1,5 +1,8 @@
 @echo off
 
+python transport\generate.py --check
+IF ERRORLEVEL 1 EXIT /B 1
+
 SET BASEDIR=.
 SET FLOPPYA=..\..\..\MSX\MSXPi\diska22
 SET TARGETDIR=target

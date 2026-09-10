@@ -119,24 +119,16 @@ static void init_fcb(FCB *fcb_ptr, const char *path) {
 // A separate close rather than a last-block flag, because the block protocol
 // carries no header byte in this direction and inventing one would change a
 // path the disk driver also uses.
+// Keep download/upload comparable. Change this one value for both directions.
+#define PCOPY_BLOCK_SIZE 8192
+
 static uint8_t pcopy_upload(void) {
     uint8_t rc;
     uint16_t block_size;
     uint16_t n;
     const char *dest;
     uint8_t *buffer = get_buffer_ptr();
-    // 8 KB, not 16 KB.  16384 works in emulation - a 512 KB download comes
-    // back byte-identical - but fails on real hardware, so the smaller size
-    // stands until that is understood.  8192 is the size that round-tripped
-    // 512 KB on the Canon V-25 with a matching sha1.
-    //
-    // It also keeps this buffer clear of #4000: at 8 KB it ends around
-    // 0x3D57, at 16 KB it runs to 0x5D57 and any disk write from it hands
-    // DSKIO a page-1 source, where the driver banks its own ROM.  Whether
-    // that is what breaks on hardware is unproven - MSX-DOS may buffer the
-    // write itself and never pass that address on - but it is one fewer
-    // difference between the two block sizes.
-    uint16_t maxbufsize = 16384;
+    uint16_t maxbufsize = PCOPY_BLOCK_SIZE;
 
     init_fcb(&file, src);
     if (fcb_open(&file) != 0) {
@@ -231,25 +223,7 @@ static uint8_t pcopy_body(void) {
     uint8_t rc;
     uint16_t block_size;
     uint8_t *buffer = get_buffer_ptr();
-	// 8 KB, not 16 KB.  openMSX's MSXPiDevice caps its receive queue at
-	// 16 * 1024 and SILENTLY DISCARDS anything beyond it ("skip excess
-	// bytes"), and the server writes a whole block into the socket at once.
-	// A full 16 KB block plus its 4-byte header and checksum is 16389 bytes,
-	// so the tail of every such block - including the checksum the MSX then
-	// waits for - was thrown away, and the transfer hung.  Measured: 16256
-	// bytes transfers cleanly, 16383 does not.
-	// 8 KB, not 16 KB.  16384 works in emulation - a 512 KB download comes
-	// back byte-identical - but fails on real hardware, so the smaller size
-	// stands until that is understood.  8192 is the size that round-tripped
-	// 512 KB on the Canon V-25 with a matching sha1.
-	//
-	// It also keeps this buffer clear of #4000: at 8 KB it ends around
-	// 0x3D57, at 16 KB it runs to 0x5D57 and any disk write from it hands
-	// DSKIO a page-1 source, where the driver banks its own ROM.  Whether
-	// that is what breaks on hardware is unproven - MSX-DOS may buffer the
-	// write itself and never pass that address on - but it is one fewer
-	// difference between the two block sizes.
-	uint16_t maxbufsize = 8192;
+    uint16_t maxbufsize = PCOPY_BLOCK_SIZE;
 
     // 1. Read command tail directly from MSX-DOS PSP memory
     get_dos_cmdline(cmdTail);

@@ -48,11 +48,16 @@ def main():
     parser.add_argument('--client', type=Path, required=True)
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--direction', choices=['download', 'upload', 'dos-copy'], default='download')
     parser.add_argument('--fault', choices=['none', 'once', 'always', 'sector-info'], default='none')
+    parser.add_argument('--nextor-mapper', action='store_true', help='512 KiB RAM in boot-controller subslot 2, ROM in subslot 3')
+    parser.add_argument('--nextor-hd', type=Path, help='Isolated Nextor/Sunrise boot image; COPY A:INPUT.ROM C:OUTPUT.ROM')
     parser.add_argument('--openmsx', default='/opt/openMSX/bin/openmsx')
     parser.add_argument('--boot-disk', type=Path, default=Path('/home/pi/msxpi/disks/msxpiboot.dsk'))
     parser.add_argument('--data-disk', type=Path, default=Path('/home/pi/msxpi/disks/tools.dsk'))
     args = parser.parse_args()
+    if args.direction != 'download' and args.fault != 'none':
+        parser.error('disk-write fault modes apply to download tests')
     args.output.mkdir(parents=True, exist_ok=True)
     work = args.output.resolve()
     # Refuse to share the stateful protocol with an existing server.
@@ -63,6 +68,9 @@ def main():
         shutil.copyfile(src, work/dest)
     subprocess.run(['python3', str(SOFTWARE/'dsktool.py'), 'copy', str(args.client.resolve()),
                     str(work/'a.dsk')+':PCOPY.COM'], check=True, stdout=subprocess.DEVNULL)
+    if args.direction in ('upload', 'dos-copy'):
+        subprocess.run(['python3', str(SOFTWARE/'dsktool.py'), 'copy', str(work/'INPUT.ROM'),
+                        str(work/'b.dsk')+':INPUT.ROM'], check=True, stdout=subprocess.DEVNULL)
     (work/'msxpi.ini').write_text(f'var PATH={work}\nvar DriveA={work}/a.dsk\nvar DriveB={work}/b.dsk\nvar WIDTH=80\n')
     # Execute the actual server source with test-only paths and fault injection.
     # No changes to the installed server, its config, or its served disks.
@@ -114,16 +122,55 @@ harness::at_dos_prompt {
     }
 } 10000
 ''')
+    if args.direction == 'upload':
+        script.write_text(script.read_text().replace(
+            'A:pcopy INPUT.ROM OUTPUT.ROM', 'A:pcopy B:INPUT.ROM OUTPUT.ROM').replace(
+            'File copied successfully', 'File copied to'))
+    if args.direction == 'dos-copy':
+        script.write_text(script.read_text().replace(
+            'A:pcopy INPUT.ROM OUTPUT.ROM" 10000', 'COPY INPUT.ROM OUTPUT.ROM" 40000').replace(
+            'harness::assert_screen_contains copy "File copied successfully"',
+            '# Destination bytes are verified from the disk image below.'))
     env = dict(os.environ, PYTHONPATH=str(SOFTWARE/'Server/Python/src'),
                OPENMSX_USER_DATA=str(work/'share'), MSXPI_HARNESS_OUT=str(work/'result.txt'))
+    machine = 'Panasonic_FS-A1WSX'
+    hardware = ['-ext', 'ram4mb', '-ext', 'MSXPiTest']
+    if args.nextor_hd:
+        if args.direction != 'dos-copy' or args.fault != 'none':
+            parser.error('--nextor-hd requires --direction dos-copy without faults')
+        machine = 'Philips_NMS_8245'  # 128 KiB mapper required by Nextor
+        shutil.copyfile(args.nextor_hd, work/'nextor.dsk')
+        nextor = Path('/opt/openMSX/share/extensions/SunriseIDE_Nextor.xml').read_text()
+        nextor = re.sub(r'<rom>.*?</rom>', '<rom><filename>/opt/openMSX/share/systemroms/extensions/Nextor-2.1.0.SunriseIDE.emulators.ROM</filename></rom>', nextor, flags=re.S)
+        if args.nextor_mapper:
+            nextor = nextor.replace('<primary slot="any">', '<primary slot="1">').replace('<secondary slot="any">', '<secondary slot="3">')
+            nextor = nextor.replace('</primary>', '<secondary slot="2"><MemoryMapper id="Boot controller RAM"><mem base="0x0000" size="0x10000"/><size>512</size></MemoryMapper></secondary></primary>')
+        (share/'NextorTest.xml').write_text(nextor)
+        hardware = ['-ext', 'NextorTest', '-ext', 'MSXPiTest']
+        # diskmanipulator in this openMSX build cannot edit standard MBR images.
+        # Edit the first FAT12 partition offline, retaining the partition table.
+        hd = bytearray((work/'nextor.dsk').read_bytes())
+        first = int.from_bytes(hd[454:458], 'little')*512
+        size = int.from_bytes(hd[458:462], 'little')*512
+        assert hd[510:512] == b'\x55\xaa' and first and size, 'Use a standard MBR boot image'
+        partition = work/'nextor-partition.dsk'
+        partition.write_bytes(hd[first:first+size])
+        subprocess.run(['python3', str(SOFTWARE/'dsktool.py'), 'copy', str(work/'INPUT.ROM'),
+                        str(partition)+':INPUT.ROM'], check=True, stdout=subprocess.DEVNULL)
+        hd[first:first+size] = partition.read_bytes()
+        (work/'nextor.dsk').write_bytes(hd)
+        script.write_text(script.read_text().replace(
+            '"B:"', '"A:"').replace('COPY INPUT.ROM OUTPUT.ROM', 'COPY A:INPUT.ROM C:OUTPUT.ROM').replace(
+            'harness::run_cmd "dir" 1000 { harness::done }',
+            'harness::run_cmd "COPY C:OUTPUT.ROM A:ROUND.ROM" 40000 { harness::run_cmd "DIR C:OUTPUT.ROM" 1000 { harness::done } }'))
+        script.write_text(f'hda {{{work}/nextor.dsk}}\n' + script.read_text())
     start = time.monotonic()
     with (work/'server.log').open('w') as log, (work/'openmsx.log').open('w') as emulog:
         process = subprocess.Popen(['python3', '-u', str(server_path)], env=env, stdout=log, stderr=subprocess.STDOUT)
         try:
             time.sleep(1)
             assert process.poll() is None, 'server failed to start'
-            subprocess.run([args.openmsx, '-machine', 'Panasonic_FS-A1WSX', '-ext', 'ram4mb',
-                            '-ext', 'MSXPiTest', '-command', 'set renderer none', '-command', 'set throttle off',
+            subprocess.run([args.openmsx, '-machine', machine, *hardware, '-command', 'set renderer none', '-command', 'set throttle off',
                             '-script', str(SOFTWARE/'UNAPI/harness/lib/harness.tcl'), '-script', str(script)],
                            env=env, stdout=emulog, stderr=subprocess.STDOUT, timeout=900, check=True)
         finally:
@@ -144,9 +191,13 @@ harness::at_dos_prompt {
         print(f'PASS: {args.fault}: exactly 3 attempts, DOS error propagated ({elapsed:.1f}s)')
     else:
         assert 'RESULT PASS' in result, result
-        output = extract(work/'mounted/2_b.dsk', 'OUTPUT.ROM')
+        output = (work/'OUTPUT.ROM').read_bytes() if args.direction == 'upload' else extract(work/('mounted/1_a.dsk' if args.nextor_hd else 'mounted/2_b.dsk'), 'OUTPUT.ROM')
         assert output == args.input.read_bytes(), 'destination differs from source'
         assert count == (1 if args.fault == 'once' else 0), count
+        if args.nextor_hd:
+            partition.write_bytes((work/'nextor.dsk').read_bytes()[first:first+size])
+            assert extract(partition, 'ROUND.ROM') == args.input.read_bytes(), 'Nextor return copy differs'
+            print('PASS: Nextor cross-controller return copy is byte-identical')
         print(f'PASS: {len(output)} bytes identical; {count} injected faults; SHA256 {hashlib.sha256(output).hexdigest()} ({elapsed:.1f}s)')
 
 

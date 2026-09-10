@@ -59,12 +59,9 @@ o_LINK_BUSY	EQU	UNAPI_WRK+36
 o_LINK_SAVE	EQU	UNAPI_WRK+37	; DSKIO's saved copy of o_LINK_BUSY - see
 				; LINK_BUSY_SET.  One slot is enough because
 				; DSKIO is not reentrant.
-o_SEND_P1	EQU	UNAPI_WRK+38	; set by DSKIO_WRITE while it is sending DISK
-				; DATA, so SENDDATA reads a page-1 source
-				; through RDSLT.  Must stay clear for the
-				; command strings, which live in the ROM and
-				; go through the same loop.
-UNAPI_WRKEND	EQU	UNAPI_WRK+39	; total size - this is MYSIZE in the ROM
+o_SEND_P1	EQU	UNAPI_WRK+38	; reserved former page-1 source flag.
+                                ; DSKIO stages sectors in its private buffer.
+UNAPI_WRKEND	EQU	UNAPI_WRK+39	; UNAPI size; ROM MYSIZE adds its disk buffer
 
 ; Where the assembled driver is placed inside the MSX-DOS driver ROM.
 ;

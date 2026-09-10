@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../header/msxpi.h"
+#include "payload_generated.h"
 
 // pprintf: print a string followed by a number
 void pprintf(char* text, uint16_t value) {
@@ -212,13 +213,8 @@ uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
         *size = length;  // size of the last block received (optional)
 
         // --- Payload ---
-        checksum = 0;
-        for (uint16_t i = 0; i < length; i++) {
-            rc = PIREADBYTE(&byte);
-            if (rc != RC_SUCCESS) return RC_CONNERR;
-            dest[offset + i] = byte;
-            checksum += byte;
-        }
+        rc = payload_rx(dest + offset, length, &checksum);
+        if (rc != RC_SUCCESS) return RC_CONNERR;
 
         // --- Local checksum ---
         localChecksum = (uint8_t)((checksum & 0xFF) + ((checksum >> 8) & 0xFF));
@@ -362,13 +358,8 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
     *size = this_blocksize;  // size of this block
 
     // --- Payload ---
-    checksum = 0;
-    for (uint16_t i = 0; i < this_blocksize; i++) {
-        rc = PIREADBYTE(&byte);
-        if (rc != RC_SUCCESS) return RC_CONNERR;
-        dest[i] = byte;
-        checksum += byte;
-    }
+    rc = payload_rx(dest, this_blocksize, &checksum);
+    if (rc != RC_SUCCESS) return RC_CONNERR;
 
     // Local checksum (folded 16-bit sum → 8-bit)
     uint8_t right = (uint8_t)(checksum & 0xFF);
@@ -529,13 +520,8 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
             if (rc != RC_SUCCESS) return RC_CONNERR;
 
             // --- Payload + checksum accumulation ---
-            checksum = 0;
-            for (uint16_t i = 0; i < this_blocksize; i++) {
-                uint8_t b = src[offset + i];
-                rc = PIWRITEBYTE(b);
-                if (rc != RC_SUCCESS) return RC_CONNERR;
-                checksum += b;
-            }
+            rc = payload_tx(src + offset, this_blocksize, &checksum);
+            if (rc != RC_SUCCESS) return RC_CONNERR;
 
             // --- Local checksum (MSX sender) ---
             localChecksum = (uint8_t)((checksum & 0xFF) + ((checksum >> 8) & 0xFF));

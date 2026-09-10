@@ -2,6 +2,7 @@
 # Linux equivalent of make.bat. Build a client without deploying disk images.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+python3 "$here/transport/generate.py" --check
 prog="${1:?Usage: make.sh program [output-directory]}"
 [[ "$prog" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid program name" >&2; exit 1; }
 out="${2:-$here/target}"
@@ -23,7 +24,7 @@ sdcc -mz80 --sdcccall 0 -c "$here/C-common/lib/msxpi-bios.c" \
     -o "$scratch/msxpi-bios.rel"
 sdar -rc "$scratch/msxpi-bios.lib" "$scratch/msxpi-bios.rel"
 sdcc -mz80 --sdcccall 0 --code-loc 0x106 --data-loc 0x0 \
-    --disable-warning 196 --no-std-crt0 --opt-code-size \
+    --disable-warning 196 --no-std-crt0 --nostdlib --opt-code-size \
     fusion.lib msxpi-bios.lib "$legacy" -L "$fusion/lib" -L "$scratch" \
     "$fusion/include/crt0_msxdos.rel" "$here/Client/src/$prog.c" \
     -o "$scratch/$prog.ihx"

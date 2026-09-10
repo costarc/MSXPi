@@ -1,5 +1,7 @@
 #!/bin/bash
 
+python3 transport/generate.py --check || exit 1
+
 export buildClientCommands="yes"
 export buildBIOS="yes"
 export buildLoadrom="yes"

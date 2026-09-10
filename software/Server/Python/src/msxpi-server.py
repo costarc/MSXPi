@@ -389,6 +389,7 @@ _GPLEV0 = 0x34 >> 2      # read pin levels
 
 _FAST_GPIO = False
 _GPIO_REG  = None
+_NATIVE_GPIO = None
 
 # ---------------------------------------------------------------------------
 # Profiler.  Enable with MSXPI_PROFILE=1.  Answers one question: how much of the
@@ -430,10 +431,11 @@ def _init_fast_gpio():
     Called from init_spi_bitbang(), i.e. after RPi.GPIO has set the directions
     and after the pin numbers have been read from the config file.
     """
-    global _FAST_GPIO, _GPIO_REG
+    global _FAST_GPIO, _GPIO_REG, _NATIVE_GPIO
     global _M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY
 
     _FAST_GPIO = False
+    _NATIVE_GPIO = None
 
     if os.environ.get("MSXPI_SLOW_GPIO"):
         print("init_fast_gpio(): MSXPI_SLOW_GPIO set - using the original RPi.GPIO path")
@@ -478,6 +480,15 @@ def _init_fast_gpio():
     except Exception as e:
         print(f"init_fast_gpio(): falling back to RPi.GPIO ({e})")
         _FAST_GPIO = False
+
+    if _FAST_GPIO and os.environ.get("MSXPI_NATIVE_GPIO") == "1":
+        try:
+            from msxpi_gpio_native import NativeGPIO
+            _NATIVE_GPIO = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            print(f"init_fast_gpio(): native GPIO payload engine active "
+                  f"(half-period {_NATIVE_GPIO.half_period_ns} ns)")
+        except (OSError, ValueError, ImportError, AttributeError) as e:
+            print(f"init_fast_gpio(): native engine unavailable ({e}); using Python GPIO")
 
 
 def _spi_byte_fast(byte_out=None):
@@ -554,7 +565,7 @@ def SPI_BurstOut(data):
     stream.  Holding RDY up across the burst closes that window.
 
     Returns RC_SUCCESS, or an error code.  Falls back to per-byte transfers
-    when the fast GPIO path is not available, which is correct but slow.
+    only for TCP. GPIO requires a backend that keeps READY asserted.
     """
     global conn, hostType
 
@@ -567,12 +578,21 @@ def SPI_BurstOut(data):
         except Exception:
             return RC_CONNERR
 
+    if _NATIVE_GPIO is not None:
+        try:
+            _NATIVE_GPIO.write_burst(bytes(data))
+            if _PROFILE:
+                _NATIVE_GPIO.report()
+            return RC_SUCCESS
+        except OSError as exc:
+            print(f"Native GPIO burst failed: {exc}")
+            return RC_CONNERR
+
     if not _FAST_GPIO:
-        for b in bytearray(data):
-            rc, _ = SPI_ByteTransfer(b)
-            if rc != RC_SUCCESS:
-                return rc
-        return RC_SUCCESS
+        # Per-byte READY gaps are incompatible with the client's INIR loop.
+        # Leave READY low so its bounded entry wait fails instead of corrupting
+        # the stream. A polled client also gets a transport error, never data.
+        return RC_CONNERR
 
     reg = _GPIO_REG
     SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
@@ -690,6 +710,44 @@ def SPI_ByteTransfer(byte_out=None):
             #print(f"Received: {chr(byte_in)}")
     return RC_SUCCESS,byte_in
     
+
+def SPI_ReadPayload(length):
+    """Exactly length bytes; header, checksum and status remain at the caller."""
+    if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
+        try:
+            data = _NATIVE_GPIO.read(length)
+            if _PROFILE:
+                _NATIVE_GPIO.report()
+            return RC_SUCCESS, data
+        except OSError as e:
+            print(f"SPI_ReadPayload: {e}")
+            return RC_CONNERR, None
+    payload = bytearray(length)
+    for i in range(length):
+        rc, byte = SPI_ByteTransfer()
+        if rc != RC_SUCCESS:
+            return rc, None
+        payload[i] = byte
+    return RC_SUCCESS, payload
+
+
+def SPI_WritePayload(payload):
+    """Same per-byte READY/CS contract as SPI_ByteTransfer, in native chunks."""
+    if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
+        try:
+            _NATIVE_GPIO.write(payload)
+            if _PROFILE:
+                _NATIVE_GPIO.report()
+            return RC_SUCCESS
+        except OSError as e:
+            print(f"SPI_WritePayload: {e}")
+            return RC_CONNERR
+    for byte in payload:
+        rc, _ = SPI_ByteTransfer(byte if isinstance(byte, int) else ord(byte))
+        if rc != RC_SUCCESS:
+            return rc
+    return RC_SUCCESS
+
 # create a subclass and override the handler methods
 class MyHTMLParser(HTMLParser):
     def __init__(self):
@@ -1794,14 +1852,10 @@ def recvdata2(maxbufsize = 8192):
             return (RC_CONNERR, None)
 
         # --- Payload ---
-        payload = bytearray(length)
-        chksum = 0
-        for i in range(length):
-            rc, byte = SPI_ByteTransfer()
-            if rc != RC_SUCCESS:
-                return (RC_CONNERR, None)
-            payload[i] = byte
-            chksum += byte
+        rc, payload = SPI_ReadPayload(length)
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+        chksum = sum(payload)
 
         # --- Local checksum (Python receiver) ---
         right = chksum & 0xFF
@@ -2055,13 +2109,10 @@ def senddata(header_rc, payload):
                 return RC_FAILED
 
             # --- Send payload bytes ---
-            for b in block_bytes:
-                if not isinstance(b, int):
-                    b = ord(b)
-                rc, _ = SPI_ByteTransfer(b & 0xFF)
-                if rc != RC_SUCCESS:
-                    print("senddata: SPI error while sending payload byte")
-                    return RC_FAILED
+            rc = SPI_WritePayload(block_bytes)
+            if rc != RC_SUCCESS:
+                print("senddata: SPI error while sending payload")
+                return RC_FAILED
 
             # --- Send checksum ---
             rc, _ = SPI_ByteTransfer(local_sum & 0xFF)
@@ -2213,16 +2264,10 @@ def recvdata2_oneblock(maxbufsize):
         if block_index != 0:
             return (RC_CONNERR, None)
 
-        payload = bytearray(length)
-        chksum = 0
-
-        # Read payload
-        for i in range(length):
-            rc, b = SPI_ByteTransfer()
-            if rc != RC_SUCCESS:
-                return (RC_CONNERR, None)
-            payload[i] = b
-            chksum += b
+        rc, payload = SPI_ReadPayload(length)
+        if rc != RC_SUCCESS:
+            return (RC_CONNERR, None)
+        chksum = sum(payload)
 
         # Local checksum
         right = chksum & 0xFF
@@ -2328,15 +2373,11 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         #print(f"senddata_oneblock(): block_index={block_index} sent OK, starting payload ({length} bytes)")
 
         # payload
-        chksum = 0
-        for idx, b in enumerate(payload):
-            rc, _ = SPI_ByteTransfer(b)
-            if rc != RC_SUCCESS:
-                print(f"senddata_oneblock(): FAILED sending payload byte at offset {idx} (of {length})")
-                return RC_CONNERR
-            chksum += b
-            ##if idx > 0 and idx % 2048 == 0:
-            ##    print(f"senddata_oneblock(): payload progress {idx}/{length} bytes sent")
+        chksum = sum(payload)
+        rc = SPI_WritePayload(payload)
+        if rc != RC_SUCCESS:
+            print("senddata_oneblock(): FAILED sending payload")
+            return RC_CONNERR
 
         #print(f"senddata_oneblock(): payload complete, {length} bytes sent")
 

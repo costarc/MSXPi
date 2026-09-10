@@ -485,26 +485,29 @@ FN_SEND_FRAME:
             ret
 
 ; --- ETH_TX_SUM: send BC bytes from HL, leaving the 8-bit sum in ETH_SUM.
-; The checksum has to be computed here rather than reusing ETH_TX_BLOCK,
-; because the Pi verifies the same simple additive sum msxpi_eth.py computes.
+; Keep the sum in E and wait directly: ETH_TX's per-byte register saves and
+; repeated indexed checksum accesses are unnecessary inside a payload loop.
+; ETH_WAIT_READY preserves DE/HL, but corrupts BC. No keyboard/BIOS calls here.
+; Out: CF=1 on timeout; corrupts AF/BC/DE/HL.
 ETH_TX_SUM:
-            ld      (ix+o_ETH_SUM),0
+            ld      e,0
 .loop:
             ld      a,b
             or      c
             jr      z,.done
-            ld      a,(hl)
-            add     a,(ix+o_ETH_SUM)
-            ld      (ix+o_ETH_SUM),a
             push    bc
-            ld      a,(hl)
-            call    ETH_TX
+            call    ETH_WAIT_READY
             pop     bc
             ret     c
+            ld      a,(hl)
+            out     (DATA1),a
+            add     a,e
+            ld      e,a
             inc     hl
             dec     bc
             jr      .loop
 .done:
+            ld      (ix+o_ETH_SUM),e
             or      a
             ret
 

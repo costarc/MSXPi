@@ -83,7 +83,7 @@ RC_OUTOFSYNC   EQU $E5
 ; 0..4 are DSKIO_SECTINFO's, 5..7 are MSXPI_GETSTASH's, and everything from
 ; UNAPI_WRK up belongs to the Ethernet UNAPI driver appended at the end of
 ; this ROM - see asm-common/include/unapi_wrk.inc.
-MYSIZE		equ	UNAPI_WRKEND	; Size of environment
+MYSIZE		equ	UNAPI_WRKEND+512	; private sector buffer follows UNAPI work area
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -197,7 +197,7 @@ DSKIO:
         jp      LINK_BUSY_CLR
 
 DSKIO_BODY:
-        JR      NC,DSKIO_READ
+        JP      NC,DSKIO_READ
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -210,61 +210,95 @@ DSKIO_WRITE:
         push    bc               ; need to save this ?
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_WSEC
         call    SendCommandToMSXPi ; Send sector write command "DSKIOWRS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
-; Raise the page-1 flag for the DATA transfer only.  SENDDATA then reads a
-; source in #4000-#7FFF through RDSLT, reaching the RAM under this ROM instead
-; of the ROM itself.  The command sent above must NOT be redirected: it is a
-; string in this ROM and goes through the very same loop, which is why the flag
-; exists rather than a test on the address alone.
-;
-; Cleared on every exit, including the error one - a flag left set would make
-; the next command read out of RAM, which is exactly the failure this avoids.
-        call    SEND_P1_SET
 DSKIO_WRITE_LOOP:
-        push	bc
+        push    bc
+        ex      de,hl              ; HL = caller source
+        call    DSKIO_BUFFER
+        call    DSKIO_COPY_SECTOR   ; HL = next source, staged bytes in private buffer
+        push    hl
+        call    DSKIO_BUFFER
         ld      bc,SECTORSIZE
-        call    senddata	      ; Send the sectors (write to disk
+        call    SENDDATA
+        pop     de                 ; original caller pointer, advanced 512
         pop     bc
-        jr      c, DSKIO_WRITE_ERR
+        jr      c,DSKIO_WRITE_ERR
         djnz    DSKIO_WRITE_LOOP
-        call    SEND_P1_CLR
-        or	     a
+        or      a
         ret
 DSKIO_WRITE_ERR:
-        call    SEND_P1_CLR
         jp      DSKIO_ERR1
 
-; --- Raise / lower the page-1 source flag.  Preserve everything: DSKIO_WRITE
-; is mid-transfer around these, and on the error path A and the carry are the
-; driver's return values.
-SEND_P1_SET:
-        push    af
-        push    bc
+; Never use the kernel's shared SECBUF as scratch: another disk kernel may
+; retain FAT/validation data there across a call into this driver.
+; Return DE = our private 512-byte buffer; preserve HL and BC.
+DSKIO_BUFFER:
         push    hl
-        call    GETWRK
-        ld      (ix+o_SEND_P1),1
-        jr      SEND_P1_DONE
-SEND_P1_CLR:
-        push    af
         push    bc
-        push    hl
         call    GETWRK
-        ld      (ix+o_SEND_P1),0
-SEND_P1_DONE:
-        pop     hl
+        ld      bc,UNAPI_WRKEND
+        add     hl,bc
+        ex      de,hl
         pop     bc
-        pop     af
+        pop     hl
         ret
 
-; END OF ------------------------------
-; MSXPi DSKIO_WRITE Routine    |
-;--------------------------------------
-
+; Copy one disk sector. XFER executes from RAM and restores the current ROM
+; slot after mapping TPA RAM, including expanded slots. Only spans that might
+; touch page 1 need it. The conservative 3E00 test also covers a crossing sector.
+; In: HL=source, DE=destination. Out: both advanced, BC=0, carry clear.
+DSKIO_COPY_SECTOR:
+        ld      bc,SECTORSIZE
+        ld      a,h
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_COPY_XFER
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_COPY_XFER
+        ldir
+        or      a
+        ret
+DSKIO_COPY_XFER:
+        ld      a,(XFER)
+        cp      0C3H
+        jr      nz,DSKIO_COPY_BASIC
+        call    XFER
+        or      a
+        ret
+ ; BASIC and early boot may not have the DOS RAM helper installed. Keep the
+; inter-slot fallback for that environment, including boundary-crossing spans.
+DSKIO_COPY_BASIC:
+        ld      a,(hl)
+        bit     7,h
+        jr      nz,DSKIO_COPY_GOT
+        bit     6,h
+        jr      z,DSKIO_COPY_GOT
+        push    bc
+        push    de
+        push    hl
+        ld      a,(RAMAD1)
+        call    RDSLT
+        pop     hl
+        pop     de
+        pop     bc
+DSKIO_COPY_GOT:
+        call    STORE_BYTE
+        inc     hl
+        inc     de
+        dec     bc
+        ld      a,b
+        or      c
+        jr      nz,DSKIO_COPY_BASIC
+        ret
+DSKIO_P1_TEST:
+        sub     03EH
+        cp      042H               ; 3E00..7FFF can overlap page 1
+        ret
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_READ Routine     |
@@ -291,25 +325,37 @@ DSKIO_READ:
         push    bc                ;
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_RSEC
         call    SendCommandToMSXPi ; Send sector read command "DSKIORDS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
-		push    af
-        push	bc
-        ld	    bc,SECTORSIZE
-        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
-		xor     a
-        call    RECVDATA_ONEBLOCK	
-        pop	    bc
-		pop 	hl
-		ld      a,h
-        jr	    c, DSKIO_ERR1
-        djnz	DSKIO_READ_LOOP
-        or	    a
+        push    af
+        push    bc
+        push    de                 ; caller destination survives reception
+        call    DSKIO_BUFFER
+        ld      bc,SECTORSIZE
+        call    PerformHandshake
+        jr      c,DSKIO_READ_UNSTACK
+        xor     a
+        call    RECVDATA_ONEBLOCK
+DSKIO_READ_UNSTACK:
+        pop     hl                 ; caller destination
+        jr      c,DSKIO_READ_DONE   ; do not copy a rejected sector
+        call    DSKIO_BUFFER       ; HL = caller destination, DE = private buffer
+        ex      de,hl
+        call    DSKIO_COPY_SECTOR
+DSKIO_READ_DONE_OK:
+        or      a
+DSKIO_READ_DONE:
+        pop     bc
+        pop     hl
+        ld      a,h
+        jr      c,DSKIO_ERR1
+        djnz    DSKIO_READ_LOOP
+        or      a
         ret
 DSKIO_ERR:
         pop     hl
