@@ -1,6 +1,6 @@
 @echo off
 
-python transport\generate.py --check
+python asm-common\transport\generate.py --check
 IF ERRORLEVEL 1 EXIT /B 1
 
 SET BASEDIR=.

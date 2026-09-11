@@ -1,7 +1,7 @@
 # Shared MSX payload engine
 
 `payload.z80` is the source of truth for the C and ASM file/disk payload loops.
-Run `python3 software/transport/generate.py` after editing it. Generated files
+Run `python3 software/asm-common/transport/generate.py` after editing it. Generated files
 are checked in; `--check` and both client build scripts reject stale output.
 The C build uses an SDCC ABI-0 stack adapter, while ASM callers pass DE=buffer,
 BC=count and HL=running 16-bit checksum. IX/IY and alternate registers survive.

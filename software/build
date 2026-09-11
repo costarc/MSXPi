@@ -1,6 +1,6 @@
 #!/bin/bash
 
-python3 transport/generate.py --check || exit 1
+python3 asm-common/transport/generate.py --check || exit 1
 
 export buildClientCommands="yes"
 export buildBIOS="yes"

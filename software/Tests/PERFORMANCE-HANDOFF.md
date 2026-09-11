@@ -49,7 +49,7 @@ revert to the original baseline when resuming.
 
 ## Implemented performance work
 
-- Canonical software/transport/payload.z80 generates synchronized C inline
+- Canonical software/asm-common/transport/payload.z80 generates synchronized C inline
   assembly and ASM includes. Fast payload loops preserve checksum/retry
   semantics, choose GPIO/TCP once and reduce readiness/keyboard overhead.
 - Native optional Pi GPIO payload and existing UNAPI burst engines, Python

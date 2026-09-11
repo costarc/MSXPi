@@ -28,7 +28,7 @@
 # Linux equivalent of make.bat. Build a client without deploying disk images.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
-python3 "$here/transport/generate.py" --check
+python3 "$here/asm-common/transport/generate.py" --check
 prog="${1:?Usage: make.sh program [output-directory]}"
 [[ "$prog" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid program name" >&2; exit 1; }
 out="${2:-$here/target}"
