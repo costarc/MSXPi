@@ -52,16 +52,16 @@ proc r_h4 {v} { format %04x $v }
 proc r_lg {tag} {
   puts $::lg "$tag af=[r_h4 [reg af]] bc=[r_h4 [reg bc]] de=[r_h4 [reg de]] hl=[r_h4 [reg hl]] sp=[r_h4 [reg sp]] t=[format %.2f [machine_info time]]"
 }
-debug set_bp 0x4010 {[pc_in_slot 2]} {r_lg "DSKIO "}
-debug set_bp 0x4013 {[pc_in_slot 2]} {r_lg "DSKCHG"}
-debug set_bp 0x4016 {[pc_in_slot 2]} {r_lg "GETDPB"}
+debug set_bp 0x4010 {[pc_in_slot PISLOT]} {r_lg "DSKIO "}
+debug set_bp 0x4013 {[pc_in_slot PISLOT]} {r_lg "DSKCHG"}
+debug set_bp 0x4016 {[pc_in_slot PISLOT]} {r_lg "GETDPB"}
 '''
 
 # Nextor calls GETDPB with whatever flags it has; carry set is what broke the
 # old bare-RET GETDPB, but only when the timing lined up. Force carry on every
 # entry so a GETDPB that hands it back fails deterministically.
 FORCE_CARRY_TCL = r'''
-debug set_bp 0x4016 {[pc_in_slot 2]} {reg f [expr {[reg f] | 1}]}
+debug set_bp 0x4016 {[pc_in_slot PISLOT]} {reg f [expr {[reg f] | 1}]}
 '''
 
 # Leave MultiMente (AUTOEXEC on the MFR flash): ESC, then RETURN.
@@ -78,8 +78,14 @@ proc r_run {cmds} {
   set c [lindex $cmds 0]; set n [lindex $c 0]
   harness::run_cmd [lindex $c 1] 900 [list r_next $n [lrange $cmds 1 end]] }
 proc r_next {n rest} { r_snap $n; r_run $rest }
-after time 28 { type [format %c 27]; after time 2 { type "\r"; after time 5 {
-  r_snap prompt; after time 1 r_watch; r_run $::cmds } } }
+proc r_start {} { r_snap prompt; after time 1 r_watch; r_run $::cmds }
+if {$::nextor_mm} {
+  after time 28 { type [format %c 27]; after time 2 { type "\r"; after time 5 r_start } }
+} else {
+  # MSXPi's own DOS1 boot: no MultiMente, and an ESC here would abort the
+  # MSXPi transfer that is loading COMMAND.COM.
+  harness::wait_for "A:" 60 { after time 3 r_start }
+}
 '''
 
 
@@ -100,6 +106,11 @@ def main():
     ap.add_argument('--pi-drive', default='D', help='drive letter of MSXPi unit 0')
     ap.add_argument('--pre', action='append', default=[],
                     help='DOS command to run before the copies (repeatable), e.g. "MAPDRV A: 1 2"')
+    ap.add_argument('--extra', action='append', type=Path, default=[],
+                    help='extra file to put on the MSXPi disk (repeatable), e.g. Tests/p1test/P1TEST.COM')
+    ap.add_argument('--no-copy', action='store_true', help='run only the --pre commands')
+    ap.add_argument('--no-mfr', action='store_true',
+                    help='no MegaFlashROM: MSXPi boots its own MSX-DOS 1 kernel (A:/B:)')
     ap.add_argument('--gui', action='store_true', help='show the openMSX window')
     ap.add_argument('--speed', type=int, default=250)
     ap.add_argument('--timeout', type=int, default=1800)
@@ -123,6 +134,8 @@ def main():
     # MSXPi D: (the server's DriveA)
     shutil.copyfile(SOFTWARE/'target/disks/msxpiboot.dsk', work/'a.dsk')
     shutil.copyfile(SOFTWARE/'target/disks/msxpiboot.dsk', work/'b.dsk')
+    for f in a.extra:
+        subprocess.run(dsktool + [str(f), f'{work}/a.dsk:{f.name.upper()}'], check=True, stdout=subprocess.DEVNULL)
     if a.preload:
         subprocess.run(dsktool + [str(work/'INPUT.ROM'), f'{work}/a.dsk:{name}'], check=True, stdout=subprocess.DEVNULL)
 
@@ -157,16 +170,20 @@ def main():
 
     sdd, pid = a.sd_drive.rstrip(':').upper(), a.pi_drive.rstrip(':').upper()
     cmds = [(f'pre{i}', c) for i, c in enumerate(a.pre)] + [('drvinfo', 'DRVINFO')]
-    cmds += [] if a.only_back else [('to_msxpi', f'COPY {sdd}:{name} {pid}:')]
-    cmds += [('to_sd', f'COPY {pid}:{name} {sdd}:ROUND.ROM'), ('dir', f'DIR {sdd}:')]
+    if not a.no_copy:
+        cmds += [] if a.only_back else [('to_msxpi', f'COPY {sdd}:{name} {pid}:')]
+        cmds += [('to_sd', f'COPY {pid}:{name} {sdd}:ROUND.ROM'), ('dir', f'DIR {sdd}:')]
     tcl = work/'run.tcl'
-    tcl.write_text('harness::init nextor_mfr_copy\n' + (TRACE_TCL if a.trace else '')
-                   + ('' if a.natural_carry else FORCE_CARRY_TCL)
+    slot = '1' if a.no_mfr else '2'   # MSXPi takes the first free cartridge slot
+    tcl.write_text('harness::init nextor_mfr_copy\n'
+                   + f'set ::nextor_mm {0 if a.no_mfr else 1}\n'
+                   + (TRACE_TCL if a.trace else '').replace('PISLOT', slot)
+                   + ('' if a.natural_carry else FORCE_CARRY_TCL).replace('PISLOT', slot)
                    + 'set ::cmds {' + ' '.join('{%s {%s}}' % c for c in cmds) + '}\n' + STEPS_TCL)
 
     env = dict(os.environ, PYTHONPATH=str(SOFTWARE/'Server/Python/src'), REPRO_WORK=str(work),
                OPENMSX_USER_DATA=str(work/'share'), MSXPI_HARNESS_OUT=str(work/'result.txt'))
-    cmd = ['/opt/openMSX/bin/openmsx', '-machine', a.machine, '-ext', 'MFRTest', '-ext', 'MSXPiTest',
+    cmd = ['/opt/openMSX/bin/openmsx', '-machine', a.machine, *([] if a.no_mfr else ['-ext', 'MFRTest']), '-ext', 'MSXPiTest',
            '-command', f'set speed {a.speed}']
     if not a.gui:
         cmd += ['-command', 'set renderer none']
@@ -192,6 +209,8 @@ def main():
     part.write_bytes(sd.read_bytes()[first:first+size])
     checks = [(f'{pid}:'+name, work/'mounted/1_a.dsk', name)] if not a.only_back else []
     checks += [(f'{sdd}:ROUND.ROM', part, 'ROUND.ROM')]
+    if a.no_copy:
+        checks = []
     for label, img, fn in checks:
         try:
             got = extract(img, fn) if img.exists() else b''
@@ -202,7 +221,9 @@ def main():
         print(f"{'PASS' if same else 'FAIL'}: {label} {len(got)} bytes {hashlib.sha256(got).hexdigest()[:16]}")
     if a.trace:
         t = (work/'trace.log').read_text()
-        print(f"trace: {t.count('DSKIO')} DSKIO, {t.count('DSKCHG')} DSKCHG, {t.count('GETDPB')} GETDPB")
+        p1 = sum(1 for l in t.splitlines() if l.startswith('DSKIO') and 0x3E <= int(l.split('hl=')[1][:2], 16) <= 0x7F)
+        print(f"trace: {t.count('DSKIO')} DSKIO ({p1} with a page-1 start address), "
+              f"{t.count('DSKCHG')} DSKCHG, {t.count('GETDPB')} GETDPB")
     sys.exit(0 if ok else 1)
 
 

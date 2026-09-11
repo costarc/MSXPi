@@ -216,21 +216,41 @@ DSKIO_WRITE:
         jp      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
+; Sectors normally go straight between the link and the caller's buffer.
+; Only a sector that can touch page 1 (3E00-7FFF, where this ROM is mapped
+; while the driver runs) is staged through the private buffer and XFER.
+; Nextor never hands a legacy driver such an address - it remaps page 1 into
+; page 2 first - so under Nextor every sector takes the direct path. Staging
+; every sector through the page-3 buffer (R2/R2.1) broke COPY on a real
+; Canon V-25 + MFR SD ("Bad file allocation table reading drive A:").
 DSKIO_WRITE_LOOP:
         push    bc
-        ex      de,hl              ; HL = caller source
-        call    DSKIO_BUFFER
-        call    DSKIO_COPY_SECTOR   ; HL = next source, staged bytes in private buffer
-        push    hl
-        call    DSKIO_BUFFER
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_WRITE_STAGED
+        push    de
         ld      bc,SECTORSIZE
         call    SENDDATA
-        pop     de                 ; original caller pointer, advanced 512
+        pop     de
+        inc     d                  ; DE += 512; INC keeps SENDDATA's carry
+        inc     d
+DSKIO_WRITE_NEXT:
         pop     bc
         jr      c,DSKIO_WRITE_ERR
         djnz    DSKIO_WRITE_LOOP
         or      a
         ret
+DSKIO_WRITE_STAGED:
+        ex      de,hl              ; HL = caller source
+        call    DSKIO_BUFFER
+        call    DSKIO_COPY_SECTOR   ; HL = next source, staged bytes in private buffer
+        jr      c,DSKIO_WRITE_NEXT
+        push    hl
+        call    DSKIO_BUFFER
+        ld      bc,SECTORSIZE
+        call    SENDDATA
+        pop     de                 ; original caller pointer, advanced 512
+        jr      DSKIO_WRITE_NEXT
 DSKIO_WRITE_ERR:
         jp      DSKIO_ERR1
 
@@ -248,52 +268,20 @@ DSKIO_BUFFER:
         pop     hl
         ret
 
-; Copy one disk sector. XFER executes from RAM and restores the current ROM
-; slot after mapping TPA RAM, including expanded slots. Only spans that might
-; touch page 1 need it. The conservative 3E00 test also covers a crossing sector.
-; In: HL=source, DE=destination. Out: both advanced, BC=0, carry clear.
+; Copy one staged sector to/from page 1. Only called for a page-1 caller
+; buffer, so it always needs XFER, which runs from RAM, maps TPA RAM into
+; page 1 and restores this ROM. DOS1 disables XFER in Disk BASIC, where page 1
+; is the BASIC ROM and no transfer targets it; if it is ever missing here,
+; fail the sector rather than copy nothing.
+; In: HL=source, DE=destination. Out: both advanced, carry = error.
 DSKIO_COPY_SECTOR:
         ld      bc,SECTORSIZE
-        ld      a,h
-        call    DSKIO_P1_TEST
-        jr      c,DSKIO_COPY_XFER
-        ld      a,d
-        call    DSKIO_P1_TEST
-        jr      c,DSKIO_COPY_XFER
-        ldir
-        or      a
-        ret
-DSKIO_COPY_XFER:
         ld      a,(XFER)
         cp      0C3H
-        jr      nz,DSKIO_COPY_BASIC
+        scf
+        ret     nz
         call    XFER
         or      a
-        ret
- ; BASIC and early boot may not have the DOS RAM helper installed. Keep the
-; inter-slot fallback for that environment, including boundary-crossing spans.
-DSKIO_COPY_BASIC:
-        ld      a,(hl)
-        bit     7,h
-        jr      nz,DSKIO_COPY_GOT
-        bit     6,h
-        jr      z,DSKIO_COPY_GOT
-        push    bc
-        push    de
-        push    hl
-        ld      a,(RAMAD1)
-        call    RDSLT
-        pop     hl
-        pop     de
-        pop     bc
-DSKIO_COPY_GOT:
-        call    STORE_BYTE
-        inc     hl
-        inc     de
-        dec     bc
-        ld      a,b
-        or      c
-        jr      nz,DSKIO_COPY_BASIC
         ret
 DSKIO_P1_TEST:
         sub     03EH
@@ -335,6 +323,21 @@ DSKIO_READ_LOOP:
         push    af
         push    bc
         push    de                 ; caller destination survives reception
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_READ_STAGED
+        ld      bc,SECTORSIZE
+        call    PerformHandshake
+        jr      c,DSKIO_READ_DIRECT_END
+        xor     a
+        call    RECVDATA_ONEBLOCK
+DSKIO_READ_DIRECT_END:
+        pop     de
+        jr      c,DSKIO_READ_DONE
+        inc     d                  ; DE += 512
+        inc     d
+        jr      DSKIO_READ_DONE_OK
+DSKIO_READ_STAGED:
         call    DSKIO_BUFFER
         ld      bc,SECTORSIZE
         call    PerformHandshake
@@ -347,6 +350,7 @@ DSKIO_READ_UNSTACK:
         call    DSKIO_BUFFER       ; HL = caller destination, DE = private buffer
         ex      de,hl
         call    DSKIO_COPY_SECTOR
+        jr      c,DSKIO_READ_DONE
 DSKIO_READ_DONE_OK:
         or      a
 DSKIO_READ_DONE:
