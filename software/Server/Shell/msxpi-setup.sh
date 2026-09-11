@@ -108,6 +108,7 @@ Description=Monitor MSXPi Server control Process
 [Service]
 User=pi
 WorkingDirectory=/home/pi/msxpi
+Environment=MSXPI_NATIVE_GPIO=1
 ExecStart=/home/pi/msxpi/msxpi-monitor
 
 [Install]

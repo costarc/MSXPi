@@ -11,6 +11,13 @@ USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 UNAPISETUP="/home/pi/msxpi/msxpi-tcpip-setup.sh"
 MSXPI_ROOT_LOG="/var/log/msxpi.log"
 
+# Native GPIO payload engine (burst transfers), see Server/Python/src/native/
+# README.md. On by default; exported so every server this script (re)starts
+# inherits it. Override with Environment=MSXPI_NATIVE_GPIO=0 in the systemd
+# unit. If native/libmsxpi_gpio.so is missing the server falls back to Python
+# GPIO and logs "native engine unavailable".
+export MSXPI_NATIVE_GPIO="${MSXPI_NATIVE_GPIO:-1}"
+
 if [[ -x "$UNAPISETUP" ]]; then
     echo "$(date) Starting root script $UNAPISETUP" >> "$MSXPI_ROOT_LOG"
     sudo nohup "$UNAPISETUP" >> "$MSXPI_ROOT_LOG" 2>&1 &
