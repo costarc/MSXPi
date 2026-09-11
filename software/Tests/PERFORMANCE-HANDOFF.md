@@ -1,5 +1,26 @@
 # Performance branch checkpoint — 2026-09-10
 
+## UPDATE 2026-09-11: Nextor COPY regression root-caused and fixed
+
+Reproduced in openMSX with the user's topology (Panasonic_FS-A1WSX,
+MegaFlashROM_SCC+_SD in slot 1 with a FAT SD image, MSXPi in slot 2, Nextor
+booting from the MFR flash; in the emulator the SD auto-maps to B:).
+`COPY D:ALESTE.ROM B:ROUND.ROM` gave "Not a DOS disk reading drive D:".
+
+Cause: DSKCHG always returns "unknown", so when Nextor's media-check timer
+lapses mid-copy it re-reads the boot sector (DSKIO returned it correctly) and
+then calls GETDPB with CARRY SET. GETDPB was a bare RET, returning that carry,
+which Nextor treats as failure. Timing-dependent, hence intermittent: the
+pre-staging R1 ROM (a5cef7c) also failed in one of two runs. The R2/R2.1
+staging/XFER/private-buffer changes were not the cause.
+
+Fix: GETDPB = `xor a / ret` (DPB untouched as before; the DOS1 kernel's only
+call site ignores A and flags). Verified: both COPY directions between the
+MFR SD and MSXPi byte-identical (SHA256 42a0470e...), with Nextor calling
+GETDPB 4-5 times during the copy. The DOS1-only boot was not re-run.
+
+The sections below describe the state BEFORE this fix.
+
 ## Status: work in progress, Nextor regression unresolved
 
 This checkpoint was requested before the user's daily quota expires. Do not
