@@ -1,0 +1,6 @@
+machine Panasonic_FS-A1WSX
+ext MSXPi
+ext ram4mb
+bind F12 cycle videosource
+plug printerport simpl
+set speed 100

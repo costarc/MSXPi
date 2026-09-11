@@ -1,6 +1,0 @@
-machine Philips_NMS_8245
-ext MSXPi
-ext Ram2Mb
-bind F12 cycle videosource
-plug printerport simpl
-set speed 100

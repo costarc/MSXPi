@@ -1,35 +1,34 @@
-;|===========================================================================|
-;|                                                                           |
-;| MSXPi Interface                                                           |
-;|                                                                           |
-;| Version : 1.5                                                             |
-;|                                                                           |
-;| Copyright (c) 2015-2026 Ronivon Costa (ronivon@outlook.com)               |
-;|                                                                           |
-;| All rights reserved                                                       |
-;|                                                                           |
-;| Redistribution and use in source and compiled forms, with or without      |
-;| modification, are permitted under GPL license.                            |
-;|                                                                           |
-;|===========================================================================|
-;|                                                                           |
-;| This file is part of MSXPi Interface project.                             |
-;|                                                                           |
-;| MSX PI Interface is free software: you can redistribute it and/or modify  |
-;| it under the terms of the GNU General Public License as published by      |
-;| the Free Software Foundation, either version 3 of the License, or         |
-;| (at your option) any later version.                                       |
-;|                                                                           |
-;| MSX PI Interface is distributed in the hope that it will be useful,       |
-;| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
-;| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
-;| GNU General Public License for more details.                              |
-;|                                                                           |
-;| You should have received a copy of the GNU General Public License         |
-;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
-;|===========================================================================|
+; MSXPi Interface
+; Version 1.6
+; ------------------------------------------------------------------------------
+; MIT License
 ;
-; MSXPi Driver v1.5 (2026)
+; Copyright (c) 2015-2026 Ronivon Costa
+;
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+; copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included in all
+; copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+; ------------------------------------------------------------------------------
+;
+; MSXPi Driver v1.6 (2026)
+
+; Work area layout and load address of the Ethernet UNAPI driver appended at
+; the end of this ROM.  Shared verbatim with the sjasm build of that driver.
+INCLUDE unapi_wrk.inc
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -75,7 +74,11 @@ RC_OUTOFSYNC   EQU $E5
 ; 14	insufficient memory
 ; 16	other error
 
-MYSIZE		equ	9		; Size of environment
+; Size of the disk driver work area the kernel allocates for us.  Offsets
+; 0..4 are DSKIO_SECTINFO's, 5..7 are MSXPI_GETSTASH's, and everything from
+; UNAPI_WRK up belongs to the Ethernet UNAPI driver appended at the end of
+; this ROM - see asm-common/include/unapi_wrk.inc.
+MYSIZE		equ	UNAPI_WRKEND+512	; private sector buffer follows UNAPI work area
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -139,7 +142,13 @@ DRIVES:
 ;		depends on the hardware if this is needed.
 
 INIENV:
-        ret
+        ; Hand over to the Ethernet UNAPI driver at the end of this ROM: it
+        ; hooks EXTBIO and initialises its part of the work area, then
+        ; returns.  INIENV is the right moment - the kernel has by now
+        ; allocated the MYSIZE work area and stored it in SLTWRK, and the
+        ; EXTBIO hook has been initialised (by this diskrom or by whichever
+        ; one started the disk system first).
+        jp      UNAPI_ORG
 
 ; START OF -----------------------------
 ; MSXPi DSKIO Routine           |
@@ -159,8 +168,31 @@ INIENV:
 ;		B	if error, remaining sectors
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 ;
+; Option A, the shared-channel guard.  MSXPi is ONE channel: the disk and the
+; Ethernet UNAPI both drive ports 56/57/5A, and InterNestor Lite polls from the
+; 50/60Hz timer interrupt.  Without this, a timer tick landing part-way through
+; a block transfer makes the ISR issue its own IN ($5A) and both byte streams
+; desynchronise permanently - silently, onto a filesystem.
+;
+; A flag rather than DI: a 512-byte block is ~28ms and disabling interrupts for
+; that long would break JIFFY, key repeat and INL's own timers.  And a plain
+; flag is enough without any atomicity worry, for the same reason ETH_LOCK
+; needs no DI - the two contexts are asymmetric.  The foreground sets the flag
+; before touching a port; an interrupt arriving before that finds the link free
+; and completes its whole transaction before the foreground resumes, because
+; the ISR runs to completion and cannot itself be preempted.
+;
+; Wrapped around DSKIO as a whole rather than around the individual block
+; routines in msxpi_bios.asm: those nest and have several error exits each, so
+; bracketing them would need a depth counter and would be easy to get wrong.
+; DSKIO has one entry and every exit is a plain RET, so one CALL covers it.
 DSKIO:
-        JR      NC,DSKIO_READ
+        call    LINK_BUSY_SET
+        call    DSKIO_BODY
+        jp      LINK_BUSY_CLR
+
+DSKIO_BODY:
+        JP      NC,DSKIO_READ
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -173,25 +205,83 @@ DSKIO_WRITE:
         push    bc               ; need to save this ?
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_WSEC
         call    SendCommandToMSXPi ; Send sector write command "DSKIOWRS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
+; Sectors normally go straight between the link and the caller's buffer.
+; Only a sector that can touch page 1 (3E00-7FFF, where this ROM is mapped
+; while the driver runs) is staged through the private buffer and XFER.
+; Nextor never hands a legacy driver such an address - it remaps page 1 into
+; page 2 first - so under Nextor every sector takes the direct path. Staging
+; every sector through the page-3 buffer (R2/R2.1) broke COPY on a real
+; Canon V-25 + MFR SD ("Bad file allocation table reading drive A:").
 DSKIO_WRITE_LOOP:
-        push	bc
+        push    bc
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_WRITE_STAGED
+        push    de
         ld      bc,SECTORSIZE
-        call    senddata	      ; Send the sectors (write to disk
+        call    SENDDATA
+        pop     de
+        inc     d                  ; DE += 512; INC keeps SENDDATA's carry
+        inc     d
+DSKIO_WRITE_NEXT:
         pop     bc
-        jr      c, DSKIO_ERR1
+        jr      c,DSKIO_WRITE_ERR
         djnz    DSKIO_WRITE_LOOP
-        or	     a
+        or      a
         ret
-; END OF ------------------------------
-; MSXPi DSKIO_WRITE Routine    |
-;--------------------------------------
+DSKIO_WRITE_STAGED:
+        ex      de,hl              ; HL = caller source
+        call    DSKIO_BUFFER
+        call    DSKIO_COPY_SECTOR   ; HL = next source, staged bytes in private buffer
+        jr      c,DSKIO_WRITE_NEXT
+        push    hl
+        call    DSKIO_BUFFER
+        ld      bc,SECTORSIZE
+        call    SENDDATA
+        pop     de                 ; original caller pointer, advanced 512
+        jr      DSKIO_WRITE_NEXT
+DSKIO_WRITE_ERR:
+        jp      DSKIO_ERR1
 
+; Never use the kernel's shared SECBUF as scratch: another disk kernel may
+; retain FAT/validation data there across a call into this driver.
+; Return DE = our private 512-byte buffer; preserve HL and BC.
+DSKIO_BUFFER:
+        push    hl
+        push    bc
+        call    GETWRK
+        ld      bc,UNAPI_WRKEND
+        add     hl,bc
+        ex      de,hl
+        pop     bc
+        pop     hl
+        ret
+
+; Copy one staged sector to/from page 1. Only called for a page-1 caller
+; buffer, so it always needs XFER, which runs from RAM, maps TPA RAM into
+; page 1 and restores this ROM. DOS1 disables XFER in Disk BASIC, where page 1
+; is the BASIC ROM and no transfer targets it; if it is ever missing here,
+; fail the sector rather than copy nothing.
+; In: HL=source, DE=destination. Out: both advanced, carry = error.
+DSKIO_COPY_SECTOR:
+        ld      bc,SECTORSIZE
+        ld      a,(XFER)
+        cp      0C3H
+        scf
+        ret     nz
+        call    XFER
+        or      a
+        ret
+DSKIO_P1_TEST:
+        sub     03EH
+        cp      042H               ; 3E00..7FFF can overlap page 1
+        ret
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_READ Routine     |
@@ -218,25 +308,53 @@ DSKIO_READ:
         push    bc                ;
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_RSEC
         call    SendCommandToMSXPi ; Send sector read command "DSKIORDS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
-		push    af
-        push	bc
-        ld	    bc,SECTORSIZE
-        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
-		xor     a
-        call    RECVDATA_ONEBLOCK	
-        pop	    bc
-		pop 	hl
-		ld      a,h
-        jr	    c, DSKIO_ERR1
-        djnz	DSKIO_READ_LOOP
-        or	    a
+        push    af
+        push    bc
+        push    de                 ; caller destination survives reception
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_READ_STAGED
+        ld      bc,SECTORSIZE
+        call    PerformHandshake
+        jr      c,DSKIO_READ_DIRECT_END
+        xor     a
+        call    RECVDATA_ONEBLOCK
+DSKIO_READ_DIRECT_END:
+        pop     de
+        jr      c,DSKIO_READ_DONE
+        inc     d                  ; DE += 512
+        inc     d
+        jr      DSKIO_READ_DONE_OK
+DSKIO_READ_STAGED:
+        call    DSKIO_BUFFER
+        ld      bc,SECTORSIZE
+        call    PerformHandshake
+        jr      c,DSKIO_READ_UNSTACK
+        xor     a
+        call    RECVDATA_ONEBLOCK
+DSKIO_READ_UNSTACK:
+        pop     hl                 ; caller destination
+        jr      c,DSKIO_READ_DONE   ; do not copy a rejected sector
+        call    DSKIO_BUFFER       ; HL = caller destination, DE = private buffer
+        ex      de,hl
+        call    DSKIO_COPY_SECTOR
+        jr      c,DSKIO_READ_DONE
+DSKIO_READ_DONE_OK:
+        or      a
+DSKIO_READ_DONE:
+        pop     bc
+        pop     hl
+        ld      a,h
+        jr      c,DSKIO_ERR1
+        djnz    DSKIO_READ_LOOP
+        or      a
         ret
 DSKIO_ERR:
         pop     hl
@@ -249,6 +367,40 @@ DSKIO_ERR1:
 ; END OF ------------------------------
 ; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
+
+; --- Claim / release the link for the disk --------------------------------
+; Both preserve AF, BC, DE and HL, which matters at BOTH ends: on entry DSKIO
+; takes the drive in A and read/write in the CARRY flag, and on exit it returns
+; the error code in A and the carry.  IX is corrupted, which DSKIO's own
+; contract already permits.
+; SAVE and RESTORE, not set-and-clear.  A .COM can now hold the link itself
+; through UNAPI routine 129, and such a program may well write to disk in the
+; middle of its transfer - pcopy does exactly that with every block it
+; receives.  Forcing the flag to 0 here would drop that program's claim while
+; it was still using the link, letting the ISR back in precisely where it does
+; the damage.  One save slot suffices: DSKIO is not reentrant.
+LINK_BUSY_SET:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK              ; HL = IX = this driver's work area
+        ld      a,(ix+o_LINK_BUSY)
+        ld      (ix+o_LINK_SAVE),a
+        ld      (ix+o_LINK_BUSY),1
+        jr      LINK_BUSY_DONE
+LINK_BUSY_CLR:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK
+        ld      a,(ix+o_LINK_SAVE)
+        ld      (ix+o_LINK_BUSY),a
+LINK_BUSY_DONE:
+        pop     hl
+        pop     bc
+        pop     af
+        ret
+
 
 
 ; START OF ----------------------------
@@ -300,15 +452,12 @@ DSKIO_SECTINFO1:
 	pop     de
 	ld	    bc,5
 	call	senddata
-	and     a
+	; Propagate SENDDATA carry so DSKIO does not issue a command after failure.
 	ret
         
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
-
-DSKIORDMSG:
-    DB      "DSKIO READ ERROR",13,10,0
 
 ; DSKCHG
 ;
@@ -355,8 +504,16 @@ DSKCHGDPB:
 ;		..
 ;		[hl+18]	updated
 ; Changed:	af,bc,de,hl,IX,IY may be affected
+;
+; DSKCHG always answers "unknown", so Nextor revalidates the drive whenever
+; its media-check timer has lapsed: it re-reads the boot sector and then calls
+; GETDPB. It arrives here with carry SET and treats a carry returned from
+; GETDPB as failure - "Not a DOS disk". A bare RET handed that carry straight
+; back, so COPY between MSXPi and another drive failed whenever the check
+; happened mid-copy. Keep the DPB as it is (as before) but return carry clear.
 
 GETDPB:
+        xor     a
         ret
 
 DpbTable:
@@ -399,14 +556,6 @@ DEFDPB	equ	DpbTable+18-1
 CHOICE:
 		ld		hl,0
 		ret
-
-; Choices not used by MSXPi driver
-ChoiceStr:	db	13,10
-		db	"1 - Choice A",13,10
-		db	"2 - Choice B",13,10
-        db	"3 - Choice C",13,10
-		db	13,10
-		db	0
 
 ; DSKFMT
 ;
@@ -547,12 +696,6 @@ SYNTAX_ERROR:
 ;-----------------------
 ; call HELP OR MSXPIHELP
 ;-----------------------
-_MSXPIHELP:
-        push    hl
-        ld      hl,MSXPIHelpMsg
-        call    PRINT
-        pop     hl
-        ret      
 ;-----------------------
 ; call MSXPIVER 
 ;-----------------------
@@ -739,7 +882,10 @@ RECV_ERROR:
         RET
 
  CALL_SYNTAX_ERROR:
-        CALL    _MSXPIHELP
+        ; The help text used to be printed here.  Dropped to reclaim ROM
+        ; space: BASIC's own "Syntax error" already says the call was wrong,
+        ; and the same information is available from P VER, the boot splash
+        ; and CALL MSXPI("1,C000,ver").
         POP     HL
         LD      E,2
         LD      IX,ERRHAND  ; Call the Basic error handler
@@ -849,18 +995,10 @@ EC_ExitError:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.5"
-BuildId: DB ".20260808.020"
+        DB      13,10,"MSXPi BIOS v1.6"
+BuildId: DB ".20260911.039"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
-MSXPIHelpMsg:
-        DB      "Commands available:",13,10
-        DB      "MSXPI MSXPIVER ",13,10
-        DB      "Examples:",13,10
-        DB      "CALL MSXPI(",34,"0,C000,dir",34,") -> Execute command and ignores the response",13,10
-        DB      "CALL MSXPI(",34,"1,C000,dir",34,") -> Execute command and print the response to screen",13,10
-        DB      "CALL MSXPI(",34,"2,C000,dir",34,") -> Execute command and store response data in given memory address+3",13,10,0
-
 ; ================================================================
 ; Table of Commands available/implemented
 ; ================================================================
@@ -869,21 +1007,46 @@ CALL_TABLE:
         DW      _MSXPIVER
         DB      "MSXPI",0
         DW      _MSXPI
-        DB      "HELP",0
-        DW      _MSXPIHELP
-        DB      "MSXPIHELP",0
-        DW      _MSXPIHELP
 ENDOFCMDS:
         DB      00
 
-; Commands for MSX-DOS - sector transfers
-DOS_INI:    DB  "dskioini",0,0,0,0
+; Commands for MSX-DOS - sector transfers.  The protocol also defines
+; "dskioini", "dskiodrv" and "dskiofmt"; this driver never sends them, so
+; they are not carried here - the space went to the UNAPI driver below.
 DOS_RSEC:   DB  "dskiords",0,0,0,0
 DOS_WSEC:   DB  "dskiowrs",0,0,0,0
 DOS_SECI:   DB  "dskiosct",0,0,0,0
-DOS_DRV:    DB  "dskiodrv",0,0,0,0
-DOS_FMT:    DB  "dskiofmt",0,0,0,0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
+MSXPI_DRIVER    equ 1   ; msxpi_bios.asm: stash via the driver workarea (GETWRK)
 INCLUDE msxpi_bios.asm
+
+; ================================================================
+; Ethernet UNAPI driver
+; ================================================================
+; Assembled separately by sjasm (software/UNAPI/src/ethrom.asm) and dropped in
+; here as a binary, because the two builds cannot share one assembler: the
+; driver is also built for a mapped RAM segment by the .COM installer, from
+; the same sources, and those use sjasm syntax throughout.
+;
+; It is placed at a FIXED address rather than simply appended, so that both
+; directions of overflow are build errors instead of silent corruption:
+; MSXPi code growing past UNAPI_ORG, or the driver growing past the end of the
+; ROM.  If either assertion fires, either free space here (there is a lot of
+; comment-only ROM data left) or take the diagnostic routine 128 out of
+; ethcore.asm.
+;
+; The driver calls two kernel entry points by hardcoded address, because zmac
+; and sjasm have no way to share a symbol table.  Both live in the kernel half
+; of msx-dos.mac, entirely below this point, so nothing here can move them -
+; but assert it anyway, since the failure mode is a jump into whatever landed
+; at the old address.
+        ASSERT  GETSLT EQ 06016H         ; ethrom.asm GETSLT
+        ASSERT  GETWRK EQ 06025H         ; ethrom.asm GETWRK
+
+        ASSERT  $ LE UNAPI_ORG           ; MSXPi code has run into the driver
+        DEFS    UNAPI_ORG-$,0
+UNAPI_ROM_IMAGE:
+        INCBIN  ethrom.bin
+        ASSERT  $ LE 08000H              ; the driver has run off the ROM

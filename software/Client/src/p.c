@@ -1,3 +1,31 @@
+/*
+ * MSXPi Interface
+ * Version 1.6
+ * ------------------------------------------------------------------------------
+ * MIT License
+ *
+ * Copyright (c) 2015-2026 Ronivon Costa
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * ------------------------------------------------------------------------------
+ */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -124,6 +152,14 @@ int main(void)
         return 0;
 
     const char* parms = GetCmdLineParameters();
+    // Hold the link across the WHOLE exchange - command, the server's
+    // execution, and the response.  msxpi_exchange() covers the common case,
+    // but the "date" branch below answers through SetDateTime() rather than
+    // printstdout(), so the pair is used directly here.  Both exits from the
+    // region are in view, which is the property that matters: a missed release
+    // would silently stop the Ethernet UNAPI ISR polling for the rest of the
+    // session.
+    msxpi_link_claim();
     uint8_t rc = SendCommandToMSXPi("", false);
 	uint8_t rcFinal = parseConnError(rc);
     if (rcFinal == RC_SUCCESS || rcFinal == RC_FAILED || rc == RC_BUFOVFLW) {
@@ -138,5 +174,7 @@ int main(void)
 		Print("Connection error\n");
     }
     
+    msxpi_link_release();
+
     return 0;
 }

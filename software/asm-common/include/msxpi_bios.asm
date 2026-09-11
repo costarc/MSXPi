@@ -1,20 +1,20 @@
 ; MSXPi Interface
-; Version 1.2
+; Version 1.6
 ; ------------------------------------------------------------------------------
 ; MIT License
-; 
-; Copyright (c) 2015-2025 Ronivon Costa
-; 
+;
+; Copyright (c) 2015-2026 Ronivon Costa
+;
 ; Permission is hereby granted, free of charge, to any person obtaining a copy
 ; of this software and associated documentation files (the "Software"), to deal
 ; in the Software without restriction, including without limitation the rights
 ; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 ; copies of the Software, and to permit persons to whom the Software is
 ; furnished to do so, subject to the following conditions:
-; 
+;
 ; The above copyright notice and this permission notice shall be included in all
 ; copies or substantial portions of the Software.
-; 
+;
 ; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 ; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 ; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -22,7 +22,7 @@
 ; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 ; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ; SOFTWARE.
-; -----------------------------------------------------------------------------
+; ------------------------------------------------------------------------------
 ;
 ; File history :
 ; 1.2    : CHKPIRDY now return values 0 (pi online), 1 (pi offline), 2(byte ready)
@@ -50,66 +50,54 @@
 ; CHKPIRDY
 ; -----------------------
 ; Returns:
-;   C = 1  → ESC pressed (error)
-;   C = 0  → OK, CONTROL_PORT1 is 0 or 2
+;   C = 1  -> ESC pressed (error)
+;   C = 0  -> OK, CONTROL_PORT1 is 0 or 2 (value left in A)
 ; Uses: A
 ; -----------------------
+; Headers use the shared readiness helper too. It preserves BC/DE/HL,
+; restores PPI row selection and does not change the caller's interrupt state.
+; Payload loops sample ESC at byte intervals and also while busy waiting.
 CHKPIRDY:
-        ; --- Check ESC key (row 7, bit 2) ---
-        ld      a,7
-        out     ($AA),a
-        in      a,($A9)
-        bit     2,a
-        jr      nz,CHKPIRDY_NO_ESC    ; bit=1 → key not pressed
-        scf                             ; ESC pressed → error
-        ret
-
-; --- ESC not pressed, check MSXPi ready state ---
-CHKPIRDY_NO_ESC:
-        in      a,(CONTROL_PORT1)
-        cp      0
-        jr      z,CHKPIRDY_OK         ; 0 → MSXPi physical interface, OK
-
-        cp      2                     ; 2 → openMSX interface, OK
-        jr      nz,CHKPIRDY           ; anything else → recheck ESC + ready
-
-CHKPIRDY_OK:
-        and     a                     ; clear carry (success)
-        ret
+        call PAYLOAD_ESCAPE
+        ret c
+        jp PAYLOAD_WAIT
 
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
+; The push/pop pairs that used to bracket the $57 check were only balancing
+; the stack between the two paths into PIREADBYTE_SUCC - the saved AF was
+; overwritten by the IN below on one path and unused on the other. Removing
+; them costs nothing and saves 21 T-states on every byte.
 PIREADBYTE:
             call    CHKPIRDY
-            jr      nc,PIREADBYTE1	   ; PI Responding
-PIREADBYTE_ESC:
-			ld 		a,$FF
-			ret                        ; Return error - ESC Pressed
-PIREADBYTE1:			
-            xor     a                  ; clear A - but not really necessary
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+
+            xor     a
             out     (CONTROL_PORT1),a  ; send read command to the interface
-			
-			call    CHKPIRDY
-			jr		c,PIREADBYTE_ESC   ; ESC Pressed
-		    ; Verify if it is openMSX or real MSXPi hardware
-			push	af				   ; save CHKPIRDY state temporarily
-			in		a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
-			cp		$FE                ; openMSX will return $FE
-			jr		c,PIREADBYTE_SUCC  ; iT IS PHYSICAL msxpI
-			pop		af				   ; restore CHKPIRDY state
-PIREADBYTE2:
-			call    CHKPIRDY
-			jr		c,PIREADBYTE_ESC   ; ESC Pressed
-			cp		2
-			jr		nz,PIREADBYTE2
-			push    af
+
+            call    CHKPIRDY
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+
+            ; Verify if it is openMSX or real MSXPi hardware
+            in      a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
+            cp      $FE                ; openMSX will return $FE
+            jr      c,PIREADBYTE_SUCC  ; below $FE -> physical MSXPi
+
+PIREADBYTE2:                           ; openMSX: wait for state 2
+            call    CHKPIRDY
+            jr      c,PIREADBYTE_ESC   ; ESC Pressed
+            cp      2
+            jr      nz,PIREADBYTE2
+
 PIREADBYTE_SUCC:
-			pop		af
-			or		a				   ; reset carry flag
-            in      a,(DATA_PORT1)     ; read byte - probably has nothing useful since
-			                           ; there was an error in the comms
+            or      a                  ; reset carry flag
+            in      a,(DATA_PORT1)     ; read byte
             ret                        ; return in a the byte received
+
+PIREADBYTE_ESC:
+            ld      a,$FF
+            ret                        ; carry still set by CHKPIRDY
 
 ;-----------------------
 ; PIWRITEBYTE          |
@@ -131,10 +119,16 @@ PIWRITEBYTE_ERR:
 ; Called on beginning of every command
 ; In openMSX implementation, will clear the queue 
 ; avoiding checksum loop after an interruption
+; Not assembled into the ROM: the disk driver never calls resetMSXPI, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 resetMSXPI:
 		ld		a,$FF
 		out		(CONTROL_PORT1),a
 		ret
+ endif
 		      
 ; ---------------------------------------------------------
 ; SENDDATA (single-block, size <= MAXBUFSIZE)
@@ -174,10 +168,10 @@ SENDDATA:
 SD2_HS_LOOP:
     ld      a,READY
     call    PIWRITEBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     call    PIREADBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     cp      READY_ACK
     jr      nz,SD2_HS_LOOP          ; wait until READY_ACK
@@ -185,11 +179,11 @@ SD2_HS_LOOP:
     ; Send msxmaxbuf (MAXBUFSIZE)
     ld      a,MAXBUFSIZE_LO
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,MAXBUFSIZE_HI
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
 SD2_RETRY:
     ; "Peek" the stack-preserved originals without losing them: pop them
@@ -206,49 +200,26 @@ SD2_RETRY:
 ; -------------------------
     ld      a,RC_SUCCESS            ; header_rc
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,c                     ; length low
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,b                     ; length high
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     ld      a,0                     ; block_index = 0
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
-    ld      hl,0                    ; HL = checksum
-
-; -------------------------
-; 2b. Payload loop
-; -------------------------
-SD2_SEND_LOOP:
-    ld      a,b
-    or      c
-    jr      z,SD2_SEND_DONE         ; all bytes sent
-    ld      a,(de)                  ; A = payload byte
-	push    de
-    push    bc
-	ld      e,a                     ; e = payload copy
-	call    PIWRITEBYTE
-	jr      nc,SD2_SEND_LOOP1
-    pop     bc
-	pop     de
-	jr      SD2_CONN_ERR
-SD2_SEND_LOOP1:
-    ld      a,e						; a = payload copy
-    ld      b,0
-    ld      c,a
-    add     hl,bc
-    pop     bc
-	pop     de 
-	inc     de
-    dec     bc
-    jr      SD2_SEND_LOOP
-
+; The disk driver stages sectors in the kernel buffer before SENDDATA.
+; Command strings remain direct ROM reads; neither needs per-byte RDSLT.
+    ld      hl,0
+    call    PAYLOAD_TX
+    jp      c,SD2_CONN_ERR
+    jr      SD2_SEND_DONE
 
 ; -------------------------
 ; Errors
@@ -271,10 +242,10 @@ SD2_SEND_DONE:
 
     ld      a,l                     ; send local checksum
     call    PIWRITEBYTE
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     call    PIREADBYTE              ; receive remote checksum
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
 
     cp      l                       ; compare with localChecksum
     jr      z,SD2_CHK_OK
@@ -295,7 +266,7 @@ SD2_SEND_DONE:
     ld      a,l
     cp      GLOBALRETRIES
     jr      nc,SD2_CHKSUM_ERR
-    jr      SD2_RETRY
+    jp      SD2_RETRY
 
 SD2_CHKSUM_ERR:
     scf
@@ -306,18 +277,18 @@ SD2_CHK_OK:
 ; 3. Status handshake
 ; -------------------------
     call    PIREADBYTE              ; expect READY
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
     cp      READY
     jr      nz,SD2_HS_ERR
 
     call    PIREADBYTE              ; expect status_from_python
-    jr      c,SD2_CONN_ERR
+    jp      c,SD2_CONN_ERR
     cp      RC_SUCCESS
     jr      nz,SD2_CONN_ERR
 
     ld      a,READY_ACK             ; send READY_ACK
     call    PIWRITEBYTE
-    jr      c,SD2_HS_ERR
+    jp      c,SD2_HS_ERR
 
     or      a                        ; clear carry (success)
 
@@ -404,56 +375,35 @@ r2_retry:
 ; ------------------------------------------------------------
 
     call    PIREADBYTE      ; header_rc
-    jr      c, r2_conn_err
-    push    ix              ; GETWRK clobbers IX (retry_count)
-    push    de              ; and DE isn't verified safe across its
-                            ; internal kernel calls either
+    jp      c,r2_conn_err
     push    af
-    call    GETWRK          ; HL = IX = driver workarea (offset 5+ is free -
-                            ; DSKIO_SECTINFO only ever uses offsets 0-4, and
-                            ; never runs concurrently with a CALL MSXPI)
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl              ; HL = workarea+5
-    pop     af
-    ld      (hl),a          ; stash header_rc in safe RAM
-    pop     de              ; restore dest pointer
-    pop     ix              ; restore retry_count
-
     call    PIREADBYTE      ; length low
-    jr      c, r2_conn_err
-    ld      c, a
-
+    jr      c,r2_header_err
+    ld      c,a
     call    PIREADBYTE      ; length high
-    jr      c, r2_conn_err
-    ld      b, a            ; BC = length
-    push    ix              ; GETWRK clobbers IX (retry_count)
-    push    de              ; and DE isn't verified safe across its
-                            ; internal kernel calls either
+    jr      c,r2_header_err
+    ld      b,a
+    ; One workarea lookup for all three metadata bytes. Keep retries in IX.
+    push    ix
+    push    de
     push    bc
-    call    GETWRK          ; HL = IX = driver workarea (offset 6-7 is
-                            ; free - see the header_rc stash above for
-                            ; offset 5, and DSKIO_SECTINFO's offsets 0-4)
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl
-    inc     hl              ; HL = workarea+6
+    call    MSXPI_GETSTASH
+    ld      bc,5
+    add     hl,bc
     pop     bc
+    pop     de
+    pop     ix
+    pop     af
+    ld      (hl),a
+    inc     hl
     ld      (hl),c
     inc     hl
-    ld      (hl),b          ; stash length (lo,hi) in safe RAM - length
-                            ; has the exact same vulnerability header_rc
-                            ; had: it sits untouched in the inactive
-                            ; register bank across the same long payload
-                            ; wait, and the success return trusts it
-                            ; survived via exx alone
-    pop     de              ; restore dest pointer
-    pop     ix              ; restore retry_count
-
+    ld      (hl),b
+    jr      r2_header_ok
+r2_header_err:
+    pop     af
+    jp      r2_conn_err
+r2_header_ok:
     call    PIREADBYTE      ; block_index
     jr      c, r2_conn_err
     ; A = received_index. B,C(length)/D,E(dest) are both live and can't be
@@ -483,24 +433,58 @@ r2_retry:
     pop     bc            ; restore length
     ld      hl, 0         ; 16-bit checksum accumulator
 r2_payload_loop:
-    ld      a, b
-    or      c
-    jr      z, r2_payload_done
+    call PAYLOAD_RX
+    jp c,r2_conn_err_x
+    jp r2_payload_done
 
-    call    PIREADBYTE
-    jr      c, r2_conn_err_x
-
+; ------------------------------------------------------------
+; STORE_BYTE - write A to (DE), correctly even when DE is in page 1
+; ------------------------------------------------------------
+; When DE lands in #4000-#7FFF this ROM is banked in there - DOS reaches the
+; driver by inter-slot call, which selects our slot in page 1 - so a plain
+; LD (DE),A writes to the EEPROM and the byte is silently lost.
+;
+; Found on real hardware: loading a 26 KB .COM over MSXPi under MSX-DOS 1
+; failed at exactly relative sector 31 of a 50-sector read - destination
+; 0x100 + 31*512 = 0x3F00, the first sector to cross #4000.  Proven to track
+; the ADDRESS and not the disk: the same-sized INLSTOCK.COM, at completely
+; different absolute sectors, failed at the same relative index.  Every MSXPi
+; tool is under ~16 KB and so stays below #4000, which is why a driver this
+; old had never hit it.
+;
+; Decided per byte, not per block, because a block can begin in page 0 and
+; cross into page 1 part way through - exactly the failing case - and because
+; it keeps every caller of RECVDATA_ONEBLOCK correct without any of them
+; having to know about it.
+;
+; Preserves A, BC, DE and HL: the payload loop needs the byte for its
+; checksum and is using the other three as count, destination and running
+; sum.  WRSLT is documented to corrupt AF, BC and E, hence the saves.  It is
+; reached at 0014H, which is valid under MSX-DOS - the kernel keeps the
+; inter-slot entry points live in page-0 RAM.  WRSLT switches SLOTS only,
+; never mapper segments, so the segment DOS selected for page 1 stays put.
+STORE_BYTE:
+    bit     7, d
+    jr      nz, STORE_BYTE_1
+    bit     6, d
+    jr      z, STORE_BYTE_1
+    push    af
+    push    hl
+    push    bc
+    ld      h, d
+    ld      l, e            ; HL = destination
+    ld      e, a            ; E  = data
+    ld      a, (RAMAD1)     ; A  = slot holding RAM in page 1
+    call    WRSLT
+    ld      d, h
+    ld      e, l            ; DE = destination again (WRSLT keeps HL)
+    pop     bc
+    pop     hl
+    pop     af
+    ret
+STORE_BYTE_1:
     ld      (de), a
-    inc     de
-
-    ; HL += A
-    add     a, l
-    ld      l, a
-    jr      nc, r2_no_carry
-    inc     h
-r2_no_carry:
-    dec     bc
-    jr      r2_payload_loop
+    ret
 
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack
@@ -509,11 +493,6 @@ r2_no_carry:
 
 r2_unexpecteddata:
     ld      a, RC_UNEXPECTEDDATA
-    scf
-    ret
-
-r2_bufovflw:
-    ld      a, RC_BUFOVFLW
     scf
     ret
 
@@ -625,8 +604,8 @@ r2_chk_ok:
                             ; both get overwritten from safe RAM instead
     pop     hl               ; discard (=0)
     pop     de               ; DE = advanced dest, for the caller
-    push    de              ; preserve dest pointer across GETWRK
-    call    GETWRK          ; HL = IX = driver workarea
+    push    de              ; preserve dest pointer across MSXPI_GETSTASH
+    call    MSXPI_GETSTASH          ; HL = IX = driver workarea
     inc     hl
     inc     hl
     inc     hl
@@ -667,9 +646,7 @@ SendCommandToMSXPi:
 
 SCM_HaveFirst:
     ; HL = walk pointer, BC = length
-    ld      hl,0            ; BC will be length, so clear it
-    ld      b,h
-    ld      c,l
+    ld      bc,0            ; byte count
 
     push    de              ; save original start pointer
 
@@ -695,8 +672,7 @@ SCM_CountDone:
 
 SCM_HaveLength:
     ; DE = src, BC = size
-    call    SENDDATA
-    ret                     ; propagate carry from SENDDATA
+    jp      SENDDATA        ; propagate carry from SENDDATA
 
 ;-----------------------
 ; PRINTPISTDOUT
@@ -770,6 +746,11 @@ PRINT1:
         inc     hl
         jr      PRINT
 
+; Not assembled into the ROM: the disk driver never calls PRINTNLINE, PRINTNUMBER or PRINTDIGIT, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 PRINTNLINE:
         ld      a,13
         call    PUTCHAR
@@ -810,54 +791,33 @@ PRINTNUM1:
         add     a,d
         call    PUTCHAR
         ret
+ endif
 
 STRTOHEX:
-; Convert the 4 bytes ascii values in buffer DE to hex
-; Preserves HL
-; Output:
-; BC = The hex value converted
-; DE = Points to next char in the string addess
-        PUSH    HL
-        LD      H,D
-        LD      L,E
-        LD      DE,0
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        SLA     A
-        SLA     A
-        SLA     A
-        SLA     A
-        LD      D,A
-        INC     HL
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        OR      D
-        LD      D,A
-        INC     HL
-        LD      A,(HL)
-        CALL    ATOHEX
-        JR      C,STREXIT
-        SLA     A
-        SLA     A
-        SLA     A
-        SLA     A
-        LD      E,A
-        INC     HL
-        LD      A,(HL)
-        INC     HL          ; ";"
-        INC     HL          ; "COMMAND"
-        CALL    ATOHEX
-        JR      C,STREXIT
-        OR      E
-        LD      B,D         ; BC = Converted hex value
-        LD      C,A
-        LD      D,H
-        LD      E,L         ; DE = Next char in the string - should be the command
+; Four hexadecimal digits followed by a delimiter. Preserve caller HL.
+    push    hl
+    ld      hl,0
+    ld      b,4
+STRTOHEX_LOOP:
+    ld      a,(de)
+    call    ATOHEX
+    jr      c,STREXIT
+    inc     de
+    add     hl,hl
+    add     hl,hl
+    add     hl,hl
+    add     hl,hl
+    ld      c,a
+    ld      a,l
+    or      c
+    ld      l,a
+    djnz    STRTOHEX_LOOP
+    inc     de              ; skip delimiter
+    ld      b,h
+    ld      c,l
 STREXIT:
-        POP     HL
-        RET
+    pop     hl
+    ret
 ATOHEX:
         CP      '0'
         RET     C
@@ -888,6 +848,11 @@ ATOHERR:
 ; BC = buffer size
 ; DE = Buffer Address
 ;
+; Not assembled into the ROM: the disk driver never calls CLEARBUF, and the
+; ROM is full.  Every other consumer of this file (the .COM tools in
+; Client/src) still gets it.
+ ifdef MSXPI_DRIVER
+ else
 CLEARBUF:
         push    bc
         push    de
@@ -902,7 +867,57 @@ CLEARBUF:
         pop     de
         pop     bc
         ret
-		
-		DS 		128
-heap_top: equ     $
-		
+ endif
+
+
+;-----------------------
+; MSXPI_GETSTASH       |
+;-----------------------
+; RECVDATA_ONEBLOCK needs 3 bytes of RAM (offsets 5,6,7 of the block this
+; returns) to stash header_rc and length across the payload loop - they
+; can't stay in the inactive register bank, and this file is linked into
+; several very different contexts, so there is no one place that is RAM
+; in all of them. The includer must therefore say which it is, BEFORE the
+; include line:
+;
+;   MSXPI_DRIVER    equ 1   ; linked into the MSX-DOS/Nextor disk driver -
+;                           ; use the driver workarea via the kernel's
+;                           ; GETWRK. Offsets 5+ are free there:
+;                           ; DSKIO_SECTINFO only ever uses 0-4, and never
+;                           ; runs concurrently with a CALL MSXPI.
+;   MSXPI_RAM_STASH equ 1   ; linked into a plain .COM under MSX-DOS (or
+;                           ; anything else running from RAM) - GETWRK
+;                           ; doesn't exist there, so use the local buffer
+;                           ; below. NOT valid for a ROM link: the writes
+;                           ; would silently do nothing (see SENDDATA).
+;
+; Defining neither is a hard assembly error rather than a silent default,
+; because the wrong choice fails silently at runtime, not at build time.
+;
+; Contract, identical either way: returns HL = IX = base of a block whose
+; offsets 5..7 are free for this routine. Clobbers AF/HL/IX only - callers
+; push whatever else they need around it.
+ ifdef MSXPI_DRIVER
+MSXPI_GETSTASH equ GETWRK       ; a plain alias, not a trampoline - the
+                                ; driver build stays byte-identical to
+                                ; what it was before this indirection
+ else
+  ifdef MSXPI_RAM_STASH
+MSXPI_GETSTASH:
+            ld      hl,MSXPI_STASH_BUF
+            push    hl
+            pop     ix
+            ret
+MSXPI_STASH_BUF:
+            ; emitted as real bytes, not a ds reservation: a trailing ds
+            ; is dropped from the .hex/.bin, which would leave the buffer
+            ; sitting just past the end of the loaded .COM image, in RAM
+            ; the host program is free to use for its own buffers.
+            db      0,0,0,0,0   ; offsets 0-4 unused - kept only so the
+            db      0,0,0       ; offsets match the driver workarea layout
+  else
+            dw      MSXPI_DRIVER_or_MSXPI_RAM_STASH_must_be_defined
+  endif
+ endif
+
+        INCLUDE payload_generated.asm

@@ -1,0 +1,8 @@
+machine Panasonic_FS-A1WSX
+ext MegaFlashROM_SCC+_SD
+#ext ram4mb
+ext MSXPi
+diska C:/Users/roniv/Dev/MSX/FloppyA
+bind F12 cycle videosource
+plug printerport simpl
+set speed 100

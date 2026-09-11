@@ -5,5 +5,8 @@ package MSXPi_package is
     constant CTRLPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"56";
     constant CTRLPORT2: STD_LOGIC_VECTOR(7 downto 0) := x"57";
     constant DATAPORT1: STD_LOGIC_VECTOR(7 downto 0) := x"5A";
-    constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1101";
+    constant MSXPIVer : STD_LOGIC_VECTOR(3 DOWNTO 0) := "1110";
+    -- Value written to CTRLPORT2 to turn hardware /WAIT flow control on/off
+    constant WAITMODE_ON  : STD_LOGIC_VECTOR(7 downto 0) := x"01";
+    constant WAITMODE_OFF : STD_LOGIC_VECTOR(7 downto 0) := x"00";
 end MSXPi_package;

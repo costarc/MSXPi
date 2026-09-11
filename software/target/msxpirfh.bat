@@ -2,6 +2,7 @@ pcopy m:API.BAS
 pcopy m:DOLAR.BAS
 pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
+pcopy m:PITIME.BAS
 pcopy m:RASTRO.BAS
 pcopy m:STOCKS.BAS
 pcopy m:TESTDIR.BAS
@@ -11,10 +12,9 @@ pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxchat.com
 pcopy m:msxpibios.rom
-pcopy m:msxpidos.rom
 pcopy m:msxpiupd.bat
 pcopy m:p.com
-pcopy m:ploadr.com
+pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:pcopy.com
 echo  
