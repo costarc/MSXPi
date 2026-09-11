@@ -11,7 +11,6 @@ pcopy m:at28c256.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxchat.com
-pcopy m:msxpibios-MEMTEST.rom
 pcopy m:msxpibios.rom
 pcopy m:msxpiupd.bat
 pcopy m:p.com
