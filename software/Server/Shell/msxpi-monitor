@@ -47,12 +47,7 @@ else
     echo "No matching msxpi-server.py process found."
 fi
 
-msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
-if [[ $msxpisrv -eq 1 ]];then
-    MSXPISERVER="sudo $MSXPIHOME/msxpi-server"
-else
-    MSXPISERVER="/usr/bin/python3 -u $MSXPIHOME/msxpi-server.py"
-fi
+MSXPISERVER="/usr/bin/python3 -u $MSXPIHOME/msxpi-server.py"
 
 # check if msxpi files are already installed in ramdisk
 if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
@@ -91,13 +86,8 @@ do
 
     if [[ $state -eq 0 ]];then
         echo "Restarting msxpi-server"
-        msxpisrv=$(grep -c "Server=C" ${MSXPIHOME}/msxpi.ini)
-        if [[ $msxpisrv -eq 1 ]];then
-            sudo ${MSXPIHOME}/msxpi-server >> "$MSXPI_ROOT_LOG" 2>&1 &
-        else
-            /usr/bin/python3 -u ${MSXPIHOME}/msxpi-server.py >> "$MSXPI_ROOT_LOG" 2>&1 &
-        fi
-        
+        $MSXPISERVER >> "$MSXPI_ROOT_LOG" 2>&1 &
+
         sleep 2
         
         # Check recent log entries for initialization failure
