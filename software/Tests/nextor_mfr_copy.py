@@ -137,6 +137,7 @@ def main():
     ap.add_argument('--no-copy', action='store_true', help='run only the --pre commands')
     ap.add_argument('--no-mfr', action='store_true',
                     help='no MegaFlashROM: MSXPi boots its own MSX-DOS 1 kernel (A:/B:)')
+    ap.add_argument('--tcl', type=Path, help='extra Tcl appended to the run script (breakpoints etc.)')
     ap.add_argument('--gui', action='store_true', help='show the openMSX window')
     ap.add_argument('--speed', type=int, default=250)
     ap.add_argument('--timeout', type=int, default=1800)
@@ -205,6 +206,7 @@ def main():
                    + f'set ::nextor_mm {0 if a.no_mfr else 1}\n'
                    + (TRACE_TCL if a.trace else '').replace('PISLOT', slot)
                    + ('' if a.natural_carry else FORCE_CARRY_TCL).replace('PISLOT', slot)
+                   + (a.tcl.read_text() + chr(10) if a.tcl else '')
                    + 'set ::cmds {' + ' '.join('{%s {%s}}' % c for c in cmds) + '}\n' + STEPS_TCL)
 
     env = dict(os.environ, PYTHONPATH=str(SOFTWARE/'Server/Python/src'), REPRO_WORK=str(work),

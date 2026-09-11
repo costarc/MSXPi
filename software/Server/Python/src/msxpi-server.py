@@ -550,6 +550,15 @@ def _spi_byte_fast(byte_out=None):
     return RC_SUCCESS, byte_in
 
 
+# Block-size / length bit that marks a /WAIT burst payload (see sendmultiblock).
+BURST_FLAG = 0x8000
+
+
+def burst_capable():
+    """True when SPI_BurstOut can hold READY for a whole block (or no READY: TCP)."""
+    return hostType != "RaspberryPi" or _NATIVE_GPIO is not None or _FAST_GPIO
+
+
 # How long to wait for the MSX to collect a burst before giving up on it.
 # Generous next to a per-byte time of tens of microseconds, but short enough
 # that an abandoned burst cannot wedge the server.
@@ -2335,11 +2344,17 @@ def recvdata2_oneblock(maxbufsize):
 
     return (RC_CONNERR, None)                 # unexpected header
 
-def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0) -> int:
+def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0,
+                      burst: bool = False) -> int:
     #print(f"senddata_oneblock(): Sending block {block_index}, header_rc={hex(header_rc)}, maxsize={msx_blocksize}")
     length = len(payload)
     if length > msx_blocksize:
         return RC_INVALIDDATASIZE
+    # A burst block says so in bit 15 of its length; the MSX then reads the
+    # payload with /WAIT (INIR) instead of byte by byte. Only when it asked,
+    # and only for whole 256-byte runs (a 512-byte sector): the ROM's burst
+    # loop has no room for a remainder. Anything else goes byte by byte.
+    wire_length = length | BURST_FLAG if burst and length and not length % 256 else length
 
     # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
     # Is performed by sendmultiblock() once before calling this function.
@@ -2357,11 +2372,11 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
         #print("senddata_oneblock(): header_rc sent OK")
 
         # length low/high
-        rc, _ = SPI_ByteTransfer(length & 0xFF)
+        rc, _ = SPI_ByteTransfer(wire_length & 0xFF)
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending length low byte")
             return RC_CONNERR
-        rc, _ = SPI_ByteTransfer((length >> 8) & 0xFF)
+        rc, _ = SPI_ByteTransfer((wire_length >> 8) & 0xFF)
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending length high byte")
             return RC_CONNERR
@@ -2376,7 +2391,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
 
         # payload
         chksum = sum(payload)
-        rc = SPI_WritePayload(payload)
+        rc = SPI_BurstOut(payload) if wire_length & BURST_FLAG else SPI_WritePayload(payload)
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending payload")
             return RC_CONNERR
@@ -2487,6 +2502,14 @@ def sendmultiblock(payload: bytes, header_rc = None):
     rc, msx_blocksize = PerformHandshake()
     if rc != RC_SUCCESS:
         return rc
+    # Bit 15 of the block size is the MSX asking for /WAIT burst payloads.
+    # Honour it only when this host can hold READY for a whole block; either
+    # way it is not part of the size.
+    burst = bool(msx_blocksize & BURST_FLAG) and burst_capable()
+    msx_blocksize &= ~BURST_FLAG
+    if burst and not globals().get('_burst_announced'):
+        globals()['_burst_announced'] = True
+        print("sendmultiblock(): MSX asked for /WAIT burst payloads - enabled")
 
     offset = 0
     block_index = 0
@@ -2517,7 +2540,7 @@ def sendmultiblock(payload: bytes, header_rc = None):
 
         # Send one block
         #print(f"sendmultiblock(): Sending block {block_index}, header_rc={hex(block_rc)}, length={len(block)}, MSX max blocksize = {msx_blocksize})")
-        rc = senddata_oneblock(block, msx_blocksize, block_rc, block_index)
+        rc = senddata_oneblock(block, msx_blocksize, block_rc, block_index, burst)
         if rc not in (RC_SUCCESS, RC_READY):
             # Any error aborts the whole transfer
             return rc

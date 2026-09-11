@@ -127,8 +127,8 @@ from itertools import product
 # Disk loops: a caller buffer outside page 1 is transferred directly (no
 # staging); one in page 1 is staged through the private buffer and XFER.
 # Neither may touch the kernel's shared sector buffer (SECBUF).
-for caller, receive, fail, sectors in product((0xc000, 0x4000), (False, True), (False, True), (1, 2)):
-    m=Machine(image)
+for caller, receive, fail, sectors, wait_hw in product((0xc000, 0x4000), (False, True), (False, True), (1, 2), (False, True)):
+    m=Machine(image, wait_hw=wait_hw)
     ram=bytearray(0x4000)
     def read(a): return ram[a-0x4000] if 0x4000<=a<0x8000 else m.mem[a]
     def write(a,v):
@@ -156,7 +156,13 @@ for caller, receive, fail, sectors in product((0xc000, 0x4000), (False, True), (
             if pc==getwrk:
                 m.set(HL,0xc800);m.set(IX,0xc800);m.set(BC,0xdead);m.set(AF,0x1234);ret()
             elif pc==handshake:
-                m.set(AF,0);ret()
+                # PerformHandshake hands the CALLER's flags back (push/pop af),
+                # so whatever carry the driver arrives with is what it sees.
+                if receive:
+                    asked=m.get(BC)
+                    assert asked==(0x8200 if wait_hw else 0x200),hex(asked)
+                    assert not m.waitmode,'wait mode left on after the /WAIT probe'
+                ret()
             elif pc==0xf36e:
                 xfers+=1
                 a,b,n=m.get(HL),m.get(DE),m.get(BC)
@@ -166,7 +172,7 @@ for caller, receive, fail, sectors in product((0xc000, 0x4000), (False, True), (
                 m.set(HL,a+n);m.set(DE,b+n);m.set(BC,0);ret()
             elif pc==transfer:
                 where=private if staged else caller+calls*512
-                assert m.get(DE)==where and m.get(BC)==512,(hex(m.get(DE)),hex(where))
+                assert m.get(DE)==where and m.get(BC)&0x7fff==512,(hex(m.get(DE)),hex(where))
                 block=payload[calls*512:(calls+1)*512]
                 if receive:
                     for i,v in enumerate(block): write(where+i,v)
@@ -188,4 +194,36 @@ for caller, receive, fail, sectors in product((0xc000, 0x4000), (False, True), (
             expected=payload[:512]+initial[512:]
         assert bytes(read(caller+i) for i in range(512*sectors))==expected
     finally: m.close()
-print('PASS: disk loops direct outside page 1, staged via XFER in page 1, reject failed reads')
+print('PASS: disk loops direct outside page 1, staged via XFER in page 1, reject failed reads,'
+      ' ask for /WAIT bursts only when $57 shows wait mode')
+
+# PAYLOAD_RX_BURST on a /WAIT interface: INIR runs, wait mode is off again
+# afterwards, and DE/BC/HL/CF match PAYLOAD_RX's contract.
+burst=label('PAYLOAD_RX_BURST')
+for length in (256, 512):
+    m=Machine(image, wait_hw=True)
+    try:
+        m.mem[0xf000:0xf002]=bytes(2)
+        m.set(DE,0xc000);m.set(BC,0x8000|length);m.set(HL,0);m.set(SP,0xf000);m.set(PC,burst)
+        for _ in range(200000):
+            if m.get(PC)==0: break
+            LIB.z80ex_step(m.cpu)
+        else: raise AssertionError('burst timeout')
+        data=bytes((i*73+19)&255 for i in range(length))
+        assert bytes(m.mem[0xc000:0xc000+length])==data
+        assert m.wait_reads==length and not m.waitmode, (m.wait_reads, m.waitmode)
+        assert m.get(DE)==0xc000+length and m.get(BC)==0 and m.get(HL)==sum(data)&0xffff
+        assert not m.get(AF)&1 and not m.errors, m.errors
+    finally: m.close()
+# ESC while waiting for the Pi: fail before wait mode is ever switched on.
+m=Machine(image, wait_hw=True, stuck=True, escape_after=3)
+try:
+    m.mem[0xf000:0xf002]=bytes(2)
+    m.set(DE,0xc000);m.set(BC,0x8200);m.set(HL,0);m.set(SP,0xf000);m.set(PC,burst)
+    for _ in range(2000000):
+        if m.get(PC)==0: break
+        LIB.z80ex_step(m.cpu)
+    else: raise AssertionError('burst did not give up on ESC')
+    assert m.get(AF)&1 and m.wait_reads==0 and not m.waitmode
+finally: m.close()
+print('PASS: PAYLOAD_RX_BURST 256/512 bytes via /WAIT, checksum and registers; ESC aborts before wait mode')

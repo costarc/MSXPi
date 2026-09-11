@@ -4759,6 +4759,7 @@ A5AE7:	ld	a,(YF247)
 ;
 ; Shared transport in an existing alignment hole. DEFS enforces capacity.
 	INCLUDE payload_wait_generated.asm
+	INCLUDE dskio_rxsize.asm		; /WAIT probe for DSKIO (msxpi-driver.mac)
 	defs	05B1AH-05A11H-($-A5A11),0
 ;
 ; END OF CHANGE

@@ -57,16 +57,21 @@ LIB.z80ex_step.restype = C.c_int
 LIB.z80ex_destroy.argtypes = [PTR]
 
 class Machine:
-    def __init__(self, image, tcp=False, delay=0, escape_after=None, stuck=False):
+    def __init__(self, image, tcp=False, delay=0, escape_after=None, stuck=False, wait_hw=False):
         self.mem=bytearray(image)
         self.tcp=tcp; self.delay=delay; self.escape_after=escape_after; self.stuck=stuck
+        # wait_hw: CPLD v1.6 /WAIT. $57 is a mode register ($01 on, $00 off;
+        # reads $8E/$0E) and in wait mode every IN from $5A is a whole transfer.
+        self.wait_hw=wait_hw; self.waitmode=False; self.wait_reads=0
         self.pending=False; self.polls=0; self.poll_left=0; self.reads=0
         self.requests=0; self.sent=[]; self.row=0xb4; self.errors=[]; self.keys=0
         def mr(cpu,addr,m1,user): return self.mem[addr]
         def mw(cpu,addr,value,user): self.mem[addr]=value
         def pr(cpu,port,user):
             port &= 255
-            if port==0x57: return 0xfe if self.tcp else 0x0e
+            if port==0x57:
+                if self.wait_hw: return 0x8e if self.waitmode else 0x0e
+                return 0xfe if self.tcp else 0x0e
             if port==0xaa: return self.row
             if port==0xa9:
                 self.keys+=1
@@ -79,6 +84,11 @@ class Machine:
                     self.poll_left-=1
                     return 0 if self.tcp else 1
                 return 2 if self.tcp and self.pending else 0
+            if port==0x5a and self.waitmode:
+                self.wait_reads+=1
+                value=(self.reads*73+19)&255
+                self.reads+=1
+                return value
             if port==0x5a:
                 if not self.pending or self.poll_left: self.errors.append('unready or duplicate read')
                 self.pending=False
@@ -92,6 +102,9 @@ class Machine:
             elif port==0x56:
                 if value or self.pending: self.errors.append('invalid request')
                 self.requests+=1; self.pending=True; self.poll_left=self.delay
+            elif port==0x57 and self.wait_hw:
+                if value not in (0,1): self.errors.append('invalid wait-mode value')
+                self.waitmode = value==1
             elif port==0x5a:
                 if self.poll_left and not self.tcp: self.errors.append('unready write')
                 self.sent.append(value); self.poll_left=0 if self.tcp else self.delay

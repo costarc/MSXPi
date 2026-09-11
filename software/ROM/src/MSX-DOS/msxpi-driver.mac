@@ -96,16 +96,15 @@ INIHRD:
         ret     z
         ld      hl,MSXPIVERSION
         call    PRINT
-        ld      b,3
+        ; About 1.4 s at 3.58 MHz (6 x 256 x 256 DJNZ): time to read the
+        ; banner. The kernel ignores INIHRD's registers and flags.
+        ld      d,6
 INIDELAY:
-        ld      hl,0
-INIDELAY1:
-        dec     hl
-        ld      a,h
-        or      l
-        jr      nz,INIDELAY1
         djnz    INIDELAY
-        and     a
+        dec     c
+        jr      nz,INIDELAY
+        dec     d
+        jr      nz,INIDELAY
         ret
         
 ; START OF -----------------------------
@@ -283,6 +282,8 @@ DSKIO_P1_TEST:
         cp      042H               ; 3E00..7FFF can overlap page 1
         ret
 
+; DSKIO_RXSIZE lives in a free gap of the kernel ROM: see dskio_rxsize.asm.
+
 ; START OF ----------------------------
 ; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
@@ -319,30 +320,26 @@ DSKIO_READ_LOOP:
         push    bc
         push    de                 ; caller destination survives reception
         ld      a,d
-        call    DSKIO_P1_TEST
-        jr      c,DSKIO_READ_STAGED
-        ld      bc,SECTORSIZE
+        call    DSKIO_P1_TEST      ; CF = page 1: receive into the private buffer
+        push    af
+        call    c,DSKIO_BUFFER
+        call    DSKIO_RXSIZE       ; BC = 512, bit 15 set to ask for a /WAIT burst
         call    PerformHandshake
-        jr      c,DSKIO_READ_DIRECT_END
+        jr      c,DSKIO_READ_RXEND
         xor     a
         call    RECVDATA_ONEBLOCK
-DSKIO_READ_DIRECT_END:
-        pop     de
-        jr      c,DSKIO_READ_DONE
-        inc     d                  ; DE += 512
+DSKIO_READ_RXEND:
+        pop     hl                 ; L = flags of the page-1 test
+        pop     de                 ; caller destination
+        jr      c,DSKIO_READ_DONE  ; do not copy a rejected sector
+        bit     0,l
+        jr      nz,DSKIO_READ_COPY
+        inc     d                  ; direct: DE += 512
         inc     d
         jr      DSKIO_READ_DONE_OK
-DSKIO_READ_STAGED:
-        call    DSKIO_BUFFER
-        ld      bc,SECTORSIZE
-        call    PerformHandshake
-        jr      c,DSKIO_READ_UNSTACK
-        xor     a
-        call    RECVDATA_ONEBLOCK
-DSKIO_READ_UNSTACK:
-        pop     hl                 ; caller destination
-        jr      c,DSKIO_READ_DONE   ; do not copy a rejected sector
-        call    DSKIO_BUFFER       ; HL = caller destination, DE = private buffer
+DSKIO_READ_COPY:
+        ex      de,hl              ; HL = caller destination
+        call    DSKIO_BUFFER       ; DE = private buffer
         ex      de,hl
         call    DSKIO_COPY_SECTOR
         jr      c,DSKIO_READ_DONE
@@ -516,21 +513,12 @@ GETDPB:
         xor     a
         ret
 
+; The kernel copies 21 bytes from DEFDPB into every drive's DPB: one byte
+; before the media id, the 18-byte F9 entry and the two bytes after it. Only
+; the F9 entry is used (GETDPB leaves the DPB as initialised), so the F8
+; entry that used to precede it is reduced to that one leading byte.
 DpbTable:
-        db	0F8h		; Media F8
-		dw	512		; 80 Tracks
-		db	0Fh		; 9 sectors
-		db	04h		; 1 side
-		db	01h		; 3.5" 360 Kb
-		db	02h
-		dw	1
-		db	2
-		db	112
-		dw	12
-		dw	355
-		db	2
-		dw	5
-
+		db	0		; DEFDPB byte 0 (was the last byte of the F8 entry)
 		db	0F9h		; Media F9
 		dw	512		; 80 Tracks
 		db	0Fh		; 9 sectors
@@ -545,7 +533,7 @@ DpbTable:
 		db	3
 		dw	7
 
-DEFDPB	equ	DpbTable+18-1
+DEFDPB	equ	DpbTable
 
 ; CHOICE
 ;
@@ -1013,9 +1001,10 @@ ENDOFCMDS:
 ; Commands for MSX-DOS - sector transfers.  The protocol also defines
 ; "dskioini", "dskiodrv" and "dskiofmt"; this driver never sends them, so
 ; they are not carried here - the space went to the UNAPI driver below.
-DOS_RSEC:   DB  "dskiords",0,0,0,0
-DOS_WSEC:   DB  "dskiowrs",0,0,0,0
-DOS_SECI:   DB  "dskiosct",0,0,0,0
+; SendCommandToMSXPi sends up to the first 0: no padding needed.
+DOS_RSEC:   DB  "dskiords",0
+DOS_WSEC:   DB  "dskiowrs",0
+DOS_SECI:   DB  "dskiosct",0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
