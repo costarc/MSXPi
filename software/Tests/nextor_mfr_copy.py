@@ -94,6 +94,12 @@ def main():
     ap.add_argument('--trace', action='store_true', help='log driver entry points to trace.log')
     ap.add_argument('--natural-carry', action='store_true',
                     help='do not force carry on GETDPB entry (failure becomes timing-dependent)')
+    ap.add_argument('--machine', default='Panasonic_FS-A1WSX',
+                    help='e.g. Sony_HB-F9P (no floppy: SD becomes A:, MSXPi C:/D:)')
+    ap.add_argument('--sd-drive', default='B', help='drive letter Nextor gives the SD')
+    ap.add_argument('--pi-drive', default='D', help='drive letter of MSXPi unit 0')
+    ap.add_argument('--pre', action='append', default=[],
+                    help='DOS command to run before the copies (repeatable), e.g. "MAPDRV A: 1 2"')
     ap.add_argument('--gui', action='store_true', help='show the openMSX window')
     ap.add_argument('--speed', type=int, default=250)
     ap.add_argument('--timeout', type=int, default=1800)
@@ -149,8 +155,10 @@ def main():
     m = m.replace('<sramname>megaflashromsccplussd.sram</sramname>', f'<sramname>{work}/mfr.sram</sramname>')
     (ext/'MFRTest.xml').write_text(m)
 
-    cmds = [] if a.only_back else [('to_msxpi', f'COPY B:{name} D:')]
-    cmds += [('to_sd', f'COPY D:{name} B:ROUND.ROM'), ('dir', 'DIR B:')]
+    sdd, pid = a.sd_drive.rstrip(':').upper(), a.pi_drive.rstrip(':').upper()
+    cmds = [(f'pre{i}', c) for i, c in enumerate(a.pre)] + [('drvinfo', 'DRVINFO')]
+    cmds += [] if a.only_back else [('to_msxpi', f'COPY {sdd}:{name} {pid}:')]
+    cmds += [('to_sd', f'COPY {pid}:{name} {sdd}:ROUND.ROM'), ('dir', f'DIR {sdd}:')]
     tcl = work/'run.tcl'
     tcl.write_text('harness::init nextor_mfr_copy\n' + (TRACE_TCL if a.trace else '')
                    + ('' if a.natural_carry else FORCE_CARRY_TCL)
@@ -158,7 +166,7 @@ def main():
 
     env = dict(os.environ, PYTHONPATH=str(SOFTWARE/'Server/Python/src'), REPRO_WORK=str(work),
                OPENMSX_USER_DATA=str(work/'share'), MSXPI_HARNESS_OUT=str(work/'result.txt'))
-    cmd = ['/opt/openMSX/bin/openmsx', '-machine', 'Panasonic_FS-A1WSX', '-ext', 'MFRTest', '-ext', 'MSXPiTest',
+    cmd = ['/opt/openMSX/bin/openmsx', '-machine', a.machine, '-ext', 'MFRTest', '-ext', 'MSXPiTest',
            '-command', f'set speed {a.speed}']
     if not a.gui:
         cmd += ['-command', 'set renderer none']
@@ -182,8 +190,8 @@ def main():
 
     ok = 'RESULT PASS' in result
     part.write_bytes(sd.read_bytes()[first:first+size])
-    checks = [('D:'+name, work/'mounted/1_a.dsk', name)] if not a.only_back else []
-    checks += [('B:ROUND.ROM', part, 'ROUND.ROM')]
+    checks = [(f'{pid}:'+name, work/'mounted/1_a.dsk', name)] if not a.only_back else []
+    checks += [(f'{sdd}:ROUND.ROM', part, 'ROUND.ROM')]
     for label, img, fn in checks:
         try:
             got = extract(img, fn) if img.exists() else b''
