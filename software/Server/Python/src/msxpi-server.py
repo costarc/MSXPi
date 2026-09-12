@@ -2006,6 +2006,11 @@ def recvdata2(maxbufsize = 8192):
     # -------------------------
     while True:
         rc, pibyte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return (RC_CONNERR, None)
         if rc != RC_SUCCESS:
             continue  # ignore transient SPI errors
 
@@ -2236,6 +2241,11 @@ def senddata(header_rc, payload):
         # Wait for READY
         while True:
             rc, b = SPI_ByteTransfer()
+            # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+            # retrying spins at full speed and floods the log. Only give up on that;
+            # timeouts and noise still mean keep waiting.
+            if rc == RC_CONNERR:
+                return (RC_FAILED, None)
             if rc != RC_SUCCESS:
                 # SPI error: keep waiting; higher-level timeout policy is outside this function
                 continue
@@ -2259,6 +2269,11 @@ def senddata(header_rc, payload):
     # -------------------------
     while True:
         rc, pibyte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return RC_CONNERR
         if rc != RC_SUCCESS:
             # SPI error: ignore and keep waiting
             continue
@@ -2426,6 +2441,11 @@ def recvdata2_oneblock(maxbufsize):
 
     while True:
         rc, byte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return (RC_CONNERR, None)
         if rc != RC_SUCCESS:
             continue  # ignore transient SPI noise
 
@@ -2679,6 +2699,11 @@ def PerformHandshake():
     #print("PerformHandshake(): Waiting for READY from MSX")
     while True:
         rc, byte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return RC_CONNERR, 0
         if rc != RC_SUCCESS:
             continue  # ignore noise
         if byte == READY:
@@ -2953,6 +2978,136 @@ def netreset(parm=None):
 def tcpip(parm=None):
     """Alias for netreset - the script is msxpi-tcpip-setup.sh."""
     return netreset(parm)
+
+
+# Run as one "sudo sh -c" so a single sudoers rule covers it. Works with
+# NetworkManager (Bookworm) and with dhcpcd/wpa_supplicant (older images);
+# each tool is skipped if absent. Every step is "|| true": a wlan0 in a bad
+# state is exactly when individual steps fail, and the next step may still
+# recover it.
+_WLANRESET_SCRIPT = r"""
+IF=wlan0
+has() { command -v "$1" >/dev/null 2>&1; }
+svc_active() { has systemctl && systemctl is-active --quiet "$1" 2>/dev/null; }
+svc_enabled() { has systemctl && systemctl is-enabled --quiet "$1" 2>/dev/null; }
+
+# Decide once who owns wlan0, so the teardown never pokes a manager that is
+# not in charge (e.g. a leftover dhcpcd binary on a NetworkManager image).
+#   nm       - NetworkManager (Bookworm and newer, or installed by hand)
+#   dhcpcd   - dhcpcd + wpa_supplicant hook (Bullseye and older)
+#   dhclient - ifupdown/dhclient
+#   none     - nothing recognised: link and radio cycle only
+if has nmcli && svc_active NetworkManager; then MGR=nm
+elif has dhcpcd && { svc_active dhcpcd || svc_enabled dhcpcd; }; then MGR=dhcpcd
+elif has dhclient; then MGR=dhclient
+else MGR=none
+fi
+echo "wlanreset: manager=$MGR"
+
+# --- tear down ---
+case $MGR in
+    nm)       nmcli device disconnect $IF || true ;;
+    dhcpcd)   dhcpcd -k $IF >/dev/null 2>&1 || true ;;
+    dhclient) dhclient -r $IF || true ;;
+esac
+ip addr flush dev $IF || true
+ip link set $IF down || true
+
+# --- radio off/on: forces the driver to drop the association completely ---
+[ $MGR = nm ] && { nmcli radio wifi off || true; }
+has rfkill && { rfkill block wifi || true; }
+sleep 2
+has rfkill && { rfkill unblock wifi || true; }
+[ $MGR = nm ] && { nmcli radio wifi on || true; }
+
+ip link set $IF up || true
+sleep 2
+
+# --- bring back and request a lease ---
+case $MGR in
+    nm)
+        nmcli device set $IF managed yes || true
+        # Connect can race the radio coming back; retry a few times.
+        for i in 1 2 3; do
+            nmcli device connect $IF && break
+            sleep 3
+        done
+        ;;
+    dhcpcd)
+        # dhcpcd starts wpa_supplicant from its 10-wpa_supplicant hook;
+        # "dhcpcd -k" may have stopped it and a plain rebind does not
+        # restart it - a full service restart does.
+        if svc_enabled dhcpcd || svc_active dhcpcd; then
+            systemctl restart dhcpcd || true
+        else
+            dhcpcd $IF || true
+        fi
+        sleep 3
+        has wpa_cli && { wpa_cli -i $IF reconfigure || true; }
+        ;;
+    dhclient)
+        has wpa_cli && { wpa_cli -i $IF reconfigure || true; }
+        dhclient $IF || true
+        ;;
+esac
+exit 0
+"""
+
+
+def _wlan0_ipv4():
+    try:
+        out = subprocess.run(["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
+                             stdout=PIPE, stderr=STDOUT, text=True,
+                             timeout=5).stdout or ""
+    except Exception:
+        return None
+    for line in out.split("\n"):
+        parts = line.split()
+        if "inet" in parts:
+            return parts[parts.index("inet") + 1]
+    return None
+
+
+def wlanreset(parm=None):
+    """Completely reset wlan0 so it gets a fresh DHCP lease from the router.
+
+    Drops the lease, flushes addresses, takes the link down, cycles the WiFi
+    radio (rfkill / nmcli), brings the link up and asks NetworkManager, dhcpcd
+    or dhclient - whichever the image uses - to reconnect. Then waits for an
+    IPv4 address.
+
+    Does not touch msxpi0 or NAT: if the uplink address changed, run
+    "p netreset" afterwards.
+
+    Optional parameter: seconds to wait for an address (default 30, max 90).
+    """
+    if hostType != "RaspberryPi":
+        return "Command not supported by this platform"
+
+    wait = 30
+    if parm:
+        try:
+            wait = max(5, min(90, int(parm.split()[0])))
+        except ValueError:
+            pass
+
+    try:
+        done = subprocess.run(["sudo", "sh", "-c", _WLANRESET_SCRIPT],
+                              stdout=PIPE, stderr=STDOUT, text=True,
+                              timeout=60)
+        print(f"wlanreset: rc={done.returncode}\n{done.stdout or ''}", flush=True)
+    except Exception as exc:
+        return f"Pi:wlanreset failed: {exc}"
+
+    deadline = time.time() + wait
+    addr = _wlan0_ipv4()
+    while not addr and time.time() < deadline:
+        time.sleep(1)
+        addr = _wlan0_ipv4()
+
+    if addr:
+        return f"wlan0: {addr}"
+    return f"Pi:wlanreset: no IPv4 on wlan0 after {wait}s"
 
 
 def reboot(parm=None):
@@ -5016,10 +5171,16 @@ try:
                 initialize_connection()
 
     else:
-        # TCP mode: accept loop with reconnection
+        # TCP mode: accept loop with reconnection.
+        # One listening socket for the life of the server.  Opening a new one
+        # on every pass bound port 5000 a second time while the first listener
+        # was still open, which SO_REUSEADDR does not permit, so the first
+        # reconnect killed the server with EADDRINUSE.  It went unnoticed
+        # because the READY-wait loops spun on a closed peer and never let the
+        # loop come round again.
+        server_socket = initialize_connection()
         while True:
             print("MSXPi Server: Waiting for MSX connection...")
-            server_socket = initialize_connection()
             conn, addr = server_socket.accept()
             print(f" ** MSX Connected to {addr} **\n")
             # openMSX sends one byte per OUT. With Nagle on its side and
