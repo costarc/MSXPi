@@ -646,6 +646,86 @@ def SPI_BurstOut(data):
     return RC_SUCCESS
 
 
+def SPI_BurstIn(length):
+    """Receive a run of bytes with RPI_READY held high for the whole run.
+
+    The mirror image of SPI_BurstOut, for the MSX's OTIR side: the CPLD only
+    asserts /WAIT while SPI_RDY is high, so the same inter-byte RDY gap that
+    would let an INIR read stale data would let an OTIR write vanish.
+
+    Returns (RC_SUCCESS, bytearray) or (error code, None).
+    """
+    global conn, hostType
+
+    if hostType != "RaspberryPi":
+        # openMSX / socket mode: no RDY line to hold; the burst arrives as an
+        # ordinary byte stream.  Read it in one go rather than byte by byte -
+        # the MSX sends it as fast as OTIR can run.
+        payload = bytearray()
+        quickack = getattr(socket, 'TCP_QUICKACK', None)
+        try:
+            conn.settimeout(None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
+            while len(payload) < length:
+                if quickack is not None:
+                    try:
+                        conn.setsockopt(socket.IPPROTO_TCP, quickack, 1)
+                    except OSError:
+                        quickack = None
+                chunk = conn.recv(length - len(payload))
+                if not chunk:
+                    return RC_CONNERR, None
+                payload.extend(chunk)
+        except Exception:
+            return RC_CONNERR, None
+        return RC_SUCCESS, payload
+
+    if _NATIVE_GPIO is not None:
+        try:
+            data = _NATIVE_GPIO.read_burst(length)
+            if _PROFILE:
+                _NATIVE_GPIO.report()
+            return RC_SUCCESS, data
+        except OSError as exc:
+            print(f"Native GPIO burst receive failed: {exc}")
+            return RC_CONNERR, None
+
+    if not _FAST_GPIO:
+        # As in SPI_BurstOut: per-byte READY gaps cannot carry an OTIR burst,
+        # so fail the transport instead of accepting corrupted data.
+        return RC_CONNERR, None
+
+    reg = _GPIO_REG
+    SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
+    m_sclk, m_miso, m_mosi, m_cs = _M_SCLK, _M_MISO, _M_MOSI, _M_CS
+
+    payload = bytearray(length)
+    deadline = time.perf_counter() + BURST_CS_TIMEOUT
+
+    reg[SET] = _M_RDY                       # up once, for the whole burst
+    try:
+        reg[CLR] = m_miso                   # passive receive drives MISO low
+        for i in range(length):
+            spins = 0
+            while reg[LEV] & m_cs:
+                spins += 1
+                if not (spins & 0x3FF) and time.perf_counter() > deadline:
+                    return RC_FAILED, None
+            reg[SET] = m_sclk               # leading tick
+            reg[CLR] = m_sclk
+            byte_in = 0
+            for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
+                reg[SET] = m_sclk
+                if reg[LEV] & m_mosi:
+                    byte_in |= bit
+                reg[CLR] = m_sclk
+            reg[SET] = m_sclk               # trailing tick
+            reg[CLR] = m_sclk
+            payload[i] = byte_in
+    finally:
+        reg[CLR] = _M_RDY                   # and down exactly once
+    return RC_SUCCESS, payload
+
+
 def tick_sclk():
 
     global SPI_SCLK
