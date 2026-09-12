@@ -1889,10 +1889,12 @@ def dskior(parms = None):
     # Multi-sector reads are the interesting case: MSX-DOS asks for one sector
     # at a time for directory and FAT access, but uses B>1 for the body of a
     # large file, so a defect in the per-sector handshake only shows up on big
-    # programs.  Logged unconditionally because the failure it diagnoses is
-    # intermittent on real hardware and there is no second chance to enable it.
-    print("dskiords: drive=%d sector=%d count=%d" %
-          (sectorInfo[0], sectorInfo[3], numsectors))
+    # programs. Off by default - a line per sector buries everything else in
+    # the log during a copy - so turn it on when chasing one:
+    #     MSXPI_PROFILE=1 python3 msxpi-server.py
+    if _PROFILE:
+        print("dskiords: drive=%d sector=%d count=%d" %
+              (sectorInfo[0], sectorInfo[3], numsectors))
 
     while sectorcnt < numsectors:
         #print("dskiords:",sectorcnt)
