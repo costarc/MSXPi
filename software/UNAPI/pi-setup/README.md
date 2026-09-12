@@ -1,11 +1,15 @@
 # Pi-side network setup
 
-`msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that is
-on **WiFi**, and `INL.CFG` is the matching InterNestor Lite configuration.
+The setup script lives in **`../../Server/Shell/msxpi-tcpip-setup.sh`**, with
+every other Pi-side script. A second copy used to sit in this folder; the two
+drifted - a fix for the uplink detection landed in one and not the other, and
+they logged to different files, so the wrong copy got debugged. Only `INL.CFG`,
+the matching InterNestor Lite configuration, belongs here.
 
-Run the script with `sudo` on the Pi, then copy `INL.CFG` onto the MSX disk
-beside `INL.COM` - InterNestor reads it at install time, so the addresses are
-applied automatically by `INL I`.
+`msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that
+is on **WiFi**. Run it with `sudo` on the Pi, then copy `INL.CFG` onto the MSX
+disk beside `INL.COM` - InterNestor reads it at install time, so the addresses
+are applied automatically by `INL I`.
 
 ## Why not a bridge
 
@@ -41,7 +45,8 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 
 ## Order of operations
 
-1. `sudo ./msxpi-tcpip-setup.sh` on the Pi
+1. `sudo /home/pi/msxpi/msxpi-tcpip-setup.sh` on the Pi (deployed from
+   `Server/Shell/`); it logs to `/var/log/msxpi.log`
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
 3. on the MSX: `INL I`.  The Ethernet UNAPI driver is in `msxpibios.rom` now,
    so there is nothing to install first - `RAMHELPR` is not needed, and
