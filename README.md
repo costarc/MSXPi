@@ -186,9 +186,11 @@ arrangement the Raspberry Pi uses, and for the same reason: bridging cannot
 work over WiFi, because an access point will not forward frames whose source
 MAC is not the associated station's.
 
-This needs an openMSX whose MSXPi device implements the v1.6 hardware /WAIT
-flow control. The Ethernet transport uses it, so an older build reads stale
-bytes and looks like a broken driver.
+This works best with an openMSX whose MSXPi device implements the v1.6
+hardware /WAIT flow control (openMSX/openMSX#2194). An older build still
+works: the ROM probes for wait mode, does not find it, and falls back to the
+polled transport - the same path MSXPi has always used under emulation. What
+you lose is the v1.6 speedup, not the connection.
 
 
 ### Step 1: Install the OpenVPN TAP driver
