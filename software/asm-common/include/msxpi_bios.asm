@@ -351,17 +351,28 @@ r2_handshake_loop:
     pop     bc              ; BC = msx_blocksize
     ld      a, c
     call    PIWRITEBYTE
-    jr      c, handshake_exit
+    jr      c, handshake_exit_err
     ld      a, b
     call    PIWRITEBYTE
-    ; C flag set if error
+    jr      c, handshake_exit_err
+; Return the handshake's OWN result in the carry. Restoring the entry AF -
+; which is what a single `pop af` here used to do - threw it away, so every
+; caller saw the flags it arrived with: a failed handshake looked like a good
+; one and the caller went on to read a block the other end never sent.
+; (LDRPATCH197's `jr c,readpatch_neterr_ei` has been waiting for this.)
+; A is still the expected_index the caller passed in, as before.
 handshake_exit:
     pop     de
     pop     af
+    or      a               ; CF=0: handshake done, A unchanged
     ret
 handshake_err:
     pop     bc
-    jr      handshake_exit
+handshake_exit_err:
+    pop     de
+    pop     af
+    scf                     ; CF=1: handshake failed, A unchanged
+    ret
 
 
 RECVDATA_ONEBLOCK:

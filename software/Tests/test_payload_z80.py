@@ -57,12 +57,13 @@ LIB.z80ex_step.restype = C.c_int
 LIB.z80ex_destroy.argtypes = [PTR]
 
 class Machine:
-    def __init__(self, image, tcp=False, delay=0, escape_after=None, stuck=False, wait_hw=False):
+    def __init__(self, image, tcp=False, delay=0, escape_after=None, stuck=False, wait_hw=False, reply=None):
         self.mem=bytearray(image)
         self.tcp=tcp; self.delay=delay; self.escape_after=escape_after; self.stuck=stuck
         # wait_hw: CPLD v1.6 /WAIT. $57 is a mode register ($01 on, $00 off;
         # reads $8E/$0E) and in wait mode every IN from $5A is a whole transfer.
         self.wait_hw=wait_hw; self.waitmode=False; self.wait_reads=0; self.wait_writes=0
+        self.reply=list(reply) if reply else None   # scripted bytes for IN ($5A)
         self.pending=False; self.polls=0; self.poll_left=0; self.reads=0
         self.requests=0; self.sent=[]; self.row=0xb4; self.errors=[]; self.keys=0
         def mr(cpu,addr,m1,user): return self.mem[addr]
@@ -86,12 +87,18 @@ class Machine:
                 return 2 if self.tcp and self.pending else 0
             if port==0x5a and self.waitmode:
                 self.wait_reads+=1
+                if self.reply is not None:
+                    self.reads+=1
+                    return self.reply.pop(0) if self.reply else 0xff
                 value=(self.reads*73+19)&255
                 self.reads+=1
                 return value
             if port==0x5a:
                 if not self.pending or self.poll_left: self.errors.append('unready or duplicate read')
                 self.pending=False
+                if self.reply is not None:
+                    self.reads+=1
+                    return self.reply.pop(0) if self.reply else 0xff
                 value=(self.reads*73+19)&255
                 self.reads+=1
                 return value

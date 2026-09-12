@@ -159,12 +159,13 @@ for caller, receive, fail, sectors, wait_hw in product((0xc000, 0x4000), (False,
             if pc==getwrk:
                 m.set(HL,0xc800);m.set(IX,0xc800);m.set(BC,0xdead);m.set(AF,0x1234);ret()
             elif pc==handshake:
-                # PerformHandshake hands the CALLER's flags back (push/pop af),
-                # so whatever carry the driver arrives with is what it sees.
+                # PerformHandshake now returns its own result: CF=0 on success
+                # (it used to hand the caller's flags back, hiding failures).
                 if receive:
                     asked=m.get(BC)
                     assert asked==(0x8200 if wait_hw else 0x200),hex(asked)
                     assert not m.waitmode,'wait mode left on after the /WAIT probe'
+                m.set(AF, m.get(AF) & ~1)       # CF=0: handshake succeeded
                 ret()
             elif pc==0xf36e:
                 xfers+=1
@@ -232,6 +233,38 @@ try:
     else: raise AssertionError('burst did not give up on ESC')
     assert m.get(AF)&1 and m.wait_reads==0 and not m.waitmode
 finally: m.close()
+# PerformHandshake must report ITS OWN result in the carry. It used to end
+# with `pop af`, handing back the flags the caller arrived with, so a failed
+# handshake looked successful and the caller read a block nobody sent.
+hs=label('PerformHandshake')
+# Success, entered with CF=1: the server answers READY_ACK.
+m=Machine(image, reply=[0xa0])
+try:
+    m.mem[0xf000:0xf002]=bytes(2)
+    m.set(AF,0x0501);m.set(BC,0x0200);m.set(DE,0xc000);m.set(SP,0xf000);m.set(PC,hs)
+    for _ in range(200000):
+        if m.get(PC)==0: break
+        LIB.z80ex_step(m.cpu)
+    else: raise AssertionError('handshake timeout')
+    assert not m.get(AF)&1, 'good handshake must clear CF'
+    assert m.get(AF)>>8==0x05 and m.get(DE)==0xc000, 'A/DE must survive'
+    assert bytes(m.sent)[:1]==bytes([0xaa]) and 0x00 in m.sent and 0x02 in m.sent, m.sent
+finally: m.close()
+# Failure, entered with CF=0: ESC while waiting for the link.
+m=Machine(image, stuck=True, escape_after=0)
+try:
+    m.mem[0xf000:0xf002]=bytes(2)
+    m.set(AF,0x0500);m.set(BC,0x0200);m.set(DE,0xc000);m.set(SP,0xf000);m.set(PC,hs)
+    for _ in range(2000000):
+        if m.get(PC)==0: break
+        LIB.z80ex_step(m.cpu)
+    else: raise AssertionError('handshake did not give up')
+    assert m.get(AF)&1, 'failed handshake must set CF'
+    assert m.get(AF)>>8==0x05 and m.get(DE)==0xc000, 'A/DE must survive'
+    assert m.get(SP)==0xf002, 'stack must be balanced'
+finally: m.close()
+print('PASS: PerformHandshake returns its own carry (success and failure), keeping A/DE')
+
 # PAYLOAD_TX_BURST: OTIR of the whole block with wait mode on, then the sum.
 send=label('PAYLOAD_TX_BURST')
 for length in (256, 512):
