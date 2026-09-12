@@ -2950,11 +2950,11 @@ def irc(parms):
 # -----------------------------
 # API keys
 # -----------------------------
-RAPIDAPI_KEY = "a22476fe91mshe8c7ca25baf2810p1b27e6jsn35dc5ee5102d"
+RAPIDAPI_KEY = ""  # key removed: set RAPIDAPIKEY in msxpi.ini (var RAPIDAPIKEY=...)
 RAPIDAPI_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
-FINNHUB_KEY = "d6lg179r01qrq6i2j67gd6lg179r01qrq6i2j680"
-TWELVEDATA_KEY = "fcb06db32abb4883bbe8447c2215fc2e"
-ALPHAVANTAGE_KEY = "FMQKUJ2MTSMYRV84"
+FINNHUB_KEY = ""  # key removed: set FINNHUBKEY in msxpi.ini (var FINNHUBKEY=...)
+TWELVEDATA_KEY = ""  # key removed: set TWELVEDATAKEY in msxpi.ini (var TWELVEDATAKEY=...)
+ALPHAVANTAGE_KEY = ""  # key removed: set ALPHAVANTAGEKEY in msxpi.ini (var ALPHAVANTAGEKEY=...)
 
 DEFAULT_COOLDOWN = 60  # seconds
 # Yahoo cooldown state
