@@ -5036,7 +5036,7 @@ try:
                         buf = buf.decode('utf-8', 'replace')
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
-                        print(f" -> {cmd} {parms}  [t={time.time():.2f}]")   # TEMP timing
+                        print(f" -> {cmd} {parms}")
                         try:
                             if (cmd.lower() == "set"): #workaround to avoid callign Linux "set" command
                                 cmd = "pset"
