@@ -1,10 +1,12 @@
 # Pi-side network setup
 
-The setup script lives in **`../../Server/Shell/msxpi-tcpip-setup.sh`**, with
-every other Pi-side script. A second copy used to sit in this folder; the two
-drifted - a fix for the uplink detection landed in one and not the other, and
-they logged to different files, so the wrong copy got debugged. Only `INL.CFG`,
-the matching InterNestor Lite configuration, belongs here.
+The setup script lives in **`../Server/Shell/msxpi-tcpip-setup.sh`**, with
+every other Pi-side script. A second copy used to sit under `UNAPI/pi-setup/`;
+the two drifted - a fix for the uplink detection landed in one and not the
+other, and they logged to different files, so the wrong copy got debugged.
+The matching InterNestor Lite configuration is **`../target/INL.CFG`**, which
+`UNAPI/build.sh` converts to CRLF with a trailing Ctrl-Z - both of which
+MSX-DOS 1 needs - and writes onto the boot disk.
 
 `msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that
 is on **WiFi**. Run it with `sudo` on the Pi, then copy `INL.CFG` onto the MSX
@@ -48,6 +50,10 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 1. `sudo /home/pi/msxpi/msxpi-tcpip-setup.sh` on the Pi (deployed from
    `Server/Shell/`); it logs to `/var/log/msxpi.log`
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
+   If the Pi had no default route when it booted, the setup script gives up
+   and the MSX has no network. `p netreset` from the MSX runs this whole
+   sequence again - including reopening the TAP - so it can be recovered
+   without logging into the Pi.
 3. on the MSX: `INL I`.  The Ethernet UNAPI driver is in `msxpibios.rom` now,
    so there is nothing to install first - `RAMHELPR` is not needed, and
    `ETHUNAPI` will refuse because the ROM already registers an ETHERNET

@@ -20,9 +20,17 @@ below.
 Quick Start Guide
 =================
 
-Version 1.4 breaks software compatibility with previous ROMS and server. 
-Upgrade the whole pack (ROM, msxpi-server and client commands). There is no need
-to update the CPLD firmware - it is unchanged in this release.
+Version 1.6 breaks software compatibility with previous ROMS and server.
+Upgrade the whole pack (ROM, msxpi-server and client commands), and this time
+the CPLD firmware too: v1.6 adds hardware /WAIT flow control, which is what
+makes the new burst transfers possible, and the earlier firmware cannot drive
+them. A v1.6 ROM on older firmware falls back to the polled transfers and
+still works, only slower.
+
+If you need to run an older ROM, the matching server is kept alongside the
+current one, named after that ROM's sha1 - see
+"software/Server/Python/src/READ.md".
+
 The documentation is very outdated - for reference, look the new source code,
 they have plenty of information for developers.
 
@@ -166,6 +174,54 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
+
+MSXPi v1.6 Release Notes
+========================
+Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM, and
+MSX-DOS 2 / Nextor compatibility. ROM, msxpi-server and the client commands
+must be upgraded together, and the CPLD firmware moves to v1.6 - the /WAIT
+logic is new, so the previous firmware cannot drive burst transfers.
+
+Transfer speed
+- The CPLD now asserts /WAIT while a byte is in flight, so the MSX moves payloads with INIR/OTIR at 21 T-states per byte instead of polling the status port for every one. The Pi holds RPI_READY high for the whole run (SPI_BurstOut / SPI_BurstIn) - without that, the gap between bytes would let a block instruction read a stale byte and silently desynchronise the stream.
+- Both ends negotiate it per block: the MSX marks the block size it asks for, the server marks the length it answers with, and either side declining falls back to the polled path. A checksum retry never bursts.
+- Measured on a Canon V-25 with real hardware: 256 KB in 51.95 s, down from 1:45.00.
+- The native GPIO payload engine is now on by default (MSXPI_NATIVE_GPIO=1) in msxpi-monitor and in both systemd units; without the native library the server falls back to Python GPIO and says so in the log.
+
+MSX-DOS 2 / Nextor
+- GETDPB returned with the carry flag as the caller happened to pass it in, so Nextor read a perfectly good DPB as a failure: every access through a MAPDRV'd MSXPi drive answered "Not a DOS disk". It now clears carry explicitly.
+- DSKIO staged every sector through the driver's own buffer. Transfers now go directly to the caller's buffer when it is outside page 1, and through the kernel's XFER routine when it is not - page 1 is where the driver ROM is banked in, so the driver cannot see the caller's memory there. This is what produced "Bad file allocation table" on larger copies.
+- Tests/p1test/P1TEST.COM is a 40 KB self-checking program for exactly that case, for use on real hardware.
+
+Ethernet UNAPI
+- The Ethernet UNAPI implementation is in msxpibios.rom, so InterNestor Lite installs with no helper: RAMHELPR is not needed and ETHUNAPI refuses, because the ROM already registers an ETHERNET implementation.
+- Pi side: msxpi_eth.py shuttles frames over a TAP device (msxpi0), and Server/Shell/msxpi-tcpip-setup.sh creates it, owns it as the server's user, and sets up routing and NAT to whichever interface carries the default route. The MSX sits on an isolated subnet behind NAT because an access point will not forward frames whose source MAC is not the associated station's - bridging cannot work over WiFi.
+- ethtrans.asm uses the same /WAIT burst path as the disk transfers.
+
+New and changed client commands
+- "p netreset [secs]" rebuilds the Pi's whole TCP/IP setup from the MSX - tear down the TAP and the iptables rules, run the setup again, and reopen the link - for the case where the Pi had no default route when it booted and the MSX therefore has no network at all. Optional argument is how long to wait for a default route (default 15 s, capped at 60). "p tcpip" is an alias.
+- "p wifi" listed interfaces by filtering "ip a" for lines starting 1 to 4, so an interface numbered 5 or above lost its header line and its address appeared to belong to the interface above it. It now builds the list itself: one 40-column line per address, with the interface name and state.
+
+Server
+- PerformHandshake ended by restoring the caller's flags, so it reported the carry it was entered with rather than its own result: a failed handshake could look successful, and the caller then read a block nobody was sending.
+- SPI_BurstIn - the receive half of the burst path - was missing, so every burst write died with "name 'SPI_BurstIn' is not defined" and left the driver mid-block.
+- The Ethernet link is no longer chosen once and kept for the life of the process. If msxpi0 is not ready when the first UNAPI opcode arrives - msxpi-monitor starts the setup script in the background, so that is a race - the server retries and swaps the real TAP in when it appears, instead of answering every opcode correctly while carrying no traffic at all.
+- Historical servers are kept alongside the current one, named after the sha1 of the ROM they pair with; see Server/Python/src/READ.md.
+
+Pi network setup (msxpi-tcpip-setup.sh)
+- The uplink was read from a fixed field position of "ip route show default", which is the interface only when the route has a gateway. A gatewayless route reads "default dev wlan0 scope link" and the field is then the word "link" - and iptables accepts a nonexistent interface without complaint, so the rules installed and never matched. Forwarding happened, masquerading did not, and every lookup from the MSX timed out. The interface is now read after "dev", and no rule is written if it is not a real interface.
+- The TAP was created only when absent, never checked for ownership, so a device left behind by a server that once ran as root could never be opened by the pi-owned server: it sat UP but never RUNNING. The owner is now checked and the device recreated if it does not match.
+- The address is added with "broadcast +" rather than coming up with broadcast 0.0.0.0.
+
+openMSX
+- The MSXPi device emulates the CPLD /WAIT flow control, so burst transfers can be developed and tested without hardware, with fault injection for a low RPI_READY.
+- It no longer discards received bytes. The queue was capped at 16 KB and the remainder thrown away, which silently truncated every large transfer - a 16384-byte block with its header and checksum is 16389 - including the checksum byte the MSX then waited for forever. Back-pressure replaces discarding.
+- TCP_NODELAY on the server socket. Each OUT to the data port is its own one-byte write, and with Nagle plus the server's delayed ACK each took about 40 ms, so a 512-byte burst write took minutes and looked exactly like a hung transfer.
+
+Housekeeping
+- MIT licence headers and version 1.6 across the sources, third-party copyrights preserved.
+- The discontinued C server, the MEMTEST ROM and the legacy client sources are gone; asm-common/transport holds the generated transfer code.
+- Regression tests under software/Tests: the DSKIO sector loops and burst routines on an emulated Z80 against the real ROM, the Pi-side transfer engine, PCOPY, "p netreset", "p wifi", and a full Nextor + MegaFlashROM SCC+ SD copy test in openMSX.
 
 MSXPi v1.5 Release Notes
 ========================
