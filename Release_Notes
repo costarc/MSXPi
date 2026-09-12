@@ -20,31 +20,44 @@ Ethernet UNAPI
 - The Ethernet UNAPI implementation is in msxpibios.rom, so InterNestor Lite installs with no helper: RAMHELPR is not needed and ETHUNAPI refuses, because the ROM already registers an ETHERNET implementation.
 - Pi side: msxpi_eth.py shuttles frames over a TAP device (msxpi0), and Server/Shell/msxpi-tcpip-setup.sh creates it, owns it as the server's user, and sets up routing and NAT to whichever interface carries the default route. The MSX sits on an isolated subnet behind NAT because an access point will not forward frames whose source MAC is not the associated station's - bridging cannot work over WiFi.
 - ethtrans.asm uses the same /WAIT burst path as the disk transfers.
+- DSKIO only asks for /WAIT bursts once wait mode has actually engaged, so an openMSX without the v1.6 MSXPi device still works, on the polled transport.
 - Windows, under openMSX: the same ROM driver reaches a real network there too. msxpi_eth.py opens an OpenVPN TAP-Windows adapter (WinTapLink) and Server/Shell/msxpi-tcpip-setup.ps1 does what the shell script does on the Pi - the address, forwarding, and a WinNAT instance for the MSX's subnet. Opening the adapter needs no administrator rights; only that one-time setup does. InterNestor Lite installs and resolves names from the emulated MSX, so telnet, HGET and the rest work in the emulator as they do on hardware.
 
 New and changed client commands
 - "p netreset [secs]" rebuilds the Pi's whole TCP/IP setup from the MSX - tear down the TAP and the iptables rules, run the setup again, and reopen the link - for the case where the Pi had no default route when it booted and the MSX therefore has no network at all. Optional argument is how long to wait for a default route (default 15 s, capped at 60). "p tcpip" is an alias.
 - "p wifi" listed interfaces by filtering "ip a" for lines starting 1 to 4, so an interface numbered 5 or above lost its header line and its address appeared to belong to the interface above it. It now builds the list itself: one 40-column line per address, with the interface name and state.
+- "p wlanreset [secs]" resets wlan0 from the MSX: drops the lease, cycles the WiFi radio, and asks NetworkManager, dhcpcd or dhclient - whichever owns the interface - to reconnect, then waits for a fresh IPv4 address (default 30 s, 5 to 90). It does not touch msxpi0 or NAT, so run "p netreset" afterwards if the uplink address changed.
 
 Server
 - PerformHandshake ended by restoring the caller's flags, so it reported the carry it was entered with rather than its own result: a failed handshake could look successful, and the caller then read a block nobody was sending.
 - SPI_BurstIn - the receive half of the burst path - was missing, so every burst write died with "name 'SPI_BurstIn' is not defined" and left the driver mid-block.
 - The Ethernet link is no longer chosen once and kept for the life of the process. If msxpi0 is not ready when the first UNAPI opcode arrives - msxpi-monitor starts the setup script in the background, so that is a race - the server retries and swaps the real TAP in when it appears, instead of answering every opcode correctly while carrying no traffic at all.
 - Historical servers are kept alongside the current one, named after the sha1 of the ROM they pair with; see Server/Python/src/READ.md.
+- When openMSX exited, five loops waiting for the MSX retried the closed connection forever, flooding the console, and the server never got back to accepting. They now give up on a closed connection (timeouts still wait; the Pi's GPIO link is unaffected). That exposed a second bug: every reconnect opened port 5000 again while the first listener was still bound, so the first reconnect killed the server with "Address already in use". The listener is now opened once.
+- The API keys the stock demo uses are no longer in the source: set RAPIDAPIKEY, FINNHUBKEY, TWELVEDATAKEY and ALPHAVANTAGEKEY in msxpi.ini ("var RAPIDAPIKEY=..."). The jumper .ini files list these names with placeholder values. The archived server copies had the old keys in plain text; they are blanked there too - anyone who used them should reissue their own.
+- The per-sector disk read line and the debug timestamps are gone from the log.
 
 Pi network setup (msxpi-tcpip-setup.sh)
 - The uplink was read from a fixed field position of "ip route show default", which is the interface only when the route has a gateway. A gatewayless route reads "default dev wlan0 scope link" and the field is then the word "link" - and iptables accepts a nonexistent interface without complaint, so the rules installed and never matched. Forwarding happened, masquerading did not, and every lookup from the MSX timed out. The interface is now read after "dev", and no rule is written if it is not a real interface.
 - The TAP was created only when absent, never checked for ownership, so a device left behind by a server that once ran as root could never be opened by the pi-owned server: it sat UP but never RUNNING. The owner is now checked and the device recreated if it does not match.
 - The address is added with "broadcast +" rather than coming up with broadcast 0.0.0.0.
 
+BASIC extension without an EPROM (MSXPIEXT.BIN)
+- MSXPIEXT.BIN builds again for v1.6: BLOAD"MSXPIEXT.BIN",R relocates it into page-1 RAM and adds CALL MSXPIVER and CALL MSXPI to BASIC on an MSXPi with no EPROM. It shares the CALL MSXPI handler with the driver ROM (asm-common/include/msxpi_call.asm), so the two cannot drift apart again; the obsolete msxpibios.asm is removed.
+- The installer registered the CALL handler for the wrong slot whenever page-1 RAM sits in an expanded slot - most MSX2s, e.g. the Philips NMS 8245 has it in 3-2 - so CALL MSXPIVER crashed and rebooted the machine. It now includes the subslot. The install help no longer lists the CALL MSXPISEND / MSXPIRECV commands that no longer exist.
+- msxpiboot.dsk carries it, and the BASIC programs BLOAD it when CALL MSXPIVER is not available.
+
 openMSX
 - The MSXPi device emulates the CPLD /WAIT flow control, so burst transfers can be developed and tested without hardware, with fault injection for a low RPI_READY.
 - It no longer discards received bytes. The queue was capped at 16 KB and the remainder thrown away, which silently truncated every large transfer - a 16384-byte block with its header and checksum is 16389 - including the checksum byte the MSX then waited for forever. Back-pressure replaces discarding.
 - TCP_NODELAY on the server socket. Each OUT to the data port is its own one-byte write, and with Nagle plus the server's delayed ACK each took about 40 ms, so a 512-byte burst write took minutes and looked exactly like a hung transfer.
+- MSXPiNoROM.xml: the MSXPi I/O ports with no EPROM, for running MSXPIEXT.BIN the way it is used on an interface without one.
 
 Housekeeping
 - MIT licence headers and version 1.6 across the sources, third-party copyrights preserved.
 - The discontinued C server, the MEMTEST ROM and the legacy client sources are gone; asm-common/transport holds the generated transfer code.
+- build reorganised; the updater copies only the current BIOS ROM, not every archived one. The CPLD firmware and BIOS ROM of every release are kept, named by version.
+- STELNET and CP437 added to the disk and the updater; TESTRAM.COM dropped.
 - Regression tests cover the DSKIO sector loops and burst routines on an emulated Z80 against the real ROM, the Pi-side transfer engine, PCOPY, "p netreset", "p wifi", and a full Nextor + MegaFlashROM SCC+ SD copy in openMSX. They live under software/Tests on the development branches, and are not carried on the release branch.
 
 MSXPi v1.5 Release Notes
