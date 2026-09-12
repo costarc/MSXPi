@@ -82,21 +82,32 @@ inicio0:
         call    relocprog
         pop     af
 
+; Flag the slot we relocated into as carrying a CALL statement handler.
+; SLTATR is 16 slot entries of 4 bytes (one per page), ordered primary-major:
+;   offset = primary*16 + subslot*4 + page
+; The old code multiplied the primary slot by 16 and stopped there, dropping
+; the subslot entirely, so on any machine whose page-1 RAM sits in an expanded
+; slot - a Philips NMS 8245 has it in 3-2 - it flagged 3-0 instead.  BASIC then
+; dispatched CALL MSXPI into a slot holding no handler and the machine hung.
+; A is the slot id from PG1RAMSEARCH: bits 1-0 primary, bits 3-2 subslot
+; (already zero when the slot is not expanded), so the subslot bits are
+; themselves the *4 term and need only masking, not shifting.
+        push    af
         and     %00000011
-        ld      hl,SLTATR
-        ld      de,16
-        or      a
-        jr      z,setcall2
-        ld      b,a
-
-setcall1:
+        ld      l,a
+        ld      h,0
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl
+        add     hl,hl           ; primary*16
+        pop     af
+        and     %00001100       ; subslot*4
+        ld      e,a
+        ld      d,0
         add     hl,de
-        djnz    setcall1
-
-setcall2:
-        xor     a
-        set     5,a
-        inc     hl
+        ld      de,SLTATR+1     ; +1 = page 1
+        add     hl,de
+        ld      a,%00100000
         ld      (hl),a
 
         ld      hl,msgcallhlp
@@ -148,12 +159,11 @@ relocfinish:
 msgstart:   db      "Search for ram in $4000",13,10,0
 msgramnf:   db      "ram not found",13,10,0
 msgdoing:   db      "Installing MSXPi extension...",13,10,0
-msgcallhlp: db      "Installed. Use ",13,10
-            db      "CALL MSXPI(",$22,"<option,><buffer,><commmand>",$22,") to run MSXPi Commands",13,10
-            db      "CALL MSXPISEND(",$22,"<buffer>",$22,") to send data to RPi",13,10
-            db      "CALL MSXPIRECV(",$22,"<buffer>",$22,") to read data from RPi",13,10
-            db      "flag: 0=no screen output, 1=screen output(default), 2=store output in buffer", 13,10
-            db      "buffer = valid hexadecimal number (4 digits)"
+msgcallhlp: db      "Installed. Use",13,10
+            db      "CALL MSXPIVER",13,10
+            db      "CALL MSXPI(",$22,"<option,><buffer,><command>",$22,")",13,10
+            db      "option: 0=no screen output, 1=screen output(default), 2=store output in buffer",13,10
+            db      "buffer: hexadecimal address (4 digits)"
             db      13,10,0
 
 ramcheck:
@@ -302,9 +312,7 @@ MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.6"
 BuildId: DB ".20260912.048"
         DB      13,10
-        DB      "    RCC (c) 2015-2026",0
-        DB      "Commands available:",13,10
-        DB      "MSXPI MSXPIVER",13,10,0
+        DB      "    RCC (c) 2015-2026",13,10,0
 
 
 ; ================================================================
