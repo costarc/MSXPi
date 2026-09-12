@@ -56,6 +56,7 @@
 
 import os
 import struct
+import sys
 import threading
 import collections
 
@@ -317,6 +318,247 @@ class TapLink(BaseLink):
             pass
 
 
+class WinTapLink(BaseLink):
+    """A TAP-Windows (OpenVPN tap-windows6) adapter, the Windows sibling of
+    TapLink.
+
+    Same contract and same wire format: the device carries raw Ethernet
+    frames, exactly as the Linux TAP does, so the shuttle, ARP handling and the
+    whole UNAPI path above are untouched.
+
+    Two Windows specifics drive the shape of this:
+
+    1. The device is opened with FILE_FLAG_OVERLAPPED, which is what lets a
+       read be abandoned when close() is called instead of wedging the thread
+       until a frame happens to arrive.  Overlapped handles mean EVERY
+       ReadFile/WriteFile must pass an OVERLAPPED, including the writes.
+    2. The adapter reports "cable unplugged" to Windows until
+       TAP_IOCTL_SET_MEDIA_STATUS says otherwise.  Without that call the
+       address the setup script assigned stays inactive, nothing routes, and
+       the failure looks like a misconfigured network rather than a missing
+       ioctl.
+
+    Opening it does NOT need administrator rights - verified against
+    tap-windows6 from an unelevated process.  Only creating the adapter and
+    writing the address and NAT rules do, which is why that lives in a setup
+    script run once rather than in the server.
+    """
+
+    # Adapter enumeration lives in the registry; there is no friendlier API
+    # without pulling in setupapi.
+    ADAPTER_KEY = (r"SYSTEM\CurrentControlSet\Control\Class"
+                   r"\{4D36E972-E325-11CE-BFC1-08002BE10318}")
+    CONN_KEY = (r"SYSTEM\CurrentControlSet\Control\Network"
+                r"\{4D36E972-E325-11CE-BFC1-08002BE10318}")
+
+    # CTL_CODE(FILE_DEVICE_UNKNOWN=0x22, function, METHOD_BUFFERED=0,
+    #          FILE_ANY_ACCESS=0)
+    TAP_IOCTL_GET_MTU = (0x22 << 16) | (3 << 2)
+    TAP_IOCTL_SET_MEDIA_STATUS = (0x22 << 16) | (6 << 2)
+
+    GENERIC_READ = 0x80000000
+    GENERIC_WRITE = 0x40000000
+    OPEN_EXISTING = 3
+    FILE_ATTRIBUTE_SYSTEM = 0x4
+    FILE_FLAG_OVERLAPPED = 0x40000000
+    ERROR_IO_PENDING = 997
+    WAIT_TIMEOUT_ = 0x102          # not WAIT_TIMEOUT: that name is a macro
+    INFINITE = 0xFFFFFFFF
+
+    @classmethod
+    def find_adapters(cls):
+        """Every tap-windows adapter, as (guid, friendly name).
+
+        ComponentId is "tap0901" on some installs and "root\\tap0901" on
+        others - the OpenVPN installer has used both - so match on the
+        substring rather than on equality.
+        """
+        import winreg
+        found = []
+        try:
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, cls.ADAPTER_KEY)
+        except OSError:
+            return found
+        with key:
+            for i in range(winreg.QueryInfoKey(key)[0]):
+                try:
+                    with winreg.OpenKey(key, winreg.EnumKey(key, i)) as sub:
+                        cid = winreg.QueryValueEx(sub, "ComponentId")[0]
+                        if "tap0901" not in str(cid).lower():
+                            continue
+                        guid = winreg.QueryValueEx(sub, "NetCfgInstanceId")[0]
+                except OSError:
+                    continue
+                name = guid
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                        cls.CONN_KEY + "\\" + guid +
+                                        r"\Connection") as conn:
+                        name = winreg.QueryValueEx(conn, "Name")[0]
+                except OSError:
+                    pass
+                found.append((guid, name))
+        return found
+
+    def __init__(self, ifname=None, *a, **kw):
+        BaseLink.__init__(self, *a, **kw)
+        import ctypes
+        import ctypes.wintypes as wintypes
+        self._ctypes = ctypes
+        self._wintypes = wintypes
+
+        adapters = self.find_adapters()
+        if not adapters:
+            raise OSError("no TAP-Windows adapter found - install the "
+                          "OpenVPN TAP driver, then run msxpi-tcpip-setup.ps1")
+        if ifname:
+            adapters = [a_ for a_ in adapters if a_[1] == ifname] or adapters
+        self.guid, self.ifname = adapters[0]
+
+        self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._k32.CreateFileW.restype = wintypes.HANDLE
+        self._k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD,
+                                          wintypes.DWORD, ctypes.c_void_p,
+                                          wintypes.DWORD, wintypes.DWORD,
+                                          wintypes.HANDLE]
+        self._k32.CreateEventW.restype = wintypes.HANDLE
+
+        path = "\\\\.\\Global\\" + self.guid + ".tap"
+        handle = self._k32.CreateFileW(
+            path, self.GENERIC_READ | self.GENERIC_WRITE, 0, None,
+            self.OPEN_EXISTING,
+            self.FILE_ATTRIBUTE_SYSTEM | self.FILE_FLAG_OVERLAPPED, None)
+        if handle == wintypes.HANDLE(-1).value:
+            err = ctypes.get_last_error()
+            raise OSError(err, "cannot open %s (WinError %d)%s"
+                          % (self.ifname, err,
+                             " - another program has it open"
+                             if err == 32 else ""))
+        self.handle = handle
+
+        # Report the cable as connected, or the adapter's address never
+        # becomes active. Done before the reader starts so no frame can be
+        # missed between the two.
+        on = ctypes.c_ulong(1)
+        ret = wintypes.DWORD()
+        if not self._k32.DeviceIoControl(handle, self.TAP_IOCTL_SET_MEDIA_STATUS,
+                                         ctypes.byref(on), 4,
+                                         ctypes.byref(on), 4,
+                                         ctypes.byref(ret), None):
+            err = ctypes.get_last_error()
+            self._k32.CloseHandle(handle)
+            self.handle = None
+            raise OSError(err, "TAP_IOCTL_SET_MEDIA_STATUS failed (WinError %d)"
+                          % err)
+
+        self._write_lock = threading.Lock()
+        self._read_event = self._k32.CreateEventW(None, True, False, None)
+        self._write_event = self._k32.CreateEventW(None, True, False, None)
+
+        self.enabled = True
+        self.thread = threading.Thread(target=self._reader, name="msxpi-wintap")
+        self.thread.daemon = True
+        self.thread.start()
+
+    def _overlapped(self, event):
+        """An OVERLAPPED carrying `event`, as a plain buffer.
+
+        Declared here rather than as a ctypes.Structure at module scope so
+        this file still imports on Linux, where ctypes.wintypes does not.
+        """
+        ctypes = self._ctypes
+        buf = (ctypes.c_ubyte * (ctypes.sizeof(ctypes.c_void_p) * 3 +
+                                 ctypes.sizeof(ctypes.c_ulong) * 2))()
+        # OVERLAPPED: Internal, InternalHigh, Offset, OffsetHigh, hEvent.
+        # Only hEvent has to be set; the rest start zeroed, which is what the
+        # API requires for a device that does not support offsets.
+        ctypes.memmove(ctypes.byref(buf, ctypes.sizeof(buf) -
+                                    ctypes.sizeof(ctypes.c_void_p)),
+                       ctypes.byref(ctypes.c_void_p(event)),
+                       ctypes.sizeof(ctypes.c_void_p))
+        return buf
+
+    def _reader(self):
+        ctypes = self._ctypes
+        wintypes = self._wintypes
+        buf = (ctypes.c_ubyte * (MAX_FRAME + 4))()
+        got = wintypes.DWORD()
+        while self.running:
+            ov = self._overlapped(self._read_event)
+            self._k32.ResetEvent(self._read_event)
+            ok = self._k32.ReadFile(self.handle, ctypes.byref(buf), len(buf),
+                                    ctypes.byref(got), ctypes.byref(ov))
+            if not ok:
+                if ctypes.get_last_error() != self.ERROR_IO_PENDING:
+                    if self.running:
+                        continue
+                    break
+                # Wake up regularly so close() ends this thread promptly,
+                # exactly as the select() timeout does on Linux.
+                while self.running:
+                    if self._k32.WaitForSingleObject(self._read_event,
+                                                     250) != self.WAIT_TIMEOUT_:
+                        break
+                if not self.running:
+                    break
+                if not self._k32.GetOverlappedResult(self.handle,
+                                                     ctypes.byref(ov),
+                                                     ctypes.byref(got), False):
+                    continue
+            if got.value:
+                self._push(bytes(bytearray(buf[:got.value])))
+
+    def transmit(self, frame):
+        ctypes = self._ctypes
+        wintypes = self._wintypes
+        if self.handle is None:
+            return False
+        data = (ctypes.c_ubyte * len(frame)).from_buffer_copy(frame)
+        sent = wintypes.DWORD()
+        with self._write_lock:
+            ov = self._overlapped(self._write_event)
+            self._k32.ResetEvent(self._write_event)
+            ok = self._k32.WriteFile(self.handle, ctypes.byref(data),
+                                     len(frame), ctypes.byref(sent),
+                                     ctypes.byref(ov))
+            if not ok:
+                if ctypes.get_last_error() != self.ERROR_IO_PENDING:
+                    return False
+                self._k32.WaitForSingleObject(self._write_event, self.INFINITE)
+                if not self._k32.GetOverlappedResult(self.handle,
+                                                     ctypes.byref(ov),
+                                                     ctypes.byref(sent), False):
+                    return False
+        return True
+
+    def link_up(self):
+        return self.handle is not None
+
+    def close(self):
+        # Order matters: stop the reader and WAIT for it before closing the
+        # handle. Closing first leaves that thread inside GetOverlappedResult
+        # on a handle Windows is free to hand to something else - a
+        # use-after-close that would corrupt whichever file got the reused
+        # value, and only under a race. Signalling the event makes it notice
+        # at once instead of after the 250 ms poll.
+        BaseLink.close(self)
+        handle, self.handle = self.handle, None
+        thread = getattr(self, "thread", None)
+        if thread is not None and thread.is_alive():
+            if getattr(self, "_read_event", None):
+                self._k32.SetEvent(self._read_event)
+            if handle is not None:
+                self._k32.CancelIoEx(handle, None)
+            thread.join(timeout=2.0)
+        if handle is not None:
+            self._k32.CloseHandle(handle)
+        for ev in (getattr(self, "_read_event", None),
+                   getattr(self, "_write_event", None)):
+            if ev:
+                self._k32.CloseHandle(ev)
+        self._read_event = self._write_event = None
+
+
 # =============================================================================
 # Shuttle - opcode dispatch
 # =============================================================================
@@ -561,6 +803,17 @@ def make_link(prefer_tap=True, ifname="msxpi0", log=None):
         try:
             link = TapLink(ifname=ifname)
             log("eth: TAP device %s up" % ifname)
+            return link
+        except Exception as e:
+            log("eth: TAP unavailable (%s) - falling back to MockLink" % e)
+    elif prefer_tap and sys.platform == "win32":
+        # TAP-Windows carries the same raw Ethernet frames as the Linux TAP,
+        # so everything above this line is unchanged. Opening it needs no
+        # administrator rights; assigning the address and the NAT does, and
+        # that is msxpi-tcpip-setup.ps1's job, run once.
+        try:
+            link = WinTapLink(ifname=None if ifname == "msxpi0" else ifname)
+            log("eth: TAP device %s up" % link.ifname)
             return link
         except Exception as e:
             log("eth: TAP unavailable (%s) - falling back to MockLink" % e)

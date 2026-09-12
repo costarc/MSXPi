@@ -17,6 +17,7 @@ Run from WSL (Ubuntu). Emulator tests need the MSXPi-enabled openMSX in
 | `test_pcopy_receive.py` | PCOPY never writes a failed block to disk; needs a host C compiler | `python3 test_pcopy_receive.py` |
 | `test_netreset.py` | `p netreset` rebuilds the Pi's TCP/IP setup and reopens the TAP: screen-sized reply, reasons for failure, teardown failure does not stop the rebuild | `python3 test_netreset.py` |
 | `test_wifi_report.py` | `p wifi` names every interface whatever its index (msxpi0 climbs past 4 as the TAP is rebuilt), one 40-column line each | `python3 test_wifi_report.py` |
+| `test_wintap_nat.py` | The Windows TAP path end to end, with no MSX: takes the adapter, ARPs the gateway, then resolves a name from 192.168.99.2 through WinNAT. Needs the OpenVPN TAP driver and `msxpi-tcpip-setup.ps1` run once as Administrator | `python test_wintap_nat.py [name]` |
 | `native_gpio_test.c` | C model of the CPLD edge contract for `native/gpio_transfer.c` | see `../Server/Python/src/native/README.md` |
 
 ## Emulator tests (minutes, openMSX + a private server instance)
