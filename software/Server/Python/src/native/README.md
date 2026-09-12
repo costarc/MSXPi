@@ -68,6 +68,10 @@ MSXPI_NATIVE_GPIO=1 MSXPI_PROFILE=1 python3 msxpi-server.py
 
 ## Host regression tests
 
+`software/Tests/` is **not part of the release branch** - it is carried on the
+development branches (`performance` and the feature branches cut from it), so
+check one of those out before running these.
+
 From the repository root:
 
 ```sh

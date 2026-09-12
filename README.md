@@ -221,7 +221,7 @@ openMSX
 Housekeeping
 - MIT licence headers and version 1.6 across the sources, third-party copyrights preserved.
 - The discontinued C server, the MEMTEST ROM and the legacy client sources are gone; asm-common/transport holds the generated transfer code.
-- Regression tests under software/Tests: the DSKIO sector loops and burst routines on an emulated Z80 against the real ROM, the Pi-side transfer engine, PCOPY, "p netreset", "p wifi", and a full Nextor + MegaFlashROM SCC+ SD copy test in openMSX.
+- Regression tests cover the DSKIO sector loops and burst routines on an emulated Z80 against the real ROM, the Pi-side transfer engine, PCOPY, "p netreset", "p wifi", and a full Nextor + MegaFlashROM SCC+ SD copy in openMSX. They live under software/Tests on the development branches, and are not carried on the release branch.
 
 MSXPi v1.5 Release Notes
 ========================
