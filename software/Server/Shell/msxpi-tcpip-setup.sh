@@ -78,7 +78,9 @@ uplink_dev() {
 
 # wait up to 60s for a default route (network to come up)
 MSXPI_ROOT_LOG="/var/log/msxpi.log"
-WAIT_SECS=60
+# Overridable because the MSX can now ask for this from "p netreset": the MSX
+# sits waiting for the reply, so that path passes a much shorter wait.
+WAIT_SECS="${WAIT_SECS:-60}"
 count=0
 while [ $count -lt $WAIT_SECS ]; do
     UPLINK="$(uplink_dev)"

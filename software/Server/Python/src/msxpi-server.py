@@ -2747,6 +2747,111 @@ def restart(parm=None):
         print("Command not supported by this platform")
         sendmultiblock(b'Command not supported by this platform')
         
+TCPIP_SETUP = "/home/pi/msxpi/msxpi-tcpip-setup.sh"
+
+
+def _eth_relink():
+    """Re-attach the Ethernet link after the TAP device has been replaced.
+
+    msxpi-tcpip-setup.sh deletes and recreates msxpi0, which leaves the
+    shuttle holding a file descriptor to a device that no longer exists - it
+    reads and writes without error and carries nothing. Nothing short of
+    reopening recovers from that, so netreset() does it here rather than
+    telling the user to restart the server.
+    """
+    global _eth_handle, _eth_tap_retry_at
+    if _eth_mod is None or _eth_shuttle is None:
+        return None                 # nothing attached yet: first opcode will
+    old = _eth_shuttle.link
+    try:
+        link = _eth_mod.TapLink()
+    except Exception as exc:
+        print(f"eth: TAP still unavailable after netreset ({exc})")
+        _eth_tap_retry_at = 0.0      # let the opcode path keep trying
+        return False
+    link.enabled = old.enabled
+    link.filters = old.filters
+    _eth_shuttle.link = link
+    old.close()
+    _eth_note_link(link)
+    _eth_handle = _eth_shuttle.handle
+    print("eth: TAP device reattached after netreset", flush=True)
+    return True
+
+
+def netreset(parm=None):
+    """Rebuild the Pi's MSX networking from scratch, on demand from the MSX.
+
+    For the case this cannot be designed away: the Pi boots, msxpi-monitor
+    starts msxpi-tcpip-setup.sh in the background, and the Pi has no default
+    route yet - so there is no uplink to NAT to, the script gives up, and the
+    MSX has no network until somebody logs into the Pi. Now "p netreset" does
+    the whole sequence: tear down the TAP and the iptables rules, run the setup
+    again (new uplink, new TAP owned by the server's user, fresh NAT), and
+    reopen the link so the running server picks up the new device.
+
+    An optional parameter is how many seconds to wait for a default route
+    (default 15, bounded because the MSX is sitting waiting for the reply).
+    """
+    if hostType != "RaspberryPi":
+        return "Command not supported by this platform"
+    if not os.path.isfile(TCPIP_SETUP):
+        return f"Pi:{TCPIP_SETUP} missing"
+
+    wait = 15
+    if parm:
+        try:
+            wait = max(1, min(60, int(parm.split()[0])))
+        except ValueError:
+            pass
+
+    env = dict(os.environ, WAIT_SECS=str(wait))
+    report = []
+    for phase in ("down", "up"):
+        try:
+            done = subprocess.run(["sudo", TCPIP_SETUP, phase], env=env,
+                                  stdout=PIPE, stderr=STDOUT, text=True,
+                                  timeout=wait + 60)
+        except Exception as exc:
+            return f"Pi:netreset {phase} failed: {exc}"
+        out = done.stdout or ""
+        print(f"netreset {phase}: rc={done.returncode}\n{out}", flush=True)
+        if done.returncode != 0:
+            if phase == "down":
+                # Teardown failing is not a reason to stop: it exits non-zero
+                # when there is no default route yet, which is precisely the
+                # situation this command exists for. Let "up" report the
+                # real problem.
+                continue
+            # The script says why on its first line or two - pass that on
+            # rather than a bare exit code, since "no default route" is the
+            # expected answer when this is run too early.
+            global _eth_tap_retry_at
+            _eth_tap_retry_at = 0.0     # stale TAP: let the opcode path retry
+            why = " ".join(out.split())[:70] or f"exit {done.returncode}"
+            return f"Pi:netreset {phase}: {why}"
+        if phase == "up":
+            # Only the lines worth 40 columns on an MSX screen.
+            for line in out.splitlines():
+                if line.startswith(("uplink:", "created ", "msxpi0 up:",
+                                    "NAT:")) or "recreating" in line:
+                    report.append(line.strip())
+
+    state = _eth_relink()
+    if state is None:
+        report.append("link: idle, attaches on first use")
+    elif state:
+        report.append("link: TAP reattached")
+    else:
+        report.append("link: TAP unavailable - check owner")
+    return "\r\n".join(report) if report else "Pi:netreset done"
+
+
+def tcpip(parm=None):
+    """Alias for netreset - the script is msxpi-tcpip-setup.sh."""
+    return netreset(parm)
+
+
 def reboot(parm=None):
     #print("preboot()")
     if hostType == "RaspberryPi":

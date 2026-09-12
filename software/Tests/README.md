@@ -15,6 +15,7 @@ Run from WSL (Ubuntu). Emulator tests need the MSXPi-enabled openMSX in
 | `test_payload_z80.py` | Generated transfer code (`../asm-common/transport`) in both ASM and C form; needs `libz80ex-dev`, SDCC | `python3 test_payload_z80.py` |
 | `test_native_gpio.py` | Pi-side native/burst engine behaves exactly like the Python path, incl. fault injection | `python3 test_native_gpio.py` |
 | `test_pcopy_receive.py` | PCOPY never writes a failed block to disk; needs a host C compiler | `python3 test_pcopy_receive.py` |
+| `test_netreset.py` | `p netreset` rebuilds the Pi's TCP/IP setup and reopens the TAP: screen-sized reply, reasons for failure, teardown failure does not stop the rebuild | `python3 test_netreset.py` |
 | `native_gpio_test.c` | C model of the CPLD edge contract for `native/gpio_transfer.c` | see `../Server/Python/src/native/README.md` |
 
 ## Emulator tests (minutes, openMSX + a private server instance)
