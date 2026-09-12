@@ -61,7 +61,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260912.040"
+BuildId = "20260912.042"
 
 CMDSIZE = 9
 MSGSIZE = 128
