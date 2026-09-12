@@ -448,8 +448,7 @@ static uint8_t allocateMapperSegments(uint8_t storageCount) {
     segTotal = detectMapperSegments();
     if (segTotal < (uint8_t)(storageCount + 4)) {
         pprintf("Not enough mapper segments: have ", segTotal);
-        pprintf(", need ", (uint16_t)storageCount + 4); pprints("", "
-");
+        pprintf(", need ", (uint16_t)storageCount + 4); pprints("", "\n");
         return RC_FAILED;
     }
     segNext = (uint8_t)(segTotal - 1);
@@ -733,7 +732,7 @@ void ascii8Win1Handler(void) __naked {
         ld (hl), a
         push bc
         push de
-        ld a, i          ; P/V = IFF2, the caller's interrupt state
+        ld a, i          ; P/V = IFF2, the interrupt state of the caller
         push af
         di
         ; RRCA does double duty: carry becomes bank bit 0 (which half of the
@@ -798,7 +797,7 @@ void ascii8Win2Handler(void) __naked {
         ld (hl), a
         push bc
         push de
-        ld a, i          ; P/V = IFF2, the caller's interrupt state
+        ld a, i          ; P/V = IFF2, the interrupt state of the caller
         push af
         di
         ; RRCA does double duty: carry becomes bank bit 0 (which half of the
@@ -863,7 +862,7 @@ void ascii8Win3Handler(void) __naked {
         ld (hl), a
         push bc
         push de
-        ld a, i          ; P/V = IFF2, the caller's interrupt state
+        ld a, i          ; P/V = IFF2, the interrupt state of the caller
         push af
         di
         ; RRCA does double duty: carry becomes bank bit 0 (which half of the
@@ -928,7 +927,7 @@ void ascii8Win4Handler(void) __naked {
         ld (hl), a
         push bc
         push de
-        ld a, i          ; P/V = IFF2, the caller's interrupt state
+        ld a, i          ; P/V = IFF2, the interrupt state of the caller
         push af
         di
         ; RRCA does double duty: carry becomes bank bit 0 (which half of the
