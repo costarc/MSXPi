@@ -175,6 +175,94 @@ https://github.com/costarc/openMSX/blob/master/Contrib/README.MSXPi
 MSXPi specific documentation is available in the MSXPi repository:
 https://github.com/costarc/MSXPi/tree/master/documents
 
+Internet from the MSX in openMSX (Windows)
+=========================================
+
+The MSXPi extension carries real network traffic, so InterNestor Lite, telnet,
+HGET and the other UNAPI clients work in the emulator exactly as they do on
+hardware. The emulated MSX gets its own subnet (192.168.99.0/24) and Windows
+NATs it out through whichever interface carries your default route - the same
+arrangement the Raspberry Pi uses, and for the same reason: bridging cannot
+work over WiFi, because an access point will not forward frames whose source
+MAC is not the associated station's.
+
+This needs an openMSX whose MSXPi device implements the v1.6 hardware /WAIT
+flow control. The Ethernet transport uses it, so an older build reads stale
+bytes and looks like a broken driver.
+
+
+### Step 1: Install the OpenVPN TAP driver
+
+Install OpenVPN (https://openvpn.net/community-downloads/) and keep the "TAP
+Virtual Ethernet Adapter" component, or install the standalone tap-windows6
+driver on its own. Afterwards an adapter named "OpenVPN TAP-Windows6" appears
+in Network Connections - nothing else about OpenVPN is used or needs
+configuring.
+
+
+### Step 2: Run the setup once, as Administrator
+
+From an elevated PowerShell:
+
+          powershell -ExecutionPolicy Bypass -File software/Server/Shell/msxpi-tcpip-setup.ps1
+
+It reports what it did:
+
+          adapter: OpenVPN TAP-Windows6  [TAP-Windows Adapter V9]
+          uplink: Wi-Fi
+          OpenVPN TAP-Windows6 up: 192.168.99.1/24 mtu 576
+          NAT: 192.168.99.0/24 -> Wi-Fi
+          dns: 192.168.1.254
+
+and prints the InterNestor Lite settings to match. Note the "dns:" line - that
+is the resolver the MSX should use.
+
+This is NOT persistent across reboots; re-run it after a restart. To undo it
+and give the adapter back to OpenVPN, add "-Down".
+
+Windows generally allows only one NAT instance, and Docker Desktop, Hyper-V and
+WSL each take one. If something already holds it the script names it and stops
+rather than half-configuring.
+
+
+### Step 3: Start the server
+
+          python msxpi-server.py
+
+No administrator rights are needed for this part. It should print:
+
+          eth: TAP device OpenVPN TAP-Windows6 up
+
+If it says "TAP unavailable ... falling back to MockLink", something else has
+the adapter open - a running OpenVPN session will do that. MockLink answers
+every UNAPI call correctly and carries no traffic at all, so the MSX will look
+configured and reach nothing.
+
+
+### Step 4: On the MSX
+
+Start openMSX with the MSXPi extension, then:
+
+          MSR I              (MSX-DOS 1 only - see below)
+          INL I
+          HOST GOOGLE.COM
+
+`HOST` printing an address means the whole path works. The Ethernet UNAPI
+driver is in msxpibios.rom, so nothing needs installing first: ETHUNAPI will
+refuse, because the ROM already registers an ETHERNET implementation.
+
+**Do not run RAMHELPR I.** It installs the UNAPI RAM helper on its own, and
+MSR.COM installs the mapper support routines AND a helper - so MSR then finds a
+helper already present and aborts, leaving INL to fail with "No mapper support
+routines found". A cold boot clears it. Under Nextor or MSX-DOS 2, skip MSR
+entirely: the mapper routines are already there.
+
+If `HOST` answers "8: DNS not found" but the link is otherwise up, the resolver
+is the problem rather than the network - INL.CFG ships with 1.1.1.1, and some
+networks block public resolvers. Use the address the setup script printed:
+
+          INL IP P 192.168.1.254
+
 MSXPi v1.6 Release Notes
 ========================
 Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM, and
@@ -197,6 +285,7 @@ Ethernet UNAPI
 - The Ethernet UNAPI implementation is in msxpibios.rom, so InterNestor Lite installs with no helper: RAMHELPR is not needed and ETHUNAPI refuses, because the ROM already registers an ETHERNET implementation.
 - Pi side: msxpi_eth.py shuttles frames over a TAP device (msxpi0), and Server/Shell/msxpi-tcpip-setup.sh creates it, owns it as the server's user, and sets up routing and NAT to whichever interface carries the default route. The MSX sits on an isolated subnet behind NAT because an access point will not forward frames whose source MAC is not the associated station's - bridging cannot work over WiFi.
 - ethtrans.asm uses the same /WAIT burst path as the disk transfers.
+- Windows, under openMSX: the same ROM driver reaches a real network there too. msxpi_eth.py opens an OpenVPN TAP-Windows adapter (WinTapLink) and Server/Shell/msxpi-tcpip-setup.ps1 does what the shell script does on the Pi - the address, forwarding, and a WinNAT instance for the MSX's subnet. Opening the adapter needs no administrator rights; only that one-time setup does. InterNestor Lite installs and resolves names from the emulated MSX, so telnet, HGET and the rest work in the emulator as they do on hardware.
 
 New and changed client commands
 - "p netreset [secs]" rebuilds the Pi's whole TCP/IP setup from the MSX - tear down the TAP and the iptables rules, run the setup again, and reopen the link - for the case where the Pi had no default route when it booted and the MSX therefore has no network at all. Optional argument is how long to wait for a default route (default 15 s, capped at 60). "p tcpip" is an alias.
