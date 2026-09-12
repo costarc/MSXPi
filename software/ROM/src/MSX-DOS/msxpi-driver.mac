@@ -91,9 +91,11 @@ SECLEN		equ	512		; Size of biggest sector
 ; A = #40 in first call, and #80 in second all.;
 ;
 INIHRD:
-        ld      a,$80
-        cp      h
-        ret     z
+        ; Called twice, with $40 then $80 (see the note above), so bit 7
+        ; alone tells the two apart - one byte cheaper than comparing, and
+        ; that byte is what let DSKIO_RXSIZE grow.
+        bit     7,h
+        ret     nz
         ld      hl,MSXPIVERSION
         call    PRINT
         ; About 1.4 s at 3.58 MHz (6 x 256 x 256 DJNZ): time to read the
@@ -286,15 +288,9 @@ DSKIO_COPY_SECTOR:
 ; and only when this side asked (DSKIO_RXSIZE, /WAIT present); disk reads
 ; always come before writes. SENDDATA sends only the first attempt as a
 ; burst. GETWRK keeps DE. Corrupts AF, HL, IX.
-DSKIO_TXSIZE:
-        call    GETWRK             ; HL = IX = work area
-        ld      bc,SECTORSIZE
-        bit     7,(ix+7)
-        ret     z
-        set     7,b
-        ret
+; DSKIO_TXSIZE lives in a free gap of the kernel ROM: see dskio_txsize.asm.
 
-; DSKIO_RXSIZE lives in a free gap of the kernel ROM: see dskio_rxsize.asm.
+        INCLUDE dskio_rxsize.asm
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_READ Routine     |
@@ -996,7 +992,7 @@ EC_ExitError:
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.6"
-BuildId: DB ".20260912.043"
+BuildId: DB ".20260912.048"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 ; ================================================================
@@ -1014,9 +1010,9 @@ ENDOFCMDS:
 ; "dskioini", "dskiodrv" and "dskiofmt"; this driver never sends them, so
 ; they are not carried here - the space went to the UNAPI driver below.
 ; SendCommandToMSXPi sends up to the first 0: no padding needed.
-DOS_RSEC:   DB  "dskiords",0
-DOS_WSEC:   DB  "dskiowrs",0
-DOS_SECI:   DB  "dskiosct",0
+DOS_RSEC:   DB  "dskior",0
+DOS_WSEC:   DB  "dskiow",0
+DOS_SECI:   DB  "dskios",0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm

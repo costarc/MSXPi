@@ -213,7 +213,7 @@ harness::at_dos_prompt {
     if args.fault in ('always', 'sector-info'):
         assert 'DOS disk error' in result and count == 3, (result, count)
         if args.fault == 'sector-info':
-            assert '-> dskiowrs' not in logs.split('-> pcopy init', 1)[1]
+            assert '-> dskiow' not in logs.split('-> pcopy init', 1)[1]
         print(f'PASS: {args.fault}: exactly 3 attempts, DOS error propagated ({elapsed:.1f}s)')
     else:
         assert 'RESULT PASS' in result, result

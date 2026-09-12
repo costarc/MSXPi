@@ -61,7 +61,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260912.043"
+BuildId = "20260912.048"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1869,7 +1869,7 @@ def reload(parms = None):
     print(f"reload(): {varname} reloaded from {path}")
     return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
-def dskiords(parms = None):
+def dskior(parms = None):
     #print("dskiords()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1916,7 +1916,7 @@ def dskiords(parms = None):
                   % (sectorcnt, numsectors, sectorInfo[3] + sectorcnt - 1, rc))
             break
  
-def dskiowrs(parms = None):
+def dskiow(parms = None):
     #print("dskiowrs()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1946,7 +1946,7 @@ def dskiowrs(parms = None):
             print("dskiowrs: checksum error")
             break
                   
-def dskiosct(parms = None):
+def dskios(parms = None):
     #print("dskiosct()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1971,6 +1971,18 @@ def dskiosct(parms = None):
     #print("dskiosct:mediaDescriptor=",sectorInfo[2])
     #print("dskiosct:initialSector=",sectorInfo[3])
        
+# The v1.6 driver sends the short names; every ROM before it sends these.
+# Keeping both costs three lines and lets a server upgraded ahead of the EEPROM
+# - the usual order, since one is a file copy and the other is a reflash - go on
+# serving an older ROM. The reverse pairing cannot be rescued from here: a v1.6
+# ROM against a pre-1.6 server fails on the name, which is a better failure than
+# the silent one it would otherwise hit (that server reads the burst request as
+# a 33280-byte buffer and answers with an ordinary block).
+dskiords = dskior
+dskiowrs = dskiow
+dskiosct = dskios
+
+
 def recvdata2(maxbufsize = 8192):
     """
     Python-side counterpart of MSX SENDDATA2().
@@ -5024,7 +5036,7 @@ try:
                         buf = buf.decode('utf-8', 'replace')
                         cmd, *rest = buf.split()
                         parms = " ".join(rest)
-                        print(f" -> {cmd} {parms}")
+                        print(f" -> {cmd} {parms}  [t={time.time():.2f}]")   # TEMP timing
                         try:
                             if (cmd.lower() == "set"): #workaround to avoid callign Linux "set" command
                                 cmd = "pset"
