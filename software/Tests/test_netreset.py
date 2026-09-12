@@ -36,6 +36,7 @@ echo "uplink: wlan0"
 echo "created msxpi0 (owner pi)"
 echo "msxpi0 up: 192.168.99.1/24 mtu 576"
 echo "NAT: msxpi0 -> wlan0"
+echo "dns: 192.168.1.254"
 echo ""
 echo "Now restart msxpi-server.py as pi and check it prints"
 echo "    eth: TAP device msxpi0 up"
@@ -128,6 +129,10 @@ class NetresetTest(unittest.TestCase):
         self.assertIn('uplink: wlan0', lines)
         self.assertIn('NAT: msxpi0 -> wlan0', lines)
         self.assertIn('created msxpi0 (owner pi)', lines)
+        # The Pi's resolver: the MSX keeps its own in INL.CFG, and when the Pi
+        # changes network the two silently stop agreeing.
+        self.assertTrue(any(l.startswith('dns: 192.168.1.254') for l in lines),
+                        lines)
         self.assertNotIn('', [l for l in lines if l == ''])
         for line in lines:
             self.assertLessEqual(len(line), 40, f'too wide for the screen: {line}')

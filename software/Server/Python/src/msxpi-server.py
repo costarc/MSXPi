@@ -2871,7 +2871,8 @@ def netreset(parm=None):
             # Only the lines worth 40 columns on an MSX screen.
             for line in out.splitlines():
                 if line.startswith(("uplink:", "created ", "msxpi0 up:",
-                                    "NAT:", "WARN")) or "recreating" in line:
+                                    "NAT:", "dns:", "WARN")) \
+                        or "recreating" in line:
                     report.append(line.strip())
 
     state = _eth_relink()

@@ -197,6 +197,12 @@ echo "NAT: $TAP -> $UPLINK"
 
 DNS="$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf 2>/dev/null)"
 [ -n "$DNS" ] || DNS="1.1.1.1"
+# Announced on its own line, not only inside the advice below, so that "p
+# netreset" can show it on the MSX. The MSX holds ITS resolver in INL.CFG,
+# fixed at install time; when the Pi changes network the two stop agreeing,
+# and a resolver that was reachable from the old network may be blocked on the
+# new one - which looks exactly like a broken link but is not one.
+echo "dns: $DNS"
 
 sudo chown pi:pi "$MSXPI_ROOT_LOG"
 chmod 664 "$MSXPI_ROOT_LOG"
