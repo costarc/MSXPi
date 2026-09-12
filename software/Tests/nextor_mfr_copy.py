@@ -123,6 +123,7 @@ def main():
     ap.add_argument('--input', type=Path, default=Path('/mnt/c/tmp/ALESTE.ROM'))
     ap.add_argument('--preload', action='store_true', help='also put the file on D: beforehand')
     ap.add_argument('--only-back', action='store_true', help='only COPY D: -> B: (implies --preload)')
+    ap.add_argument('--only-write', action='store_true', help='only COPY B: -> D: (exercises burst writes)')
     ap.add_argument('--trace', action='store_true', help='log driver entry points to trace.log')
     ap.add_argument('--natural-carry', action='store_true',
                     help='do not force carry on GETDPB entry (failure becomes timing-dependent)')
@@ -138,6 +139,8 @@ def main():
     ap.add_argument('--no-mfr', action='store_true',
                     help='no MegaFlashROM: MSXPi boots its own MSX-DOS 1 kernel (A:/B:)')
     ap.add_argument('--tcl', type=Path, help='extra Tcl appended to the run script (breakpoints etc.)')
+    ap.add_argument('--fault-burst-write', action='store_true',
+                    help='corrupt the checksum of the first burst write once (the retry must go byte by byte)')
     ap.add_argument('--gui', action='store_true', help='show the openMSX window')
     ap.add_argument('--speed', type=int, default=250)
     ap.add_argument('--timeout', type=int, default=1800)
@@ -182,6 +185,14 @@ def main():
     srv = (SOFTWARE/'Server/Python/src/msxpi-server.py').read_text(encoding='utf-8-sig')
     srv = srv.replace('MSXPIHOME = "/home/pi/msxpi"', f'MSXPIHOME = {str(work)!r}')
     srv = srv.replace('os.path.join("/tmp/msxpi", "mounted")', repr(str(work/'mounted')))
+    if a.fault_burst_write:
+        marker = "        # --- Send local checksum back ---"
+        assert marker in srv, 'server source changed: update the fault injection'
+        inject = ("        if burst and not globals().get('_test_fault_done'):",
+                  "            globals()['_test_fault_done'] = True",
+                  "            local_sum ^= 1",
+                  "            print('TEST BURST WRITE CHECKSUM FAULT', flush=True)")
+        srv = srv.replace(marker, chr(10).join(inject) + chr(10) + marker, 1)
     (work/'server.py').write_text(srv)
 
     ext = work/'share/extensions'
@@ -199,7 +210,8 @@ def main():
     cmds = [(f'pre{i}', c) for i, c in enumerate(a.pre)] + [('drvinfo', 'DRVINFO')]
     if not a.no_copy:
         cmds += [] if a.only_back else [('to_msxpi', f'COPY {sdd}:{name} {pid}:')]
-        cmds += [('to_sd', f'COPY {pid}:{name} {sdd}:ROUND.ROM'), ('dir', f'DIR {sdd}:')]
+        if not a.only_write:
+            cmds += [('to_sd', f'COPY {pid}:{name} {sdd}:ROUND.ROM'), ('dir', f'DIR {sdd}:')]
     tcl = work/'run.tcl'
     slot = '1' if a.no_mfr else '2'   # MSXPi takes the first free cartridge slot
     tcl.write_text('harness::init nextor_mfr_copy\n'
@@ -236,7 +248,7 @@ def main():
     ok = 'RESULT PASS' in result
     part.write_bytes(sd.read_bytes()[first:first+size])
     checks = [(f'{pid}:'+name, work/'mounted/1_a.dsk', name)] if not a.only_back else []
-    checks += [(f'{sdd}:ROUND.ROM', part, 'ROUND.ROM')]
+    checks += [] if a.only_write else [(f'{sdd}:ROUND.ROM', part, 'ROUND.ROM')]
     if a.no_copy:
         checks = []
     for label, img, fn in checks:

@@ -223,7 +223,7 @@ DSKIO_WRITE_LOOP:
         call    DSKIO_P1_TEST
         jr      c,DSKIO_WRITE_STAGED
         push    de
-        ld      bc,SECTORSIZE
+        call    DSKIO_TXSIZE       ; BC = 512, bit 15 set: send as a /WAIT burst
         call    SENDDATA
         pop     de
         inc     d                  ; DE += 512; INC keeps SENDDATA's carry
@@ -241,7 +241,7 @@ DSKIO_WRITE_STAGED:
         jr      c,DSKIO_WRITE_NEXT
         push    hl
         call    DSKIO_BUFFER
-        ld      bc,SECTORSIZE
+        call    DSKIO_TXSIZE
         call    SENDDATA
         pop     de                 ; original caller pointer, advanced 512
         jr      DSKIO_WRITE_NEXT
@@ -277,9 +277,21 @@ DSKIO_COPY_SECTOR:
         call    XFER
         or      a
         ret
-DSKIO_P1_TEST:
-        sub     03EH
-        cp      042H               ; 3E00..7FFF can overlap page 1
+; DSKIO_P1_TEST (CF = sector at D*256 can touch page 1) lives in a free gap of
+; the kernel ROM: see dskio_p1test.asm.
+
+; BC = sector size for SENDDATA, with bit 15 set when the last block the
+; server sent was a /WAIT burst (RECVDATA_ONEBLOCK keeps its raw length high
+; byte at work area +7). Only a server that can burst both ways sends one,
+; and only when this side asked (DSKIO_RXSIZE, /WAIT present); disk reads
+; always come before writes. SENDDATA sends only the first attempt as a
+; burst. GETWRK keeps DE. Corrupts AF, HL, IX.
+DSKIO_TXSIZE:
+        call    GETWRK             ; HL = IX = work area
+        ld      bc,SECTORSIZE
+        bit     7,(ix+7)
+        ret     z
+        set     7,b
         ret
 
 ; DSKIO_RXSIZE lives in a free gap of the kernel ROM: see dskio_rxsize.asm.

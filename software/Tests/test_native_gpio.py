@@ -26,6 +26,7 @@
 
 """Protocol equivalence for native/Python payloads; no GPIO or server startup."""
 import ast
+import socket
 import ctypes
 import importlib.util
 from pathlib import Path
@@ -33,13 +34,13 @@ import unittest
 
 SRC = Path(__file__).resolve().parents[1]/'Server/Python/src'
 TREE = ast.parse((SRC/'msxpi-server.py').read_text(encoding='utf-8-sig'))
-NAMES = {'SPI_BurstOut', 'SPI_ReadPayload', 'SPI_WritePayload', 'recvdata2', 'recvdata2_oneblock', 'senddata_oneblock'}
+NAMES = {'SPI_BurstOut', 'SPI_BurstIn', 'SPI_ReadPayload', 'SPI_WritePayload', 'recvdata2', 'recvdata2_oneblock', 'senddata_oneblock'}
 CODE = compile(ast.Module(body=[n for n in TREE.body if isinstance(n, ast.FunctionDef) and n.name in NAMES], type_ignores=[]), 'server-functions', 'exec')
 CONSTANTS = {}
 for node in TREE.body:
     if isinstance(node, ast.Assign) and len(node.targets)==1 and isinstance(node.targets[0], ast.Name):
         name=node.targets[0].id
-        if name.startswith('RC_') or name in {'READY', 'READY_ACK', 'MAX_BLOCK_RETRIES', 'GLOBALRETRIES'}:
+        if name.startswith('RC_') or name in {'READY', 'READY_ACK', 'MAX_BLOCK_RETRIES', 'GLOBALRETRIES', 'BURST_FLAG'}:
             CONSTANTS[name]=ast.literal_eval(node.value)
 
 
@@ -74,6 +75,7 @@ def context(data, native):
     wire=Wire(data)
     namespace=dict(CONSTANTS, hostType='RaspberryPi' if native else 'Linux',
                    _NATIVE_GPIO=wire if native else None, _PROFILE=False,
+                   _FAST_GPIO=False, socket=socket, conn=None,
                    SPI_ByteTransfer=wire.byte, eth_handle_opcode=lambda _: False)
     exec(CODE, namespace)
     return namespace, wire

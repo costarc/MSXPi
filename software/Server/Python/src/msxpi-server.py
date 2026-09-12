@@ -734,7 +734,16 @@ def SPI_ReadPayload(length):
             print(f"SPI_ReadPayload: {e}")
             return RC_CONNERR, None
     payload = bytearray(length)
+    quickack = getattr(socket, 'TCP_QUICKACK', None) if hostType != "RaspberryPi" else None
     for i in range(length):
+        # Linux clears TCP_QUICKACK by itself after a few packets, and a burst
+        # write arrives as hundreds of one-byte packets, so re-arm it while
+        # draining (see the accept() above). No-op on the Pi's GPIO link.
+        if quickack is not None and conn is not None and not i % 32:
+            try:
+                conn.setsockopt(socket.IPPROTO_TCP, quickack, 1)
+            except OSError:
+                quickack = None
         rc, byte = SPI_ByteTransfer()
         if rc != RC_SUCCESS:
             return rc, None
@@ -1843,6 +1852,14 @@ def recvdata2(maxbufsize = 8192):
             return (RC_CONNERR, None)
 
         length = size_low | (size_high << 8)
+        # Bit 15: the MSX sends this payload as a /WAIT burst (OTIR). It only
+        # does so once this server has sent it a burst block, and never on a
+        # retry - see senddata_oneblock and the ROM's DSKIO_TXSIZE.
+        burst = bool(length & BURST_FLAG)
+        length &= ~BURST_FLAG
+        if burst and not globals().get('_burst_in_announced'):
+            globals()['_burst_in_announced'] = True
+            print("recvdata2(): MSX sends /WAIT burst payloads - receiving them")
 
         # --- block_index ---
         rc, block_index = SPI_ByteTransfer()
@@ -1863,7 +1880,7 @@ def recvdata2(maxbufsize = 8192):
             return (RC_CONNERR, None)
 
         # --- Payload ---
-        rc, payload = SPI_ReadPayload(length)
+        rc, payload = SPI_BurstIn(length) if burst else SPI_ReadPayload(length)
         if rc != RC_SUCCESS:
             return (RC_CONNERR, None)
         chksum = sum(payload)
@@ -4646,6 +4663,19 @@ try:
             server_socket = initialize_connection()
             conn, addr = server_socket.accept()
             print(f" ** MSX Connected to {addr} **\n")
+            # openMSX sends one byte per OUT. With Nagle on its side and
+            # delayed ACK here, a /WAIT burst write (512 back-to-back bytes
+            # with no reply between them) costs tens of milliseconds PER BYTE,
+            # which looks exactly like a hung transfer. Ask for immediate ACKs
+            # and keep our own one-byte replies prompt. openMSX should also set
+            # TCP_NODELAY (see openMSX/src/MSXPiDevice.cc); this helps until
+            # such a build is deployed. The Pi's GPIO link is unaffected.
+            try:
+                conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                if hasattr(socket, 'TCP_QUICKACK'):
+                    conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
+            except OSError as exc:
+                print(f"socket tuning not applied: {exc}")
             globals()['conn'] = conn
 
             print(f"MSXPi Server waiting command:",end="")

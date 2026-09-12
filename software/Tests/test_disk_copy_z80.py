@@ -34,7 +34,7 @@ those kernel implementations. The ROM itself supplies all copy/dispatch code.
 import sys
 from pathlib import Path
 import re
-from test_payload_z80 import Machine, LIB, AF, BC, DE, HL, PC, SP, IX, IFF1, IFF2
+from test_payload_z80 import Machine, LIB, AF, AF2, BC, DE, HL, PC, SP, IX, IFF1, IFF2
 
 rom=Path(sys.argv[1]).read_bytes()
 listing=Path(sys.argv[2]).read_text()
@@ -129,6 +129,9 @@ from itertools import product
 # Neither may touch the kernel's shared sector buffer (SECBUF).
 for caller, receive, fail, sectors, wait_hw in product((0xc000, 0x4000), (False, True), (False, True), (1, 2), (False, True)):
     m=Machine(image, wait_hw=wait_hw)
+    # Work area +7: raw length high byte of the last block the server sent.
+    # With /WAIT that was a burst (bit 7), which is what lets writes burst.
+    m.mem[0xc807]=0x82 if wait_hw else 0x02
     ram=bytearray(0x4000)
     def read(a): return ram[a-0x4000] if 0x4000<=a<0x8000 else m.mem[a]
     def write(a,v):
@@ -173,6 +176,8 @@ for caller, receive, fail, sectors, wait_hw in product((0xc000, 0x4000), (False,
             elif pc==transfer:
                 where=private if staged else caller+calls*512
                 assert m.get(DE)==where and m.get(BC)&0x7fff==512,(hex(m.get(DE)),hex(where))
+                if not receive:
+                    assert m.get(BC)==(0x8200 if wait_hw else 0x200),'write burst request '+hex(m.get(BC))
                 block=payload[calls*512:(calls+1)*512]
                 if receive:
                     for i,v in enumerate(block): write(where+i,v)
@@ -195,7 +200,7 @@ for caller, receive, fail, sectors, wait_hw in product((0xc000, 0x4000), (False,
         assert bytes(read(caller+i) for i in range(512*sectors))==expected
     finally: m.close()
 print('PASS: disk loops direct outside page 1, staged via XFER in page 1, reject failed reads,'
-      ' ask for /WAIT bursts only when $57 shows wait mode')
+      ' ask for /WAIT bursts only when $57 shows wait mode, burst writes only after a burst read')
 
 # PAYLOAD_RX_BURST on a /WAIT interface: INIR runs, wait mode is off again
 # afterwards, and DE/BC/HL/CF match PAYLOAD_RX's contract.
@@ -205,8 +210,9 @@ for length in (256, 512):
     try:
         m.mem[0xf000:0xf002]=bytes(2)
         m.set(DE,0xc000);m.set(BC,0x8000|length);m.set(HL,0);m.set(SP,0xf000);m.set(PC,burst)
-        for _ in range(200000):
+        for step in range(200000):
             if m.get(PC)==0: break
+            if step%7==0: m.set(AF2,(step*0x2f5d)&0xffff)   # an ISR that trashes AF'
             LIB.z80ex_step(m.cpu)
         else: raise AssertionError('burst timeout')
         data=bytes((i*73+19)&255 for i in range(length))
@@ -226,4 +232,23 @@ try:
     else: raise AssertionError('burst did not give up on ESC')
     assert m.get(AF)&1 and m.wait_reads==0 and not m.waitmode
 finally: m.close()
-print('PASS: PAYLOAD_RX_BURST 256/512 bytes via /WAIT, checksum and registers; ESC aborts before wait mode')
+# PAYLOAD_TX_BURST: OTIR of the whole block with wait mode on, then the sum.
+send=label('PAYLOAD_TX_BURST')
+for length in (256, 512):
+    m=Machine(image, wait_hw=True)
+    try:
+        data=bytes((i*29+7)&255 for i in range(length))
+        m.mem[0xc000:0xc000+length]=data
+        m.mem[0xf000:0xf002]=bytes(2)
+        m.set(DE,0xc000);m.set(BC,0x8000|length);m.set(HL,0);m.set(SP,0xf000);m.set(PC,send)
+        for step in range(200000):
+            if m.get(PC)==0: break
+            if step%7==0: m.set(AF2,(step*0x2f5d)&0xffff)   # an ISR that trashes AF'
+            LIB.z80ex_step(m.cpu)
+        else: raise AssertionError('send burst timeout')
+        assert bytes(m.sent)==data and m.wait_writes==length and not m.waitmode
+        assert m.get(DE)==0xc000+length and m.get(BC)==0 and m.get(HL)==sum(data)&0xffff
+        assert not m.get(AF)&1 and not m.errors, m.errors
+    finally: m.close()
+print('PASS: PAYLOAD_RX_BURST/PAYLOAD_TX_BURST 256/512 bytes via /WAIT, checksum and registers,'
+      " immune to AF' changes; ESC aborts before wait mode")

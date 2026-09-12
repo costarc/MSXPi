@@ -96,9 +96,10 @@ UNAPI_WRKEND	EQU	UNAPI_WRK+39	; UNAPI size; ROM MYSIZE adds its disk buffer
 ; below 8000H - so MSXPi code growing into the driver, or the driver growing
 ; past the end of the ROM, fails the build loudly instead of silently
 ; producing a corrupt ROM.
-UNAPI_ORG	EQU	07AB8H	; Boundary between the DOS driver below and the UNAPI
-				; image above, chosen to split the free space evenly
-				; between them (about 25 bytes each).  Both are tight;
+UNAPI_ORG	EQU	07AC4H	; Boundary between the DOS driver below and the UNAPI
+				; image above.  Moved up from 07AB8H for the /WAIT
+				; disk bursts, leaving the UNAPI image 6 spare bytes
+				; below 8000H and the driver none.  Both are tight;
 				; the ASSERTs around UNAPI_ROM_IMAGE in msxpi-driver.mac
 				; catch an overrun on either side, so move this only in
 				; response to one of them, and re-measure afterwards.

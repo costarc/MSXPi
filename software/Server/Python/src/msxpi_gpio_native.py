@@ -91,6 +91,10 @@ class NativeGPIO:
     def write_burst(self, payload):
         self._transfer(payload, len(payload), burst=True)
 
+    def read_burst(self, length):
+        """Receive with READY held for the whole block (MSX OTIR in wait mode)."""
+        return self._transfer(None, length, burst=True)
+
     def report(self):
         if self.bytes:
             print(f'[native GPIO] {self.bytes} payload bytes; '

@@ -11,7 +11,7 @@ Run from WSL (Ubuntu). Emulator tests need the MSXPi-enabled openMSX in
 
 | Test | Checks | Run |
 |---|---|---|
-| `test_disk_copy_z80.py` | DSKIO sector loops on an emulated Z80 against the real ROM: direct transfers outside page 1, XFER staging in page 1, failure when XFER is missing, failed sectors, hex parser | `python3 test_disk_copy_z80.py ../target/msxpibios.rom ../zout/msx-dos.lst` |
+| `test_disk_copy_z80.py` | DSKIO sector loops on an emulated Z80 against the real ROM: direct transfers outside page 1, XFER staging in page 1, failure when XFER is missing, failed sectors, /WAIT burst requests and the burst routines (incl. a trashed AF'), hex parser | `python3 test_disk_copy_z80.py ../target/msxpibios.rom ../zout/msx-dos.lst` |
 | `test_payload_z80.py` | Generated transfer code (`../asm-common/transport`) in both ASM and C form; needs `libz80ex-dev`, SDCC | `python3 test_payload_z80.py` |
 | `test_native_gpio.py` | Pi-side native/burst engine behaves exactly like the Python path, incl. fault injection | `python3 test_native_gpio.py` |
 | `test_pcopy_receive.py` | PCOPY never writes a failed block to disk; needs a host C compiler | `python3 test_pcopy_receive.py` |
@@ -33,7 +33,11 @@ python3 nextor_mfr_copy.py /tmp/t --sd nextor-mbr.dsk --machine Canon_V-25 --no-
 ```
 
 `--rom` tests another ROM, `--trace` logs every DSKIO/DSKCHG/GETDPB call,
-`--gui` shows the window. Exit code 0 = pass.
+`--gui` shows the window, `--tcl FILE` adds breakpoints or other Tcl,
+`--fault-burst-write` corrupts the checksum of the first /WAIT burst write
+(its retry must go byte by byte). Exit code 0 = pass. The server log says
+whether /WAIT bursts were used ("burst payloads - enabled" for reads,
+"receiving them" for writes).
 
 **`pcopy_emulator.py`** / **`verify_disk_copy.py`**: PCOPY download/upload
 (with checksum-fault injection) and a FAT12 file check; see `README-pcopy.md`.
