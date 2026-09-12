@@ -5,7 +5,7 @@ python3 asm-common/transport/generate.py --check || exit 1
 export buildClientCommands="yes"
 export buildBIOS="yes"
 export buildLoadrom="yes"
-export buildOpenMSXConfig="yes"
+export buildOpenMSXConfig="no"
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
 # the sha1 in its XML, so a released ROM needs its own copy that no later build
@@ -16,12 +16,12 @@ export buildOpenMSXConfig="yes"
 #     releaseOpenMSXRom=yes ./build
 export releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 export buildMSXdiskImage="yes"
-export updateVersions="yes"
+export updateVersions="no"
 
-export BIOSNAME=msxpibios
+export BIOSNAME=msxpibios_v1.6
 OPENMSXSRC=../../openMSX/openMSX
 export HOME=../../../..
-export BIOS=ROM/src/BIOS/$BIOSNAME.asm
+export BIOSSRC=ROM/src/BIOS/msxpibios.asm
 export ROMBANK1=$HOME/Dev/MSX/gameroms/ROAD.ROM
 export BIOSFILE=target/$BIOSNAME.rom
 export ZMAC_PATH=$HOME/Dev/zmac
@@ -141,7 +141,7 @@ if [ $buildBIOS = "yes" ];then
   # before zmac runs, or the compiled ROM bakes in the previous run's id
   # and the bump only takes effect on the *next* build.
   UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
-  UpdateBuildIdASM ./ROM/src/BIOS/$BIOSNAME.asm
+  UpdateBuildIdASM ./$BIOSSRC
   UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
   UpdateBuildId    ./Server/Python/src/msxpi-server.py
 
@@ -178,7 +178,7 @@ if [ $buildBIOS = "yes" ];then
   [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/$BIOSNAME.rom
   
   # Build BIOS
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/$BIOSNAME.asm  -o ./target/msxpbios.rom
+  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./$BIOSSRC  -o ./target/msxpbios.rom
   
   # Build BASIC BIOS Extension
   #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
