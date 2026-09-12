@@ -186,6 +186,15 @@ if [ "$buildBIOS" = "yes" ]; then
     "$ZMAC" -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac ||
         die "msx-dos.mac did not assemble - $BIOSFILE NOT updated"
 
+    # msxpiext.bin - the BASIC-only extension, BLOADed and relocated to page-1
+    # RAM. Shares the CALL MSXPI handler with the driver via msxpi_call.asm, and
+    # needs -DMSXPI_RAM_STASH: it runs from RAM, so msxpi_bios.asm uses its own
+    # stash buffer rather than the driver's GETWRK workarea. sjasmplus, not
+    # zmac, because IFDEF there tests -D defines.
+    echo "Compiling the BASIC extension (msxpiext.bin)"
+    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include         --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
+        die "msxpiext.asm did not assemble"
+
     [ -f ./zout/msx-dos.hex ] || die "zmac produced no zout/msx-dos.hex"
     "$HEX2BIN" -s 4000 ./zout/msx-dos.hex || die "hex2bin failed"
     cp ./zout/msx-dos.bin "$BIOSFILE" || die "could not write $BIOSFILE"
@@ -275,7 +284,10 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
     # that order is the order the files land in the image's directory. A glob
     # expands pattern by pattern, which reorders the directory and changes the
     # image byte-for-byte for no reason.
-    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.ini 2>/dev/null); do
+    # *.bin picks up msxpiext.bin, the BASIC extension. The BASIC programs
+    # BLOAD it as their fallback when CALL MSXPIVER fails, and it was not
+    # being shipped at all - so that fallback died with "File not found".
+    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini 2>/dev/null); do
         fname="${file##*/}"
         [ -f "$file" ] || continue
         # Skip empty files. dsktool.py dies with "list index out of range" on a
