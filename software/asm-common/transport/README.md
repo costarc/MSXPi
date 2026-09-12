@@ -51,6 +51,10 @@ measurements of this common software bottleneck removal.
 
 ## Verification
 
+The tests below live in `software/Tests/`, which is **not part of the release
+branch** - it is carried on the development branches (`performance` and the
+feature branches cut from it). Check one of those out to run them.
+
 - `python3 software/Tests/test_payload_z80.py`: executes assembled SDCC output
   with libz80ex. RX/TX and ABI checks cover hardware/TCP status, lengths
   0/1/255/256/257/512/8192, checksum overflow, register preservation, IFF on/off,

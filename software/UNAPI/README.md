@@ -1,11 +1,17 @@
 # Pi-side network setup
 
-`msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that is
-on **WiFi**, and `INL.CFG` is the matching InterNestor Lite configuration.
+The setup script lives in **`../Server/Shell/msxpi-tcpip-setup.sh`**, with
+every other Pi-side script. A second copy used to sit under `UNAPI/pi-setup/`;
+the two drifted - a fix for the uplink detection landed in one and not the
+other, and they logged to different files, so the wrong copy got debugged.
+The matching InterNestor Lite configuration is **`../target/INL.CFG`**, which
+`UNAPI/build.sh` converts to CRLF with a trailing Ctrl-Z - both of which
+MSX-DOS 1 needs - and writes onto the boot disk.
 
-Run the script with `sudo` on the Pi, then copy `INL.CFG` onto the MSX disk
-beside `INL.COM` - InterNestor reads it at install time, so the addresses are
-applied automatically by `INL I`.
+`msxpi-tcpip-setup.sh` gives the MSX a route to the internet through a Pi that
+is on **WiFi**. Run it with `sudo` on the Pi, then copy `INL.CFG` onto the MSX
+disk beside `INL.COM` - InterNestor reads it at install time, so the addresses
+are applied automatically by `INL I`.
 
 ## Why not a bridge
 
@@ -41,12 +47,29 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 
 ## Order of operations
 
-1. `sudo ./msxpi-tcpip-setup.sh` on the Pi
+1. `sudo /home/pi/msxpi/msxpi-tcpip-setup.sh` on the Pi (deployed from
+   `Server/Shell/`); it logs to `/var/log/msxpi.log`
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
+   If the Pi had no default route when it booted, the setup script gives up
+   and the MSX has no network. `p netreset` from the MSX runs this whole
+   sequence again - including reopening the TAP - so it can be recovered
+   without logging into the Pi.
 3. on the MSX: `INL I`.  The Ethernet UNAPI driver is in `msxpibios.rom` now,
    so there is nothing to install first - `RAMHELPR` is not needed, and
    `ETHUNAPI` will refuse because the ROM already registers an ETHERNET
    implementation.  `ETHTEST` should print `Seg: FF`.
+
+   Do NOT run `RAMHELPR I`.  It installs the UNAPI RAM helper on its own, and
+   `MSR.COM` installs the mapper support routines AND a helper - so when MSR
+   finds a helper already there it aborts, and the mapper routines it was
+   being run for are never installed.  The pair of messages that follow look
+   like they contradict each other:
+
+       A:MSR I    *** An UNAPI RAM helper is already installed
+       A:INL I    *** No mapper support routines found.
+
+   They do not: the first is why the second happens.  The helper lives in RAM,
+   so a cold boot clears it - then run `MSR I` and `INL I`, nothing else.
 
    `MSR I` only under **MSX-DOS 1**.  Under Nextor or MSX-DOS 2 the mapper
    support routines are already present and MSR is built to fail in that case

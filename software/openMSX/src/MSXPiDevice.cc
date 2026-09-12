@@ -2,6 +2,9 @@
 #include "MSXCPU.hh"
 #include "Timer.hh"
 #include <chrono>
+#ifndef _WIN32
+#include <netinet/tcp.h> // TCP_NODELAY (winsock2.h provides it on Windows)
+#endif
 #include "xrange.hh"
 #include <algorithm>
 #include <vector>
@@ -214,6 +217,18 @@ void MSXPiDevice::readLoop()
 			addr.sin_port = htons(5000);
 			addr.sin_addr.s_addr =
 			        htonl(INADDR_LOOPBACK); // 127.0.0.1
+			// Every OUT to $5A is sent as its own one-byte write. With
+			// Nagle enabled those are held back until the previous one is
+			// acknowledged, and the server's delayed ACK makes that ~40 ms
+			// EACH: a 512-byte /WAIT burst write then takes minutes instead
+			// of milliseconds, which looks exactly like a hung transfer.
+			// The protocol is request/response, so there is nothing to
+			// coalesce anyway.
+			{
+				int one = 1;
+				setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+				           reinterpret_cast<const char*>(&one), sizeof(one));
+			}
 			if (connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
 				close();
 				Timer::sleep(1'000'000); // retry once per second

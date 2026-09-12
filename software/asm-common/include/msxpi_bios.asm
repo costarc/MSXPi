@@ -217,7 +217,16 @@ SD2_RETRY:
 ; The disk driver stages sectors in the kernel buffer before SENDDATA.
 ; Command strings remain direct ROM reads; neither needs per-byte RDSLT.
     ld      hl,0
+ ifdef MSXPI_DRIVER
+    ; Length bit 15 (sent above as part of the length): burst this payload.
+    ; CF is clear here (the last PIWRITEBYTE succeeded); a good burst leaves
+    ; BC=0 so PAYLOAD_TX returns at once, a failed one skips it.
+    bit     7,b
+    call    nz,PAYLOAD_TX_BURST
+    call    nc,PAYLOAD_TX
+ else
     call    PAYLOAD_TX
+ endif
     jp      c,SD2_CONN_ERR
     jr      SD2_SEND_DONE
 
@@ -266,6 +275,11 @@ SD2_SEND_DONE:
     ld      a,l
     cp      GLOBALRETRIES
     jr      nc,SD2_CHKSUM_ERR
+ ifdef MSXPI_DRIVER
+    pop     bc              ; a retry never bursts: clear length bit 15 in
+    res     7,b             ; the saved original
+    push    bc
+ endif
     jp      SD2_RETRY
 
 SD2_CHKSUM_ERR:
@@ -337,17 +351,28 @@ r2_handshake_loop:
     pop     bc              ; BC = msx_blocksize
     ld      a, c
     call    PIWRITEBYTE
-    jr      c, handshake_exit
+    jr      c, handshake_exit_err
     ld      a, b
     call    PIWRITEBYTE
-    ; C flag set if error
+    jr      c, handshake_exit_err
+; Return the handshake's OWN result in the carry. Restoring the entry AF -
+; which is what a single `pop af` here used to do - threw it away, so every
+; caller saw the flags it arrived with: a failed handshake looked like a good
+; one and the caller went on to read a block the other end never sent.
+; (LDRPATCH197's `jr c,readpatch_neterr_ei` has been waiting for this.)
+; A is still the expected_index the caller passed in, as before.
 handshake_exit:
     pop     de
     pop     af
+    or      a               ; CF=0: handshake done, A unchanged
     ret
 handshake_err:
     pop     bc
-    jr      handshake_exit
+handshake_exit_err:
+    pop     de
+    pop     af
+    scf                     ; CF=1: handshake failed, A unchanged
+    ret
 
 
 RECVDATA_ONEBLOCK:
@@ -398,7 +423,11 @@ r2_retry:
     inc     hl
     ld      (hl),c
     inc     hl
-    ld      (hl),b
+    ld      (hl),b          ; raw: in the driver, bit 7 of this byte (length
+                            ; bit 15) says the server sent this block as a
+                            ; /WAIT burst - DSKIO_TXSIZE reads it to decide
+                            ; whether writes may burst. Only the disk driver
+                            ; asks for bursts, and it ignores the length.
     jr      r2_header_ok
 r2_header_err:
     pop     af
@@ -433,7 +462,16 @@ r2_header_ok:
     pop     bc            ; restore length
     ld      hl, 0         ; 16-bit checksum accumulator
 r2_payload_loop:
+ ifdef MSXPI_DRIVER
+    ; CF is clear here (the index compare above matched). A burst block
+    ; leaves BC=0 on success, so PAYLOAD_RX returns at once; on failure
+    ; CF skips it.
+    bit     7,b
+    call    nz,PAYLOAD_RX_BURST
+    call    nc,PAYLOAD_RX
+ else
     call PAYLOAD_RX
+ endif
     jp c,r2_conn_err_x
     jp r2_payload_done
 
@@ -485,6 +523,78 @@ STORE_BYTE:
 STORE_BYTE_1:
     ld      (de), a
     ret
+
+ ifdef MSXPI_DRIVER
+; ------------------------------------------------------------
+; PAYLOAD_RX_BURST / PAYLOAD_TX_BURST - payload with hardware /WAIT
+; ------------------------------------------------------------
+; In wait mode every IN from or OUT to $5A starts one transfer and stalls
+; the Z80 until it has completed, so INIR/OTIR move a byte in 21 T-states
+; instead of the polled loop's few hundred. The Pi holds READY for the whole
+; block (SPI_BurstOut / SPI_BurstIn); waiting for it once first is what
+; keeps the first INIR/OTIR from running before the burst has started (see
+; ethtrans.asm).
+;
+; Receive: used when the server marked the block length with bit 15, which
+; it only does when this side asked (bit 15 of the size sent by
+; PerformHandshake; the disk driver asks when port $57 shows /WAIT).
+; Send: used by SENDDATA when its length has bit 15 set, which the disk
+; driver only does after the server has sent it a burst (DSKIO_TXSIZE).
+;
+; The buffer must not be in page 1 (the block instructions access memory
+; directly); the disk driver only bursts to its caller's buffer outside page
+; 1 or its private buffer. Only whole, non-empty 256-byte runs are marked (a
+; 512-byte sector), so there is no remainder or empty case. The checksum is
+; taken from memory afterwards, in either direction.
+;
+; The direction lives in E across the loop - NOT in F': an interrupt handler
+; that uses EX AF,AF' without saving it (firmware, cartridge or DOS timer
+; hooks may) would flip a read into a send in the middle of a burst.
+;
+; In:  DE = buffer, BC = length with bit 15 set, HL = 0
+; Out: as PAYLOAD_RX/PAYLOAD_TX - DE advanced, BC = 0, HL = sum, CF = 0;
+;      CF = error (ESC while waiting for the Pi)
+PAYLOAD_TX_BURST:
+    scf                         ; CF=1: send (OTIR)
+    db      3Eh                 ; LD A,n - swallows the OR A below
+PAYLOAD_RX_BURST:
+    or      a                   ; CF=0: receive (INIR)
+    sbc     a,a                 ; A = FFh send, 00h receive
+    ld      l,a                 ; into L: HL is 0 on entry (the sum), and
+    res     7,b                 ; EX DE,HL below moves it to E
+    call    PAYLOAD_WAIT        ; Pi ready (READY up); ESC still aborts
+    ret     c
+    ld      a,1
+    out     (CONTROL_PORT2),a   ; wait mode on
+    push    bc
+    push    de
+    ex      de,hl               ; HL = buffer, E = direction
+    ld      d,b                 ; D = number of 256-byte runs (at least 1)
+    ld      b,c                 ; B = 0: each INIR/OTIR moves 256 bytes
+    ld      c,DATA_PORT1
+PRB_RUNS:
+    ld      a,e
+    or      a
+    jr      nz,PRB_OUT
+    inir
+    jr      PRB_NEXT
+PRB_OUT:
+    otir
+PRB_NEXT:
+    dec     d
+    jr      nz,PRB_RUNS
+    xor     a
+    out     (CONTROL_PORT2),a   ; wait mode off, before any polled byte
+    ld      h,a                 ; HL = 0: checksum accumulator
+    ld      l,a
+    pop     de
+    pop     bc
+PRB_SUM:                        ; checksum the block, now in memory
+    ld      a,(de)
+    call    PAYLOAD_ADVANCE     ; HL += A, DE++, BC--; NZ while bytes remain
+    jr      nz,PRB_SUM
+    ret
+ endif
 
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack

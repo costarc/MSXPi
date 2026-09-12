@@ -62,12 +62,28 @@ MTU="${MTU:-576}"
 # msxpi-server.py can open it WITHOUT running as root.
 TAP_USER="${TAP_USER:-pi}"
 
+# The interface carrying the default route, read as the field AFTER "dev"
+# rather than at a fixed position. "default via 1.2.3.4 dev wlan0 ..." puts it
+# in $5, but a route with no gateway reads "default dev wlan0 scope link" and
+# then $5 is the word "link". iptables accepts a nonexistent interface name
+# without complaint, so the rules install cleanly and simply never match: the
+# MSX's packets are forwarded but never masqueraded, they leave with a
+# 192.168.99.x source nobody routes back, and the only symptom is that
+# everything times out. This is exactly what happened on the Pi - the rules
+# read "-o link" - so read the interface properly and check it exists below.
+uplink_dev() {
+    ip route show default \
+        | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i+1); exit }}'
+}
+
 # wait up to 60s for a default route (network to come up)
 MSXPI_ROOT_LOG="/var/log/msxpi.log"
-WAIT_SECS=60
+# Overridable because the MSX can now ask for this from "p netreset": the MSX
+# sits waiting for the reply, so that path passes a much shorter wait.
+WAIT_SECS="${WAIT_SECS:-60}"
 count=0
 while [ $count -lt $WAIT_SECS ]; do
-    UPLINK="$(ip route show default | awk '/default/ {print $5; exit}')"
+    UPLINK="$(uplink_dev)"
     if [ -n "$UPLINK" ]; then
         break
     fi
@@ -83,7 +99,7 @@ fi
 echo "$(date) uplink: $UPLINK" >> "$MSXPI_ROOT_LOG"
 
 # Uplink: whichever interface currently carries the default route.
-UPLINK="${UPLINK:-$(ip route show default | awk '/default/ {print $5; exit}')}"
+UPLINK="${UPLINK:-$(uplink_dev)}"
 
 if [ "${1:-up}" = "down" ]; then
     iptables -t nat -D POSTROUTING -o "$UPLINK" -j MASQUERADE 2>/dev/null || true
@@ -97,6 +113,14 @@ if [ "${1:-up}" = "down" ]; then
 fi
 
 [ -n "$UPLINK" ] || { echo "no default route - is the Pi on the network?"; exit 1; }
+# Every rule below names $UPLINK, and iptables will happily accept a name that
+# is not an interface - so check here, where it can still be reported, rather
+# than silently building a NAT setup that cannot work.
+ip link show "$UPLINK" >/dev/null 2>&1 || {
+    echo "uplink \"$UPLINK\" is not an interface - refusing to write NAT rules"
+    echo "$(date) bad uplink \"$UPLINK\" - aborting" >> "$MSXPI_ROOT_LOG"
+    exit 1
+}
 echo "uplink: $UPLINK"
 
 # --- The TAP device ---------------------------------------------------------
@@ -106,13 +130,54 @@ echo "uplink: $UPLINK"
 # CAP_NET_ADMIN or root. Without this, msxpi_eth.make_link() silently falls
 # back to MockLink, which answers every opcode correctly and carries no
 # traffic whatsoever - the most confusing possible failure.
+#
+# The OWNER matters as much as the existence, and this used to check only
+# existence. A TAP left behind by a server that once ran as root belongs to
+# root, and then TUNSETIFF from the pi-owned server fails with EPERM - the
+# device sits there UP but never RUNNING, nothing attaches to it, and the log
+# says "TAP unavailable (Operation not permitted) - falling back to MockLink".
+# So if the owner is not $TAP_USER, replace the device rather than keeping it.
+tap_owner_uid() {
+    # "msxpi0: tap persist user 1000" - the field after "user", empty when the
+    # device has no owner at all (created by root without `user`).
+    ip tuntap show 2>/dev/null \
+        | awk -v dev="$TAP:" '$1 == dev {for (i = 1; i < NF; i++)
+                                            if ($i == "user") { print $(i+1); exit }}'
+}
+
+want_uid="$(id -u "$TAP_USER" 2>/dev/null || echo "")"
+if ip link show "$TAP" >/dev/null 2>&1; then
+    have_uid="$(tap_owner_uid)"
+    if [ -n "$want_uid" ] && [ "$have_uid" != "$want_uid" ] \
+       && [ "$have_uid" != "$TAP_USER" ]; then
+        echo "$TAP is owned by \"${have_uid:-root}\", not $TAP_USER - recreating it"
+        echo "$(date) $TAP owner ${have_uid:-root} != $TAP_USER - recreating" \
+            >> "$MSXPI_ROOT_LOG"
+        ip link set "$TAP" down 2>/dev/null || true
+        ip tuntap del dev "$TAP" mode tap 2>/dev/null || true
+        # `ip tuntap del` on a device some process still has OPEN does not
+        # remove it - it only clears the persist flag, and the device lives on
+        # (with its original owner) until that descriptor is closed. Say so:
+        # otherwise the script goes on to configure a device the server still
+        # cannot open, and the only clue is that "created ..." never appears.
+        if ip link show "$TAP" >/dev/null 2>&1; then
+            echo "WARN $TAP still present after delete - another process holds it"
+            echo "$(date) $TAP delete had no effect - still held open" \
+                >> "$MSXPI_ROOT_LOG"
+        fi
+    fi
+fi
+
 if ! ip link show "$TAP" >/dev/null 2>&1; then
     ip tuntap add dev "$TAP" mode tap user "$TAP_USER"
     echo "created $TAP (owner $TAP_USER)"
 fi
 
 ip addr flush dev "$TAP" 2>/dev/null || true
-ip addr add "$TAP_IP/$PREFIX" dev "$TAP"
+# "broadcast +" has the kernel derive the broadcast address from the prefix.
+# Without it the interface comes up with broadcast 0.0.0.0 - as ifconfig showed
+# on the Pi - on a link whose first job is to carry an ARP broadcast to the MSX.
+ip addr add "$TAP_IP/$PREFIX" broadcast + dev "$TAP"
 ip link set "$TAP" mtu "$MTU" up
 echo "$TAP up: $TAP_IP/$PREFIX mtu $MTU"
 
@@ -132,6 +197,12 @@ echo "NAT: $TAP -> $UPLINK"
 
 DNS="$(awk '/^nameserver/ {print $2; exit}' /etc/resolv.conf 2>/dev/null)"
 [ -n "$DNS" ] || DNS="1.1.1.1"
+# Announced on its own line, not only inside the advice below, so that "p
+# netreset" can show it on the MSX. The MSX holds ITS resolver in INL.CFG,
+# fixed at install time; when the Pi changes network the two stop agreeing,
+# and a resolver that was reachable from the old network may be blocked on the
+# new one - which looks exactly like a broken link but is not one.
+echo "dns: $DNS"
 
 sudo chown pi:pi "$MSXPI_ROOT_LOG"
 chmod 664 "$MSXPI_ROOT_LOG"

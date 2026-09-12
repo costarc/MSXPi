@@ -6,6 +6,15 @@ export buildClientCommands="yes"
 export buildBIOS="yes"
 export buildLoadrom="yes"
 export buildOpenMSXConfig="yes"
+# Keep a copy of the openMSX extension named after this build's ROM sha1?
+# Only for a build that is actually RELEASED. openMSX resolves an extension by
+# the sha1 in its XML, so a released ROM needs its own copy that no later build
+# overwrites - but doing that every time litters
+# openMSX/share/{extensions,systemroms/extensions} with a pair per build, which
+# then has to be hand-pruned before a release. Off by default; turn it on for
+# the build you ship:
+#     releaseOpenMSXRom=yes ./build
+export releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 export buildMSXdiskImage="yes"
 export updateVersions="yes"
 
@@ -208,23 +217,29 @@ fi
 
 
 if [ $buildOpenMSXConfig = "yes" ];then
-  # do not replace the msxpibios on every build to avoid users having to update their bios/sha constantly
   SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-  sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.$SHA.xml
-  cp openMSX/share/extensions/MSXPi.$SHA.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
-  cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom
-  cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/$BIOSNAME.rom
 
-  # ...and under the plain names as well, which is what `-ext MSXPi` actually
-  # resolves to and what runmsx deploys into /opt/openMSX.  Only the per-SHA
-  # copies were being written here, so those two files kept whatever ROM they
-  # had: openMSX went on loading an OLD bios while the build reported success,
-  # and a harness run could pass against a ROM that no longer existed in the
-  # tree.  The per-SHA copies above are still kept, so an older machine
-  # configuration referring to one by hash continues to resolve.
-  cp openMSX/share/extensions/MSXPi.$SHA.xml openMSX/share/extensions/MSXPi.xml
+  # The plain names, ALWAYS.  This is what `-ext MSXPi` resolves to and what
+  # runmsx deploys into /opt/openMSX.  Once only the per-SHA copies were
+  # written here, so these two kept whatever ROM they already had: openMSX went
+  # on loading an OLD bios while the build reported success, and a harness run
+  # could pass against a ROM that no longer existed in the tree.
+  sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.xml
   cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.rom
+  cp openMSX/share/extensions/MSXPi.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
+  cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/$BIOSNAME.rom
   echo "openMSX extension updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
+
+  # The per-SHA pair, only when this build is being released.  openMSX finds a
+  # ROM by the sha1 its XML declares, so a released build needs a copy under a
+  # name no later build overwrites - msxpibios.rom itself is replaced every
+  # time.  Writing the pair on EVERY build instead left one behind per build,
+  # to be hand-pruned before a release; see releaseOpenMSXRom at the top.
+  if [ "$releaseOpenMSXRom" = "yes" ];then
+    cp openMSX/share/extensions/MSXPi.xml openMSX/share/extensions/MSXPi.$SHA.xml
+    cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom
+    echo "openMSX extension KEPT as $SHA (MSXPi.$SHA.xml + $BIOSNAME.$SHA.rom)"
+  fi
   # Update sources for openMSX extensions - to keep up to date with openMSX fork
   cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
   cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
