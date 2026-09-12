@@ -62,12 +62,26 @@ MTU="${MTU:-576}"
 # msxpi-server.py can open it WITHOUT running as root.
 TAP_USER="${TAP_USER:-pi}"
 
+# The interface carrying the default route, read as the field AFTER "dev"
+# rather than at a fixed position. "default via 1.2.3.4 dev wlan0 ..." puts it
+# in $5, but a route with no gateway reads "default dev wlan0 scope link" and
+# then $5 is the word "link". iptables accepts a nonexistent interface name
+# without complaint, so the rules install cleanly and simply never match: the
+# MSX's packets are forwarded but never masqueraded, they leave with a
+# 192.168.99.x source nobody routes back, and the only symptom is that
+# everything times out. This is exactly what happened on the Pi - the rules
+# read "-o link" - so read the interface properly and check it exists below.
+uplink_dev() {
+    ip route show default \
+        | awk '{for (i = 1; i < NF; i++) if ($i == "dev") { print $(i+1); exit }}'
+}
+
 # wait up to 60s for a default route (network to come up)
 MSXPI_ROOT_LOG="/var/log/msxpi.log"
 WAIT_SECS=60
 count=0
 while [ $count -lt $WAIT_SECS ]; do
-    UPLINK="$(ip route show default | awk '/default/ {print $5; exit}')"
+    UPLINK="$(uplink_dev)"
     if [ -n "$UPLINK" ]; then
         break
     fi
@@ -83,7 +97,7 @@ fi
 echo "$(date) uplink: $UPLINK" >> "$MSXPI_ROOT_LOG"
 
 # Uplink: whichever interface currently carries the default route.
-UPLINK="${UPLINK:-$(ip route show default | awk '/default/ {print $5; exit}')}"
+UPLINK="${UPLINK:-$(uplink_dev)}"
 
 if [ "${1:-up}" = "down" ]; then
     iptables -t nat -D POSTROUTING -o "$UPLINK" -j MASQUERADE 2>/dev/null || true
@@ -97,6 +111,14 @@ if [ "${1:-up}" = "down" ]; then
 fi
 
 [ -n "$UPLINK" ] || { echo "no default route - is the Pi on the network?"; exit 1; }
+# Every rule below names $UPLINK, and iptables will happily accept a name that
+# is not an interface - so check here, where it can still be reported, rather
+# than silently building a NAT setup that cannot work.
+ip link show "$UPLINK" >/dev/null 2>&1 || {
+    echo "uplink \"$UPLINK\" is not an interface - refusing to write NAT rules"
+    echo "$(date) bad uplink \"$UPLINK\" - aborting" >> "$MSXPI_ROOT_LOG"
+    exit 1
+}
 echo "uplink: $UPLINK"
 
 # --- The TAP device ---------------------------------------------------------
@@ -112,7 +134,10 @@ if ! ip link show "$TAP" >/dev/null 2>&1; then
 fi
 
 ip addr flush dev "$TAP" 2>/dev/null || true
-ip addr add "$TAP_IP/$PREFIX" dev "$TAP"
+# "broadcast +" has the kernel derive the broadcast address from the prefix.
+# Without it the interface comes up with broadcast 0.0.0.0 - as ifconfig showed
+# on the Pi - on a link whose first job is to carry an ARP broadcast to the MSX.
+ip addr add "$TAP_IP/$PREFIX" broadcast + dev "$TAP"
 ip link set "$TAP" mtu "$MTU" up
 echo "$TAP up: $TAP_IP/$PREFIX mtu $MTU"
 
