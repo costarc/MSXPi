@@ -147,8 +147,10 @@ done
 #
 # Converted here rather than trusting the file in the repo, because git's
 # line-ending handling can rewrite it on checkout.
-CFGTMP="$HERE/pi-setup/.INL.CFG.crlf"
-python "$HERE/crlf.py" "$HERE/pi-setup/INL.CFG" "$CFGTMP"
+INLCFG="$HERE/../target/INL.CFG"
+[ -f "$INLCFG" ] || { echo "missing $INLCFG - the boot disk needs it"; exit 1; }
+CFGTMP="$HERE/../target/.INL.CFG.crlf"
+python "$HERE/crlf.py" "$INLCFG" "$CFGTMP"
 python "$DSKTOOL" copy "$CFGTMP" "$DSK:INL.CFG"
 rm -f "$CFGTMP"
 
