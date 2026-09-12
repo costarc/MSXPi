@@ -23,16 +23,6 @@ installed".
 If you would rather not carry someone else's binary in this repo, delete it and
 point build.sh at your own copy with the RAMHELPR environment variable.
 
-## TESTRAM.COM
-
-Mapper RAM tester, from the user's own Nextor tools tree.  Not built here and
-not UNAPI-related, but it lives in this folder because ../build.sh copies
-everything in bin/ onto msxpiboot.dsk - and ../../build regenerates that image
-from target/, so anything not copied from here is silently dropped on the next
-full build.  It is on the disk because InterNestor Lite needs a working memory
-mapper and "is the mapper actually good?" is worth being able to answer without
-a second boot.
-
 ## Konamiman's UNAPI client tools
 
 `HOST.COM`, `TCPCON.COM`, `SNTP.COM`, `GETURL.COM`, `HGET.COM`, `TCPIP.COM`,
