@@ -1,10 +1,12 @@
 pcopy m:API.BAS
+pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
 pcopy m:INL.CFG
 pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
 pcopy m:PITIME.BAS
 pcopy m:RASTRO.BAS
+pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
 pcopy m:TESTDIR.BAS
 pcopy m:WEATHER.BAS
