@@ -1721,6 +1721,57 @@ def getMSXPiVar(devname = 'PATH'):
         idx += 1
     return devval
     
+def interfaces_report():
+    """One line per interface: name, state, IPv4 address - for a 40-column MSX.
+
+    This used to be `ip a` filtered through
+    `grep '^1\\|^2\\|^3\\|^4\\|inet' | grep -v inet6`, which keeps the header
+    line only for interfaces numbered 1 to 4. msxpi0 is recreated every time
+    the TAP is rebuilt, and its index climbs with each one, so once it passed 4
+    its header vanished while its "inet" line stayed - leaving an address
+    hanging under the previous interface, which reads as corrupted output.
+    Nothing about an interface's index says anything useful anyway.
+
+    `ip -o` keeps each record on ONE line, so there is nothing to reassemble
+    and no wrapped line to mis-parse.
+    """
+    def ip_out(args):
+        try:
+            done = subprocess.run(["ip", "-o"] + args, stdout=PIPE,
+                                  stderr=STDOUT, text=True, timeout=10)
+            return done.stdout if done.returncode == 0 else ""
+        except Exception as exc:
+            print(f"interfaces_report: {exc}")
+            return ""
+
+    state = {}
+    for line in ip_out(["link", "show"]).splitlines():
+        # "2: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 ..."
+        parts = line.split(":", 2)
+        if len(parts) < 3:
+            continue
+        name = parts[1].strip().split("@")[0]
+        flags = parts[2]
+        state[name] = "up" if ",UP" in flags or "<UP" in flags else "down"
+
+    addrs = {}
+    for line in ip_out(["-4", "addr", "show"]).splitlines():
+        # "2: wlan0    inet 192.168.1.239/24 brd ... scope global wlan0\"
+        fields = line.split()
+        if len(fields) < 4 or fields[2] != "inet":
+            continue
+        addrs.setdefault(fields[1].split("@")[0], []).append(fields[3])
+
+    if not state and not addrs:
+        return "Pi:could not read the interfaces"
+
+    report = []
+    for name in state or addrs:
+        for addr in addrs.get(name, ["-"]):
+            report.append(f"{name:<8.8} {state.get(name, '?'):<4} {addr}")
+    return "\r\n".join(report)
+
+
 def wifi(cmd):
     #print(f"pwifi(): {cmd}")
     global psetvar
@@ -1734,13 +1785,13 @@ def wifi(cmd):
 
     if (cmd[:1] == "s" or cmd[:1] == "S"):
         if hostType == "RaspberryPi":
-            wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipasss + '"'
+            wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipass + '"'
             run(wifisetcmd)
         else:
             sendmultiblock(b'Parameter not supported in this platform')
     else:
         if hostType == "RaspberryPi":
-            run("ip a | grep '^1\\|^2\\|^3\\|^4\\|inet'|grep -v inet6")
+            sendmultiblock(interfaces_report().encode())
         else:
             run("ipconfig")
     
