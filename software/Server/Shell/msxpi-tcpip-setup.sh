@@ -155,6 +155,16 @@ if ip link show "$TAP" >/dev/null 2>&1; then
             >> "$MSXPI_ROOT_LOG"
         ip link set "$TAP" down 2>/dev/null || true
         ip tuntap del dev "$TAP" mode tap 2>/dev/null || true
+        # `ip tuntap del` on a device some process still has OPEN does not
+        # remove it - it only clears the persist flag, and the device lives on
+        # (with its original owner) until that descriptor is closed. Say so:
+        # otherwise the script goes on to configure a device the server still
+        # cannot open, and the only clue is that "created ..." never appears.
+        if ip link show "$TAP" >/dev/null 2>&1; then
+            echo "WARN $TAP still present after delete - another process holds it"
+            echo "$(date) $TAP delete had no effect - still held open" \
+                >> "$MSXPI_ROOT_LOG"
+        fi
     fi
 fi
 

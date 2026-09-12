@@ -24,7 +24,7 @@ from subprocess import PIPE, STDOUT
 
 SRC = Path(__file__).resolve().parents[1] / 'Server/Python/src'
 TREE = ast.parse((SRC / 'msxpi-server.py').read_text(encoding='utf-8-sig'))
-NAMES = {'netreset', 'tcpip', '_eth_relink', '_eth_note_link'}
+NAMES = {'netreset', 'tcpip', '_eth_relink', '_eth_release', '_eth_note_link'}
 CODE = compile(ast.Module(body=[n for n in TREE.body
                                if isinstance(n, ast.FunctionDef) and n.name in NAMES],
                           type_ignores=[]), 'server-functions', 'exec')
@@ -114,7 +114,7 @@ class EthMod:
             raise OSError(1, 'Operation not permitted')
         return Link()
 
-    class MockLink:
+    class MockLink(Link):
         pass
 
 
@@ -195,6 +195,42 @@ class NetresetTest(unittest.TestCase):
         fake = Fake(GOOD)
         fake.env['hostType'] = 'Linux'
         self.assertIn('not supported', fake.netreset())
+
+    def test_releases_the_device_before_the_script_runs(self):
+        """`ip tuntap del` cannot remove a device the server still holds open.
+
+        It only clears the persist flag; the device survives with its original
+        owner until the descriptor closes. So the link must be dropped BEFORE
+        the script tries to delete it, not after - otherwise the rebuild
+        reconfigures the very device the server cannot open, which is exactly
+        what the Pi showed: the owner check fired, "created ..." never
+        appeared, and the reply ended "TAP unavailable".
+        """
+        shuttle, mod = Shuttle(), EthMod(works=True)
+        first = shuttle.link
+        # The stub records whether the old link was already closed when it ran.
+        script = ("#!/bin/sh\n[ \"$1\" = down ] && exit 0\n"
+                  "echo 'uplink: wlan0'\necho 'NAT: msxpi0 -> wlan0'\nexit 0\n")
+        fake = Fake(script, shuttle=shuttle, tap=mod)
+        real_run = fake.env['subprocess'].run
+        seen = []
+
+        def watching_run(argv, **kw):
+            seen.append(first.closed)
+            return real_run(argv, **kw)
+
+        fake.env['subprocess'].run = watching_run
+        fake.netreset()
+        self.assertTrue(seen and all(seen),
+                        'the TAP was still open while the script ran')
+
+    def test_a_device_that_could_not_be_deleted_is_reported(self):
+        script = ("#!/bin/sh\n[ \"$1\" = down ] && exit 0\n"
+                  "echo 'uplink: wlan0'\n"
+                  "echo 'WARN msxpi0 still present after delete - another "
+                  "process holds it'\necho 'NAT: msxpi0 -> wlan0'\nexit 0\n")
+        out = Fake(script).netreset()
+        self.assertIn('WARN', out)
 
     def test_tcpip_is_an_alias(self):
         fake = Fake(GOOD)

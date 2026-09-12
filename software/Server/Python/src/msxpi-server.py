@@ -2779,6 +2779,34 @@ def _eth_relink():
     return True
 
 
+def _eth_release():
+    """Let go of msxpi0 so the setup script can actually delete it.
+
+    `ip tuntap del` does NOT remove a device that a process still has open: it
+    clears the persist flag and the device survives, with its original owner,
+    until that descriptor is closed. The server is exactly such a process, so
+    a netreset that ran the script first would ask the kernel to delete a
+    device it was itself holding - the delete "succeeded", the old device
+    stayed, and the rebuild reconfigured the very device the server could not
+    open. Drop to MockLink first: opcodes keep being answered while the
+    network is being rebuilt, and netreset reattaches afterwards.
+    """
+    global _eth_handle
+    if _eth_mod is None or _eth_shuttle is None:
+        return
+    old = _eth_shuttle.link
+    if isinstance(old, _eth_mod.MockLink):
+        return
+    mock = _eth_mod.MockLink()
+    mock.enabled = old.enabled
+    mock.filters = old.filters
+    _eth_shuttle.link = mock
+    old.close()
+    _eth_note_link(mock)
+    _eth_handle = _eth_shuttle.handle
+    print("eth: released msxpi0 for netreset", flush=True)
+
+
 def netreset(parm=None):
     """Rebuild the Pi's MSX networking from scratch, on demand from the MSX.
 
@@ -2804,6 +2832,9 @@ def netreset(parm=None):
             wait = max(1, min(60, int(parm.split()[0])))
         except ValueError:
             pass
+
+    # Before the script runs, not after: see _eth_release().
+    _eth_release()
 
     env = dict(os.environ, WAIT_SECS=str(wait))
     report = []
@@ -2834,7 +2865,7 @@ def netreset(parm=None):
             # Only the lines worth 40 columns on an MSX screen.
             for line in out.splitlines():
                 if line.startswith(("uplink:", "created ", "msxpi0 up:",
-                                    "NAT:")) or "recreating" in line:
+                                    "NAT:", "WARN")) or "recreating" in line:
                     report.append(line.strip())
 
     state = _eth_relink()
