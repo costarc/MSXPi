@@ -41,7 +41,6 @@ releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 # the current one. Tests read this name out of this file, so keep the
 # "export BIOSNAME=" shape (software/Tests/nextor_mfr_copy.py).
 export BIOSNAME=msxpibios_v1.6
-BIOSSRC=ROM/src/BIOS/msxpibios.asm
 BIOSFILE=target/$BIOSNAME.rom
 
 # --- where the tools and the outside directories are -------------------------
@@ -160,7 +159,8 @@ if [ "$buildBIOS" = "yes" ]; then
     # zmac runs, or the compiled ROM bakes in the previous run's id and the
     # bump only takes effect on the *next* build.
     update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "."
-    update_build_id "./$BIOSSRC"                         "BuildId: DB " "."
+    # msxpibios.asm used to carry a BuildId too; it is gone, and the BIOS
+    # banner now lives in the driver ROM and the BASIC extension.
     update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "."
     update_build_id ./Server/Python/src/msxpi-server.py  "BuildId = "   ""
 
