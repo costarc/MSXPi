@@ -71,6 +71,14 @@ function Fail([string]$msg) {
     exit 1
 }
 
+function Get-NetMask([int]$p) {
+    $m = [uint32]0
+    for ($i = 0; $i -lt $p; $i++) { $m = $m -bor ([uint32]1 -shl (31 - $i)) }
+    $b = @()
+    for ($i = 3; $i -ge 0; $i--) { $b += (($m -shr ($i * 8)) -band 255) }
+    return ($b -join '.')
+}
+
 function Assert-Admin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal $id
@@ -102,11 +110,9 @@ Write-Host "adapter: $($tap.Name)  [$($tap.InterfaceDescription)]"
 if ($Down) {
     Get-NetNat -Name $NatName -ErrorAction SilentlyContinue |
         Remove-NetNat -Confirm:$false
-    Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-        Remove-NetIPAddress -Confirm:$false
     # Put the adapter back the way a fresh TAP install leaves it, so it is
     # usable for whatever else it was installed for (an OpenVPN profile, say).
-    Set-NetIPInterface -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -Dhcp Enabled -ErrorAction SilentlyContinue
+    & netsh interface ipv4 set address name="$($tap.Name)" source=dhcp | Out-Null
     Set-NetIPInterface -InterfaceIndex $tap.ifIndex -Forwarding Disabled -ErrorAction SilentlyContinue
     Write-Host "torn down"
     exit 0
@@ -125,15 +131,23 @@ $uplinkAlias = (Get-NetAdapter -InterfaceIndex $uplink.InterfaceIndex).Name
 Write-Host "uplink: $uplinkAlias"
 
 # --- Address on the TAP -----------------------------------------------------
-# DHCP first: a fresh TAP adapter comes up with DHCP enabled, and writing a
-# static address into the persistent store while it is on fails with
-# "Inconsistent parameters PolicyStore PersistentStore and Dhcp Enabled"
-# (Windows error 87), which says nothing about DHCP being the problem.
-Set-NetIPInterface -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction SilentlyContinue
-Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Remove-NetIPAddress -Confirm:$false
-New-NetIPAddress -InterfaceIndex $tap.ifIndex -IPAddress $TapIp -PrefixLength $Prefix | Out-Null
-Set-NetIPInterface -InterfaceIndex $tap.ifIndex -NlMtuBytes $Mtu -ErrorAction SilentlyContinue
+# netsh, not New-NetIPAddress. A fresh TAP adapter has DHCP enabled, and
+# New-NetIPAddress then fails with
+#
+#     Inconsistent parameters PolicyStore PersistentStore and Dhcp Enabled
+#
+# (Windows error 87), which never mentions DHCP as the cause. Turning DHCP off
+# first with Set-NetIPInterface does not help: that cmdlet writes to the ACTIVE
+# store, the address goes to the PERSISTENT one, and the two disagree.
+# `netsh ... source=static` switches the interface off DHCP and assigns the
+# address as a single operation, which is the whole problem gone.
+$mask = Get-NetMask $Prefix
+& netsh interface ipv4 set address name="$($tap.Name)" source=static address=$TapIp mask=$mask | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Fail "could not set $TapIp/$Prefix on '$($tap.Name)' (netsh exit $LASTEXITCODE)"
+}
+# Persistent, so it survives the reboot that the address does not.
+& netsh interface ipv4 set subinterface "$($tap.Name)" mtu=$Mtu store=persistent | Out-Null
 Write-Host "$($tap.Name) up: $TapIp/$Prefix mtu $Mtu"
 
 # The firewall treats an unidentified network as Public and drops most
