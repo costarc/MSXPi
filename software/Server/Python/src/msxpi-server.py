@@ -2836,7 +2836,13 @@ def netreset(parm=None):
     # Before the script runs, not after: see _eth_release().
     _eth_release()
 
-    env = dict(os.environ, WAIT_SECS=str(wait))
+    # A MINIMAL environment, not os.environ: the script takes TAP, TAP_IP,
+    # MSX_IP, PREFIX, MTU, TAP_USER and UPLINK from the environment, so
+    # anything that happened to be set for the server - by the unit file, the
+    # monitor, or whoever started it by hand - would silently reconfigure the
+    # network differently here than at boot. Only WAIT_SECS is ours to pass.
+    env = {"PATH": os.environ.get("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"),
+           "WAIT_SECS": str(wait)}
     report = []
     for phase in ("down", "up"):
         try:
