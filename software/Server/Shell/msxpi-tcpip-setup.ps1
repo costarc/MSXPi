@@ -104,6 +104,10 @@ if ($Down) {
         Remove-NetNat -Confirm:$false
     Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         Remove-NetIPAddress -Confirm:$false
+    # Put the adapter back the way a fresh TAP install leaves it, so it is
+    # usable for whatever else it was installed for (an OpenVPN profile, say).
+    Set-NetIPInterface -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -Dhcp Enabled -ErrorAction SilentlyContinue
+    Set-NetIPInterface -InterfaceIndex $tap.ifIndex -Forwarding Disabled -ErrorAction SilentlyContinue
     Write-Host "torn down"
     exit 0
 }
@@ -121,6 +125,11 @@ $uplinkAlias = (Get-NetAdapter -InterfaceIndex $uplink.InterfaceIndex).Name
 Write-Host "uplink: $uplinkAlias"
 
 # --- Address on the TAP -----------------------------------------------------
+# DHCP first: a fresh TAP adapter comes up with DHCP enabled, and writing a
+# static address into the persistent store while it is on fails with
+# "Inconsistent parameters PolicyStore PersistentStore and Dhcp Enabled"
+# (Windows error 87), which says nothing about DHCP being the problem.
+Set-NetIPInterface -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -Dhcp Disabled -ErrorAction SilentlyContinue
 Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Remove-NetIPAddress -Confirm:$false
 New-NetIPAddress -InterfaceIndex $tap.ifIndex -IPAddress $TapIp -PrefixLength $Prefix | Out-Null
