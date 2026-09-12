@@ -25,20 +25,38 @@
 ; ------------------------------------------------------------------------------
 
 ; BC = sector size for PerformHandshake, with bit 15 set when the interface
-; has hardware /WAIT, asking the server for burst payloads (PAYLOAD_RX_BURST).
-; Every supported interface reads port $57 below $80 (msxpi_bios.asm relies
-; on that on every byte); with wait mode switched on, a CPLD v1.6 reads $8E
-; and openMSX $FF. Wait mode is switched straight off again: it is only ever
-; on inside a burst. Corrupts AF; returns CF=0.
+; really has hardware /WAIT, asking the server for burst payloads
+; (PAYLOAD_RX_BURST).
+;
+; The test is "did the read-back CHANGE when wait mode was switched on?", not
+; "is bit 7 set". Bit 7 was what this used to test, and it was wrong: openMSX
+; answers $FE with wait mode off - it has to stay at or above $FE, because
+; every MSXPi binary asks "am I emulated?" with `cp $FE` on every byte - and
+; $FE has bit 7 set. So an openMSX WITHOUT the /WAIT emulation (everything up
+; to and including the 21.0 release) looked burst-capable: the server sent a
+; burst, nothing stalled the INIR, every byte read back $FF, and the transfer
+; failed. A v1.6 ROM could not read a disk on a stock openMSX at all.
+;
+; Comparing the two read-backs also rejects a pre-v1.6 CPLD, and any future
+; device, without this routine having to know what any of them answer:
+;   CPLD v1.6   $0E -> $8E   changed  -> burst
+;   openMSX new $FE -> $FF   changed  -> burst
+;   openMSX old $FE -> $FE   same     -> polled
+;   CPLD v1.5   $0E -> $0E   same     -> polled
+;
+; Wait mode is switched straight off again in both paths: it is only ever on
+; inside a burst. Corrupts AF; returns CF=0.
 DSKIO_RXSIZE:
-        ld      bc,SECTORSIZE
+        in      a,(CONTROL_PORT2)  ; what $57 reads with wait mode off
+        ld      b,a                ; BC is loaded below - LD leaves flags alone
         ld      a,1
-        out     (CONTROL_PORT2),a
+        out     (CONTROL_PORT2),a  ; wait mode on
         in      a,(CONTROL_PORT2)
-        rla                        ; CF = bit 7
-        ld      a,0                ; (keeps CF)
-        out     (CONTROL_PORT2),a
-        ret     nc
+        cp      b                  ; did the read-back actually change?
+        ld      bc,SECTORSIZE
+        jr      z,RXSIZE_OFF       ; no: this device has no wait mode
         set     7,b
-        or      a                  ; CF=0: PerformHandshake hands the caller's
-        ret                        ; flags back, so a carry here reads as an error
+RXSIZE_OFF:
+        xor     a                  ; also CF=0: PerformHandshake hands the
+        out     (CONTROL_PORT2),a  ; caller's flags back, so a carry here
+        ret                        ; would read as an error

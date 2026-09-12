@@ -4,6 +4,6 @@ pdate
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
-echo 
+echo
 echo Starting update
 msxpirfh

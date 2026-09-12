@@ -1,300 +1,323 @@
 #!/bin/bash
+# =============================================================================
+# MSXPi build
+# =============================================================================
+#   ./build                        build everything switched on below
+#   releaseOpenMSXRom=yes ./build  and keep a per-sha openMSX extension pair
+#
+# Every switch can be overridden from the environment, e.g.
+#   buildMSXdiskImage=no ./build
+#
+# Stages, in order: client commands -> BIOS/MSX-DOS ROM -> LOADROM patch ->
+# openMSX extension -> disk images. Each is independent and skippable.
+# =============================================================================
+
+set -o pipefail
 
 python3 asm-common/transport/generate.py --check || exit 1
 
-export buildClientCommands="yes"
-export buildBIOS="yes"
-export buildLoadrom="yes"
-export buildOpenMSXConfig="yes"
+# --- what to build -----------------------------------------------------------
+buildClientCommands="${buildClientCommands:-yes}"
+buildBIOS="${buildBIOS:-yes}"
+buildLoadrom="${buildLoadrom:-yes}"
+buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
+buildMSXdiskImage="${buildMSXdiskImage:-yes}"
+
+# Bump the BuildId in the ROM sources and the server before compiling? Off
+# while iterating, so a rebuild does not churn every version string; on for a
+# build that is going out.
+updateVersions="${updateVersions:-no}"
+
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
 # the sha1 in its XML, so a released ROM needs its own copy that no later build
 # overwrites - but doing that every time litters
 # openMSX/share/{extensions,systemroms/extensions} with a pair per build, which
-# then has to be hand-pruned before a release. Off by default; turn it on for
-# the build you ship:
-#     releaseOpenMSXRom=yes ./build
-export releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
-export buildMSXdiskImage="yes"
-export updateVersions="yes"
+# then has to be hand-pruned before a release.
+releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 
-export BIOSNAME=msxpibios
-OPENMSXSRC=../../openMSX/openMSX
-export HOME=../../../..
-export BIOS=ROM/src/BIOS/$BIOSNAME.asm
-export ROMBANK1=$HOME/Dev/MSX/gameroms/ROAD.ROM
-export BIOSFILE=target/$BIOSNAME.rom
-export ZMAC_PATH=$HOME/Dev/zmac
-export HEX2BIN_PATH=$HOME/Dev/bin
-export SJASM_PATH=$HOME/Dev/bin
-export Z80ASM_PATH=$HOME/Dev/z80asm-1.8
-export ZCCCFG=/cygdrive/c/Apps/z88dk-win32-2.3/lib/config
-export OPENMSXDISK=$HOME/Desktop/MSXPi/commands
-export GITPATH=https://github.com/costarc/MSXPi/raw/master/software
+# --- what it is called -------------------------------------------------------
+# The ROM carries its version: target/ keeps the ROM of every release beside
+# the current one. Tests read this name out of this file, so keep the
+# "export BIOSNAME=" shape (software/Tests/nextor_mfr_copy.py).
+export BIOSNAME=msxpibios_v1.6
+BIOSFILE=target/$BIOSNAME.rom
 
-MSXPIHOME=/home/pi/msxpi
-export PI=raspberrypi
+# --- where the tools and the outside directories are -------------------------
+# TOOLS, not HOME: this script used to override HOME for these paths, and every
+# child process inherited that.
+TOOLS=../../../..
+ZMAC=$TOOLS/Dev/zmac/zmac.exe
+HEX2BIN=$TOOLS/Dev/bin/hex2bin.exe
+SJASM_DIR=$TOOLS/Dev/bin
+OPENMSXSRC=../../openMSX/openMSX                  # the openMSX fork
+OPENMSXSHARE=$TOOLS/Documents/openMSX/share       # what the Windows openMSX reads
+SERVEDDISKS=/c/home/pi/msxpi/disks                # what msxpi-server.py serves
+GITPATH=https://github.com/costarc/MSXPi/raw/master/software
 
-# Functions
-UpdateBuildId() {
-	if [ "$updateVersions" = "yes" ];then
-		fname=$1
-		cp "$fname" "$fname.bak"
-		today=$(date +%Y%m%d)
-		newbuild=$(cat "$fname" | grep "BuildId = " | awk '{print $3}' | cut -f2 -d"."|sed 's/"//'|awk '{printf "%03d\n", $1 + 1;}')
-		rc=$?
-        if [ "$rc" = 0 ]; then
-            newdefine="BuildId = \"${today}.${newbuild}\""
-            # Match the line by its anchor alone and replace it whole -
-            # no need to reconstruct/escape the old value as a search
-            # pattern, which was fragile and could silently fail to
-            # match without any visible error
-            sed "s|^BuildId = .*|${newdefine}|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
-            if grep -qF -- "$newdefine" "$fname"; then
-                echo "New BuildId for $1: $today.$newbuild"
-            else
-                echo "WARNING: BuildId update for $1 did NOT take effect" >&2
-            fi
+die()  { echo "ERROR: $*" >&2; exit 1; }
+warn() { echo "WARNING: $*" >&2; }
+step() { echo; echo "== $* =="; }
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+# Bump "<anchor><date>.<nnn>" in a source file. The ASM sources write it as
+#   BuildId: DB ".20260912.048"
+# and the Python server as
+#   BuildId = "20260912.048"
+# so the only difference is the anchor and whether the value carries a leading
+# dot - one function, two kinds of caller.
+#
+# The line is matched by its anchor alone and replaced whole: reconstructing the
+# old value as a search pattern was fragile and could silently fail to match,
+# leaving the id unchanged with no visible error.
+update_build_id() {
+    local fname="$1" anchor="$2" dot="$3"
+    [ "$updateVersions" = "yes" ] || return 0
+    [ -f "$fname" ] || { warn "BuildId: $fname does not exist"; return 0; }
+
+    cp "$fname" "$fname.bak"
+    local today last next line
+    today=$(date +%Y%m%d)
+    last=$(grep "^$anchor" "$fname" | tail -n 1 |
+           sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
+    [ -n "$last" ] || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
+    next=$(printf "%03d" $((10#$last + 1)))
+    line="$anchor\"$dot$today.$next\""
+
+    sed "s|^$anchor.*|$line|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
+    if grep -qF -- "$line" "$fname"; then
+        echo "  New BuildId for $fname: $dot$today.$next"
+    else
+        warn "BuildId update for $fname did NOT take effect"
+    fi
+}
+
+# CRLF, because MSX-DOS reads these.
+to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
+
+# The two .bat files the MSX runs to update itself from the repo.
+gen_update_batch() {
+    to_crlf target/msxpiupd.bat <<EOF
+echo Preparing to update...
+pset DriveM ${GITPATH}/target
+pdate
+echo Getting lastest updater...
+pcopy m:msxpirfh.bat
+pcopy m:msxpiupd.bat
+echo
+echo Starting update
+msxpirfh
+EOF
+
+    # pcopy.com goes last: it is the tool doing the copying, so replacing it
+    # first would pull the floor out from under the rest of the list.
+    {
+        for f in target/*; do
+            fname="${f##*/}"
+            [ -f "$f" ] || continue
+            [ "$(echo "$fname" | tr 'A-Z' 'a-z')" = "pcopy.com" ] && continue
+            # target/ keeps the ROM of every release. The MSX only needs the
+            # current one - without this the update pulls all of them over a
+            # link that runs at about 18 KB/s.
+            case "$fname" in
+                msxpibios*.rom) [ "$fname" = "$BIOSNAME.rom" ] || continue ;;
+            esac
+            echo "pcopy m:$fname"
+        done
+        echo "pcopy m:pcopy.com"
+        echo "echo  "
+        echo "pcd /home/pi/msxpi"
+        echo "prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server"
+        echo "echo "
+        echo "echo Restarting msxpi-server.py"
+        echo "prestart"
+        echo "pver"
+    } | to_crlf target/msxpirfh.bat
+}
+
+# =============================================================================
+# MSX-DOS client commands
+# =============================================================================
+if [ "$buildClientCommands" = "yes" ]; then
+    step "Compiling MSXPi DOS commands"
+    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
+        --raw=./target/template.com ./Client/src/template.com.asm ||
+        die "template.com did not assemble"
+fi
+
+# =============================================================================
+# BIOS and MSX-DOS ROM
+# =============================================================================
+if [ "$buildBIOS" = "yes" ]; then
+    step "Compiling MSXPi BIOS and MSX-DOS ROM"
+
+    # Bump BuildIds BEFORE compiling, not after - msx-dos.mac includes
+    # msxpi-driver.mac, so the id must already be updated in the source before
+    # zmac runs, or the compiled ROM bakes in the previous run's id and the
+    # bump only takes effect on the *next* build.
+    update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "."
+    # msxpibios.asm used to carry a BuildId too; it is gone, and the BIOS
+    # banner now lives in the driver ROM and the BASIC extension.
+    update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "."
+    update_build_id ./Server/Python/src/msxpi-server.py  "BuildId = "   ""
+
+    # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
+    # exist before zmac runs - and it is built with sjasm, not zmac, because the
+    # same sources also build the RAM (mapped segment) variant that ETHUNAPI.COM
+    # installs, and those are sjasm syntax throughout. sjasm resolves its
+    # includes against the current directory, hence the subshell - so the tool
+    # path has to be made absolute BEFORE cd'ing away.
+    echo "Compiling Ethernet UNAPI driver (ROM variant)"
+    SJASM_BIN="$(cd "$SJASM_DIR" && pwd)/sjasm.exe"
+    ( cd UNAPI/src && "$SJASM_BIN" ethrom.asm ../../ROM/src/MSX-DOS/ethrom.bin ethrom.lst ) ||
+        die "the Ethernet UNAPI ROM driver did not assemble"
+
+    # Where the image lands in the ROM, and whether it still fits, is asserted
+    # inside msxpi-driver.mac - so a driver that has outgrown the free tail
+    # fails this build rather than producing a corrupt ROM.
+    #
+    # zmac's exit status is the only thing that says whether the ROM is good.
+    # Without this check a failed assembly left the PREVIOUS zout/msx-dos.hex in
+    # place and the copy below happily shipped a stale ROM - exactly the failure
+    # the ASSERTs were added to make loud.
+    "$ZMAC" -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac ||
+        die "msx-dos.mac did not assemble - $BIOSFILE NOT updated"
+
+    # msxpiext.bin - the BASIC-only extension, BLOADed and relocated to page-1
+    # RAM. Shares the CALL MSXPI handler with the driver via msxpi_call.asm, and
+    # needs -DMSXPI_RAM_STASH: it runs from RAM, so msxpi_bios.asm uses its own
+    # stash buffer rather than the driver's GETWRK workarea. sjasmplus, not
+    # zmac, because IFDEF there tests -D defines.
+    echo "Compiling the BASIC extension (msxpiext.bin)"
+    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include         --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
+        die "msxpiext.asm did not assemble"
+
+    [ -f ./zout/msx-dos.hex ] || die "zmac produced no zout/msx-dos.hex"
+    "$HEX2BIN" -s 4000 ./zout/msx-dos.hex || die "hex2bin failed"
+    cp ./zout/msx-dos.bin "$BIOSFILE" || die "could not write $BIOSFILE"
+    echo "  $BIOSFILE  $(sha1sum "$BIOSFILE" | cut -c1-40)"
+fi
+
+# =============================================================================
+# LOADROM.COM - the MSXPi network-loading patch of the third-party v1.97
+# =============================================================================
+# See Client/src/loadrom/README.md. LDRPATCH197.MAC assembles a *private copy*
+# of asm-common/include/msxpi_bios.asm into the appended blob at 1900h -
+# LOADROM does not call the MSXPi ROM BIOS - so any change to msxpi_bios.asm
+# only reaches LOADROM.COM when this stage re-runs. The input is the pristine
+# v1.97 binary; the output overwrites Client/src/loadrom/LOADROM.COM, which the
+# disk stage below stages into target/.
+#
+# patch_loadrom197.py verifies the source length and the exact original bytes at
+# every patch site and refuses to write a broken binary, so a failure here means
+# the toolchain or the pristine input is wrong - and the previous LOADROM.COM is
+# deliberately left in place rather than the build stopping.
+if [ "$buildLoadrom" = "yes" ]; then
+    step "Building LOADROM.COM (MSXPi network-loading patch)"
+    LOADROMDIR=./Client/src/loadrom
+    "$ZMAC" -I $LOADROMDIR -I ./asm-common/include $LOADROMDIR/LDRPATCH197.MAC &&
+    "$HEX2BIN" -s 1900 ./zout/LDRPATCH197.hex &&
+    python3 $LOADROMDIR/patch_loadrom197.py \
+        $LOADROMDIR/v1.97/loadrom.com \
+        ./zout/LDRPATCH197.bin \
+        $LOADROMDIR/LOADROM.COM \
+        ./zout/LDRPATCH197.lst ||
+        warn "LOADROM.COM build FAILED - keeping the previous binary"
+fi
+
+# =============================================================================
+# openMSX extension
+# =============================================================================
+if [ "$buildOpenMSXConfig" = "yes" ]; then
+    step "Updating the openMSX extension"
+    SHA=$(sha1sum "$BIOSFILE" | cut -f1 -d" ")
+
+    # The plain names, ALWAYS. This is what `-ext MSXPi` resolves to and what
+    # runmsx deploys into /opt/openMSX. Once only the per-SHA copies were
+    # written here, so these two kept whatever ROM they already had: openMSX
+    # went on loading an OLD bios while the build reported success, and a
+    # harness run could pass against a ROM that no longer existed in the tree.
+    sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.xml
+    cp "$BIOSFILE" "openMSX/share/systemroms/extensions/$BIOSNAME.rom"
+    cp openMSX/share/extensions/MSXPi.xml "$OPENMSXSHARE/extensions/MSXPi.xml"
+    cp "$BIOSFILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.rom"
+    echo "  updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
+
+    # The per-SHA pair, only for a released build: the plain ROM above is
+    # replaced by every later build, so a released one needs a copy under a name
+    # nothing overwrites.
+    if [ "$releaseOpenMSXRom" = "yes" ]; then
+        cp openMSX/share/extensions/MSXPi.xml "openMSX/share/extensions/MSXPi.$SHA.xml"
+        cp "$BIOSFILE" "openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom"
+        echo "  KEPT as $SHA (MSXPi.$SHA.xml + $BIOSNAME.$SHA.rom)"
+    fi
+
+    # Keep the device sources in step with the openMSX fork.
+    cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
+    cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
+    cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
+    cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
+fi
+
+# =============================================================================
+# Disk images
+# =============================================================================
+if [ "$buildMSXdiskImage" = "yes" ]; then
+    step "Building the disk images"
+    gen_update_batch
+
+    for dsk in msxpiboot tools; do
+        python3 dsktool.py format "target/disks/$dsk.dsk"
+        python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/$dsk.dsk:MSXDOS.SYS"
+        python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/$dsk.dsk:COMMAND.COM"
+        python3 dsktool.py copy "$BIOSFILE"                "target/disks/$dsk.dsk:$BIOSNAME.ROM"
+    done
+
+    # LOADROM.COM lives under Client/src/loadrom/, not target/ like every other
+    # client .com - stage it so the loop below picks it up like the rest.
+    cp Client/src/loadrom/LOADROM.COM target/LOADROM.COM
+
+    # `ls` rather than a bash glob: it sorts all four patterns together, and
+    # that order is the order the files land in the image's directory. A glob
+    # expands pattern by pattern, which reorders the directory and changes the
+    # image byte-for-byte for no reason.
+    # *.bin picks up msxpiext.bin, the BASIC extension. The BASIC programs
+    # BLOAD it as their fallback when CALL MSXPIVER fails, and it was not
+    # being shipped at all - so that fallback died with "File not found".
+    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini 2>/dev/null); do
+        fname="${file##*/}"
+        [ -f "$file" ] || continue
+        # Skip empty files. dsktool.py dies with "list index out of range" on a
+        # zero-length input and leaves the image half-written, so every file
+        # copied AFTER it becomes unreadable on the MSX - the symptom is a plain
+        # "? FILENAME" from COMMAND.COM for a file DIR clearly shows. A 0-byte
+        # .COM is meaningless anyway, and one appears whenever a client's
+        # sources have been removed but its stale target/ output has not.
+        if [ ! -s "$file" ]; then
+            warn "skipping empty $fname (would corrupt the disk image)"
+            continue
         fi
-	fi
-}
+        python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"
+    done
 
-# Functionsf
-UpdateBuildIdASM() {
-    if [ "$updateVersions" = "yes" ]; then
-        fname="$1"
-        cp "$fname" "$fname.bak"
-
-        # Get the last BuildId line
-        curdefine=$(grep "^BuildId: DB" "$fname" | tail -n 1)
-
-        # Extract and increment the build number
-        today=$(date +%Y%m%d)
-        lastbuild=$(echo "$curdefine" | sed -n 's/.*"\.[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
-        newbuild=$(printf "%03d\n" $((10#$lastbuild + 1)))
-        rc=$?
-
-        if [ "$rc" = 0 ]; then
-            newdefine="BuildId: DB \".${today}.${newbuild}\""
-            # Match the line by its anchor alone and replace it whole -
-            # no need to reconstruct/escape the old value as a search
-            # pattern, which was fragile and could silently fail to
-            # match without any visible error
-            sed "s|^BuildId: DB.*|${newdefine}|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
-            if grep -qF -- "$newdefine" "$fname"; then
-                echo "New BuildId for $1: .${today}.${newbuild}"
-            else
-                echo "WARNING: BuildId update for $1 did NOT take effect" >&2
-            fi
-        fi
+    # The UNAPI tools and INL.CFG go on last. They are NOT in target/, so the
+    # loop above cannot pick them up, and regenerating the image here drops
+    # every one of them - which is how a disk that had ETHTEST, INL and INL.CFG
+    # silently went back to not having them. UNAPI/build.sh adds them and then
+    # installs the finished image to the served location itself, so it has to
+    # run before the copies below.
+    if [ -x UNAPI/build.sh ]; then
+        echo "Adding UNAPI tools to the disk image"
+        ( cd UNAPI && ./build.sh ) ||
+            warn "UNAPI/build.sh failed - disk image is missing the UNAPI tools"
     fi
-}
 
-genUpdateBatch() {
-  echo "echo Preparing to update..." >> /tmp/msxpiupd.bat
-  echo "pset DriveM ${GITPATH}/target"  >> /tmp/msxpiupd.bat
-  echo "pdate" >> /tmp/msxpiupd.bat
-  echo "echo Getting lastest updater..." >> /tmp/msxpiupd.bat
-  echo "pcopy m:msxpirfh.bat" >> /tmp/msxpiupd.bat
-  echo "pcopy m:msxpiupd.bat" >> /tmp/msxpiupd.bat
-  echo "echo "  >> /tmp/msxpiupd.bat
-  echo "echo Starting update" >> /tmp/msxpiupd.bat
-  echo "msxpirfh" >> /tmp/msxpiupd.bat
-  
-  rm target/msxpirfh.bat  > /dev/null 2>&1
-    
-  for fn in `ls target | grep -v -i pcopy.com`
-  do
-    if [ -f target/${fn} ];then
-      echo "pcopy m:${fn}" >> /tmp/msxpirfh.bat
-    fi
-  done
-  echo "pcopy m:pcopy.com" >> /tmp/msxpirfh.bat
-  
-  echo "echo  " >> /tmp/msxpirfh.bat
-  echo "pcd /home/pi/msxpi" >> /tmp/msxpirfh.bat
-  echo "prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server"  >> /tmp/msxpirfh.bat
-  echo "echo "  >> /tmp/msxpirfh.bat
-  echo "echo Restarting msxpi-server.py" >> /tmp/msxpirfh.bat
-  echo "prestart" >> /tmp/msxpirfh.bat
-  echo "pver" >> /tmp/msxpirfh.bat
-  perl -pe 's/\r?\n/\r\n/' /tmp/msxpiupd.bat > target/msxpiupd.bat
-  perl -pe 's/\r?\n/\r\n/' /tmp/msxpirfh.bat > target/msxpirfh.bat
-  rm /tmp/msxpiupd.bat
-  rm /tmp/msxpirfh.bat 
-}
-
-# MSX-DOS P Commands
-if [ $buildClientCommands = "yes" ];then
-  echo "Compiling MSXPi DOS Commands"
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/template.com.asm -o ./target/template.com
-  $SJASM_PATH/sjasmplus -DMSXPI_RAM_STASH --inc=./asm-common/include --raw=./target/template.com ./Client/src/template.com.asm
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/pcopy.com.asm    -o ./target/pcopy.com
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./Client/src/at28c256.com.asm -o ./target/at28c256.com
+    echo "Copying disk images to $SERVEDDISKS/"
+    cp target/disks/msxpiboot.dsk "$SERVEDDISKS/"
+    cp target/disks/tools.dsk "$SERVEDDISKS/"
 fi
 
-if [ $buildBIOS = "yes" ];then
-  echo "Compiling MSXPi BIOS and MSX-DOS ROM"
-
-  # Bump BuildIds BEFORE compiling, not after - msx-dos.mac includes
-  # msxpi-driver.mac, so the id must already be updated in the source
-  # before zmac runs, or the compiled ROM bakes in the previous run's id
-  # and the bump only takes effect on the *next* build.
-  UpdateBuildIdASM ./ROM/src/MSX-DOS/msxpi-driver.mac
-  UpdateBuildIdASM ./ROM/src/BIOS/$BIOSNAME.asm
-  UpdateBuildIdASM ./ROM/src/BIOS/msxpiext.asm
-  UpdateBuildId    ./Server/Python/src/msxpi-server.py
-
-  # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
-  # exist before zmac runs - and it is built with sjasm, not zmac, because the
-  # same sources also build the RAM (mapped segment) variant that
-  # ETHUNAPI.COM installs, and those are sjasm syntax throughout.  sjasm
-  # resolves its includes against the current directory, hence the subshell.
-  # Where the image lands in the ROM, and whether it still fits, is asserted
-  # inside msxpi-driver.mac - so a driver that has outgrown the free tail
-  # fails this build rather than producing a corrupt ROM.
-  echo "Compiling Ethernet UNAPI driver (ROM variant)"
-  # $SJASM_PATH is relative to this directory (HOME is set to ../../../.. at
-  # the top of this script), so it has to be resolved BEFORE the subshell cds
-  # away or the tool is looked for relative to UNAPI/src.
-  SJASM_BIN="$(cd $SJASM_PATH && pwd)/sjasm.exe"
-  ( cd UNAPI/src && "$SJASM_BIN" ethrom.asm ../../ROM/src/MSX-DOS/ethrom.bin ethrom.lst )
-  if [ $? -ne 0 ]; then
-    echo "ERROR: the Ethernet UNAPI ROM driver did not assemble - stopping" >&2
-    exit 1
-  fi
-
-  $ZMAC_PATH/zmac.exe -I ./asm-common/include -I ./ROM/src/MSX-DOS ./ROM/src/MSX-DOS/msx-dos.mac
-  # zmac's exit status is the only thing that says whether the ROM is good.
-  # Without this check a failed assembly left the PREVIOUS zout/msx-dos.hex in
-  # place, and the line below happily copied a stale ROM into target/ - which
-  # is exactly the kind of failure the ASSERTs were added to make loud.
-  if [ $? -ne 0 ]; then
-    echo "ERROR: msx-dos.mac did not assemble - target/$BIOSNAME.rom NOT updated" >&2
-    exit 1
-  fi
-
-  # Build MSX-DOS Driver
-  [ -f ./zout/msx-dos.hex ] && $HEX2BIN_PATH/hex2bin.exe -s 4000 ./zout/msx-dos.hex && cp ./zout/msx-dos.bin ./target/$BIOSNAME.rom
-  
-  # Build BIOS
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/$BIOSNAME.asm  -o ./target/msxpbios.rom
-  
-  # Build BASIC BIOS Extension
-  #$Z80ASM_PATH/z80asm.exe -I ./asm-common/include ./ROM/src/BIOS/msxpiext.asm   -o ./target/msxpiext.bin
-
-  # Create an optional 2-bank ROMs for the EEPROM
-  
-  #cat $ROMBANK1 > target/multirom.rom
-  #cat $BIOSFILE >> target/multirom.rom
-fi
-
-# LOADROM.COM - MSXPi network-loading patch of the third-party LOADROM.COM
-# v1.97 (see Client/src/loadrom/README.md). LDRPATCH197.MAC assembles a
-# *private copy* of asm-common/include/msxpi_bios.asm into the appended
-# blob at 1900h - LOADROM does not call the MSXPi ROM BIOS - so any change
-# to msxpi_bios.asm (e.g. the v1.6 poll-loop speedup) only reaches
-# LOADROM.COM when this block re-runs. The input is the pristine
-# v1.97/loadrom.com; the output overwrites Client/src/loadrom/LOADROM.COM,
-# which the disk-image block below stages into target/.
-if [ "$buildLoadrom" = "yes" ];then
-  echo "Building LOADROM.COM (MSXPi network-loading patch)"
-  LOADROMDIR=./Client/src/loadrom
-
-  # patch_loadrom197.py verifies the source length and the exact original
-  # bytes at every patch site, and refuses to write a broken binary - so a
-  # failure here means the toolchain or the pristine v1.97 input is wrong,
-  # and the previously built LOADROM.COM is left untouched.
-  $ZMAC_PATH/zmac.exe -I $LOADROMDIR -I ./asm-common/include $LOADROMDIR/LDRPATCH197.MAC &&
-  $HEX2BIN_PATH/hex2bin.exe -s 1900 ./zout/LDRPATCH197.hex &&
-  python3 $LOADROMDIR/patch_loadrom197.py \
-      $LOADROMDIR/v1.97/loadrom.com \
-      ./zout/LDRPATCH197.bin \
-      $LOADROMDIR/LOADROM.COM \
-      ./zout/LDRPATCH197.lst ||
-  echo "WARNING: LOADROM.COM build FAILED - keeping the previous binary" >&2
-fi
-
-
-if [ $buildOpenMSXConfig = "yes" ];then
-  SHA=$(sha1sum $BIOSFILE | cut -f1 -d" ")
-
-  # The plain names, ALWAYS.  This is what `-ext MSXPi` resolves to and what
-  # runmsx deploys into /opt/openMSX.  Once only the per-SHA copies were
-  # written here, so these two kept whatever ROM they already had: openMSX went
-  # on loading an OLD bios while the build reported success, and a harness run
-  # could pass against a ROM that no longer existed in the tree.
-  sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.xml
-  cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.rom
-  cp openMSX/share/extensions/MSXPi.xml ../../../../Documents/openMSX/share/extensions/MSXPi.xml
-  cp $BIOSFILE          ../../../../Documents/openMSX/share/systemroms/extensions/$BIOSNAME.rom
-  echo "openMSX extension updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
-
-  # The per-SHA pair, only when this build is being released.  openMSX finds a
-  # ROM by the sha1 its XML declares, so a released build needs a copy under a
-  # name no later build overwrites - msxpibios.rom itself is replaced every
-  # time.  Writing the pair on EVERY build instead left one behind per build,
-  # to be hand-pruned before a release; see releaseOpenMSXRom at the top.
-  if [ "$releaseOpenMSXRom" = "yes" ];then
-    cp openMSX/share/extensions/MSXPi.xml openMSX/share/extensions/MSXPi.$SHA.xml
-    cp $BIOSFILE openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom
-    echo "openMSX extension KEPT as $SHA (MSXPi.$SHA.xml + $BIOSNAME.$SHA.rom)"
-  fi
-  # Update sources for openMSX extensions - to keep up to date with openMSX fork
-  cp $OPENMSXSRC/src/MSXPiDevice.cc         openMSX/src/MSXPiDevice.cc
-  cp $OPENMSXSRC/src/MSXPiDevice.hh         openMSX/src/MSXPiDevice.hh
-  cp $OPENMSXSRC/src/DeviceFactory.cc       openMSX/src/DeviceFactory.cc
-  cp $OPENMSXSRC/build/msvc/openmsx.vcxproj openMSX/build/msvc/openmsx.vcxproj
-fi
-
-if [ $buildMSXdiskImage = "yes" ];then
-  genUpdateBatch
-  # Generate msxpiboot.dsk disk image
-  python3 dsktool.py format target/disks/msxpiboot.dsk
-  python3 dsktool.py format target/disks/tools.dsk
-  python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/msxpiboot.dsk:MSXDOS.SYS"
-  python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/msxpiboot.dsk:COMMAND.COM"
-  python3 dsktool.py copy "target/$BIOSNAME.rom" "target/disks/msxpiboot.dsk:$BIOSNAME.ROM"
-  python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/tools.dsk:MSXDOS.SYS"
-  python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/tools.dsk:COMMAND.COM"
-  python3 dsktool.py copy "target/$BIOSNAME.rom" "target/disks/tools.dsk:$BIOSNAME.ROM"
-
-  # LOADROM.COM (the MSXPi network-loading patch of LOADROM.COM v1.97 -
-  # see Client/src/loadrom/README.md) lives under Client/src/loadrom/,
-  # not target/ like every other client .com - stage it into target/
-  # first so the glob below picks it up like everything else.
-  cp Client/src/loadrom/LOADROM.COM target/LOADROM.COM
-
-  for file in `ls target/*.com target/*.COM target/*.BAS target/*.ini`
-  do
-    fname="${file##*/}"
-    [ -f $file ] || continue
-    # Skip empty files.  dsktool.py dies with "list index out of range" on a
-    # zero-length input and leaves the image half-written, so every file copied
-    # AFTER it becomes unreadable on the MSX - the symptom is a plain
-    # "? FILENAME" from COMMAND.COM for a file that DIR clearly shows.  A
-    # 0-byte .COM is meaningless anyway, and one appears whenever a client's
-    # sources have been removed but its stale target/ output has not.
-    if [ ! -s "$file" ]; then
-      echo "  skipping empty $fname (would corrupt the disk image)" >&2
-      continue
-    fi
-    python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"
-  done
-
-  # The UNAPI tools and INL.CFG go on last.  They are NOT in target/, so the
-  # loop above cannot pick them up, and regenerating the image here drops
-  # every one of them - which is how a disk that had ETHTEST, INL and INL.CFG
-  # silently went back to not having them.  UNAPI/build.sh adds them and then
-  # installs the finished image to the served location itself, so do that
-  # before the copies below rather than after.
-  if [ -x UNAPI/build.sh ]; then
-    echo "Adding UNAPI tools to the disk image"
-    ( cd UNAPI && ./build.sh ) || echo "WARNING: UNAPI/build.sh failed - disk image is missing the UNAPI tools" >&2
-  fi
-
-  echo "Copying disk images to /home/pi/msxpi/disks/"
-  cp target/disks/msxpiboot.dsk /c/home/pi/msxpi/disks/
-  cp target/disks/tools.dsk /c/home/pi/msxpi/disks/
-fi
-
+step "Build finished"

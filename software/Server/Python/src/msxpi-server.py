@@ -61,7 +61,7 @@ import filecmp
 
 
 version = "1.6"
-BuildId = "20260912.043"
+BuildId = "20260912.048"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1869,7 +1869,7 @@ def reload(parms = None):
     print(f"reload(): {varname} reloaded from {path}")
     return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
-def dskiords(parms = None):
+def dskior(parms = None):
     #print("dskiords()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1889,10 +1889,12 @@ def dskiords(parms = None):
     # Multi-sector reads are the interesting case: MSX-DOS asks for one sector
     # at a time for directory and FAT access, but uses B>1 for the body of a
     # large file, so a defect in the per-sector handshake only shows up on big
-    # programs.  Logged unconditionally because the failure it diagnoses is
-    # intermittent on real hardware and there is no second chance to enable it.
-    print("dskiords: drive=%d sector=%d count=%d" %
-          (sectorInfo[0], sectorInfo[3], numsectors))
+    # programs. Off by default - a line per sector buries everything else in
+    # the log during a copy - so turn it on when chasing one:
+    #     MSXPI_PROFILE=1 python3 msxpi-server.py
+    if _PROFILE:
+        print("dskiords: drive=%d sector=%d count=%d" %
+              (sectorInfo[0], sectorInfo[3], numsectors))
 
     while sectorcnt < numsectors:
         #print("dskiords:",sectorcnt)
@@ -1916,7 +1918,7 @@ def dskiords(parms = None):
                   % (sectorcnt, numsectors, sectorInfo[3] + sectorcnt - 1, rc))
             break
  
-def dskiowrs(parms = None):
+def dskiow(parms = None):
     #print("dskiowrs()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1946,7 +1948,7 @@ def dskiowrs(parms = None):
             print("dskiowrs: checksum error")
             break
                   
-def dskiosct(parms = None):
+def dskios(parms = None):
     #print("dskiosct()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
@@ -1971,6 +1973,18 @@ def dskiosct(parms = None):
     #print("dskiosct:mediaDescriptor=",sectorInfo[2])
     #print("dskiosct:initialSector=",sectorInfo[3])
        
+# The v1.6 driver sends the short names; every ROM before it sends these.
+# Keeping both costs three lines and lets a server upgraded ahead of the EEPROM
+# - the usual order, since one is a file copy and the other is a reflash - go on
+# serving an older ROM. The reverse pairing cannot be rescued from here: a v1.6
+# ROM against a pre-1.6 server fails on the name, which is a better failure than
+# the silent one it would otherwise hit (that server reads the burst request as
+# a 33280-byte buffer and answers with an ordinary block).
+dskiords = dskior
+dskiowrs = dskiow
+dskiosct = dskios
+
+
 def recvdata2(maxbufsize = 8192):
     """
     Python-side counterpart of MSX SENDDATA2().
@@ -1992,6 +2006,11 @@ def recvdata2(maxbufsize = 8192):
     # -------------------------
     while True:
         rc, pibyte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return (RC_CONNERR, None)
         if rc != RC_SUCCESS:
             continue  # ignore transient SPI errors
 
@@ -2222,6 +2241,11 @@ def senddata(header_rc, payload):
         # Wait for READY
         while True:
             rc, b = SPI_ByteTransfer()
+            # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+            # retrying spins at full speed and floods the log. Only give up on that;
+            # timeouts and noise still mean keep waiting.
+            if rc == RC_CONNERR:
+                return (RC_FAILED, None)
             if rc != RC_SUCCESS:
                 # SPI error: keep waiting; higher-level timeout policy is outside this function
                 continue
@@ -2245,6 +2269,11 @@ def senddata(header_rc, payload):
     # -------------------------
     while True:
         rc, pibyte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return RC_CONNERR
         if rc != RC_SUCCESS:
             # SPI error: ignore and keep waiting
             continue
@@ -2412,6 +2441,11 @@ def recvdata2_oneblock(maxbufsize):
 
     while True:
         rc, byte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return (RC_CONNERR, None)
         if rc != RC_SUCCESS:
             continue  # ignore transient SPI noise
 
@@ -2665,6 +2699,11 @@ def PerformHandshake():
     #print("PerformHandshake(): Waiting for READY from MSX")
     while True:
         rc, byte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return RC_CONNERR, 0
         if rc != RC_SUCCESS:
             continue  # ignore noise
         if byte == READY:
@@ -2939,6 +2978,136 @@ def netreset(parm=None):
 def tcpip(parm=None):
     """Alias for netreset - the script is msxpi-tcpip-setup.sh."""
     return netreset(parm)
+
+
+# Run as one "sudo sh -c" so a single sudoers rule covers it. Works with
+# NetworkManager (Bookworm) and with dhcpcd/wpa_supplicant (older images);
+# each tool is skipped if absent. Every step is "|| true": a wlan0 in a bad
+# state is exactly when individual steps fail, and the next step may still
+# recover it.
+_WLANRESET_SCRIPT = r"""
+IF=wlan0
+has() { command -v "$1" >/dev/null 2>&1; }
+svc_active() { has systemctl && systemctl is-active --quiet "$1" 2>/dev/null; }
+svc_enabled() { has systemctl && systemctl is-enabled --quiet "$1" 2>/dev/null; }
+
+# Decide once who owns wlan0, so the teardown never pokes a manager that is
+# not in charge (e.g. a leftover dhcpcd binary on a NetworkManager image).
+#   nm       - NetworkManager (Bookworm and newer, or installed by hand)
+#   dhcpcd   - dhcpcd + wpa_supplicant hook (Bullseye and older)
+#   dhclient - ifupdown/dhclient
+#   none     - nothing recognised: link and radio cycle only
+if has nmcli && svc_active NetworkManager; then MGR=nm
+elif has dhcpcd && { svc_active dhcpcd || svc_enabled dhcpcd; }; then MGR=dhcpcd
+elif has dhclient; then MGR=dhclient
+else MGR=none
+fi
+echo "wlanreset: manager=$MGR"
+
+# --- tear down ---
+case $MGR in
+    nm)       nmcli device disconnect $IF || true ;;
+    dhcpcd)   dhcpcd -k $IF >/dev/null 2>&1 || true ;;
+    dhclient) dhclient -r $IF || true ;;
+esac
+ip addr flush dev $IF || true
+ip link set $IF down || true
+
+# --- radio off/on: forces the driver to drop the association completely ---
+[ $MGR = nm ] && { nmcli radio wifi off || true; }
+has rfkill && { rfkill block wifi || true; }
+sleep 2
+has rfkill && { rfkill unblock wifi || true; }
+[ $MGR = nm ] && { nmcli radio wifi on || true; }
+
+ip link set $IF up || true
+sleep 2
+
+# --- bring back and request a lease ---
+case $MGR in
+    nm)
+        nmcli device set $IF managed yes || true
+        # Connect can race the radio coming back; retry a few times.
+        for i in 1 2 3; do
+            nmcli device connect $IF && break
+            sleep 3
+        done
+        ;;
+    dhcpcd)
+        # dhcpcd starts wpa_supplicant from its 10-wpa_supplicant hook;
+        # "dhcpcd -k" may have stopped it and a plain rebind does not
+        # restart it - a full service restart does.
+        if svc_enabled dhcpcd || svc_active dhcpcd; then
+            systemctl restart dhcpcd || true
+        else
+            dhcpcd $IF || true
+        fi
+        sleep 3
+        has wpa_cli && { wpa_cli -i $IF reconfigure || true; }
+        ;;
+    dhclient)
+        has wpa_cli && { wpa_cli -i $IF reconfigure || true; }
+        dhclient $IF || true
+        ;;
+esac
+exit 0
+"""
+
+
+def _wlan0_ipv4():
+    try:
+        out = subprocess.run(["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
+                             stdout=PIPE, stderr=STDOUT, text=True,
+                             timeout=5).stdout or ""
+    except Exception:
+        return None
+    for line in out.split("\n"):
+        parts = line.split()
+        if "inet" in parts:
+            return parts[parts.index("inet") + 1]
+    return None
+
+
+def wlanreset(parm=None):
+    """Completely reset wlan0 so it gets a fresh DHCP lease from the router.
+
+    Drops the lease, flushes addresses, takes the link down, cycles the WiFi
+    radio (rfkill / nmcli), brings the link up and asks NetworkManager, dhcpcd
+    or dhclient - whichever the image uses - to reconnect. Then waits for an
+    IPv4 address.
+
+    Does not touch msxpi0 or NAT: if the uplink address changed, run
+    "p netreset" afterwards.
+
+    Optional parameter: seconds to wait for an address (default 30, max 90).
+    """
+    if hostType != "RaspberryPi":
+        return "Command not supported by this platform"
+
+    wait = 30
+    if parm:
+        try:
+            wait = max(5, min(90, int(parm.split()[0])))
+        except ValueError:
+            pass
+
+    try:
+        done = subprocess.run(["sudo", "sh", "-c", _WLANRESET_SCRIPT],
+                              stdout=PIPE, stderr=STDOUT, text=True,
+                              timeout=60)
+        print(f"wlanreset: rc={done.returncode}\n{done.stdout or ''}", flush=True)
+    except Exception as exc:
+        return f"Pi:wlanreset failed: {exc}"
+
+    deadline = time.time() + wait
+    addr = _wlan0_ipv4()
+    while not addr and time.time() < deadline:
+        time.sleep(1)
+        addr = _wlan0_ipv4()
+
+    if addr:
+        return f"wlan0: {addr}"
+    return f"Pi:wlanreset: no IPv4 on wlan0 after {wait}s"
 
 
 def reboot(parm=None):
@@ -3935,11 +4104,20 @@ def irc(parms):
 # -----------------------------
 # API keys
 # -----------------------------
-RAPIDAPI_KEY = "a22476fe91mshe8c7ca25baf2810p1b27e6jsn35dc5ee5102d"
-RAPIDAPI_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
-FINNHUB_KEY = "d6lg179r01qrq6i2j67gd6lg179r01qrq6i2j680"
-TWELVEDATA_KEY = "fcb06db32abb4883bbe8447c2215fc2e"
-ALPHAVANTAGE_KEY = "FMQKUJ2MTSMYRV84"
+# From msxpi.ini, like OPENAIKEY - never in this file. These were hardcoded
+# here until v1.6, which put four live keys in a public repository; they have
+# been revoked, and the replacements live on the Pi in
+# /home/pi/msxpi/msxpi.ini, which is not in the repository. target/msxpi.ini
+# lists the names with empty values.
+#
+# Read per call rather than once at import: `p set FINNHUBKEY ...` rewrites the
+# file and updates psetvar, and a key set that way has to take effect without
+# restarting the server.
+def _api_key(name):
+    return getMSXPiVar(name).strip()
+
+
+RAPIDAPI_HOST_DEFAULT = "apidojo-yahoo-finance-v1.p.rapidapi.com"
 
 DEFAULT_COOLDOWN = 60  # seconds
 # Yahoo cooldown state
@@ -3964,7 +4142,8 @@ class YahooProvider(QuoteProvider):
     def fetch_batch(self, symbols):
         url = f"https://{RAPIDAPI_HOST}/market/v2/get-quotes"
         params = {"region": "US", "symbols": ",".join(symbols)}
-        headers = {"X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": RAPIDAPI_HOST}
+        headers = {"X-RapidAPI-Key": _api_key("RAPIDAPIKEY"),
+                   "X-RapidAPI-Host": _api_key("RAPIDAPIHOST") or RAPIDAPI_HOST_DEFAULT}
 
         r = requests.get(url, headers=headers, params=params, timeout=10)
         r.raise_for_status()
@@ -3987,7 +4166,7 @@ class FinnhubProvider(QuoteProvider):
         out = {}
         for s in symbols:
             url = "https://finnhub.io/api/v1/quote"
-            params = {"symbol": s, "token": FINNHUB_KEY}
+            params = {"symbol": s, "token": _api_key("FINNHUBKEY")}
             r = requests.get(url, params=params, timeout=10)
             r.raise_for_status()
             q = r.json()
@@ -4015,7 +4194,7 @@ class FinnhubProvider(QuoteProvider):
             "resolution": resolution,
             "from": start,
             "to": now,
-            "token": FINNHUB_KEY
+            "token": _api_key("FINNHUBKEY")
         }
 
         r = requests.get(url, params=params)
@@ -4052,7 +4231,7 @@ class TwelveDataProvider(QuoteProvider):
         td_symbols = [normalize_for_twelvedata(s) for s in symbols]
 
         url = "https://api.twelvedata.com/quote"
-        params = {"symbol": ",".join(td_symbols), "apikey": TWELVEDATA_KEY}
+        params = {"symbol": ",".join(td_symbols), "apikey": _api_key("TWELVEDATAKEY")}
         r = requests.get(url, params=params, timeout=10)
         r.raise_for_status()
         data = r.json()
@@ -4241,7 +4420,7 @@ class AlphaVantageProvider(QuoteProvider):
             params = {
                 "function": "GLOBAL_QUOTE",
                 "symbol": av_sym,
-                "apikey": ALPHAVANTAGE_KEY
+                "apikey": _api_key("ALPHAVANTAGEKEY")
             }
 
             try:
@@ -4274,7 +4453,7 @@ class AlphaVantageProvider(QuoteProvider):
             "function": "TIME_SERIES_INTRADAY",
             "symbol": symbol,
             "interval": interval,
-            "apikey": ALPHAVANTAGE_KEY,
+            "apikey": _api_key("ALPHAVANTAGEKEY"),
             "outputsize": "compact" if range_ == "1d" else "full"
         }
 
@@ -4905,7 +5084,12 @@ else:
            ['SPI_MOSI','16'], \
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
-           ['OPENAIKEY','']]
+           ['OPENAIKEY',''], \
+           ['RAPIDAPIKEY',''], \
+           ['RAPIDAPIHOST',''], \
+           ['FINNHUBKEY',''], \
+           ['TWELVEDATAKEY',''], \
+           ['ALPHAVANTAGEKEY','']]
 
 print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 
@@ -4987,10 +5171,16 @@ try:
                 initialize_connection()
 
     else:
-        # TCP mode: accept loop with reconnection
+        # TCP mode: accept loop with reconnection.
+        # One listening socket for the life of the server.  Opening a new one
+        # on every pass bound port 5000 a second time while the first listener
+        # was still open, which SO_REUSEADDR does not permit, so the first
+        # reconnect killed the server with EADDRINUSE.  It went unnoticed
+        # because the READY-wait loops spun on a closed peer and never let the
+        # loop come round again.
+        server_socket = initialize_connection()
         while True:
             print("MSXPi Server: Waiting for MSX connection...")
-            server_socket = initialize_connection()
             conn, addr = server_socket.accept()
             print(f" ** MSX Connected to {addr} **\n")
             # openMSX sends one byte per OUT. With Nagle on its side and

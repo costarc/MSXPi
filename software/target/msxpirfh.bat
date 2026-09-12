@@ -1,9 +1,12 @@
 pcopy m:API.BAS
+pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
+pcopy m:INL.CFG
 pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
 pcopy m:PITIME.BAS
 pcopy m:RASTRO.BAS
+pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
 pcopy m:TESTDIR.BAS
 pcopy m:WEATHER.BAS
@@ -11,7 +14,9 @@ pcopy m:at28c256.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxchat.com
-pcopy m:msxpibios.rom
+pcopy m:msxpibios_v1.6.rom
+pcopy m:msxpiext.bin
+pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
 pcopy m:p.com
 pcopy m:templatc.com
