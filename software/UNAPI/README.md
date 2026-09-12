@@ -59,6 +59,18 @@ connection responsive. Raise it if bulk throughput matters more than latency.
    `ETHUNAPI` will refuse because the ROM already registers an ETHERNET
    implementation.  `ETHTEST` should print `Seg: FF`.
 
+   Do NOT run `RAMHELPR I`.  It installs the UNAPI RAM helper on its own, and
+   `MSR.COM` installs the mapper support routines AND a helper - so when MSR
+   finds a helper already there it aborts, and the mapper routines it was
+   being run for are never installed.  The pair of messages that follow look
+   like they contradict each other:
+
+       A:MSR I    *** An UNAPI RAM helper is already installed
+       A:INL I    *** No mapper support routines found.
+
+   They do not: the first is why the second happens.  The helper lives in RAM,
+   so a cold boot clears it - then run `MSR I` and `INL I`, nothing else.
+
    `MSR I` only under **MSX-DOS 1**.  Under Nextor or MSX-DOS 2 the mapper
    support routines are already present and MSR is built to fail in that case
    ("the installer will fail if these routines are already present" -
