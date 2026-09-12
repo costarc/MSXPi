@@ -3949,11 +3949,20 @@ def irc(parms):
 # -----------------------------
 # API keys
 # -----------------------------
-RAPIDAPI_KEY = "a22476fe91mshe8c7ca25baf2810p1b27e6jsn35dc5ee5102d"
-RAPIDAPI_HOST = "apidojo-yahoo-finance-v1.p.rapidapi.com"
-FINNHUB_KEY = "d6lg179r01qrq6i2j67gd6lg179r01qrq6i2j680"
-TWELVEDATA_KEY = "fcb06db32abb4883bbe8447c2215fc2e"
-ALPHAVANTAGE_KEY = "FMQKUJ2MTSMYRV84"
+# From msxpi.ini, like OPENAIKEY - never in this file. These were hardcoded
+# here until v1.6, which put four live keys in a public repository; they have
+# been revoked, and the replacements live on the Pi in
+# /home/pi/msxpi/msxpi.ini, which is not in the repository. target/msxpi.ini
+# lists the names with empty values.
+#
+# Read per call rather than once at import: `p set FINNHUBKEY ...` rewrites the
+# file and updates psetvar, and a key set that way has to take effect without
+# restarting the server.
+def _api_key(name):
+    return getMSXPiVar(name).strip()
+
+
+RAPIDAPI_HOST_DEFAULT = "apidojo-yahoo-finance-v1.p.rapidapi.com"
 
 DEFAULT_COOLDOWN = 60  # seconds
 # Yahoo cooldown state
@@ -3978,7 +3987,8 @@ class YahooProvider(QuoteProvider):
     def fetch_batch(self, symbols):
         url = f"https://{RAPIDAPI_HOST}/market/v2/get-quotes"
         params = {"region": "US", "symbols": ",".join(symbols)}
-        headers = {"X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": RAPIDAPI_HOST}
+        headers = {"X-RapidAPI-Key": _api_key("RAPIDAPIKEY"),
+                   "X-RapidAPI-Host": _api_key("RAPIDAPIHOST") or RAPIDAPI_HOST_DEFAULT}
 
         r = requests.get(url, headers=headers, params=params, timeout=10)
         r.raise_for_status()
@@ -4001,7 +4011,7 @@ class FinnhubProvider(QuoteProvider):
         out = {}
         for s in symbols:
             url = "https://finnhub.io/api/v1/quote"
-            params = {"symbol": s, "token": FINNHUB_KEY}
+            params = {"symbol": s, "token": _api_key("FINNHUBKEY")}
             r = requests.get(url, params=params, timeout=10)
             r.raise_for_status()
             q = r.json()
@@ -4029,7 +4039,7 @@ class FinnhubProvider(QuoteProvider):
             "resolution": resolution,
             "from": start,
             "to": now,
-            "token": FINNHUB_KEY
+            "token": _api_key("FINNHUBKEY")
         }
 
         r = requests.get(url, params=params)
@@ -4066,7 +4076,7 @@ class TwelveDataProvider(QuoteProvider):
         td_symbols = [normalize_for_twelvedata(s) for s in symbols]
 
         url = "https://api.twelvedata.com/quote"
-        params = {"symbol": ",".join(td_symbols), "apikey": TWELVEDATA_KEY}
+        params = {"symbol": ",".join(td_symbols), "apikey": _api_key("TWELVEDATAKEY")}
         r = requests.get(url, params=params, timeout=10)
         r.raise_for_status()
         data = r.json()
@@ -4255,7 +4265,7 @@ class AlphaVantageProvider(QuoteProvider):
             params = {
                 "function": "GLOBAL_QUOTE",
                 "symbol": av_sym,
-                "apikey": ALPHAVANTAGE_KEY
+                "apikey": _api_key("ALPHAVANTAGEKEY")
             }
 
             try:
@@ -4288,7 +4298,7 @@ class AlphaVantageProvider(QuoteProvider):
             "function": "TIME_SERIES_INTRADAY",
             "symbol": symbol,
             "interval": interval,
-            "apikey": ALPHAVANTAGE_KEY,
+            "apikey": _api_key("ALPHAVANTAGEKEY"),
             "outputsize": "compact" if range_ == "1d" else "full"
         }
 
@@ -4919,7 +4929,12 @@ else:
            ['SPI_MOSI','16'], \
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
-           ['OPENAIKEY','']]
+           ['OPENAIKEY',''], \
+           ['RAPIDAPIKEY',''], \
+           ['RAPIDAPIHOST',''], \
+           ['FINNHUBKEY',''], \
+           ['TWELVEDATAKEY',''], \
+           ['ALPHAVANTAGEKEY','']]
 
 print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 
