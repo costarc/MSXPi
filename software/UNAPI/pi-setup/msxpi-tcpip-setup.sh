@@ -113,6 +113,34 @@ echo "uplink: $UPLINK"
 # CAP_NET_ADMIN or root. Without this, msxpi_eth.make_link() silently falls
 # back to MockLink, which answers every opcode correctly and carries no
 # traffic whatsoever - the most confusing possible failure.
+#
+# The OWNER matters as much as the existence, and this used to check only
+# existence. A TAP left behind by a server that once ran as root belongs to
+# root, and then TUNSETIFF from the pi-owned server fails with EPERM - the
+# device sits there UP but never RUNNING, nothing attaches to it, and the log
+# says "TAP unavailable (Operation not permitted) - falling back to MockLink".
+# So if the owner is not $TAP_USER, replace the device rather than keeping it.
+tap_owner_uid() {
+    # "msxpi0: tap persist user 1000" - the field after "user", empty when the
+    # device has no owner at all (created by root without `user`).
+    ip tuntap show 2>/dev/null \
+        | awk -v dev="$TAP:" '$1 == dev {for (i = 1; i < NF; i++)
+                                            if ($i == "user") { print $(i+1); exit }}'
+}
+
+want_uid="$(id -u "$TAP_USER" 2>/dev/null || echo "")"
+if ip link show "$TAP" >/dev/null 2>&1; then
+    have_uid="$(tap_owner_uid)"
+    if [ -n "$want_uid" ] && [ "$have_uid" != "$want_uid" ] \
+       && [ "$have_uid" != "$TAP_USER" ]; then
+        echo "$TAP is owned by \"${have_uid:-root}\", not $TAP_USER - recreating it"
+        echo "$(date) $TAP owner ${have_uid:-root} != $TAP_USER - recreating" \
+            >> "$ROOT_LOG"
+        ip link set "$TAP" down 2>/dev/null || true
+        ip tuntap del dev "$TAP" mode tap 2>/dev/null || true
+    fi
+fi
+
 if ! ip link show "$TAP" >/dev/null 2>&1; then
     ip tuntap add dev "$TAP" mode tap user "$TAP_USER"
     echo "created $TAP (owner $TAP_USER)"

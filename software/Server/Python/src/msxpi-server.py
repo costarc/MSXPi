@@ -187,7 +187,59 @@ def eth_get_shuttle():
             log=print)
         print("eth: Ethernet UNAPI shuttle ready (%s)"
               % type(link).__name__)
+        _eth_note_link(link)
     return _eth_shuttle
+
+
+# Seconds between attempts to replace a MockLink with the real TAP.
+ETH_TAP_RETRY = 5.0
+_eth_link_is_mock = False   # checked on the opcode path, so keep it a bool
+_eth_tap_retry_at = 0.0
+
+
+def _eth_note_link(link):
+    """Remember whether the shuttle ended up on MockLink."""
+    global _eth_link_is_mock
+    _eth_link_is_mock = (_eth_mod is not None
+                         and isinstance(link, _eth_mod.MockLink))
+
+
+def _eth_retry_tap():
+    """Swap a MockLink for the real TAP once msxpi0 becomes openable.
+
+    make_link() runs once, lazily, on the first Ethernet opcode, and its result
+    used to be kept for the life of the process.  msxpi-monitor starts
+    msxpi-tcpip-setup.sh in the BACKGROUND and the server immediately after, so
+    whether msxpi0 exists and is owned by the server's user when that first
+    opcode lands is a race.  Losing it pinned MockLink, which answers every
+    opcode correctly and carries no traffic whatsoever - the MSX installs INL,
+    reports the link up, and nothing reaches the network - until somebody
+    restarted the server by hand.
+
+    The MSX-visible MAC is the same fixed address on every link (BaseLink's
+    default), so a swap is invisible to the stack on the other side; the two
+    pieces of state the MSX can change, ETH_ENABLE and ETH_FILTERS, are carried
+    across.  Retries are silent: on a host that will never have a TAP (the
+    openMSX harness) this runs for the life of the process.
+    """
+    global _eth_tap_retry_at
+    now = time.monotonic()
+    if now < _eth_tap_retry_at:
+        return
+    _eth_tap_retry_at = now + ETH_TAP_RETRY
+    try:
+        # TapLink directly, not make_link: its fallback would build a throwaway
+        # MockLink (threads and all) and log a line on every failed retry.
+        link = _eth_mod.TapLink()
+    except Exception:
+        return
+    old = _eth_shuttle.link
+    link.enabled = old.enabled
+    link.filters = old.filters
+    _eth_shuttle.link = link
+    old.close()
+    _eth_note_link(link)
+    print("eth: msxpi0 is up now - MockLink replaced by the TAP", flush=True)
 
 
 # Hoisted out of eth_handle_opcode: the membership test below runs on EVERY
@@ -211,6 +263,10 @@ def eth_handle_opcode(opcode):
         # lookup per opcode, on a path where the per-transaction fixed cost is
         # what dominates short transactions.
         _eth_handle = shuttle.handle
+    if _eth_link_is_mock:
+        # Degraded: look for the TAP again (rate limited inside). Only ever on
+        # this path while the link is Mock, so it costs a bool test otherwise.
+        _eth_retry_tap()
     try:
         return _eth_handle(opcode)
     except Exception as e:
