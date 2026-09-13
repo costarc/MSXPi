@@ -219,9 +219,65 @@ def detect_mapper(rom):
     return None, None
 
 
+def _plausible_bank_store(rom, i, depth=4):
+    """Is the 32 lo hi at rom[i] plausibly a real LD (nn),A instruction?
+
+    The byte pattern alone also matches data and the middle of other
+    instructions. NEMESIS.ROM's PLAY SELECT text contains 32 FF 6D ("R" then
+    two layout bytes), which was patched into CALL F9C5h and drawn as
+    "1PLAYE" plus garbage; XEVIOUS.ROM's "add a,32h / ld (ix+10h),a" read as
+    LD (DD77h),A. A genuine bank switch follows an instruction that loads A,
+    or one that leaves A alone. Checked against every megaROM in the test set:
+    ARCTIC's "di / ld (7000h),a" and XEVIOUS/ZANACEX's chained
+    "ld (nn),a / ld (7000h),a" are kept, the text and operand hits dropped."""
+    if i >= 2 and rom[i - 2] == 0x3E:                              # ld a,n
+        return True
+    if i >= 3 and rom[i - 3] == 0x3A:                              # ld a,(nn)
+        return True
+    if i >= 1 and 0x78 <= rom[i - 1] <= 0xBF:                      # ld a,r / a op r
+        return True
+    if i >= 1 and rom[i - 1] in (0x3C, 0x3D, 0xAF, 0x87, 0x2F, 0x1A, 0x0A,
+                                 0x07, 0x0F, 0x17, 0x1F, 0xF1, 0xB7):
+        return True                                                # inc/dec/rotate/pop af...
+    if i >= 3 and rom[i - 3] in (0xDD, 0xFD) and rom[i - 2] == 0x7E:
+        return True                                                # ld a,(ix/iy+d)
+    if i >= 2 and rom[i - 2] in (0xE6, 0xF6, 0xC6, 0xD6, 0xEE, 0xCE, 0xDE):
+        return True                                                # and/or/add/sub... n
+    if i >= 2 and rom[i - 2] == 0xCB:                              # CB-prefixed op
+        return True
+    # Instructions that leave A as it was and are distinctive enough to trust
+    # on their own.
+    if i >= 1 and rom[i - 1] in (0xF3, 0xFB, 0xF5, 0xC5, 0xD5, 0xE5):
+        return True                                                # di / ei / push
+    if i >= 3 and rom[i - 3] == 0x32:                              # chained ld (nn),a
+        return True
+    if i >= 2 and rom[i - 2] == 0x18 and rom[i - 1] == 0x00:       # jr +0
+        return True
+    # Weaker ones - also leave A alone, but common as data too - count only if
+    # the instruction before them is plausible in turn. The Konami boot code
+    # sets all three windows in a row - METAL GEAR, MGEAR and USAS do
+    #     ld a,04h / push hl / ld hl,0F0F1h / ld (6000h),a / ld (hl),a /
+    #     inc a / inc hl / ld (8000h),a ...
+    # and without these the switch after ld hl,nn / inc hl was left unpatched,
+    # so the game ran from the wrong banks and fell back to DOS. Accepted on
+    # their own, NEMESIS's text "...21 39 25 32 FF 6D" read as ld hl,2539h
+    # before the store and was patched again; the byte before that 21h is 2Ch,
+    # which is not plausible, so the chain rejects it.
+    if depth <= 0:
+        return False
+    if i >= 3 and rom[i - 3] in (0x01, 0x11, 0x21, 0x31):          # ld rr,nn
+        return _plausible_bank_store(rom, i - 3, depth - 1)
+    if i >= 1 and rom[i - 1] in (0x03, 0x13, 0x23, 0x0B, 0x1B, 0x2B):
+        return _plausible_bank_store(rom, i - 1, depth - 1)        # inc/dec rr
+    if i >= 1 and 0x70 <= rom[i - 1] <= 0x77 and rom[i - 1] != 0x76:
+        return _plausible_bank_store(rom, i - 1, depth - 1)        # ld (hl),r
+    return False
+
+
 def patch_bank_switches(rom, mapper_type, handlers):
     """Rewrite every LD (nn),A that targets a bank-select window into
-    CALL <handler>, so the MSX only has to store blocks and run.
+    CALL <handler>, so the MSX only has to store blocks and run. Sites that do
+    not look like real instructions are left alone - see _plausible_bank_store.
 
     handlers: one address per window of that mapper, in window order.
     Returns (patched_rom, count).
@@ -237,7 +293,7 @@ def patch_bank_switches(rom, mapper_type, handlers):
     i = 0
     end = len(out) - 2
     while i < end:
-        if out[i] == 0x32:
+        if out[i] == 0x32 and _plausible_bank_store(rom, i):
             a = out[i + 1] | (out[i + 2] << 8)
             for k, (lo, hi) in enumerate(windows):
                 if lo <= a <= hi:
@@ -245,8 +301,14 @@ def patch_bank_switches(rom, mapper_type, handlers):
                     out[i + 1] = handlers[k] & 0xFF
                     out[i + 2] = (handlers[k] >> 8) & 0xFF
                     n += 1
-                    i += 2
                     break
+            # Step over the whole instruction even when it is not a bank
+            # switch. METAL.ROM has ld a,(0C602h) / ld (0C632h),a / xor a at
+            # 55F3h: the store to RAM was skipped one byte at a time, so its
+            # operand "32 C6" plus the xor a (AFh) read as ld (0AFC6h),a, got
+            # patched into CALL F9CFh, and the game crashed with SP=1010h.
+            i += 3
+            continue
         i += 1
     return bytes(out), n
 

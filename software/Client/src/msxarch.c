@@ -265,6 +265,7 @@ uint8_t loadrom(uint16_t totalSize) {
 // ===========================================================================
 
 #define MAX_STORAGE_SEGMENTS 64   // 64 x 16K = 1MB
+#define PAIR_CACHE_ENTRIES   12   // pre-filled segments per 16K page, see ascii8Handlers
 #define BANK_HALF_SIZE       0x2000
 
 static uint8_t __at(0x3800) storageSegments[MAX_STORAGE_SEGMENTS];
@@ -311,6 +312,8 @@ static uint8_t segInUse2;
 static uint8_t segInUse3;
 static uint8_t segTotal;
 static uint8_t segNext;
+static uint8_t pairCacheCount;
+static uint8_t pairCacheSegments[2][PAIR_CACHE_ENTRIES];
 
 static uint8_t segmentIsReserved(uint8_t seg) {
     return (seg == segInUse0 || seg == segInUse1 ||
@@ -401,6 +404,21 @@ static uint8_t allocateMapperSegments(uint8_t storageCount) {
         if (takeSegment(&storageSegments[i]) != RC_SUCCESS) return RC_FAILED;
     }
     if (takeSegment(&safeZoneSegment) != RC_SUCCESS) return RC_FAILED;
+
+    // Pair caches for the 8K handlers: up to PAIR_CACHE_ENTRIES segments per
+    // page, the exec segment being entry 0. Take what is left - with a pool of
+    // one the handlers simply copy on every switch, as they used to.
+    pairCacheCount = 1;
+    pairCacheSegments[0][0] = execSegment1;
+    pairCacheSegments[1][0] = execSegment2;
+    while (pairCacheCount < PAIR_CACHE_ENTRIES) {
+        uint8_t s0, s1;
+        if (takeSegment(&s0) != RC_SUCCESS) break;
+        if (takeSegment(&s1) != RC_SUCCESS) break;
+        pairCacheSegments[0][pairCacheCount] = s0;
+        pairCacheSegments[1][pairCacheCount] = s1;
+        pairCacheCount++;
+    }
 
     return RC_SUCCESS;
 }
@@ -538,21 +556,26 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 #define RESIDENT_PAGE2_ADDR   0xFAD8
 #define RESIDENT_16K_SLOT     0x18
 #define RESIDENT_TABLE_ADDR   0xF975
-#define RESIDENT_EXEC1_ADDR   0xF9B5
-#define RESIDENT_EXEC2_ADDR   0xF9B6
-// Do NOT spread these out. Widening the slots to 0x50 pushed WIN4's slot to
-// FAB0-FAFF, past the end of the usable window at FAD5, and every 8K game
-// died right after "Starting game...". Four 0x40 slots from F9C0 end at FABF,
-// which fits; the handlers below are sized to match.
-#define RESIDENT_8K_WIN1_ADDR 0xF9C0
-#define RESIDENT_8K_WIN2_ADDR 0xFA00
-#define RESIDENT_8K_WIN3_ADDR 0xFA40
-#define RESIDENT_8K_WIN4_ADDR 0xFA80
-#define RESIDENT_SLOT_SIZE    0x40
-// Four bytes (one per 8K window) holding the bank number currently resident in
-// that window, living in the gap between EXEC2 (F9B6) and WIN1 (F9C0).
-#define RESIDENT_CACHE_ADDR   0xF9B7
 #define RESIDENT_TABLE_ENTRIES 0x40   // F975-F9B4, indexed by AND 3Fh
+// 8K windows: the bank currently in each window (W1..W4), then one record per
+// 16K page: current segment, next cache victim, cache entries in use.
+#define RESIDENT_CUR_ADDR     0xF9B5
+#define RESIDENT_PG0_ADDR     0xF9B9  // page 1 (4000h-7FFFh), port FDh
+#define RESIDENT_PG1_ADDR     0xF9BC  // page 2 (8000h-BFFFh), port FEh
+// Four 5-byte entry stubs followed by the shared switch routine. The code is
+// D0h bytes and only that much is copied, because the pair caches follow it:
+// grow RESIDENT_8K_SIZE (and move the caches) if ascii8Handlers grows.
+#define RESIDENT_8K_BASE      0xF9C0
+#define RESIDENT_8K_WIN1_ADDR 0xF9C0
+#define RESIDENT_8K_WIN2_ADDR 0xF9C5
+#define RESIDENT_8K_WIN3_ADDR 0xF9CA
+#define RESIDENT_8K_WIN4_ADDR 0xF9CF
+#define RESIDENT_8K_SIZE      0xD0
+// Pair caches, (bank lo, bank hi, segment) x PAIR_CACHE_ENTRIES per page:
+// FA90-FAB3 and FAB4-FAD7. That reaches into the 16K handlers' space, which an
+// 8K game never uses, and ends below the MSX2 system variables at FAF5h.
+#define RESIDENT_CACHE0_ADDR  0xFA90
+#define RESIDENT_CACHE1_ADDR  0xFAB4
 
 // The server patches the ROM's bank-switch writes into CALLs to our resident
 // handlers, so it has to know where they ended up. Derive the addresses from
@@ -652,291 +675,201 @@ static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
 }
 
 // --- Konami & ASCII8 8K Resident Handlers ---
-void ascii8Win1Handler(void) __naked {
+// A cartridge switches an 8K window with one latch write. These handlers used
+// to copy 8KB (~45ms) on every switch, which is harmless for a game that
+// switches rarely and ruinous for one that switches all the time: NEMESIS's
+// interrupt music driver pages its banks in and out of 8000h/A000h 18 times a
+// second, so the title music and everything else crawled.
+//
+// A 16K page is fully determined by the pair of banks in its two windows, and
+// games reuse very few pairs. So each page keeps a small cache of mapper
+// segments already holding a (lo, hi) pair: the first use of a pair costs two
+// 8KB copies, and every later switch to it is a single OUT, as on the
+// cartridge. Victims rotate; with a pool of one segment this degrades to the
+// old copy-on-every-switch behaviour.
+//
+// The cache must hold a game's whole working set, or rotation evicts pairs
+// that are needed again at once and every switch copies. NEMESIS cycles through
+// 10 page-2 pairs, transients included - (02,06) (02,03) (07,03) (02,08)
+// (0B,03) (0B,0C) (02,0C) (07,08) (05,03) (05,06) - so 8 entries missed on
+// every pass and the music still ran at 2.7 steps a second against the
+// cartridge's 60. Hence PAIR_CACHE_ENTRIES 12.
+//
+// Entry: A = bank, return address on the stack; all registers preserved.
+// This block is COPIED to RESIDENT_8K_BASE, so every jump must be relative.
+void ascii8Handlers(void) __naked {
     __asm
-        ; Fast path first: a mapper ignores a write re-selecting the bank the
-        ; window already holds, but this used to re-copy 8KB regardless - ~48ms
-        ; of LDIR. Games rewrite bank registers constantly, so PC sampling
-        ; found 20/20 samples inside this LDIR. Bail out before touching
-        ; interrupts when the bank has not changed.
+        push hl                 ; W1
+        ld l, #0
+        jr 1$
+        push hl                 ; W2
+        ld l, #1
+        jr 1$
+        push hl                 ; W3
+        ld l, #2
+        jr 1$
+        push hl                 ; W4
+        ld l, #3
+    1$:
         push af
-        push hl
-        ld hl, #(RESIDENT_CACHE_ADDR + 0)
-        cp (hl)
-        jr nz, 3$
-        pop hl
-        pop af
-        ret
-    3$:
-        ld (hl), a
         push bc
         push de
-        ld a, i          ; P/V = IFF2, the interrupt state of the caller
-        push af
-        di
-        ; RRCA does double duty: carry becomes bank bit 0 (which half of the
-        ; 16K segment) and A becomes bank>>1, the segment index. The AND 3Fh
-        ; masks it to the 64-entry table AND clears the bit RRCA rotated in.
-        ; Masking matters: unmasked, a bank number larger than the ROM indexed
-        ; past the table into whatever DOS left there and selected a garbage
-        ; segment - NEMESIS does this on its first switch, ld a,(F0F2h) with
-        ; F0F2h uninitialised.
+        push ix
+        ld c, l                 ; C = window 0-3
+        ld e, a                 ; E = bank
+        ld b, #0
+        ld hl, #RESIDENT_CUR_ADDR
+        add hl, bc
         ld a, (hl)
-        rrca
-        ld de, #0x8000
-        jr nc, 2$
-        ld d, #0xA0
-    2$:
-        and #0x3F
-        ; Table is 64 bytes at F975, so low byte 75h+3Fh = B4h cannot carry.
-        add a, #(RESIDENT_TABLE_ADDR & 0xFF)
-        ld l, a
-        ld h, #(RESIDENT_TABLE_ADDR >> 8)
-        ld a, (hl)
-        out (#0xFE), a
-        ex de, hl
-        ld de, #0x4000
-        ld bc, #0x2000
-        ldir
-        ld a, (#RESIDENT_EXEC2_ADDR)
-        out (#0xFE), a
-        ; This code is COPIED into RAM, so every jump must be RELATIVE: a
-        ; `jp po` assembled to the link-time address inside the msxarch.com
-        ; page-0 image, and launchGame() maps the BIOS over page 0 before the
-        ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
-        pop hl           ; H = A, L = F from the `ld a,i` snapshot
-        ; Acknowledge the VDP interrupt that went pending during the LDIR.
-        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
-        ; windows from its interrupt routine and then does EI, so the pending
-        ; interrupt nested every frame until the stack reached C000h.
-        in a, (#0x99)
-        bit 2, l
-        jr z, 9$         ; caller had interrupts off - leave them off
-        ei
-    9$:
+        cp e
+        jr nz, 10$
+        ; Same bank again - a mapper ignores that. Exits here rather than
+        ; at 99$, which is out of JR range from this point.
+        pop ix
         pop de
         pop bc
-        pop hl
         pop af
-        ret
-    __endasm;
-}
-
-void ascii8Win2Handler(void) __naked {
-    __asm
-        ; Fast path first: a mapper ignores a write re-selecting the bank the
-        ; window already holds, but this used to re-copy 8KB regardless - ~48ms
-        ; of LDIR. Games rewrite bank registers constantly, so PC sampling
-        ; found 20/20 samples inside this LDIR. Bail out before touching
-        ; interrupts when the bank has not changed.
-        push af
-        push hl
-        ld hl, #(RESIDENT_CACHE_ADDR + 1)
-        cp (hl)
-        jr nz, 3$
         pop hl
-        pop af
         ret
-    3$:
-        ld (hl), a
-        push bc
-        push de
-        ld a, i          ; P/V = IFF2, the interrupt state of the caller
+    10$:
+        ld (hl), e
+        ld a, i                 ; P/V = IFF2, interrupt state of the caller
         push af
         di
-        ; RRCA does double duty: carry becomes bank bit 0 (which half of the
-        ; 16K segment) and A becomes bank>>1, the segment index. The AND 3Fh
-        ; masks it to the 64-entry table AND clears the bit RRCA rotated in.
-        ; Masking matters: unmasked, a bank number larger than the ROM indexed
-        ; past the table into whatever DOS left there and selected a garbage
-        ; segment - NEMESIS does this on its first switch, ld a,(F0F2h) with
-        ; F0F2h uninitialised.
-        ld a, (hl)
-        rrca
-        ld de, #0x8000
-        jr nc, 2$
-        ld d, #0xA0
+        ld a, c
+        and #2
+        ld c, a                 ; C = 0 (page 1) or 2 (page 2)
+        ld hl, #RESIDENT_CUR_ADDR
+        add hl, bc
+        ld d, (hl)              ; D = bank in the low window of the page
+        inc hl
+        ld e, (hl)              ; E = bank in the high window of the page
+        ld ix, #RESIDENT_PG0_ADDR
+        ld hl, #RESIDENT_CACHE0_ADDR
+        bit 1, c
+        jr z, 2$
+        ld ix, #RESIDENT_PG1_ADDR
+        ld hl, #RESIDENT_CACHE1_ADDR
     2$:
-        and #0x3F
-        ; Table is 64 bytes at F975, so low byte 75h+3Fh = B4h cannot carry.
-        add a, #(RESIDENT_TABLE_ADDR & 0xFF)
-        ld l, a
-        ld h, #(RESIDENT_TABLE_ADDR >> 8)
-        ld a, (hl)
-        out (#0xFE), a
-        ex de, hl
-        ld de, #0x6000
-        ld bc, #0x2000
-        ldir
-        ld a, (#RESIDENT_EXEC2_ADDR)
-        out (#0xFE), a
-        ; This code is COPIED into RAM, so every jump must be RELATIVE: a
-        ; `jp po` assembled to the link-time address inside the msxarch.com
-        ; page-0 image, and launchGame() maps the BIOS over page 0 before the
-        ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
-        pop hl           ; H = A, L = F from the `ld a,i` snapshot
-        ; Acknowledge the VDP interrupt that went pending during the LDIR.
-        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
-        ; windows from its interrupt routine and then does EI, so the pending
-        ; interrupt nested every frame until the stack reached C000h.
-        in a, (#0x99)
-        bit 2, l
-        jr z, 9$         ; caller had interrupts off - leave them off
-        ei
-    9$:
-        pop de
-        pop bc
-        pop hl
-        pop af
-        ret
-    __endasm;
-}
-
-void ascii8Win3Handler(void) __naked {
-    __asm
-        ; Fast path first: a mapper ignores a write re-selecting the bank the
-        ; window already holds, but this used to re-copy 8KB regardless - ~48ms
-        ; of LDIR. Games rewrite bank registers constantly, so PC sampling
-        ; found 20/20 samples inside this LDIR. Bail out before touching
-        ; interrupts when the bank has not changed.
-        push af
-        push hl
-        ld hl, #(RESIDENT_CACHE_ADDR + 2)
-        cp (hl)
-        jr nz, 3$
-        pop hl
-        pop af
-        ret
+        ld b, 2 (ix)            ; entries in the cache of this page
     3$:
-        ld (hl), a
-        push bc
-        push de
-        ld a, i          ; P/V = IFF2, the interrupt state of the caller
-        push af
-        di
-        ; RRCA does double duty: carry becomes bank bit 0 (which half of the
-        ; 16K segment) and A becomes bank>>1, the segment index. The AND 3Fh
-        ; masks it to the 64-entry table AND clears the bit RRCA rotated in.
-        ; Masking matters: unmasked, a bank number larger than the ROM indexed
-        ; past the table into whatever DOS left there and selected a garbage
-        ; segment - NEMESIS does this on its first switch, ld a,(F0F2h) with
-        ; F0F2h uninitialised.
         ld a, (hl)
-        rrca
+        cp d
+        jr nz, 4$
+        inc hl
+        ld a, (hl)
+        dec hl
+        cp e
+        jr nz, 4$
+        inc hl
+        inc hl
+        ld a, (hl)              ; segment already holding (lo, hi)
+        ld 0 (ix), a
+        jr 7$
+    4$:
+        inc hl
+        inc hl
+        inc hl
+        djnz 3$
+        ; Miss: take the next victim entry and fill its segment.
+        ld a, 1 (ix)
+        ld l, a
+        add a, a
+        add a, l                ; A = victim * 3
+        ld hl, #RESIDENT_CACHE0_ADDR
+        bit 1, c
+        jr z, 5$
+        ld hl, #RESIDENT_CACHE1_ADDR
+    5$:
+        ld c, a
+        add hl, bc              ; B is 0 after the djnz
+        ld a, 1 (ix)
+        inc a
+        cp 2 (ix)
+        jr c, 6$
+        xor a
+    6$:
+        ld 1 (ix), a
+        ld (hl), d
+        inc hl
+        ld (hl), e
+        inc hl
+        ld a, (hl)              ; segment of the victim entry
+        ld 0 (ix), a
+        out (#0xFE), a          ; build it at 8000h
+        push de
+        ld hl, #0x8000
+        ld a, d
+    8$:
+        push hl                 ; destination half
+        rrca                    ; carry = half of the storage segment
         ld de, #0x4000
-        jr nc, 2$
+        jr nc, 9$
         ld d, #0x60
-    2$:
+    9$:
+        ; RRCA above made A the segment index (bank >> 1) and carry the half.
+        ; AND 3Fh bounds it to the 64-entry table: unmasked, a bank number
+        ; larger than the ROM indexed past the table into whatever DOS left
+        ; there - NEMESIS does this on its first switch, ld a,(F0F2h) with
+        ; F0F2h uninitialised. The table is 64 bytes at F975, so the low byte
+        ; 75h + 3Fh = B4h cannot carry.
         and #0x3F
-        ; Table is 64 bytes at F975, so low byte 75h+3Fh = B4h cannot carry.
         add a, #(RESIDENT_TABLE_ADDR & 0xFF)
         ld l, a
         ld h, #(RESIDENT_TABLE_ADDR >> 8)
         ld a, (hl)
-        out (#0xFD), a
+        out (#0xFD), a          ; storage segment at 4000h
         ex de, hl
-        ld de, #0x8000
+        pop de
         ld bc, #0x2000
         ldir
-        ld a, (#RESIDENT_EXEC1_ADDR)
-        out (#0xFD), a
-        ; This code is COPIED into RAM, so every jump must be RELATIVE: a
-        ; `jp po` assembled to the link-time address inside the msxarch.com
-        ; page-0 image, and launchGame() maps the BIOS over page 0 before the
-        ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
-        pop hl           ; H = A, L = F from the `ld a,i` snapshot
-        ; Acknowledge the VDP interrupt that went pending during the LDIR.
-        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
-        ; windows from its interrupt routine and then does EI, so the pending
-        ; interrupt nested every frame until the stack reached C000h.
-        in a, (#0x99)
-        bit 2, l
-        jr z, 9$         ; caller had interrupts off - leave them off
-        ei
-    9$:
+        ex de, hl               ; HL = A000h after the low half, C000h after both
         pop de
-        pop bc
-        pop hl
-        pop af
-        ret
-    __endasm;
-}
-
-void ascii8Win4Handler(void) __naked {
-    __asm
-        ; Fast path first: a mapper ignores a write re-selecting the bank the
-        ; window already holds, but this used to re-copy 8KB regardless - ~48ms
-        ; of LDIR. Games rewrite bank registers constantly, so PC sampling
-        ; found 20/20 samples inside this LDIR. Bail out before touching
-        ; interrupts when the bank has not changed.
-        push af
-        push hl
-        ld hl, #(RESIDENT_CACHE_ADDR + 3)
-        cp (hl)
-        jr nz, 3$
-        pop hl
-        pop af
-        ret
-    3$:
-        ld (hl), a
-        push bc
         push de
-        ld a, i          ; P/V = IFF2, the interrupt state of the caller
-        push af
-        di
-        ; RRCA does double duty: carry becomes bank bit 0 (which half of the
-        ; 16K segment) and A becomes bank>>1, the segment index. The AND 3Fh
-        ; masks it to the 64-entry table AND clears the bit RRCA rotated in.
-        ; Masking matters: unmasked, a bank number larger than the ROM indexed
-        ; past the table into whatever DOS left there and selected a garbage
-        ; segment - NEMESIS does this on its first switch, ld a,(F0F2h) with
-        ; F0F2h uninitialised.
-        ld a, (hl)
-        rrca
-        ld de, #0x4000
-        jr nc, 2$
-        ld d, #0x60
-    2$:
-        and #0x3F
-        ; Table is 64 bytes at F975, so low byte 75h+3Fh = B4h cannot carry.
-        add a, #(RESIDENT_TABLE_ADDR & 0xFF)
-        ld l, a
-        ld h, #(RESIDENT_TABLE_ADDR >> 8)
-        ld a, (hl)
-        out (#0xFD), a
-        ex de, hl
-        ld de, #0xA000
-        ld bc, #0x2000
-        ldir
-        ld a, (#RESIDENT_EXEC1_ADDR)
-        out (#0xFD), a
-        ; This code is COPIED into RAM, so every jump must be RELATIVE: a
-        ; `jp po` assembled to the link-time address inside the msxarch.com
-        ; page-0 image, and launchGame() maps the BIOS over page 0 before the
-        ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
-        pop hl           ; H = A, L = F from the `ld a,i` snapshot
-        ; Acknowledge the VDP interrupt that went pending during the LDIR.
-        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
-        ; windows from its interrupt routine and then does EI, so the pending
-        ; interrupt nested every frame until the stack reached C000h.
+        ld a, e
+        bit 6, h
+        jr z, 8$
+        pop de
+        ; Acknowledge the VDP interrupt that went pending during the copies,
+        ; or a switch made from the interrupt routine nests the next one.
         in a, (#0x99)
+    7$:
+        ld a, (#RESIDENT_PG0_ADDR)
+        out (#0xFD), a
+        ld a, (#RESIDENT_PG1_ADDR)
+        out (#0xFE), a
+        ; This code is COPIED into RAM, so every jump must be relative: a jp po
+        ; assembles to the link-time address inside the msxarch.com image,
+        ; which the BIOS covers once the game runs. JR has no P/O condition,
+        ; so test bit 2 (P/V) of the F saved by ld a,i instead.
+        pop hl                  ; H = A, L = F from the ld a,i snapshot
         bit 2, l
-        jr z, 9$         ; caller had interrupts off - leave them off
+        jr z, 99$
         ei
-    9$:
+    99$:
+        pop ix
         pop de
         pop bc
-        pop hl
         pop af
+        pop hl
         ret
     __endasm;
 }
 
 static void relocateResidentHandlers8K(uint16_t storageCount) {
     uint16_t i;
+    uint8_t p, e;
     uint8_t* table = (uint8_t*)RESIDENT_TABLE_ADDR;
-    uint8_t* exec1 = (uint8_t*)RESIDENT_EXEC1_ADDR;
-    uint8_t* exec2 = (uint8_t*)RESIDENT_EXEC2_ADDR;
+    uint8_t* cur = (uint8_t*)RESIDENT_CUR_ADDR;
+    uint8_t* pg[2];
+    uint8_t* cache[2];
+    uint8_t* src = (uint8_t*)ascii8Handlers;
+    uint8_t* dst = (uint8_t*)RESIDENT_8K_BASE;
+
+    pg[0] = (uint8_t*)RESIDENT_PG0_ADDR;
+    pg[1] = (uint8_t*)RESIDENT_PG1_ADDR;
+    cache[0] = (uint8_t*)RESIDENT_CACHE0_ADDR;
+    cache[1] = (uint8_t*)RESIDENT_CACHE1_ADDR;
 
     // Fill all 64 entries, mirroring the ROM the way the cartridge hardware
     // does, instead of only the first storageCount. Combined with the AND 3Fh
@@ -945,30 +878,26 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
     // exactly the segment the mapper would have selected.
     for (i = 0; i < RESIDENT_TABLE_ENTRIES; i++)
         table[i] = storageSegments[i % storageCount];
-    *exec1 = execSegment1;
-    *exec2 = execSegment2;
 
-    // konamiInitialSetup/ascii8InitialSetup load banks 0..3 into windows 1..4,
-    // so seed the cache with those - otherwise the first genuine switch to one
-    // of them would be skipped as a no-op.
-    for (i = 0; i < 4; i++) ((uint8_t*)RESIDENT_CACHE_ADDR)[i] = (uint8_t)i;
-
-    uint8_t* src1 = (uint8_t*)ascii8Win1Handler;
-    uint8_t* src2 = (uint8_t*)ascii8Win2Handler;
-    uint8_t* src3 = (uint8_t*)ascii8Win3Handler;
-    uint8_t* src4 = (uint8_t*)ascii8Win4Handler;
-
-    uint8_t* dst1 = (uint8_t*)RESIDENT_8K_WIN1_ADDR;
-    uint8_t* dst2 = (uint8_t*)RESIDENT_8K_WIN2_ADDR;
-    uint8_t* dst3 = (uint8_t*)RESIDENT_8K_WIN3_ADDR;
-    uint8_t* dst4 = (uint8_t*)RESIDENT_8K_WIN4_ADDR;
-
-    for (i = 0; i < RESIDENT_SLOT_SIZE; i++) {
-        dst1[i] = src1[i];
-        dst2[i] = src2[i];
-        dst3[i] = src3[i];
-        dst4[i] = src4[i];
+    // konamiInitialSetup/ascii8InitialSetup load banks 0..3 into windows 1..4
+    // of the exec segments, so those are the current banks and each page's
+    // first cache entry; the other entries hold no pair yet.
+    for (i = 0; i < 4; i++) cur[i] = (uint8_t)i;
+    for (p = 0; p < 2; p++) {
+        pg[p][0] = pairCacheSegments[p][0];
+        pg[p][1] = pairCacheCount > 1 ? 1 : 0;
+        pg[p][2] = pairCacheCount;
+        cache[p][0] = (uint8_t)(p * 2);
+        cache[p][1] = (uint8_t)(p * 2 + 1);
+        cache[p][2] = pairCacheSegments[p][0];
+        for (e = 1; e < PAIR_CACHE_ENTRIES; e++) {
+            cache[p][e * 3]     = 0xFF;
+            cache[p][e * 3 + 1] = 0xFF;
+            cache[p][e * 3 + 2] = pairCacheSegments[p][e];
+        }
     }
+
+    for (i = 0; i < RESIDENT_8K_SIZE; i++) dst[i] = src[i];
 }
 
 static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {

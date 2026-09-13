@@ -3916,7 +3916,11 @@ def msxarchive(parms = None):
                 # detect_mapper() is only the fallback for unlisted ROMs.
                 dbinfo = romdb_lookup(buf, get_romdb())
                 if dbinfo:
-                    print(f"{filename}: ROM database: {dbinfo[2]} ({dbinfo[3]})")
+                    # ASCII only: titles such as "Akumajō Dracula" raised
+                    # UnicodeEncodeError on a cp1252 Windows console, which
+                    # aborted the load and left the MSX without a ROM header.
+                    title = dbinfo[3].encode("ascii", "replace").decode("ascii")
+                    print(f"{filename}: ROM database: {dbinfo[2]} ({title})")
                     if dbinfo[0] == "unsupported":
                         return reject(f"{filename}: {dbinfo[2]} mapper is not "
                                       f"supported.")
