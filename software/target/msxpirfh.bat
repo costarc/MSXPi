@@ -24,7 +24,8 @@ pcopy m:template.com
 pcopy m:pcopy.com
 echo  
 pcd /home/pi/msxpi
-prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
+prun wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Shell/update.sh
+prun sh update.sh
 echo 
 echo Restarting msxpi-server.py
 prestart

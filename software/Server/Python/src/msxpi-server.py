@@ -542,7 +542,21 @@ def _init_fast_gpio():
     if _FAST_GPIO and os.environ.get("MSXPI_NATIVE_GPIO") == "1":
         try:
             from msxpi_gpio_native import NativeGPIO
-            _NATIVE_GPIO = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            native = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            # msxpi_gpio_native.py is a separate file, and a Pi can end up
+            # running this server with an older copy of it. One without
+            # read_burst sends burst READS fine (the ROM then starts bursting
+            # its writes) but raises AttributeError on the first burst WRITE -
+            # outside the OSError the burst paths catch - so the server
+            # answered mid-sector with an error string and every COPY to an
+            # MSXPi drive failed with "Disk error writing". Only use an engine
+            # that can burst both ways; the Python GPIO path below does.
+            missing = [m for m in ('read', 'write', 'read_burst', 'write_burst')
+                       if not callable(getattr(native, m, None))]
+            if missing:
+                raise AttributeError(f"msxpi_gpio_native.py is out of date, no {', '.join(missing)} "
+                                     f"- run update.sh")
+            _NATIVE_GPIO = native
             print(f"init_fast_gpio(): native GPIO payload engine active "
                   f"(half-period {_NATIVE_GPIO.half_period_ns} ns)")
         except (OSError, ValueError, ImportError, AttributeError) as e:

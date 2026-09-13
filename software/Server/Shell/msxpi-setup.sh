@@ -67,7 +67,7 @@ fi
 # Install libraries required by msxpi-server
 # ------------------------------------------
 sudo apt-get update
-sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
+sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar gcc
 python3 -m pip install --upgrade pip --break-system-packages
 
 # -------------------------
@@ -137,6 +137,7 @@ sudo amixer cset numid=3 1
 cd $MSXPIHOME
 rm msxpi.ini.new > /dev/null 2>&1
 rm msxpi-server.py > /dev/null 2>&1
+rm update.sh > /dev/null 2>&1
 rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
@@ -144,7 +145,12 @@ rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperLeft.ini
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperRight.ini
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperRight_PCBV1.1Rev.0.ini
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
+# msxpi-server.py together with the modules it imports (mapper_detect,
+# msxpi_eth, msxpi_gpio_native) and the native GPIO engine built for this Pi.
+# The server alone does not start without mapper_detect.py.
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/update.sh
+sh update.sh
+chmod 755 $MSXPIHOME/update.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
