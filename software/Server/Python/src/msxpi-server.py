@@ -57,7 +57,6 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 import shutil
-import filecmp
 
 
 version = "1.6"
@@ -971,88 +970,38 @@ def pathExpander(path, basepath = ''):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    #print("msxdos_inihrd()")
+    """Map a disk image for the MSX drives. The mapping is of the image file
+    itself, so the MSX's sector writes (dskiow) land directly in the file and
+    survive however the server stops.
 
-    if ('disk' in vars() or 'disk' in globals()):
-        disk.flush()
-
+    This used to map a private staging copy instead, so that on Windows the
+    image could be overwritten while mounted; but the copy was only synced
+    back on Ctrl+C, so any other stop silently lost everything the MSX had
+    saved. On Windows a mounted image cannot be replaced by another program -
+    remount it (pset DriveA / reload A:) or stop the server to rebuild it."""
     if not filename or not os.path.exists(filename):
         return RC_FAILED, ''
 
-    # Mount from a private staging copy rather than mmap'ing the canonical
-    # path directly. mmap keeps a Windows file handle open for as long as
-    # the server runs, which blocks anything else (e.g. a rebuild) from
-    # overwriting that same file. DriveA/DriveB still report and can be
-    # freely rewritten at the canonical path; only this internal copy -
-    # refreshed on every mount/reload - is ever actually locked open.
-    #
-    # Each mount gets its own uniquely-named staging file (globals.mounts_count
-    # as a counter), rather than reusing one fixed name: a reload while the
-    # previous mmap is still open (nothing here explicitly closes it first)
-    # would otherwise try to overwrite that same still-locked staging file,
-    # hitting the exact Windows locking problem this is meant to avoid.
-    global mount_counter, mounted_paths
-    mount_counter = globals().get("mount_counter", 0) + 1
-    mounted_paths = globals().get("mounted_paths", {})
-    staging_dir = os.path.join("/tmp/msxpi", "mounted")
-    os.makedirs(staging_dir, exist_ok=True)
-    staging_path = os.path.join(staging_dir, f"{mount_counter}_{os.path.basename(filename)}")
-    shutil.copyfile(filename, staging_path)
-    # Recorded so any writes made during the session can be synced back to
-    # the canonical file on a clean shutdown (see sync_mounted_writes_back()).
-    mounted_paths[filename] = staging_path
+    size = os.path.getsize(filename)
+    if size <= 0:
+        return RC_FAILED, ''
 
-    size = os.path.getsize(staging_path)
-    if (size>0):
-        fd = os.open(staging_path, os.O_RDWR)
+    fd = os.open(filename, os.O_RDWR | getattr(os, "O_BINARY", 0))
+    try:
         disk = mmap.mmap(fd, size, access=access)
-        rc = RC_SUCCESS
-    else:
-        disk = ''
-        rc = RC_FAILED
-    return rc,disk
+    finally:
+        os.close(fd)        # the mapping keeps its own handle
+    return RC_SUCCESS, disk
 
-def sync_mounted_writes_back():
-    """Called on a clean shutdown (Ctrl+C -> KeyboardInterrupt below). Any
-    drive mounted via msxdos_inihrd() actually lives in a private staging
-    copy (see its own comment) so that writes made during the session -
-    e.g. an MSX program saving a file to drive A - never touched the
-    canonical DriveA/DriveB path and would otherwise be silently lost the
-    next time the drive is (re)mounted. For each tracked (canonical,
-    staging) pair, flush the still-open mmap and copy the staging file
-    back over the canonical one if its content actually changed.
-
-    Note: this only runs on a graceful stop (Ctrl+C). A force-kill (Task
-    Manager "End Task", Stop-Process -Force, etc.) terminates the process
-    without giving Python a chance to run this, so writes from a
-    force-killed session are lost - stop the server with Ctrl+C to keep
-    them.
-    """
-    global drive0Data, drive1Data, mounted_paths
-
-    mounted_paths = globals().get("mounted_paths", {})
-    if not mounted_paths:
-        return
-
-    # Flush whichever mmap objects are currently live so their staging
-    # files on disk reflect any in-memory writes before comparing.
-    for disk in (drive0Data, drive1Data):
-        if disk and disk != '':
-            try:
-                disk.flush()
-            except Exception:
-                pass
-
-    for canonical_path, staging_path in mounted_paths.items():
+def unmount_drive(disk):
+    """Flush and release a mapping returned by msxdos_inihrd(), so a remount
+    does not keep the previous image file open."""
+    if disk and disk != '':
         try:
-            if not os.path.exists(staging_path):
-                continue
-            if os.path.exists(canonical_path) and filecmp.cmp(canonical_path, staging_path, shallow=False):
-                continue  # unchanged, nothing to sync
-            shutil.copyfile(staging_path, canonical_path)
-            print(f"sync_mounted_writes_back(): synced changes back to {canonical_path}")
+            disk.flush()
+            disk.close()
         except Exception as e:
-            print(f"sync_mounted_writes_back(): failed to sync {canonical_path}: {e}")
+            print(f"unmount_drive(): {e}")
 
 def dos83format(fname):
     name = '        '
@@ -1676,11 +1625,15 @@ def pset(data):
     # Special cases for drives
     if rc == RC_SUCCESS:
         if varname_upper == 'DRIVEA':
+            old = drive0Data
             rc, drive0Data = msxdos_inihrd(varvalue)
+            unmount_drive(old)
             updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         elif varname_upper == 'DRIVEB':
+            old = drive1Data
             rc, drive1Data = msxdos_inihrd(varvalue)
+            unmount_drive(old)
             updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         return sendmultiblock("Pi:Ok".encode())
@@ -1870,9 +1823,13 @@ def reload(parms = None):
     if rc != RC_SUCCESS:
         return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
 
+    # Release the previous mapping only once the new one is in place, so a
+    # failed reload leaves the drive usable.
     if varname_upper == "A":
+        unmount_drive(drive0Data)
         drive0Data = data
     else:
+        unmount_drive(drive1Data)
         drive1Data = data
 
     print(f"reload(): {varname} reloaded from {path}")
@@ -1956,6 +1913,12 @@ def dskiow(parms = None):
         else:
             print("dskiowrs: checksum error")
             break
+
+    # The drive maps the image file itself; push the MSX's writes to disk
+    # now rather than whenever the OS gets round to it.
+    disk = drive0Data if sectorInfo[0] == 0 else drive1Data
+    if sectorcnt > 0 and disk and disk != '':
+        disk.flush()
                   
 def dskios(parms = None):
     #print("dskiosct()")
@@ -5358,5 +5321,6 @@ except KeyboardInterrupt:
             server_socket.close()
     except Exception:
         pass
-    sync_mounted_writes_back()
+    for disk in (globals().get("drive0Data"), globals().get("drive1Data")):
+        unmount_drive(disk)
     print("MSXPi Server: Terminating")
