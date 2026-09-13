@@ -57,7 +57,6 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 import shutil
-import filecmp
 
 
 version = "1.6"
@@ -279,6 +278,11 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
     mapper_type MAPPER_PLAIN keeps today's client behavior unchanged;
     the other values are reserved for mapper-aware loading (not yet
     implemented client-side)."""
+    # Konami SCC only differs in where the cartridge decodes its bank writes,
+    # which the server has already patched; on the MSX it loads exactly like
+    # Konami, and the clients only know types 1-3.
+    if mapper_type == MAPPER_KONAMI_SCC:
+        mapper_type = MAPPER_KONAMI
     return struct.pack("<BBBBHI6x", ROM_HEADER_MAGIC, ROM_HEADER_VERSION,
                         mapper_type, bank_size_kb, bank_count, total_size)
 
@@ -298,7 +302,9 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # can misidentify unusual/hand-rolled ROMs - good enough for the common
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
-                            patch_bank_switches, PATCH_WINDOWS)
+                            patch_bank_switches, PATCH_WINDOWS,
+                            neutralise_rom_writes, MAPPER_KONAMI_SCC,
+                            load_romdb, romdb_lookup)
 
 # Handler addresses the MSX will have relocated its resident bank-switch code
 # to. The client sends its own with the selection so the two sides cannot
@@ -313,6 +319,8 @@ def handlers_for(mapper_type, h):
     if mapper_type == MAPPER_ASCII8:   return [h[0], h[1], h[2], h[3]]
     if mapper_type == MAPPER_ASCII16:  return [h[4], h[5]]
     if mapper_type == MAPPER_KONAMI:   return [h[1], h[2], h[3]]  # 6000/8000/A000 ranges
+    if mapper_type == MAPPER_KONAMI_SCC:
+        return [h[0], h[1], h[2], h[3]]                            # 5000/7000/9000/B000
     return None
 
 
@@ -749,9 +757,18 @@ def SPI_BurstIn(length):
             return RC_CONNERR, None
         return RC_SUCCESS, payload
 
+    # DIAGNOSTIC (not for release): has the MSX already started its OTIR before
+    # this burst raised READY?  A write OUT arms a CPLD transfer whether or not
+    # READY is up, but /WAIT only holds the Z80 while READY is up - so bytes
+    # sent in that window overwrite each other and are lost.  Sampled before
+    # anything slow; reported only after the burst, so it adds no latency.
+    early = _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
+
     if _NATIVE_GPIO is not None:
         try:
             data = _NATIVE_GPIO.read_burst(length)
+            if early:
+                print("SPI_BurstIn: CS was already low before READY - the MSX started early")
             if _PROFILE:
                 _NATIVE_GPIO.report()
             return RC_SUCCESS, data
@@ -976,88 +993,38 @@ def pathExpander(path, basepath = ''):
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
-    #print("msxdos_inihrd()")
+    """Map a disk image for the MSX drives. The mapping is of the image file
+    itself, so the MSX's sector writes (dskiow) land directly in the file and
+    survive however the server stops.
 
-    if ('disk' in vars() or 'disk' in globals()):
-        disk.flush()
-
+    This used to map a private staging copy instead, so that on Windows the
+    image could be overwritten while mounted; but the copy was only synced
+    back on Ctrl+C, so any other stop silently lost everything the MSX had
+    saved. On Windows a mounted image cannot be replaced by another program -
+    remount it (pset DriveA / reload A:) or stop the server to rebuild it."""
     if not filename or not os.path.exists(filename):
         return RC_FAILED, ''
 
-    # Mount from a private staging copy rather than mmap'ing the canonical
-    # path directly. mmap keeps a Windows file handle open for as long as
-    # the server runs, which blocks anything else (e.g. a rebuild) from
-    # overwriting that same file. DriveA/DriveB still report and can be
-    # freely rewritten at the canonical path; only this internal copy -
-    # refreshed on every mount/reload - is ever actually locked open.
-    #
-    # Each mount gets its own uniquely-named staging file (globals.mounts_count
-    # as a counter), rather than reusing one fixed name: a reload while the
-    # previous mmap is still open (nothing here explicitly closes it first)
-    # would otherwise try to overwrite that same still-locked staging file,
-    # hitting the exact Windows locking problem this is meant to avoid.
-    global mount_counter, mounted_paths
-    mount_counter = globals().get("mount_counter", 0) + 1
-    mounted_paths = globals().get("mounted_paths", {})
-    staging_dir = os.path.join("/tmp/msxpi", "mounted")
-    os.makedirs(staging_dir, exist_ok=True)
-    staging_path = os.path.join(staging_dir, f"{mount_counter}_{os.path.basename(filename)}")
-    shutil.copyfile(filename, staging_path)
-    # Recorded so any writes made during the session can be synced back to
-    # the canonical file on a clean shutdown (see sync_mounted_writes_back()).
-    mounted_paths[filename] = staging_path
+    size = os.path.getsize(filename)
+    if size <= 0:
+        return RC_FAILED, ''
 
-    size = os.path.getsize(staging_path)
-    if (size>0):
-        fd = os.open(staging_path, os.O_RDWR)
+    fd = os.open(filename, os.O_RDWR | getattr(os, "O_BINARY", 0))
+    try:
         disk = mmap.mmap(fd, size, access=access)
-        rc = RC_SUCCESS
-    else:
-        disk = ''
-        rc = RC_FAILED
-    return rc,disk
+    finally:
+        os.close(fd)        # the mapping keeps its own handle
+    return RC_SUCCESS, disk
 
-def sync_mounted_writes_back():
-    """Called on a clean shutdown (Ctrl+C -> KeyboardInterrupt below). Any
-    drive mounted via msxdos_inihrd() actually lives in a private staging
-    copy (see its own comment) so that writes made during the session -
-    e.g. an MSX program saving a file to drive A - never touched the
-    canonical DriveA/DriveB path and would otherwise be silently lost the
-    next time the drive is (re)mounted. For each tracked (canonical,
-    staging) pair, flush the still-open mmap and copy the staging file
-    back over the canonical one if its content actually changed.
-
-    Note: this only runs on a graceful stop (Ctrl+C). A force-kill (Task
-    Manager "End Task", Stop-Process -Force, etc.) terminates the process
-    without giving Python a chance to run this, so writes from a
-    force-killed session are lost - stop the server with Ctrl+C to keep
-    them.
-    """
-    global drive0Data, drive1Data, mounted_paths
-
-    mounted_paths = globals().get("mounted_paths", {})
-    if not mounted_paths:
-        return
-
-    # Flush whichever mmap objects are currently live so their staging
-    # files on disk reflect any in-memory writes before comparing.
-    for disk in (drive0Data, drive1Data):
-        if disk and disk != '':
-            try:
-                disk.flush()
-            except Exception:
-                pass
-
-    for canonical_path, staging_path in mounted_paths.items():
+def unmount_drive(disk):
+    """Flush and release a mapping returned by msxdos_inihrd(), so a remount
+    does not keep the previous image file open."""
+    if disk and disk != '':
         try:
-            if not os.path.exists(staging_path):
-                continue
-            if os.path.exists(canonical_path) and filecmp.cmp(canonical_path, staging_path, shallow=False):
-                continue  # unchanged, nothing to sync
-            shutil.copyfile(staging_path, canonical_path)
-            print(f"sync_mounted_writes_back(): synced changes back to {canonical_path}")
+            disk.flush()
+            disk.close()
         except Exception as e:
-            print(f"sync_mounted_writes_back(): failed to sync {canonical_path}: {e}")
+            print(f"unmount_drive(): {e}")
 
 def dos83format(fname):
     name = '        '
@@ -1681,11 +1648,15 @@ def pset(data):
     # Special cases for drives
     if rc == RC_SUCCESS:
         if varname_upper == 'DRIVEA':
+            old = drive0Data
             rc, drive0Data = msxdos_inihrd(varvalue)
+            unmount_drive(old)
             updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         elif varname_upper == 'DRIVEB':
+            old = drive1Data
             rc, drive1Data = msxdos_inihrd(varvalue)
+            unmount_drive(old)
             updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         return sendmultiblock("Pi:Ok".encode())
@@ -1875,9 +1846,13 @@ def reload(parms = None):
     if rc != RC_SUCCESS:
         return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
 
+    # Release the previous mapping only once the new one is in place, so a
+    # failed reload leaves the drive usable.
     if varname_upper == "A":
+        unmount_drive(drive0Data)
         drive0Data = data
     else:
+        unmount_drive(drive1Data)
         drive1Data = data
 
     print(f"reload(): {varname} reloaded from {path}")
@@ -1961,6 +1936,12 @@ def dskiow(parms = None):
         else:
             print("dskiowrs: checksum error")
             break
+
+    # The drive maps the image file itself; push the MSX's writes to disk
+    # now rather than whenever the OS gets round to it.
+    disk = drive0Data if sectorInfo[0] == 0 else drive1Data
+    if sectorcnt > 0 and disk and disk != '':
+        disk.flush()
                   
 def dskios(parms = None):
     #print("dskiosct()")
@@ -2139,6 +2120,19 @@ def recvdata2(maxbufsize = 8192):
             # ever showed up as "dskiowrs: checksum error" with no cause.
             print(f"recvdata2: checksum mismatch, block {block_index}, {length} bytes, "
                   f"{'burst' if burst else 'polled'}: MSX {msxsum:#04x}, Pi {local_sum:#04x} - MSX resends")
+            # DIAGNOSTIC (not for release): keep what a failed burst delivered,
+            # to line it up against the source file - a duplicated byte shows
+            # as a repeat at one offset, line noise as changed bits.
+            if burst:
+                try:
+                    n = globals().get('_burst_dump_n', 0) + 1
+                    globals()['_burst_dump_n'] = n
+                    dump = f"/tmp/msxpi-burst-mismatch-{n}.bin"
+                    with open(dump, 'wb') as f:
+                        f.write(bytes(payload))
+                    print(f"recvdata2: received burst payload saved to {dump}")
+                except OSError as e:
+                    print(f"recvdata2: could not save the burst payload: {e}")
             continue
 
         # Checksums match: commit block
@@ -3219,6 +3213,49 @@ def chatgpt(query):
         print(error_msg)
         sendmultiblock(error_msg.encode())
 
+ROMDB_DEFAULT_URL = "https://raw.githubusercontent.com/costarc/openMSX/master/share/softwaredb.xml"
+ROMDB_CACHE_DAYS = 30
+_romdb = None
+
+
+def get_romdb():
+    """openMSX's share/softwaredb.xml, indexed by SHA-1 (see load_romdb in
+    mapper_detect.py). ROMDB in msxpi.ini may be a URL or a local path; a URL
+    is cached as MSXPIHOME/softwaredb.xml and refreshed every ROMDB_CACHE_DAYS,
+    and a failed refresh keeps using the cached copy. With no database at all
+    the caller falls back to detect_mapper()."""
+    global _romdb
+    if _romdb:
+        return _romdb
+    src = getMSXPiVar('ROMDB') or ROMDB_DEFAULT_URL
+    text = None
+    try:
+        if src.startswith(("http://", "https://")):
+            cache = os.path.join(MSXPIHOME, "softwaredb.xml")
+            fresh = os.path.exists(cache) and \
+                time.time() - os.path.getmtime(cache) < ROMDB_CACHE_DAYS * 86400
+            if not fresh:
+                try:
+                    r = requests.get(src, timeout=30)
+                    r.raise_for_status()
+                    os.makedirs(MSXPIHOME, exist_ok=True)
+                    with open(cache, "wb") as f:
+                        f.write(r.content)
+                except Exception as e:
+                    print(f"ROM database download failed ({e}); using the cached copy if any")
+            if os.path.exists(cache):
+                with open(cache, encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+        else:
+            with open(src, encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+    except Exception as e:
+        print(f"ROM database unavailable ({e}); falling back to mapper detection")
+    _romdb = load_romdb(text) if text else {}
+    print(f"ROM database: {len(_romdb)} entries from {src}")
+    return _romdb
+
+
 def is_local_path(s: str) -> bool:
     """A repository entry is a local filesystem path (e.g. /home/roms or
     C:\\Users\\roniv\\Dev\\MSX\\gameroms) rather than an HTTP(S) archive URL
@@ -3345,6 +3382,8 @@ def fetch_and_uncompress(url: str):
     return RC_SUCCESS, buf
 
    
+_ploadr_cache = None   # (filepath, rom bytes) of the transfer in progress
+
 def ploadr(parms = None):
     """Fetch a single ROM by filename (resolved against the current MSXPi
     path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
@@ -3379,6 +3418,26 @@ def ploadr(parms = None):
     pathType, filepath = pathExpander(filename, basepath)
     if pathType == 1 and filename != filename.lower():
         pathType, filepath = pathExpander(filename.lower(), basepath)
+
+    # Per-block requests reuse the ROM held in memory from this transfer's
+    # header request instead of re-fetching/re-extracting it for every
+    # 16K block (which ran 7z and wrote the whole extracted ROM to disk
+    # once per block). Replaced by the next header/legacy request, dropped
+    # after the last block.
+    global _ploadr_cache
+    is_block_req = len(parts) >= 3
+    if is_block_req and _ploadr_cache and _ploadr_cache[0] == filepath:
+        buf = _ploadr_cache[1]
+        block_index = int(parts[1])
+        block_size = int(parts[2])
+        offset = block_index * block_size
+        chunk = buf[offset:offset + block_size]
+        is_last = (offset + len(chunk)) >= len(buf)
+        if is_last:
+            _ploadr_cache = None
+        return sendmultiblock(chunk, header_rc=RC_SUCCESS if is_last else RC_READY)
+    _ploadr_cache = None
+
     rc, buf = fetch_and_uncompress(filepath)
     if rc != RC_SUCCESS:
         reason = buf if isinstance(buf, str) else "Pi:Error - fetch failed"
@@ -3424,6 +3483,7 @@ def ploadr(parms = None):
     # mapped routing and block count before requesting the body above,
     # one block at a time.
     if len(parts) == 2 and parts[1].upper() == 'H':
+        _ploadr_cache = (filepath, buf)
         return sendmultiblock(header)
 
     # Legacy whole-file request: "ploadr <file>" (no extra params) -
@@ -3713,10 +3773,38 @@ def msxarchive(parms = None):
                 if rc != RC_SUCCESS:
                     return reject(buf)
 
-                if len(buf) <= PLAIN_ROM_MAX_SIZE:
+                # openMSX's softwaredb.xml decides how the ROM is loaded;
+                # detect_mapper() is only the fallback for unlisted ROMs.
+                dbinfo = romdb_lookup(buf, get_romdb())
+                if dbinfo:
+                    print(f"{filename}: ROM database: {dbinfo[2]} ({dbinfo[3]})")
+                    if dbinfo[0] == "unsupported":
+                        return reject(f"{filename}: {dbinfo[2]} mapper is not "
+                                      f"supported.")
+                plain = (dbinfo[0] == "plain") if dbinfo else \
+                    len(buf) <= PLAIN_ROM_MAX_SIZE
+                if plain and len(buf) > PLAIN_ROM_MAX_SIZE:
+                    return reject(f"{filename} ({len(buf)} bytes): plain ROM "
+                                  f"larger than {PLAIN_ROM_MAX_SIZE} bytes.")
+                if plain:
+                    # The MSX runs the image from RAM, where stores into the
+                    # ROM window succeed instead of being discarded - see
+                    # neutralise_rom_writes in mapper_detect.py.
+                    buf, nstore = neutralise_rom_writes(buf)
+                    print(f"{filename}: neutralised {nstore} stores into ROM")
+                    # An 8KB cartridge decodes only 13 address bits, so the
+                    # image also appears at 6000h; FROGGER.ROM jumps there and
+                    # showed a black screen when only 4000h was loaded.
+                    if len(buf) == 0x2000:
+                        buf = buf + buf
                     header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
                 else:
-                    mapper_type, bank_size_kb = detect_mapper(buf)
+                    if dbinfo:
+                        mapper_type, bank_size_kb = dbinfo[1]
+                    else:
+                        mapper_type, bank_size_kb = detect_mapper(buf)
+                        print(f"{filename}: not in the ROM database - "
+                              f"detected mapper type {mapper_type}")
                     if mapper_type is not None and msx_handlers:
                         buf, npatch = patch_for_msx(buf, mapper_type, msx_handlers)
                         print(f"{filename}: patched {npatch} bank-switch sites "
@@ -5103,6 +5191,7 @@ else:
            ['WIFIPWD','MYWFIPASSWORD'], \
            ['WIFICOUNTRY','GB'], \
            ['DSKTMPL','/home/pi/msxpi/disks/blank.dsk'], \
+           ['ROMDB','https://raw.githubusercontent.com/costarc/openMSX/master/share/softwaredb.xml'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
@@ -5305,5 +5394,6 @@ except KeyboardInterrupt:
             server_socket.close()
     except Exception:
         pass
-    sync_mounted_writes_back()
+    for disk in (globals().get("drive0Data"), globals().get("drive1Data")):
+        unmount_drive(disk)
     print("MSXPi Server: Terminating")
