@@ -550,7 +550,22 @@ def _init_fast_gpio():
     if _FAST_GPIO and os.environ.get("MSXPI_NATIVE_GPIO") == "1":
         try:
             from msxpi_gpio_native import NativeGPIO
-            _NATIVE_GPIO = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            native = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            # msxpi_gpio_native.py is a separate file that the MSX updater
+            # does not replace, so a Pi can run this server with an older
+            # wrapper. One without read_burst sends burst READS fine (the ROM
+            # then starts bursting its writes) but raises AttributeError on
+            # the first burst WRITE - outside the OSError the burst paths
+            # catch - so the server answered mid-sector with an error string
+            # and every COPY to an MSXPi drive failed with "Disk error
+            # writing". Only use an engine that can burst both ways; the
+            # Python GPIO path below does.
+            missing = [m for m in ('read', 'write', 'read_burst', 'write_burst')
+                       if not callable(getattr(native, m, None))]
+            if missing:
+                raise AttributeError(f"msxpi_gpio_native.py is out of date, no {', '.join(missing)} "
+                                     f"- update it next to msxpi-server.py")
+            _NATIVE_GPIO = native
             print(f"init_fast_gpio(): native GPIO payload engine active "
                   f"(half-period {_NATIVE_GPIO.half_period_ns} ns)")
         except (OSError, ValueError, ImportError, AttributeError) as e:
@@ -743,9 +758,18 @@ def SPI_BurstIn(length):
             return RC_CONNERR, None
         return RC_SUCCESS, payload
 
+    # DIAGNOSTIC (not for release): has the MSX already started its OTIR before
+    # this burst raised READY?  A write OUT arms a CPLD transfer whether or not
+    # READY is up, but /WAIT only holds the Z80 while READY is up - so bytes
+    # sent in that window overwrite each other and are lost.  Sampled before
+    # anything slow; reported only after the burst, so it adds no latency.
+    early = _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
+
     if _NATIVE_GPIO is not None:
         try:
             data = _NATIVE_GPIO.read_burst(length)
+            if early:
+                print("SPI_BurstIn: CS was already low before READY - the MSX started early")
             if _PROFILE:
                 _NATIVE_GPIO.report()
             return RC_SUCCESS, data
@@ -2047,19 +2071,25 @@ def recvdata2(maxbufsize = 8192):
         # Validate block index
         if block_index != expected_block_index:
             # Protocol drift
+            print(f"recvdata2: block index {block_index}, expected {expected_block_index} "
+                  f"(header_rc {header_rc:#04x}, len {length}, burst {burst}) - out of step")
             return (RC_CONNERR, None)
 
         # Capacity checks
         if length > block_max:
             # MSX tried to send more than negotiated / allowed
+            print(f"recvdata2: block of {length} bytes exceeds the negotiated {block_max}")
             return (RC_CONNERR, None)
         if len(data) + length > maxbufsize:
             # Would overflow caller's max buffer
+            print(f"recvdata2: {len(data)}+{length} bytes exceeds the {maxbufsize}-byte buffer")
             return (RC_CONNERR, None)
 
         # --- Payload ---
         rc, payload = SPI_BurstIn(length) if burst else SPI_ReadPayload(length)
         if rc != RC_SUCCESS:
+            print(f"recvdata2: payload read failed rc={rc:#04x} "
+                  f"({'burst' if burst else 'polled'}, block {block_index}, {length} bytes)")
             return (RC_CONNERR, None)
         chksum = sum(payload)
 
@@ -2071,6 +2101,7 @@ def recvdata2(maxbufsize = 8192):
         # --- Receive MSX checksum ---
         rc, msxsum = SPI_ByteTransfer()
         if rc != RC_SUCCESS:
+            print(f"recvdata2: reading the MSX checksum failed rc={rc:#04x}")
             return (RC_CONNERR, None)
 
         # --- Send local checksum back ---
@@ -2083,6 +2114,26 @@ def recvdata2(maxbufsize = 8192):
             # - DO NOT advance expected_block_index
             # - DO NOT do status handshake
             # MSX will detect mismatch and resend this block.
+            # Logged because it used to be silent: after GLOBALRETRIES failed
+            # resends the MSX gives up with "Disk error writing" while this
+            # loop is still waiting for a header, and the next command's bytes
+            # then fail the block-index check - so a real checksum problem only
+            # ever showed up as "dskiowrs: checksum error" with no cause.
+            print(f"recvdata2: checksum mismatch, block {block_index}, {length} bytes, "
+                  f"{'burst' if burst else 'polled'}: MSX {msxsum:#04x}, Pi {local_sum:#04x} - MSX resends")
+            # DIAGNOSTIC (not for release): keep what a failed burst delivered,
+            # to line it up against the source file - a duplicated byte shows
+            # as a repeat at one offset, line noise as changed bits.
+            if burst:
+                try:
+                    n = globals().get('_burst_dump_n', 0) + 1
+                    globals()['_burst_dump_n'] = n
+                    dump = f"/tmp/msxpi-burst-mismatch-{n}.bin"
+                    with open(dump, 'wb') as f:
+                        f.write(bytes(payload))
+                    print(f"recvdata2: received burst payload saved to {dump}")
+                except OSError as e:
+                    print(f"recvdata2: could not save the burst payload: {e}")
             continue
 
         # Checksums match: commit block
@@ -2107,9 +2158,9 @@ def recvdata2(maxbufsize = 8192):
 
         # Expect READY_ACK from MSX
         rc, ack = SPI_ByteTransfer()
-        if rc != RC_SUCCESS:
-            return (RC_HANDSHAKEERR, None)
-        if ack != READY_ACK:
+        if rc != RC_SUCCESS or ack != READY_ACK:
+            print(f"recvdata2: status handshake failed after block {block_index} "
+                  f"(rc={rc:#04x}, got {ack!r}, want READY_ACK {READY_ACK:#04x})")
             return (RC_HANDSHAKEERR, None)
 
         # If this was the last block, we're done
@@ -3332,6 +3383,8 @@ def fetch_and_uncompress(url: str):
     return RC_SUCCESS, buf
 
    
+_ploadr_cache = None   # (filepath, rom bytes) of the transfer in progress
+
 def ploadr(parms = None):
     """Fetch a single ROM by filename (resolved against the current MSXPi
     path - same convention as pcopy/pdir/pcd, see cd()'s own basepath =
@@ -3366,6 +3419,26 @@ def ploadr(parms = None):
     pathType, filepath = pathExpander(filename, basepath)
     if pathType == 1 and filename != filename.lower():
         pathType, filepath = pathExpander(filename.lower(), basepath)
+
+    # Per-block requests reuse the ROM held in memory from this transfer's
+    # header request instead of re-fetching/re-extracting it for every
+    # 16K block (which ran 7z and wrote the whole extracted ROM to disk
+    # once per block). Replaced by the next header/legacy request, dropped
+    # after the last block.
+    global _ploadr_cache
+    is_block_req = len(parts) >= 3
+    if is_block_req and _ploadr_cache and _ploadr_cache[0] == filepath:
+        buf = _ploadr_cache[1]
+        block_index = int(parts[1])
+        block_size = int(parts[2])
+        offset = block_index * block_size
+        chunk = buf[offset:offset + block_size]
+        is_last = (offset + len(chunk)) >= len(buf)
+        if is_last:
+            _ploadr_cache = None
+        return sendmultiblock(chunk, header_rc=RC_SUCCESS if is_last else RC_READY)
+    _ploadr_cache = None
+
     rc, buf = fetch_and_uncompress(filepath)
     if rc != RC_SUCCESS:
         reason = buf if isinstance(buf, str) else "Pi:Error - fetch failed"
@@ -3411,6 +3484,7 @@ def ploadr(parms = None):
     # mapped routing and block count before requesting the body above,
     # one block at a time.
     if len(parts) == 2 and parts[1].upper() == 'H':
+        _ploadr_cache = (filepath, buf)
         return sendmultiblock(header)
 
     # Legacy whole-file request: "ploadr <file>" (no extra params) -
