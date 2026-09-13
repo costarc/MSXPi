@@ -279,6 +279,11 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
     mapper_type MAPPER_PLAIN keeps today's client behavior unchanged;
     the other values are reserved for mapper-aware loading (not yet
     implemented client-side)."""
+    # Konami SCC only differs in where the cartridge decodes its bank writes,
+    # which the server has already patched; on the MSX it loads exactly like
+    # Konami, and the clients only know types 1-3.
+    if mapper_type == MAPPER_KONAMI_SCC:
+        mapper_type = MAPPER_KONAMI
     return struct.pack("<BBBBHI6x", ROM_HEADER_MAGIC, ROM_HEADER_VERSION,
                         mapper_type, bank_size_kb, bank_count, total_size)
 
@@ -299,7 +304,7 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
                             patch_bank_switches, PATCH_WINDOWS,
-                            neutralise_rom_writes)
+                            neutralise_rom_writes, MAPPER_KONAMI_SCC)
 
 # Handler addresses the MSX will have relocated its resident bank-switch code
 # to. The client sends its own with the selection so the two sides cannot
@@ -314,6 +319,8 @@ def handlers_for(mapper_type, h):
     if mapper_type == MAPPER_ASCII8:   return [h[0], h[1], h[2], h[3]]
     if mapper_type == MAPPER_ASCII16:  return [h[4], h[5]]
     if mapper_type == MAPPER_KONAMI:   return [h[1], h[2], h[3]]  # 6000/8000/A000 ranges
+    if mapper_type == MAPPER_KONAMI_SCC:
+        return [h[0], h[1], h[2], h[3]]                            # 5000/7000/9000/B000
     return None
 
 

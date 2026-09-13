@@ -67,9 +67,13 @@ ordered, and why the order matters more than it looks.
 ------------------------------------------------------------------------------
 """
 
-MAPPER_KONAMI  = 1      # 8K banks (both Konami4 and Konami SCC)
+MAPPER_KONAMI  = 1      # 8K banks, Konami4
 MAPPER_ASCII8  = 2      # 8K banks
 MAPPER_ASCII16 = 3      # 16K banks
+# Konami SCC: same four 8K windows as ASCII8/Konami on the MSX side, but the
+# cartridge decodes 5000h/7000h/9000h/B000h. Server-internal only - the MSX
+# is told MAPPER_KONAMI, since its loading path for 8K banks is identical.
+MAPPER_KONAMI_SCC = 4
 
 # Windows used for PATCHING, once the type is known.
 PATCH_WINDOWS = {
@@ -87,6 +91,11 @@ PATCH_WINDOWS = {
     # land in it are data coincidences (LODERUN.ROM has 10, and it is Konami4),
     # so patching them would corrupt the image. SCC needs its own mapper type.
     MAPPER_KONAMI:  [(0x6000, 0x7FFF), (0x8000, 0x9FFF), (0xA000, 0xBFFF)],
+    # One window per 8K page: 5000h->4000h, 7000h->6000h, 9000h->8000h,
+    # B000h->A000h. Patching these as Konami4 left CONTRA, PENNANT, MANBOW,
+    # KINGS VALLEY 2 and METAL GEAR 2 switching the wrong windows.
+    MAPPER_KONAMI_SCC: [(0x5000, 0x57FF), (0x7000, 0x77FF),
+                        (0x9000, 0x97FF), (0xB000, 0xB7FF)],
 }
 
 # A genuine bank-select address is written over and over; a data coincidence
@@ -107,12 +116,20 @@ def write_targets(rom):
 
 
 def _strict(hits):
-    """The original chain: exact addresses, most specific first. ASCII16 is
-    last because it owns no address of its own."""
+    """Exact addresses, most specific first. Validated against the mapper
+    types in openMSX's softwaredb.xml for all 33 megaROMs in the test set
+    (32 match; SUPERLOA uses the unsupported SuperLodeRunner mapper and is
+    correctly left unrecognised).
+
+    The previous order sent any ROM with a stray 5000h store to Konami
+    (ALESTE, FANZONE2 are ASCII16), any single 7800h to ASCII8 (METAL GEAR is
+    Konami4) and every Konami SCC ROM to Konami4. 9000h is written only by
+    SCC games - 12 to 26 times each - so it goes first; Konami4 needs BOTH
+    8000h and A000h; ASCII16 still comes last, owning no address of its own."""
+    if 0x9000 in hits:                                    return MAPPER_KONAMI_SCC, 8
+    if 0x8000 in hits and 0xA000 in hits:                 return MAPPER_KONAMI, 8
     if any(a in hits for a in (0x6800, 0x7800)):          return MAPPER_ASCII8, 8
-    if any(a in hits for a in (0x5000, 0x9000, 0xB000)):  return MAPPER_KONAMI, 8
-    if any(a in hits for a in (0x8000, 0xA000)):          return MAPPER_KONAMI, 8
-    if any(a in hits for a in (0x6000, 0x7000)):          return MAPPER_ASCII16, 16
+    if any(a in hits for a in (0x5000, 0x6000, 0x7000)):  return MAPPER_ASCII16, 16
     return None, None
 
 
@@ -141,7 +158,9 @@ def detect_mapper(rom):
     # windows are 8K, not 16K
     if used >= 3 or (w[0] and w[1]) or (w[2] and w[3]):
         return MAPPER_ASCII8, 8
-    if used == 2:
+    # A single repeated window lies inside ASCII16's decode range too:
+    # ANDROGYN.ROM writes only 77FFh (23 times) and is ASCII16.
+    if used in (1, 2):
         return MAPPER_ASCII16, 16
     return None, None
 
