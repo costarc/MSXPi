@@ -41,15 +41,11 @@ PAYLOAD_WAIT:
     in a,(0x56)
     or a
     ret z
-    cp 2
-    ret z
     push bc
     ld b,0
 PAYLOAD_WAIT_SLOW:
     in a,(0x56)
     or a
-    jr z,PAYLOAD_WAIT_DONE
-    cp 2
     jr z,PAYLOAD_WAIT_DONE
     djnz PAYLOAD_WAIT_SLOW
     call PAYLOAD_ESCAPE

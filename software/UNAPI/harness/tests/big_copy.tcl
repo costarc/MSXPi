@@ -25,25 +25,20 @@
 # ------------------------------------------------------------------------------
 
 # =============================================================================
-# wsl_bench - sanity-check ETHBENCH before it is run on real hardware.
-#
-# openMSX emulates the CPLD, so both the /WAIT and the polled passes must
-# report ok=0800.
+# big_copy - a file larger than 16 KB, A: -> B: -> A:, over the MSXPi disk
+# driver.  Needs BIGTEST.BIN on the served A: image; the caller compares the
+# resulting files byte for byte from the host side.
 # =============================================================================
 
-harness::init "wsl_bench"
+harness::init "big_copy"
 
 harness::at_dos_prompt {
-    harness::run_cmd "RAMHELPR I" 60 {
-        harness::run_cmd "ETHUNAPI" 60 {
-            harness::run_cmd "ETHBENCH" 300 {
-                set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
-                foreach l [harness::screen_lines] { puts $fh "|$l" }
-                close $fh
-                harness::assert_screen_contains "ran-all" "P-8by:"
-                harness::assert_screen_contains "wait-pass-valid" "ok=0800"
-                harness::done
-            }
+    harness::run_cmd "COPY BIGTEST.BIN B:BIGCOPY.BIN" 600 {
+        harness::assert_screen_lacks "no-error-to-b" "error"
+        harness::run_cmd "COPY B:BIGCOPY.BIN A:BIGBACK.BIN" 600 {
+            harness::assert_screen_lacks "no-error-to-a" "error"
+            harness::assert_screen_contains "copied" "1 file"
+            harness::done
         }
     }
 }

@@ -55,7 +55,6 @@ SEG_SIZE:   equ     SEG_CODE_END-SEG_CODE_START
 ; Transport modes, for reporting only - the detection itself lives in the
 ; driver (ETH_DETECT), which is shared with the ROM build.
 MODE_WAIT:      equ   1
-MODE_POLL_OMSX: equ   2
 
             org     100h
 
@@ -303,9 +302,6 @@ MAPFND:
             cp      MODE_WAIT
             ld      de,MODE_WAIT_S
             jr      z,.report
-            cp      MODE_POLL_OMSX
-            ld      de,MODE_OMSX_S
-            jr      z,.report
             cp      0FFh
             ld      de,MODE_NONE_S
             jr      z,.report
@@ -375,7 +371,6 @@ ALINST_S:   db      "*** An ETHERNET UNAPI is already installed.",13,10,"$"
 OK_S:       db      "Installed.",13,10,"$"
 MODE_WAIT_S:   db   "Transport: hardware /WAIT",13,10,"$"
 MODE_POLLED_S: db   "Transport: polled",13,10,"$"
-MODE_OMSX_S:   db   "Transport: polled (openMSX)",13,10,"$"
 MODE_NONE_S:   db   "Transport: NONE - link did not answer",13,10,"$"
 FORCED_S:      db   "Forcing polled transport (P)",13,10,"$"
 

@@ -74,7 +74,6 @@ FN_SET_MODE:   equ  128         ; implementation-specific
 MODE_REPORT:    equ 0
 MODE_POLL_HW:   equ 1
 MODE_WAIT:      equ 2
-MODE_POLL_OMSX: equ 3
 
 CTRL1:          equ 56h
 RESET_MSXPI:    equ 0FFh
@@ -160,11 +159,8 @@ RESET_MSXPI:    equ 0FFh
             call    PRINT_HEX8
             call    NEWLINE
 
-; --- All three backends -----------------------------------------------------
-; Only one polled backend can work on any given machine - MODE_POLL_HW on real
-; hardware, MODE_POLL_OMSX under openMSX - and there is no reliable way to ask
-; from here.  So run all three and let the OK count say which figures are real.
-; Each backend is measured at TWO payload sizes.  A transaction costs
+; --- Both backends ----------------------------------------------------------
+; The OK count says whether a pass's figures are real.  Each backend is measured at TWO payload sizes.  A transaction costs
 ; fixed + n*b, and with a single size those cannot be separated - which is how
 ; a 7% difference got mistaken for the whole story.  ETH_GET_NETSTAT moves 3
 ; bytes and ETH_GET_HWADD moves 8, so:
@@ -226,8 +222,7 @@ RUN_PASS:
             ; Resynchronise the device first.  A pass that failed leaves reply
             ; bytes the MSX never collected, and the next pass would read those
             ; stale bytes instead of its own.  Writing $FF to $56 is the
-            ; existing MSXPi reset: it clears the CPLD transfer state, and
-            ; under openMSX it also empties the receive queue.  It clears wait
+            ; existing MSXPi reset: it clears the CPLD transfer state.  It clears wait
             ; mode too, which is harmless - ETH_BEGIN re-enables it per
             ; transaction.
             ld      a,RESET_MSXPI

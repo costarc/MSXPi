@@ -34,9 +34,9 @@
 ;
 ; Every routine that touches the link goes through ETH_OP or follows the same
 ; lock/begin/end discipline.  Nothing here may leave wait mode enabled on the
-; way out: while it is on, port $57 reads $8E, and msxpi_bios.asm:97 decides
-; "is this openMSX?" by testing $57 against $FE - so a leaked wait mode would
-; silently break every other piece of MSXPi software until the next reset.
+; way out: while it is on, every IN from $5A starts a transfer, so a leaked
+; wait mode would silently break every other piece of MSXPi software, which
+; reads bytes the polled way, until the next reset.
 ; =============================================================================
 
 ; Opcodes - must match msxpi_eth.py
@@ -638,8 +638,7 @@ FN_LINK_CLAIM:
 ; =============================================================================
 ; 128: implementation-specific - force the transport mode
 ; =============================================================================
-; In:  B = 0 report only, 1 force polled-hardware, 2 force /WAIT,
-;          3 force polled-openMSX
+; In:  B = 0 report only, 1 force polled, 2 force /WAIT; anything else reports
 ; Out: A = the mode in effect BEFORE this call
 ;
 ; Diagnostic only.  It exists so ETHBENCH can time the same transfer loop under
@@ -651,8 +650,10 @@ FN_SET_MODE:
             ld      a,b
             or      a
             jr      z,.report
-            dec     a                   ; 1 -> 0 polled hw, 2 -> 1 wait,
-            ld      (ix+o_ETH_MODE),a   ; 3 -> 2 polled openMSX
+            cp      3
+            jr      nc,.report          ; no such mode
+            dec     a                   ; 1 -> 0 polled, 2 -> 1 wait
+            ld      (ix+o_ETH_MODE),a
 .report:
             pop     af
             ret

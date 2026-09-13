@@ -53,11 +53,8 @@ harness::at_dos_prompt {
         # A completed round trip on that transport, not just the mode byte.
         harness::assert_screen_contains "mac"        "024D53585069"
         harness::assert_screen_contains "netstat"    "Net:   01"
-        # Wait mode is per-transaction and must be off again by now: while it
-        # is on $57 reads $8E on hardware and $FF under openMSX, and
-        # msxpi_bios.asm:97 stops recognising the emulator.
-        harness::assert_screen_lacks "no-leaked-waitmode-hw"   "P57:   8E"
-        harness::assert_screen_lacks "no-leaked-waitmode-omsx" "P57:   FF"
+        # Wait mode is per-transaction and must be off again by now.
+        harness::assert_screen_contains "no-leaked-waitmode" "P57:   0E"
         harness::done
     }
 }

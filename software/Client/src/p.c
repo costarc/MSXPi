@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 // ----------------------------------------------------------------------

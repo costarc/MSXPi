@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../header/msxpi.h"
 #include "payload_generated.h"
 
@@ -117,14 +117,11 @@ uint8_t CHKPIRDY(void) {
         state = InPort(CONTROL_PORT1);
         if (state == 0)
             return CHK_STATE_0;
-        if (state == 2)
-            return CHK_STATE_2;
     }
 }
 
 uint8_t PIREADBYTE(uint8_t* byte) {
     uint8_t rc;
-    uint8_t version = InPort(CONTROL_PORT2);
 
     rc = CHKPIRDY();
 
@@ -134,6 +131,7 @@ uint8_t PIREADBYTE(uint8_t* byte) {
         return rc;
     }
 
+    // Start a transfer; once $56 reads 0 again the Pi's byte is in.
     OutPort(CONTROL_PORT1, 0x00);
 
     rc = CHKPIRDY();
@@ -142,22 +140,8 @@ uint8_t PIREADBYTE(uint8_t* byte) {
         return rc;
     }
 
-    if (version < 0xFE) {
-        *byte = InPort(DATA_PORT1);
-        return RC_SUCCESS;
-    }
-
-    while (1) {
-        rc = CHKPIRDY();
-        if (rc == RC_ESCPRESSED) {
-            *byte = 0xFF;
-            return rc;
-        }
-        if (rc == CHK_STATE_2) {
-            *byte = InPort(DATA_PORT1);
-            return RC_SUCCESS;
-        }
-    }
+    *byte = InPort(DATA_PORT1);
+    return RC_SUCCESS;
 }
 
 /* -----------------------
@@ -166,7 +150,7 @@ uint8_t PIREADBYTE(uint8_t* byte) {
 uint8_t PIWRITEBYTE(uint8_t byte) {
     uint8_t rc = CHKPIRDY();
     OutPort(DATA_PORT1, byte);
-    if (rc == CHK_STATE_0 || rc == CHK_STATE_2)
+    if (rc == CHK_STATE_0)
 		return RC_SUCCESS;
     return rc;
 }

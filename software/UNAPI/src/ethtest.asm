@@ -394,9 +394,9 @@ ARG:        equ     0F847h
 .nosend:
 
 ; --- The device must be left out of wait mode ------------------------------
-; While wait mode is on, $57 reads $8E, and msxpi_bios.asm:97 decides "is this
-; openMSX?" by testing $57 against $FE.  A driver that leaked wait mode would
-; silently break every other piece of MSXPi software, so check it explicitly.
+; While wait mode is on, $57 reads $8E and every IN from $5A starts a transfer.
+; A driver that leaked wait mode would silently break every other piece of
+; MSXPi software, so check it explicitly: $57 must read $0E here.
             ld      de,PORT57_S
             ld      c,_STROUT
             call    BDOS

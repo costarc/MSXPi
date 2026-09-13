@@ -48,7 +48,7 @@
 ; driver work area and is re-initialised at every boot.
 ;
 ; Uses implementation-specific routine 128, whose B values are
-; 0 report, 1 polled-hardware, 2 /WAIT, 3 polled-openMSX, and which returns the
+; 0 report, 1 polled, 2 /WAIT, and which returns the
 ; mode that was in effect BEFORE the call.
 ; =============================================================================
 
@@ -188,17 +188,14 @@ CALL_UNAPI:
             ei
             ret
 
-; --- PRINT_MODE: A = a MODE_* value as the driver reports it (0 polled
-; hardware, 1 /WAIT, 2 polled openMSX, FFh never probed).
+; --- PRINT_MODE: A = a MODE_* value as the driver reports it (0 polled,
+; 1 /WAIT, FFh never probed).
 PRINT_MODE:
             ld      de,M_POLLED_S
             or      a
             jr      z,.emit
             dec     a
             ld      de,M_WAIT_S
-            jr      z,.emit
-            dec     a
-            ld      de,M_OMSX_S
             jr      z,.emit
             ld      de,M_UNKNOWN_S
 .emit:
@@ -227,7 +224,6 @@ WAS_S:      db      "Was: $"
 NOW_S:      db      "Now: $"
 M_POLLED_S: db      "polled",13,10,"$"
 M_WAIT_S:   db      "hardware /WAIT",13,10,"$"
-M_OMSX_S:   db      "polled (openMSX)",13,10,"$"
 M_UNKNOWN_S: db     "not probed yet",13,10,"$"
 NONE_S:     db      "*** No ETHERNET implementation found.",13,10,"$"
 NOHELPER_S: db      "*** Implementation is in a RAM segment and no UNAPI RAM",13,10

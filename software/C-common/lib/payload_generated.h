@@ -36,10 +36,7 @@ PAYLOAD_RX:
     ld a,b
     or c
     ret z
-    in a,(0x57)
-    cp #0xfe
-    jp nc,PAYLOAD_RX_TCP
-PAYLOAD_RX_PI:
+PAYLOAD_RX_LOOP:
     ld a,c
     or a
     call z,PAYLOAD_ESCAPE
@@ -53,30 +50,7 @@ PAYLOAD_RX_PI:
     in a,(0x5a)
     ld (de),a
     call PAYLOAD_ADVANCE
-    jr nz,PAYLOAD_RX_PI
-    ret
-PAYLOAD_RX_TCP:
-    ld a,c
-    or a
-    call z,PAYLOAD_ESCAPE
-    ret c
-    call PAYLOAD_WAIT
-    ret c
-    xor a
-    out (0x56),a
-PAYLOAD_RX_TCP_WAIT:
-    call PAYLOAD_WAIT
-    ret c
-    cp #2
-    jr z,PAYLOAD_RX_TCP_GOT
-    call PAYLOAD_ESCAPE
-    ret c
-    jr PAYLOAD_RX_TCP_WAIT
-PAYLOAD_RX_TCP_GOT:
-    in a,(0x5a)
-    ld (de),a
-    call PAYLOAD_ADVANCE
-    jr nz,PAYLOAD_RX_TCP
+    jr nz,PAYLOAD_RX_LOOP
     ret
 PAYLOAD_TX:
     ld a,b
@@ -111,15 +85,11 @@ PAYLOAD_WAIT:
     in a,(0x56)
     or a
     ret z
-    cp #2
-    ret z
     push bc
     ld b,#0
 PAYLOAD_WAIT_SLOW:
     in a,(0x56)
     or a
-    jr z,PAYLOAD_WAIT_DONE
-    cp #2
     jr z,PAYLOAD_WAIT_DONE
     djnz PAYLOAD_WAIT_SLOW
     call PAYLOAD_ESCAPE

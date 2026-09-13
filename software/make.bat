@@ -6,13 +6,13 @@ IF ERRORLEVEL 1 EXIT /B 1
 SET BASEDIR=.
 SET FLOPPYA=..\..\..\MSX\MSXPi\diska22
 SET TARGETDIR=target
-SET HEX2BINDIR="..\..\..\MSX-C\WorkingFolder\Tools\Hex2Bin\Hex2bin Windows"
+SET HEX2BINDIR="..\..\..\MSX\MSX-C\WorkingFolder\Tools\Hex2Bin\Hex2bin Windows"
 SET HEX2BIN=%HEX2BINDIR%\hex2bin.exe 
 SET ASM=sdasz80 
 SET CC=sdcc 
 SET DEST=dsk\
-SET INCLUDEDIR=..\..\..\MSX-C\WorkingFolder\fusion-c\include
-SET LIBDIR=..\..\..\MSX-C\WorkingFolder\fusion-c\lib
+SET INCLUDEDIR=..\..\..\MSX\MSX-C\WorkingFolder\fusion-c\include
+SET LIBDIR=..\..\..\MSX\MSX-C\WorkingFolder\fusion-c\lib
 SET MSXPILIB=C-common\lib
 SET proga=Client\src\%1
 SET sourcename=%1

@@ -25,6 +25,8 @@
 ; ------------------------------------------------------------------------------
 ;
 ; File history :
+; 1.6    : No emulator branch any more: openMSX emulates the CPLD itself, so
+;          PIREADBYTE no longer reads $57 and CHKPIRDY no longer accepts 2.
 ; 1.2    : CHKPIRDY now return values 0 (pi online), 1 (pi offline), 2(byte ready)
 ;           PIREADBYTE now loops until it receives 2 from CHKPIRDY (this add
 ;           support for the openMSX extension
@@ -51,7 +53,7 @@
 ; -----------------------
 ; Returns:
 ;   C = 1  -> ESC pressed (error)
-;   C = 0  -> OK, CONTROL_PORT1 is 0 or 2 (value left in A)
+;   C = 0  -> OK, CONTROL_PORT1 is 0: no transfer running, Pi ready (A = 0)
 ; Uses: A
 ; -----------------------
 ; Headers use the shared readiness helper too. It preserves BC/DE/HL,
@@ -65,32 +67,18 @@ CHKPIRDY:
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
-; The push/pop pairs that used to bracket the $57 check were only balancing
-; the stack between the two paths into PIREADBYTE_SUCC - the saved AF was
-; overwritten by the IN below on one path and unused on the other. Removing
-; them costs nothing and saves 21 T-states on every byte.
+; OUT ($56) starts a CPLD transfer, which the Pi clocks with the byte it is
+; offering; once $56 reads 0 again the byte is in the shift register.
 PIREADBYTE:
             call    CHKPIRDY
             jr      c,PIREADBYTE_ESC   ; ESC Pressed
 
             xor     a
-            out     (CONTROL_PORT1),a  ; send read command to the interface
+            out     (CONTROL_PORT1),a  ; start a transfer
 
-            call    CHKPIRDY
+            call    CHKPIRDY           ; wait for it to complete
             jr      c,PIREADBYTE_ESC   ; ESC Pressed
 
-            ; Verify if it is openMSX or real MSXPi hardware
-            in      a,(CONTROL_PORT2)  ; Need to check if it is MSXPi interface
-            cp      $FE                ; openMSX will return $FE
-            jr      c,PIREADBYTE_SUCC  ; below $FE -> physical MSXPi
-
-PIREADBYTE2:                           ; openMSX: wait for state 2
-            call    CHKPIRDY
-            jr      c,PIREADBYTE_ESC   ; ESC Pressed
-            cp      2
-            jr      nz,PIREADBYTE2
-
-PIREADBYTE_SUCC:
             or      a                  ; reset carry flag
             in      a,(DATA_PORT1)     ; read byte
             ret                        ; return in a the byte received
@@ -117,8 +105,8 @@ PIWRITEBYTE_ERR:
             
 ; resetMSXPI
 ; Called on beginning of every command
-; In openMSX implementation, will clear the queue 
-; avoiding checksum loop after an interruption
+; OUT ($56),$FF resets the CPLD transfer state (and clears /WAIT mode),
+; avoiding a checksum loop after an interruption
 ; Not assembled into the ROM: the disk driver never calls resetMSXPI, and the
 ; ROM is full.  Every other consumer of this file (the .COM tools in
 ; Client/src) still gets it.

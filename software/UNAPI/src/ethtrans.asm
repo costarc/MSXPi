@@ -62,13 +62,11 @@
 ;                        AND stall the Z80 until it completes, so OTIR/INIR
 ;                        work and cost 21 T-states per byte.
 ;
-;   ETH_MODE = 0  POLLED openMSX, and real hardware older than v1.6.
+;   ETH_MODE = 0  POLLED MSXPi before v1.6, or /WAIT not usable.
 ;                        A read must be requested by writing $56, then the
 ;                        status port polled, then $5A read.
 ;
-; NOTE: openMSX only ever exercises the POLLED path - MSXPiDevice::readIO does
-; not start anything on an `in ($5A)`, and $57 is read-only there.  The WAIT
-; path therefore CANNOT be validated in emulation; it needs real hardware.
+; openMSX emulates the CPLD at port level, so both paths run there unchanged.
 ; =============================================================================
 
 CTRL1:      equ     56h             ; status / read-request / reset
@@ -77,10 +75,8 @@ DATA1:      equ     5Ah             ; data
 
 WAITMODE_ON:  equ   01h
 
-; $57 read values.  Real hardware is $0E with wait mode off and $8E with it on;
-; openMSX always returns $FE and ignores writes.
+; $57 read value with wait mode on ($0E with it off).
 VER_WAIT_ON:  equ   8Eh
-VER_OPENMSX:  equ   0FEh
 
 ; Polled-mode spin limit, in iterations of an ~30 T-state loop.  2048 is about
 ; 17 ms at 3.58 MHz: comfortably longer than the Pi's worst observed per-byte
@@ -103,9 +99,8 @@ VER_OPENMSX:  equ   0FEh
 ETH_TIMEOUT:  equ   2048
 
 ; ETH_MODE values.
-MODE_POLL_HW:   equ   0     ; polled, real hardware ($56 = 0 when done)
+MODE_POLL_HW:   equ   0     ; polled ($56 = 0 when done)
 MODE_WAIT:      equ   1     ; hardware /WAIT, INIR/OTIR
-MODE_POLL_OMSX: equ   2     ; polled, openMSX ($56 = 2 when a byte is queued)
 
 ; =============================================================================
 ; State
@@ -302,12 +297,8 @@ ETH_OK:
 ; the resync the failures are never independent.
 ;
 ; It is not a complete answer either.  It resets OUR side; a reply the other
-; end had already produced is still sitting in its buffer, and under openMSX -
-; where the link is a socket rather than a device the MSX clocks - nothing here
-; can drain it.  That is exactly how the first cold-boot probe used to poison
-; every transaction after it; see ETH_TIMEOUT above for what actually fixed
-; that.  If the failure recurs, a bounded read-and-discard loop here, while $56
-; still reports a byte queued, is the next thing to try.
+; end had already produced is still waiting to be clocked out, which is why
+; the drain below follows.
 ETH_RESYNC:
             push    af
             push    bc
@@ -423,9 +414,7 @@ ETH_RX:
 
 ; --- ETH_WAIT_READY: spin until $56 reads 0, bounded.
 ; Out: CF=1 on timeout.  Corrupts AF, BC.
-; Accepts 0 (idle) and 2 (openMSX: a byte is already queued) as "not busy",
-; matching the stock CHKPIRDY.  Waiting for 0 alone would deadlock under
-; openMSX whenever a byte was still sitting in the queue.
+; $56 = 0: no transfer running and the Pi is holding READY.
 ETH_WAIT_READY:
             ld      c,0
             ld      b,(ix+o_ETH_TMO)
@@ -433,11 +422,6 @@ ETH_WAIT_READY:
             in      a,(CTRL1)
             or      a
             ret     z                       ; ready, CF=0
-            cp      2
-            jr      nz,.next
-            or      a                       ; CF=0
-            ret
-.next:
             dec     bc
             ld      a,b
             or      c
@@ -447,31 +431,14 @@ ETH_WAIT_READY:
 
 ; --- ETH_WAIT_DATA: spin until the requested byte is actually available.
 ; Out: CF=1 on timeout.  Corrupts AF, BC.
-;
-; The two polled backends report this DIFFERENTLY, and conflating them is a
-; silent data-corruption bug rather than a hang:
-;
-;   real hardware  $56 = 0 means the SPI transfer has completed
-;   openMSX        $56 = 0 means "connected, nothing queued"
-;                  $56 = 2 means a byte is waiting
-;
-; An earlier version accepted 0 from either, so under openMSX it returned
-; immediately and read $FF - MSXPiDevice::readIO's "no data ready" filler -
-; producing a perfectly successful transaction full of garbage.  That is why
-; ETH_MODE distinguishes polled-openMSX (2) from polled-hardware (0).
-;
-; ONE loop serves both, because MODE_POLL_HW and MODE_POLL_OMSX were given
-; the values 0 and 2 - exactly the $56 reading each of them has to wait for.
-; That is a deliberate coupling and the only reason those two constants have
-; the values they do: any new polled backend must either keep the property or
-; this routine needs a separate "ready value" byte in the work area.  Only the
-; polled paths of ETH_RX reach here, so MODE_WAIT never appears in (ix).
+; After the request, $56 = 0 means the transfer has completed and the byte is
+; in the shift register.
 ETH_WAIT_DATA:
             ld      c,0
             ld      b,(ix+o_ETH_TMO)
 .loop:
             in      a,(CTRL1)
-            cp      (ix+o_ETH_MODE)
+            or      a
             ret     z                       ; byte available, CF=0
             dec     bc
             ld      a,b

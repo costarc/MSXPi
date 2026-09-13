@@ -60,7 +60,7 @@ import shutil
 
 
 version = "1.6"
-BuildId = "20260913.051"
+BuildId = "20260913.052"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -84,6 +84,7 @@ SYNCTIMEOUT         = 30
 # was really just impatience.
 BYTETRANSFTIMEOUT   = 180
 SYNCTRANSFTIMEOUT   = 180
+HTTP_TIMEOUT        = 15     # seconds for any web fetch; an unreachable host must not hang a command
 DISABLETIMEOUT      = False
 READY_ACK           = 0xA0
 SENDNEXT            = 0xA1
@@ -643,6 +644,118 @@ def burst_capable():
 BURST_CS_TIMEOUT = 0.25     # seconds
 
 
+# -----------------------------------------------------------------------------
+# openMSX link: "virtual SPI" over TCP
+# -----------------------------------------------------------------------------
+# The openMSX MSXPiDevice emulates the CPLD v1.6 at port level, so the TCP link
+# carries what the GPIO pins carry on a Pi: every transfer is one full-duplex
+# byte that the Pi offers (READY up + its MISO byte) and the CPLD clocks when
+# the MSX starts a transfer (its MOSI byte). Two-byte frames:
+#
+#   server -> openMSX   01 d   offer d; READY drops after this transfer
+#                       02 d   offer d; READY stays up for the next offer
+#                       03 00  cancel offers not clocked yet
+#                       7E v   hello, protocol version v
+#   openMSX -> server   01 m   one offer was clocked, the CPLD sent m
+#                       03 00  cancel acknowledged
+#                       7E v   hello reply
+#
+# A run of 02 offers must be closed by a 01 offer in the same write: openMSX
+# only makes the run visible once the closing offer is in.  An openMSX without
+# CPLD emulation does not answer the hello; the link then stays raw bytes.
+TCP_OP_OFFER = 0x01
+TCP_OP_HOLD = 0x02
+TCP_OP_CANCEL = 0x03
+TCP_OP_HELLO = 0x7E
+TCP_PROTOCOL_VERSION = 1
+TCP_HELLO_TIMEOUT = 1.0     # seconds for openMSX to answer the hello
+TCP_BURST_TIMEOUT = 10.0    # emulation can run slower than real time
+_tcp_framed = False
+_tcp_rx = bytearray()       # received but not yet consumed
+
+
+def tcp_handshake(c):
+    """Greet a new openMSX connection; True when it speaks virtual SPI."""
+    global _tcp_framed, _tcp_rx
+    _tcp_framed = False
+    _tcp_rx = bytearray()
+    try:
+        c.sendall(bytes((TCP_OP_HELLO, TCP_PROTOCOL_VERSION)))
+        c.settimeout(TCP_HELLO_TIMEOUT)
+        while len(_tcp_rx) < 2:
+            chunk = c.recv(2 - len(_tcp_rx))
+            if not chunk:
+                break
+            _tcp_rx.extend(chunk)
+    except socket.timeout:
+        pass
+    if len(_tcp_rx) == 2 and _tcp_rx[0] == TCP_OP_HELLO:
+        _tcp_framed = True
+        _tcp_rx = bytearray()
+        print(" ** openMSX link: virtual SPI (CPLD v1.6 emulation) **")
+    else:
+        # anything received is MSX data from an old device: keep it
+        print(" ** openMSX link: raw bytes (openMSX without CPLD emulation) **")
+    return _tcp_framed
+
+
+def _tcp_frame(timeout):
+    """Next two-byte frame from openMSX; raises socket.timeout/ConnectionError."""
+    conn.settimeout(timeout)
+    while len(_tcp_rx) < 2:
+        chunk = conn.recv(4096)
+        if not chunk:
+            raise ConnectionError("connection closed by peer")
+        _tcp_rx.extend(chunk)
+    op, arg = _tcp_rx[0], _tcp_rx[1]
+    del _tcp_rx[:2]
+    return op, arg
+
+
+def _tcp_cancel(got, count):
+    """Withdraw the offers openMSX has not clocked; keeps the ones it did."""
+    try:
+        conn.sendall(bytes((TCP_OP_CANCEL, 0)))
+        while True:
+            op, arg = _tcp_frame(TCP_BURST_TIMEOUT)
+            if op == TCP_OP_CANCEL:
+                break
+            if op == TCP_OP_OFFER:
+                got.append(arg)
+    except (socket.timeout, OSError, ConnectionError):
+        return RC_CONNERR, None
+    if len(got) == count:
+        return RC_SUCCESS, got      # the last one landed while cancelling
+    return RC_FAILED, None
+
+
+def tcp_exchange(misos, timeout, hold=True):
+    """Offer bytes the way the Pi does, one CPLD transfer per byte.  hold=True
+    keeps READY up across the run (a burst); hold=False drops READY after every
+    byte, as SPI_ByteTransfer does, but still sends all offers in one write so
+    a payload costs one round trip instead of one per byte.
+    Returns (rc, the bytes the CPLD sent)."""
+    count = len(misos)
+    got = bytearray()
+    if not count:
+        return RC_SUCCESS, got
+    frames = bytearray()
+    for i, b in enumerate(misos):
+        frames.append(TCP_OP_OFFER if i == count - 1 or not hold else TCP_OP_HOLD)
+        frames.append(b & 0xFF)
+    try:
+        conn.sendall(frames)
+        while len(got) < count:
+            op, arg = _tcp_frame(timeout)
+            if op == TCP_OP_OFFER:
+                got.append(arg)
+        return RC_SUCCESS, got
+    except socket.timeout:
+        return _tcp_cancel(got, count)
+    except (OSError, ConnectionError):
+        return RC_CONNERR, None
+
+
 def SPI_BurstOut(data):
     """Send a run of bytes with RPI_READY held high for the whole run.
 
@@ -659,8 +772,10 @@ def SPI_BurstOut(data):
     global conn, hostType
 
     if hostType != "RaspberryPi":
-        # openMSX / socket mode: the device is a plain TCP client, there is no
-        # RDY line to hold and sendall() is already the fast path.
+        if _tcp_framed:
+            rc, _ = tcp_exchange(bytearray(data), TCP_BURST_TIMEOUT)
+            return rc
+        # raw openMSX link: no RDY line to hold, sendall() is the fast path.
         try:
             conn.sendall(bytes(data))
             return RC_SUCCESS
@@ -735,8 +850,13 @@ def SPI_BurstIn(length):
     """
     global conn, hostType
 
+    if hostType != "RaspberryPi" and _tcp_framed:
+        # passive offers, READY held across the run: exactly SPI_BurstIn's GPIO
+        # contract, so an OTIR that starts before them loses bytes here too
+        return tcp_exchange(bytes(length), TCP_BURST_TIMEOUT)
+
     if hostType != "RaspberryPi":
-        # openMSX / socket mode: no RDY line to hold; the burst arrives as an
+        # raw openMSX link: no RDY line to hold; the burst arrives as an
         # ordinary byte stream.  Read it in one go rather than byte by byte -
         # the MSX sends it as fast as OTIR can run.
         payload = bytearray()
@@ -856,7 +976,19 @@ def SPI_ByteTransfer(byte_out=None):
 
         tick_sclk()
         GPIO.output(RPI_READY, GPIO.LOW)
+    elif _tcp_framed:
+        # one offer, READY dropped after it - the per-byte GPIO contract
+        rc, got = tcp_exchange((0 if byte_out is None else byte_out,),
+                               None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
+        if rc != RC_SUCCESS:
+            print(f"SPI_ByteTransfer(): virtual SPI transfer failed rc={rc:#04x}")
+            return rc, None
+        byte_in = got[0]
     else:
+        if _tcp_rx:
+            # MSX data an old openMSX sent before the hello timed out
+            if byte_out is None:
+                return RC_SUCCESS, _tcp_rx.pop(0)
         if DISABLETIMEOUT == True:
             #print("disabling timeout")
             conn.settimeout(None)
@@ -900,6 +1032,8 @@ def SPI_ReadPayload(length):
         except OSError as e:
             print(f"SPI_ReadPayload: {e}")
             return RC_CONNERR, None
+    if hostType != "RaspberryPi" and _tcp_framed:
+        return tcp_exchange(bytes(length), SYNCTRANSFTIMEOUT, hold=False)
     payload = bytearray(length)
     quickack = getattr(socket, 'TCP_QUICKACK', None) if hostType != "RaspberryPi" else None
     for i in range(length):
@@ -929,6 +1063,9 @@ def SPI_WritePayload(payload):
         except OSError as e:
             print(f"SPI_WritePayload: {e}")
             return RC_CONNERR
+    if hostType != "RaspberryPi" and _tcp_framed:
+        rc, _ = tcp_exchange(bytes(payload), SYNCTRANSFTIMEOUT, hold=False)
+        return rc
     for byte in payload:
         rc, _ = SPI_ByteTransfer(byte if isinstance(byte, int) else ord(byte))
         if rc != RC_SUCCESS:
@@ -1109,7 +1246,9 @@ def dir(data):
                 run('ls -l ' + path)
         else:
             parser = MyHTMLParser()
-            htmldata = urlopen(path).read().decode()
+            # Bounded: an unreachable host otherwise blocks here for ever, with
+            # the MSX waiting for a reply and nothing in the log.
+            htmldata = urlopen(path, timeout=HTTP_TIMEOUT).read().decode()
             parser = MyHTMLParser()
             parser.feed(htmldata)
             buf = " ".join(parser.HTMLDATA)
@@ -1424,7 +1563,7 @@ def pcopy(msxcmd="pcopy"):
             return send_error_block(f"File error: {str(e)}", err_code)
     else:
         try:
-            urlhandler = urlopen(path)
+            urlhandler = urlopen(path, timeout=HTTP_TIMEOUT)
             buf = urlhandler.read()
             filesize = len(buf)
         except Exception as e:
@@ -3201,7 +3340,7 @@ def chatgpt(query):
             ]
         }
         
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
         openai_response = response.json()
         if "choices" in openai_response:
             response_text = openai_response["choices"][0]["message"]["content"]
@@ -3289,7 +3428,7 @@ def fetch_and_uncompress(url: str):
                 return RC_FAILED, f"Local read failed: {e}"
         else:
             try:
-                resp = requests.get(url, stream=True)
+                resp = requests.get(url, stream=True, timeout=HTTP_TIMEOUT)
                 resp.raise_for_status()
                 with open(cached_path, "wb") as f:
                     for chunk in resp.iter_content(chunk_size=8192):
@@ -3534,7 +3673,7 @@ def msxarchive(parms = None):
         if not cache_exists or cache_expired:
             print(f"cache expired: {cached_file}" if cache_expired else f"not cached: {cached_file}")
             # Download from the URL
-            response = requests.get(index_url)
+            response = requests.get(index_url, timeout=HTTP_TIMEOUT)
 
             if response.status_code == 200:
                 # Success: parse the content
@@ -3544,7 +3683,7 @@ def msxarchive(parms = None):
                 # no 00index.txt, like a local test HTTP server): fall back to
                 # the server's own auto-generated directory listing instead.
                 print(f"{index} not found, falling back to directory listing at: {url}/")
-                dir_response = requests.get(url + "/")
+                dir_response = requests.get(url + "/", timeout=HTTP_TIMEOUT)
                 if dir_response.status_code != 200:
                     print(f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}")
                     files = f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}"
@@ -4313,7 +4452,7 @@ class FinnhubProvider(QuoteProvider):
             "token": _api_key("FINNHUBKEY")
         }
 
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
         data = r.json()
 
         if data.get("s") != "ok":
@@ -4429,7 +4568,7 @@ class CoinGeckoProvider(QuoteProvider):
             "days": "1" if range_=="1d" else "7"
         }
 
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
         data = r.json()
 
         candles = []
@@ -4452,7 +4591,7 @@ class StooqProvider(QuoteProvider):
         # Stooq only supports daily data
         url = f"https://stooq.com/q/d/l/?s={symbol.lower()}&i=d"
 
-        r = requests.get(url)
+        r = requests.get(url, timeout=HTTP_TIMEOUT)
         if r.status_code != 200:
             return []
 
@@ -4573,7 +4712,7 @@ class AlphaVantageProvider(QuoteProvider):
             "outputsize": "compact" if range_ == "1d" else "full"
         }
 
-        r = requests.get(url, params=params)
+        r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
         data = r.json()
 
         key = f"Time Series ({interval})"
@@ -5314,6 +5453,7 @@ try:
             except OSError as exc:
                 print(f"socket tuning not applied: {exc}")
             globals()['conn'] = conn
+            tcp_handshake(conn)
 
             print(f"MSXPi Server waiting command:",end="")
             try:

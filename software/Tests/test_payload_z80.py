@@ -57,9 +57,9 @@ LIB.z80ex_step.restype = C.c_int
 LIB.z80ex_destroy.argtypes = [PTR]
 
 class Machine:
-    def __init__(self, image, tcp=False, delay=0, escape_after=None, stuck=False, wait_hw=False, reply=None):
+    def __init__(self, image, delay=0, escape_after=None, stuck=False, wait_hw=False, reply=None):
         self.mem=bytearray(image)
-        self.tcp=tcp; self.delay=delay; self.escape_after=escape_after; self.stuck=stuck
+        self.delay=delay; self.escape_after=escape_after; self.stuck=stuck
         # wait_hw: CPLD v1.6 /WAIT. $57 is a mode register ($01 on, $00 off;
         # reads $8E/$0E) and in wait mode every IN from $5A is a whole transfer.
         self.wait_hw=wait_hw; self.waitmode=False; self.wait_reads=0; self.wait_writes=0
@@ -71,8 +71,7 @@ class Machine:
         def pr(cpu,port,user):
             port &= 255
             if port==0x57:
-                if self.wait_hw: return 0x8e if self.waitmode else 0x0e
-                return 0xfe if self.tcp else 0x0e
+                return 0x8e if self.wait_hw and self.waitmode else 0x0e
             if port==0xaa: return self.row
             if port==0xa9:
                 self.keys+=1
@@ -80,11 +79,11 @@ class Machine:
                 return 0xfb if self.escape_after is not None and self.polls>=self.escape_after else 0xff
             if port==0x56:
                 self.polls+=1
-                if self.stuck: return 0 if self.tcp else 1
+                if self.stuck: return 1
                 if self.poll_left:
                     self.poll_left-=1
-                    return 0 if self.tcp else 1
-                return 2 if self.tcp and self.pending else 0
+                    return 1
+                return 0
             if port==0x5a and self.waitmode:
                 self.wait_reads+=1
                 if self.reply is not None:
@@ -115,8 +114,8 @@ class Machine:
             elif port==0x5a and self.waitmode:
                 self.sent.append(value); self.wait_writes+=1
             elif port==0x5a:
-                if self.poll_left and not self.tcp: self.errors.append('unready write')
-                self.sent.append(value); self.poll_left=0 if self.tcp else self.delay
+                if self.poll_left: self.errors.append('unready write')
+                self.sent.append(value); self.poll_left=self.delay
             else: self.errors.append(f'unexpected output {port:x}')
         self.callbacks=(MR(mr),MW(mw),PR(pr),PW(pw),IR(lambda *_:0xff))
         a,b,c,d,e=self.callbacks
@@ -174,48 +173,46 @@ class PayloadTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls): cls.tmp.cleanup()
     def test_transfer_and_abi(self):
-        for tcp in (False,True):
-            for tx in (False,True):
-                for adapter in (False,True):
-                    for count in (0,1,255,256,257,512,8192):
-                        for iff in (0,1):
-                            with self.subTest(tcp=tcp,tx=tx,adapter=adapter,count=count,iff=iff):
-                                m=Machine(self.image,tcp,delay=3)
-                                try:
-                                    expected=bytes((i*73+19)&255 for i in range(count))
-                                    if tx: m.mem[0x8000:0x8000+count]=expected
-                                    label=('_payload_' if adapter else 'PAYLOAD_')+('tx' if tx else 'rx') if adapter else ('PAYLOAD_TX' if tx else 'PAYLOAD_RX')
-                                    m.run(self.labels[label],count,adapter,iff)
-                                    self.assertEqual(m.errors,[])
-                                    self.assertEqual(bytes(m.sent) if tx else bytes(m.mem[0x8000:0x8000+count]),expected)
-                                    checksum=int.from_bytes(m.mem[0xe000:0xe002],'little') if adapter else m.get(HL)
-                                    self.assertEqual(checksum,sum(expected)&65535)
-                                    if adapter: self.assertEqual(m.get(HL)&255,0xe0)
-                                    else:
-                                        self.assertFalse(m.get(AF)&1)
-                                        self.assertEqual(m.get(BC),0)
-                                        self.assertEqual(m.get(DE),0x8000+count)
-                                    self.assertEqual(m.get(SP),0xf002)
-                                    for r in [AF2,BC2,DE2,HL2,IX,IY]: self.assertEqual(m.get(r),0x1234+r)
-                                    self.assertEqual(m.get(IFF1),iff)
-                                    self.assertEqual(m.row,0xb4)
-                                    if not tx: self.assertEqual(m.requests,count)
-                                finally: m.close()
+        for tx in (False,True):
+            for adapter in (False,True):
+                for count in (0,1,255,256,257,512,8192):
+                    for iff in (0,1):
+                        with self.subTest(tx=tx,adapter=adapter,count=count,iff=iff):
+                            m=Machine(self.image,delay=3)
+                            try:
+                                expected=bytes((i*73+19)&255 for i in range(count))
+                                if tx: m.mem[0x8000:0x8000+count]=expected
+                                label=('_payload_' if adapter else 'PAYLOAD_')+('tx' if tx else 'rx') if adapter else ('PAYLOAD_TX' if tx else 'PAYLOAD_RX')
+                                m.run(self.labels[label],count,adapter,iff)
+                                self.assertEqual(m.errors,[])
+                                self.assertEqual(bytes(m.sent) if tx else bytes(m.mem[0x8000:0x8000+count]),expected)
+                                checksum=int.from_bytes(m.mem[0xe000:0xe002],'little') if adapter else m.get(HL)
+                                self.assertEqual(checksum,sum(expected)&65535)
+                                if adapter: self.assertEqual(m.get(HL)&255,0xe0)
+                                else:
+                                    self.assertFalse(m.get(AF)&1)
+                                    self.assertEqual(m.get(BC),0)
+                                    self.assertEqual(m.get(DE),0x8000+count)
+                                self.assertEqual(m.get(SP),0xf002)
+                                for r in [AF2,BC2,DE2,HL2,IX,IY]: self.assertEqual(m.get(r),0x1234+r)
+                                self.assertEqual(m.get(IFF1),iff)
+                                self.assertEqual(m.row,0xb4)
+                                if not tx: self.assertEqual(m.requests,count)
+                            finally: m.close()
     def test_network_transmit(self):
-        for tcp in (False,True):
-            for count in (0,1,255,256,257,1514):
-                m=Machine(self.image,tcp,delay=3)
-                try:
-                    data=bytes((i*29+3)&255 for i in range(count))
-                    m.mem[0x8000:0x8000+count]=data
-                    m.mem[0x1234+IX]=1  # bounded readiness timeout
-                    m.run(self.labels['ETH_TX_SUM'],count,network=True)
-                    self.assertEqual(bytes(m.sent),data)
-                    self.assertEqual(m.mem[0x1234+IX+1],sum(data)&255)
-                    self.assertFalse(m.get(AF)&1)
-                    self.assertEqual(m.keys,0)  # never scan the keyboard in UNAPI
-                    self.assertEqual(m.errors,[])
-                finally: m.close()
+        for count in (0,1,255,256,257,1514):
+            m=Machine(self.image,delay=3)
+            try:
+                data=bytes((i*29+3)&255 for i in range(count))
+                m.mem[0x8000:0x8000+count]=data
+                m.mem[0x1234+IX]=1  # bounded readiness timeout
+                m.run(self.labels['ETH_TX_SUM'],count,network=True)
+                self.assertEqual(bytes(m.sent),data)
+                self.assertEqual(m.mem[0x1234+IX+1],sum(data)&255)
+                self.assertFalse(m.get(AF)&1)
+                self.assertEqual(m.keys,0)  # never scan the keyboard in UNAPI
+                self.assertEqual(m.errors,[])
+            finally: m.close()
         m=Machine(self.image,stuck=True)
         try:
             m.mem[0x1234+IX]=1
@@ -226,18 +223,17 @@ class PayloadTests(unittest.TestCase):
         finally: m.close()
 
     def test_escape_busy_and_ready(self):
-        for tcp in (False,True):
-            for stuck in (False,True):
-                for iff in (False,True):
-                    m=Machine(self.image,tcp,escape_after=100,stuck=stuck)
-                    try:
-                        m.run(self.labels['PAYLOAD_RX'],8192,iff=iff)
-                        self.assertTrue(m.get(AF)&1)
-                        self.assertEqual(m.get(AF)>>8,0xe2)
-                        self.assertLess(m.reads,8192)
-                        self.assertEqual(m.get(BC),8192-m.reads)
-                        self.assertEqual(m.get(DE),0x8000+m.reads)
-                        self.assertEqual(m.get(IFF1),iff)
-                        self.assertEqual(m.row,0xb4)
-                    finally: m.close()
+        for stuck in (False,True):
+            for iff in (False,True):
+                m=Machine(self.image,escape_after=100,stuck=stuck)
+                try:
+                    m.run(self.labels['PAYLOAD_RX'],8192,iff=iff)
+                    self.assertTrue(m.get(AF)&1)
+                    self.assertEqual(m.get(AF)>>8,0xe2)
+                    self.assertLess(m.reads,8192)
+                    self.assertEqual(m.get(BC),8192-m.reads)
+                    self.assertEqual(m.get(DE),0x8000+m.reads)
+                    self.assertEqual(m.get(IFF1),iff)
+                    self.assertEqual(m.row,0xb4)
+                finally: m.close()
 if __name__=='__main__': unittest.main()

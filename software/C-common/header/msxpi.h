@@ -65,7 +65,6 @@
 #define RC_UNDEFINED		0xEF
 
 #define CHK_STATE_0       0
-#define CHK_STATE_2       2
 
 #define PAGE1ADDRESS ((uint8_t*)0x4000)
 #define PAGE2ADDRESS ((uint8_t*)0x8000)

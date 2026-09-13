@@ -29,20 +29,11 @@
 ; (PAYLOAD_RX_BURST).
 ;
 ; The test is "did the read-back CHANGE when wait mode was switched on?", not
-; "is bit 7 set". Bit 7 was what this used to test, and it was wrong: openMSX
-; answers $FE with wait mode off - it has to stay at or above $FE, because
-; every MSXPi binary asks "am I emulated?" with `cp $FE` on every byte - and
-; $FE has bit 7 set. So an openMSX WITHOUT the /WAIT emulation (everything up
-; to and including the 21.0 release) looked burst-capable: the server sent a
-; burst, nothing stalled the INIR, every byte read back $FF, and the transfer
-; failed. A v1.6 ROM could not read a disk on a stock openMSX at all.
-;
-; Comparing the two read-backs also rejects a pre-v1.6 CPLD, and any future
-; device, without this routine having to know what any of them answer:
+; "is bit 7 set", so it rejects a pre-v1.6 CPLD, and any future device,
+; without having to know what each of them answers:
 ;   CPLD v1.6   $0E -> $8E   changed  -> burst
-;   openMSX new $FE -> $FF   changed  -> burst
-;   openMSX old $FE -> $FE   same     -> polled
 ;   CPLD v1.5   $0E -> $0E   same     -> polled
+; openMSX emulates the v1.6 CPLD, so it answers the same way.
 ;
 ; Wait mode is switched straight off again in both paths: it is only ever on
 ; inside a burst. Corrupts AF; returns CF=0.

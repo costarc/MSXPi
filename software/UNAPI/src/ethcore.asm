@@ -199,8 +199,6 @@ FN_GETINFO:
 ; So: work out which polled backend this device needs, prove the link with it,
 ; and only then try to upgrade to /WAIT - and prove that too, because on real
 ; hardware "the CPLD supports /WAIT" turned out not to mean "/WAIT works".
-VER_WAIT_ON_OMSX: equ 0FFh      ; openMSX's wait-mode read-back (see ethtrans)
-
 ; Out: CF=0 a working backend was found, CF=1 nothing answered at all.  Every
 ; exit sets a usable mode either way, so a caller that does not care about the
 ; distinction can ignore the flag.
@@ -226,9 +224,7 @@ ETH_DETECT:
             xor     a
             out     (CTRL2),a           ; never leave it on outside a
             ld      a,b                 ; transaction - see ethops.asm
-            cp      VER_WAIT_ON         ; $8E - real CPLD v1.6
-            jr      z,.trywait
-            cp      VER_WAIT_ON_OMSX    ; $FF - openMSX
+            cp      VER_WAIT_ON         ; $8E - CPLD v1.6
             jr      z,.trywait
             or      a                   ; CF=0: polled, and it works
             ret
@@ -239,18 +235,11 @@ ETH_DETECT:
             ret     nc                  ; /WAIT works, keep it
             ; It does not.  Back to the polled backend we already proved.
 
-; --- ETH_POLLMODE: select the polled backend this device needs.
-; Real hardware reads below $FE on $57; openMSX reads exactly $FE and needs
-; the other polled backend, because there $56 = 2 (not 0) means "a byte is
-; waiting".  Corrupts AF; always returns CF=0, which is what lets ETH_DETECT
-; fall into it as its "/WAIT is not usable" exit.
+; --- ETH_POLLMODE: select the polled backend.  There is only one - openMSX
+; emulates the CPLD - but ETH_DETECT still falls into this as its "/WAIT is
+; not usable" exit.  Corrupts AF; always returns CF=0.
 ETH_POLLMODE:
-            in      a,(CTRL2)
-            cp      VER_OPENMSX
             ld      a,MODE_POLL_HW
-            jr      c,.set
-            ld      a,MODE_POLL_OMSX
-.set:
             ld      (ix+o_ETH_MODE),a
             or      a                   ; CF=0
             ret

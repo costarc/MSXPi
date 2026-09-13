@@ -8,8 +8,8 @@ BC=count and HL=running 16-bit checksum. IX/IY and alternate registers survive.
 Zero bytes perform no I/O. Carry on return reports cancellation; successful
 bytes alone update the pointer/count/checksum. Public BIOS APIs are unchanged.
 
-The physical and TCP receive loops are selected once per payload. Physical
-hardware waits for status zero after a request; TCP waits for two. Checksum
+There is one receive loop: request a transfer, then wait for status zero. openMSX
+emulates the CPLD at port level, so the MSX side has no emulator path. Checksum
 folding, headers, index checking, retries and disk commit decisions remain in
 the protocol layer. The disk driver stages each sector in a private 512-byte driver buffer,
 then uses LDIR or the DOS XFER helper to copy the entire sector across RAM slot

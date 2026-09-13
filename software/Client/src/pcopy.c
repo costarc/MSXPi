@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 // Static buffers to prevent Z80 stack overflow
