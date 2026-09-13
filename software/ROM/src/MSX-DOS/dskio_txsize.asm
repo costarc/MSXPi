@@ -24,15 +24,21 @@
 ; SOFTWARE.
 ; ------------------------------------------------------------------------------
 
-; BC = sector size for PerformHandshake, with bit 15 set when the LAST block
-; received arrived as a /WAIT burst - the server proved it can burst, so this
-; side may send one back. Work area +7 holds the raw length high byte of that
-; block (see RECVDATA_ONEBLOCK). Lives in a kernel gap because the driver has
+; BC = sector size for SENDDATA. Lives in a kernel gap because the driver has
 ; no room; DSKIO_RXSIZE took its place there.
+;
+; TEMPORARY: disk writes never burst. This used to set bit 15 - send the
+; sector as a /WAIT burst (OTIR) - whenever the last block received had
+; arrived as one (work area +7, see RECVDATA_ONEBLOCK). On a Canon V-25 with
+; real v1.6 hardware that lost the first bytes of a sector: the MSX started
+; its OTIR before the Pi raised READY for the burst, and a write OUT arms a
+; CPLD transfer whether READY is up or not while /WAIT holds the Z80 only
+; when it is, so the leading OUTs overwrote each other. A captured directory
+; sector arrived shifted by ten bytes, and every COPY or pcopy to an MSXPi
+; drive ended in "Disk error writing". Burst reads are unaffected - the CPLD
+; will not start a read while READY is low - so only the write side is
+; switched off, back to the polled writes of the previous builds. Restore
+; the burst once READY and the start of an OTIR are sequenced safely.
 DSKIO_TXSIZE:
-        call    GETWRK             ; HL = IX = work area
         ld      bc,SECTORSIZE
-        bit     7,(ix+7)
-        ret     z
-        set     7,b
         ret
