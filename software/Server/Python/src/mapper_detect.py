@@ -133,6 +133,60 @@ def _strict(hits):
     return None, None
 
 
+# ------------------------------------------------------------------------------
+# ROM database lookup (openMSX share/softwaredb.xml)
+# ------------------------------------------------------------------------------
+# The database is the authority; detect_mapper() below is only the fallback
+# for ROMs it does not know. Types are openMSX's names, matched without regard
+# to case (the file has both "Konami" and "konami").
+ROMDB_PLAIN_TYPES = {"mirrored", "normal", "page12", "mirrored4000",
+                     "0x4000", "8kb", "16kb"}
+ROMDB_MAPPER_TYPES = {
+    "ascii8":       (MAPPER_ASCII8, 8),
+    "ascii8sram2":  (MAPPER_ASCII8, 8),
+    "ascii8sram8":  (MAPPER_ASCII8, 8),
+    "ascii16":      (MAPPER_ASCII16, 16),
+    "ascii16sram2": (MAPPER_ASCII16, 16),
+    "ascii16sram8": (MAPPER_ASCII16, 16),
+    "konami":       (MAPPER_KONAMI, 8),
+    "konamiscc":    (MAPPER_KONAMI_SCC, 8),
+}
+
+
+def load_romdb(xml_text):
+    """Index openMSX's softwaredb.xml by SHA-1: {sha1: (type, title)}.
+    A regex scan rather than an XML parser - the file is 1.4MB and this runs
+    on a Raspberry Pi."""
+    import re
+    db = {}
+    for sw in re.finditer(r'<software title="([^"]*)"(.*?)</software>', xml_text, re.S):
+        title = sw.group(1)
+        for rom in re.finditer(r'<rom\b([^>]*)/?>', sw.group(2)):
+            attrs = dict(re.findall(r'(\w+)="([^"]*)"', rom.group(1)))
+            sha1 = attrs.get("sha1", "").lower()
+            if len(sha1) == 40:
+                db[sha1] = (attrs.get("type", ""), title)
+    return db
+
+
+def romdb_lookup(rom, db):
+    """('plain', None, type, title), ('mapper', (mapper, bank_kb), type, title),
+    ('unsupported', None, type, title), or None when the ROM is not listed."""
+    import hashlib
+    if not db:
+        return None
+    entry = db.get(hashlib.sha1(rom).hexdigest())
+    if entry is None:
+        return None
+    dbtype, title = entry
+    key = dbtype.strip().lower()
+    if key in ROMDB_PLAIN_TYPES:
+        return ("plain", None, dbtype, title)
+    if key in ROMDB_MAPPER_TYPES:
+        return ("mapper", ROMDB_MAPPER_TYPES[key], dbtype, title)
+    return ("unsupported", None, dbtype, title)
+
+
 def _repeated(hits, lo, hi):
     return [a for a, c in hits.items() if lo <= a <= hi and c >= REPEAT_MIN]
 

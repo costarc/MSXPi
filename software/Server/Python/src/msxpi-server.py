@@ -304,7 +304,8 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
                             patch_bank_switches, PATCH_WINDOWS,
-                            neutralise_rom_writes, MAPPER_KONAMI_SCC)
+                            neutralise_rom_writes, MAPPER_KONAMI_SCC,
+                            load_romdb, romdb_lookup)
 
 # Handler addresses the MSX will have relocated its resident bank-switch code
 # to. The client sends its own with the selection so the two sides cannot
@@ -3199,6 +3200,49 @@ def chatgpt(query):
         print(error_msg)
         sendmultiblock(error_msg.encode())
 
+ROMDB_DEFAULT_URL = "https://raw.githubusercontent.com/costarc/openMSX/master/share/softwaredb.xml"
+ROMDB_CACHE_DAYS = 30
+_romdb = None
+
+
+def get_romdb():
+    """openMSX's share/softwaredb.xml, indexed by SHA-1 (see load_romdb in
+    mapper_detect.py). ROMDB in msxpi.ini may be a URL or a local path; a URL
+    is cached as MSXPIHOME/softwaredb.xml and refreshed every ROMDB_CACHE_DAYS,
+    and a failed refresh keeps using the cached copy. With no database at all
+    the caller falls back to detect_mapper()."""
+    global _romdb
+    if _romdb:
+        return _romdb
+    src = getMSXPiVar('ROMDB') or ROMDB_DEFAULT_URL
+    text = None
+    try:
+        if src.startswith(("http://", "https://")):
+            cache = os.path.join(MSXPIHOME, "softwaredb.xml")
+            fresh = os.path.exists(cache) and \
+                time.time() - os.path.getmtime(cache) < ROMDB_CACHE_DAYS * 86400
+            if not fresh:
+                try:
+                    r = requests.get(src, timeout=30)
+                    r.raise_for_status()
+                    os.makedirs(MSXPIHOME, exist_ok=True)
+                    with open(cache, "wb") as f:
+                        f.write(r.content)
+                except Exception as e:
+                    print(f"ROM database download failed ({e}); using the cached copy if any")
+            if os.path.exists(cache):
+                with open(cache, encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+        else:
+            with open(src, encoding="utf-8", errors="ignore") as f:
+                text = f.read()
+    except Exception as e:
+        print(f"ROM database unavailable ({e}); falling back to mapper detection")
+    _romdb = load_romdb(text) if text else {}
+    print(f"ROM database: {len(_romdb)} entries from {src}")
+    return _romdb
+
+
 def is_local_path(s: str) -> bool:
     """A repository entry is a local filesystem path (e.g. /home/roms or
     C:\\Users\\roniv\\Dev\\MSX\\gameroms) rather than an HTTP(S) archive URL
@@ -3693,7 +3737,20 @@ def msxarchive(parms = None):
                 if rc != RC_SUCCESS:
                     return reject(buf)
 
-                if len(buf) <= PLAIN_ROM_MAX_SIZE:
+                # openMSX's softwaredb.xml decides how the ROM is loaded;
+                # detect_mapper() is only the fallback for unlisted ROMs.
+                dbinfo = romdb_lookup(buf, get_romdb())
+                if dbinfo:
+                    print(f"{filename}: ROM database: {dbinfo[2]} ({dbinfo[3]})")
+                    if dbinfo[0] == "unsupported":
+                        return reject(f"{filename}: {dbinfo[2]} mapper is not "
+                                      f"supported.")
+                plain = (dbinfo[0] == "plain") if dbinfo else \
+                    len(buf) <= PLAIN_ROM_MAX_SIZE
+                if plain and len(buf) > PLAIN_ROM_MAX_SIZE:
+                    return reject(f"{filename} ({len(buf)} bytes): plain ROM "
+                                  f"larger than {PLAIN_ROM_MAX_SIZE} bytes.")
+                if plain:
                     # The MSX runs the image from RAM, where stores into the
                     # ROM window succeed instead of being discarded - see
                     # neutralise_rom_writes in mapper_detect.py.
@@ -3706,7 +3763,12 @@ def msxarchive(parms = None):
                         buf = buf + buf
                     header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
                 else:
-                    mapper_type, bank_size_kb = detect_mapper(buf)
+                    if dbinfo:
+                        mapper_type, bank_size_kb = dbinfo[1]
+                    else:
+                        mapper_type, bank_size_kb = detect_mapper(buf)
+                        print(f"{filename}: not in the ROM database - "
+                              f"detected mapper type {mapper_type}")
                     if mapper_type is not None and msx_handlers:
                         buf, npatch = patch_for_msx(buf, mapper_type, msx_handlers)
                         print(f"{filename}: patched {npatch} bank-switch sites "
@@ -5093,6 +5155,7 @@ else:
            ['WIFIPWD','MYWFIPASSWORD'], \
            ['WIFICOUNTRY','GB'], \
            ['DSKTMPL','/home/pi/msxpi/disks/blank.dsk'], \
+           ['ROMDB','https://raw.githubusercontent.com/costarc/openMSX/master/share/softwaredb.xml'], \
            ['IRCNICK','msxpi'], \
            ['IRCADDR','chat.freenode.net'], \
            ['IRCPORT','6667'], \
