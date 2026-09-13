@@ -529,9 +529,14 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 // the same region SofaRun relocates its own resident stub into
 // (ld hl,7255h / ld de,0F975h / ld bc,0160h / ldir).
 // Layout: table 0xF975-0xF9B4, exec 0xF9B5-0xF9B6, 8K handlers 0xF9C0-0xFABF,
-// 16K handlers 0xFAC0-0xFB3F.
+// 16K handlers 0xFAC0-0xFAEF (MSX2 system variables start at 0xFAF5).
+// The 16K handlers are 13h bytes each and must stay below FAF5h, where the
+// MSX2 system variables start (DPPAGE, ACPAGE, EXBRSA at FAF8h...). At FB00h
+// with a 40h copy they overwrote EXBRSA, so every SUB-ROM call hung and all
+// ASCII16 ROMs died right after "Starting game...".
 #define RESIDENT_PAGE1_ADDR   0xFAC0
-#define RESIDENT_PAGE2_ADDR   0xFB00
+#define RESIDENT_PAGE2_ADDR   0xFAD8
+#define RESIDENT_16K_SLOT     0x18
 #define RESIDENT_TABLE_ADDR   0xF975
 #define RESIDENT_EXEC1_ADDR   0xF9B5
 #define RESIDENT_EXEC2_ADDR   0xF9B6
@@ -633,8 +638,8 @@ static void relocateResidentHandlers16K(uint16_t storageCount) {
     // exactly the segment the mapper would have selected.
     for (i = 0; i < RESIDENT_TABLE_ENTRIES; i++)
         table[i] = storageSegments[i % storageCount];
-    for (i = 0; i < RESIDENT_SLOT_SIZE; i++) dst1[i] = src1[i];
-    for (i = 0; i < RESIDENT_SLOT_SIZE; i++) dst2[i] = src2[i];
+    for (i = 0; i < RESIDENT_16K_SLOT; i++) dst1[i] = src1[i];
+    for (i = 0; i < RESIDENT_16K_SLOT; i++) dst2[i] = src2[i];
 }
 
 static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
@@ -700,6 +705,11 @@ void ascii8Win1Handler(void) __naked {
         ; page-0 image, and launchGame() maps the BIOS over page 0 before the
         ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
         pop hl           ; H = A, L = F from the `ld a,i` snapshot
+        ; Acknowledge the VDP interrupt that went pending during the LDIR.
+        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
+        ; windows from its interrupt routine and then does EI, so the pending
+        ; interrupt nested every frame until the stack reached C000h.
+        in a, (#0x99)
         bit 2, l
         jr z, 9$         ; caller had interrupts off - leave them off
         ei
@@ -765,6 +775,11 @@ void ascii8Win2Handler(void) __naked {
         ; page-0 image, and launchGame() maps the BIOS over page 0 before the
         ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
         pop hl           ; H = A, L = F from the `ld a,i` snapshot
+        ; Acknowledge the VDP interrupt that went pending during the LDIR.
+        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
+        ; windows from its interrupt routine and then does EI, so the pending
+        ; interrupt nested every frame until the stack reached C000h.
+        in a, (#0x99)
         bit 2, l
         jr z, 9$         ; caller had interrupts off - leave them off
         ei
@@ -830,6 +845,11 @@ void ascii8Win3Handler(void) __naked {
         ; page-0 image, and launchGame() maps the BIOS over page 0 before the
         ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
         pop hl           ; H = A, L = F from the `ld a,i` snapshot
+        ; Acknowledge the VDP interrupt that went pending during the LDIR.
+        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
+        ; windows from its interrupt routine and then does EI, so the pending
+        ; interrupt nested every frame until the stack reached C000h.
+        in a, (#0x99)
         bit 2, l
         jr z, 9$         ; caller had interrupts off - leave them off
         ei
@@ -895,6 +915,11 @@ void ascii8Win4Handler(void) __naked {
         ; page-0 image, and launchGame() maps the BIOS over page 0 before the
         ; game runs. JR has no P/O condition, so test bit 2 (P/V) of saved F.
         pop hl           ; H = A, L = F from the `ld a,i` snapshot
+        ; Acknowledge the VDP interrupt that went pending during the LDIR.
+        ; A copy takes ~45ms, longer than a frame; BILLIARD switches two
+        ; windows from its interrupt routine and then does EI, so the pending
+        ; interrupt nested every frame until the stack reached C000h.
+        in a, (#0x99)
         bit 2, l
         jr z, 9$         ; caller had interrupts off - leave them off
         ei
