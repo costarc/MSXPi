@@ -542,7 +542,21 @@ def _init_fast_gpio():
     if _FAST_GPIO and os.environ.get("MSXPI_NATIVE_GPIO") == "1":
         try:
             from msxpi_gpio_native import NativeGPIO
-            _NATIVE_GPIO = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            native = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
+            # msxpi_gpio_native.py is a separate file, and a Pi can end up
+            # running this server with an older copy of it. One without
+            # read_burst sends burst READS fine (the ROM then starts bursting
+            # its writes) but raises AttributeError on the first burst WRITE -
+            # outside the OSError the burst paths catch - so the server
+            # answered mid-sector with an error string and every COPY to an
+            # MSXPi drive failed with "Disk error writing". Only use an engine
+            # that can burst both ways; the Python GPIO path below does.
+            missing = [m for m in ('read', 'write', 'read_burst', 'write_burst')
+                       if not callable(getattr(native, m, None))]
+            if missing:
+                raise AttributeError(f"msxpi_gpio_native.py is out of date, no {', '.join(missing)} "
+                                     f"- run update.sh")
+            _NATIVE_GPIO = native
             print(f"init_fast_gpio(): native GPIO payload engine active "
                   f"(half-period {_NATIVE_GPIO.half_period_ns} ns)")
         except (OSError, ValueError, ImportError, AttributeError) as e:
@@ -2075,19 +2089,25 @@ def recvdata2(maxbufsize = 8192):
         # Validate block index
         if block_index != expected_block_index:
             # Protocol drift
+            print(f"recvdata2: block index {block_index}, expected {expected_block_index} "
+                  f"(header_rc {header_rc:#04x}, len {length}, burst {burst}) - out of step")
             return (RC_CONNERR, None)
 
         # Capacity checks
         if length > block_max:
             # MSX tried to send more than negotiated / allowed
+            print(f"recvdata2: block of {length} bytes exceeds the negotiated {block_max}")
             return (RC_CONNERR, None)
         if len(data) + length > maxbufsize:
             # Would overflow caller's max buffer
+            print(f"recvdata2: {len(data)}+{length} bytes exceeds the {maxbufsize}-byte buffer")
             return (RC_CONNERR, None)
 
         # --- Payload ---
         rc, payload = SPI_BurstIn(length) if burst else SPI_ReadPayload(length)
         if rc != RC_SUCCESS:
+            print(f"recvdata2: payload read failed rc={rc:#04x} "
+                  f"({'burst' if burst else 'polled'}, block {block_index}, {length} bytes)")
             return (RC_CONNERR, None)
         chksum = sum(payload)
 
@@ -2099,6 +2119,7 @@ def recvdata2(maxbufsize = 8192):
         # --- Receive MSX checksum ---
         rc, msxsum = SPI_ByteTransfer()
         if rc != RC_SUCCESS:
+            print(f"recvdata2: reading the MSX checksum failed rc={rc:#04x}")
             return (RC_CONNERR, None)
 
         # --- Send local checksum back ---
@@ -2111,6 +2132,13 @@ def recvdata2(maxbufsize = 8192):
             # - DO NOT advance expected_block_index
             # - DO NOT do status handshake
             # MSX will detect mismatch and resend this block.
+            # Logged because it used to be silent: after GLOBALRETRIES failed
+            # resends the MSX gives up with "Disk error writing" while this
+            # loop is still waiting for a header, and the next command's bytes
+            # then fail the block-index check - so a real checksum problem only
+            # ever showed up as "dskiowrs: checksum error" with no cause.
+            print(f"recvdata2: checksum mismatch, block {block_index}, {length} bytes, "
+                  f"{'burst' if burst else 'polled'}: MSX {msxsum:#04x}, Pi {local_sum:#04x} - MSX resends")
             continue
 
         # Checksums match: commit block
@@ -2135,9 +2163,9 @@ def recvdata2(maxbufsize = 8192):
 
         # Expect READY_ACK from MSX
         rc, ack = SPI_ByteTransfer()
-        if rc != RC_SUCCESS:
-            return (RC_HANDSHAKEERR, None)
-        if ack != READY_ACK:
+        if rc != RC_SUCCESS or ack != READY_ACK:
+            print(f"recvdata2: status handshake failed after block {block_index} "
+                  f"(rc={rc:#04x}, got {ack!r}, want READY_ACK {READY_ACK:#04x})")
             return (RC_HANDSHAKEERR, None)
 
         # If this was the last block, we're done
