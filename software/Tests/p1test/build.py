@@ -25,9 +25,10 @@
 # SOFTWARE.
 # ------------------------------------------------------------------------------
 
-"""Assemble p1test.asm with zmac and pad it to 40 KB with the test pattern.
+"""Assemble p1test.asm with zmac and pad it to 40 KB with the test pattern,
+and assemble p1w.asm (MSX-DOS 1 page-1 write/read test) as is.
 
-    python3 build.py [path/to/zmac(.exe)]   ->  P1TEST.COM next to this file
+    python3 build.py [path/to/zmac(.exe)]   ->  P1TEST.COM, P1W.COM next to this file
 """
 import subprocess
 import sys
@@ -49,3 +50,15 @@ for a in range(PADSTART, PADEND):
     image[a-ORG] = (a & 0xFF) ^ (a >> 8) ^ 0xA5
 (HERE/'P1TEST.COM').write_bytes(image)
 print(f'P1TEST.COM {len(image)} bytes (pattern {PADSTART:04X}-{PADEND-1:04X})')
+
+# P1W.COM: code only, up to the last assembled byte.
+with tempfile.TemporaryDirectory() as tmp:
+    subprocess.run([zmac, '--oo', 'hex', '--od', tmp, str(HERE/'p1w.asm')], check=True)
+    image, end = bytearray(0x3E00 - ORG), ORG
+    for line in (Path(tmp)/'p1w.hex').read_text().split():
+        n, addr, kind = int(line[1:3], 16), int(line[3:7], 16), int(line[7:9], 16)
+        if kind == 0:
+            image[addr-ORG:addr-ORG+n] = bytes.fromhex(line[9:9+2*n])
+            end = max(end, addr + n)
+(HERE/'P1W.COM').write_bytes(image[:end-ORG])
+print(f'P1W.COM {end-ORG} bytes')
