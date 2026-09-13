@@ -78,7 +78,10 @@ RC_OUTOFSYNC   EQU $E5
 ; 0..4 are DSKIO_SECTINFO's, 5..7 are MSXPI_GETSTASH's, and everything from
 ; UNAPI_WRK up belongs to the Ethernet UNAPI driver appended at the end of
 ; this ROM - see asm-common/include/unapi_wrk.inc.
-MYSIZE		equ	UNAPI_WRKEND+512	; private sector buffer follows UNAPI work area
+; No private sector buffer: page-1 sectors are staged through the kernel's
+; $SECBUF (see DSKIO_BUFFER). 512 more bytes here left a Panasonic FS-A1F
+; below its A1 Cockpit's HIMEM >= D200h check ("not enough memory" at boot).
+MYSIZE		equ	UNAPI_WRKEND	; Size of environment
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -250,18 +253,15 @@ DSKIO_WRITE_STAGED:
 DSKIO_WRITE_ERR:
         jp      DSKIO_ERR1
 
-; Never use the kernel's shared SECBUF as scratch: another disk kernel may
-; retain FAT/validation data there across a call into this driver.
-; Return DE = our private 512-byte buffer; preserve HL and BC.
+; Return DE = the kernel's $SECBUF, which the DOS1 kernel documents as usable
+; by the disk driver; preserve everything else. Only a caller buffer in page 1
+; is staged, so the buffer is never also the caller's own buffer (page 3).
+; The MSX-DOS1 kernel only allocates $SECBUF; Nextor fills it for boot and
+; partition work, always as a direct target, never around a page-1 transfer
+; through a legacy driver. Verified: Nextor SD <-> MSXPi COPY and FS-A1WSX
+; internal floppy <-> MSXPi COPY, both directions, byte-identical.
 DSKIO_BUFFER:
-        push    hl
-        push    bc
-        call    GETWRK
-        ld      bc,UNAPI_WRKEND
-        add     hl,bc
-        ex      de,hl
-        pop     bc
-        pop     hl
+        ld      de,($SECBUF)
         ret
 
 ; Copy one staged sector to/from page 1. Only called for a page-1 caller
