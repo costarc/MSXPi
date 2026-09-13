@@ -9,6 +9,8 @@ pcopy m:RASTRO.BAS
 pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
 pcopy m:TESTDIR.BAS
+pcopy m:Telnet.com
+pcopy m:Telnetf.com
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:msxarch.com
