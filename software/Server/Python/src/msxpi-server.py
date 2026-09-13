@@ -298,7 +298,8 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # can misidentify unusual/hand-rolled ROMs - good enough for the common
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
-                            patch_bank_switches, PATCH_WINDOWS)
+                            patch_bank_switches, PATCH_WINDOWS,
+                            neutralise_rom_writes)
 
 # Handler addresses the MSX will have relocated its resident bank-switch code
 # to. The client sends its own with the selection so the two sides cannot
@@ -3686,6 +3687,16 @@ def msxarchive(parms = None):
                     return reject(buf)
 
                 if len(buf) <= PLAIN_ROM_MAX_SIZE:
+                    # The MSX runs the image from RAM, where stores into the
+                    # ROM window succeed instead of being discarded - see
+                    # neutralise_rom_writes in mapper_detect.py.
+                    buf, nstore = neutralise_rom_writes(buf)
+                    print(f"{filename}: neutralised {nstore} stores into ROM")
+                    # An 8KB cartridge decodes only 13 address bits, so the
+                    # image also appears at 6000h; FROGGER.ROM jumps there and
+                    # showed a black screen when only 4000h was loaded.
+                    if len(buf) == 0x2000:
+                        buf = buf + buf
                     header = build_rom_header(MAPPER_PLAIN, 0, 0, len(buf))
                 else:
                     mapper_type, bank_size_kb = detect_mapper(buf)

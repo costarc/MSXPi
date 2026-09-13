@@ -229,64 +229,6 @@ static int LoadRepositoryList(void) {
     return count;
 }
 
-// ---------------------------------------------------------------------------
-// neutraliseRomWrites
-//
-// A cartridge ROM is read-only: any store whose target address falls inside
-// the cartridge window is silently discarded by the hardware. Because this
-// loader runs the image from RAM instead, those same stores SUCCEED and
-// overwrite the game's own code.
-//
-// GOONIES.ROM is a worked example - it does, at 0x401F:
-//     ld   hl,0C9E1h
-//     ld   (0411Ch),hl      ; a no-op on a real cartridge
-// which in RAM replaces the DJNZ at 0x411C with POP HL / RET and hangs the
-// game with a blank screen. The same ROM runs correctly in openMSX's own
-// cartridge slot, where the write is discarded.
-//
-// Replacing these instructions with NOPs reproduces the hardware behaviour
-// exactly; it is not a heuristic patch. Only absolute-addressed stores can be
-// found this way - indirect stores through HL/IX/IY cannot be identified
-// statically, so this does not make every ROM safe, only the common case.
-// ---------------------------------------------------------------------------
-static void neutraliseRomWrites(uint8_t* base, uint16_t scanLen,
-                                uint16_t lo, uint16_t hi) {
-    uint16_t i = 0;
-
-    while (i + 3 <= scanLen) {
-        uint8_t  op    = base[i];
-        uint8_t  len   = 0;
-        uint16_t addr  = 0;
-
-        if (op == 0x32 || op == 0x22) {              // ld (nn),a / ld (nn),hl
-            addr = (uint16_t)base[i+1] | ((uint16_t)base[i+2] << 8);
-            len  = 3;
-        }
-        else if (op == 0xED && i + 4 <= scanLen) {   // ld (nn),bc/de/hl/sp
-            uint8_t sub = base[i+1];
-            if (sub == 0x43 || sub == 0x53 || sub == 0x63 || sub == 0x73) {
-                addr = (uint16_t)base[i+2] | ((uint16_t)base[i+3] << 8);
-                len  = 4;
-            }
-        }
-        else if ((op == 0xDD || op == 0xFD) && i + 4 <= scanLen) {  // ld (nn),ix/iy
-            if (base[i+1] == 0x22) {
-                addr = (uint16_t)base[i+2] | ((uint16_t)base[i+3] << 8);
-                len  = 4;
-            }
-        }
-
-        if (len != 0 && addr >= lo && addr < hi) {
-            uint8_t j;
-            for (j = 0; j < len; j++) base[i+j] = 0x00;   // nop
-            i += len;
-        }
-        else {
-            i++;
-        }
-    }
-}
-
 uint8_t loadrom(uint16_t totalSize) {
     uint8_t  rc;
     uint8_t  index = 1;
@@ -308,11 +250,11 @@ uint8_t loadrom(uint16_t totalSize) {
         }
     }
 
-    // Undo the difference between "cartridge in a slot" and "image in
-    // RAM" - see neutraliseRomWrites above.
-    neutraliseRomWrites(PAGE1ADDRESS, totalSize,
-                        (uint16_t)PAGE1ADDRESS,
-                        (uint16_t)PAGE1ADDRESS + totalSize);
+    // Stores into the ROM's own window (no-ops on a cartridge, corruption in
+    // RAM) are neutralised by msxpi-server before sending - see
+    // neutralise_rom_writes in mapper_detect.py. The linear scan that used to
+    // run here also NOPed data that looked like a store and hung GALAGA.
+    (void)totalSize;
 
     Print("Game loaded\n");
     return rc;
@@ -701,14 +643,6 @@ static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
         PutPN_direct(1, storageSegments[s]);
         patchWindow(PAGE1ADDRESS, 0x6000, 0x6FFF, (void (*)(void))RESIDENT_PAGE1_ADDR);
         patchWindow(PAGE1ADDRESS, 0x7000, 0x7FFF, (void (*)(void))RESIDENT_PAGE2_ADDR);
-        // Stray absolute stores into the cartridge window are no-ops on real
-        // hardware but corrupt the image when it lives in RAM. Run this AFTER
-        // the patchWindow() calls above, so the genuine bank-switch writes have
-        // already become CALLs and are no longer recognised as stores.
-        // DISABLED pending investigation: on data-heavy MegaROM banks this
-        // scan produces false positives (a 32KB target window vs a 16KB
-        // segment of mostly data), NOPing real data.
-        // neutraliseRomWrites(PAGE1ADDRESS, 0x4000, 0x4000, 0xC000);
     }
 }
 
@@ -1019,14 +953,6 @@ static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
         patchWindow(PAGE1ADDRESS, 0x6000, 0x6000, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
         patchWindow(PAGE1ADDRESS, 0x8000, 0x8000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
         patchWindow(PAGE1ADDRESS, 0xA000, 0xA000, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
-        // Stray absolute stores into the cartridge window are no-ops on real
-        // hardware but corrupt the image when it lives in RAM. Run this AFTER
-        // the patchWindow() calls above, so the genuine bank-switch writes have
-        // already become CALLs and are no longer recognised as stores.
-        // DISABLED pending investigation: on data-heavy MegaROM banks this
-        // scan produces false positives (a 32KB target window vs a 16KB
-        // segment of mostly data), NOPing real data.
-        // neutraliseRomWrites(PAGE1ADDRESS, 0x4000, 0x4000, 0xC000);
     }
 }
 
@@ -1038,14 +964,6 @@ static void patchAllStorageSegmentsAscii8(uint16_t segmentCount) {
         patchWindow(PAGE1ADDRESS, 0x6800, 0x6800, (void (*)(void))RESIDENT_8K_WIN2_ADDR);
         patchWindow(PAGE1ADDRESS, 0x7000, 0x7000, (void (*)(void))RESIDENT_8K_WIN3_ADDR);
         patchWindow(PAGE1ADDRESS, 0x7800, 0x7800, (void (*)(void))RESIDENT_8K_WIN4_ADDR);
-        // Stray absolute stores into the cartridge window are no-ops on real
-        // hardware but corrupt the image when it lives in RAM. Run this AFTER
-        // the patchWindow() calls above, so the genuine bank-switch writes have
-        // already become CALLs and are no longer recognised as stores.
-        // DISABLED pending investigation: on data-heavy MegaROM banks this
-        // scan produces false positives (a 32KB target window vs a 16KB
-        // segment of mostly data), NOPing real data.
-        // neutraliseRomWrites(PAGE1ADDRESS, 0x4000, 0x4000, 0xC000);
     }
 }
 
@@ -1139,6 +1057,48 @@ void launchGame(void) {
         and #0xFC
         or c
         out (#0xA8), a
+
+        ; Give the game the hook table a cartridge sees. MSX-DOS and the MSXPi
+        ; driver leave ~34 hooks as RST 30h inter-slot calls into their own
+        ; ROM (F7 01 xx here); a cold cartridge boot has only the BIOS and
+        ; SUB-ROM ones. Games calling BIOS routines that pass through those
+        ; hooks detoured into the MSXPi ROM - FROGGER stayed black, VALLEY
+        ; stuck on its logo. Every RST 30h hook whose slot is neither the main
+        ; BIOS slot (EXPTBL) nor the SUB-ROM slot (EXBRSA) becomes RET.
+        ld hl, #0xFD9A
+    3$:
+        ld a, (hl)
+        cp #0xF7
+        jr nz, 4$
+        inc hl
+        ld a, (hl)
+        dec hl
+        ld b, a
+        ld a, (#0xFCC1)          ; EXPTBL: main BIOS slot
+        cp b
+        jr z, 4$
+        ld a, (#0xFAF8)          ; EXBRSA: SUB-ROM slot (0 on MSX1)
+        cp b
+        jr z, 4$
+        ld (hl), #0xC9
+    4$:
+        ld de, #5
+        add hl, de
+        ld a, h
+        cp #0xFF
+        jr nz, 3$
+        ld a, l
+        cp #0xCF                 ; up to and including EXTBIO at FFCAh
+        jr c, 3$
+
+        ; Put the screen into the state a cartridge boots in: SCREEN 1, 32
+        ; columns (INIT32), as the BIOS does before calling a cartridge INIT.
+        ; MSX-DOS "mode 80" leaves SCREEN 0 at 80 columns, and the MSX2 BIOS
+        ; VRAM routines then keep selecting VRAM page R#14=1 - every write
+        ; the game made through them landed above 4000h and was never shown,
+        ; so FROGGER.ROM ran with a black screen. Page 0 is the BIOS by now
+        ; and the hooks INIT32 passes through have been cleared above.
+        call #0x006F
 
         ; Read entry vector from Page 1 (0x4002) and jump with DI
         ld hl, (#0x4002)
