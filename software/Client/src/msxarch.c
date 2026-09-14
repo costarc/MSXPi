@@ -192,6 +192,35 @@ static void SetFcbFilename(FCB* fcb, const char* filename) {
     }
 }
 
+// msxarch.ini may also hold settings, one per line as name=value. They are
+// not repositories and are left out of the menu.
+//     rebootAfterRomLoad=yes   ask the Pi to shut down once a game is loaded
+static bool rebootAfterRomLoad;
+
+static char lowerChar(char c) {
+    return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
+}
+
+// If line is "name=value" for the given lower-case name, return the value,
+// else NULL. Case-insensitive; spaces around '=' are allowed.
+static const char* iniSetting(const char* line, const char* name) {
+    while (*name) {
+        if (lowerChar(*line) != *name) return NULL;
+        line++; name++;
+    }
+    while (*line == ' ') line++;
+    if (*line != '=') return NULL;
+    line++;
+    while (*line == ' ') line++;
+    return line;
+}
+
+static bool iniYes(const char* value) {
+    return lowerChar(value[0]) == 'y' && lowerChar(value[1]) == 'e' &&
+           lowerChar(value[2]) == 's' &&
+           (value[3] == '\0' || value[3] == ' ' || value[3] == '\t');
+}
+
 static int LoadRepositoryList(void) {
     int count = 0;
     int col = 0;
@@ -213,8 +242,13 @@ static int LoadRepositoryList(void) {
         if (c == '\r') continue;
 
         if (c == '\n') {
+            const char* value;
             repoList[count][col] = '\0';
-            if (col > 0 && repoList[count][0] != ';' && repoList[count][0] != '#') {
+            value = iniSetting(repoList[count], "rebootafterromload");
+            if (value != NULL) {
+                rebootAfterRomLoad = iniYes(value);
+            }
+            else if (col > 0 && repoList[count][0] != ';' && repoList[count][0] != '#') {
                 count++;
             }
             col = 0;
@@ -1333,6 +1367,13 @@ int main(void) {
                 return 1;
             }
             else {
+                // msxarch.ini rebootAfterRomLoad=yes. The game is fully in RAM
+                // and needs nothing more from the Pi. Use the no-reply form so
+                // the launch path does not perform another receive/print after
+                // the ROM image has already been staged.
+                if (rebootAfterRomLoad) {
+                    SendCommandToMSXPi("shut nowait", false);
+                }
                 launchGame();
             }
         }

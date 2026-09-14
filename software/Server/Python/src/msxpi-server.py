@@ -3291,13 +3291,29 @@ def reboot(parm=None):
         sendmultiblock(b'Command not supported by this platform')
         
 def shut(parm=None):
+    """Shut the Raspberry Pi down. Sent by "p shut", and by msxarch once a game
+    is fully loaded, right before it starts the game, when msxarch.ini has
+    rebootAfterRomLoad=yes.
+
+    For interactive "p shut" the reply goes out FIRST and the MSX waits for it,
+    so the exchange is complete before anything else happens.  msxarch uses
+    "shut nowait" because the game is already staged and the launch path should
+    not perform another receive/print before jumping into the ROM. Raspberry Pi
+    ONLY: on any other host, the no-reply form is a logged no-op and the
+    interactive form returns an unsupported-platform message."""
     #print("pshut()")
-    if hostType == "RaspberryPi":
-        print("Shutting down Raspberry Pi")
-        os.system("sudo shutdown -h now")
+    no_reply = (parm or "").strip().lower() in ("nowait", "noack", "quiet")
+    if hostType == "RaspberryPi" and platform.system() == "Linux":
+        if not no_reply:
+            sendmultiblock(b"OK")
+        print("Shutting down Raspberry Pi in 2 seconds")
+        subprocess.Popen("sleep 2; sudo shutdown -h now", shell=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b'Command not supported by this platform')
+        if not no_reply:
+            sendmultiblock(b'Command not supported by this platform')
 
 def button_handler(channel):
     start = time.time()
