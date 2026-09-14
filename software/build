@@ -20,7 +20,7 @@ python3 asm-common/transport/generate.py --check || exit 1
 buildClientCommands="${buildClientCommands:-yes}"
 buildBIOS="${buildBIOS:-yes}"
 buildLoadrom="${buildLoadrom:-yes}"
-buildOpenMSXConfig="${buildOpenMSXConfig:-yes}"
+buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
 # Bump the BuildId in the ROM sources and the server before compiling? Off
@@ -34,7 +34,7 @@ updateVersions="${updateVersions:-no}"
 # overwrites - but doing that every time litters
 # openMSX/share/{extensions,systemroms/extensions} with a pair per build, which
 # then has to be hand-pruned before a release.
-releaseOpenMSXRom="${releaseOpenMSXRom:-yes}"
+releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 
 # --- what it is called -------------------------------------------------------
 # The ROM carries its version: target/ keeps the ROM of every release beside

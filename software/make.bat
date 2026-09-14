@@ -4,7 +4,7 @@ python asm-common\transport\generate.py --check
 IF ERRORLEVEL 1 EXIT /B 1
 
 SET BASEDIR=.
-SET FLOPPYA=..\..\..\MSX\MSXPi\diska22
+SET FLOPPYA=..\..\..\MSX\MSXPi\FloppyA
 SET TARGETDIR=target
 SET HEX2BINDIR="..\..\..\MSX\MSX-C\WorkingFolder\Tools\Hex2Bin\Hex2bin Windows"
 SET HEX2BIN=%HEX2BINDIR%\hex2bin.exe 
