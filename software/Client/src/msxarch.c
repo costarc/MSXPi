@@ -229,6 +229,55 @@ static int LoadRepositoryList(void) {
     return count;
 }
 
+// Transfer progress bar, on the cursor line:
+//     [##########..........................]
+// The block count is known before the transfer from the ROM header, so the
+// bar has a fixed width whatever the ROM size. It is drawn once through the
+// BIOS; printing its "[" again leaves the VDP write address on the first
+// cell. From then on each new cell is one OUT (98h),'#' - the VDP advances the
+// address itself - so the transfer loop makes no BIOS calls at all.
+#define CSRY    0xF3DC      // cursor row, 1-based
+#define LINLEN  0xF3B0      // current text width
+
+static uint16_t progTotal;      // blocks expected
+static uint16_t progDone;       // blocks received
+static uint8_t  progRow;
+static uint8_t  progWidth;      // bar cells
+static uint8_t  progCells;      // cells filled
+
+static void progressStart(uint16_t totalBlocks) {
+    uint8_t i;
+    progTotal = totalBlocks ? totalBlocks : 1;
+    progDone  = 0;
+    progCells = 0;
+    progWidth = (*(uint8_t*)LINLEN > 40) ? 60 : 28;
+    progRow   = *(uint8_t*)CSRY - 1;
+    PrintChar('[');
+    for (i = 0; i < progWidth; i++)
+        PrintChar('.');
+    PrintChar(']');
+    Locate(0, progRow);
+    PrintChar('[');
+}
+
+static void progressDot(void) {
+    uint8_t cells;
+    if (progDone < progTotal)
+        progDone++;
+    // progDone * 60 stays within 16 bits up to 1092 blocks (8.7MB).
+    cells = (uint8_t)((progDone * progWidth) / progTotal);
+    while (progCells < cells) {
+        OutPort(0x98, '#');
+        progCells++;
+    }
+}
+
+// Put the cursor on the line below the bar, so later messages do not
+// overwrite it.
+static void progressEnd(void) {
+    Locate(0, progRow + 1);
+}
+
 uint8_t loadrom(uint16_t totalSize) {
     uint8_t  rc;
     uint8_t  index = 1;
@@ -242,13 +291,14 @@ uint8_t loadrom(uint16_t totalSize) {
     if (rc == RC_SUCCESS) {
         uint8_t* romaddress = PAGE1ADDRESS;
         while (1) {
-            pprintf("Reading game block ", index++); pprintf(" (", block_size); pprints(")", "\n");
             rc = RECVDATA_ONEBLOCK(romaddress, &block_size, block_size);
+            progressDot();
             romaddress += block_size;
             if (rc != RC_READY)
                 break;
         }
     }
+    progressEnd();
 
     // Stores into the ROM's own window (no-ops on a cartridge, corruption in
     // RAM) are neutralised by msxpi-server before sending - see
@@ -474,6 +524,7 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
         PutPN_direct(2, mapperCurrentSegment);
         mapperLoadRc = RECVDATA_ONEBLOCK(PAGE2ADDRESS + mapperCurrentOffset,
                                          &mapperReceivedSize, mapperBlockSize);
+        progressDot();
 
         if (mapperLoadRc != RC_READY && mapperLoadRc != RC_SUCCESS) return RC_FAILED;
         if (mapperReceivedSize == 0) return RC_FAILED;
@@ -576,6 +627,11 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 // 8K game never uses, and ends below the MSX2 system variables at FAF5h.
 #define RESIDENT_CACHE0_ADDR  0xFA90
 #define RESIDENT_CACHE1_ADDR  0xFAB4
+// Window dispatcher for games that pick the register at run time, after the
+// page-2 cache (FAB4h + 12 x 3 = FAD8h). The 16K handlers also start at FAD8h,
+// but a game loads either those or the 8K ones, never both.
+#define RESIDENT_8K_DISPATCH_ADDR 0xFAD8
+#define RESIDENT_8K_DISPATCH_SIZE 16
 
 // The server patches the ROM's bank-switch writes into CALLs to our resident
 // handlers, so it has to know where they ended up. Derive the addresses from
@@ -591,14 +647,16 @@ static void appendHex4(char* dst, uint16_t v) {
 }
 
 static void buildSelection(char* out, const char* number) {
-    static const uint16_t addr[6] = {
+    // The seventh address is new: a server that knows only six ignores it.
+    static const uint16_t addr[7] = {
         RESIDENT_8K_WIN1_ADDR, RESIDENT_8K_WIN2_ADDR,
         RESIDENT_8K_WIN3_ADDR, RESIDENT_8K_WIN4_ADDR,
-        RESIDENT_PAGE1_ADDR,   RESIDENT_PAGE2_ADDR
+        RESIDENT_PAGE1_ADDR,   RESIDENT_PAGE2_ADDR,
+        RESIDENT_8K_DISPATCH_ADDR
     };
     uint8_t i = 0, j;
     while (number[i]) { out[i] = number[i]; i++; }
-    for (j = 0; j < 6; j++) {
+    for (j = 0; j < 7; j++) {
         out[i++] = ' ';
         appendHex4(out + i, addr[j]);
         i += 4;
@@ -695,6 +753,32 @@ static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
 // every pass and the music still ran at 2.7 steps a second against the
 // cartridge's 60. Hence PAIR_CACHE_ENTRIES 12.
 //
+// Entry: D = window 0-3, E = bank. Jumps to that window's handler entry
+// (RESIDENT_8K_BASE + 5 x window, each entry being push hl / ld l,n / jr) with
+// A = bank and HL restored, so the handler returns straight to the game.
+// HYDLIDE3.ROM selects windows through one routine,
+//     ld a,d / add a,a / add a,a / add a,a / add a,60h / ld h,a / di / ld (hl),e
+// which no LD (nn),A patch can reach; msxpi-server turns its first nine bytes
+// into di / call here. A and flags are not preserved - that routine reloads
+// both. COPIED to RESIDENT_8K_DISPATCH_ADDR: no absolute jumps.
+void ascii8Dispatch(void) __naked {
+    __asm
+        push hl
+        ld a, d
+        and #3
+        ld l, a
+        add a, a
+        add a, a
+        add a, l                ; 5 x window
+        add a, #0xC0            ; low byte of RESIDENT_8K_BASE
+        ld l, a
+        ld h, #0xF9             ; high byte of RESIDENT_8K_BASE
+        ld a, e
+        ex (sp), hl             ; restore HL, push the handler entry
+        ret
+    __endasm;
+}
+
 // Entry: A = bank, return address on the stack; all registers preserved.
 // This block is COPIED to RESIDENT_8K_BASE, so every jump must be relative.
 void ascii8Handlers(void) __naked {
@@ -898,6 +982,10 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
     }
 
     for (i = 0; i < RESIDENT_8K_SIZE; i++) dst[i] = src[i];
+
+    src = (uint8_t*)ascii8Dispatch;
+    dst = (uint8_t*)RESIDENT_8K_DISPATCH_ADDR;
+    for (i = 0; i < RESIDENT_8K_DISPATCH_SIZE; i++) dst[i] = src[i];
 }
 
 static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
@@ -953,6 +1041,7 @@ uint8_t loadMappedRom(RomHeader* hdr) {
     if (rc != RC_SUCCESS) return rc;
 
     rc = loadBanksIntoStorage(hdr->bankCount, hdr->bankSizeKB);
+    progressEnd();
     if (rc != RC_SUCCESS) {
         Print("Error loading ROM banks\n");
         freeMapperSegments(storageCount);
@@ -1088,6 +1177,7 @@ void launchGame(void) {
 }
 
 int main(void) {
+	Screen(0);
     Width(80);
 
     const unsigned char* items[MAX_REPOS + 1];
@@ -1207,6 +1297,18 @@ int main(void) {
                 sendQuit();
                 return 1;
             }
+            // For an accepted ROM the text after the header is the game's
+            // name (an older server sends none, which prints just "Loading").
+            Print("Loading ");
+            Print(romRejectReason);
+            pprintf("  (", (uint16_t)((romHeader.totalSize + 1023) >> 10));
+            Print("K)\n");
+            // Blocks are always 8KB - see loadrom and loadBanksIntoStorage.
+            if (romHeader.mapperType == MAPPER_PLAIN)
+                progressStart((uint16_t)((romHeader.totalSize + 8191) >> 13));
+            else
+                progressStart(romHeader.bankCount *
+                              (uint16_t)(romHeader.bankSizeKB / 8));
             if (romHeader.mapperType == MAPPER_PLAIN) {
                 if (romHeader.totalSize > 0x8000) {
                     Print("ROM too large for plain loading\n");

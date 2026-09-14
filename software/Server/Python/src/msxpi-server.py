@@ -51,6 +51,7 @@ import errno
 import select
 import base64
 import math
+import re
 from random import randint
 from fs import open_fs
 import threading
@@ -303,7 +304,8 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # can misidentify unusual/hand-rolled ROMs - good enough for the common
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
-                            patch_bank_switches, PATCH_WINDOWS,
+                            patch_bank_switches, patch_indexed_switches,
+                            PATCH_WINDOWS,
                             neutralise_rom_writes, MAPPER_KONAMI_SCC,
                             load_romdb, romdb_lookup)
 
@@ -334,7 +336,15 @@ def patch_for_msx(buf, mapper_type, handlers):
     hs = handlers_for(mapper_type, handlers)
     if not hs:
         return buf, 0
-    return patch_bank_switches(buf, mapper_type, hs)
+    buf, n = patch_bank_switches(buf, mapper_type, hs)
+    # A seventh address is the MSX's window dispatcher, for games that compute
+    # the register instead of storing to it directly (HYDLIDE3.ROM).
+    if len(handlers) >= 7:
+        buf, m = patch_indexed_switches(buf, mapper_type, handlers[6])
+        if m:
+            print(f"patched {m} computed window selects")
+        n += m
+    return buf, n
 
 
 KONAMI_SCC_UNIQUE_ADDRS = (0x5000, 0x9000, 0xB000)
@@ -3648,6 +3658,23 @@ def msxarchive(parms = None):
 
     ROM_FILE_EXTENSIONS = (".rom", ".zip", ".lzh", ".pma", ".arj")
 
+    # File size in KB per file name, shown next to each game in the listing.
+    # Every source finds sizes its own way (see fetch_file_list); a name with
+    # no entry has not been looked up yet, None means the size is unknown.
+    sizes = {}
+
+    def _listing_size_kb(text):
+        """KB from the size column of an HTTP directory listing: Apache shows
+        "128K" / "1.2M", nginx the byte count, Python's http.server nothing."""
+        m = re.fullmatch(r"(\d+(?:\.\d+)?)([KMG]?)", text.strip(), re.I)
+        if not m:
+            return None
+        n = float(m.group(1))
+        unit = m.group(2).upper()
+        if unit == "":
+            return math.ceil(n / 1024)
+        return math.ceil(n * {"K": 1, "M": 1024, "G": 1024 * 1024}[unit])
+
     def fetch_file_list(url: str, index: str):
         """Fetch file list from the given URL and return filenames without extensions.
         Skip header (first line) and empty lines."""
@@ -3660,6 +3687,11 @@ def msxarchive(parms = None):
                 return RC_FAILED, f"Failed to list directory: {e}"
             files = sorted(f for f in entries
                             if f.lower().endswith(ROM_FILE_EXTENSIONS))
+            for f in files:
+                try:
+                    sizes[f] = math.ceil(os.path.getsize(os.path.join(url, f)) / 1024)
+                except OSError:
+                    sizes[f] = None
             return RC_SUCCESS, files
 
         CACHE_TTL_SECONDS = 3600
@@ -3703,6 +3735,18 @@ def msxarchive(parms = None):
                 parser.feed(dir_response.text)
                 entries = [unquote(h) for h in parser.hrefs if h != '..' and not h.endswith('/')]
 
+                # Servers that show a size print it on the same line, after
+                # the link. It is kept as a second column so it survives the
+                # cache; the parsing loop below reads the last column.
+                listed = {}
+                for m in re.finditer(r'<a\s[^>]*href="([^"]+)"[^>]*>.*?</a>([^\n<]*)',
+                                     dir_response.text, re.I | re.S):
+                    cols = m.group(2).split()
+                    kb = _listing_size_kb(cols[-1]) if cols else None
+                    if kb is not None:
+                        listed[unquote(m.group(1))] = kb
+                entries = [f"{e} {listed[e]}" if e in listed else e for e in entries]
+
                 # Prepend a placeholder header line since the parsing loop
                 # below always skips line 0 (matches the plain-text index format).
                 lines = ["# directory listing"] + entries
@@ -3729,9 +3773,62 @@ def msxarchive(parms = None):
             if i == 0 or not line or line.startswith('#'):  # skip header + empty + comments
                 continue
             # Drop extension
-            name = line.split(' ')[0]
+            cols = line.split()
+            name = cols[0]
             files.append(name)
+            # 00index.txt ends each line with the size in KB ("div" for
+            # archives of many ROMs); a directory listing line carries it as
+            # the second column when the server showed one. Unknown sizes are
+            # asked for with HEAD when their page is shown - see size_label.
+            if len(cols) > 1 and cols[-1].isdigit():
+                sizes[name] = int(cols[-1])
+            elif len(cols) > 1:
+                sizes[name] = None
         return RC_SUCCESS,files
+
+    def size_label(name):
+        """"128K" / "12M", or blank when the size is unknown."""
+        kb = sizes.get(name)
+        if kb is None:
+            return ""
+        return f"{kb}K" if kb < 10000 else f"{kb // 1024}M"
+
+    def lookup_sizes(names):
+        """HEAD the files whose size no listing gave, only for the page being
+        shown - a request per file for a whole archive would take minutes."""
+        missing = [n for n in names if n not in sizes]
+        if not missing or is_local_path(url):
+            return
+        from concurrent.futures import ThreadPoolExecutor
+        from urllib.parse import urlsplit, urlunsplit
+
+        # On Windows "localhost" tries IPv6 (::1) first and falls back to IPv4
+        # after a delay, paid by every request: a page of 25 HEADs to a local
+        # IPv4-only http.server took 6 seconds. 127.0.0.1 skips that.
+        base = urlsplit(url)
+        if base.hostname == "localhost":
+            netloc = "127.0.0.1" + (f":{base.port}" if base.port else "")
+            base = base._replace(netloc=netloc)
+        base = urlunsplit(base).rstrip("/")
+
+        # One session keeps connections open between requests instead of
+        # connecting again for every file; pool sized to the worker count.
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=1, pool_maxsize=8)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        def head(name):
+            try:
+                r = session.head(f"{base}/{name}", timeout=3, allow_redirects=True)
+                n = int(r.headers.get("Content-Length", ""))
+                return name, math.ceil(n / 1024)
+            except Exception:
+                return name, None
+
+        with session, ThreadPoolExecutor(max_workers=8) as pool:
+            for name, kb in pool.map(head, missing):
+                sizes[name] = kb
 
     def paginate_files(files, rows=nrows, cols=ncolumns, col_width=None):
         """
@@ -3744,46 +3841,38 @@ def msxarchive(parms = None):
             return []
 
         # Compute max column width if not provided
+        max_index_len = len(str(len(files)))  # e.g. "650" → 3
         if col_width is None:
             max_name_len = max(len(f) for f in files)
-            max_index_len = len(str(len(files)))  # e.g. "650" → 3
-            col_width = max_name_len + max_index_len + 1  # +1 for colon
+            # +1 for the colon, +6 for " 1234K"
+            col_width = max_name_len + max_index_len + 1 + SIZE_FIELD
 
-        # Clamp column width to avoid overflow
-        if col_width > cols:
-            col_width = cols
+        # At least three columns: the size field would otherwise push a long
+        # name like GOODMSX1_0.999.2.ZIP down to two columns. Such names are
+        # truncated on screen only; selection still uses the full name.
+        col_width = min(col_width, cols // 3 - 1, cols)
 
         # Ensure at least one column
         cols_count = max(1, cols // (col_width + 1))  # +1 for spacing
         items_per_page = cols_count * rows
         total_pages = max(1, math.ceil(len(files) / items_per_page))
 
-        # Truncate filenames and add index
-        files = [f[:col_width] for f in files]
-        indexed = [f"{i+1}:{name}" for i, name in enumerate(files)]
-
+        # Pages hold 0-based file indices, laid out row by row; the text is
+        # made in get_page, once the sizes for that page are known.
         pages = []
         for p in range(total_pages):
             start = p * items_per_page
-            end = start + items_per_page
-            chunk = indexed[start:end]
-
-            # Pad chunk to fill the page
-            while len(chunk) < items_per_page:
-                chunk.append("".ljust(col_width))
-
-            page_lines = []
-            for r in range(rows):
-                row_items = []
-                for c in range(cols_count):
-                    idx = r * cols_count + c
-                    # Add one space after each column
-                    row_items.append(chunk[idx].ljust(col_width) + " ")
-                # Trim to exactly 'cols' width
-                page_lines.append("".join(row_items)[:cols].ljust(cols))
-            pages.append(page_lines)
-
+            pages.append((list(range(start, min(start + items_per_page, len(files)))),
+                          cols_count, col_width))
         return pages
+
+    SIZE_FIELD = 6  # " 1234K"
+
+    def format_entry(files, i, col_width):
+        prefix = f"{i+1}:"
+        room = max(1, col_width - len(prefix) - SIZE_FIELD)
+        return (prefix + files[i][:room].ljust(room) +
+                size_label(files[i]).rjust(SIZE_FIELD))
 
     def get_page(files, pages, page_number, width=ncolumns):
         """
@@ -3792,10 +3881,15 @@ def msxarchive(parms = None):
         """
         nonlocal stored_screen  # use nonlocal to modify outer variable
         total_pages = len(pages)
+        lines = []
         if 1 <= page_number <= total_pages:
-            lines = pages[page_number - 1]
-        else:
-            lines = []
+            indices, cols_count, col_width = pages[page_number - 1]
+            lookup_sizes([files[i] for i in indices])
+            entries = [format_entry(files, i, col_width) for i in indices]
+            for r in range(nrows):
+                row = entries[r * cols_count:(r + 1) * cols_count]
+                # Add one space after each column, trim to exactly 'width'
+                lines.append("".join(e.ljust(col_width) + " " for e in row)[:width])
     
         # Pad each line to the full width with spaces
         padded_lines = [line.ljust(width) for line in lines]
@@ -3898,7 +3992,7 @@ def msxarchive(parms = None):
                     fields = str(parm).split()
                     file_num = int(fields[0])
                     if len(fields) >= 7:
-                        msx_handlers = tuple(int(f, 16) for f in fields[1:7])
+                        msx_handlers = tuple(int(f, 16) for f in fields[1:8])
                 except (ValueError, TypeError, IndexError):
                     return reject(f"Invalid input: {cmd}")
 
@@ -3933,8 +4027,18 @@ def msxarchive(parms = None):
                     # The MSX runs the image from RAM, where stores into the
                     # ROM window succeed instead of being discarded - see
                     # neutralise_rom_writes in mapper_detect.py.
-                    buf, nstore = neutralise_rom_writes(buf)
+                    # A 16KB cartridge that decodes only 14 address bits appears
+                    # at 4000h AND 8000h, and may be built to run from 8000h:
+                    # ICEWORLD.ROM ("Mirrored" in softwaredb.xml) has INIT
+                    # 8010h, which pointed into empty RAM when only 4000h was
+                    # loaded. Its code is traced from 8000h, and the image is
+                    # sent twice to fill both pages.
+                    init = buf[2] | (buf[3] << 8) if len(buf) >= 4 else 0
+                    page2 = len(buf) == 0x4000 and 0x8000 <= init < 0xC000
+                    buf, nstore = neutralise_rom_writes(buf, 0x8000 if page2 else 0x4000)
                     print(f"{filename}: neutralised {nstore} stores into ROM")
+                    if page2:
+                        buf = buf + buf
                     # An 8KB cartridge decodes only 13 address bits, so the
                     # image also appears at 6000h; FROGGER.ROM jumps there and
                     # showed a black screen when only 4000h was loaded.
@@ -3963,7 +4067,11 @@ def msxarchive(parms = None):
                           f"{bank_size_kb}KB banks, {bank_count} banks")
                     header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
 
-                rc = sendmultiblock(header)
+                # The file name follows the header so the MSX can show what
+                # it is loading; a client that does not use it ignores it,
+                # like the reason text of a rejection.
+                name = filename.encode("ascii", "replace")[:64]
+                rc = sendmultiblock(header + name)
                 if rc != RC_SUCCESS:
                     return rc
                 rc = sendmultiblock(buf)

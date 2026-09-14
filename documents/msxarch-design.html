@@ -1,0 +1,243 @@
+<title>msxarch Loader Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#F5F6FA; --paper:#FFFFFF; --ink:#1B1E2B; --muted:#5A6076; --rule:#D9DCE8;
+  --accent:#3A3FD0; --accent-soft:#E6E7FB; --code-bg:#EEF0F7;
+  --ok:#1F7A4A; --warn:#9A6200; --bad:#B3261E;
+  --display:"Chakra Petch", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#12141D; --paper:#1A1D29; --ink:#E4E6F0; --muted:#9BA1B8; --rule:#2E3244;
+    --accent:#8C90FF; --accent-soft:#252A55; --code-bg:#20243A;
+    --ok:#5CC98C; --warn:#E0B050; --bad:#F08A80;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#12141D; --paper:#1A1D29; --ink:#E4E6F0; --muted:#9BA1B8; --rule:#2E3244;
+  --accent:#8C90FF; --accent-soft:#252A55; --code-bg:#20243A;
+  --ok:#5CC98C; --warn:#E0B050; --bad:#F08A80;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font:16px/1.6 var(--body);padding-inline:20px;padding-block:0 80px}
+.wrap{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:200px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:24px;align-self:start;padding-top:56px;font-size:13px}
+nav b{font:600 11px var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+nav ol{list-style:none;padding:0;margin:10px 0 0;display:grid;gap:6px}
+nav a{color:var(--muted);text-decoration:none}
+nav a:hover,nav a:focus-visible{color:var(--accent)}
+main{min-width:0;max-width:72ch}
+header{padding-block:56px 28px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:600 12px var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+h1{font:600 clamp(34px,5vw,48px)/1.1 var(--display);margin:8px 0 14px;text-wrap:balance}
+.lede{font-size:18px;color:var(--muted);margin:0}
+.meta{margin-top:18px;font:13px var(--mono);color:var(--muted)}
+h2{font:600 26px/1.25 var(--display);margin:56px 0 12px;text-wrap:balance;scroll-margin-top:20px}
+h2 .sec{color:var(--accent);margin-right:10px}
+h3{font:600 17px/1.35 var(--body);margin:30px 0 6px}
+p{margin:0 0 14px}
+code{font:.88em var(--mono);background:var(--code-bg);padding:1px 5px;border-radius:3px}
+pre{font:13px/1.55 var(--mono);background:var(--code-bg);padding:14px 16px;border-radius:4px;overflow-x:auto;margin:0 0 16px}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin:18px 0 22px}
+.flow div{background:var(--paper);padding:12px 14px;font-size:14px}
+.flow b{display:block;font:600 11px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:4px}
+.tbl{overflow-x:auto;margin:14px 0 20px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{font:600 11px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:2px solid var(--rule)}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+td code{white-space:nowrap}
+.memmap{font:12px var(--mono);border:1px solid var(--rule);margin:16px 0 20px;background:var(--paper)}
+.memmap div{display:grid;grid-template-columns:120px 1fr;border-bottom:1px solid var(--rule)}
+.memmap div:last-child{border-bottom:0}
+.memmap span{padding:7px 10px}
+.memmap span:first-child{color:var(--muted);border-right:1px solid var(--rule);font-variant-numeric:tabular-nums}
+.memmap .hl{background:var(--accent-soft)}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;margin:18px 0;color:var(--ink)}
+.pill{display:inline-block;font:600 11px var(--display);letter-spacing:.06em;padding:1px 8px;border-radius:10px;border:1px solid currentColor;white-space:nowrap}
+.ok{color:var(--ok)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
+.games{font-size:14px;color:var(--muted)}
+@media (max-width:820px){.wrap{grid-template-columns:1fr;gap:0} nav{display:none}}
+</style>
+
+<div class="wrap">
+<nav aria-label="Contents"><b>Contents</b>
+<ol>
+<li><a href="#pipeline">1 Pipeline</a></li>
+<li><a href="#identify">2 Identification</a></li>
+<li><a href="#runtime">3 Loading &amp; runtime</a></li>
+<li><a href="#patching">4 Patching engine</a></li>
+<li><a href="#cases">5 ROM cases</a></li>
+<li><a href="#status">6 Test status</a></li>
+<li><a href="#general">7 Generalising</a></li>
+<li><a href="#all">8 Toward every game</a></li>
+</ol></nav>
+
+<main>
+<header>
+<div class="eyebrow">MSXPi v1.6 · Design document</div>
+<h1>msxarch: loading cartridge ROMs into RAM</h1>
+<p class="lede">How the MSXPi server identifies a ROM, rewrites its bank switches, and how the MSX runs the result from memory-mapper RAM instead of a cartridge slot.</p>
+<div class="meta">branch fix/msxarch-1942 · msxarch.com 4867c04 · mapper_detect.py 07fdd4a</div>
+</header>
+
+<h2 id="pipeline"><span class="sec">1</span>Pipeline</h2>
+<p>msxarch is split so that each side does what it is good at. The Raspberry Pi has the whole ROM in memory and a fast CPU, so it does identification and patching. The MSX only stores blocks into RAM, installs small resident handlers, and jumps into the game.</p>
+<div class="flow">
+<div><b>MSX</b>msxarch.com lists ROMs from paths in <code>MSXARCH.INI</code>; user picks one</div>
+<div><b>Server</b>Fetch file (local or HTTP), look up SHA-1 in softwaredb.xml</div>
+<div><b>Server</b>Classify: plain, mapper type, or unsupported (fallback: detection)</div>
+<div><b>Server</b>Patch: bank switches → CALLs, or neutralise ROM self-writes</div>
+<div><b>MSX</b>Store image into mapper segments, relocate handlers to page 3</div>
+<div><b>MSX</b>Launch trampoline: INIT, then header start or H.STKE</div>
+</div>
+<p>The MSX sends the addresses of its own handlers with the selection, so the server patches CALLs to exactly the addresses the client will use; client and server cannot drift apart. An old client that sends none gets <code>DEFAULT_HANDLERS</code>.</p>
+
+<h2 id="identify"><span class="sec">2</span>ROM identification</h2>
+<p>Identification decides everything downstream: which windows get patched and how the MSX lays out memory. A wrong type means every switch goes to the wrong window, so the design puts an authoritative source first and heuristics last.</p>
+
+<h3>Layer 1 — openMSX software database (authority)</h3>
+<p><code>share/softwaredb.xml</code> from the openMSX fork is indexed by SHA-1 of the whole ROM (<code>load_romdb</code>, a regex scan because it runs on a Pi). Location comes from <code>ROMDB</code> in msxpi.ini; a URL is cached locally and refreshed every <code>ROMDB_CACHE_DAYS</code>, and a failed refresh keeps the cached copy.</p>
+<div class="tbl"><table>
+<thead><tr><th>openMSX type</th><th>msxarch class</th><th>Bank size</th></tr></thead>
+<tbody>
+<tr><td><code>normal</code> <code>mirrored</code> <code>page12</code> <code>mirrored4000</code> <code>0x4000</code> <code>8kb</code> <code>16kb</code></td><td>Plain ROM</td><td>—</td></tr>
+<tr><td><code>konami</code></td><td>Konami4</td><td>8 KB</td></tr>
+<tr><td><code>konamiscc</code></td><td>Konami SCC (server-internal; MSX is told Konami)</td><td>8 KB</td></tr>
+<tr><td><code>ascii8</code> <code>ascii8sram2</code> <code>ascii8sram8</code></td><td>ASCII8 (SRAM not emulated)</td><td>8 KB</td></tr>
+<tr><td><code>ascii16</code> <code>ascii16sram2</code> <code>ascii16sram8</code></td><td>ASCII16 (SRAM not emulated)</td><td>16 KB</td></tr>
+<tr><td>anything else</td><td>Unsupported — rejected with the mapper name</td><td>—</td></tr>
+</tbody></table></div>
+
+<h3>Layer 2 — detection (fallback only)</h3>
+<p>For ROMs the database doesn't list, <code>detect_mapper</code> counts every <code>LD (nn),A</code> target (<code>32 lo hi</code>) and runs an ordered chain on exact addresses:</p>
+<pre>9000h present              → Konami SCC   (only SCC games write it, 12–26 times)
+8000h AND A000h            → Konami4
+6800h or 7800h             → ASCII8
+5000h / 6000h / 7000h      → ASCII16      (owns no address of its own: elimination)</pre>
+<p>If that finds nothing, a repetition heuristic takes over: an address inside a window written at least 8 times (<code>REPEAT_MIN</code>) is a genuine register, a coincidence appears once or twice. BUBBLE writes 7FF8h 133 times and ISHTAR 77FFh 97 times without ever touching an exact address. Both 8K halves of a 16K group in use means ASCII8; a single repeated window means ASCII16 (ANDROGYN writes only 77FFh).</p>
+<p class="note"><strong>Detection is exact, patching uses ranges, on purpose.</strong> In detection one false hit changes the answer for the entire ROM, so specificity wins; widening the first test to ranges reclassified 23 of 33 megaROMs as ASCII8. In patching the type is already known, a missed switch is fatal and a stray patch is local, so coverage wins. Against the 33 test megaROMs the strict chain agrees with softwaredb.xml on 32; SUPERLOA uses an unsupported mapper and is correctly left unrecognised.</p>
+
+<h2 id="runtime"><span class="sec">3</span>Loading and runtime on the MSX</h2>
+<p>A cartridge switches banks by decoding a write to a register. In RAM there is no such decoder, so msxarch replaces each write with a call to a handler that remaps memory-mapper segments (ports FCh–FFh).</p>
+
+<h3>The 8K problem and the pair cache</h3>
+<p>The MSX memory mapper works in 16 KB pages; Konami and ASCII8 games switch 8 KB banks, so one 16 KB page can hold any combination of two banks. msxarch builds a composite segment for each (low bank, high bank) pair the game actually uses:</p>
+<ul>
+<li>Each 16 KB page (4000h, 8000h) has a cache of up to 12 segments (<code>PAIR_CACHE_ENTRIES</code>), allocated after the ROM segments.</li>
+<li>First use of a pair copies both 8 KB banks into a victim segment with two <code>LDIR</code>s; later uses are a single <code>OUT (FDh)/(FEh)</code>, which is cartridge speed.</li>
+<li>Nemesis cycles through 10 pairs during music and the title; an 8-entry cache thrashed and played at a crawl, 12 entries play at 59 switches per second with no copies.</li>
+</ul>
+
+<div class="memmap" role="table" aria-label="Resident area in page 3">
+<div><span>F975–F9B4</span><span>stubs and shared switch routine</span></div>
+<div class="hl"><span>F9B5</span><span>current bank per window (cur 0..3)</span></div>
+<div><span>F9B9 / F9BC</span><span>page 1 / page 2 pair records</span></div>
+<div class="hl"><span>F9C0 C5 CA CF</span><span>8K window handlers — CALL targets written by the server</span></div>
+<div><span>FA90 / FAB4</span><span>pair caches for page 1 / page 2</span></div>
+<div class="hl"><span>FAC0 / FAD8</span><span>16K handlers (ASCII16)</span></div>
+<div><span>FAF5 →</span><span>MSX2 system variables, left untouched</span></div>
+</div>
+<p>Handlers preserve every register and the interrupt state (read via <code>LD A,I</code>), restore both mapper ports, and only acknowledge the VDP when a copy was built.</p>
+
+<h3>Launch trampoline</h3>
+<p>Copied to C000h: it disables BIOS hooks (FD9Ah–FFCFh RST 30h → RET), calls INIT32, pushes a return address, and jumps to the header INIT at 4002h. Most games never return. Some (PENNANT, VALLEY2) return after registering <strong>H.STKE</strong> (FEDAh: <code>F7</code> slot addr), the BIOS convention for “start me after all cartridges initialised”. The return path checks for <code>F7</code> and jumps to the address at FEDCh; otherwise it idles with interrupts on.</p>
+
+<h2 id="patching"><span class="sec">4</span>Patching engine</h2>
+<h3>Mapper games: <code>patch_bank_switches</code></h3>
+<p>Every plausible <code>LD (nn),A</code> (<code>32 lo hi</code>) whose target lies in a bank-select window becomes <code>CALL handler</code> (<code>CD lo hi</code>) — same length, no relocation, A still carries the bank number.</p>
+<div class="tbl"><table>
+<thead><tr><th>Mapper</th><th>Patch windows</th><th>Exact registers</th></tr></thead>
+<tbody>
+<tr><td>Konami4</td><td><code>6000–7FFF</code> <code>8000–9FFF</code> <code>A000–BFFF</code></td><td>6000 8000 A000</td></tr>
+<tr><td>Konami SCC</td><td><code>5000–57FF</code> <code>7000–77FF</code> <code>9000–97FF</code> <code>B000–B7FF</code></td><td>5000 7000 9000 B000</td></tr>
+<tr><td>ASCII8</td><td><code>6000–67FF</code> <code>6800–6FFF</code> <code>7000–77FF</code> <code>7800–7FFF</code></td><td>6000 6800 7000 7800</td></tr>
+<tr><td>ASCII16</td><td><code>6000–6FFF</code> <code>7000–7FFF</code></td><td>6000 7000</td></tr>
+</tbody></table></div>
+
+<p>Byte pattern alone matches data too, so each site must pass <code>_plausible_bank_store</code>: a real switch follows an instruction that sets A or leaves it alone.</p>
+<div class="tbl"><table>
+<thead><tr><th>Predecessor</th><th>Examples</th><th>Rule</th></tr></thead>
+<tbody>
+<tr><td>Sets A</td><td><code>ld a,n</code> <code>ld a,(nn)</code> <code>ld a,r</code> <code>xor a</code> <code>inc a</code> <code>and n</code> <code>ld a,(ix+d)</code> <code>pop af</code></td><td>Accept</td></tr>
+<tr><td>Leaves A, distinctive</td><td><code>di</code> <code>ei</code> <code>push</code> chained <code>ld (nn),a</code> <code>jr +0</code></td><td>Accept</td></tr>
+<tr><td>Leaves A, common in data</td><td><code>ld rr,nn</code> <code>inc/dec rr</code> <code>ld (hl),r</code></td><td>Accept if the instruction before is plausible (recursive, depth 4)</td></tr>
+<tr><td>8-bit inc/dec B–L</td><td><code>inc l</code> <code>dec h</code></td><td>As above, <em>and</em> only when the target is an exact register</td></tr>
+</tbody></table></div>
+<p>After examining a store, the scanner steps over the whole 3-byte instruction instead of advancing one byte, so an operand can never be re-read as a new opcode.</p>
+
+<h3>Plain ROMs: <code>neutralise_rom_writes</code></h3>
+<p>A cartridge silently ignores writes into its own ROM; in RAM they succeed and corrupt the game. The server traces code from the header INIT/STATEMENT/DEVICE entries (following jumps, calls, BIOS-hook installs and pushed return addresses), then NOPs out traced stores whose target lies in the image — absolute stores and <code>ld hl,nn</code> followed by writes through (HL). Only traced instructions are touched, so data is never altered. 8 KB images are doubled so the 6000h mirror exists.</p>
+
+<h2 id="cases"><span class="sec">5</span>ROM-specific cases</h2>
+<p>There are <strong>no per-game patch lists</strong>. Every case below was fixed by changing a general rule, then re-checking all test ROMs so no other game changed. The ROM names are the evidence each rule is built on.</p>
+<div class="tbl"><table>
+<thead><tr><th>ROM</th><th>What went wrong</th><th>Rule that fixed it</th></tr></thead>
+<tbody>
+<tr><td>NEMESIS</td><td>PLAY SELECT text <code>32 FF 6D</code> patched to CALL; garbage on screen. Pair thrash made music slow</td><td>Plausible-predecessor check; 12-entry pair cache</td></tr>
+<tr><td>XEVIOUS</td><td><code>add a,32h / ld (ix+10h),a</code> read as <code>ld (DD77h),a</code></td><td>Plausibility; chained stores accepted</td></tr>
+<tr><td>METAL</td><td><code>ld (C632h),a / xor a</code> at 55F3h: operand re-scanned, became CALL F9CFh, SP=1010h crash</td><td>Step over whole instruction</td></tr>
+<tr><td>METAL, MGEAR, USAS</td><td>Boot switches after <code>ld hl,nn</code> / <code>inc hl</code> missed; fell back to DOS</td><td>Recursive weak predecessors</td></tr>
+<tr><td>PENNANT</td><td>SCC switches at 43ADh/43B3h after <code>inc l</code> unpatched; ran into data. Also INIT returns</td><td>Exact-register inc/dec rule; H.STKE trampoline</td></tr>
+<tr><td>TETRIS, METAL GEAR 2</td><td>Data such as <code>15 32 15 70</code> would be patched by a loose inc/dec rule</td><td>inc/dec limited to exact registers</td></tr>
+<tr><td>CONTRA, ANDROGYN</td><td>Exact-address patching patched 2/46 and 0/133 sites</td><td>Konami windows as ranges</td></tr>
+<tr><td>CONTRA, MANBOW, KV2, MG2</td><td>SCC switches sent to Konami4 windows</td><td>Separate Konami SCC type</td></tr>
+<tr><td>LODERUN</td><td>10 coincidental stores in 5000h range in a Konami4 ROM</td><td>5000h window only for SCC</td></tr>
+<tr><td>BUBBLE, ISHTAR</td><td>No exact register written; unrecognised</td><td>Repetition heuristic</td></tr>
+<tr><td>ALESTE, FANZONE2</td><td>Stray 5000h store classified as Konami</td><td>Reordered strict chain</td></tr>
+<tr><td>VALLEY2</td><td>INIT returns after setting H.STKE</td><td>H.STKE trampoline</td></tr>
+<tr><td>GOONIES</td><td><code>ld (411Ch),hl</code> and <code>res 6,(hl)</code> into own ROM hang it</td><td>Traced neutralisation incl. HL writes, hook tracing</td></tr>
+<tr><td>GALAGA, CASTLE, AVALANCH</td><td>Old byte scan destroyed 22/17/76 bytes of tables</td><td>Neutralise only traced code</td></tr>
+<tr><td>VALLEY</td><td>Rewrites its own dispatcher via HL</td><td>HL run tracking; pushed-return tracing</td></tr>
+<tr><td>FROGGER</td><td>Jumps into the 6000h mirror</td><td>Double 8 KB images</td></tr>
+<tr><td>VAMPIRE</td><td>Title “Akumajō” crashed the server console print</td><td>ASCII-safe title</td></tr>
+</tbody></table></div>
+
+<h2 id="status"><span class="sec">6</span>Test status (openMSX, compared with the real cartridge)</h2>
+<p><span class="pill ok">Working</span></p>
+<p class="games">Nemesis, 1942, METAL, MGEAR, USAS, VAMPIRE, CONTRA, VALLEY2, King's Valley 2 Gold, MANBOW, BILLIARD, BUBBLE, OUTRUN, TETRIS, PENGUIN, ARCTIC, XEVIOUS, ISHTAR, SRAMBO, ALESTE, ANDROGYN, FANZONE2; plain ROMs including GOONIES, GALAGA, CASTLE, AVALANCH, FROGGER.</p>
+<p><span class="pill warn">Fixed, not re-run</span> PENNANT — server fix committed; offline diff shows only its two switches changed.</p>
+<p><span class="pill warn">Not tested</span> PENNANT2, MG2FRS, MG2NOSCC, SOLID, SOLIDE12, AMSOCCER, ARKAN2, MISTERY, ZANACEX.</p>
+<p><span class="pill bad">Unsupported</span> SUPERLOA (SuperLodeRunner mapper).</p>
+<p>None of this has been confirmed on real hardware yet.</p>
+
+<h2 id="general"><span class="sec">7</span>Does the patching generalise?</h2>
+<p><strong>Largely yes, within a clear boundary.</strong> The rules are about how Z80 code switches banks, not about particular games, and each was validated against the full test set. A Konami, Konami SCC, ASCII8 or ASCII16 game you haven't tried is likely to work if it:</p>
+<ul>
+<li>switches banks with <code>LD (nn),A</code>, preceded by something that sets or preserves A — the dominant idiom in commercial games;</li>
+<li>uses no more distinct 8K pairs per page than the cache holds (12) during tight loops;</li>
+<li>fits in the available mapper RAM plus cache segments;</li>
+<li>doesn't rely on SRAM, sound hardware on the cartridge, or reading back bank registers.</li>
+</ul>
+<p>It will <strong>not</strong> catch switches written any other way:</p>
+<ul>
+<li><code>ld (hl),a</code>, <code>ld (de),a</code>, <code>ld (ix+d),a</code> with the register address computed or loaded at runtime;</li>
+<li>switch code copied to RAM and executed there, or generated/self-modifying code;</li>
+<li><code>LD (nn),A</code> preceded by an instruction outside the accepted set (the next PENNANT-style case);</li>
+<li>data that happens to pass the plausibility rules and target a window (a wrong patch, much rarer now).</li>
+</ul>
+<p>Static byte patching can never be complete: whether a byte is code, and what address a computed write targets, is not decidable in general. Each new failure is cheap to diagnose with the tooling used here (openMSX watchpoints on mapper ports, comparison with the cartridge), and usually fixes as one more general rule plus an offline all-ROM diff.</p>
+
+<h2 id="all"><span class="sec">8</span>What it would take to run every MSX game</h2>
+<h3>Software path — incremental</h3>
+<div class="tbl"><table>
+<thead><tr><th>Need</th><th>Why</th><th>Effort</th></tr></thead>
+<tbody>
+<tr><td>Trace-based patching for mappers</td><td>Reuse <code>trace_code</code> and HL tracking to find indirect register writes; patch only code, not data</td><td>Medium</td></tr>
+<tr><td>Trap handler for untraced writes</td><td>Make the RAM behind registers detect writes (e.g. periodic check of sentinel bytes) — only partial</td><td>High, imperfect</td></tr>
+<tr><td>Per-SHA-1 patch overrides</td><td>Small DB of extra sites/exclusions for the games no rule covers</td><td>Low per game</td></tr>
+<tr><td>More mapper types</td><td>Game Master 2, R-Type, Harry Fox, Cross Blaim, Zemina, SuperLodeRunner, ASCII16-X, Konami SCC+ and others each need handlers and windows</td><td>Medium each</td></tr>
+<tr><td>SRAM</td><td>ASCII8/16 SRAM games save; needs RAM-backed save area and upload to server</td><td>Medium</td></tr>
+<tr><td>Cartridge hardware</td><td>SCC sound, Majutsushi DAC, MSX-AUDIO, extra RAM on cartridge cannot come from main RAM</td><td>Needs the real chip in another slot</td></tr>
+<tr><td>Memory</td><td>Largest ROMs plus 22 cache segments need 1 MB+ mapper RAM; 256 KB machines limit what loads</td><td>Hardware dependent</td></tr>
+</tbody></table></div>
+
+<h3>Hardware path — complete</h3>
+<p>The only route to effectively every cartridge game is to stop patching and <strong>emulate the mapper decoder in hardware</strong>: MSXPi's CPLD (or an FPGA) presents a cartridge slot, decodes bank-register writes exactly like the original board, and maps pages to SRAM that the Pi filled with the ROM. The game runs unmodified, so indirect writes, self-modifying code and register reads all work; the database only has to select the decoder. Sound chips and flash-backed SRAM still need dedicated logic, which is how existing flash cartridges reach near-total compatibility.</p>
+<p class="note">Recommendation: keep the software loader for the large, common Konami/ASCII library, where it already works well. Add trace-based detection of indirect writes and a small override table as the next steps. Treat 100% coverage as a hardware feature, not a patching goal.</p>
+</main>
+</div>

@@ -341,6 +341,35 @@ def patch_bank_switches(rom, mapper_type, handlers):
     return bytes(out), n
 
 
+# ASCII8 window select with the register computed at run time, D = window 0-3,
+# E = bank. HYDLIDE3.ROM does all its ordinary bank switching through this
+# routine at 414Dh (called from 12 places):
+#     ld a,d / add a,a / add a,a / add a,a / add a,60h / ld h,a / di / ld (hl),e
+# There is no LD (nn),A, so patch_bank_switches never saw it; in RAM the
+# ld (hl),e overwrote the game's own code instead of switching, and the game
+# sat on a blue screen with the wrong bank in 8000h.
+_ASCII8_INDEXED_SELECT = bytes([0x7A, 0x87, 0x87, 0x87, 0xC6, 0x60, 0x67, 0xF3, 0x73])
+
+
+def patch_indexed_switches(rom, mapper_type, dispatch):
+    """Replace each ASCII8 computed window select with di / CALL <dispatch>
+    (the MSX's window dispatcher, D = window, E = bank) padded with NOPs to the
+    same nine bytes. Returns (patched_rom, count)."""
+    if mapper_type != MAPPER_ASCII8 or not dispatch:
+        return rom, 0
+    pat = _ASCII8_INDEXED_SELECT
+    repl = bytes([0xF3, 0xCD, dispatch & 0xFF, (dispatch >> 8) & 0xFF]) + \
+        bytes(len(pat) - 4)
+    out = bytearray(rom)
+    n = 0
+    i = out.find(pat)
+    while i >= 0:
+        out[i:i + len(pat)] = repl
+        n += 1
+        i = out.find(pat, i + len(pat))
+    return bytes(out), n
+
+
 # ------------------------------------------------------------------------------
 # Plain ROMs: neutralise stores into the ROM's own address window
 # ------------------------------------------------------------------------------
