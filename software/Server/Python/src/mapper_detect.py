@@ -219,7 +219,18 @@ def detect_mapper(rom):
     return None, None
 
 
-def _plausible_bank_store(rom, i, depth=4):
+# The bank-select register of each window, exactly. A real bank switch writes
+# one of these; data that merely looks like LD (nn),A lands somewhere inside a
+# window instead - see the inc/dec rule in _plausible_bank_store.
+EXACT_BANK_ADDRS = {
+    MAPPER_KONAMI:     (0x6000, 0x8000, 0xA000),
+    MAPPER_KONAMI_SCC: (0x5000, 0x7000, 0x9000, 0xB000),
+    MAPPER_ASCII8:     (0x6000, 0x6800, 0x7000, 0x7800),
+    MAPPER_ASCII16:    (0x6000, 0x7000),
+}
+
+
+def _plausible_bank_store(rom, i, depth=4, exact=False):
     """Is the 32 lo hi at rom[i] plausibly a real LD (nn),A instruction?
 
     The byte pattern alone also matches data and the middle of other
@@ -265,12 +276,26 @@ def _plausible_bank_store(rom, i, depth=4):
     # which is not plausible, so the chain rejects it.
     if depth <= 0:
         return False
+    # 8-bit inc/dec of B-L are weak too, but only for a store to an exact
+    # bank-select register. PENNANT.ROM sets all four SCC windows in a row -
+    # ld (7000h),a / ld (hl),a / inc a / inc l / ld (9000h),a / ld (hl),a /
+    # inc a / inc l / ld (0B000h),a - and rejecting inc l left the 9000h and
+    # B000h switches unpatched, so the banks never changed and the game ran
+    # into data. Allowed for any window address, the same bytes are so common
+    # in data that it also patched TETRIS's "15 32 15 70" tables, METAL GEAR's
+    # bank-10 graphics (32 6E 7C) and METAL GEAR 2's 32 61 71 - all targets
+    # somewhere inside a window, none of them a bank register. NEMESIS's
+    # "39 25 32" stays rejected either way: 39h before the dec h is not
+    # plausible.
+    if exact and i >= 1 and rom[i - 1] in (0x04, 0x05, 0x0C, 0x0D, 0x14, 0x15,
+                                           0x1C, 0x1D, 0x24, 0x25, 0x2C, 0x2D):
+        return _plausible_bank_store(rom, i - 1, depth - 1, exact)  # inc/dec r
     if i >= 3 and rom[i - 3] in (0x01, 0x11, 0x21, 0x31):          # ld rr,nn
-        return _plausible_bank_store(rom, i - 3, depth - 1)
+        return _plausible_bank_store(rom, i - 3, depth - 1, exact)
     if i >= 1 and rom[i - 1] in (0x03, 0x13, 0x23, 0x0B, 0x1B, 0x2B):
-        return _plausible_bank_store(rom, i - 1, depth - 1)        # inc/dec rr
+        return _plausible_bank_store(rom, i - 1, depth - 1, exact)  # inc/dec rr
     if i >= 1 and 0x70 <= rom[i - 1] <= 0x77 and rom[i - 1] != 0x76:
-        return _plausible_bank_store(rom, i - 1, depth - 1)        # ld (hl),r
+        return _plausible_bank_store(rom, i - 1, depth - 1, exact)  # ld (hl),r
     return False
 
 
@@ -292,8 +317,11 @@ def patch_bank_switches(rom, mapper_type, handlers):
     n = 0
     i = 0
     end = len(out) - 2
+    exact_addrs = EXACT_BANK_ADDRS.get(mapper_type, ())
     while i < end:
-        if out[i] == 0x32 and _plausible_bank_store(rom, i):
+        target = out[i + 1] | (out[i + 2] << 8) if out[i] == 0x32 else None
+        if out[i] == 0x32 and _plausible_bank_store(rom, i,
+                                                    exact=target in exact_addrs):
             a = out[i + 1] | (out[i + 2] << 8)
             for k, (lo, hi) in enumerate(windows):
                 if lo <= a <= hi:
