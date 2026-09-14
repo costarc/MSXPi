@@ -1054,9 +1054,34 @@ void launchGame(void) {
         ; and the hooks INIT32 passes through have been cleared above.
         call #0x006F
 
+        ; Some cartridges only install a hook in INIT and return to the BIOS,
+        ; which starts them later through H.STKE once BASIC has initialised.
+        ; PENNANT.ROM does ld (0FEDAh),F7h slot / ld (0FEDCh),4102h / ret, and
+        ; VALLEY2.ROM the same with 40B5h. With nothing to return to, INIT
+        ; returned into garbage: PENNANT rebooted to DOS, VALLEY2 hung in the
+        ; BIOS. So INIT returns to 5$ below, inside this copied block at C000h.
+        ld hl, #(0xC000 + 5$ - 1$)
+        push hl
+
         ; Read entry vector from Page 1 (0x4002) and jump with DI
         ld hl, (#0x4002)
         jp (hl)
+
+    5$:
+        ; INIT returned. Start the game the way the BIOS would, through the
+        ; H.STKE hook it installed; its slot is the one already selected, so
+        ; jump straight to the address in the hook.
+        di
+        ld a, (#0xFEDA)
+        cp #0xF7
+        jr nz, 6$
+        ld hl, (#0xFEDC)
+        jp (hl)
+    6$:
+        ; No H.STKE hook: nothing to start. Idle with interrupts on rather than
+        ; running into whatever follows.
+        ei
+        jr 6$
 
     2$:
     __endasm;
