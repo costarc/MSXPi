@@ -3414,6 +3414,16 @@ def is_local_path(s: str) -> bool:
     return not (s.startswith("http://") or s.startswith("https://"))
 
 
+def _rmtree_force(path):
+    """shutil.rmtree that also removes read-only files (Windows refuses to
+    delete them with 'Access is denied'). Missing path is not an error."""
+    def _onerror(func, p, exc_info):
+        os.chmod(p, 0o666)
+        func(p)
+    if os.path.exists(path):
+        shutil.rmtree(path, onerror=_onerror)
+
+
 def fetch_and_uncompress(url: str):
     """
     Download a compressed file from URL into /tmp/msxpi (cache), or - if
@@ -3460,8 +3470,16 @@ def fetch_and_uncompress(url: str):
             print(f"Failed to read ROM file: {e}")
             return RC_FAILED, f"Failed to read ROM file: {e}"
 
-    # Otherwise, prepare extraction
+    # Otherwise, prepare extraction. Start from an empty extract dir every
+    # time: archives may carry read-only files (e.g. 1942.zip), which a plain
+    # shutil.rmtree cannot delete on Windows, and any leftover ROM would be
+    # picked up instead of the one just extracted.
     extract_dir = os.path.join(tmpdir, "extract")
+    try:
+        _rmtree_force(extract_dir)
+    except Exception as e:
+        print(f"Cannot clean extract dir: {e}")
+        return RC_FAILED, f"Cannot clean extract dir: {e}"
     os.makedirs(extract_dir, exist_ok=True)
     system = platform.system().lower()
 
@@ -3493,42 +3511,42 @@ def fetch_and_uncompress(url: str):
         print(f"Unsupported extension: {ext}")
         return RC_FAILED, f"Unsupported extension: {ext}"
 
-    # Run extraction
     try:
-        print(f"Extrating file with command: {cmd}")
-        subprocess.run(cmd, cwd=extract_dir, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Extraction failed: {e}")
-        return RC_FAILED, f"Extraction failed: {e}"
+        # Run extraction
+        try:
+            print(f"Extrating file with command: {cmd}")
+            subprocess.run(cmd, cwd=extract_dir, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Extraction failed: {e}")
+            return RC_FAILED, f"Extraction failed: {e}"
 
-    # Find the resulting .rom file
-    rom_file = None
-    for root, _, files in os.walk(extract_dir):
-        for f in files:
-            if f.lower().endswith(".rom"):
-                rom_file = os.path.join(root, f)
-                break
-        if rom_file:
-            break
+        # Find the resulting .rom file; prefer one named like the archive
+        roms = sorted(os.path.join(root, f)
+                      for root, _, files in os.walk(extract_dir)
+                      for f in files if f.lower().endswith(".rom"))
+        if not roms:
+            print("No .rom file found after extraction")
+            return RC_FAILED, "No .rom file found after extraction"
+        base = os.path.splitext(filename)[0].lower()
+        rom_file = next((r for r in roms
+                         if os.path.splitext(os.path.basename(r))[0].lower() == base),
+                        roms[0])
 
-    if not rom_file:
-        print("No .rom file found after extraction")
-        shutil.rmtree(extract_dir)
-        return RC_FAILED, "No .rom file found after extraction"
+        # Load into buf
+        try:
+            with open(rom_file, "rb") as f:
+                buf = f.read()
+        except Exception as e:
+            print(f"Failed to read ROM file: {e}")
+            return RC_FAILED, f"Failed to read ROM file: {e}"
 
-    # Load into buf
-    try:
-        with open(rom_file, "rb") as f:
-            buf = f.read()
-    except Exception as e:
-        print(f"Failed to read ROM file: {e}")
-        shutil.rmtree(extract_dir)
-        return RC_FAILED, f"Failed to read ROM file: {e}"
-
-    # Clean up extracted files, keep cache
-    shutil.rmtree(extract_dir)
-
-    return RC_SUCCESS, buf
+        return RC_SUCCESS, buf
+    finally:
+        # Clean up extracted files, keep cache
+        try:
+            _rmtree_force(extract_dir)
+        except Exception as e:
+            print(f"Cannot clean extract dir: {e}")
 
    
 _ploadr_cache = None   # (filepath, rom bytes) of the transfer in progress
