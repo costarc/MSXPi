@@ -7,6 +7,8 @@
 #
 # Every switch can be overridden from the environment, e.g.
 #   buildMSXdiskImage=no ./build
+#   updateServerVersion=yes ./build  bump only the msxpi-server BuildId
+#   updateRomVersion=yes ./build     bump only the ROM/extension BuildIds
 #
 # Stages, in order: client commands -> BIOS/MSX-DOS ROM -> LOADROM patch ->
 # openMSX extension -> disk images. Each is independent and skippable.
@@ -18,15 +20,19 @@ python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
 buildClientCommands="${buildClientCommands:-yes}"
-buildBIOS="${buildBIOS:-yes}"
-buildLoadrom="${buildLoadrom:-yes}"
+buildBIOS="${buildBIOS:-no}"
+buildLoadrom="${buildLoadrom:-no}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
-# Bump the BuildId in the ROM sources and the server before compiling? Off
-# while iterating, so a rebuild does not churn every version string; on for a
-# build that is going out.
-updateVersions="${updateVersions:-no}"
+# Bump the BuildId in the server before compiling? Off while iterating, so a
+# rebuild does not churn the version string; on for a server build that is going
+# out.
+updateServerVersion="${updateServerVersion:-yes}"
+
+# Bump only the BuildIds that are baked into the ROM artifacts:
+# msxpibios.rom and msxpiext.bin.
+updateRomVersion="${updateRomVersion:-no}"
 
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
@@ -59,6 +65,17 @@ die()  { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARNING: $*" >&2; }
 step() { echo; echo "== $* =="; }
 
+check_yes_no() {
+    local name="$1" value="$2"
+    case "$value" in
+        yes|no) ;;
+        *) die "$name must be 'yes' or 'no' (got '$value')" ;;
+    esac
+}
+
+check_yes_no updateServerVersion "$updateServerVersion"
+check_yes_no updateRomVersion "$updateRomVersion"
+
 # =============================================================================
 # Helpers
 # =============================================================================
@@ -74,8 +91,8 @@ step() { echo; echo "== $* =="; }
 # old value as a search pattern was fragile and could silently fail to match,
 # leaving the id unchanged with no visible error.
 update_build_id() {
-    local fname="$1" anchor="$2" dot="$3"
-    [ "$updateVersions" = "yes" ] || return 0
+    local fname="$1" anchor="$2" dot="$3" update="$4"
+    [ "$update" = "yes" ] || return 0
     [ -f "$fname" ] || { warn "BuildId: $fname does not exist"; return 0; }
 
     cp "$fname" "$fname.bak"
@@ -143,6 +160,11 @@ EOF
 }
 
 # =============================================================================
+# Server
+# =============================================================================
+update_build_id ./Server/Python/src/msxpi-server.py "BuildId = " "" "$updateServerVersion"
+
+# =============================================================================
 # MSX-DOS client commands
 # =============================================================================
 if [ "$buildClientCommands" = "yes" ]; then
@@ -162,11 +184,10 @@ if [ "$buildBIOS" = "yes" ]; then
     # msxpi-driver.mac, so the id must already be updated in the source before
     # zmac runs, or the compiled ROM bakes in the previous run's id and the
     # bump only takes effect on the *next* build.
-    update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "."
+    update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "." "$updateRomVersion"
     # msxpibios.asm used to carry a BuildId too; it is gone, and the BIOS
     # banner now lives in the driver ROM and the BASIC extension.
-    update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "."
-    update_build_id ./Server/Python/src/msxpi-server.py  "BuildId = "   ""
+    update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "." "$updateRomVersion"
 
     # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
     # exist before zmac runs - and it is built with sjasm, not zmac, because the

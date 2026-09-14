@@ -61,7 +61,7 @@ import shutil
 
 
 version = "1.6"
-BuildId = "20260914.054"
+BuildId = "20260914.055"
 
 CMDSIZE = 9
 MSGSIZE = 128
