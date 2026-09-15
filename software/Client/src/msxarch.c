@@ -166,6 +166,38 @@ void sendQuit() {
     uint8_t rc = SendCommandToMSXPi("Q", false);
 }
 
+static bool StartsWith(const char* text, const char* prefix) {
+    while (*prefix) {
+        if (*text != *prefix)
+            return false;
+        text++;
+        prefix++;
+    }
+    return true;
+}
+
+static bool IsArchiveError(const char* message) {
+    return StartsWith(message, "Pi:Error - ") ||
+           StartsWith(message, "Failed to list directory:");
+}
+
+static void ShowArchiveError(const char* message) {
+    Cls();
+    Print("MSX Archive error\n");
+    Print("=================\n\n");
+    if (StartsWith(message, "Pi:Error - ")) {
+        Print(message + 11);
+    } else if (StartsWith(message, "Failed to list directory:")) {
+        Print("Cannot open archive directory.\n");
+        Print("File or directory does not exist.");
+    } else {
+        Print(message);
+    }
+    Print("\n\nPress any key to return to the URL list.");
+    WaitForKey();
+    Cls();
+}
+
 static FCB iniFcb;
 static char iniBuffer[INI_BUFFER_SIZE];
 static char repoList[MAX_REPOS][MAX_URL_LEN];
@@ -267,9 +299,9 @@ static int LoadRepositoryList(void) {
 //     [##########..........................]
 // The block count is known before the transfer from the ROM header, so the
 // bar has a fixed width whatever the ROM size. It is drawn once through the
-// BIOS; printing its "[" again leaves the VDP write address on the first
-// cell. From then on each new cell is one OUT (98h),'#' - the VDP advances the
-// address itself - so the transfer loop makes no BIOS calls at all.
+// BIOS; each fill cell then sets the text VRAM address directly and writes
+// one '#' through port 98h. That avoids BIOS calls in the transfer loop and
+// does not rely on the VDP address surviving interrupts or transfer code.
 #define CSRY    0xF3DC      // cursor row, 1-based
 #define LINLEN  0xF3B0      // current text width
 
@@ -278,6 +310,16 @@ static uint16_t progDone;       // blocks received
 static uint8_t  progRow;
 static uint8_t  progWidth;      // bar cells
 static uint8_t  progCells;      // cells filled
+
+static void progressPut(uint8_t col, char ch) {
+    uint16_t addr = (uint16_t)progRow * (*(uint8_t*)LINLEN) + col;
+
+    __critical {
+        OutPort(0x99, (uint8_t)(addr & 0xFF));
+        OutPort(0x99, (uint8_t)(((addr >> 8) & 0x3F) | 0x40));
+        OutPort(0x98, ch);
+    }
+}
 
 static void progressStart(uint16_t totalBlocks) {
     uint8_t i;
@@ -301,7 +343,7 @@ static void progressDot(void) {
     // progDone * 60 stays within 16 bits up to 1092 blocks (8.7MB).
     cells = (uint8_t)((progDone * progWidth) / progTotal);
     while (progCells < cells) {
-        OutPort(0x98, '#');
+        progressPut(progCells + 1, '#');
         progCells++;
     }
 }
@@ -1229,158 +1271,179 @@ int main(void) {
     items[repoCount] = "Exit";
 
     int itemCount = repoCount + 1;
-    char parameters[BLKSIZE + 1];
-    const unsigned char* selected = showMenu(items, itemCount);
-
-    if (StrCompare(selected, "Exit") == 0 || StrCompare(selected, "Q") == 0) {
-        Print("Exit selected.\n");
-        return 0;
-    }
-
-    if (selected != NULL) {
-        for (int i = 0; i < BLKSIZE + 1; i++) {
-            parameters[i] = 0;
-        }
-
-        int pos = 0;
-        int j = 0;
-        while (selected[j] != '\0' && pos < BLKSIZE) {
-            parameters[pos] = selected[j];
-            pos++;
-            j++;
-        }
-
-        parameters[BLKSIZE] = 0;
-
-        Print("You selected: ");
-        Print(parameters);
-        Print("\nConnecting...\n");
-    }
-
-    uint8_t rc;
-    int cmd;
-
-    rc = SendCommandToMSXPi("msxarchive", false);
-    if (rc != RC_SUCCESS) {
-        Print("Error sending command to MSXPi!\n");
-        sendQuit();
-        return 1;
-    }
-
-    pprints("Sending parameters: ", parameters);
-    rc = SendCommandToMSXPi(parameters, false);
-    if (rc != RC_SUCCESS) {
-        sendQuit();
-        return 1;
-    }
-
-    uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
-    uint16_t size = 22 * 80;
-    char userNumber[INPUTLEN];
-    uint16_t replySize = 0;
-    uint16_t maxbuf = MAXBUFSIZE;
 
     while (1) {
-        rc = RECVDATA(buffer, &replySize, &maxbuf);
+        char parameters[BLKSIZE + 1];
+        const unsigned char* selected = showMenu(items, itemCount);
 
+        if (StrCompare(selected, "Exit") == 0 || StrCompare(selected, "Q") == 0) {
+            Print("Exit selected.\n");
+            return 0;
+        }
+
+        if (selected != NULL) {
+            for (int i = 0; i < BLKSIZE + 1; i++) {
+                parameters[i] = 0;
+            }
+
+            int pos = 0;
+            int j = 0;
+            while (selected[j] != '\0' && pos < BLKSIZE) {
+                parameters[pos] = selected[j];
+                pos++;
+                j++;
+            }
+
+            parameters[BLKSIZE] = 0;
+
+            Print("You selected: ");
+            Print(parameters);
+            Print("\nConnecting...\n");
+        }
+
+        uint8_t rc;
+        int cmd;
+
+        rc = SendCommandToMSXPi("msxarchive", false);
+        if (rc != RC_SUCCESS) {
+            Print("Error sending command to MSXPi!\n");
+            sendQuit();
+            return 1;
+        }
+
+        pprints("Sending parameters: ", parameters);
+        rc = SendCommandToMSXPi(parameters, false);
         if (rc != RC_SUCCESS) {
             sendQuit();
-            break;
+            return 1;
         }
-        buffer[size - 1] = '\0';
 
-        Locate(0, 1);
-        Print("================================================================================");
-        Locate(0, 2);
-        FastPrint(buffer);
-        Locate(0, 0);
-        Print("     Q = Quit  N/Down = Next Page  P/Up = Previous Page or Game Number to load");
+        uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
+        uint16_t size = 22 * 80;
+        char userNumber[INPUTLEN];
+        uint16_t replySize = 0;
+        uint16_t maxbuf = MAXBUFSIZE;
+        bool returnToMenu = false;
 
-        Locate(0, 0);
-        cmd = GetValidInput(userNumber);
-        if (cmd == INPUT_Q)
-            break;
-        else if (cmd == INPUT_N || cmd == INPUT_DOWN) {
-            rc = SendCommandToMSXPi("N", false);
-        }
-        else if (cmd == INPUT_P || cmd == INPUT_UP) {
-            rc = SendCommandToMSXPi("P", false);
-        }
-        else {
-            {
-                char selcmd[48];
-                buildSelection(selcmd, userNumber);
-                rc = SendCommandToMSXPi(selcmd, false);
-            }
-            if (rc != RC_SUCCESS)
-                break;
+        while (1) {
+            rc = RECVDATA(buffer, &replySize, &maxbuf);
 
-            Cls();
-
-            RomHeader romHeader;
-            char romRejectReason[ROM_REASON_MAX];
-            rc = readRomHeader(&romHeader, romRejectReason, sizeof(romRejectReason));
             if (rc != RC_SUCCESS) {
-                Print("Error reading ROM header\n");
+                buffer[(replySize < size) ? replySize : size - 1] = '\0';
+                if (IsArchiveError((const char*)buffer)) {
+                    ShowArchiveError((const char*)buffer);
+                } else {
+                    ShowArchiveError("Unable to read the archive list.");
+                }
                 sendQuit();
-                return 1;
+                returnToMenu = true;
+                break;
             }
-            if (romHeader.mapperType == MAPPER_REJECTED) {
-                Print(romRejectReason);
-                Print("\n");
+            buffer[size - 1] = '\0';
+            if (IsArchiveError((const char*)buffer)) {
+                ShowArchiveError((const char*)buffer);
                 sendQuit();
-                return 1;
+                returnToMenu = true;
+                break;
             }
-            // For an accepted ROM the text after the header is the game's
-            // name (an older server sends none, which prints just "Loading").
-            Print("Loading ");
-            Print(romRejectReason);
-            pprintf("  (", (uint16_t)((romHeader.totalSize + 1023) >> 10));
-            Print("K)\n");
-            // Blocks are always 8KB - see loadrom and loadBanksIntoStorage.
-            if (romHeader.mapperType == MAPPER_PLAIN)
-                progressStart((uint16_t)((romHeader.totalSize + 8191) >> 13));
-            else
-                progressStart(romHeader.bankCount *
-                              (uint16_t)(romHeader.bankSizeKB / 8));
-            if (romHeader.mapperType == MAPPER_PLAIN) {
-                if (romHeader.totalSize > 0x8000) {
-                    Print("ROM too large for plain loading\n");
+
+            Locate(0, 1);
+            Print("================================================================================");
+            Locate(0, 2);
+            FastPrint(buffer);
+            Locate(0, 0);
+            Print("     Q = Quit  N/Down = Next Page  P/Up = Previous Page or Game Number to load");
+
+            Locate(0, 0);
+            cmd = GetValidInput(userNumber);
+            if (cmd == INPUT_Q) {
+                returnToMenu = true;
+                break;
+            }
+            else if (cmd == INPUT_N || cmd == INPUT_DOWN) {
+                rc = SendCommandToMSXPi("N", false);
+            }
+            else if (cmd == INPUT_P || cmd == INPUT_UP) {
+                rc = SendCommandToMSXPi("P", false);
+            }
+            else {
+                {
+                    char selcmd[48];
+                    buildSelection(selcmd, userNumber);
+                    rc = SendCommandToMSXPi(selcmd, false);
+                }
+                if (rc != RC_SUCCESS)
+                    break;
+
+                Cls();
+
+                RomHeader romHeader;
+                char romRejectReason[ROM_REASON_MAX];
+                rc = readRomHeader(&romHeader, romRejectReason, sizeof(romRejectReason));
+                if (rc != RC_SUCCESS) {
+                    Print("Error reading ROM header\n");
                     sendQuit();
                     return 1;
                 }
-                rc = loadrom((uint16_t)romHeader.totalSize);
-            }
-            else if (romHeader.mapperType == MAPPER_KONAMI ||
-                     romHeader.mapperType == MAPPER_ASCII8 ||
-                     romHeader.mapperType == MAPPER_ASCII16) {
-                rc = loadMappedRom(&romHeader);
-            }
-            else {
-                pprintf("Mapper type not yet supported: ", romHeader.mapperType);
-                sendQuit();
-                return 1;
-            }
-
-            if (rc != RC_SUCCESS) {
-                pprintf("Error loading the rom: ", rc);
-                return 1;
-            }
-            else {
-                // msxarch.ini rebootAfterRomLoad=yes. The game is fully in RAM
-                // and needs nothing more from the Pi. Use the no-reply form so
-                // the launch path does not perform another receive/print after
-                // the ROM image has already been staged.
-                if (rebootAfterRomLoad) {
-                    SendCommandToMSXPi("shut nowait", false);
+                if (romHeader.mapperType == MAPPER_REJECTED) {
+                    Print(romRejectReason);
+                    Print("\n");
+                    sendQuit();
+                    return 1;
                 }
-                launchGame();
-            }
-        }
+                // For an accepted ROM the text after the header is the game's
+                // name (an older server sends none, which prints just "Loading").
+                Print("Loading ");
+                Print(romRejectReason);
+                pprintf("  (", (uint16_t)((romHeader.totalSize + 1023) >> 10));
+                Print("K)\n");
+                // Blocks are always 8KB - see loadrom and loadBanksIntoStorage.
+                if (romHeader.mapperType == MAPPER_PLAIN)
+                    progressStart((uint16_t)((romHeader.totalSize + 8191) >> 13));
+                else
+                    progressStart(romHeader.bankCount *
+                                  (uint16_t)(romHeader.bankSizeKB / 8));
+                if (romHeader.mapperType == MAPPER_PLAIN) {
+                    if (romHeader.totalSize > 0x8000) {
+                        Print("ROM too large for plain loading\n");
+                        sendQuit();
+                        return 1;
+                    }
+                    rc = loadrom((uint16_t)romHeader.totalSize);
+                }
+                else if (romHeader.mapperType == MAPPER_KONAMI ||
+                         romHeader.mapperType == MAPPER_ASCII8 ||
+                         romHeader.mapperType == MAPPER_ASCII16) {
+                    rc = loadMappedRom(&romHeader);
+                }
+                else {
+                    pprintf("Mapper type not yet supported: ", romHeader.mapperType);
+                    sendQuit();
+                    return 1;
+                }
 
-        if (rc != RC_SUCCESS)
-            break;
+                if (rc != RC_SUCCESS) {
+                    pprintf("Error loading the rom: ", rc);
+                    return 1;
+                }
+                else {
+                    // msxarch.ini rebootAfterRomLoad=yes. The game is fully in RAM
+                    // and needs nothing more from the Pi. Use the no-reply form so
+                    // the launch path does not perform another receive/print after
+                    // the ROM image has already been staged.
+                    if (rebootAfterRomLoad) {
+                        SendCommandToMSXPi("shut nowait", false);
+                    }
+                    launchGame();
+                }
+            }
+
+            if (rc != RC_SUCCESS)
+                break;
+        }
+        sendQuit();
+        if (!returnToMenu)
+            return 0;
+        Cls();
     }
-    sendQuit();
-    return 0;
 }

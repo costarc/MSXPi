@@ -3713,12 +3713,43 @@ def msxarchive(parms = None):
         """Fetch file list from the given URL and return filenames without extensions.
         Skip header (first line) and empty lines."""
 
+        def request_failed(fetch_url, exc):
+            if isinstance(exc, requests.exceptions.Timeout):
+                detail = "Timed out waiting for the server."
+            elif isinstance(exc, requests.exceptions.ConnectionError):
+                detail = "Connection refused or server offline."
+            elif isinstance(exc, requests.exceptions.TooManyRedirects):
+                detail = "Too many redirects."
+            else:
+                detail = "Network request failed."
+
+            print(f"MSX Archive request failed for {fetch_url}: {exc}")
+            return RC_FAILED, (
+                "Pi:Error - Cannot open archive URL.\n"
+                f"{fetch_url}\n"
+                f"{detail}"
+            )
+
+        def local_path_failed(path, exc):
+            if isinstance(exc, PermissionError):
+                detail = "Permission denied."
+            elif isinstance(exc, (FileNotFoundError, NotADirectoryError)):
+                detail = "File or directory does not exist."
+            else:
+                detail = "Cannot read this directory."
+
+            print(f"MSX Archive directory failed for {path}: {exc}")
+            return RC_FAILED, (
+                "Pi:Error - Cannot open archive directory.\n"
+                f"{path}\n"
+                f"{detail}"
+            )
+
         if is_local_path(url):
             try:
                 entries = os.listdir(url)
             except Exception as e:
-                print(f"Failed to list directory {url}: {e}")
-                return RC_FAILED, f"Failed to list directory: {e}"
+                return local_path_failed(url, e)
             files = sorted(f for f in entries
                             if f.lower().endswith(ROM_FILE_EXTENSIONS))
             for f in files:
@@ -3739,7 +3770,10 @@ def msxarchive(parms = None):
         if not cache_exists or cache_expired:
             print(f"cache expired: {cached_file}" if cache_expired else f"not cached: {cached_file}")
             # Download from the URL
-            response = requests.get(index_url, timeout=HTTP_TIMEOUT)
+            try:
+                response = requests.get(index_url, timeout=HTTP_TIMEOUT)
+            except requests.exceptions.RequestException as e:
+                return request_failed(index_url, e)
 
             if response.status_code == 200:
                 # Success: parse the content
@@ -3749,7 +3783,10 @@ def msxarchive(parms = None):
                 # no 00index.txt, like a local test HTTP server): fall back to
                 # the server's own auto-generated directory listing instead.
                 print(f"{index} not found, falling back to directory listing at: {url}/")
-                dir_response = requests.get(url + "/", timeout=HTTP_TIMEOUT)
+                try:
+                    dir_response = requests.get(url + "/", timeout=HTTP_TIMEOUT)
+                except requests.exceptions.RequestException as e:
+                    return request_failed(url + "/", e)
                 if dir_response.status_code != 200:
                     print(f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}")
                     files = f"Download failed: HTTP {dir_response.status_code} - {dir_response.reason}"
