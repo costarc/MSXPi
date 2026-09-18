@@ -320,11 +320,18 @@ def patch_bank_switches(rom, mapper_type, handlers):
     exact_addrs = EXACT_BANK_ADDRS.get(mapper_type, ())
     while i < end:
         target = out[i + 1] | (out[i + 2] << 8) if out[i] == 0x32 else None
-        if out[i] == 0x32 and _plausible_bank_store(rom, i,
-                                                    exact=target in exact_addrs):
+        exact = target in exact_addrs
+        if out[i] == 0x32 and _plausible_bank_store(rom, i, exact=exact):
             a = out[i + 1] | (out[i + 2] << 8)
             for k, (lo, hi) in enumerate(windows):
                 if lo <= a <= hi:
+                    # SCC cartridges also expose sound-chip controls in the
+                    # mapper register area.  Treating every ranged store as a
+                    # bank switch corrupts MANBOW tables. Exact SCC register
+                    # writes are still bank switches, even for high values
+                    # like 3Fh: the resident handler masks them like hardware.
+                    if mapper_type == MAPPER_KONAMI_SCC and not exact:
+                        break
                     out[i] = 0xCD                       # CALL nn
                     out[i + 1] = handlers[k] & 0xFF
                     out[i + 2] = (handlers[k] >> 8) & 0xFF
@@ -367,6 +374,93 @@ def patch_indexed_switches(rom, mapper_type, dispatch):
         out[i:i + len(pat)] = repl
         n += 1
         i = out.find(pat, i + len(pat))
+    return bytes(out), n
+
+
+def neutralise_scc_writes(rom):
+    """NOP writes to Konami SCC sound registers.
+
+    A Konami SCC cartridge exposes sound registers at 9800h-98FFh after the SCC
+    is enabled.  msxarch runs from RAM, so those writes would overwrite the ROM
+    image instead of reaching hardware; Space Manbow does this continuously
+    during play.  The loader cannot emulate SCC sound, but it can preserve the
+    ROM image by making those writes no-ops.
+    """
+    out = bytearray(rom)
+    n = 0
+
+    def in_scc(a):
+        return 0x9800 <= a <= 0x98FF
+
+    def patch_span(i, size):
+        nonlocal n
+        if any(out[i + k] for k in range(size)):
+            for k in range(size):
+                out[i + k] = 0
+            n += 1
+
+    def same_bank_target(origin, target):
+        # MANBOW's SCC mixer code calls helpers in the same 8K ROM bank that is
+        # currently visible at 6000h-7FFFh.
+        if not 0x4000 <= target <= 0xBFFF:
+            return None
+        off = (origin & ~0x1FFF) + (target & 0x1FFF)
+        return off if 0 <= off < len(rom) else None
+
+    scc_roots = []
+
+    for i in range(len(rom) - 3):
+        # Common SCC helper setup: ld de,98xxh / call helper.  The helper only
+        # writes sound registers; in RAM that is destructive, so skip it.  Some
+        # MANBOW paths jump through the helper instead of calling it directly, and
+        # some put flag tests between the LD DE and CALL. Remember those roots so
+        # the helper's own store opcodes can be neutralised below.
+        if rom[i] == 0x11:
+            a = rom[i + 1] | (rom[i + 2] << 8)
+            if in_scc(a):
+                for j in range(i + 3, min(i + 40, len(rom) - 2)):
+                    if rom[j] in (0xC3, 0xCD):
+                        target = rom[j + 1] | (rom[j + 2] << 8)
+                        off = same_bank_target(i, target)
+                        if off is not None:
+                            scc_roots.append(off)
+                        if j == i + 3 and rom[j] == 0xCD:
+                            patch_span(j, 3)
+
+    seen = set()
+
+    def neutralise_helper(root, depth=0):
+        if root in seen or depth > 2:
+            return
+        seen.add(root)
+        pc = root
+        end = min(root + 96, len(rom))
+        while pc < end:
+            op = rom[pc]
+            if op == 0xC9:
+                return
+            if op == 0xCD and pc + 2 < len(rom):
+                target = rom[pc + 1] | (rom[pc + 2] << 8)
+                off = same_bank_target(root, target)
+                if off is not None:
+                    neutralise_helper(off, depth + 1)
+                pc += 3
+                continue
+            if op == 0xC3:
+                target = rom[pc + 1] | (rom[pc + 2] << 8)
+                off = same_bank_target(root, target)
+                if off is not None:
+                    neutralise_helper(off, depth + 1)
+                return
+            if op == 0x12 and pc > root and rom[pc - 1] == 0x7E:
+                patch_span(pc, 1)     # ld (de),a after ld a,(hl)
+            elif op == 0x77 and pc > root and rom[pc - 1] == 0x1A:
+                patch_span(pc, 1)     # ld (hl),a after ld a,(de)
+            pc += 1
+
+    for root in scc_roots:
+        neutralise_helper(root)
+
     return bytes(out), n
 
 

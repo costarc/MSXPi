@@ -61,7 +61,7 @@ import shutil
 
 
 version = "1.6"
-BuildId = "20260914.055"
+BuildId = "20260916.057"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -306,7 +306,8 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
                             patch_bank_switches, patch_indexed_switches,
                             PATCH_WINDOWS,
-                            neutralise_rom_writes, MAPPER_KONAMI_SCC,
+                            neutralise_rom_writes, neutralise_scc_writes,
+                            MAPPER_KONAMI_SCC,
                             load_romdb, romdb_lookup)
 
 # Handler addresses the MSX will have relocated its resident bank-switch code
@@ -337,6 +338,11 @@ def patch_for_msx(buf, mapper_type, handlers):
     if not hs:
         return buf, 0
     buf, n = patch_bank_switches(buf, mapper_type, hs)
+    if mapper_type == MAPPER_KONAMI_SCC:
+        buf, m = neutralise_scc_writes(buf)
+        if m:
+            print(f"neutralised {m} SCC sound-register writes")
+        n += m
     # A seventh address is the MSX's window dispatcher, for games that compute
     # the register instead of storing to it directly (HYDLIDE3.ROM).
     if len(handlers) >= 7:

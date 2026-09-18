@@ -20,7 +20,7 @@ python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
 buildClientCommands="${buildClientCommands:-yes}"
-buildBIOS="${buildBIOS:-no}"
+buildBIOS="${buildBIOS:-yes}"
 buildLoadrom="${buildLoadrom:-no}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"

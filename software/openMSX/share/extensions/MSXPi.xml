@@ -6,7 +6,7 @@
     <manufacturer>MSXPi (https://github.com/costarc/MSXPi)</manufacturer>
     <code/>
     <release_year/>
-    <description>MSXPi is an extension for openMSX that emulates the MSXPi hardware interface, enabling an MSX computer to interact with modern systems. Unlike the physical version, the emulated interface does not require a Raspberry Pi — it communicates with a Python-based server component that provides access to web resources, files, REST APIs, and other external services.</description>
+    <description>MSXPi is an extension for openMSX that emulates the MSXPi hardware interface, enabling an MSX computer to interact with modern systems. Unlike the physical version, the emulated interface does not require a Raspberry Pi — it communicates with a Python-based server component that provides access to web resources, files, REST APIs, and other external services. Newer versions of the msxpibios.rom and the corresponding MSXPi server can be downloaded from the MSXPi repository at https://github.com/costarc/MSXPi/tree/master/software.</description>
     <type>pluggable</type>
   </info>
   <devices>
@@ -20,7 +20,13 @@
         <ROM id="MSXPi BIOS">
           <mem base="0x4000" size="0x4000"/>
           <rom>
-            <sha1>dca1cc81f7d023744c20abf0693300739938e847</sha1>
+            <sha1>dca1cc81f7d023744c20abf0693300739938e847</sha1> <!-- v1.6 - BASIC BIOS, MSX-DOS1, UNAPI; CPLD-exact device-->
+			<sha1>3cfffa59afef160439085a8a496953edcaeb0662</sha1> <!-- v1.5 - BASIC BIOS, MSX-DOS1-->
+			<sha1>45b204426039c909ddc142c12c2aa5738cbbbb50</sha1> <!-- v1.3 - BASIC BIOS, MSX-DOS1-->
+			<sha1>f04a377a2c653daf23c792cf157c69d422620d95</sha1> <!-- v1.2.1b - BASIC BIOS, MSX-DOS1-->
+			<sha1>7155b9b7dd1ce2cd3d73258cee380fa62caf6ba6</sha1> <!-- v1.1 - BASIC BIOS, MSX-DOS1-->
+			<sha1>bd29ea2723adae6bacbc8128ed07c745ef93396f</sha1> <!-- v1.0 - BASIC BIOS, MSX-DOS1-->
+			<sha1>a14976fce1bff34f9f59de1a2fb3fd0113dbf30c</sha1> <!-- v0.8.2 - BASIC BIOS, MSX-DOS1-->
             <filename>msxpibios.rom</filename>
           </rom>
         </ROM>

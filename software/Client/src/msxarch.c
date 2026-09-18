@@ -391,7 +391,9 @@ uint8_t loadrom(uint16_t totalSize) {
 // ===========================================================================
 
 #define MAX_STORAGE_SEGMENTS 64   // 64 x 16K = 1MB
-#define PAIR_CACHE_ENTRIES   12   // pre-filled segments per 16K page, see ascii8Handlers
+#define PAIR_CACHE0_ENTRIES  8    // page 1 cache entries, see ascii8Handlers
+#define PAIR_CACHE1_ENTRIES  16   // page 2 cache entries, ends at RESIDENT_8K_DISPATCH_ADDR
+#define PAIR_CACHE_MAX_ENTRIES PAIR_CACHE1_ENTRIES
 #define BANK_HALF_SIZE       0x2000
 
 static uint8_t __at(0x3800) storageSegments[MAX_STORAGE_SEGMENTS];
@@ -438,8 +440,8 @@ static uint8_t segInUse2;
 static uint8_t segInUse3;
 static uint8_t segTotal;
 static uint8_t segNext;
-static uint8_t pairCacheCount;
-static uint8_t pairCacheSegments[2][PAIR_CACHE_ENTRIES];
+static uint8_t pairCacheCounts[2];
+static uint8_t pairCacheSegments[2][PAIR_CACHE_MAX_ENTRIES];
 
 static uint8_t segmentIsReserved(uint8_t seg) {
     return (seg == segInUse0 || seg == segInUse1 ||
@@ -531,21 +533,23 @@ static uint8_t allocateMapperSegments(uint8_t storageCount) {
     }
     if (takeSegment(&safeZoneSegment) != RC_SUCCESS) return RC_FAILED;
 
-    // Pair caches for the 8K handlers: up to PAIR_CACHE_ENTRIES segments per
-    // page, the exec segment being entry 0. Take what is left - with a pool of
-    // one the handlers simply copy on every switch, as they used to.
-    pairCacheCount = 1;
+    // Pair caches for the 8K handlers: the exec segment is entry 0. Page 2 gets
+    // the larger cache because Konami games commonly keep music/code in one
+    // 8K half while screen transitions swap the other.
+    pairCacheCounts[0] = 1;
+    pairCacheCounts[1] = 1;
     pairCacheSegments[0][0] = execSegment1;
     pairCacheSegments[1][0] = execSegment2;
-    while (pairCacheCount < PAIR_CACHE_ENTRIES) {
-        uint8_t s0, s1;
-        if (takeSegment(&s0) != RC_SUCCESS) break;
-        if (takeSegment(&s1) != RC_SUCCESS) break;
-        pairCacheSegments[0][pairCacheCount] = s0;
-        pairCacheSegments[1][pairCacheCount] = s1;
-        pairCacheCount++;
+    while (pairCacheCounts[1] < PAIR_CACHE1_ENTRIES) {
+        uint8_t s;
+        if (takeSegment(&s) != RC_SUCCESS) break;
+        pairCacheSegments[1][pairCacheCounts[1]++] = s;
     }
-
+    while (pairCacheCounts[0] < PAIR_CACHE0_ENTRIES) {
+        uint8_t s;
+        if (takeSegment(&s) != RC_SUCCESS) break;
+        pairCacheSegments[0][pairCacheCounts[0]++] = s;
+    }
     return RC_SUCCESS;
 }
 
@@ -607,6 +611,25 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
     }
 
     PutPN_direct(2, execSegment2);
+    return RC_SUCCESS;
+}
+
+static uint8_t drainMappedRomBody(uint16_t bankCount, uint8_t bankSizeKB) {
+    uint16_t chunks = bankCount * (uint16_t)(bankSizeKB / 8);
+    uint16_t received;
+    uint8_t rc;
+    uint16_t c;
+
+    rc = PerformHandshake(MAXBUFSIZE);
+    if (rc != RC_SUCCESS) return RC_FAILED;
+
+    for (c = 0; c < chunks; c++) {
+        received = MAXBUFSIZE;
+        rc = RECVDATA_ONEBLOCK((uint8_t*)BUFADDRESS, &received, MAXBUFSIZE);
+        progressDot();
+        if (rc != RC_READY && rc != RC_SUCCESS) return RC_FAILED;
+        if (received == 0) return RC_FAILED;
+    }
     return RC_SUCCESS;
 }
 
@@ -698,13 +721,13 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 #define RESIDENT_8K_WIN3_ADDR 0xF9CA
 #define RESIDENT_8K_WIN4_ADDR 0xF9CF
 #define RESIDENT_8K_SIZE      0xD0
-// Pair caches, (bank lo, bank hi, segment) x PAIR_CACHE_ENTRIES per page:
-// FA90-FAB3 and FAB4-FAD7. That reaches into the 16K handlers' space, which an
-// 8K game never uses, and ends below the MSX2 system variables at FAF5h.
+// Pair caches, (bank lo, bank hi, segment). Page 1 uses FA90-FAA7, page 2 uses
+// FAA8-FAD7. That reaches into the 16K handlers' space, which an 8K game never
+// uses, and ends below the MSX2 system variables at FAF5h.
 #define RESIDENT_CACHE0_ADDR  0xFA90
-#define RESIDENT_CACHE1_ADDR  0xFAB4
+#define RESIDENT_CACHE1_ADDR  0xFAA8
 // Window dispatcher for games that pick the register at run time, after the
-// page-2 cache (FAB4h + 12 x 3 = FAD8h). The 16K handlers also start at FAD8h,
+// page-2 cache (FAA8h + 16 x 3 = FAD8h). The 16K handlers also start at FAD8h,
 // but a game loads either those or the 8K ones, never both.
 #define RESIDENT_8K_DISPATCH_ADDR 0xFAD8
 #define RESIDENT_8K_DISPATCH_SIZE 16
@@ -1044,13 +1067,15 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
     // first cache entry; the other entries hold no pair yet.
     for (i = 0; i < 4; i++) cur[i] = (uint8_t)i;
     for (p = 0; p < 2; p++) {
+        uint8_t count = pairCacheCounts[p];
+        uint8_t maxEntries = p ? PAIR_CACHE1_ENTRIES : PAIR_CACHE0_ENTRIES;
         pg[p][0] = pairCacheSegments[p][0];
-        pg[p][1] = pairCacheCount > 1 ? 1 : 0;
-        pg[p][2] = pairCacheCount;
+        pg[p][1] = count > 1 ? 1 : 0;
+        pg[p][2] = count;
         cache[p][0] = (uint8_t)(p * 2);
         cache[p][1] = (uint8_t)(p * 2 + 1);
         cache[p][2] = pairCacheSegments[p][0];
-        for (e = 1; e < PAIR_CACHE_ENTRIES; e++) {
+        for (e = 1; e < maxEntries; e++) {
             cache[p][e * 3]     = 0xFF;
             cache[p][e * 3 + 1] = 0xFF;
             cache[p][e * 3 + 2] = pairCacheSegments[p][e];
@@ -1062,6 +1087,30 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
     src = (uint8_t*)ascii8Dispatch;
     dst = (uint8_t*)RESIDENT_8K_DISPATCH_ADDR;
     for (i = 0; i < RESIDENT_8K_DISPATCH_SIZE; i++) dst[i] = src[i];
+}
+
+static void prewarmKonami16PairCache(void) {
+    uint8_t e, b;
+    uint8_t* cache;
+
+    cache = (uint8_t*)RESIDENT_CACHE1_ADDR;
+    for (e = 1, b = 0; e < pairCacheCounts[1]; b++) {
+        if (b == 2) b = 4;
+        if (b == 16) b = 3;
+        if (b >= 16 && b != 3) break;
+        PutPN_direct(2, pairCacheSegments[1][e]);
+        mapperCopyBank(b, 0, 1, 2);
+        mapperCopyBank(3, BANK_HALF_SIZE, 1, 2);
+        cache[e * 3] = b;
+        cache[e * 3 + 1] = 3;
+        cache[e * 3 + 2] = pairCacheSegments[1][e];
+        e++;
+        if (b == 3) break;
+    }
+    ((uint8_t*)RESIDENT_PG1_ADDR)[1] = e < pairCacheCounts[1] ? e : 1;
+
+    PutPN_direct(1, execSegment1);
+    PutPN_direct(2, execSegment2);
 }
 
 static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
@@ -1109,12 +1158,18 @@ uint8_t loadMappedRom(RomHeader* hdr) {
 
     storageCount = (hdr->bankSizeKB == 16) ? hdr->bankCount : (hdr->bankCount + 1) / 2;
     if (storageCount > MAX_STORAGE_SEGMENTS) {
-        pprintf("ROM too large: needs ", storageCount); Print(" segments\n");
+        pprintf("Too large: ", storageCount); Print(" seg\n");
+        drainMappedRomBody(hdr->bankCount, hdr->bankSizeKB);
+        progressEnd();
         return RC_FAILED;
     }
 
     rc = allocateMapperSegments((uint8_t)storageCount);
-    if (rc != RC_SUCCESS) return rc;
+    if (rc != RC_SUCCESS) {
+        drainMappedRomBody(hdr->bankCount, hdr->bankSizeKB);
+        progressEnd();
+        return rc;
+    }
 
     rc = loadBanksIntoStorage(hdr->bankCount, hdr->bankSizeKB);
     progressEnd();
@@ -1123,6 +1178,7 @@ uint8_t loadMappedRom(RomHeader* hdr) {
         freeMapperSegments(storageCount);
         return rc;
     }
+    Print("Cache...\n");
 
     // The bank-switch writes are already CALLs to our resident handlers -
     // msxpi-server patches the image before sending it, using the handler
@@ -1137,6 +1193,7 @@ uint8_t loadMappedRom(RomHeader* hdr) {
     } else if (hdr->mapperType == MAPPER_KONAMI) {
         relocateResidentHandlers8K(storageCount);
         konamiInitialSetup(hdr->bankCount);
+        if (hdr->bankCount == 16) prewarmKonami16PairCache();
     } else if (hdr->mapperType == MAPPER_ASCII8) {
         relocateResidentHandlers8K(storageCount);
         ascii8InitialSetup(hdr->bankCount);
