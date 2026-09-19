@@ -61,7 +61,7 @@ import shutil
 
 
 version = "1.6"
-BuildId = "20260919.058"
+BuildId = "20260919.059"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -5677,7 +5677,11 @@ signal.signal(signal.SIGTERM, _on_sigterm)
 
 try:
     if hostType == "RaspberryPi":
-        # SPI mode: keep trying forever
+        # SPI mode: keep trying forever.  Set the GPIO link up first: without
+        # this the first recvdata2() ran on unconfigured pins, failed with
+        # "Please set pin numbering mode", and only the error path below set
+        # the link up - a false error on every start.
+        initialize_connection()
         print(f"MSXPi Server waiting command:",end="")
         while True:
             try:
