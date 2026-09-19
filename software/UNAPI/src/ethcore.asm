@@ -85,9 +85,20 @@ UNAPI_ENTRY:
             push    de
             push    hl
             call    ETH_WRK                 ; IX = work area
+            ; Routine 129 (link claim/release) never touches the link, and
+            ; P.COM, PCOPY.COM and PVER.COM call it before every command
+            ; whether or not UNAPI is in use.  Probing on it put an Ethernet
+            ; transaction in front of their first command, which hung them on
+            ; a v0.8.2 board.  Leave the probe to the first real Ethernet call.
+            ld      hl,7
+            add     hl,sp
+            ld      a,(hl)                  ; caller's A, the routine number
+            cp      129
+            jr      z,.nodetect
             ld      a,(ix+o_ETH_MODE)
             inc     a                       ; MODE_UNKNOWN ($FF) -> 0
             call    z,ETH_DETECT
+.nodetect:
             pop     hl
             pop     de
             pop     bc

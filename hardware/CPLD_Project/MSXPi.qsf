@@ -75,6 +75,9 @@ set_location_assignment PIN_4 -to SPI_SCLK
 
 set_location_assignment PIN_39 -to SPI_RDY
 set_location_assignment PIN_37 -to WAIT_n
+# BUSDIR_n is deliberately NOT pinned: the PCB routes BUSDIR to U2 pin 31 and the
+# fitter already chooses 31 (check MSXPi.pin after every build).  Pinning it in
+# Quartus 13.0sp1 grows the fit from 46 to 61 of 64 macrocells.
 
 
 set_global_assignment -name FORCE_FITTER_TO_AVOID_PERIPHERY_PLACEMENT_WARNINGS OFF

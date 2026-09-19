@@ -38,6 +38,9 @@ architecture sim of tb_MSXPi is
     signal pi_bytes   : integer := 0;
     signal pi_abort   : boolean := false;   -- server killed (Ctrl-C -> GPIO.cleanup)
     signal pi_watch14 : boolean := false;   -- which DUT's SPI_CS the Pi follows
+    signal pi_ann_req : boolean := false;   -- server online/offline announce:
+    signal pi_ann_val : std_logic := '0';   -- one idle SCLK edge, MISO = value
+    signal pi_ann_done: boolean := false;
     signal pi_sigkill : boolean := false;   -- kill -9: GPIO pads keep their state,
                                            -- so SPI_RDY stays HIGH and SCLK stops
 
@@ -78,7 +81,7 @@ begin
                     report "MISMATCH SPI_CS" severity error;
                     errors <= errors + 1;
                 end if;
-                if WAIT13 /= WAIT14 then
+                if WAIT13 /= WAIT14 and not WAIT_PIN_IS_LED then
                     report "MISMATCH WAIT_n (legacy must be Z on both)" severity error;
                     errors <= errors + 1;
                 end if;
@@ -101,9 +104,19 @@ begin
             loop
                 exit when ((CS13 = '0') and not pi_watch14)
                        or ((CS14 = '0') and pi_watch14)
-                       or (not pi_run) or pi_abort;
+                       or (not pi_run) or pi_abort or pi_ann_req;
                 wait for 200 ns;
             end loop;
+            if pi_ann_req then
+                -- cpld_announce(): only ever sent with CS high
+                SPI_MISO <= pi_ann_val;
+                wait for 50 ns;
+                SPI_SCLK <= '1'; wait for PI_HALF; SPI_SCLK <= '0'; wait for PI_HALF;
+                pi_ann_done <= true;
+                wait until not pi_ann_req;
+                pi_ann_done <= false;
+                next;
+            end if;
             if pi_abort then
                 -- Ctrl-C / clean exit: GPIO.cleanup() releases the pad and the
                 -- R8 10K pulldown takes SPI_RDY low.  Recoverable: the server
@@ -200,6 +213,10 @@ begin
         variable g13, g14 : std_logic_vector(7 downto 0);
         variable st       : time;
         variable expect   : std_logic_vector(7 downto 0);
+        -- $57 as the package under test defines it: $0E / $8E for the main
+        -- v1.6 build, the build's own ID for the legacy-board builds.
+        constant VER_OFF  : std_logic_vector(7 downto 0) := "00" & MSXPIVer;
+        constant VER_ON   : std_logic_vector(7 downto 0) := "10" & MSXPIVer;
     begin
         wait for 1 us;
 
@@ -213,7 +230,15 @@ begin
         io_read(CTRLPORT2, g13, g14);
         assert g13 = g14 report "version read differs" severity error;
         report "  port $57 legacy reads " & to_hstring(g14);
-        assert g14 = x"0E" report "port $57 must read $0E (BC-2)" severity error;
+        assert g14 = VER_OFF report "port $57 must read the build ID (BC-2)" severity error;
+        assert g14 < x"FE" report "BC-2 VIOLATION: $57 reached $FE/$FF" severity error;
+
+
+        -- Server online announce: one SCLK edge outside a transfer.  Every
+        -- firmware must ignore it - the equivalence checker is running.
+        pi_ann_val <= '1'; pi_ann_req <= true;
+        wait until pi_ann_done; pi_ann_req <= false;
+        wait for 5 us;
 
         for k in 0 to 3 loop
             expect := std_logic_vector(to_unsigned(16#5A# + k*17, 8));
@@ -249,7 +274,67 @@ begin
         assert CS13 = '1' and CS14 = '1'
             report "BC-1 VIOLATION: legacy read of $5A started a transfer" severity error;
         report "  legacy read of $5A does not start a transfer: OK";
+        pi_ann_val <= '0'; pi_ann_req <= true;     -- and the offline one
+        wait until pi_ann_done; pi_ann_req <= false;
+        wait for 5 us;
         report "PHASE 1 complete, errors so far = " & integer'image(errors + errors2);
+
+        if not WAIT_SUPPORT then
+            -- Polled-only build: the mode register must not exist, so the
+            -- driver's "did $57 change?" probe sees no change, and /WAIT is
+            -- never driven.  Phases 2-6 exercise a mode that is absent here.
+            report "=== PHASE 2P: polled-only build, $57 write must be ignored ===";
+            io_write(CTRLPORT2, x"01");
+            wait for 2 us;
+            io_read(CTRLPORT2, g13, g14);
+            report "  port $57 after $01 write reads " & to_hstring(g14);
+            assert g14 = VER_OFF
+                report "polled build: $57 changed after a $01 write" severity error;
+            io_read(DATAPORT1, g13, g14);
+            assert CS14 = '1'
+                report "polled build: read of $5A started a transfer" severity error;
+            if WAIT_PIN_IS_LED then
+                -- LED build: off until the server announces itself, on while
+                -- online, dark during a byte, off again after "offline".
+                assert WAIT14 = '0'
+                    report "LED build: LED lit before the server announced" severity error;
+                pi_ann_val <= '1'; pi_ann_req <= true;
+                wait until pi_ann_done; pi_ann_req <= false;
+                wait for 5 us;
+                assert WAIT14 = '1'
+                    report "LED build: LED not lit after online" severity error;
+                io_write(DATAPORT1, x"3C");     -- first byte after the announce
+                wait for 40 us;
+                assert pi_rx14 = x"3C"
+                    report "LED build: announce disturbed the next byte" severity error;
+                pi_tx <= x"A5";
+                io_write(DATAPORT1, x"5A");     -- a byte in flight
+                assert WAIT14 = '0'
+                    report "LED build: LED not dark during a transfer" severity error;
+                wait for 40 us;
+                assert WAIT14 = '1'
+                    report "LED build: LED not back on after the transfer" severity error;
+                pi_ann_val <= '0'; pi_ann_req <= true;
+                wait until pi_ann_done; pi_ann_req <= false;
+                wait for 5 us;
+                assert WAIT14 = '0'
+                    report "LED build: LED still lit after offline" severity error;
+                report "  LED: off, online, follows READY, offline: OK";
+            else
+                assert WAIT14 /= '0'
+                    report "polled build: WAIT_n driven" severity error;
+            end if;
+            report "  mode register absent, /WAIT never driven: OK";
+            pi_run <= false;
+            wait for 2 us;
+            report "==================================================";
+            report "CHECKS RUN  : " & integer'image(checks);
+            report "TOTAL ERRORS: " & integer'image(errors + errors2);
+            report "==================================================";
+            assert errors + errors2 = 0 report "DIFFERENTIAL TEST FAILED" severity failure;
+            report "ALL TESTS PASSED" severity note;
+            std.env.stop;
+        end if;
 
         report "=== PHASE 2: WAIT mode ===";
         compare_en <= false;      -- v1.3 has no WAIT mode to compare against
@@ -260,7 +345,7 @@ begin
         wait for 2 us;
         io_read(CTRLPORT2, g13, g14);
         report "  port $57 in WAIT mode reads " & to_hstring(g14);
-        assert g14 = x"8E" report "mode bit not readable at $57 bit 7" severity error;
+        assert g14 = VER_ON report "mode bit not readable at $57 bit 7" severity error;
         assert g14 < x"FE" report "BC-2 VIOLATION: $57 reached $FE/$FF" severity error;
 
         for k in 0 to 3 loop
@@ -286,7 +371,7 @@ begin
         wait for 25 us;
         io_read(CTRLPORT2, g13, g14);
         report "  port $57 after reset reads " & to_hstring(g14);
-        assert g14 = x"0E" report "FR-5 VIOLATION: reset did not clear WAIT mode" severity error;
+        assert g14 = VER_OFF report "FR-5 VIOLATION: reset did not clear WAIT mode" severity error;
 
         io_read(DATAPORT1, g13, g14);
         assert CS14 = '1' report "FR-5 VIOLATION: still in WAIT mode" severity error;

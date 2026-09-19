@@ -117,7 +117,14 @@ case "$HW" in
             echo "   Set SDIMG=/path/to/nextor.sdc"
         fi
         ;;
-    *)     echo "unknown HW='$HW' (want msxpi or mfr)"; exit 1 ;;
+    # No MSXPi at all: a machine with its own floppy drive booting the MSXPi
+    # boot disk image, for tests of what the tools do when no board answers.
+    # Run with MACHINE=Panasonic_FS-A1WSX (Canon_V-25 has no drive).
+    nomsxpi)
+        EXTS=()
+        MEDIA_ARGS=(-diska "${BOOTDSK:-$HERE/../../target/disks/msxpiboot.dsk}")
+        ;;
+    *)     echo "unknown HW='$HW' (want msxpi, msxpi128, nextor, mfr or nomsxpi)"; exit 1 ;;
 esac
 
 # Headless by default.  Tests read the screen out of VRAM through the debugger,
@@ -151,6 +158,8 @@ else
             # disk image ./mknextorhd.sh builds; they would fail on any other
             # profile for reasons that have nothing to do with the driver.
             nextor_*) [ "$HW" = "nextor" ] || continue ;;
+            # nomsxpi_* boot a machine with no MSXPi cartridge (HW=nomsxpi).
+            nomsxpi_*) [ "$HW" = "nomsxpi" ] || continue ;;
         esac
         TESTS+=("$name")
     done

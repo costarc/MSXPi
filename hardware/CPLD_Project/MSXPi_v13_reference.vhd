@@ -121,7 +121,7 @@ begin
         elsif A = DATAPORT1 then
             D_out <= D_buff_pi;
         elsif A = CTRLPORT2 then
-            D_out <= "0000" & MSXPIVer;
+            D_out <= "00" & MSXPIVer;   -- 6-bit field since the legacy builds; same bits for $0D/$0E
         else
             D_out <= (others => 'Z');
         end if;

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <chrono>
 
 namespace openmsx {
@@ -19,20 +20,28 @@ static constexpr byte OP_CANCEL = 0x03;
 static constexpr byte OP_HELLO  = 0x7E;
 static constexpr byte PROTOCOL_VERSION = 1;
 
-static constexpr byte MSXPI_VERSION = 0x0E; // MSXPIVer "1110"
-static constexpr uint16_t SERVER_PORT = 5000;
+static constexpr byte MSXPI_VERSION = 0x0E; // firmware version, port 0x57
+static constexpr int DEFAULT_SERVER_PORT = 5000;
+
+// How long the Pi takes to clock one byte, and so how long a wait-mode stall
+// lasts. In the order of what the Pi's native GPIO engine needs.
+static constexpr auto TRANSFER_TIME = EmuDuration::usec(20);
 
 MSXPiDevice::MSXPiDevice(const DeviceConfig& config)
 	: MSXDevice(config)
-	, transferTime(EmuDuration::usec(config.getChildDataAsInt("transfer_time", 20)))
-	, readyTail(EmuDuration::usec(config.getChildDataAsInt("ready_tail", 0)))
-	, readyGap(EmuDuration::usec(config.getChildDataAsInt("ready_gap", 0)))
+	, activePort(DEFAULT_SERVER_PORT)
+	, portSetting(getCommandController(), "msxpiserver_port",
+		"TCP port used to connect to the MSXPi server",
+		DEFAULT_SERVER_PORT, 1, 65535)
 {
+	activePort = portSetting.getInt();
+	portSetting.attach(*this);
 	thread = std::thread(&MSXPiDevice::readLoop, this);
 }
 
 MSXPiDevice::~MSXPiDevice()
 {
+	portSetting.detach(*this);
 	shouldStop = true;
 	closeSocket();
 	if (thread.joinable()) {
@@ -41,8 +50,17 @@ MSXPiDevice::~MSXPiDevice()
 	}
 }
 
+void MSXPiDevice::update(const Setting& setting) noexcept
+{
+	(void)setting;
+	assert(&setting == &portSetting);
+	activePort = portSetting.getInt();
+	closeSocket();
+}
+
 void MSXPiDevice::closeSocket()
 {
+	std::lock_guard lock(socketMtx);
 	auto oldSock = sock.exchange(OPENMSX_INVALID_SOCKET);
 	if (oldSock != OPENMSX_INVALID_SOCKET) {
 		sock_close(oldSock);
@@ -50,57 +68,35 @@ void MSXPiDevice::closeSocket()
 }
 
 // ---------------------------------------------------------------------------
-// CPLD model
+// Interface model
 // ---------------------------------------------------------------------------
 
-void MSXPiDevice::cpldReset()
+void MSXPiDevice::interfaceReset()
 {
-	// RESET (OUT ($56),$FF): SPI_en_s <= '0', pi_sr <= 0, wait_mode <= '0'.
-	// The Pi does not see it: an offer it made still waits for SPI_CS, and a
-	// transfer it already clocks just finishes on its side.
+	// What OUT (0x56),0xFF does. The Pi does not see it: an offer it made
+	// still waits to be clocked, and a transfer it is already clocking just
+	// finishes on its side.
 	busy = false;
 	bound.reset();
 	srValue = 0x00;
 	waitMode = false;
 }
 
-void MSXPiDevice::reset(EmuTime /*time*/)
+void MSXPiDevice::powerUp(EmuTime /*time*/)
 {
-	// The CPLD does not see the MSX reset line, but the device registers
-	// clear at power-up, and a machine reset in openMSX must not leave a
-	// stretched transfer behind.
-	cpldReset();
+	interfaceReset();
 	latch = 0xFF;
-	haveLast = false;
 }
 
-bool MSXPiDevice::ready(EmuTime time) const
+bool MSXPiDevice::ready() const
 {
-	// SPI_RDY as the Pi drives it
-	if (link != Link::FRAMED) return false; // pull-down R8: no Pi
-	if (bound) return true;             // up until E10
-	if (inReleaseTail(time)) return true;
-	// an offer is waiting for SPI_CS, unless the Pi is still between bytes
-	return offerCount != 0 && !inReleaseGap(time);
-}
-
-bool MSXPiDevice::inReleaseTail(EmuTime time) const
-{
-	// E10 of a releasing offer until the Pi drops READY
-	return haveLast && !lastHold && time < lastDone + readyTail;
-}
-
-bool MSXPiDevice::inReleaseGap(EmuTime time) const
-{
-	// After a releasing offer READY stays low this long (after the tail)
-	// before the Pi can offer the next byte, even when that offer is
-	// already queued here.
-	return haveLast && !lastHold && time < lastDone + readyTail + readyGap;
+	// The Pi's READY line.
+	if (link != Link::FRAMED) return false; // no Pi: pulled low
+	return bound || offerCount != 0; // up while clocking or offering a byte
 }
 
 void MSXPiDevice::startTransfer(EmuTime time)
 {
-	// SPI_en_s <= '1', pi_sr <= "0000000001", SPI_CS low
 	busy = true;
 	bound.reset();
 	tryBind(time);
@@ -108,27 +104,23 @@ void MSXPiDevice::startTransfer(EmuTime time)
 
 void MSXPiDevice::tryBind(EmuTime time)
 {
+	// A started transfer gets clocked as soon as the Pi offers a byte.
 	if (!busy || bound || link != Link::FRAMED || offerCount == 0) return;
-	if (inReleaseGap(time)) return; // the Pi has not raised READY again yet
 	std::lock_guard lock(mtx);
 	if (offers.empty()) return; // withdrawn by a cancel meanwhile
 	bound = offers.front();
 	offers.pop_front();
 	offerCount = offers.size();
 	boundEpoch = epoch;
-	// E1: the Pi starts clocking and samples the write latch
+	// The Pi starts clocking now, and copies the latch as it does.
 	startTime = time;
-	doneTime = time + transferTime;
+	doneTime = time + TRANSFER_TIME;
 	sendFrame(OP_OFFER, latch);
 }
 
 void MSXPiDevice::complete()
 {
-	// E10: SPI_en_s <= '0'; pi_sr(7 downto 0) holds the received byte
 	srValue = bound->miso;
-	lastHold = bound->hold;
-	lastDone = doneTime;
-	haveLast = true;
 	bound.reset();
 	busy = false;
 }
@@ -137,7 +129,7 @@ void MSXPiDevice::update(EmuTime time)
 {
 	if (bound && boundEpoch != epoch) {
 		// The server went away mid-byte. Nobody clocks this transfer any
-		// more: it stays armed until RESET, or until a new server's first
+		// more: it stays started until reset, or until a new server's first
 		// offer picks it up - exactly what the hardware does.
 		bound.reset();
 	}
@@ -148,14 +140,14 @@ void MSXPiDevice::update(EmuTime time)
 byte MSXPiDevice::shiftRegister(EmuTime time) const
 {
 	if (!busy) return srValue;
-	if (!bound || time <= startTime) return 0x01; // sentinel only
-	// E2..E9 shift MISO in below the sentinel, one bit per ninth of the
-	// transfer (E10 does not shift)
+	// A marker bit is loaded at bit 0 when a transfer starts; the Pi's bits
+	// then shift in below it, one per ninth of the transfer time.
+	if (!bound || time <= startTime) return 0x01;
 	auto elapsed = (time - startTime).toUint64();
-	auto total = std::max<uint64_t>(transferTime.toUint64(), 1);
+	auto total = std::max<uint64_t>(TRANSFER_TIME.toUint64(), 1);
 	auto bits = unsigned(std::min<uint64_t>(8, (elapsed * 9) / total));
 	unsigned sr = (1u << bits) | (unsigned(bound->miso) >> (8 - bits));
-	return byte(sr); // after 8 bits the sentinel sits in bit 8, not visible
+	return byte(sr); // after 8 bits the marker is in bit 8, not visible
 }
 
 void MSXPiDevice::waitForPeer(EmuTime time)
@@ -180,22 +172,16 @@ void MSXPiDevice::waitForPeer(EmuTime time)
 
 EmuTime MSXPiDevice::stall(EmuTime time)
 {
-	// wait_assert <= wait_mode and SPI_RDY and spi_en and
-	//                (SPI_en_s or not started)
-	// The stretched cycle ends at E10 of a transfer the Pi clocks, or when
-	// READY drops under a transfer it never took.
-	if (!waitMode || !busy || !ready(time)) return time;
-	EmuTime until = time;
-	if (bound) {
-		until = doneTime;
-	} else if (inReleaseTail(time)) {
-		until = lastDone + readyTail;
+	// Wait mode holds /WAIT while a transfer runs and the Pi's READY is up;
+	// the stretched I/O cycle ends when the Pi has clocked the byte. Returns
+	// the time the I/O cycle ends.
+	if (!waitMode || !busy || !bound) return time;
+	if (doneTime > time) {
+		getCPU().wait(doneTime);
+		update(doneTime);
+		return doneTime;
 	}
-	if (until > time) {
-		getCPU().wait(until);
-		update(until);
-	}
-	return until;
+	return time;
 }
 
 byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
@@ -215,8 +201,8 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 	case 0x5A:
 		update(time);
 		if (waitMode) {
-			// spi_en read term: wait_mode and readoper and SPI_RDY
-			if (!busy && ready(time)) startTransfer(time);
+			// a wait-mode read starts a transfer, but only when the Pi is ready
+			if (!busy && ready()) startTransfer(time);
 			return shiftRegister(stall(time));
 		}
 		return shiftRegister(time);
@@ -228,11 +214,11 @@ byte MSXPiDevice::readIO(uint16_t port, EmuTime time)
 byte MSXPiDevice::peekIO(uint16_t port, EmuTime time) const
 {
 	switch (port & 0xff) {
-	case 0x56: // "0000000" & (SPI_en_s or not SPI_RDY)
-		return (busy || !ready(time)) ? 0x01 : 0x00;
-	case 0x57: // wait_mode & '0' & "00" & MSXPIVer
+	case 0x56: // bit 0: transfer running or Pi not ready
+		return (busy || !ready()) ? 0x01 : 0x00;
+	case 0x57:
 		return byte((waitMode ? 0x80 : 0x00) | MSXPI_VERSION);
-	case 0x5A: // pi_sr(7 downto 0)
+	case 0x5A:
 		return shiftRegister(time);
 	default:
 		return 0xFF;
@@ -245,19 +231,19 @@ void MSXPiDevice::writeIO(uint16_t port, byte value, EmuTime time)
 	case 0x56:
 		if (value == 0xFF) {
 			latch = value;
-			cpldReset();
+			interfaceReset();
 			break;
 		}
 		[[fallthrough]];
 	case 0x5A:
 		update(time);
-		latch = value; // D_buff_msx follows D on every $56/$5A write
-		// spi_en write term: a write starts a transfer, READY or not
+		latch = value;
+		// a write starts a transfer, whether the Pi is ready or not
 		if (!busy) startTransfer(time);
-		(void)stall(time);
+		stall(time);
 		break;
 	case 0x57:
-		// mode register: only $01 sets and only $00 clears it
+		// only 0x01 sets and only 0x00 clears wait mode
 		if (value == 0x01) {
 			waitMode = true;
 		} else if (value == 0x00) {
@@ -285,13 +271,13 @@ void MSXPiDevice::handleFrame(byte op, byte arg)
 {
 	switch (op) {
 	case OP_HOLD:
-		pendingHold.push_back({arg, true});
+		pendingHold.emplace_back(arg, true);
 		break;
 	case OP_OFFER: {
 		// a run of holds becomes visible together with its closing offer
 		std::lock_guard lock(mtx);
-		for (const auto& o : pendingHold) offers.push_back(o);
-		offers.push_back({arg, false});
+		offers.insert(offers.end(), pendingHold.begin(), pendingHold.end());
+		offers.emplace_back(arg, false);
 		offerCount = offers.size();
 		pendingHold.clear();
 		offerCv.notify_all();
@@ -317,11 +303,18 @@ bool MSXPiDevice::connectSocket()
 {
 	SOCKET s = socket(AF_INET, SOCK_STREAM, 0);
 	if (s == OPENMSX_INVALID_SOCKET) return false;
-	auto addr = sock_makeIPv4(INADDR_LOOPBACK, SERVER_PORT); // 127.0.0.1
+	auto port = activePort.load();
+	auto addr = sock_makeIPv4(INADDR_LOOPBACK, uint16_t(port)); // 127.0.0.1
 	// Every transfer is a small request/response; Nagle plus the server's
 	// delayed ACK would hold each frame back ~40 ms.
 	sock_setNoDelay(s);
 	if (connect(s, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
+		sock_close(s);
+		return false;
+	}
+
+	std::lock_guard lock(socketMtx);
+	if ((port != activePort.load()) || (sock != OPENMSX_INVALID_SOCKET)) {
 		sock_close(s);
 		return false;
 	}

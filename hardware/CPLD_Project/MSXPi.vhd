@@ -35,6 +35,11 @@
 --                 a 4-bit hardware-generation code, not a release number, and
 --                 only one value is left in the field.  See
 --                 WAIT_STATE_IMPLEMENTATION.md section 4.
+-- Version 1.6 legacy builds - MSXPIVer widened to 6 bits ($57 bits 5-0) and
+--                 a WAIT_SUPPORT switch added to the package, so this same
+--                 file builds for the older boards: see the per-release
+--                 subdirectories (v0.8.2, v1.1) and LEGACY_BOARDS.md.
+--                 The main v1.6 build still reads $0E / $8E.
 -- ==============================================================================
 
 -- ==============================================================================
@@ -147,6 +152,9 @@ architecture rtl of MSXPi is
     signal started          : std_logic := '0';
     signal wait_assert      : std_logic;
 
+    -- Server online flag, LED build only (see online_reg)
+    signal online           : std_logic := '0';
+
 begin
 
     -- ==========================================================================
@@ -216,8 +224,12 @@ begin
             wait_mode <= '0';
         elsif rising_edge(wr_ctrl2) then
             -- Only $01 sets it; every other value is a no-op (FR-4).  $00 is
-            -- handled by the asynchronous clear above.
-            if D = WAITMODE_ON then
+            -- handled by the asynchronous clear above.  With WAIT_SUPPORT false
+            -- (builds for boards whose /WAIT pin is not wired to the slot) the
+            -- register is a constant '0': $57 reads back unchanged after a $01
+            -- write, which is how the disk driver tells it to stay polled, and
+            -- WAIT_n is never driven.
+            if D = WAITMODE_ON and WAIT_SUPPORT then
                 wait_mode <= '1';
             end if;
         end if;
@@ -264,7 +276,37 @@ begin
     -- SPI_RDY is in the term on purpose - see the header note.
     -- ==========================================================================
     wait_assert <= wait_mode and SPI_RDY and spi_en and (SPI_en_s or (not started));
-    WAIT_n      <= '0' when wait_assert = '1' else 'Z';
+    -- On the v0.8.2 board (PCB v0.7 Rev.7) this pin drives the activity LED
+    -- through R1, not the slot /WAIT line.  That build shows the server's
+    -- state: off while msxpi-server.py is not running, and while it is the
+    -- original firmware's activity light (LED <= not SPI_RDY_s): lit while
+    -- the Pi is ready, dark while it works on a command or a byte moves.
+    -- The online flag below is what keeps it off before the server starts
+    -- and after it stops - driven by READY alone the LED was lit before the
+    -- server ran (this board has no pull-down on READY, unlike R8 on the
+    -- newer PCBs).  Every other build leaves WAIT_PIN_IS_LED false and
+    -- the register below is optimised away.
+    WAIT_n      <= (online and not SPI_RDY_s) when WAIT_PIN_IS_LED else
+                   '0' when wait_assert = '1' else 'Z';
+
+    -- ==========================================================================
+    -- Server online flag (LED build only)
+    -- The server announces itself with one SCLK rising edge while NO transfer
+    -- is running, MISO = '1' for online and '0' for offline
+    -- (cpld_announce() in msxpi-server.py).  A transfer always has SPI_en_s
+    -- = '1' at each of its edges, so normal traffic never touches the flag,
+    -- and every older firmware ignores an SCLK edge outside a transfer.
+    -- The server only sends it with CS high: an edge while a byte is pending
+    -- would be taken as that byte's E1.  Power-up clears it (LED off).
+    -- ==========================================================================
+    online_reg: process(SPI_SCLK)
+    begin
+        if rising_edge(SPI_SCLK) then
+            if SPI_en_s = '0' then
+                online <= SPI_MISO;
+            end if;
+        end if;
+    end process;
 
     -- ==========================================================================
     -- D Bus Output Logic
@@ -288,10 +330,14 @@ begin
             --            all would produce exactly $FE and break detection in
             --            the field.  Holding bit 6 at '0' caps the port at $BF
             --            for ever, whatever bits 5..0 are later used for.
-            --   bits 5-4 free for future use
-            --   bits 3-0 MSXPIVer
-            -- Reads $0E with the mode off, $8E with it on.
-            D_out <= wait_mode & '0' & "00" & MSXPIVer;
+            --   bits 5-0 MSXPIVer, the firmware build ID.  Widened from 4 to
+            --            6 bits once the 4-bit codes ran out: bits 5-4 were
+            --            always '0', so every existing code reads exactly as
+            --            before, and the new IDs ($10-$3F) still sit below
+            --            $FE.  Every distinct firmware build gets its own ID;
+            --            pver.com turns it into a board and build name.
+            -- Reads $0E with the mode off, $8E with it on (main v1.6 build).
+            D_out <= wait_mode & '0' & MSXPIVer;
         else
             D_out <= (others => 'Z');
         end if;

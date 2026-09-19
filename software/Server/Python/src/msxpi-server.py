@@ -61,7 +61,7 @@ import shutil
 
 
 version = "1.6"
-BuildId = "20260916.057"
+BuildId = "20260919.058"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -402,7 +402,10 @@ PORT = 5000       # Match this with serverPort in your C++ code
 conn = None
 
 hostType = "RaspberryPi"
-RPI_SHUTDOWN = 26
+# Shutdown/reboot button GPIO, from "var RPI_SHUTDOWN=<gpio>" in msxpi.ini -
+# see the main section.  None (the default) means no button: the pin is not
+# even configured.
+RPI_SHUTDOWN = None
 press_time = None
 
 def detect_host():
@@ -434,7 +437,8 @@ def init_spi_bitbang():
     GPIO.setup(SPI_MOSI, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
-    GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    if RPI_SHUTDOWN is not None:
+        GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     _init_fast_gpio()
 
 # =============================================================================
@@ -583,7 +587,8 @@ def _init_fast_gpio():
                                      f"- run update.sh")
             _NATIVE_GPIO = native
             print(f"init_fast_gpio(): native GPIO payload engine active "
-                  f"(half-period {_NATIVE_GPIO.half_period_ns} ns)")
+                  f"(half-period {_NATIVE_GPIO.half_period_ns} ns, "
+                  f"CS setup {getattr(_NATIVE_GPIO, 'cs_setup_ns', 0)} ns)")
         except (OSError, ValueError, ImportError, AttributeError) as e:
             print(f"init_fast_gpio(): native engine unavailable ({e}); using Python GPIO")
 
@@ -3322,6 +3327,14 @@ def shut(parm=None):
             sendmultiblock(b'Command not supported by this platform')
 
 def button_handler(channel):
+    # A press must hold the line low WITHOUT A BREAK for 200 ms.  Noise coupled
+    # from SCLK/CS (header pins 38/40, next to GPIO 26 on pin 37) is continuous
+    # during a transfer, so a single sample could land low and reboot the Pi;
+    # sampling every 5 ms cannot be fooled that way.
+    for _ in range(40):
+        time.sleep(0.005)
+        if GPIO.input(RPI_SHUTDOWN) != GPIO.LOW:
+            return
     start = time.time()
     # Wait for release
     while GPIO.input(RPI_SHUTDOWN) == GPIO.LOW:
@@ -3338,7 +3351,7 @@ def button_handler(channel):
    
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")
-    GPIO.cleanup() # cleanup all GPIO
+    release_gpio()
     os.system("/home/pi/msxpi/kill.sh")
 
 def updateIniFile(fname,memvar):
@@ -5440,9 +5453,86 @@ def stock(command_str: str):
         print(len("\r\n".join(lines).encode()))
         sendmultiblock("\r\n".join(lines).encode())
 
+_stopping = False
+
+def _system_stopping():
+    """True once the Pi is shutting down or rebooting.  A server started then
+    (msxpi-monitor restarting it) must not announce itself online: it is about
+    to be SIGKILLed and could never take the LED down again.  It costs a
+    subprocess, so it runs once, when the link is set up; the per-block and
+    per-command announces only read the resulting flag."""
+    global _stopping
+    if not _stopping:
+        try:
+            state = subprocess.run(["systemctl", "is-system-running"],
+                                   capture_output=True, text=True,
+                                   timeout=1).stdout.strip()
+            _stopping = state == "stopping"
+        except Exception:
+            pass
+    return _stopping
+
+def cpld_announce(online):
+    """Tell the CPLD the server is online (True) or going offline (False).
+
+    One SCLK rising edge while no transfer is running, with MISO carrying the
+    state.  Only the v0.8.2-board CPLD build uses it - to light its LED while
+    the server is up - and every other CPLD firmware, old or new, ignores an
+    SCLK edge outside a transfer (checked in tb_MSXPi.vhd against v1.3).
+
+    Never sent with CS low: then the MSX has a byte pending and this edge
+    would be taken as that byte's first clock.  Best effort - a failure here
+    must never stop the server."""
+    if hostType != "RaspberryPi":
+        return
+    if online and _stopping:        # set by _system_stopping(), see there
+        return
+    try:
+        if GPIO.input(SPI_CS) == GPIO.LOW:
+            if online:
+                return
+            # Going offline with a byte pending: clock it out first (ten
+            # edges, as SPI_ByteTransfer does) - the flag only changes
+            # outside a transfer.  Nobody reads that byte any more.
+            for _ in range(10):
+                GPIO.output(SPI_SCLK, GPIO.HIGH)
+                GPIO.output(SPI_SCLK, GPIO.LOW)
+        GPIO.output(SPI_MISO, GPIO.HIGH if online else GPIO.LOW)
+        GPIO.output(SPI_SCLK, GPIO.HIGH)
+        GPIO.output(SPI_SCLK, GPIO.LOW)
+    except Exception:
+        pass
+
+def release_gpio():
+    """Clean exit: tell the CPLD we are going offline, then release the pins -
+    except SCLK and MISO, which stay driven low.
+
+    Released, those two float into the CPLD, and a noise edge on SCLK with
+    MISO floating high reads as an "online" announce: the v0.8.2 LED came
+    back on after the server had stopped.  A halted Pi keeps its outputs as
+    they are, so the lines stay quiet until power-off.  RPI_READY is still
+    released as before - the /WAIT safety story relies on its pull-down."""
+    global _stopping
+    _stopping = True                # nothing may relight the LED from here on
+    print("MSXPi Server: announcing offline to the CPLD")
+    cpld_announce(False)
+    try:
+        GPIO.output(SPI_SCLK, GPIO.LOW)
+        GPIO.output(SPI_MISO, GPIO.LOW)
+        pins = [SPI_CS, SPI_MOSI, RPI_READY]
+        if RPI_SHUTDOWN is not None:
+            pins.append(RPI_SHUTDOWN)
+        GPIO.cleanup(pins)
+    except Exception:
+        GPIO.cleanup()
+
 def initialize_connection():
     if hostType == "RaspberryPi":
         init_spi_bitbang()
+        # Before READY goes up, so the MSX cannot start a byte under it.
+        if _system_stopping():
+            print("MSXPi Server: system is stopping - not announcing online")
+        cpld_announce(True)
         GPIO.output(RPI_READY, GPIO.HIGH)
         time.sleep(0.2)
         GPIO.output(RPI_READY, GPIO.LOW)
@@ -5453,17 +5543,20 @@ def initialize_connection():
         # detection already enabled", which used to escape and kill the
         # server - turning one bad byte into a crash loop that the monitor
         # restarted for ever, with the MSX unable to boot at all.
-        try:
-            GPIO.remove_event_detect(RPI_SHUTDOWN)
-        except Exception:
-            pass
-        try:
-            GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
-                                  callback=button_handler, bouncetime=200)
-        except Exception as e:
-            # Losing the shutdown button is a far smaller problem than losing
-            # the server, so carry on rather than raise.
-            print(f"MSXPi Server: shutdown button unavailable ({e})")
+        if RPI_SHUTDOWN is None:
+            print("MSXPi Server: no shutdown button (RPI_SHUTDOWN not set in msxpi.ini)")
+        else:
+            try:
+                GPIO.remove_event_detect(RPI_SHUTDOWN)
+            except Exception:
+                pass
+            try:
+                GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
+                                      callback=button_handler, bouncetime=200)
+            except Exception as e:
+                # Losing the shutdown button is a far smaller problem than
+                # losing the server, so carry on rather than raise.
+                print(f"MSXPi Server: shutdown button unavailable ({e})")
         print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n"
               f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
         return None
@@ -5491,7 +5584,9 @@ if exists(MSXPIHOME+'/msxpi.ini'):
         if not line:
             break
     
-        if line.startswith('var'):
+        # A "var" line without "=" (say "var RPI_SHUTDOWN") used to raise
+        # IndexError here and kill the server at start-up; skip it instead.
+        if line.startswith('var') and '=' in line:
             var = line.split(' ')[1].split('=')[0].strip()
             value = line.replace('var ','',1).replace(var,'',1).split('=')[1].strip()
             psetvar.append([var,value])
@@ -5551,6 +5646,34 @@ SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
 SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
+# Shutdown/reboot button.  Only boards that have one (PCB v1.2 Rev.1 and
+# later, GPIO 26) set "var RPI_SHUTDOWN=26" in msxpi.ini.  Missing, empty or
+# anything that is not a usable GPIO number means no button, and the interrupt
+# is never set up: on the older boards the unconnected pin picked up noise
+# that read as a press and rebooted the Pi in a loop.  Never crash over a bad
+# value - the monitor would just restart the server for ever.
+_shut = getMSXPiVar("RPI_SHUTDOWN").strip()
+RPI_SHUTDOWN = int(_shut) if _shut.isdigit() and 2 <= int(_shut) <= 27 else None
+
+# Settling time between CS low and the first SPI clock edge, in ns, for the
+# native GPIO engine: "var GPIO_CS_SETUP_NS=1000" in msxpi.ini.  Unset or
+# invalid means 0, the original timing.  The v0.8.2 board (PCB v0.7 Rev.7)
+# needs it; see msxpi_gpio_set_cs_setup() in native/gpio_transfer.c.  An
+# MSXPI_GPIO_CS_SETUP_NS already in the environment wins, and the engine
+# itself reads that variable, so hand it over through the environment.
+_cs_setup = getMSXPiVar("GPIO_CS_SETUP_NS").strip()
+if _cs_setup.isdigit() and int(_cs_setup) <= 100000:
+    os.environ.setdefault("MSXPI_GPIO_CS_SETUP_NS", _cs_setup)
+
+# SIGTERM (sudo shutdown, "p shut", a service stop) takes the same clean exit
+# as Ctrl-C, so the CPLD is told the server is going offline and the pins are
+# released.  kill -9 still cannot be caught.
+import signal
+def _on_sigterm(signum, frame):
+    global _stopping
+    _stopping = True                # before any finally: block can relight it
+    raise KeyboardInterrupt
+signal.signal(signal.SIGTERM, _on_sigterm)
 
 try:
     if hostType == "RaspberryPi":
@@ -5558,6 +5681,10 @@ try:
         print(f"MSXPi Server waiting command:",end="")
         while True:
             try:
+                # Between commands READY is low (every byte transfer ends with
+                # it low), so the MSX cannot start a byte under this edge.  It
+                # clears the v0.8.2 CPLD's blink counter, so its LED is lit -
+                # never stuck dark mid-count - while waiting for a command.
                 DISABLETIMEOUT = True
                 rc, buf = recvdata2()
                 #print(f"MSXPi Server: Command received: {buf} (rc={hex(rc)})")
@@ -5717,7 +5844,7 @@ try:
 
 except KeyboardInterrupt:
     if hostType == "RaspberryPi":
-        GPIO.cleanup()
+        release_gpio()
     try:
         if server_socket:
             server_socket.close()

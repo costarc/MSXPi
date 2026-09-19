@@ -51,6 +51,21 @@ class NativeGPIO:
         self.burst = self.library.msxpi_gpio_burst
         self.burst.argtypes = self.transfer.argtypes
         self.burst.restype = C.c_int
+        # Delay between CS low and the first clock edge; 0 keeps the original
+        # timing.  The v0.8.2 board (PCB v0.7 Rev.7) needs one - see
+        # msxpi_gpio_set_cs_setup() in native/gpio_transfer.c.  An older
+        # library without the setter simply keeps its fixed timing.
+        self.cs_setup_ns = int(os.environ.get('MSXPI_GPIO_CS_SETUP_NS', '0'))
+        if not 0 <= self.cs_setup_ns <= 100000:
+            raise ValueError('MSXPI_GPIO_CS_SETUP_NS must be 0..100000')
+        if self.cs_setup_ns:
+            setter = getattr(self.library, 'msxpi_gpio_set_cs_setup', None)
+            if setter is None:
+                raise ValueError('MSXPI_GPIO_CS_SETUP_NS needs a rebuilt '
+                                 'native/libmsxpi_gpio.so (run native/build.sh)')
+            setter.argtypes = [C.c_uint32]
+            setter.restype = C.c_int
+            setter(self.cs_setup_ns)
         self.bytes = self.wait_ns = self.elapsed_ns = 0
 
     def _transfer(self, payload, length, burst=False):

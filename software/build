@@ -21,8 +21,8 @@ python3 asm-common/transport/generate.py --check || exit 1
 # --- what to build -----------------------------------------------------------
 buildClientCommands="${buildClientCommands:-yes}"
 buildBIOS="${buildBIOS:-yes}"
-buildLoadrom="${buildLoadrom:-no}"
-buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
+buildLoadrom="${buildLoadrom:-yes}"
+buildOpenMSXConfig="${buildOpenMSXConfig:-yes}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
 # Bump the BuildId in the server before compiling? Off while iterating, so a
@@ -32,7 +32,7 @@ updateServerVersion="${updateServerVersion:-yes}"
 
 # Bump only the BuildIds that are baked into the ROM artifacts:
 # msxpibios.rom and msxpiext.bin.
-updateRomVersion="${updateRomVersion:-no}"
+updateRomVersion="${updateRomVersion:-yes}"
 
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
@@ -228,6 +228,19 @@ if [ "$buildBIOS" = "yes" ]; then
     # working when the version in BIOSNAME changes. The updater does not copy
     # it: gen_update_batch keeps only $BIOSNAME.rom.
     cp "$BIOSFILE" target/msxpibios.rom || die "could not write target/msxpibios.rom"
+
+    # 27C256 EPROM images for the v0.8.2 and v1.0 releases (both PCB v0.7
+    # Rev.7, one image), which have no
+    # in-circuit programmable EEPROM: the same 16 KB ROM written into both
+    # halves.  Those boards decode only 16 KB of the chip, and which half
+    # depends on how A14 is strapped, so a doubled image works either way.
+    # They live in per-release subdirectories, which gen_update_batch and the
+    # disk stage skip (they only take plain files from target/).
+    for board in v0.8.2 v1.0; do
+        mkdir -p target/$board
+        cat "$BIOSFILE" "$BIOSFILE" > target/$board/${BIOSNAME}_27c256.rom ||
+            die "could not write target/$board/${BIOSNAME}_27c256.rom"
+    done
     echo "  $BIOSFILE  $(sha1sum "$BIOSFILE" | cut -c1-40)"
 fi
 
