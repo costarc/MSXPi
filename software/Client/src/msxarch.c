@@ -83,7 +83,12 @@ uint8_t readRomHeader(RomHeader* hdr, char* reason, uint16_t reasonBufSize) {
     uint16_t maxbuf = ROM_MSG_MAX;
     uint8_t  rc = RECVDATA(buf, &replySize, &maxbuf);
 
-    if (rc != RC_SUCCESS || replySize < ROM_HEADER_SIZE || buf[0] != ROM_HEADER_MAGIC)
+    // RC_TERMINATE on the header block is a fatal rejection: the server has
+    // ended the conversation and sends nothing more (see reject() in
+    // msxpi-server.py). It carries a header plus the reason, like any
+    // rejection, and is reported as MAPPER_REJECTED below.
+    if ((rc != RC_SUCCESS && rc != RC_TERMINATE) ||
+        replySize < ROM_HEADER_SIZE || buf[0] != ROM_HEADER_MAGIC)
         return RC_FAILED;
 
     hdr->mapperType = buf[2];
@@ -91,6 +96,8 @@ uint8_t readRomHeader(RomHeader* hdr, char* reason, uint16_t reasonBufSize) {
     hdr->bankCount  = (uint16_t)buf[4] | ((uint16_t)buf[5] << 8);
     hdr->totalSize  = (uint32_t)buf[6] | ((uint32_t)buf[7] << 8) |
                        ((uint32_t)buf[8] << 16) | ((uint32_t)buf[9] << 24);
+    if (rc == RC_TERMINATE)
+        hdr->mapperType = MAPPER_REJECTED;
 
     if (reason && reasonBufSize > 0) {
         uint16_t reasonLen = replySize - ROM_HEADER_SIZE;
@@ -510,8 +517,14 @@ static uint8_t takeSegment(uint8_t* out) {
     return RC_FAILED;
 }
 
-static uint8_t allocateMapperSegments(uint8_t storageCount) {
-    uint8_t i;
+// Segments takeSegment() can hand out: 1..segTotal-1, minus the four DOS is
+// running in. Sent to the server with every selection, so it can refuse a ROM
+// that does not fit BEFORE sending it - see buildSelection. The server used to
+// send the image regardless; the MSX found too few segments, printed the error
+// and returned while the server was still waiting to send the first block, and
+// both sides hung.
+static uint8_t usableMapperSegments(void) {
+    uint8_t s, n = 0;
 
     segInUse0 = InPort(0xFC);
     segInUse1 = InPort(0xFD);
@@ -519,9 +532,24 @@ static uint8_t allocateMapperSegments(uint8_t storageCount) {
     segInUse3 = InPort(0xFF);
 
     segTotal = detectMapperSegments();
-    if (segTotal < (uint8_t)(storageCount + 4)) {
-        pprintf("Not enough mapper segments: have ", segTotal);
-        pprintf(", need ", (uint16_t)storageCount + 4); pprints("", "\n");
+    for (s = (uint8_t)(segTotal - 1); s > 0; s--)
+        if (!segmentIsReserved(s)) n++;
+    return n;
+}
+
+// A mapped ROM takes its storage segments plus two exec segments and the safe
+// zone; the pair caches only use what is left.
+#define MAPPER_WORK_SEGMENTS 3
+
+static uint8_t allocateMapperSegments(uint8_t storageCount) {
+    uint8_t i;
+    uint8_t usable = usableMapperSegments();
+
+    // Normally caught by the server first; kept for an older server.
+    if (usable < (uint8_t)(storageCount + MAPPER_WORK_SEGMENTS)) {
+        pprintf("Not enough mapper segments: have ", usable);
+        pprintf(", need ", (uint16_t)storageCount + MAPPER_WORK_SEGMENTS);
+        pprints("", "\n");
         return RC_FAILED;
     }
     segNext = (uint8_t)(segTotal - 1);
@@ -760,6 +788,12 @@ static void buildSelection(char* out, const char* number) {
         appendHex4(out + i, addr[j]);
         i += 4;
     }
+    // Eighth value: mapper segments free for the game (usableMapperSegments),
+    // so the server refuses a ROM that cannot fit instead of sending it. A
+    // server that does not know it ignores it.
+    out[i++] = ' ';
+    appendHex4(out + i, usableMapperSegments());
+    i += 4;
     out[i] = 0;
 }
 
@@ -1360,7 +1394,13 @@ int main(void) {
 
         uint8_t rc;
         int cmd;
+        // Net Next (+1) / Previous (-1) page presses since this location's
+        // list was opened. When a game is rejected the server ends the
+        // session, so the list is opened again (openList) and moved back to
+        // the page the user was on.
+        int pageOffset = 0;
 
+    openList:
         rc = SendCommandToMSXPi("msxarchive", false);
         if (rc != RC_SUCCESS) {
             Print("Error sending command to MSXPi!\n");
@@ -1381,6 +1421,8 @@ int main(void) {
         uint16_t replySize = 0;
         uint16_t maxbuf = MAXBUFSIZE;
         bool returnToMenu = false;
+        bool reopen = false;         // a game was rejected: open the list again
+        int replay = pageOffset;     // page presses still to repeat after reopening
 
         while (1) {
             rc = RECVDATA(buffer, &replySize, &maxbuf);
@@ -1404,6 +1446,17 @@ int main(void) {
                 break;
             }
 
+            // Reopened after a rejection: page back to where the user was
+            // before showing anything. The server wraps pages the same way
+            // both times, so repeating the net presses lands on that page.
+            if (replay != 0) {
+                rc = SendCommandToMSXPi(replay > 0 ? "N" : "P", false);
+                replay += (replay > 0) ? -1 : 1;
+                if (rc != RC_SUCCESS)
+                    break;
+                continue;
+            }
+
             Locate(0, 1);
             Print("================================================================================");
             Locate(0, 2);
@@ -1419,9 +1472,11 @@ int main(void) {
             }
             else if (cmd == INPUT_N || cmd == INPUT_DOWN) {
                 rc = SendCommandToMSXPi("N", false);
+                pageOffset++;
             }
             else if (cmd == INPUT_P || cmd == INPUT_UP) {
                 rc = SendCommandToMSXPi("P", false);
+                pageOffset--;
             }
             else {
                 {
@@ -1442,11 +1497,15 @@ int main(void) {
                     sendQuit();
                     return 1;
                 }
+                // Rejected (not enough RAM, unsupported mapper, missing file...).
+                // The server has ended the session and sent nothing more, so
+                // show why and go back to the same list to choose another game.
                 if (romHeader.mapperType == MAPPER_REJECTED) {
                     Print(romRejectReason);
-                    Print("\n");
-                    sendQuit();
-                    return 1;
+                    Print("\n\nPress any key to choose another game\n");
+                    WaitForKey();
+                    reopen = true;
+                    break;
                 }
                 // For an accepted ROM the text after the header is the game's
                 // name (an older server sends none, which prints just "Loading").
@@ -1499,6 +1558,10 @@ int main(void) {
                 break;
         }
         sendQuit();
+        if (reopen) {
+            Cls();
+            goto openList;
+        }
         if (!returnToMenu)
             return 0;
         Cls();

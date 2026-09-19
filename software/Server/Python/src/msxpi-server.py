@@ -4067,22 +4067,30 @@ def msxarchive(parms = None):
                 # expects it right after sending a file number. Rejections carry
                 # MAPPER_REJECTED plus a short reason string instead of a ROM body,
                 # so the client never mistakes a plain-text reply for ROM data.
+                # A rejection is FATAL: its header block goes out with
+                # RC_TERMINATE instead of RC_SUCCESS, so the MSX knows the
+                # conversation is over and nothing else will be sent, whatever
+                # it reads in the header.
                 def reject(reason):
                     print(reason)
                     header = build_rom_header(MAPPER_REJECTED, 0, 0, 0)
-                    sendmultiblock(header + reason.encode())
+                    sendmultiblock(header + reason.encode(), RC_TERMINATE)
                     return RC_FAILED
 
                 # The MSX appends the addresses it relocated its resident
                 # bank-switch handlers to, so this side can patch the image and
                 # the MSX does not have to scan it. Absent => old client, which
-                # patches for itself.
+                # patches for itself. An eighth value is the number of mapper
+                # segments free for the game; absent => not checked here.
                 msx_handlers = None
+                msx_free_segments = None
                 try:
                     fields = str(parm).split()
                     file_num = int(fields[0])
                     if len(fields) >= 7:
                         msx_handlers = tuple(int(f, 16) for f in fields[1:8])
+                    if len(fields) >= 9:
+                        msx_free_segments = int(fields[8], 16)
                 except (ValueError, TypeError, IndexError):
                     return reject(f"Invalid input: {cmd}")
 
@@ -4155,6 +4163,19 @@ def msxarchive(parms = None):
                     bank_count = len(buf) // (bank_size_kb * 1024)
                     print(f"{filename}: detected mapper type {mapper_type}, "
                           f"{bank_size_kb}KB banks, {bank_count} banks")
+                    # Refuse a ROM the MSX has no room for BEFORE sending it:
+                    # the MSX used to find out only after the header, print its
+                    # error and stop while this side was still waiting to send
+                    # the image, and both hung. Storage is one 16K segment per
+                    # 16K bank or per two 8K banks, plus msxarch's two exec
+                    # segments and safe zone (MAPPER_WORK_SEGMENTS in msxarch.c).
+                    if msx_free_segments is not None:
+                        storage = bank_count if bank_size_kb == 16 else (bank_count + 1) // 2
+                        need = storage + 3
+                        if msx_free_segments < need:
+                            return reject(f"{filename}: not enough RAM - needs "
+                                          f"{need * 16}KB ({need} segments), the "
+                                          f"MSX has {msx_free_segments * 16}KB free.")
                     header = build_rom_header(mapper_type, bank_size_kb, bank_count, len(buf))
 
                 # The file name follows the header so the MSX can show what

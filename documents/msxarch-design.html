@@ -68,6 +68,7 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 <nav aria-label="Contents"><b>Contents</b>
 <ol>
 <li><a href="#pipeline">1 Pipeline</a></li>
+<li><a href="#protocol">1a Protocol &amp; errors</a></li>
 <li><a href="#identify">2 Identification</a></li>
 <li><a href="#runtime">3 Loading &amp; runtime</a></li>
 <li><a href="#patching">4 Patching engine</a></li>
@@ -82,20 +83,65 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 <div class="eyebrow">MSXPi v1.6 · Design document</div>
 <h1>msxarch: loading cartridge ROMs into RAM</h1>
 <p class="lede">How the MSXPi server identifies a ROM, rewrites its bank switches, and how the MSX runs the result from memory-mapper RAM instead of a cartridge slot.</p>
-<div class="meta">branch fix/msxarch-1942 · msxarch.com 4867c04 · mapper_detect.py 07fdd4a</div>
+<div class="meta">branch release/v1.6 · updated 2026-09-19 · fatal rejections, RAM check, return to game list</div>
 </header>
 
 <h2 id="pipeline"><span class="sec">1</span>Pipeline</h2>
 <p>msxarch is split so that each side does what it is good at. The Raspberry Pi has the whole ROM in memory and a fast CPU, so it does identification and patching. The MSX only stores blocks into RAM, installs small resident handlers, and jumps into the game.</p>
 <div class="flow">
-<div><b>MSX</b>msxarch.com lists ROMs from paths in <code>MSXARCH.INI</code>; user picks one</div>
+<div><b>MSX</b>msxarch.com lists ROMs from locations in <code>MSXARCH.INI</code>, with sizes; user picks one</div>
 <div><b>Server</b>Fetch file (local or HTTP), look up SHA-1 in softwaredb.xml</div>
 <div><b>Server</b>Classify: plain, mapper type, or unsupported (fallback: detection)</div>
+<div><b>Server</b>Check the MSX has RAM for it; otherwise reject, fatal (RC_TERMINATE)</div>
 <div><b>Server</b>Patch: bank switches → CALLs, or neutralise ROM self-writes</div>
-<div><b>MSX</b>Store image into mapper segments, relocate handlers to page 3</div>
+<div><b>MSX</b>Store image into mapper segments (progress bar), relocate handlers to page 3</div>
 <div><b>MSX</b>Launch trampoline: INIT, then header start or H.STKE</div>
 </div>
-<p>The MSX sends the addresses of its own handlers with the selection, so the server patches CALLs to exactly the addresses the client will use; client and server cannot drift apart. An old client that sends none gets <code>DEFAULT_HANDLERS</code>.</p>
+<p>The MSX sends the addresses of its own handlers with the selection, so the server patches CALLs to exactly the addresses the client will use; client and server cannot drift apart. An old client that sends none gets <code>DEFAULT_HANDLERS</code>. The same selection also carries the MSX's free mapper RAM, so the server can refuse a ROM that does not fit before sending any of it (<a href="#protocol">section 1a</a>).</p>
+
+<h2 id="protocol"><span class="sec">1a</span>Protocol and errors</h2>
+<p>One msxarch session is one <code>msxarchive</code> command on the server: the MSX sends the location, pages through the list with <code>N</code> / <code>P</code>, and ends it by choosing a game (loaded or rejected) or with <code>Q</code>.</p>
+
+<h3>Selection</h3>
+<p>The game number is followed by eight 4-digit hex values. A server ignores values it does not know, and an older client sends fewer.</p>
+<pre>&lt;n&gt; F9C0 F9C5 F9CA F9CF FAC0 FAD8 FAD8 &lt;free&gt;
+     8K window handlers  16K p1/p2 dispatch  mapper segments free for the game</pre>
+<p><code>&lt;free&gt;</code> is <code>usableMapperSegments()</code>: segments 1 to total−1, minus the four MSX-DOS runs in. It is exactly what <code>takeSegment()</code> can hand out, and the MSX's own last-minute check uses the same number, so the two sides agree.</p>
+
+<h3>ROM header and return codes</h3>
+<p>The first reply is a 16-byte header — <code>'R'</code>, version, mapper type, bank KB, bank count (u16), total size (u32), 6 spare bytes — followed by text: the game name for a load, the reason for a rejection.</p>
+<div class="tbl"><table>
+<thead><tr><th>Block return code</th><th>Meaning</th><th>MSX does</th></tr></thead>
+<tbody>
+<tr><td><code>RC_READY</code> EAh</td><td>More blocks follow</td><td>Receives the next block</td></tr>
+<tr><td><code>RC_SUCCESS</code> E0h</td><td>Last block of a normal reply; the ROM image follows as its own transfer</td><td>Loads the ROM</td></tr>
+<tr><td><code>RC_TERMINATE</code> EDh</td><td><strong>Fatal rejection</strong>: the server has ended the session and sends nothing more</td><td>Shows the reason, then returns to the game list</td></tr>
+</tbody></table></div>
+<p>The shared receive routine <code>RECVDATA</code> (msxpi-bios.c) ends on <em>any</em> code other than <code>RC_READY</code> and returns it. It used to end only on <code>RC_SUCCESS</code>, so any other code left the MSX waiting for a block that never came.</p>
+
+<h3>Not enough RAM</h3>
+<p>A mapped ROM needs one 16 KB segment per 16 KB bank or per two 8 KB banks, plus three working segments (two exec segments and the safe zone; <code>MAPPER_WORK_SEGMENTS</code>). The pair caches only use what is left. The server compares that with <code>&lt;free&gt;</code> before sending anything:</p>
+<pre>METAL.ROM: not enough RAM - needs 176KB (11 segments), the MSX has 48KB free.</pre>
+<p class="note">Before this, the server always sent the ROM. The MSX found too few segments only after the header, printed its error and stopped while the server was still waiting to send the first block, and both sides hung.</p>
+
+<h3>Back to the game list</h3>
+<p>After any fatal rejection — not enough RAM, a number that does not exist, an unsupported mapper, a failed download — msxarch shows the reason, waits for a key, and opens the <em>same location's</em> list again. It counts the net Next/Previous presses since the list was opened and repeats them before showing it, so the user lands on the page they were on. The server wraps pages the same way each time, so the count reproduces the page. Only a broken link ("Error reading ROM header") still exits to DOS.</p>
+
+<h3>Loading screen and list</h3>
+<ul>
+<li><strong>Game list sizes</strong> come from wherever the location keeps them: local file size, the Size column of <code>00index.txt</code> (msxarchive.nl lists the <em>unpacked</em> ROM size), the size column of an HTTP directory listing, or <code>HEAD</code> requests for the page being shown (to 127.0.0.1 for localhost).</li>
+<li><strong>Loading screen</strong>: <code>Loading &lt;name&gt; (&lt;size&gt;K)</code>, then a fixed-width bar drawn once through the BIOS. Each block then writes only <code>OUT (98h),'#'</code> — the VDP advances by itself — so the transfer loop makes no BIOS calls.</li>
+<li><strong>Shutting the Pi down</strong>: with <code>rebootAfterRomLoad=yes</code> in <code>msxarch.ini</code> (a setting, not shown as a location), msxarch asks the Pi to shut down once the game is fully in RAM and before starting it. The server answers first and halts afterwards, and only on a Raspberry Pi.</li>
+</ul>
+
+<h3>Compatibility</h3>
+<div class="tbl"><table>
+<thead><tr><th>msxarch.com</th><th>Server</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>new</td><td>new</td><td>Full behaviour</td></tr>
+<tr><td>new</td><td>old</td><td>Works; no up-front RAM check, so a ROM that does not fit still hangs as before</td></tr>
+<tr><td>old</td><td>new</td><td>Loads work; a rejection hangs the MSX (old <code>RECVDATA</code> waits after <code>RC_TERMINATE</code>) — update both together</td></tr>
+</tbody></table></div>
 
 <h2 id="identify"><span class="sec">2</span>ROM identification</h2>
 <p>Identification decides everything downstream: which windows get patched and how the MSX lays out memory. A wrong type means every switch goes to the wrong window, so the design puts an authoritative source first and heuristics last.</p>
@@ -140,6 +186,7 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 <div class="hl"><span>F9C0 C5 CA CF</span><span>8K window handlers — CALL targets written by the server</span></div>
 <div><span>FA90 / FAB4</span><span>pair caches for page 1 / page 2</span></div>
 <div class="hl"><span>FAC0 / FAD8</span><span>16K handlers (ASCII16)</span></div>
+<div><span>FAD8–FAE7</span><span>8K games only: window dispatcher (D = window, E = bank), for computed selects</span></div>
 <div><span>FAF5 →</span><span>MSX2 system variables, left untouched</span></div>
 </div>
 <p>Handlers preserve every register and the interrupt state (read via <code>LD A,I</code>), restore both mapper ports, and only acknowledge the VDP when a copy was built.</p>
@@ -170,6 +217,11 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 </tbody></table></div>
 <p>After examining a store, the scanner steps over the whole 3-byte instruction instead of advancing one byte, so an operand can never be re-read as a new opcode.</p>
 
+<h3>Computed window selects: <code>patch_indexed_switches</code></h3>
+<p>Some games pick the register at run time instead of storing to a fixed address. HYDLIDE3 does all its ordinary switching through one routine, called from 12 places:</p>
+<pre>ld a,d / add a,a / add a,a / add a,a / add a,60h / ld h,a / di / ld (hl),e   ; D = window, E = bank</pre>
+<p>These nine bytes become <code>di / call &lt;dispatch&gt;</code> plus NOPs, the same length. The MSX's 16-byte dispatcher at FAD8h jumps to window D's handler entry (F9C0h + 5×D) with the bank in A. The dispatcher has to live in the MSX's resident area: the ROM bank the routine sits in has no free space for it. The pattern is exact and matched only HYDLIDE3 among the test ROMs.</p>
+
 <h3>Plain ROMs: <code>neutralise_rom_writes</code></h3>
 <p>A cartridge silently ignores writes into its own ROM; in RAM they succeed and corrupt the game. The server traces code from the header INIT/STATEMENT/DEVICE entries (following jumps, calls, BIOS-hook installs and pushed return addresses), then NOPs out traced stores whose target lies in the image — absolute stores and <code>ld hl,nn</code> followed by writes through (HL). Only traced instructions are touched, so data is never altered. 8 KB images are doubled so the 6000h mirror exists.</p>
 
@@ -195,11 +247,16 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 <tr><td>VALLEY</td><td>Rewrites its own dispatcher via HL</td><td>HL run tracking; pushed-return tracing</td></tr>
 <tr><td>FROGGER</td><td>Jumps into the 6000h mirror</td><td>Double 8 KB images</td></tr>
 <tr><td>VAMPIRE</td><td>Title “Akumajō” crashed the server console print</td><td>ASCII-safe title</td></tr>
+<tr><td>HYDLIDE3</td><td>Blue screen: every bank change went through a computed <code>ld (hl),e</code>, never patched</td><td><code>patch_indexed_switches</code> + FAD8h dispatcher</td></tr>
+<tr><td>ICEWORLD</td><td>16 KB “Mirrored” ROM with INIT at 8010h; only 4000h was loaded</td><td>Trace from 8000h and send the image twice (4000h and 8000h)</td></tr>
+<tr><td>Any megaROM, too little RAM</td><td>Server sent the ROM anyway; MSX stopped after the header and both hung</td><td>RAM check on the server, fatal <code>RC_TERMINATE</code>, back to the list</td></tr>
 </tbody></table></div>
 
 <h2 id="status"><span class="sec">6</span>Test status (openMSX, compared with the real cartridge)</h2>
 <p><span class="pill ok">Working</span></p>
 <p class="games">Nemesis, 1942, METAL, MGEAR, USAS, VAMPIRE, CONTRA, VALLEY2, King's Valley 2 Gold, MANBOW, BILLIARD, BUBBLE, OUTRUN, TETRIS, PENGUIN, ARCTIC, XEVIOUS, ISHTAR, SRAMBO, ALESTE, ANDROGYN, FANZONE2; plain ROMs including GOONIES, GALAGA, CASTLE, AVALANCH, FROGGER.</p>
+<p class="games">Also: HYDLIDE3 (title, Set Up menu, Name List), ICEWORLD, Hyper Olympic 2.</p>
+<p><span class="pill ok">Error handling</span> On a 64 KB FS-A1WSX, METAL and Parodius are refused with the RAM message, the ROM is never sent, and msxarch returns to the same page of the game list; a plain ROM then loads from it. A game number that does not exist is refused the same way. With 4 MB, METAL loads and runs.</p>
 <p><span class="pill warn">Fixed, not re-run</span> PENNANT — server fix committed; offline diff shows only its two switches changed.</p>
 <p><span class="pill warn">Not tested</span> PENNANT2, MG2FRS, MG2NOSCC, SOLID, SOLIDE12, AMSOCCER, ARKAN2, MISTERY, ZANACEX.</p>
 <p><span class="pill bad">Unsupported</span> SUPERLOA (SuperLodeRunner mapper).</p>

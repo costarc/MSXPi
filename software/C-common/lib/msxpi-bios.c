@@ -274,15 +274,19 @@ uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
 
         // After this handshake, Python may:
         //  - send another block (if header_rc == RC_READY), or
-        //  - be done (if header_rc == RC_SUCCESS and this was the last block).
+        //  - be done: any other header_rc marks the last block, and is
+        //    returned so the caller can tell success (RC_SUCCESS) from, for
+        //    example, a fatal rejection (RC_TERMINATE). Only RC_SUCCESS used
+        //    to end the transfer; any other code waited for a block that
+        //    never came, and the MSX hung. This matches RECVDATA_ONEBLOCK and
+        //    sendmultiblock(), for which "not RC_READY" means the last block.
 
-        if (header_rc == RC_SUCCESS) {
-            // Last block, and it was accepted.
+        if (header_rc != RC_READY) {
             *size = offset;  // total bytes successfully received
-            return RC_SUCCESS;
+            return header_rc;
         }
 
-        // Otherwise header_rc == RC_READY, loop to receive next block.
+        // header_rc == RC_READY, loop to receive next block.
     }
 }
 
