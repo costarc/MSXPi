@@ -13,17 +13,23 @@ and `WAIT_SUPPORT`.
 
 ## Which files to use
 
-| Board (release) | PCB | Pin map | CPLD image | ROM chip and image |
+| Releases | PCB | CPLD image (ID) | ROM: `msxpibios.rom` on | `msxpi.ini` extras |
 |---|---|---|---|---|
-| v0.8.2, v1.0 | v0.7 Rev.7 | A | `v0.8.2/MSXPi_v1.6_polled.pof` (ID $10) | 27C256 EPROM: burn `software/target/v0.8.2/msxpibios_v1.6_27c256.rom` |
-| v1.1, v1.2.1b | V1.1 Rev.1, V1.2.1b | B | `v1.1/MSXPi_v1.6_wait.pof` (ID $14); `/WAIT` is wired on both PCBs | AT28C256: flash `msxpibios_v1.6.rom` in circuit, as usual |
-| v1.3, v1.4, v1.5 | V1.3 Rev.1 | C | `MSXPi_v1.6.pof` (ID $0E), the main build | AT28C256: flash `msxpibios_v1.6.rom` in circuit, as usual |
+| v0.8.2, v1.0 | v0.7 Rev.7 | `v0.8.2/MSXPi_v1.6_polled.pof` ($10) | 27C256 EPROM, burned off-board | `GPIO_CS_SETUP_NS=1000` |
+| v1.1, v1.2.1b | V1.1 Rev.1, V1.2.1b | `v1.1/MSXPi_v1.6_wait.pof` ($14) | AT28C256, flashed in circuit | V1.2.1b: `RPI_SHUTDOWN=26` |
+| v1.3, v1.4, v1.5 | V1.3 Rev.1 | `MSXPi_v1.6.pof` ($0E) | AT28C256, flashed in circuit | `RPI_SHUTDOWN=26` |
 
-- **27C256 image.** The image is the 16 KB ROM written into both halves, so
-  either A14 strap works. `software/build` regenerates it.
-- **EPROM jumpers on the v0.8.2 board (PCB v0.7 Rev.7).** /OE must be on
-  **CS1**, so the ROM answers in page 1 (4000h-7FFFh) only. The A14 jumper can
-  be on A14 or A15. **Never CS12** with this image: the ROM then also answers
+- **ROM:** every board uses the same `software/target/msxpibios.rom`, the one
+  `software/build` produces.
+- **Server:** the same v1.6 server on every Pi. Pins from the `msxpi-Jumper*.ini`
+  file matching the board (the older boards use `msxpi-JumperLeft.ini`); the
+  extras column lists what to add. Settings left out stay unset.
+
+- **EPROM jumpers on the v0.8.2 board (PCB v0.7 Rev.7).** /OE on **CS1**, so
+  the ROM answers in page 1 (4000h-7FFFh) only, and the A14 jumper on **A15**,
+  so page 1 reads the lower half of the 27C256, where the programmer puts the
+  16 KB `msxpibios.rom`. (With the jumper on A14 the MSX would read the empty
+  upper half.) **Never CS12**: the ROM then also answers
   in page 2, the MSX finds its `AB` header twice and initialises it twice, and
   the second init chains EXTBIO to itself. MSX-DOS still boots and `msxarch`
   works, but every program that calls EXTBIO - `p`, `pcopy`, `pver` - hangs
