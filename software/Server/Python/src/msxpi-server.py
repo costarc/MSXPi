@@ -434,7 +434,8 @@ def init_spi_bitbang():
     GPIO.setup(SPI_MOSI, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     GPIO.setup(SPI_MISO, GPIO.OUT)
     GPIO.setup(RPI_READY, GPIO.OUT)
-    GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    if RPI_SHUTDOWN is not None:
+        GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     _init_fast_gpio()
 
 # =============================================================================
@@ -3322,6 +3323,12 @@ def shut(parm=None):
             sendmultiblock(b'Command not supported by this platform')
 
 def button_handler(channel):
+    # A real press holds the line low far longer than 100 ms; a noise spike on
+    # an unconnected or long pin is gone by then.  Without this check a single
+    # glitch rebooted the Pi.
+    time.sleep(0.1)
+    if GPIO.input(RPI_SHUTDOWN) != GPIO.LOW:
+        return
     start = time.time()
     # Wait for release
     while GPIO.input(RPI_SHUTDOWN) == GPIO.LOW:
@@ -5453,17 +5460,20 @@ def initialize_connection():
         # detection already enabled", which used to escape and kill the
         # server - turning one bad byte into a crash loop that the monitor
         # restarted for ever, with the MSX unable to boot at all.
-        try:
-            GPIO.remove_event_detect(RPI_SHUTDOWN)
-        except Exception:
-            pass
-        try:
-            GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
-                                  callback=button_handler, bouncetime=200)
-        except Exception as e:
-            # Losing the shutdown button is a far smaller problem than losing
-            # the server, so carry on rather than raise.
-            print(f"MSXPi Server: shutdown button unavailable ({e})")
+        if RPI_SHUTDOWN is None:
+            print("MSXPi Server: shutdown button disabled (RPI_SHUTDOWN=none)")
+        else:
+            try:
+                GPIO.remove_event_detect(RPI_SHUTDOWN)
+            except Exception:
+                pass
+            try:
+                GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
+                                      callback=button_handler, bouncetime=200)
+            except Exception as e:
+                # Losing the shutdown button is a far smaller problem than
+                # losing the server, so carry on rather than raise.
+                print(f"MSXPi Server: shutdown button unavailable ({e})")
         print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n"
               f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
         return None
@@ -5551,6 +5561,12 @@ SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
 SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
+# Shutdown/reboot button.  PCB v1.2 Rev.1 and later wire it to GPIO 26; older
+# boards have no button, and the unconnected pin picks up glitches that read
+# as a press - a reboot loop on a v0.8.2 board.  "var RPI_SHUTDOWN=none" in
+# msxpi.ini turns it off; unset keeps the default, 26.
+_shut = getMSXPiVar("RPI_SHUTDOWN").strip().lower()
+RPI_SHUTDOWN = None if _shut in ("none", "off", "no", "-1") else int(_shut or 26)
 
 try:
     if hostType == "RaspberryPi":
