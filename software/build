@@ -43,10 +43,11 @@ updateRomVersion="${updateRomVersion:-yes}"
 releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 
 # --- what it is called -------------------------------------------------------
-# The ROM carries its version: target/ keeps the ROM of every release beside
-# the current one. Tests read this name out of this file, so keep the
+# One ROM, one name, on every board: target/msxpibios.rom. The versioned copies
+# (msxpibios_v1.6.rom and the ROMs of earlier releases) are gone - git keeps
+# the history. Tests read this name out of this file, so keep the
 # "export BIOSNAME=" shape (software/Tests/nextor_mfr_copy.py).
-export BIOSNAME=msxpibios_v1.6
+export BIOSNAME=msxpibios
 BIOSFILE=target/$BIOSNAME.rom
 
 # --- where the tools and the outside directories are -------------------------
@@ -136,12 +137,6 @@ EOF
             fname="${f##*/}"
             [ -f "$f" ] || continue
             [ "$(echo "$fname" | tr 'A-Z' 'a-z')" = "pcopy.com" ] && continue
-            # target/ keeps the ROM of every release. The MSX only needs the
-            # current one - without this the update pulls all of them over a
-            # link that runs at about 18 KB/s.
-            case "$fname" in
-                msxpibios*.rom) [ "$fname" = "$BIOSNAME.rom" ] || continue ;;
-            esac
             echo "pcopy m:$fname"
         done
         echo "pcopy m:pcopy.com"
@@ -223,11 +218,6 @@ if [ "$buildBIOS" = "yes" ]; then
     [ -f ./zout/msx-dos.hex ] || die "zmac produced no zout/msx-dos.hex"
     "$HEX2BIN" -s 4000 ./zout/msx-dos.hex || die "hex2bin failed"
     cp ./zout/msx-dos.bin "$BIOSFILE" || die "could not write $BIOSFILE"
-    # msxpibios.rom is always the latest build, beside the versioned name, so
-    # links in the documentation (README.MSXPi, MSXPi.xml's <filename>) keep
-    # working when the version in BIOSNAME changes. The updater does not copy
-    # it: gen_update_batch keeps only $BIOSNAME.rom.
-    cp "$BIOSFILE" target/msxpibios.rom || die "could not write target/msxpibios.rom"
 
     echo "  $BIOSFILE  $(sha1sum "$BIOSFILE" | cut -c1-40)"
 fi
@@ -273,10 +263,8 @@ if [ "$buildOpenMSXConfig" = "yes" ]; then
     # harness run could pass against a ROM that no longer existed in the tree.
     sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.xml
     cp "$BIOSFILE" "openMSX/share/systemroms/extensions/$BIOSNAME.rom"
-    cp "$BIOSFILE" "openMSX/share/systemroms/extensions/msxpibios.rom"
     cp openMSX/share/extensions/MSXPi.xml "$OPENMSXSHARE/extensions/MSXPi.xml"
     cp "$BIOSFILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.rom"
-    cp "$BIOSFILE" "$OPENMSXSHARE/systemroms/extensions/msxpibios.rom"
     echo "  updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
 
     # The per-SHA pair, only for a released build: the plain ROM above is

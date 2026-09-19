@@ -14,7 +14,7 @@ pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
-pcopy m:msxpibios_v1.6.rom
+pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
 pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat

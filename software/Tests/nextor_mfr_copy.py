@@ -118,10 +118,8 @@ if {$::nextor_mm} {
 def _newest_rom():
     """The ROM the build script currently produces.
 
-    Read from ../build's BIOSNAME rather than guessed from the directory:
-    target/ keeps the historical ROMs beside the current one, and neither
-    mtime nor version order picks the right one (v1.21b means 1.2.1b, and
-    sorts above v1.6). The build script is the single source of truth.
+    Read from ../build's BIOSNAME, so the build script stays the single
+    source of truth for the name (today target/msxpibios.rom).
     """
     try:
         for line in (SOFTWARE/'build').read_text(encoding='utf-8',
@@ -138,9 +136,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('work', type=Path, help='scratch directory for disks, logs and screens')
     ap.add_argument('--sd', type=Path, required=True, help='MBR image, first partition FAT12')
-    # The ROM carries its version in the name (target/msxpibios_v1.6.rom),
-    # so take the newest rather than a fixed filename - otherwise every
-    # version bump silently breaks this default.
+    # The name the build script produces - see _newest_rom().
     ap.add_argument('--rom', type=Path, default=_newest_rom())
     ap.add_argument('--input', type=Path, default=Path('/mnt/c/tmp/ALESTE.ROM'))
     ap.add_argument('--preload', action='store_true', help='also put the file on D: beforehand')
