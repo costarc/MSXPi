@@ -70,6 +70,20 @@ static void delay_ns(uint32_t ns) {
     while (now_ns() < until) { }
 }
 
+/* Settling time between seeing CS low and the first clock edge (E1).  CS goes
+ * low as soon as the MSX's OUT starts, and E1 loads the CPLD's write latch, so
+ * clocking E1 at once can latch a byte that is still settling.  0 (the
+ * default) keeps the original behaviour; the v0.8.2 board (PCB v0.7 Rev.7)
+ * needed a delay here.  Set by msxpi_gpio_set_cs_setup(), from
+ * MSXPI_GPIO_CS_SETUP_NS - a separate export, so the transfer ABI is unchanged.
+ */
+static uint32_t cs_setup_ns = 0;
+int msxpi_gpio_set_cs_setup(uint32_t ns) {
+    if (ns > 100000) return 2;
+    cs_setup_ns = ns;
+    return 0;
+}
+
 /* masks: SCLK, MISO, MOSI, CS, READY. tx==NULL is passive reception (MISO=0).
  * Return 0=success, 1=CS timeout, 2=invalid arguments. done counts WHOLE bytes.
  * wait_ns measures waiting for the MSX; Python can distinguish it from clocking.
@@ -102,6 +116,7 @@ static int transfer(volatile uint32_t *reg, const uint32_t masks[5],
             }
         }
         *wait_ns += now_ns()-start;
+        if (cs_setup_ns) delay_ns(cs_setup_ns);
         /* E1: load the CPLD write latch into its shift register. */
         write_reg(reg, SET, clk);
         delay_ns(half_period_ns);

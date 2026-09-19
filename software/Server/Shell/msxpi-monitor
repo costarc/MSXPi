@@ -79,6 +79,12 @@ $MSXPISERVER >> "$MSXPI_ROOT_LOG" 2>&1 &
 
 rm -f /home/pi/msxpi/msxpi-update*
 
+# Stop, don't restart, when systemd stops the service - at shutdown above
+# all.  Without this the loop saw the server exit on its SIGTERM and started
+# a new one, which announced itself online (lighting the v0.8.2 LED again)
+# and was then SIGKILLed without a chance to announce offline.
+trap 'echo "$(date) msxpi-monitor: SIGTERM, stopping without restarting the server" >> "$MSXPI_ROOT_LOG"; exit 0' TERM INT
+
 while :
 do
     sleep 2
@@ -86,6 +92,7 @@ do
 
     if [[ $state -eq 0 ]];then
         echo "Restarting msxpi-server"
+        echo "$(date) msxpi-monitor: server not running, restarting it" >> "$MSXPI_ROOT_LOG"
         $MSXPISERVER >> "$MSXPI_ROOT_LOG" 2>&1 &
 
         sleep 2
