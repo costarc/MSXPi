@@ -153,7 +153,7 @@ Steps to Setup and Try MSXPi in openMSX
    This file is used to persist some MSXPi configuration. Create the
    folder in your computer (under Windows the path is C:\home\pi\msxpi)
    and save this file inside it:
-   https://github.com/costarc/MSXPi/tree/master/software/Server/Shell/msxpi.ini
+   https://github.com/costarc/MSXPi/tree/master/software/Server/Setup/msxpi.ini
    
    If you have an OpenAI key, update this file with it so you can use the
    chatgpt.com command.

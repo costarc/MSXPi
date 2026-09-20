@@ -226,7 +226,7 @@ foreach ($f in @("msxpi-server.py", "mapper_detect.py", "msxpi_eth.py", "msxpi_g
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }
-Get-File "$Raw/Server/Shell/msxpi-tcpip-setup.ps1" "$MsxPiHome\msxpi-tcpip-setup.ps1" | Out-Null
+Get-File "$Raw/Server/Setup/msxpi-tcpip-setup.ps1" "$MsxPiHome\msxpi-tcpip-setup.ps1" | Out-Null
 
 # Never overwrite msxpi.ini: it holds the user's API keys and PSET values.
 if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {

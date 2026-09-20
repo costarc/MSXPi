@@ -93,7 +93,7 @@ rm /lib/systemd/system/msxpi-server > /dev/null 2>&1
 # Install new controller / monitor
 cd $MSXPIHOME
 rm msxpi-monitor > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/msxpi-monitor
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/msxpi-monitor
 chmod 755 $MSXPIHOME/msxpi-monitor
 
 cat <<EOF >/tmp/msxpi-monitor.service
@@ -148,11 +148,11 @@ wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com
 # msxpi-server.py together with the modules it imports (mapper_detect,
 # msxpi_eth, msxpi_gpio_native) and the native GPIO engine built for this Pi.
 # The server alone does not start without mapper_detect.py.
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/update.sh
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/update.sh
 sh update.sh
 chmod 755 $MSXPIHOME/update.sh
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/kill.sh
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/pplay.sh
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/tools.dsk
 cp msxpi-JumperLeft.ini msxpi.ini

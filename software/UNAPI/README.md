@@ -1,6 +1,6 @@
 # Pi-side network setup
 
-The setup script lives in **`../Server/Shell/msxpi-tcpip-setup.sh`**, with
+The setup script lives in **`../Server/Setup/msxpi-tcpip-setup.sh`**, with
 every other Pi-side script. A second copy used to sit under `UNAPI/pi-setup/`;
 the two drifted - a fix for the uplink detection landed in one and not the
 other, and they logged to different files, so the wrong copy got debugged.
@@ -48,7 +48,7 @@ connection responsive. Raise it if bulk throughput matters more than latency.
 ## Order of operations
 
 1. `sudo /home/pi/msxpi/msxpi-tcpip-setup.sh` on the Pi (deployed from
-   `Server/Shell/`); it logs to `/var/log/msxpi.log`
+   `Server/Setup/`); it logs to `/var/log/msxpi.log`
 2. restart `msxpi-server.py` as the TAP's owner, confirm `TAP device msxpi0 up`
    If the Pi had no default route when it booted, the setup script gives up
    and the MSX has no network. `p netreset` from the MSX runs this whole

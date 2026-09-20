@@ -145,7 +145,7 @@ EOF
         # The server alone is not enough: it imports mapper_detect, msxpi_eth
         # and msxpi_gpio_native, and the native GPIO engine is compiled on the
         # Pi. update.sh fetches all of them and rebuilds the engine.
-        echo "prun wget -q -O update.sh ${GITPATH}/Server/Shell/update.sh"
+        echo "prun wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
         echo "prun sh update.sh"
         echo "echo "
         echo "echo Restarting msxpi-server.py"
