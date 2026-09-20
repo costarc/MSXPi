@@ -1,7 +1,7 @@
 MSXPi v1.6 Release Notes
 ========================
 Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM,
-MSX-DOS 2 / Nextor compatibility, and msxarch - a network ROM browser and
+MSX-DOS 2 / Nextor coexistence, and msxarch - a network ROM browser and
 loader for plain ROMs and MegaROMs. ROM, msxpi-server and the client commands
 must be upgraded together, and the CPLD firmware moves to v1.6 - the /WAIT
 logic is new, so the previous firmware cannot drive burst transfers (a v1.6 ROM
@@ -16,6 +16,7 @@ Transfer speed
 - The native GPIO payload engine is now on by default (MSXPI_NATIVE_GPIO=1) in msxpi-monitor and in both systemd units; without the native library the server falls back to Python GPIO and says so in the log.
 
 MSX-DOS 2 / Nextor
+- MSXPi's own ROM carries MSX-DOS 1 only; Nextor and MSX-DOS 2 are never in the MSXPi ROM. They run from another disk interface, and MSXPi coexists with them. These fixes make an MSXPi drive usable from that Nextor/MSX-DOS 2 system.
 - GETDPB returned with the carry flag as the caller happened to pass it in, so Nextor read a perfectly good DPB as a failure: every access through a MAPDRV'd MSXPi drive answered "Not a DOS disk". It now clears carry explicitly.
 - DSKIO staged every sector through the driver's own buffer. Transfers now go directly to the caller's buffer when it is outside page 1, and through the kernel's XFER routine when it is not - page 1 is where the driver ROM is banked in, so the driver cannot see the caller's memory there. This is what produced "Bad file allocation table" on larger copies.
 - Tests/p1test/P1TEST.COM is a 40 KB self-checking program for exactly that case, for use on real hardware.

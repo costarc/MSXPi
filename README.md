@@ -23,6 +23,11 @@ firmware still works, using the slower polled transfers. If you must keep an
 older ROM, the matching historical server is kept next to the current one,
 named after the ROM's sha1 - see `software/Server/Python/src/READ.md`.
 
+**About the DOS.** MSXPi's own ROM contains **MSX-DOS 1 (1.03) only**. It does not
+contain Nextor or MSX-DOS 2. MSXPi *coexists* with them: Nextor or MSX-DOS 2 come
+from another disk interface in the same MSX (for example a MegaFlashROM SCC+ SD),
+and MSXPi's commands, BASIC extension and UNAPI work alongside them.
+
 Contents
 
 1. [How the pieces fit together](#how-the-pieces-fit-together)
@@ -66,7 +71,9 @@ You will need:
 * A Raspberry Pi Zero W / Zero 2 W (not a Pico - it cannot run Linux), with
   the 40-pin header on the side that matches your PCB, a micro SD card of 8 GB
   or more, and a PC to prepare it.
-* An MSX with a disk or SD interface running MSX-DOS 1, MSX-DOS 2 or Nextor,
+* An MSX with a disk or SD interface running MSX-DOS 1, MSX-DOS 2 or Nextor
+  (MSXPi itself only has MSX-DOS 1 in its ROM; MSX-DOS 2 / Nextor must come
+  from that other interface),
   and a way to copy files from your PC onto that disk. A second disk interface
   (Nextor / MSX-DOS 2) next to MSXPi is the best way to use it.
 * Only if the CPLD is not programmed yet: an Altera USB-Blaster and Quartus
@@ -117,7 +124,7 @@ Raspberry Pi does not need to be attached yet.
 4. Switch the MSX off and set the jumpers for how you will use it:
 
    * **With another disk interface (recommended):** remove the enable jumper
-     (`SLTSL`). The MSXPi ROM is off, the MSX boots Nextor / MSX-DOS 2 from the
+     (`SLTSL`). The MSXPi ROM (and its MSX-DOS 1) is off, the MSX boots Nextor / MSX-DOS 2 from the
      other interface, and MSXPi still works through the `.COM` commands.
      (The ROM must be enabled for `CALL MSXPI` in BASIC and for the Ethernet
      UNAPI; if you want them, leave the jumper closed and put MSXPi in a higher
@@ -481,6 +488,8 @@ Bugs and known limitations
   and `GPIO_CS_SETUP_NS=1000` on the v0.8.2 board. On that board the EPROM
   /OE jumper must be on CS1, never CS12, or programs that call EXTBIO (`p`,
   `pcopy`, `pver`) hang the MSX. See `hardware/CPLD_Project/LEGACY_BOARDS.md`.
+* **MSXPi only carries MSX-DOS 1.** Nextor and MSX-DOS 2 are not in the MSXPi
+  ROM; they run from another disk interface that MSXPi coexists with.
 * **Booting MSX-DOS 1 from the Pi is slow and fragile.** It needs the Pi to
   finish booting first and depends on the disk images; use another interface
   with Nextor or MSX-DOS 2 for daily work. Do not delete files on drive A: in
