@@ -1,37 +1,32 @@
-#|===========================================================================|
-#|                                                                           |
-#| MSXPi Interface                                                           |
-#|                                                                           |
-#| Version : 1.1                                                             |
-#|                                                                           |
-#| Copyright (c) 2015-2023 Ronivon Candido Costa (ronivon@outlook.com)       |
-#|                                                                           |
-#| All rights reserved                                                       |
-#|                                                                           |
-#| Redistribution and use in source and compiled forms, with or without      |
-#| modification, are permitted under GPL license.                            |
-#|                                                                           |
-#|===========================================================================|
-#|                                                                           |
-#| This file is part of MSXPi Interface project.                             |
-#|                                                                           |
-#| MSX PI Interface is free software: you can redistribute it and/or modify  |
-#| it under the terms of the GNU General Public License as published by      |
-#| the Free Software Foundation, either version 3 of the License, or         |
-#| (at your option) any later version.                                       |
-#|                                                                           |
-#| MSX PI Interface is distributed in the hope that it will be useful,       |
-#| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
-#| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
-#| GNU General Public License for more details.                              |
-#|                                                                           |
-#| You should have received a copy of the GNU General Public License         |
-#| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
-#|===========================================================================|
+#!/bin/sh
+# MSXPi Interface
+# Version 1.6
+# ------------------------------------------------------------------------------
+# MIT License
+#
+# Copyright (c) 2015-2026 Ronivon Costa
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+# ------------------------------------------------------------------------------
 #
 # File history :
 # 0.1    : Initial version.
-#!/bin/sh
 MSXPIHOME=/home/pi/msxpi
 MYTMP=/tmp
 RMFILES=true
@@ -72,7 +67,7 @@ fi
 # Install libraries required by msxpi-server
 # ------------------------------------------
 sudo apt-get update
-sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar
+sudo apt-get -y install python3-full python3 python3-pip alsa-utils music123 smbclient html2text libcurl4-nss-dev mplayer pigpio lhasa unar gcc
 python3 -m pip install --upgrade pip --break-system-packages
 
 # -------------------------
@@ -108,6 +103,7 @@ Description=Monitor MSXPi Server control Process
 [Service]
 User=pi
 WorkingDirectory=/home/pi/msxpi
+Environment=MSXPI_NATIVE_GPIO=1
 ExecStart=/home/pi/msxpi/msxpi-monitor
 
 [Install]
@@ -141,14 +137,20 @@ sudo amixer cset numid=3 1
 cd $MSXPIHOME
 rm msxpi.ini.new > /dev/null 2>&1
 rm msxpi-server.py > /dev/null 2>&1
+rm update.sh > /dev/null 2>&1
 rm $MSXPIHOME/pplay.sh > /dev/null 2>&1
 rm $MSXPIHOME/kill.sh > /dev/null 2>&1
 rm $MSXPIHOME/disks/msxpiboot.dsk > /dev/null 2>&1
 rm $MSXPIHOME/disks/tools.dsk > /dev/null 2>&1
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperLeft.ini
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperRight.ini
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/msxpi-JumperRight_PCBV1.1Rev.0
-wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-server.py
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperLeft.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperRight.ini
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src/msxpi-JumperRight_PCBV1.1Rev.0.ini
+# msxpi-server.py together with the modules it imports (mapper_detect,
+# msxpi_eth, msxpi_gpio_native) and the native GPIO engine built for this Pi.
+# The server alone does not start without mapper_detect.py.
+wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/update.sh
+sh update.sh
+chmod 755 $MSXPIHOME/update.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/kill.sh
 wget -q --show-progress --no-check-certificate https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Shell/pplay.sh
 wget -q --show-progress --no-check-certificate https://github.com/costarc/MSXPi/raw/master/software/target/disks/msxpiboot.dsk

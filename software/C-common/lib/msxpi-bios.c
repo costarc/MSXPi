@@ -1,8 +1,37 @@
-﻿#include <stdint.h>
+﻿/*
+ * MSXPi Interface
+ * Version 1.6
+ * ------------------------------------------------------------------------------
+ * MIT License
+ *
+ * Copyright (c) 2015-2026 Ronivon Costa
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ * ------------------------------------------------------------------------------
+ */
+
+#include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../../../../MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../header/msxpi.h"
+#include "payload_generated.h"
 
 // pprintf: print a string followed by a number
 void pprintf(char* text, uint16_t value) {
@@ -31,26 +60,68 @@ void FastPrint(char* text) {
 /* -----------------------
    CHKPIRDY
    ----------------------- */
+/*
+ * Counted across calls on purpose - see CHKPIRDY below.
+ *
+ * No initialiser is relied on here. This is built with --no-std-crt0 against a
+ * custom MSX-DOS crt0, and a crt0 that does not clear BSS would leave this as
+ * garbage. That is harmless for this variable: any starting value only shifts
+ * where in the 256-pass cycle ESC first gets sampled. Do NOT add statics here
+ * whose correctness depends on their initial value without first confirming
+ * the crt0 clears BSS.
+ */
+static uint8_t chk_spins;
+
 uint8_t CHKPIRDY(void) {
-    uint8_t key;
     uint8_t state;
 
+    /*
+     * OPTIMISATION: Inkey() no longer runs on every pass.
+     *
+     * Inkey() is a Fusion-C BIOS call - an inter-slot call into the MSX
+     * keyboard routine, which scans the whole matrix and debounces. Measured
+     * on real hardware it was costing ~830 us of the ~975 us the MSX spent
+     * per transferred byte: about 85% of the total, and roughly 6.7x
+     * everything else in the receive path put together. The Pi-side transfer
+     * is only 40 us/byte, so this loop - not the transport - was the
+     * bottleneck for the whole protocol.
+     *
+     * The counter is deliberately static rather than local. A local one would
+     * reset on every call, and on a fast link CHKPIRDY returns on its first
+     * pass - so ESC would never be sampled at all. Counting across calls
+     * samples it roughly every 128 bytes, a few tens of ms, which is well
+     * inside human reaction time.
+     *
+     * This also matters for correctness, not just speed: calling the BIOS
+     * keyboard routine from inside a timer-interrupt hook is exactly the
+     * reentrancy the UNAPI/InterNestor work has to avoid.
+     */
     while (true) {
-        key = Inkey();
-        if (key == 0x1B) {
-            return RC_ESCPRESSED;
+        /*
+         * Inkey() ends with EI, because the CALSLT it uses to reach the BIOS
+         * does DI internally and leaves re-enabling to the caller. Calling it
+         * every pass therefore re-enabled interrupts thousands of times per
+         * transfer - a side effect nothing here asked for but which the code
+         * had come to depend on. Now that Inkey() only runs 1 pass in 256,
+         * that no longer happens, so do it explicitly. Four T-states.
+         */
+        __asm
+            ei
+        __endasm;
+
+        if (++chk_spins == 0) {
+            if (Inkey() == 0x1B) {
+                return RC_ESCPRESSED;
+            }
         }
         state = InPort(CONTROL_PORT1);
         if (state == 0)
             return CHK_STATE_0;
-        if (state == 2)
-            return CHK_STATE_2;
     }
 }
 
 uint8_t PIREADBYTE(uint8_t* byte) {
     uint8_t rc;
-    uint8_t version = InPort(CONTROL_PORT2);
 
     rc = CHKPIRDY();
 
@@ -60,6 +131,7 @@ uint8_t PIREADBYTE(uint8_t* byte) {
         return rc;
     }
 
+    // Start a transfer; once $56 reads 0 again the Pi's byte is in.
     OutPort(CONTROL_PORT1, 0x00);
 
     rc = CHKPIRDY();
@@ -68,22 +140,8 @@ uint8_t PIREADBYTE(uint8_t* byte) {
         return rc;
     }
 
-    if (version < 0xFE) {
-        *byte = InPort(DATA_PORT1);
-        return RC_SUCCESS;
-    }
-
-    while (1) {
-        rc = CHKPIRDY();
-        if (rc == RC_ESCPRESSED) {
-            *byte = 0xFF;
-            return rc;
-        }
-        if (rc == CHK_STATE_2) {
-            *byte = InPort(DATA_PORT1);
-            return RC_SUCCESS;
-        }
-    }
+    *byte = InPort(DATA_PORT1);
+    return RC_SUCCESS;
 }
 
 /* -----------------------
@@ -92,7 +150,7 @@ uint8_t PIREADBYTE(uint8_t* byte) {
 uint8_t PIWRITEBYTE(uint8_t byte) {
     uint8_t rc = CHKPIRDY();
     OutPort(DATA_PORT1, byte);
-    if (rc == CHK_STATE_0 || rc == CHK_STATE_2)
+    if (rc == CHK_STATE_0)
 		return RC_SUCCESS;
     return rc;
 }
@@ -167,13 +225,8 @@ uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
         *size = length;  // size of the last block received (optional)
 
         // --- Payload ---
-        checksum = 0;
-        for (uint16_t i = 0; i < length; i++) {
-            rc = PIREADBYTE(&byte);
-            if (rc != RC_SUCCESS) return RC_CONNERR;
-            dest[offset + i] = byte;
-            checksum += byte;
-        }
+        rc = payload_rx(dest + offset, length, &checksum);
+        if (rc != RC_SUCCESS) return RC_CONNERR;
 
         // --- Local checksum ---
         localChecksum = (uint8_t)((checksum & 0xFF) + ((checksum >> 8) & 0xFF));
@@ -221,15 +274,19 @@ uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize) {
 
         // After this handshake, Python may:
         //  - send another block (if header_rc == RC_READY), or
-        //  - be done (if header_rc == RC_SUCCESS and this was the last block).
+        //  - be done: any other header_rc marks the last block, and is
+        //    returned so the caller can tell success (RC_SUCCESS) from, for
+        //    example, a fatal rejection (RC_TERMINATE). Only RC_SUCCESS used
+        //    to end the transfer; any other code waited for a block that
+        //    never came, and the MSX hung. This matches RECVDATA_ONEBLOCK and
+        //    sendmultiblock(), for which "not RC_READY" means the last block.
 
-        if (header_rc == RC_SUCCESS) {
-            // Last block, and it was accepted.
+        if (header_rc != RC_READY) {
             *size = offset;  // total bytes successfully received
-            return RC_SUCCESS;
+            return header_rc;
         }
 
-        // Otherwise header_rc == RC_READY, loop to receive next block.
+        // header_rc == RC_READY, loop to receive next block.
     }
 }
 
@@ -317,13 +374,8 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
     *size = this_blocksize;  // size of this block
 
     // --- Payload ---
-    checksum = 0;
-    for (uint16_t i = 0; i < this_blocksize; i++) {
-        rc = PIREADBYTE(&byte);
-        if (rc != RC_SUCCESS) return RC_CONNERR;
-        dest[i] = byte;
-        checksum += byte;
-    }
+    rc = payload_rx(dest, this_blocksize, &checksum);
+    if (rc != RC_SUCCESS) return RC_CONNERR;
 
     // Local checksum (folded 16-bit sum → 8-bit)
     uint8_t right = (uint8_t)(checksum & 0xFF);
@@ -378,7 +430,8 @@ uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t msx_blocksize)
         return RC_READY;
     }
     else {
-        return RC_CONNERR;  // unexpected header code
+		expected_block_index = 0;  // In case of an error, the block index is 0
+        return header_rc;  // returns the server return code
     }
 }
 
@@ -483,13 +536,8 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize)
             if (rc != RC_SUCCESS) return RC_CONNERR;
 
             // --- Payload + checksum accumulation ---
-            checksum = 0;
-            for (uint16_t i = 0; i < this_blocksize; i++) {
-                uint8_t b = src[offset + i];
-                rc = PIWRITEBYTE(b);
-                if (rc != RC_SUCCESS) return RC_CONNERR;
-                checksum += b;
-            }
+            rc = payload_tx(src + offset, this_blocksize, &checksum);
+            if (rc != RC_SUCCESS) return RC_CONNERR;
 
             // --- Local checksum (MSX sender) ---
             localChecksum = (uint8_t)((checksum & 0xFF) + ((checksum >> 8) & 0xFF));
@@ -623,7 +671,7 @@ uint8_t SendCommandToMSXPi(const char* cmd, bool appendTail) {
     // largest consumer of _DATA) out of the way, since the linker's
     // normal packing pushed it - and everything after it - past 0x4000,
     // into memory that mapper-loading's own Put_PN(1,...) calls corrupt.
-    static __at(0x8000) char buffer[MAXBUFSIZE];
+    static __at(BUFADDRESS) char buffer[MAXBUFSIZE];
     uint16_t total = 0;
 
     // Copy primary
@@ -675,8 +723,11 @@ uint8_t parseConnError(const uint8_t rc) {
     else if (rc == RC_HANDSHAKEERR) {
         Print("Handshake error.");
     }
+    else if (rc == RC_FILENOTFOUND) {
+        Print("File not found on Pi server.");
+    }
     else if (rc != RC_SUCCESS && rc != RC_FAILED) {
-        pprintf("Unknown error: ", rc);
+        pprintf("Unknown error code: 0x", rc);
     }
     return rc;
 }
@@ -730,6 +781,148 @@ char* u16_to_ascii(uint16_t value, char* buf)
 
     buf[j] = 0;   // null terminate
     return buf;
+}
+
+
+// ============================================================================
+// Shared-link claim  (UNAPI implementation-specific routine 129)
+// ============================================================================
+// The MSXPi link carries the disk, these commands, AND the Ethernet UNAPI
+// driver.  Once InterNestor Lite is resident it polls ETH_IN_STATUS from the
+// 50/60 Hz timer interrupt, and that ISR will happily transmit in the middle
+// of one of our exchanges.  Observed on hardware: `p cd` printed its answer
+// and then hung, the server reporting a stray 0xC5 - OP_IN_STATUS - discarded
+// while it waited for READY.
+//
+// The window that has to be protected is the whole EXCHANGE, command through
+// response, not a block and not a handshake.  The failure above landed in the
+// turnaround: the MSX had sent `cd` and was idle waiting for the server to
+// execute it, so any per-operation claim would have been released right where
+// the damage happened.  Idle on the MSX does not mean the link is free.
+//
+// Discovery is the standard MSX-UNAPI procedure and is done once, then cached.
+// If no Ethernet UNAPI is installed there is no ISR to collide with, so these
+// become no-ops and tools keep working on machines without networking.
+
+// Discovery is repeated on every call, deliberately.
+//
+// The first version cached slot/segment/entry in statics and used a
+// "not looked yet" flag to discover once.  SDCC puts such statics in _DATA as
+// .ds, and with --no-std-crt0 that memory is NOT zeroed - so the flag started
+// as whatever the TPA happened to contain.  On real hardware that meant either
+// "already discovered", sending CALSLT to a garbage address and REBOOTING the
+// machine, or "no implementation", silently skipping the guard.  Both were
+// observed in the same session.
+//
+// Two EXTBIO calls per exchange cost microseconds against a Pi round trip
+// measured in milliseconds, so there is nothing to buy back by caching, and
+// nothing here now depends on startup zeroing.
+
+static uint16_t un_iy;         // low = segment, high = slot; loaded into IY
+static uint16_t un_entry;
+static uint16_t un_helper;
+static uint8_t  un_seg;
+static const char un_id[9] = "ETHERNET";
+
+void msxpi_link_claim(void) __naked
+{
+    __asm
+        ld      b,#1
+        jr      un_call
+    __endasm;
+}
+
+void msxpi_link_release(void) __naked
+{
+    __asm
+        ld      b,#0
+        ; falls through
+    un_call:
+        push    bc                  ; EXTBIO clobbers B
+
+        ; RAM helper address.  Absent is not fatal: an implementation in ROM
+        ; reports segment 0xFF and is reached with CALSLT, needing no helper.
+        ld      de,#0x2222
+        ld      hl,#0
+        ld      a,#0xFF
+        call    0xFFCA
+        ld      (_un_helper),hl
+
+        ; The identifier has to sit at ARG for the discovery call.
+        ld      hl,#_un_id
+        ld      de,#0xF847
+        ld      bc,#9
+        ldir
+
+        ld      de,#0x2222
+        xor     a
+        ld      b,#0
+        call    0xFFCA
+        ld      a,b
+        or      a
+        jr      z,un_call_none      ; no ETHERNET UNAPI: no ISR to collide with
+
+        ld      de,#0x2222
+        ld      a,#1
+        call    0xFFCA
+        ld      (_un_iy+1),a        ; slot -> IY high
+        ld      a,b
+        ld      (_un_seg),a
+        ld      (_un_iy),a          ; segment -> IY low (the helper wants it
+        ld      (_un_entry),hl      ; there; CALSLT ignores it)
+
+        ; Refuse to call into nothing.  Cheap, and the difference between a
+        ; no-op and a reset.
+        ld      a,h
+        or      l
+        jr      z,un_call_none
+
+        ld      iy,(_un_iy)
+        ld      ix,(_un_entry)
+        pop     bc                  ; B = claim flag again
+        ld      a,(_un_seg)
+        inc     a
+        jr      nz,un_call_ram
+        ld      a,#129
+        call    0x001C              ; CALSLT - the DOS kernel keeps the
+        ei                          ; inter-slot routines live in page-0 RAM
+        ret
+    un_call_ram:
+        ld      hl,(_un_helper)
+        ld      a,h
+        or      l
+        ret     z                   ; RAM implementation and no helper: the
+                                    ; call is impossible, so do nothing
+        ld      a,#129
+        jp      (hl)
+    un_call_none:
+        pop     bc
+        ret
+    __endasm;
+}
+
+// ----------------------------------------------------------------------------
+// msxpi_exchange: one command and its response, with the link held throughout.
+//
+// A wrapper rather than a claim/release pair sprinkled through the transport:
+// RECVDATA, RECVDATA_ONEBLOCK and SENDDATA2 have eighteen return points each,
+// and a release missed at any one of them would leak the claim and silently
+// stop the ISR polling for the rest of the session.  Here there is one entry
+// and one exit, so the release cannot be skipped.
+// ----------------------------------------------------------------------------
+uint8_t msxpi_exchange(const char* cmd, bool appendTail,
+                       uint8_t* buffer, uint16_t maxbufsize)
+{
+    uint8_t rc;
+    msxpi_link_claim();
+    rc = SendCommandToMSXPi(cmd, appendTail);
+    if (buffer != NULL) {
+        uint8_t rcFinal = parseConnError(rc);
+        if (rcFinal == RC_SUCCESS || rcFinal == RC_FAILED || rc == RC_BUFOVFLW)
+            printstdout(buffer, maxbufsize);
+    }
+    msxpi_link_release();
+    return rc;
 }
 
 uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize)

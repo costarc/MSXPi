@@ -115,12 +115,12 @@ Of the three files each `.MAC` includes, two (`include.asm`, `msxpi_bios.asm`
 LOADROM version) are the project's own canonical copies in
 `asm-common/include/`, resolved via the second `-I` above rather than
 duplicated here. The third, `msxpi_putchar.asm`, is kept as a local copy
-in this directory rather than referencing `asm-common/include/putchar-
+in this directory rather than referencing `asm-common/include/putchar_
 msxdos.asm`: the two aren't equivalent - this patch's copy calls the
 BDOS console-output function directly (`CALL 5`, matching how every BDOS
 call elsewhere in these `.MAC` files and in LOADROM itself works, since
 this is a plain `.COM` program under MSX-DOS, not a device driver or ROM
-context), where `putchar-msxdos.asm` calls `$A2` instead - not a BDOS
+context), where `putchar_msxdos.asm` calls `$A2` instead - not a BDOS
 entry point (that's always `CALL 5`); it looks like the MSX BIOS `CHPUT`
 vector, which needs a different calling context than this patch has.
 

@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.4                                                           |
+;| Version : 1.6                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.5 (2017,2026);
+; MSXPi Driver v1.6 (2017,2026);
 ;
 ; DOS 1.x kernel
 ;
@@ -47,6 +47,7 @@
 
 	.Z80
 	ASEG
+MSXPI_PAYLOAD_ROM_SPLIT equ 1
 	ORG	04000H
 
 ; Changes made:
@@ -4756,6 +4757,9 @@ A5AE7:	ld	a,(YF247)
 ; ROOM CREATED BY CHANGE IS FILLED WITH NOPS
 ; TO KEEP FOLLOWING CODE AT SAME ADDRESSES
 ;
+; Shared transport in an existing alignment hole. DEFS enforces capacity.
+	INCLUDE payload_wait_generated.asm
+	INCLUDE dskio_txsize.asm		; burst-send test for DSKIO (msxpi-driver.mac)
 	defs	05B1AH-05A11H-($-A5A11),0
 ;
 ; END OF CHANGE
@@ -4854,7 +4858,7 @@ A5BA0:	ld	sp,0C200H
 	call	A5F86
 	defb	13,10
     defb    "Disk BASIC version 1.0",13,10
-    defb    "MSXPi Driver v1.5",13,10,0
+    defb    "MSXPi Driver v1.6",13,10,0
 	ld	hl,M.4173
 	push	hl			; after the RUN command completes
 	ld	hl,BUF+9
@@ -5172,6 +5176,9 @@ AWRSL:	ld	a,(RAMAD3)
 ;
 ; END OF CHANGE, BUT KEEP FOLLOWING ROUTINES AT SAME ADDRESSES!
 ;
+; Shared transport in an existing alignment hole. DEFS enforces capacity.
+	INCLUDE payload_tx_generated.asm
+	INCLUDE dskio_p1test.asm		; page-1 test for DSKIO (msxpi-driver.mac)
 	defs	05EADH-05E52H-($-A5E52),0
 
 
@@ -6298,6 +6305,8 @@ LINCP	equ	$-AINCP
 ; UNUSED SPACE IS FILLED WITH NOPS, TO KEEP FOLLOWING CODE AT
 ; THE SAME ADDRESSES FOR MAXIUM COMPATIBLITY
 ;
+; Shared transport in an existing alignment hole. DEFS enforces capacity.
+	INCLUDE payload_escape_generated.asm
 	defs	06576H-06306H-($-A6306),0
 ;
 ; END OF CHANGE

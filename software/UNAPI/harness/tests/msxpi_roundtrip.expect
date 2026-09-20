@@ -1,0 +1,12 @@
+# Server-side proof that the round trip really happened.  The screen assertions
+# alone would pass even if the MSX never talked to the server at all, which is
+# the whole reason this file exists.
+#
+# These match the server's CURRENT log format.  It used to print per-function
+# debug lines (pver(), senddata_oneblock(), the checksum comparison); those
+# were removed when the server logging was tidied, so asserting on them made
+# this test fail while the round trip was working perfectly.  Keep these
+# patterns aligned with what msxpi-server.py actually prints, and prefer lines
+# that show the command being RECEIVED and ANSWERED over internal details.
+MSXPi Server waiting command: -> VER
+Sending version info: MSXPi Server Version

@@ -1,35 +1,34 @@
-;|===========================================================================|
-;|                                                                           |
-;| MSXPi Interface                                                           |
-;|                                                                           |
-;| Version : 1.5                                                             |
-;|                                                                           |
-;| Copyright (c) 2015-2026 Ronivon Costa (ronivon@outlook.com)               |
-;|                                                                           |
-;| All rights reserved                                                       |
-;|                                                                           |
-;| Redistribution and use in source and compiled forms, with or without      |
-;| modification, are permitted under GPL license.                            |
-;|                                                                           |
-;|===========================================================================|
-;|                                                                           |
-;| This file is part of MSXPi Interface project.                             |
-;|                                                                           |
-;| MSX PI Interface is free software: you can redistribute it and/or modify  |
-;| it under the terms of the GNU General Public License as published by      |
-;| the Free Software Foundation, either version 3 of the License, or         |
-;| (at your option) any later version.                                       |
-;|                                                                           |
-;| MSX PI Interface is distributed in the hope that it will be useful,       |
-;| but WITHOUT ANY WARRANTY; without even the implied warranty of            |
-;| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the             |
-;| GNU General Public License for more details.                              |
-;|                                                                           |
-;| You should have received a copy of the GNU General Public License         |
-;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
-;|===========================================================================|
+; MSXPi Interface
+; Version 1.6
+; ------------------------------------------------------------------------------
+; MIT License
 ;
-; MSXPi Driver v1.5 (2026)
+; Copyright (c) 2015-2026 Ronivon Costa
+;
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+; copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included in all
+; copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+; ------------------------------------------------------------------------------
+;
+; MSXPi Driver v1.6 (2026)
+
+; Work area layout and load address of the Ethernet UNAPI driver appended at
+; the end of this ROM.  Shared verbatim with the sjasm build of that driver.
+INCLUDE unapi_wrk.inc
 
 CONTROL_PORT1 EQU $56
 CONTROL_PORT2 EQU $57
@@ -75,7 +74,14 @@ RC_OUTOFSYNC   EQU $E5
 ; 14	insufficient memory
 ; 16	other error
 
-MYSIZE		equ	9		; Size of environment
+; Size of the disk driver work area the kernel allocates for us.  Offsets
+; 0..4 are DSKIO_SECTINFO's, 5..7 are MSXPI_GETSTASH's, and everything from
+; UNAPI_WRK up belongs to the Ethernet UNAPI driver appended at the end of
+; this ROM - see asm-common/include/unapi_wrk.inc.
+; No private sector buffer: page-1 sectors are staged through the kernel's
+; $SECBUF (see DSKIO_BUFFER). 512 more bytes here left a Panasonic FS-A1F
+; below its A1 Cockpit's HIMEM >= D200h check ("not enough memory" at boot).
+MYSIZE		equ	UNAPI_WRKEND	; Size of environment
 SECLEN		equ	512		; Size of biggest sector
 
 ; INIHRD
@@ -88,21 +94,22 @@ SECLEN		equ	512		; Size of biggest sector
 ; A = #40 in first call, and #80 in second all.;
 ;
 INIHRD:
-        ld      a,$80
-        cp      h
-        ret     z
+        ; Called twice, with $40 then $80 (see the note above), so bit 7
+        ; alone tells the two apart - one byte cheaper than comparing, and
+        ; that byte is what let DSKIO_RXSIZE grow.
+        bit     7,h
+        ret     nz
         ld      hl,MSXPIVERSION
         call    PRINT
-        ld      b,3
+        ; About 1.4 s at 3.58 MHz (6 x 256 x 256 DJNZ): time to read the
+        ; banner. The kernel ignores INIHRD's registers and flags.
+        ld      d,6
 INIDELAY:
-        ld      hl,0
-INIDELAY1:
-        dec     hl
-        ld      a,h
-        or      l
-        jr      nz,INIDELAY1
         djnz    INIDELAY
-        and     a
+        dec     c
+        jr      nz,INIDELAY
+        dec     d
+        jr      nz,INIDELAY
         ret
         
 ; START OF -----------------------------
@@ -139,7 +146,13 @@ DRIVES:
 ;		depends on the hardware if this is needed.
 
 INIENV:
-        ret
+        ; Hand over to the Ethernet UNAPI driver at the end of this ROM: it
+        ; hooks EXTBIO and initialises its part of the work area, then
+        ; returns.  INIENV is the right moment - the kernel has by now
+        ; allocated the MYSIZE work area and stored it in SLTWRK, and the
+        ; EXTBIO hook has been initialised (by this diskrom or by whichever
+        ; one started the disk system first).
+        jp      UNAPI_ORG
 
 ; START OF -----------------------------
 ; MSXPi DSKIO Routine           |
@@ -159,8 +172,31 @@ INIENV:
 ;		B	if error, remaining sectors
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 ;
+; Option A, the shared-channel guard.  MSXPi is ONE channel: the disk and the
+; Ethernet UNAPI both drive ports 56/57/5A, and InterNestor Lite polls from the
+; 50/60Hz timer interrupt.  Without this, a timer tick landing part-way through
+; a block transfer makes the ISR issue its own IN ($5A) and both byte streams
+; desynchronise permanently - silently, onto a filesystem.
+;
+; A flag rather than DI: a 512-byte block is ~28ms and disabling interrupts for
+; that long would break JIFFY, key repeat and INL's own timers.  And a plain
+; flag is enough without any atomicity worry, for the same reason ETH_LOCK
+; needs no DI - the two contexts are asymmetric.  The foreground sets the flag
+; before touching a port; an interrupt arriving before that finds the link free
+; and completes its whole transaction before the foreground resumes, because
+; the ISR runs to completion and cannot itself be preempted.
+;
+; Wrapped around DSKIO as a whole rather than around the individual block
+; routines in msxpi_bios.asm: those nest and have several error exits each, so
+; bracketing them would need a depth counter and would be easy to get wrong.
+; DSKIO has one entry and every exit is a plain RET, so one CALL covers it.
 DSKIO:
-        JR      NC,DSKIO_READ
+        call    LINK_BUSY_SET
+        call    DSKIO_BODY
+        jp      LINK_BUSY_CLR
+
+DSKIO_BODY:
+        JP      NC,DSKIO_READ
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_WRITE Routine    |
@@ -173,25 +209,88 @@ DSKIO_WRITE:
         push    bc               ; need to save this ?
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_WSEC
         call    SendCommandToMSXPi ; Send sector write command "DSKIOWRS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer with data to read
         pop     bc                ; number of bytes to transfer
+; Sectors normally go straight between the link and the caller's buffer.
+; Only a sector that can touch page 1 (3E00-7FFF, where this ROM is mapped
+; while the driver runs) is staged through the private buffer and XFER.
+; Nextor never hands a legacy driver such an address - it remaps page 1 into
+; page 2 first - so under Nextor every sector takes the direct path. Staging
+; every sector through the page-3 buffer (R2/R2.1) broke COPY on a real
+; Canon V-25 + MFR SD ("Bad file allocation table reading drive A:").
 DSKIO_WRITE_LOOP:
-        push	bc
-        ld      bc,SECTORSIZE
-        call    senddata	      ; Send the sectors (write to disk
+        push    bc
+        ld      a,d
+        call    DSKIO_P1_TEST
+        jr      c,DSKIO_WRITE_STAGED
+        push    de
+        call    DSKIO_TXSIZE       ; BC = 512, bit 15 set: send as a /WAIT burst
+        call    SENDDATA
+        pop     de
+        inc     d                  ; DE += 512; INC keeps SENDDATA's carry
+        inc     d
+DSKIO_WRITE_NEXT:
         pop     bc
-        jr      c, DSKIO_ERR1
+        jr      c,DSKIO_WRITE_ERR
         djnz    DSKIO_WRITE_LOOP
-        or	     a
+        or      a
         ret
-; END OF ------------------------------
-; MSXPi DSKIO_WRITE Routine    |
-;--------------------------------------
+DSKIO_WRITE_STAGED:
+        ex      de,hl              ; HL = caller source
+        call    DSKIO_BUFFER
+        call    DSKIO_COPY_SECTOR   ; HL = next source, staged bytes in private buffer
+        jr      c,DSKIO_WRITE_NEXT
+        push    hl
+        call    DSKIO_BUFFER
+        call    DSKIO_TXSIZE
+        call    SENDDATA
+        pop     de                 ; original caller pointer, advanced 512
+        jr      DSKIO_WRITE_NEXT
+DSKIO_WRITE_ERR:
+        jp      DSKIO_ERR1
 
+; Return DE = the kernel's $SECBUF, which the DOS1 kernel documents as usable
+; by the disk driver; preserve everything else. Only a caller buffer in page 1
+; is staged, so the buffer is never also the caller's own buffer (page 3).
+; The MSX-DOS1 kernel only allocates $SECBUF; Nextor fills it for boot and
+; partition work, always as a direct target, never around a page-1 transfer
+; through a legacy driver. Verified: Nextor SD <-> MSXPi COPY and FS-A1WSX
+; internal floppy <-> MSXPi COPY, both directions, byte-identical.
+DSKIO_BUFFER:
+        ld      de,($SECBUF)
+        ret
+
+; Copy one staged sector to/from page 1. Only called for a page-1 caller
+; buffer, so it always needs XFER, which runs from RAM, maps TPA RAM into
+; page 1 and restores this ROM. DOS1 disables XFER in Disk BASIC, where page 1
+; is the BASIC ROM and no transfer targets it; if it is ever missing here,
+; fail the sector rather than copy nothing.
+; In: HL=source, DE=destination. Out: both advanced, carry = error.
+DSKIO_COPY_SECTOR:
+        ld      bc,SECTORSIZE
+        ld      a,(XFER)
+        cp      0C3H
+        scf
+        ret     nz
+        call    XFER
+        or      a
+        ret
+; DSKIO_P1_TEST (CF = sector at D*256 can touch page 1) lives in a free gap of
+; the kernel ROM: see dskio_p1test.asm.
+
+; BC = sector size for SENDDATA, with bit 15 set when the last block the
+; server sent was a /WAIT burst (RECVDATA_ONEBLOCK keeps its raw length high
+; byte at work area +7). Only a server that can burst both ways sends one,
+; and only when this side asked (DSKIO_RXSIZE, /WAIT present); disk reads
+; always come before writes. SENDDATA sends only the first attempt as a
+; burst. GETWRK keeps DE. Corrupts AF, HL, IX.
+; DSKIO_TXSIZE lives in a free gap of the kernel ROM: see dskio_txsize.asm.
+
+        INCLUDE dskio_rxsize.asm
 
 ; START OF ----------------------------
 ; MSXPi DSKIO_READ Routine     |
@@ -218,25 +317,49 @@ DSKIO_READ:
         push    bc                ;
         push    hl                ; save buffer address
         call    DSKIO_SECTINFO    ; Send sector info
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         ld      de,DOS_RSEC
         call    SendCommandToMSXPi ; Send sector read command "DSKIORDS"
-        jr      c,DSKIO_ERR
+        jp      c,DSKIO_ERR
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 DSKIO_READ_LOOP:
-		push    af
-        push	bc
-        ld	    bc,SECTORSIZE
-        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
-		xor     a
-        call    RECVDATA_ONEBLOCK	
-        pop	    bc
-		pop 	hl
-		ld      a,h
-        jr	    c, DSKIO_ERR1
-        djnz	DSKIO_READ_LOOP
-        or	    a
+        push    af
+        push    bc
+        push    de                 ; caller destination survives reception
+        ld      a,d
+        call    DSKIO_P1_TEST      ; CF = page 1: receive into the private buffer
+        push    af
+        call    c,DSKIO_BUFFER
+        call    DSKIO_RXSIZE       ; BC = 512, bit 15 set to ask for a /WAIT burst
+        call    PerformHandshake
+        jr      c,DSKIO_READ_RXEND
+        xor     a
+        call    RECVDATA_ONEBLOCK
+DSKIO_READ_RXEND:
+        pop     hl                 ; L = flags of the page-1 test
+        pop     de                 ; caller destination
+        jr      c,DSKIO_READ_DONE  ; do not copy a rejected sector
+        bit     0,l
+        jr      nz,DSKIO_READ_COPY
+        inc     d                  ; direct: DE += 512
+        inc     d
+        jr      DSKIO_READ_DONE_OK
+DSKIO_READ_COPY:
+        ex      de,hl              ; HL = caller destination
+        call    DSKIO_BUFFER       ; DE = private buffer
+        ex      de,hl
+        call    DSKIO_COPY_SECTOR
+        jr      c,DSKIO_READ_DONE
+DSKIO_READ_DONE_OK:
+        or      a
+DSKIO_READ_DONE:
+        pop     bc
+        pop     hl
+        ld      a,h
+        jr      c,DSKIO_ERR1
+        djnz    DSKIO_READ_LOOP
+        or      a
         ret
 DSKIO_ERR:
         pop     hl
@@ -249,6 +372,40 @@ DSKIO_ERR1:
 ; END OF ------------------------------
 ; MSXPi DSKIO_READ Routine     |
 ;--------------------------------------
+
+; --- Claim / release the link for the disk --------------------------------
+; Both preserve AF, BC, DE and HL, which matters at BOTH ends: on entry DSKIO
+; takes the drive in A and read/write in the CARRY flag, and on exit it returns
+; the error code in A and the carry.  IX is corrupted, which DSKIO's own
+; contract already permits.
+; SAVE and RESTORE, not set-and-clear.  A .COM can now hold the link itself
+; through UNAPI routine 129, and such a program may well write to disk in the
+; middle of its transfer - pcopy does exactly that with every block it
+; receives.  Forcing the flag to 0 here would drop that program's claim while
+; it was still using the link, letting the ISR back in precisely where it does
+; the damage.  One save slot suffices: DSKIO is not reentrant.
+LINK_BUSY_SET:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK              ; HL = IX = this driver's work area
+        ld      a,(ix+o_LINK_BUSY)
+        ld      (ix+o_LINK_SAVE),a
+        ld      (ix+o_LINK_BUSY),1
+        jr      LINK_BUSY_DONE
+LINK_BUSY_CLR:
+        push    af
+        push    bc
+        push    hl
+        call    GETWRK
+        ld      a,(ix+o_LINK_SAVE)
+        ld      (ix+o_LINK_BUSY),a
+LINK_BUSY_DONE:
+        pop     hl
+        pop     bc
+        pop     af
+        ret
+
 
 
 ; START OF ----------------------------
@@ -300,15 +457,12 @@ DSKIO_SECTINFO1:
 	pop     de
 	ld	    bc,5
 	call	senddata
-	and     a
+	; Propagate SENDDATA carry so DSKIO does not issue a command after failure.
 	ret
         
 ; END OF ------------------------------
 ; MSXPi DSKIO_SECTINFO Routine |
 ;--------------------------------------
-
-DSKIORDMSG:
-    DB      "DSKIO READ ERROR",13,10,0
 
 ; DSKCHG
 ;
@@ -355,25 +509,24 @@ DSKCHGDPB:
 ;		..
 ;		[hl+18]	updated
 ; Changed:	af,bc,de,hl,IX,IY may be affected
+;
+; DSKCHG always answers "unknown", so Nextor revalidates the drive whenever
+; its media-check timer has lapsed: it re-reads the boot sector and then calls
+; GETDPB. It arrives here with carry SET and treats a carry returned from
+; GETDPB as failure - "Not a DOS disk". A bare RET handed that carry straight
+; back, so COPY between MSXPi and another drive failed whenever the check
+; happened mid-copy. Keep the DPB as it is (as before) but return carry clear.
 
 GETDPB:
+        xor     a
         ret
 
+; The kernel copies 21 bytes from DEFDPB into every drive's DPB: one byte
+; before the media id, the 18-byte F9 entry and the two bytes after it. Only
+; the F9 entry is used (GETDPB leaves the DPB as initialised), so the F8
+; entry that used to precede it is reduced to that one leading byte.
 DpbTable:
-        db	0F8h		; Media F8
-		dw	512		; 80 Tracks
-		db	0Fh		; 9 sectors
-		db	04h		; 1 side
-		db	01h		; 3.5" 360 Kb
-		db	02h
-		dw	1
-		db	2
-		db	112
-		dw	12
-		dw	355
-		db	2
-		dw	5
-
+		db	0		; DEFDPB byte 0 (was the last byte of the F8 entry)
 		db	0F9h		; Media F9
 		dw	512		; 80 Tracks
 		db	0Fh		; 9 sectors
@@ -388,7 +541,7 @@ DpbTable:
 		db	3
 		dw	7
 
-DEFDPB	equ	DpbTable+18-1
+DEFDPB	equ	DpbTable
 
 ; CHOICE
 ;
@@ -399,14 +552,6 @@ DEFDPB	equ	DpbTable+18-1
 CHOICE:
 		ld		hl,0
 		ret
-
-; Choices not used by MSXPi driver
-ChoiceStr:	db	13,10
-		db	"1 - Choice A",13,10
-		db	"2 - Choice B",13,10
-        db	"3 - Choice C",13,10
-		db	13,10
-		db	0
 
 ; DSKFMT
 ;
@@ -445,422 +590,17 @@ MTOFF:
 ; Changed:	af,bc,de,hl,IX,IY may be affected
 
 OEMSTA:
-CALLHAND:
- 
-    PUSH    HL
-    LD      HL,CALL_TABLE     ; Table with "_" instructions
-.CHKCMD:
-    LD      DE,PROCNM
-.LOOP       LD  A,(DE)
-    CP      (HL)
-    JR      NZ,.TONEXTCMD   ; Not equal
-    INC     DE
-    INC     HL
-    AND     A
-    JR      NZ,.LOOP        ; No end of instruction name, go checking
-    LD      E,(HL)
-    INC     HL
-    LD      D,(HL)          
-    POP     HL              ; routine address
-    CALL    GETPREVCHAR
-    CALL    .CALLDE         ; Call routine
-    AND     A
-    RET
- 
-.TONEXTCMD:
-    LD      C,0FFH
-    XOR     A
-    CPIR            ; Skip to end of instruction name
-    INC     HL
-    INC     HL      ; Skip address
-    CP      (HL)
-    JR      NZ,.CHKCMD  ; Not end of table, go checking
-    POP     HL
-    SCF
-    RET
- 
-.CALLDE:
-    PUSH    DE
-    RET
-
-; ---------------------
-; Supporting functions|
-;----------------------
-GETSTRPNT:
-; OUT:
-; HL = String Address
-; B  = Length
- 
-        LD      HL,($F7F8)
-        LD      B,(HL)
-        INC     HL
-        LD      E,(HL)
-        INC     HL
-        LD      D,(HL)
-        EX      DE,HL
-        RET
- 
-EVALTXTPARAM:
-        CALL    CHKCHAR
-        DEFB    "("             ; Check for (
-        LD      IX,FRMEVL
-        CALL    CALBAS      ; Evaluate expression
-        LD      A,(VALTYP)
-        CP      3               ; Text type?
-        JP      NZ,TYPE_MISMATCH
-        PUSH    HL
-        LD      IX,FRESTR         ; Free the temporary string
-        CALL    CALBAS
-        POP HL
-        CALL    CHKCHAR
-        DEFB    ")"             ; Check for )
-        RET
- 
- 
-CHKCHAR:
-        CALL    GETPREVCHAR ; Get previous basic char
-        EX      (SP),HL
-        CP      (HL)            ; Check if good char
-        JR      NZ,SYNTAX_ERROR ; No, Syntax error
-        INC     HL
-        EX      (SP),HL
-        INC     HL      ; Get next basic char
- 
-GETPREVCHAR:
-        DEC     HL
-        LD      IX,CHRGTR
-        JP      CALBAS
- 
- 
-TYPE_MISMATCH:
-        LD      E,13
-        DB      1
- 
-SYNTAX_ERROR:
-        LD      E,2
-        LD      IX,ERRHAND  ; Call the Basic error handler
-        JP      CALBAS
- 
-;================================================================
-; call Commands start here
-; ================================================================
-;-----------------------
-; call HELP OR MSXPIHELP
-;-----------------------
-_MSXPIHELP:
-        push    hl
-        ld      hl,MSXPIHelpMsg
-        call    PRINT
-        pop     hl
-        ret      
-;-----------------------
-; call MSXPIVER 
-;-----------------------
-_MSXPIVER:
-        push    hl
-        ld      hl,MSXPIVERSION
-        call    PRINT
-        ld      de,vercommand
-        call    SendCommandToMSXPi
-        ld		bc,128
-		ld		HL,(HIMEM)
-        or      a
-        sbc     hl,bc
-        ld      d,h
-        ld      e,l
-		call    PRINTPISTDOUT
-        pop     hl
-        ret
-vercommand:
-        db      'ver',0
-;--------------------------------------------------------------------
-; Call MSXPI BIOS function                                          |
-;--------------------------------------------------------------------
-; Verify if command has STD parameters specified
-; Examples:
-; call mspxi("0,xxxx,pdir")  -> ignores the response
-; call msxpi("1,xxxx,pdir")  -> print the respinse to screen
-; call msxpi("2,E000,pdir")  -> store response data in memmory address passed
-_MSXPI:
-        CALL    EVALTXTPARAM    ; Evaluate text parameter
-        PUSH    HL              ; Save for BASIC
-        CALL    GETSTRPNT       ; Get the address of the paramaters
-        EX      DE,HL           ; Switch to DE as required by next routines
-        CALL    PARSE_CALL_PARAMETERS
-                                ; Validate and get all paremeters in the call command
-        JP      C,CALL_SYNTAX_ERROR ; Return to BASIC with ERROR
-; Registers at this point:
-; A  = contain the output required for the command
-; DE = contain string address of command to send to RPi
-; HL = contain buffer address to store data from RPi (if provided by user, otherwise 0)
-;
-; Routine explanation:
-; MSX Send the command to RPi
-; RPi reply with data block (BLKSIZE) with the following structure:
-; | RC | LSB | MSB | INDEX | DATA |
-; RC = RC_FAILED: Pi error. Message available to print
-; RC = RC_READY: Pi processing succeed - data available and there is another block
-; RC = RC_SUCCESS : Pi processing succeed - data available and this is last block
-; RC = RC_CONNERR : Error in the connection with RPi
-;
-; Send commands (in CALL parameters) to RPi
-
-        PUSH    HL
-        PUSH    AF
-        PUSH    DE
-        POP     HL
-        CALL    SendCommandToMSXPi
-        JR      NC,CALL_SUCCESS
-        POP     AF
-        POP     HL
-        LD      A,RC_CONNERR
-        LD      (HL),A              ; [0] = error code, for callers checking
-        INC     HL                  ; PEEK(B) without also checking carry
-        XOR     A
-        LD      (HL),A              ; [1] = size low = 0, so a caller that
-        INC     HL                  ; skips the carry check too (like a
-        LD      (HL),A              ; bare PEEK(B+1)+256*PEEK(B+2)) gets a
-                                    ; safe empty-size loop instead of
-                                    ; whatever command text ExtractCommand
-                                    ; left sitting in the buffer
-        POP     HL                  ; BASIC Pointer
-        AND     A
-        RET
-CALL_SUCCESS:
-        pop     af
-        pop     de
-        cp      '0'
-        jr      z,CALL_DiscardResponse
-        CP      '2'
-        JR      Z,CALL_MSXPISAVEDATA
-
-; ---------------------------------
-; Print response to screen
-; ---------------------------------
-        ld      bc,MAXBUFSIZE
-        xor     a               ; block = 0
-        call	PRINTPISTDOUT
-        pop     hl              ; BASIC pointer
-        and     a
-        ret
-; ---------------------------------
-; Consume response discarding it
-; ---------------------------------
-CALL_DiscardResponse:
-        ld      bc,MAXBUFSIZE
-        xor     a               ; block = 0
-        call	STDOUTTONULL
-        pop     hl              ; BASIC pointer
-        and     a
-        ret
-
-; ============================================================
-; CALL_MSXPISAVEDATA
-; Receive data blocks into buffer at DE.
-; First 3 bytes reserved for header:
-;   [0] = final return code
-;   [1..2] = total size (low/high)
-; ============================================================
-
-CALL_MSXPISAVEDATA:
-        PUSH    DE              ; save base buffer address
-        INC     DE              ; skip header space
-        INC     DE
-        INC     DE
-        LD      BC,MAXBUFSIZE   ; request max block size
-        call    PerformHandshake    ; Required before calling RECVDATA_ONEBLOCK
-        XOR     A               ; block index = 0
-        LD      HL,0            ; clear total size accumulator
-RECV_LOOP:
-        PUSH    AF
-        PUSH    HL              ; keep total size on stack
-        CALL    RECVDATA_ONEBLOCK
-        JR      NC,RECV_OK
-        POP     HL              ; discard total size - match RECV_ERROR's
-                                ; expected stack depth (BlockIdx,BufAddr,BasicPtr)
-        JR      RECV_ERROR      ; carry set = error, stop
-RECV_OK:
-        ; HL not used here, DE updated by RECVDATA_ONEBLOCK
-        ; BC = size of block just read
-        POP     HL              ; HL = current total size
-        ADD     HL,BC           ; add block size
-        ; check return code in A - matches PRINTPISTDOUT's own check
-        ; (cp RC_READY / ret nz): RC_READY means another block follows,
-        ; anything else means this was the last block. RECVDATA_ONEBLOCK
-        ; already caught real transport failures via carry, so the RC
-        ; value itself doesn't need to match a specific terminal code.
-        CP      RC_READY
-        JR      Z,RECV_NEXT     ; another block, continue
-        JR      RECV_DONE       ; transfer complete
-
-RECV_NEXT:
-        POP     AF
-        INC     A               ; next block index
-        JR      RECV_LOOP
-
-; ------------------------------------------------------------
-; Successful completion: write header
-; ------------------------------------------------------------
-RECV_DONE:
-        POP     BC              ; Discard index
-                                ; HL = total size
-        POP     DE              ; DE = base buffer address
-
-        LD      (DE),A          ; [0] = RC_SUCCESS
-        INC     DE
-        LD      A,L
-        LD      (DE),A          ; [1] = total size low
-        INC     DE
-        LD      A,H
-        LD      (DE),A          ; [2] = total size high
-
-        POP     HL              ; BASIC pointer
-
-        AND     A
-        ret
-
-; ------------------------------------------------------------
-; Error exit
-; ------------------------------------------------------------
-RECV_ERROR:
-        LD      C,A             ; preserve error/status code - about to be
-                                ; clobbered by the POP AF below
-        POP     AF              ; discard block index
-        POP     DE              ; restore buffer base
-        LD      A,C
-        LD      (DE),A          ; [0] = error code, so a caller reading the
-        INC     DE              ; header after a failed transfer sees a
-        XOR     A               ; real error instead of whatever was left in
-        LD      (DE),A          ; the buffer (this call's own command text,
-        INC     DE              ; copied in by ExtractCommand, or a previous
-        LD      (DE),A          ; call's real data at the same address)
-        POP     HL              ; restore BASIC pointer, matching RECV_DONE
-        SCF                     ; set carry = error
-        RET
-
- CALL_SYNTAX_ERROR:
-        CALL    _MSXPIHELP
-        POP     HL
-        LD      E,2
-        LD      IX,ERRHAND  ; Call the Basic error handler
-        JP      CALBAS
-
-; Evaluate CALL Commands to check for optional parameters
-; Returns Buffer address in HL (or HL=0000 if parameter not found)
-; Input:
-;  DE = Call full command (after the ")
-; Output:
-;  A = Output type (as below cases)
-;  DE = Point to start of command to send to RPi (pdir in the case below)
-;  HL = Address of buffer to store data if stdout = 2
-;
-; Cases:
-; call MSXPI("0,C000,pdir")  -> ignores the response
-; call MSXPI("1,C000,pdir")  -> print the response to screen
-; call MSXPI("2,C000,pdir")  -> store response data in given memory address+3
-; 
-PARSE_CALL_PARAMETERS:
-        LD      A,(DE)
-        ; First parameters must be 0,1 or 2 - otherwise return error.
-        CP      '0' 
-        RET     C
-        CP      '3'
-        JR      C,STDOUT_OK
-        SCF                 ; STDOUT > 2 -> error
-        RET
-STDOUT_OK:
-        LD      H,A
-        INC     DE
-        DEC     B
-        SCF
-        RET     Z
-        LD      A,(DE)
-        CP      ','         ;Check for comma after stdout parameter
-        SCF
-        RET     NZ          ; Syntax error - missing comma
-        INC     DE          ; Point to Address provided in call command
-        DEC     B
-        SCF
-        RET     Z
-; Convert ascii chars pointed by DE to hex. Return value in BC
-; Flag C is set if there was an error
-        PUSH    BC          ; Save B = number of characters remaing in command
-        CALL    STRTOHEX    ; Return with DE pointing to next char in string
-                            ; BC = Address converted from String
-                            ; Flag C: set if error
-        POP     IY          ; Temporaryly save B in IY
-        RET     C           ; Conversion error - Exit
-        PUSH    BC
-        POP     IX          ; IX = = Address converted from String
-        PUSH    IY
-        POP     BC          ; B = number of characters remaing in command
-        DEC     B
-        DEC     B
-        DEC     B
-        DEC     B
-        DEC     B
-        SCF
-        RET     Z           ; Syntax error
-        PUSH    HL          ; Save parameters
-        PUSH    IX
-        POP     HL          ; User buffer in HL - Will be used in ExtractCommand
-        CALL    ExtractCommand  ; Copy the command from DE to HL
-                                ; Return new buffer address in DE
-                                ; Add zero to end of command
-                                ; Return address in DE
-        POP     HL          ; Restore parameters
-        LD      A,H         ; A = stdout value
-        PUSH    IX
-        POP     HL          ; HL = Buffer address passed in call command
-                            ; DE = Addres of command terminated in zero
-        AND     A
-        RET
-
-; Extract command from CALL
-; DE = Address of string passed in CALL (after "0,xxxx,")
-ExtractCommand:
-        PUSH    HL
-EC_Loop:
-        LD      A,(DE)
-        CP      '"'         ; End of parameters
-        JR      Z,EC_Success
-        LD      (HL),A
-        INC     HL
-        INC     DE
-        DEC     B
-        JR      NZ,EC_Loop
-EC_Success:
-        LD      (HL),0      ; Termination for the command
-        POP     HL          ; Restore base address of command
-        LD      D,H
-        LD      E,L
-        AND     A           ; Success
-        RET
-EC_ExitError:
-        LD      (HL),0      ; Termination for the command
-        POP     HL
-        LD      D,H
-        LD      E,L
-        SCF                 ; Error
-        RET
+        INCLUDE msxpi_call.asm
 
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.5"
-BuildId: DB ".20260808.020"
+        DB      13,10,"MSXPi BIOS v1.6"
+BuildId: DB ".20260919.060"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
-MSXPIHelpMsg:
-        DB      "Commands available:",13,10
-        DB      "MSXPI MSXPIVER ",13,10
-        DB      "Examples:",13,10
-        DB      "CALL MSXPI(",34,"0,C000,dir",34,") -> Execute command and ignores the response",13,10
-        DB      "CALL MSXPI(",34,"1,C000,dir",34,") -> Execute command and print the response to screen",13,10
-        DB      "CALL MSXPI(",34,"2,C000,dir",34,") -> Execute command and store response data in given memory address+3",13,10,0
-
 ; ================================================================
 ; Table of Commands available/implemented
 ; ================================================================
@@ -869,21 +609,47 @@ CALL_TABLE:
         DW      _MSXPIVER
         DB      "MSXPI",0
         DW      _MSXPI
-        DB      "HELP",0
-        DW      _MSXPIHELP
-        DB      "MSXPIHELP",0
-        DW      _MSXPIHELP
 ENDOFCMDS:
         DB      00
 
-; Commands for MSX-DOS - sector transfers
-DOS_INI:    DB  "dskioini",0,0,0,0
-DOS_RSEC:   DB  "dskiords",0,0,0,0
-DOS_WSEC:   DB  "dskiowrs",0,0,0,0
-DOS_SECI:   DB  "dskiosct",0,0,0,0
-DOS_DRV:    DB  "dskiodrv",0,0,0,0
-DOS_FMT:    DB  "dskiofmt",0,0,0,0
+; Commands for MSX-DOS - sector transfers.  The protocol also defines
+; "dskioini", "dskiodrv" and "dskiofmt"; this driver never sends them, so
+; they are not carried here - the space went to the UNAPI driver below.
+; SendCommandToMSXPi sends up to the first 0: no padding needed.
+DOS_RSEC:   DB  "dskior",0
+DOS_WSEC:   DB  "dskiow",0
+DOS_SECI:   DB  "dskios",0
 
 INCLUDE include.asm
 INCLUDE putchar_msxdos.asm
+MSXPI_DRIVER    equ 1   ; msxpi_bios.asm: stash via the driver workarea (GETWRK)
 INCLUDE msxpi_bios.asm
+
+; ================================================================
+; Ethernet UNAPI driver
+; ================================================================
+; Assembled separately by sjasm (software/UNAPI/src/ethrom.asm) and dropped in
+; here as a binary, because the two builds cannot share one assembler: the
+; driver is also built for a mapped RAM segment by the .COM installer, from
+; the same sources, and those use sjasm syntax throughout.
+;
+; It is placed at a FIXED address rather than simply appended, so that both
+; directions of overflow are build errors instead of silent corruption:
+; MSXPi code growing past UNAPI_ORG, or the driver growing past the end of the
+; ROM.  If either assertion fires, either free space here (there is a lot of
+; comment-only ROM data left) or take the diagnostic routine 128 out of
+; ethcore.asm.
+;
+; The driver calls two kernel entry points by hardcoded address, because zmac
+; and sjasm have no way to share a symbol table.  Both live in the kernel half
+; of msx-dos.mac, entirely below this point, so nothing here can move them -
+; but assert it anyway, since the failure mode is a jump into whatever landed
+; at the old address.
+        ASSERT  GETSLT EQ 06016H         ; ethrom.asm GETSLT
+        ASSERT  GETWRK EQ 06025H         ; ethrom.asm GETWRK
+
+        ASSERT  $ LE UNAPI_ORG           ; MSXPi code has run into the driver
+        DEFS    UNAPI_ORG-$,0
+UNAPI_ROM_IMAGE:
+        INCBIN  ethrom.bin
+        ASSERT  $ LE 08000H              ; the driver has run off the ROM

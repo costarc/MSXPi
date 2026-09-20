@@ -1,3 +1,29 @@
+; MSXPi Interface
+; Version 1.6
+; ------------------------------------------------------------------------------
+; MIT License
+;
+; Copyright (c) 2015-2026 Ronivon Costa
+;
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+; copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included in all
+; copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+; ------------------------------------------------------------------------------
+
 ; ---------------------------------------------------------------------------
 ; LDRPATCH197.MAC - appended code for a network-loading patch of the
 ; third-party LOADROM.COM v1.97 by Trunks & Victor (6016 bytes, loaded at
@@ -97,11 +123,20 @@
 ; caller (C=0Fh, DE=16D2h) and untouched by this scan, so the original
 ; DSC-file open proceeds exactly as before regardless of netmode.
 ; ---------------------------------------------------------------------------
+;
+; The "/N" is blanked out of the command tail once found, and the default
+; FCB (005Ch) is rebuilt from the first non-option token. DOS only parses
+; the *first* argument into the FCB, so "LOADROM /N GAME.ROM" left the FCB
+; holding "/N" instead of the filename - searchpatch then deferred to a
+; local search (loading a local ROM) while readpatch still went to the
+; network with netfilename never filled in.
+; ---------------------------------------------------------------------------
 netinit:
         push af
         push bc
+        push de
         push hl
-        ld hl,00082h
+        ld hl,00081h
         ld a,(00080h)
         or a
         jr z,netinit_done
@@ -110,24 +145,141 @@ netinit_scan:
         ld a,(hl)
         cp '/'
         jr nz,netinit_next
-        push hl
+        ld a,b
+        cp 2            ; need the option letter still inside the tail
+        jr c,netinit_next
         inc hl
         ld a,(hl)
+        dec hl          ; DEC HL doesn't touch flags
         and 0DFh        ; uppercase
         cp 'N'
-        pop hl
         jr nz,netinit_next
+        ld (hl),' '     ; blank "/N" so nothing downstream sees it
+        inc hl
+        ld (hl),' '
+        dec hl
         ld a,1
         ld (netmode),a
-        jr netinit_done
 netinit_next:
         inc hl
         djnz netinit_scan
+        ld a,(netmode)
+        or a
+        call nz,netinit_fcb
 netinit_done:
         pop hl
+        pop de
         pop bc
         pop af
         call 013B7h
+        ret
+
+; netinit_fcb - rebuild 005Ch (drive) / 005Dh (name, 8) / 0065h (ext, 3)
+; from the first command-tail token not starting with '/'. Leaves the FCB
+; blank if there is none (browse mode). Uses AF, BC, DE, HL.
+netinit_fcb:
+        xor a
+        ld (0005Ch),a
+        ld hl,0005Dh
+        ld b,11
+        ld a,' '
+nf_fill:
+        ld (hl),a
+        inc hl
+        djnz nf_fill
+        ld a,(00080h)
+        ld b,a
+        ld hl,00081h
+nf_skipws:
+        ld a,b
+        or a
+        ret z
+        ld a,(hl)
+        cp ' '+1
+        jr nc,nf_token
+        inc hl
+        dec b
+        jr nf_skipws
+nf_token:
+        cp '/'
+        jr nz,nf_name
+nf_skipopt:
+        inc hl
+        dec b
+        ld a,b
+        or a
+        ret z
+        ld a,(hl)
+        cp ' '+1
+        jr nc,nf_skipopt
+        jr nf_skipws
+nf_name:
+        ld a,b
+        cp 2
+        jr c,nf_nodrive
+        inc hl
+        ld a,(hl)
+        dec hl
+        cp ':'
+        jr nz,nf_nodrive
+        ld a,(hl)
+        and 0DFh
+        sub '@'
+        ld (0005Ch),a
+        inc hl
+        inc hl
+        dec b
+        dec b
+nf_nodrive:
+        ld de,0005Dh
+        ld c,8
+nf_nloop:
+        ld a,b
+        or a
+        ret z
+        ld a,(hl)
+        cp ' '+1
+        ret c
+        cp '.'
+        jr z,nf_dot
+        inc hl
+        dec b
+        inc c
+        dec c
+        jr z,nf_nloop   ; name full - drop extra chars
+        call nf_upcase
+        ld (de),a
+        inc de
+        dec c
+        jr nf_nloop
+nf_dot:
+        inc hl
+        dec b
+        ld de,00065h
+        ld c,3
+nf_eloop:
+        ld a,b
+        or a
+        ret z
+        ld a,(hl)
+        cp ' '+1
+        ret c
+        inc hl
+        dec b
+        inc c
+        dec c
+        jr z,nf_eloop
+        call nf_upcase
+        ld (de),a
+        inc de
+        dec c
+        jr nf_eloop
+nf_upcase:
+        cp 'a'
+        ret c
+        cp 'z'+1
+        ret nc
+        sub 020h
         ret
 
 ; ---------------------------------------------------------------------------
@@ -309,6 +461,9 @@ searchpatch_plainrt:
 searchpatch_setrt:
         ld (netroutebyte),a
 
+        ld a,1          ; header fetched - open/read/close now go to network
+        ld (netactive),a
+
         xor a           ; success, index 0 -> Z flag set
         ret
 
@@ -328,7 +483,7 @@ searchpatch_fail:
 ; patch - see openpatch_mapped's own comment below.
 ; ---------------------------------------------------------------------------
 openpatch:
-        ld a,(netmode)
+        ld a,(netactive)
         or a
         jr nz,openpatch_net
         call 013B4h
@@ -339,7 +494,7 @@ openpatch_net:
         ret
 
 openpatch_mapped:
-        ld a,(netmode)
+        ld a,(netactive)
         or a
         jr nz,openpatch_mapped_net
         call 013B4h
@@ -356,7 +511,7 @@ openpatch_mapped_net:
 ; to openpatch_mapped's DI.
 ; ---------------------------------------------------------------------------
 closepatch:
-        ld a,(netmode)
+        ld a,(netactive)
         or a
         jr z,closepatch_disk
         ei
@@ -373,7 +528,7 @@ closepatch_disk:
 ; "LD A,H / OR L / JR Z,..." immediately after the call).
 ; ---------------------------------------------------------------------------
 readpatch:
-        ld a,(netmode)
+        ld a,(netactive)
         or a
         jr nz,readpatch_net
         call 013A7h
@@ -531,12 +686,16 @@ btd_skip_t:
 ; state + scratch
 ; ---------------------------------------------------------------------------
 netmode:    db 0
+netactive:  db 0    ; set only once searchpatch_first fetched a valid header -
+                    ; open/read/close key off this, not netmode, so a search
+                    ; that fell back to local disk also opens/reads locally
 netblkidx:  db 0
 netblkcount: db 2   ; overwritten by searchpatch_first from the header's real totalSize
 netroutebyte: db 0   ; computed by searchpatch_first, written into LOADROM's
                      ; own (16FCh)+16 buffer later, by searchpatch_concrete's
                      ; F_SNEXT return - see searchpatch_concrete's own comment.
-netfilename: ds 13   ; "NAME.EXT",0 - 8.3 filename, persists across every
+netfilename: db 0
+            ds 12  ; "NAME.EXT",0 - 8.3 filename, persists across every
                      ; per-block request (searchpatch_first populates it once)
 cmdploadr:  db "ploadr ",0
 cmdblksize: db "16384",0
@@ -544,6 +703,7 @@ cmdbuf:     ds 32
 
         include "include.asm"
         include "msxpi_putchar.asm"
+MSXPI_RAM_STASH equ 1   ; msxpi_bios.asm: plain .COM, no GETWRK - stash in local RAM
         include "msxpi_bios.asm"
 
         end

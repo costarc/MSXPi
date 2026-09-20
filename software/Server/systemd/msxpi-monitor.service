@@ -11,7 +11,13 @@
 Description=Monitor MSXPi Server process
 
 [Service]
+# Run as pi like msxpi-setup.sh's unit does. Without this systemd runs the
+# monitor - and therefore msxpi-server.py and anything PRUN executes - as root.
+# The monitor already uses sudo for the few steps that need root.
+User=pi
 WorkingDirectory=/home/pi/msxpi
+# Burst/native GPIO engine: 1 = on (default in msxpi-monitor), 0 = Python GPIO
+Environment=MSXPI_NATIVE_GPIO=1
 ExecStart=/home/pi/msxpi/msxpi-monitor
 
 [Install]

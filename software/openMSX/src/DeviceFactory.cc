@@ -81,6 +81,7 @@
 #include "SensorKid.hh"
 #include "SpectravideoFDC.hh"
 #include "SunriseIDE.hh"
+#include "UnapiNet.hh"
 #include "TalentTDC600.hh"
 #include "ToshibaFDC.hh"
 #include "TurboRFDC.hh"
@@ -108,16 +109,17 @@ namespace openmsx {
 [[nodiscard]] static std::unique_ptr<MSXDevice> createWD2793BasedFDC(DeviceConfig& conf)
 {
 	const auto* styleEl = conf.findChild("connectionstyle");
-	std::string type;
-	if (!styleEl) {
-		conf.getCliComm().printWarning(
-			"WD2793 as FDC type without a connectionstyle is "
-			"deprecated, please update your config file to use "
-			"WD2793 with connectionstyle Philips!");
-		type = "Philips";
-	} else {
-		type = styleEl->getData();
-	}
+	auto type = [&]() -> std::string_view {
+		if (!styleEl) {
+			conf.getCliComm().printWarning(
+				"WD2793 as FDC type without a connectionstyle is "
+				"deprecated, please update your config file to use "
+				"WD2793 with connectionstyle Philips!");
+			return "Philips";
+		} else {
+			return styleEl->getData();
+		}
+	}();
 	if (type == one_of("Philips", "Sony")) {
 		return std::make_unique<PhilipsFDC>(conf);
 	} else if (type == "Microsol") {
@@ -251,6 +253,8 @@ std::unique_ptr<MSXDevice> DeviceFactory::create(DeviceConfig& conf)
 		result = std::make_unique<BeerIDE>(conf);
 	} else if (type == "SunriseIDE") {
 		result = std::make_unique<SunriseIDE>(conf);
+	} else if (type == "UnapiNet") {
+		result = std::make_unique<UnapiNet>(conf);
 	} else if (type == "GoudaSCSI") {
 		result = std::make_unique<GoudaSCSI>(conf);
 	} else if (type == "MegaSCSI") {
@@ -351,7 +355,7 @@ std::unique_ptr<MSXDeviceSwitch> DeviceFactory::createDeviceSwitch(HardwareConfi
 
 std::unique_ptr<MSXMapperIO> DeviceFactory::createMapperIO(HardwareConfig& hwConf)
 {
-	static XMLElement& xml(createConfig("MapperIO", "MapperIO"));
+	static XMLElement& xml(createConfig("MapperIO", "MSX Memory Mapper I/O"));
 	return std::make_unique<MSXMapperIO>(DeviceConfig(hwConf, xml));
 }
 

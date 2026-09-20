@@ -1,0 +1,123 @@
+; MSXPi Interface
+; Version 1.6
+; ------------------------------------------------------------------------------
+; MIT License
+;
+; Copyright (c) 2015-2026 Ronivon Costa
+;
+; Permission is hereby granted, free of charge, to any person obtaining a copy
+; of this software and associated documentation files (the "Software"), to deal
+; in the Software without restriction, including without limitation the rights
+; to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+; copies of the Software, and to permit persons to whom the Software is
+; furnished to do so, subject to the following conditions:
+;
+; The above copyright notice and this permission notice shall be included in all
+; copies or substantial portions of the Software.
+;
+; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+; AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+; OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+; SOFTWARE.
+; ------------------------------------------------------------------------------
+
+; Canonical Z80 payload kernel. Generated for zmac and SDCC by generate.py.
+; DE=buffer, BC=count, HL=16-bit running sum. Preserves IX/IY and shadows.
+; CF error: A=RC_ESCPRESSED, DE/BC/HL describe completed bytes only.
+; Polled mode: caller owns link and leaves /WAIT off (UNAPI ETH_END does so).
+PAYLOAD_RX:
+    ld a,b
+    or c
+    ret z
+PAYLOAD_RX_LOOP:
+    ld a,c
+    or a
+    call z,PAYLOAD_ESCAPE
+    ret c
+    call PAYLOAD_WAIT
+    ret c
+    xor a
+    out (0x56),a
+    call PAYLOAD_WAIT
+    ret c
+    in a,(0x5a)
+    @STORE@
+    call PAYLOAD_ADVANCE
+    jr nz,PAYLOAD_RX_LOOP
+    ret
+PAYLOAD_TX:
+    ld a,b
+    or c
+    ret z
+PAYLOAD_TX_LOOP:
+    ld a,c
+    or a
+    call z,PAYLOAD_ESCAPE
+    ret c
+    call PAYLOAD_WAIT
+    ret c
+    ld a,(de)
+    out (0x5a),a
+    call PAYLOAD_ADVANCE
+    jr nz,PAYLOAD_TX_LOOP
+    ret
+; A is the completed byte. NZ=count remains, CF=0 on completion.
+PAYLOAD_ADVANCE:
+    add a,l
+    ld l,a
+    jr nc,PAYLOAD_NO_CARRY
+    inc h
+PAYLOAD_NO_CARRY:
+    inc de
+    dec bc
+    ld a,b
+    or c
+    ret
+; Fast ready path changes AF only. Slow path checks ESC every 256 polls.
+PAYLOAD_WAIT:
+    in a,(0x56)
+    or a
+    ret z
+    push bc
+    ld b,0
+PAYLOAD_WAIT_SLOW:
+    in a,(0x56)
+    or a
+    jr z,PAYLOAD_WAIT_DONE
+    djnz PAYLOAD_WAIT_SLOW
+    call PAYLOAD_ESCAPE
+    jr c,PAYLOAD_WAIT_DONE
+    jr PAYLOAD_WAIT_SLOW
+PAYLOAD_WAIT_DONE:
+    pop bc
+    ret
+; Preserve row selection, upper PPI bits and the incoming interrupt state.
+; No BIOS call: safe with interrupts disabled, no reliance on BSS.
+PAYLOAD_ESCAPE:
+    push bc
+    ld a,i
+    push af
+    di
+    in a,(0xaa)
+    ld b,a
+    and 0xf0
+    or 7
+    out (0xaa),a
+    in a,(0xa9)
+    ld c,a
+    ld a,b
+    out (0xaa),a
+    pop af
+    jp po,PAYLOAD_ESCAPE_IFF_OFF
+    ei
+PAYLOAD_ESCAPE_IFF_OFF:
+    ld a,c
+    pop bc
+    and 4
+    ret nz
+    ld a,0xe2
+    scf
+    ret

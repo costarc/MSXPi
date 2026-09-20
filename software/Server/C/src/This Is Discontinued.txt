@@ -1,2 +1,0 @@
-The C components are now discontinued.
-Kept here for reference only.

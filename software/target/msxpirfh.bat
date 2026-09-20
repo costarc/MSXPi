@@ -1,25 +1,32 @@
 pcopy m:API.BAS
+pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
+pcopy m:INL.CFG
 pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
+pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
 pcopy m:TESTDIR.BAS
+pcopy m:Telnet.com
+pcopy m:Telnetf.com
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
-pcopy m:msxchat.com
 pcopy m:msxpibios.rom
-pcopy m:msxpidos.rom
+pcopy m:msxpiext.bin
+pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
 pcopy m:p.com
-pcopy m:ploadr.com
+pcopy m:pver.com
+pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:pcopy.com
 echo  
 pcd /home/pi/msxpi
-prun wget -q -O msxpi-server.py https://tinyurl.com/msxpi-server
+prun wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Shell/update.sh
+prun sh update.sh
 echo 
 echo Restarting msxpi-server.py
 prestart
