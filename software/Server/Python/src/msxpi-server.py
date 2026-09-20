@@ -1269,7 +1269,14 @@ def dir(data):
             parser = MyHTMLParser()
             # Bounded: an unreachable host otherwise blocks here for ever, with
             # the MSX waiting for a reply and nothing in the log.
-            htmldata = urlopen(path, timeout=HTTP_TIMEOUT).read().decode()
+            # requests, not urlopen: urlopen trusts only the OS certificate
+            # store, and on hosts with an outdated store sites such as
+            # msxarchive.nl fail with CERTIFICATE_VERIFY_FAILED (expired
+            # root).  requests verifies against certifi's current bundle,
+            # which is why p copy over https already worked here.
+            resp = requests.get(path, timeout=HTTP_TIMEOUT)
+            resp.raise_for_status()
+            htmldata = resp.text
             parser = MyHTMLParser()
             parser.feed(htmldata)
             buf = " ".join(parser.HTMLDATA)
@@ -3360,6 +3367,8 @@ def updateIniFile(fname,memvar):
         f.writelines('var '+v[0]+'='+v[1]+'\n')
     f.close()
     
+OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+
 def chatgpt(query):
     #print("chatgpt()")
     print(query)
@@ -3369,7 +3378,10 @@ def chatgpt(query):
         sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
         return RC_FAILED
 
-    model_engine = "gpt-3.5-turbo"
+    # Model comes from msxpi.ini (var OPENAIMODEL), so it can be changed with
+    # `p set OPENAIMODEL <name>` as OpenAI retires models and adds new ones,
+    # without touching this file. Unset or empty: fall back to the default.
+    model_engine = getMSXPiVar('OPENAIMODEL').strip() or OPENAI_DEFAULT_MODEL
     url = "https://api.openai.com/v1/chat/completions"
 
     try:
@@ -3391,7 +3403,17 @@ def chatgpt(query):
             response_text = openai_response["choices"][0]["message"]["content"]
             sendmultiblock(response_text.encode())
         else:
-            sendmultiblock(openai_response.encode())
+            # No completion: the API replied with an error object (or something
+            # unexpected). It is a dict, so turn it into text before sending.
+            api_error = openai_response.get("error") if isinstance(openai_response, dict) else None
+            if isinstance(api_error, dict):
+                detail = api_error.get("message") or str(api_error)
+            elif api_error:
+                detail = str(api_error)
+            else:
+                detail = str(openai_response)
+            print('Pi:Error - ' + detail)
+            sendmultiblock(('Pi:Error - ' + detail).encode('ascii', errors='replace'))
     except Exception as e:
         error_msg = f"Pi:Error - {str(e)}"
         print(error_msg)
@@ -5565,7 +5587,7 @@ def initialize_connection():
         # server - turning one bad byte into a crash loop that the monitor
         # restarted for ever, with the MSX unable to boot at all.
         if RPI_SHUTDOWN is None:
-            print("MSXPi Server: no shutdown button (RPI_SHUTDOWN not set in msxpi.ini)")
+            print("MSXPi Server: no shutdown button (RPI_SHUTDOWN=none in msxpi.ini)")
         else:
             try:
                 GPIO.remove_event_detect(RPI_SHUTDOWN)
@@ -5574,6 +5596,8 @@ def initialize_connection():
             try:
                 GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
                                       callback=button_handler, bouncetime=200)
+                print(f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
+                      f"(press: reboot, hold 3 s: shutdown)")
             except Exception as e:
                 # Losing the shutdown button is a far smaller problem than
                 # losing the server, so carry on rather than raise.
@@ -5646,6 +5670,7 @@ else:
            ['SPI_MISO','12'], \
            ['RPI_READY','25'], \
            ['OPENAIKEY',''], \
+           ['OPENAIMODEL','gpt-4o-mini'], \
            ['RAPIDAPIKEY',''], \
            ['RAPIDAPIHOST',''], \
            ['FINNHUBKEY',''], \
@@ -5667,13 +5692,16 @@ SPI_SCLK = int(getMSXPiVar("SPI_SCLK"))
 SPI_MOSI = int(getMSXPiVar("SPI_MOSI"))
 SPI_MISO = int(getMSXPiVar("SPI_MISO"))
 RPI_READY = int(getMSXPiVar("RPI_READY"))
-# Shutdown/reboot button.  Only boards that have one (PCB v1.2 Rev.1 and
-# later, GPIO 26) set "var RPI_SHUTDOWN=26" in msxpi.ini.  Missing, empty or
-# anything that is not a usable GPIO number means no button, and the interrupt
-# is never set up: on the older boards the unconnected pin picked up noise
-# that read as a press and rebooted the Pi in a loop.  Never crash over a bad
-# value - the monitor would just restart the server for ever.
-_shut = getMSXPiVar("RPI_SHUTDOWN").strip()
+# Shutdown/reboot button, GPIO 26 on PCB v1.2 Rev.1 and later.  No
+# RPI_SHUTDOWN line in msxpi.ini means GPIO 26, as it always was: making the
+# button opt-in left it dead on every existing install, whose msxpi.ini never
+# had the line.  Boards without a button set "var RPI_SHUTDOWN=none" (or
+# empty, or anything that is not a usable GPIO number), and the interrupt is
+# never set up: there the unconnected pin picked up noise that read as a press
+# and rebooted the Pi in a loop.  Never crash over a bad value - the monitor
+# would just restart the server for ever.
+_has_shut = any(v[0].upper() == "RPI_SHUTDOWN" for v in psetvar)
+_shut = getMSXPiVar("RPI_SHUTDOWN").strip() if _has_shut else "26"
 RPI_SHUTDOWN = int(_shut) if _shut.isdigit() and 2 <= int(_shut) <= 27 else None
 
 # Settling time between CS low and the first SPI clock edge, in ns, for the
