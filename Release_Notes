@@ -1,9 +1,13 @@
 MSXPi v1.6 Release Notes
 ========================
-Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM, and
-MSX-DOS 2 / Nextor compatibility. ROM, msxpi-server and the client commands
+Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM,
+MSX-DOS 2 / Nextor coexistence, and msxarch - a network ROM browser and
+loader for plain ROMs and MegaROMs. ROM, msxpi-server and the client commands
 must be upgraded together, and the CPLD firmware moves to v1.6 - the /WAIT
-logic is new, so the previous firmware cannot drive burst transfers.
+logic is new, so the previous firmware cannot drive burst transfers (a v1.6 ROM
+on older firmware falls back to the polled transfers and still works, only
+slower). The same v1.6 CPLD image, ROM and server also run on every earlier
+MSXPi board - see "Older boards" below.
 
 Transfer speed
 - The CPLD now asserts /WAIT while a byte is in flight, so the MSX moves payloads with INIR/OTIR at 21 T-states per byte instead of polling the status port for every one. The Pi holds RPI_READY high for the whole run (SPI_BurstOut / SPI_BurstIn) - without that, the gap between bytes would let a block instruction read a stale byte and silently desynchronise the stream.
@@ -12,6 +16,7 @@ Transfer speed
 - The native GPIO payload engine is now on by default (MSXPI_NATIVE_GPIO=1) in msxpi-monitor and in both systemd units; without the native library the server falls back to Python GPIO and says so in the log.
 
 MSX-DOS 2 / Nextor
+- MSXPi's own ROM carries MSX-DOS 1 only; Nextor and MSX-DOS 2 are never in the MSXPi ROM. They run from another disk interface, and MSXPi coexists with them. These fixes make an MSXPi drive usable from that Nextor/MSX-DOS 2 system.
 - GETDPB returned with the carry flag as the caller happened to pass it in, so Nextor read a perfectly good DPB as a failure: every access through a MAPDRV'd MSXPi drive answered "Not a DOS disk". It now clears carry explicitly.
 - DSKIO staged every sector through the driver's own buffer. Transfers now go directly to the caller's buffer when it is outside page 1, and through the kernel's XFER routine when it is not - page 1 is where the driver ROM is banked in, so the driver cannot see the caller's memory there. This is what produced "Bad file allocation table" on larger copies.
 - Tests/p1test/P1TEST.COM is a 40 KB self-checking program for exactly that case, for use on real hardware.
@@ -42,12 +47,40 @@ Pi network setup (msxpi-tcpip-setup.sh)
 - The TAP was created only when absent, never checked for ownership, so a device left behind by a server that once ran as root could never be opened by the pi-owned server: it sat UP but never RUNNING. The owner is now checked and the device recreated if it does not match.
 - The address is added with "broadcast +" rather than coming up with broadcast 0.0.0.0.
 
+msxarch - network ROM browser and loader
+- "msxarch" is a new MSX-DOS command that lists ROMs from one or more repositories (http/https listings, a local folder on the Pi or on the PC running openMSX, or the built-in msxarchive.nl URLs), lets you page through the list with the cursor keys (or type a number) and starts the selected game. It replaces the disk-only "ploadr" command and works under MSX-DOS 1, MSX-DOS 2 and Nextor.
+- The repositories are listed in MSXARCH.INI (one URL or path per line; lines starting with ";" or "#" are ignored). "rebootAfterRomLoad=yes" makes the MSX reset after the load so the game starts from a clean machine.
+- Archives (zip, lzh, pma, 7z and others) are extracted on the server, each into a clean directory so that ROMs from different downloads never mix. File sizes are shown in the list, loading progress is shown on screen, and a rejected selection reports the reason and returns to the list. Backspace edits the game number instead of ending it.
+- MegaROM mapper detection and bank-switch patching moved from the MSX to the server (mapper_detect.py): the server classifies the ROM (plain, Konami, Konami SCC, ASCII8, ASCII16, using openMSX's softwaredb.xml when it is available), patches the bank-switch writes for the resident handlers, and sends a 16-byte ROM header ahead of the image so the client knows how to load it. Cartridges that start through the H.STKE hook, 8K bank-switching at cartridge speed, and several titles that crashed in the resident handlers (Ice World, Hydlide 3, others) are handled.
+- "LOADROM /N" (v1.5) remains available for loading a ROM by name from the network.
+
+Older boards
+- The v1.6 CPLD image, ROM (one file everywhere: target/msxpibios.rom) and server run on every earlier MSXPi board (v0.8.2 / v1.0, v1.1 / v1.2.1b, v1.3 to v1.5). The I/O ports and the ready flag have not changed since v0.7 Rev.4; only the CPLD pin map differs, and whether the board wires /WAIT to the cartridge slot.
+- CPLD images per board are kept in hardware/CPLD_Project (MSXPi_v1.6.pof for V1.3 Rev.1; v1.1/MSXPi_v1.6_wait.pof; v0.8.2/MSXPi_v1.6_polled.pof), with the details in hardware/CPLD_Project/LEGACY_BOARDS.md and documents/Legacy Support.odt.
+- Boards without the shutdown/reboot button must set "var RPI_SHUTDOWN=none" in msxpi.ini: the unconnected GPIO 26 can otherwise read as a button press and reboot the Pi in a loop. The default remains GPIO 26 (PCB v1.2 Rev.1 and later). The v0.8.2 board also needs "var GPIO_CS_SETUP_NS=1000".
+
+pver, pcopy and other client changes
+- "pver" reports the hardware as well as the server: the CPLD build ID read from port $57, the board it belongs to, and whether /WAIT bursts are available ("yes (burst)" or "no (polled)"), followed by the server version.
+- "pcopy" now copies in both directions: Pi to MSX as before, and from an MSX drive to the Pi ("pcopy <drive>:<file> <pi file>"), in 16 KB blocks with back-pressure. A bad block no longer kills the transfer, and a failed upload no longer destroys the target file.
+- "p reload A:" / "p reload B:" reloads a drive's disk image from disk. The disk images are mapped directly by the server so that writes made by the MSX persist.
+- "p" with no arguments, "p /h" or "p /help" lists the commands.
+- STELNET, CP437 and the Telnet clients are installed by the updater.
+- MSX-DOS 1: a page-1 disk write/read test (P1W.COM) was added next to P1TEST.COM.
+
+Server additions
+- The disk-image and web listings use "requests" for HTTPS, and simple_http_server.py (a read-only file server for a ROM folder) can serve a PC folder to msxarch.
+- OPENAIMODEL in msxpi.ini selects the ChatGPT model (default gpt-4o-mini); the model can be changed with "p set OPENAIMODEL <name>".
+- The shutdown/reboot button GPIO is configurable (RPI_SHUTDOWN, default 26; "none" disables).
+- The GPIO link is set up before the first command, and a dead or corrupted transfer resynchronises (the server drains its queue) instead of cascading into further failures.
+- Build IDs: every component carries BuildId 20260919.060 in this release.
+
 BASIC extension without an EPROM (MSXPIEXT.BIN)
 - MSXPIEXT.BIN builds again for v1.6: BLOAD"MSXPIEXT.BIN",R relocates it into page-1 RAM and adds CALL MSXPIVER and CALL MSXPI to BASIC on an MSXPi with no EPROM. It shares the CALL MSXPI handler with the driver ROM (asm-common/include/msxpi_call.asm), so the two cannot drift apart again; the obsolete msxpibios.asm is removed.
 - The installer registered the CALL handler for the wrong slot whenever page-1 RAM sits in an expanded slot - most MSX2s, e.g. the Philips NMS 8245 has it in 3-2 - so CALL MSXPIVER crashed and rebooted the machine. It now includes the subslot. The install help no longer lists the CALL MSXPISEND / MSXPIRECV commands that no longer exist.
 - msxpiboot.dsk carries it, and the BASIC programs BLOAD it when CALL MSXPIVER is not available.
 
 openMSX
+- Where to get it: the official openMSX is https://github.com/openMSX/openMSX, but the MSXPi device is only in the fork - download the build for your operating system from https://github.com/costarc/openMSX/releases (setup steps in the README, "Quick Start 2 - openMSX").
 - The MSXPi device emulates the CPLD /WAIT flow control, so burst transfers can be developed and tested without hardware, with fault injection for a low RPI_READY.
 - It no longer discards received bytes. The queue was capped at 16 KB and the remainder thrown away, which silently truncated every large transfer - a 16384-byte block with its header and checksum is 16389 - including the checksum byte the MSX then waited for forever. Back-pressure replaces discarding.
 - TCP_NODELAY on the server socket. Each OUT to the data port is its own one-byte write, and with Nagle plus the server's delayed ACK each took about 40 ms, so a 512-byte burst write took minutes and looked exactly like a hung transfer.
@@ -79,6 +112,7 @@ Mostly a Software major overhauling.
 - Most block data transfers re-written for easy of use and stability
 - MSX-DOS1 is back
 - BASIC BIOS simplified, now there is only one command: CALL MSXPI 
+
 MSXPi v1.3 Release Notes
 ========================
 This is mainly a PCB redesign and firmware om the CPLD. From v1.3, firmware (msxpi.pof) is no longer compatible with previous versions due to pin mapping changes.
@@ -110,10 +144,11 @@ MSXPi v1.2 Release Notes
 - Extensive changes to all software for stability
 - Added new build file msxpibios.rom with MSXPi BIOS for BASIC CALL commands
 - Lots of bug fixes to the code
-  
+
 MSXPi v1.1 Release Notes
 ========================
 - New PCB layout
+- Schema & PCB changed to support future expansion to Raspberry Pi hardware SPI
 - New basic IO routines (used by all components)
 - Lots of code changes to improve stability
 - Improved pcopy: can decompress files, use virtual remote devices  
@@ -122,7 +157,27 @@ MSXPi v1.1 Release Notes
 - Added BASIC programs from Retropix Brazil:
   - DOLAR.BAS
   - WEATHER.BAS
+- Added chatgpt.com (OpenAI/chatgpt client)
 - Lots of bug fixes and improvements
+- All changes are fully compatible with interface v0.7
+
+MSXPi v1.0.1 Release Notes
+==========================
+- Redesigned the interface in Kicad format, both schematic and PCB
+- Replaced the 27C256 by AT28C256 to allow MSX to program the EEPROM from the MSX-DOS
+- Added the EEPROM programmer AT28C256.COM to available commands - re-using it from my other project https://github.com/costarc/msxcart_flash32k
+- Updated the msxpi-server.py to run in Python3, which is the default on newer versions of Raspbian
+
+This version allows:
+- Set MSX data & time from Raspberry Pi
+- Copy programs from Internet to MSX disk (ftp, http, smb)
+- Run 8KB/16KB/32KB ROMS directly from Pi or from the network (ftp, http, smb)
+- Run commands on Pi directly from MSX-DOS command line
+- Configure Pi wifi from MSX-DOS
+
+Known issues and defects
+- MSXPI-DOS1 is not booting - it's not actually important, because the best way to use MSXPi is along with a MSX-DOS2 system, usually running with a SDCard cartridge
+- pplay.sh not working
 
 MSXPi v1.0 Release Notes
 ========================
@@ -143,7 +198,7 @@ On the software side:
 
 - The server component was mostly rewritten to be more modular
 - Every command now can be implemented in a self-contained function inside msxpi-server.py
-- No changes are needed in the main loop of the program
+- No changes are needed in the main loop of the program when new features or commands are added
 - Main data transfer routine (senddatablock / receivedatablock) rewritten to allow retries and block size configuration
 - Many functions removed (deprecated) resulting in a less complex and easier to maintain and expand solution
 - All clients rewritten based on a simple and better communication logic
