@@ -45,6 +45,7 @@
 #define KEY_UP    0x1E   // Fusion-C scancode for Up arrow
 #define KEY_DOWN  0x1F   // Fusion-C scancode for Down arrow
 #define KEY_ENTER 0x0D   // ASCII code for Enter/Return
+#define KEY_BACKSPACE 0x08
 
 // Return codes
 #define INPUT_NONE   0
@@ -133,14 +134,30 @@ int GetValidInput(char* outNumber) {
             return INPUT_DOWN;
         }
         else if (IsDigit(key)) {
+            // Only Enter ends the number. Backspace erases the last digit and
+            // anything else is ignored: the loop used to stop on any key that
+            // was not a digit, so backspace sent the half-typed number as if
+            // Enter had been pressed.
             int count = 0;
-            while (count < 3) {
-                outNumber[count++] = key;
-                PrintChar(key);
-
+            while (1) {
+                if (IsDigit(key)) {
+                    if (count < 3) {
+                        outNumber[count++] = key;
+                        PrintChar(key);
+                    }
+                }
+                else if (key == KEY_BACKSPACE) {
+                    if (count > 0) {
+                        count--;
+                        PrintChar(KEY_BACKSPACE);   // left
+                        PrintChar(' ');             // erase
+                        PrintChar(KEY_BACKSPACE);   // left again
+                    }
+                }
+                else if (key == KEY_ENTER) {
+                    if (count > 0) break;           // never send an empty number
+                }
                 key = WaitForKey();
-                if (key == KEY_ENTER) break;
-                if (!IsDigit(key)) break;
             }
             outNumber[count] = '\0';
             return INPUT_NUMBER;
