@@ -15,9 +15,9 @@ and `WAIT_SUPPORT`.
 
 | Releases | PCB | CPLD image (ID) | ROM: `msxpibios.rom` on | `msxpi.ini` extras |
 |---|---|---|---|---|
-| v0.8.2, v1.0 | v0.7 Rev.7 | `v0.8.2/MSXPi_v1.6_polled.pof` ($10) | 27C256 EPROM, burned off-board | `GPIO_CS_SETUP_NS=1000` |
-| v1.1, v1.2.1b | V1.1 Rev.1, V1.2.1b | `v1.1/MSXPi_v1.6_wait.pof` ($14) | AT28C256, flashed in circuit | V1.2.1b: `RPI_SHUTDOWN=26` |
-| v1.3, v1.4, v1.5 | V1.3 Rev.1 | `MSXPi_v1.6.pof` ($0E) | AT28C256, flashed in circuit | `RPI_SHUTDOWN=26` |
+| v0.8.2, v1.0 | v0.7 Rev.7 | `v0.8.2/MSXPi_v1.6_polled.pof` ($10) | 27C256 EPROM, burned off-board | `GPIO_CS_SETUP_NS=1000`, `RPI_SHUTDOWN=none` |
+| v1.1, v1.2.1b | V1.1 Rev.1, V1.2.1b | `v1.1/MSXPi_v1.6_wait.pof` ($14) | AT28C256, flashed in circuit | V1.1 Rev.1: `RPI_SHUTDOWN=none` |
+| v1.3, v1.4, v1.5 | V1.3 Rev.1 | `MSXPi_v1.6.pof` ($0E) | AT28C256, flashed in circuit | - |
 
 - **ROM:** every board uses the same `software/target/msxpibios.rom`, the one
   `software/build` produces.
@@ -35,10 +35,11 @@ and `WAIT_SUPPORT`.
   works, but every program that calls EXTBIO - `p`, `pcopy`, `pver` - hangs
   the machine with interrupts off (Caps Lock dead).
 - **Pi server.** The older boards use GPIO 21/20/16/12/25, which is
-  `msxpi-JumperLeft.ini`. They have no shutdown button, so leave
-  `RPI_SHUTDOWN` unset (or empty) in `msxpi.ini`: the server then never
-  configures GPIO 26. With the button enabled, glitches on the unconnected pin
-  read as a press and rebooted the Pi in a loop.
+  `msxpi-JumperLeft.ini`. They have no shutdown button, so set
+  `var RPI_SHUTDOWN=none` in `msxpi.ini`: the server then never configures
+  GPIO 26. With the button enabled, glitches on the unconnected pin read as a
+  press and rebooted the Pi in a loop. Without an `RPI_SHUTDOWN` line the
+  server uses GPIO 26, the button on PCB v1.2 Rev.1 and later.
 - **SPI settling time on the v0.8.2 board.** Add `var GPIO_CS_SETUP_NS=1000`
   to `msxpi.ini`. The native GPIO engine clocked the first edge of each byte
   the moment CS went low, and on this board's hand-wired Pi connection that
