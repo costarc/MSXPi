@@ -21,7 +21,7 @@ Upgrade the whole set together: ROM, msxpi-server, the client commands (`.COM`
 files) and, on real hardware, the CPLD firmware. A v1.6 ROM on older CPLD
 firmware still works, using the slower polled transfers. If you must keep an
 older ROM, the matching historical server is kept next to the current one,
-named after the ROM's sha1 - see `software/Server/Python/src/READ.md`.
+named after the ROM's sha1, in `software/Server/Python/src`.
 
 **About the DOS.** MSXPi's own ROM contains **MSX-DOS 1 (1.03) only**. It does not
 contain Nextor or MSX-DOS 2. MSXPi *coexists* with them: Nextor or MSX-DOS 2 come
@@ -307,7 +307,7 @@ the official build yet, so download openMSX from the MSXPi fork instead:
   "Command not supported on this platform".
 
 **Windows shortcut:** right-click
-`software/Server/Shell/msxpi-windows-setup.ps1` and choose *Run with
+`software/Server/Setup/msxpi-windows-setup.ps1` and choose *Run with
 PowerShell*. It installs Python and 7-Zip (with winget), the modules,
 `C:\home\pi\msxpi`, openMSX with the MSXPi files, the TAP driver, and a
 `start-msxpi.ps1` launcher with a desktop shortcut. Running it again is safe.
@@ -384,7 +384,7 @@ configuring.
 
 From an elevated PowerShell:
 
-          powershell -ExecutionPolicy Bypass -File software/Server/Shell/msxpi-tcpip-setup.ps1
+          powershell -ExecutionPolicy Bypass -File software/Server/Setup/msxpi-tcpip-setup.ps1
 
 It reports what it did:
 
