@@ -1,0 +1,6 @@
+#machine Panasonic_FS-A1WSX
+machine Canon_V-25
+ext MSXPi
+bind F12 cycle videosource
+plug printerport simpl
+set speed 100
