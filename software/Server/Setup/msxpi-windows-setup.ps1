@@ -35,7 +35,7 @@
 
     Steps (each can be skipped with its -Skip switch):
       1. Python 3, 7-Zip (msxpi-server uses 7z.exe for zip/lzh/pma)  [winget]
-      2. Python libraries: requests, fs, pyfatfs (+ the MSX disk signature patch)
+      2. Python libraries: requests, fs, and a setuptools that still has pkg_resources
       3. C:\home\pi\msxpi with server, modules, ini files and disk images.
          The server hardcodes /home/pi/msxpi, which Windows resolves on the
          current drive - hence C:\home\pi\msxpi.
@@ -98,6 +98,21 @@ function Get-File([string]$url, [string]$dest, [switch]$Optional) {
     }
 }
 
+# Try "import <modules>" and return whether it worked, with the last line of any
+# error. Python writes warnings to stderr even when an import succeeds ("fs" prints
+# a pkg_resources deprecation notice), and Windows PowerShell 5.1 turns any stderr
+# line into a terminating error under $ErrorActionPreference = "Stop": so the
+# preference is relaxed here and -W ignore silences the warnings at the source.
+function Test-PyImport([string]$python, [string]$modules) {
+    $old = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $out = & $python -W ignore -c "import $modules" 2>&1
+        return [pscustomobject]@{ Ok = ($LASTEXITCODE -eq 0); Text = "$($out | Select-Object -Last 1)" }
+    } finally {
+        $ErrorActionPreference = $old
+    }
+}
 function Update-Path {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
@@ -193,24 +208,15 @@ if (-not $SkipPython) {
     # --- 2. Python libraries --------------------------------------------------
     Step "Python libraries"
     & $python -m pip install --upgrade pip --quiet
-    & $python -m pip install --upgrade requests fs pyfatfs --quiet
-    if ($LASTEXITCODE -ne 0) { Fail "pip install failed" }
-    Ok "requests fs pyfatfs"
-
-    # Same patch msxpi-setup.sh applies: MSX boot sectors lack the 0xAA55
-    # signature and pyfatfs refuses them.
-    $pyfat = (& $python -c "import pyfatfs,os;print(os.path.join(os.path.dirname(pyfatfs.__file__),'PyFat.py'))").Trim()
-    $src = Get-Content -Raw $pyfat
-    $patched = $src -replace '(?m)^(\s*)if signature != 0xaa55', '$1#if signature != 0xaa55' `
-                    -replace '(?m)^(\s*)raise PyFATException\(f"Invalid signature:', '$1#raise PyFATException(f"Invalid signature:'
-    if ($patched -ne $src) {
-        # A commented-out "if" leaves its body indented under nothing; the
-        # sh patch comments both lines, and so does this one.
-        Set-Content -Path $pyfat -Value $patched -NoNewline -Encoding UTF8
-        Ok "pyfatfs signature check patched"
-    } else {
-        Ok "pyfatfs already patched"
-    }
+    # "fs" imports pkg_resources, which setuptools 81 and later no longer ships, and
+    # a fresh Python 3.12+ has no setuptools at all - pip then fetches the newest one
+    # for "fs" and the server dies on "import fs". Ask for one that still has it.
+    # (pyfatfs, which the first version of this script installed, is not used.)
+    & $python -m pip install --upgrade requests fs "setuptools<81" --quiet
+    if ($LASTEXITCODE -ne 0) { Fail "pip install failed (see the message above; an error about long paths is fixed by enabling Windows long path support, or by installing Python from python.org into a short folder)" }
+    $chk = Test-PyImport $python "requests, fs"
+    if (-not $chk.Ok) { Fail "the Python libraries were installed but do not import: $($chk.Text)" }
+    Ok "requests fs setuptools<81"
 }
 
 # --- 3. MSXPi home ------------------------------------------------------------
