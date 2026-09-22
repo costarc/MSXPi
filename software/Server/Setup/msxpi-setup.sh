@@ -468,7 +468,7 @@ install_msxpi() {
         choose_board
         local tmpl
         case "$BOARD" in
-            v1.3|1.3|v1.3+) tmpl=msxpi-JumperRight.ini ;;
+            v1.3|1.3|v1.3+) tmpl=msxpi-JumperLeft.ini ;;
             v1.1|1.1)       tmpl=msxpi-JumperRight_PCBV1.1Rev.0.ini ;;
             old|older)      tmpl=msxpi-JumperLeft.ini ;;
             *)              die "unknown board '$BOARD' (use v1.3, v1.1 or old)" ;;

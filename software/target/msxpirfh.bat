@@ -7,7 +7,6 @@ pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
 pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
-pcopy m:TESTDIR.BAS
 pcopy m:Telnet.com
 pcopy m:Telnetf.com
 pcopy m:WEATHER.BAS
@@ -20,6 +19,7 @@ pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
 pcopy m:p.com
 pcopy m:pver.com
+pcopy m:skmsx.com
 pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:pcopy.com
