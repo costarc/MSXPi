@@ -155,15 +155,23 @@ with Win32DiskImager (https://win32diskimager.org) or Raspberry Pi Imager
         chmod 755 MSXPi-Setup
         bash ./MSXPi-Setup
 
-   The script installs everything below and reboots. The last stage builds
-   Python libraries and can take over an hour on a Pi Zero.
+   The script checks the Pi, the network and the clock, installs everything
+   below, starts the server, checks that it runs, and reboots (a few minutes).
+   It asks which board you have; to skip the question add `--board v1.3`,
+   `--board v1.1` or `--board old` (see the table below). `--help` lists the
+   other options (WiFi, `--no-reboot`, ...). It is safe to run again: it
+   updates the server and repairs what is missing, and never overwrites
+   `msxpi.ini`.
 
 What the setup gives you (check it, or do it by hand):
 
-* **Python 3** with the modules `requests`, `fs` and `pyfatfs`
-  (`python3 -m pip install requests fs pyfatfs --break-system-packages`), plus the
-  packages `unar`, `lhasa`, `mplayer`, `alsa-utils` and `smbclient`, which the
-  server uses to unpack archives, play audio and read network shares.
+* **Python 3** with the modules `requests`, `fs` and `RPi.GPIO`. `fs` needs
+  `pkg_resources`, so a `setuptools` older than version 81 must be present
+  (`python3 -m pip install fs "setuptools<81" --break-system-packages` if you do it
+  by hand). The packages `unar`, `lhasa`, `unzip`, `music123`, `alsa-utils` and
+  `smbclient` are for unpacking archives, playing audio and reading network
+  shares; `iptables` gives the MSX its network; `gcc` builds the native GPIO
+  engine.
 * **The MSXPi home directory `/home/pi/msxpi`**, owned by user `pi`. The path is
   built into the server. It holds:
 
@@ -289,10 +297,9 @@ the official build yet, so download openMSX from the MSXPi fork instead:
 
 * **Python 3** (3.9 or newer; on Windows from python.org or the Microsoft
   Store, with *Add to PATH*).
-* **Python modules:** `python -m pip install requests fs pyfatfs`. If the server
-  complains about another module when it starts, install that too. On Windows,
-  `pyfatfs` also needs a one-line patch so it accepts MSX disk signatures - the
-  setup script below applies it.
+* **Python modules:** `python -m pip install requests fs "setuptools<81"` (`fs`
+  needs `pkg_resources`, which `setuptools` 81 and later no longer has). If the
+  server complains about another module when it starts, install that too.
 * **7-Zip** (`7z.exe` on the PATH) for zip, lzh, pma and 7z archives, used by
   msxarch and `pcopy /z`. On Linux/macOS install `p7zip`, `lhasa` and `unar`.
 * **The MSXPi home directory.** The server has `/home/pi/msxpi` built in. On

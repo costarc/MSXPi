@@ -39,18 +39,31 @@
 # into place once it arrived non-empty, so a failed download keeps the old one.
 # Short output lines: under prun they are printed on the MSX screen.
 #
-# MSXPI_UPDATE_BASE overrides where the files come from (testing).
+# MSXPI_UPDATE_BASE overrides where the server files come from, and
+# MSXPI_UPDATE_SETUP_BASE where msxpi-tcpip-setup.sh comes from: a URL or a
+# directory (testing, and msxpi-setup.sh run from a checkout).
 
 set -u
 BASE="${MSXPI_UPDATE_BASE:-https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Python/src}"
+# Where the helper scripts live. Follows BASE unless told otherwise.
+SETUP_BASE="${MSXPI_UPDATE_SETUP_BASE:-${BASE%/Python/src}/Setup}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR" || exit 1
 mkdir -p native
 
+# get <base> <file>: BASE is a URL, or a directory (msxpi-setup.sh run from a
+# checkout). Either way the file is only replaced when the copy is complete.
+get() {
+    case "$1" in
+        http://*|https://*) wget -q -O "$2.new" "$1/$2" ;;
+        *)                  cp "$1/$2" "$2.new" ;;
+    esac && [ -s "$2.new" ]
+}
+
 rc=0
 for f in msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
          native/gpio_transfer.c native/build.sh; do
-    if wget -q -O "$f.new" "$BASE/$f" && [ -s "$f.new" ]; then
+    if get "$BASE" "$f"; then
         mv -f "$f.new" "$f"
         echo "ok   $f"
     else
@@ -59,7 +72,18 @@ for f in msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         rc=1
     fi
 done
-chmod 755 msxpi-server.py 2>/dev/null
+# Run by msxpi-monitor at every start to give the MSX its network. Older setups
+# never installed it, so on those it arrives with the first update.
+f=msxpi-tcpip-setup.sh
+if get "$SETUP_BASE" "$f"; then
+    mv -f "$f.new" "$f"
+    echo "ok   $f"
+else
+    rm -f "$f.new"
+    echo "FAIL $f (old kept)"
+    rc=1
+fi
+chmod 755 msxpi-server.py msxpi-tcpip-setup.sh 2>/dev/null
 
 # The server works without the native engine (it falls back to Python GPIO),
 # so a missing compiler is a warning, not a failure.
@@ -77,7 +101,8 @@ fi
 # msxpi-setup.sh runs this as root; the server runs as the directory's owner.
 if [ "$(id -u)" = 0 ]; then
     owner="$(stat -c %U:%G "$DIR")"
-    chown "$owner" msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py 2>/dev/null
+    chown "$owner" msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
+        msxpi-tcpip-setup.sh 2>/dev/null
     chown -R "$owner" native 2>/dev/null
 fi
 
