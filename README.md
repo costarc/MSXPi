@@ -139,7 +139,7 @@ Raspberry Pi does not need to be attached yet.
 
 Choose one.
 
-**3a. Ready-made SD card image (easiest).** Download from
+**3a. Ready-made SD card image (easiest).** (This SD card is outdated, and will require the msxpi-setup.sh to be run to update it to latest code - refer to 3b step 2 below to make this update) - Download from
 https://tinyurl.com/MSXPi-SDCardV3, unzip with 7-Zip and write to the SD card
 with Win32DiskImager (https://win32diskimager.org) or Raspberry Pi Imager
 ("Use custom"). Insert the card in the Pi.
