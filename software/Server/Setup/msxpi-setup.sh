@@ -76,7 +76,7 @@ usage() {
 Usage: msxpi-setup.sh [options]
 
   --board v1.3|v1.1|old   which MSXPi board you have; picks the msxpi.ini template
-                          (default v1.3, or asked when run from a terminal).
+                          (default old, or asked when run from a terminal).
                           Only used when msxpi.ini does not exist yet.
   --reset-ini             replace msxpi.ini with the template (the old one is kept
                           as msxpi.ini.bak-<date>)
@@ -404,21 +404,23 @@ setup_python() {
 # ------------------------------------------------------------------------------
 choose_board() {
     [ -n "$BOARD" ] && return 0
+    # Matches the old script, which always installed msxpi-JumperLeft.ini: when
+    # nobody says otherwise, assume the older board rather than guess newer.
     if [ -t 0 ] && [ -t 1 ]; then
         echo "Which MSXPi board do you have?"
-        echo "  1) V1.3 or later (default)"
+        echo "  1) older boards (default)"
         echo "  2) V1.1 Rev.0"
-        echo "  3) older boards"
+        echo "  3) V1.3 or later"
         local ans=""
         read -r -t 60 -p "Choice [1]: " ans || ans=""
         case "$ans" in
             2) BOARD=v1.1 ;;
-            3) BOARD=old ;;
-            *) BOARD=v1.3 ;;
+            3) BOARD=v1.3 ;;
+            *) BOARD=old ;;
         esac
     else
-        BOARD=v1.3
-        note "no --board given: using the V1.3 (and later) pin layout"
+        BOARD=old
+        note "no --board given: using the older-board pin layout (pass --board v1.3 or --board v1.1 if that is yours)"
     fi
 }
 
