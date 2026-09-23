@@ -827,16 +827,28 @@ static const char un_id[9] = "ETHERNET";
 void msxpi_link_claim(void) __naked
 {
     __asm
+        ; EXTBIO and the UNAPI entry use IX/IY. Preserve the C caller
+        ; frame pointer even when discovery finds no implementation.
+        push    ix
+        push    iy
         ld      b,#1
-        jr      un_call
+        call    un_call
+        pop     iy
+        pop     ix
+        ret
     __endasm;
 }
 
 void msxpi_link_release(void) __naked
 {
     __asm
+        push    ix
+        push    iy
         ld      b,#0
-        ; falls through
+        call    un_call
+        pop     iy
+        pop     ix
+        ret
     un_call:
         push    bc                  ; EXTBIO clobbers B
 
