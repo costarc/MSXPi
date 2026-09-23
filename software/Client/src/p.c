@@ -31,6 +31,10 @@
 #include <stddef.h>
 #include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../C-common/header/msxpi.h"
+#include <string.h>
+
+#define SHOWPAGE_EMBEDDED
+#include "showpage.c"
 
 // ----------------------------------------------------------------------
 // P command help screen
@@ -55,6 +59,7 @@ void P_Help(void)
         "restart- Restart MSXPi server",
         "netreset [secs] - Rebuild the Pi's TCP/IP setup for UNAPI",
         "reload A: or reload B: - Reload a drive's disk image from disk",
+        "showpage [/4|/6|/8] <url> - Render a web page on the MSX screen",
 
         "chatgpt - Interact with ChatGPT",
         NULL
@@ -153,6 +158,19 @@ int main(void)
         return 0;
 
     const char* parms = GetCmdLineParameters();
+    if ((parms[0] == 's' || parms[0] == 'S') &&
+        (parms[1] == 'h' || parms[1] == 'H') &&
+        (parms[2] == 'o' || parms[2] == 'O') &&
+        (parms[3] == 'w' || parms[3] == 'W') &&
+        (parms[4] == 'p' || parms[4] == 'P') &&
+        (parms[5] == 'a' || parms[5] == 'A') &&
+        (parms[6] == 'g' || parms[6] == 'G') &&
+        (parms[7] == 'e' || parms[7] == 'E') &&
+        (parms[8] == 0 || parms[8] == ' ' || parms[8] == '\t')) {
+        const char *showpage_args = parms + 8;
+        while (*showpage_args == ' ' || *showpage_args == '\t') ++showpage_args;
+        return ShowPageMain(showpage_args);
+    }
     // Hold the link across the WHOLE exchange - command, the server's
     // execution, and the response.  msxpi_exchange() covers the common case,
     // but the "date" branch below answers through SetDateTime() rather than

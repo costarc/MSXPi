@@ -4232,6 +4232,23 @@ def ShowSecurityDisclaimer(parms = None):
     print("bypassing the controls in the native MSXPi commands.")
     print("=======================================================================================\n")   
 
+def renderpage(parms=None):
+    # Parameters are already in the command packet, as for stock()/irc().
+    # Always send one binary response or one short, explicitly failed response.
+    try:
+        from msxpi_renderpage import handle_command
+        payload = handle_command(parms or "")
+    except Exception as exc:
+        print(f"renderpage: {exc}")
+        detail = (str(exc).splitlines() or [type(exc).__name__])[0]
+        message = ("renderpage: " + detail)[:240]
+        return sendmultiblock(message.encode("ascii", "replace"), RC_FAILED)
+    return sendmultiblock(payload)
+
+# showpage is the public command name used by the combined `p` client.
+showpage = renderpage
+
+
 def template(parms = None):
 
     # This method is a template for new commands
