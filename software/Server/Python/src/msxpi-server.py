@@ -4245,6 +4245,9 @@ def renderpage(parms=None):
         return sendmultiblock(message.encode("ascii", "replace"), RC_FAILED)
     return sendmultiblock(payload)
 
+# showpage is the public command name used by the combined `p` client.
+showpage = renderpage
+
 
 def template(parms = None):
 
