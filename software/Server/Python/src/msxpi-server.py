@@ -58,6 +58,13 @@ import threading
 from io import StringIO
 from contextlib import redirect_stdout
 import shutil
+import atexit
+
+try:
+    from msxpi_player import MpvPlayer, PlayerError
+except ImportError:
+    MpvPlayer = None
+    PlayerError = RuntimeError
 
 
 version = "1.6"
@@ -1698,44 +1705,68 @@ def date(parms = None):
     sendmultiblock(pdate)
 
 def play(data):
-    #print(f"pplay(): {data}")
-       
-    if hostType != "RaspberryPi": 
-        sendmultiblock("Command not supported by this platform".encode())
-        return RC_SUCCESS
-
     if not data:
-        rc = sendmultiblock("Syntax:\npplay play|loop|pause|resume|stop|getids|getlids|list <filename|processid|directory|playlist|radio>\nExemple: pplay play music.mp3")
+        # Always return bytes and a non-empty payload.  The MSX client waits
+        # for this response even when the command has no parameters.
+        help_text = (
+            "Syntax:\n"
+            "pmusic play|loop|pause|resume|stop|getids|getlids|list "
+            "<filename|processid|directory|playlist|radio>\n"
+            "Example: pmusic play music.mp3\n"
+        )
+        sendmultiblock(help_text.encode())
         return RC_FAILED
         
-    parmslist = data.split(" ")
-    cmd = parmslist[0]
-    if len(parmslist) > 1:
-        parms = data.split(" ")[1].split("\x00")[0]
-    else:
-        parms = ''
-
-    buf = ''
+    cmd, _, parms = data.partition(" ")
+    parms = parms.split("\x00", 1)[0].strip()
     try:
-        buf = subprocess.check_output(['/home/pi/msxpi/pplay.sh',getMSXPiVar('PATH'),cmd,parms])
-        if buf == b'':
-            buf = b'\x0a'
-        sendmultiblock(buf)
-    except subprocess.CalledProcessError as e:
-        sendmultiblock(("Pi:Error - "+str(e)).encode())
+        if _music_player is None:
+            raise PlayerError("mpv player is not initialized")
+        # PATH is the current MSXPi directory.  It can change after startup
+        # through the CD command, so never use the initialization-time value.
+        _music_player.set_base_path(getMSXPiVar('PATH'))
+        if cmd.lower() == "play":
+            result = _music_player.play(parms)
+        elif cmd.lower() == "loop":
+            result = _music_player.play(parms, loop=True)
+        elif cmd.lower() == "pause":
+            result = _music_player.pause(parms)
+        elif cmd.lower() == "resume":
+            result = _music_player.resume(parms)
+        elif cmd.lower() == "stop":
+            result = _music_player.stop(parms)
+        elif cmd.lower() == "list":
+            # `p play list` is the process control form: return the IDs that
+            # can be passed to pause/resume/stop.  Supplying a directory keeps
+            # the existing media-file listing behavior.
+            result = (_music_player.list_ids() or "No music playing\n") \
+                if not parms else _music_player.list_media(parms)
+        elif cmd.lower() in ("getids", "getlids"):
+            result = _music_player.list_ids()
+        else:
+            raise PlayerError(f"Unknown player command: {cmd}")
+        sendmultiblock(str(result or "\n").encode())
+        return RC_SUCCESS
+    except (PlayerError, OSError, ValueError) as exc:
+        sendmultiblock(f"Player error: {exc}".encode())
+        return RC_FAILED
 
-    return RC_SUCCESS
+# `music` is the public command name. Keep `play` above as a compatibility
+# alias for existing MSX software and scripts.
+def music(data):
+    return play(data)
     
 def vol(data=None):
     #print(f"pvol(): {data}")
 
-    if hostType == "RaspberryPi": 
-        rc = run("mixer set PCM -- " + data)
-        sendmultiblock("Pi:Ok")
+    try:
+        if _music_player is None:
+            raise PlayerError("mpv player is not initialized")
+        sendmultiblock(_music_player.volume(data).encode())
         return RC_SUCCESS
-    else:
-        sendmultiblock("Command not supported by this platform".encode())
-    return RC_SUCCESS
+    except (PlayerError, ValueError) as exc:
+        sendmultiblock(f"Player error: {exc}".encode())
+        return RC_FAILED
     
 def pset(data):
     #print(f"pset(): {data}")
@@ -5693,6 +5724,18 @@ else:
            ['FINNHUBKEY',''], \
            ['TWELVEDATAKEY',''], \
            ['ALPHAVANTAGEKEY','']]
+
+# The music backend is lazy: mpv is not started until the first play command.
+# Windows uses C:\\Apps\\mpv\\mpv.exe by default; Linux/Raspberry Pi uses
+# the mpv executable found on PATH (or /usr/bin/mpv).
+_music_player = None
+if MpvPlayer is not None:
+    try:
+        _music_player = MpvPlayer(getMSXPiVar('PATH'))
+    except Exception as exc:
+        print(f"Warning: music player unavailable: {exc}")
+if _music_player is not None:
+    atexit.register(_music_player.close)
 
 print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
 

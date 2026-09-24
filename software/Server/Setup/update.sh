@@ -61,7 +61,7 @@ get() {
 }
 
 rc=0
-for f in msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
+for f in msxpi-server.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
          native/gpio_transfer.c native/build.sh; do
     if get "$BASE" "$f"; then
         mv -f "$f.new" "$f"

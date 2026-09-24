@@ -168,7 +168,7 @@ What the setup gives you (check it, or do it by hand):
 * **Python 3** with the modules `requests`, `fs` and `RPi.GPIO`. `fs` needs
   `pkg_resources`, so a `setuptools` older than version 81 must be present
   (`python3 -m pip install fs "setuptools<81" --break-system-packages` if you do it
-  by hand). The packages `unar`, `lhasa`, `unzip`, `music123`, `alsa-utils` and
+  by hand). The packages `unar`, `lhasa`, `unzip`, `mpv`, `alsa-utils` and
   `smbclient` are for unpacking archives, playing audio and reading network
   shares; `iptables` gives the MSX its network; `gcc` builds the native GPIO
   engine.
@@ -181,7 +181,7 @@ What the setup gives you (check it, or do it by hand):
   | `native/` | the native GPIO library `libmsxpi_gpio.so`, built on the Pi (without it the server falls back to slower Python GPIO and says so in its log) |
   | `msxpi.ini` | your settings, see below |
   | `disks/msxpiboot.dsk`, `disks/tools.dsk` | drives A: and B: for the MSX-DOS 1 boot mode |
-  | `msxpi-tcpip-setup.sh`, `kill.sh`, `pplay.sh` | helpers |
+  | `msxpi-tcpip-setup.sh`, `kill.sh` | helpers |
 
 * **A systemd service** (`msxpi-monitor`) that starts the server at boot. To
   watch it work, run it by hand: `cd /home/pi/msxpi && python3 msxpi-server.py`.

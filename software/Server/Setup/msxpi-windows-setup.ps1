@@ -60,6 +60,7 @@ param(
     [string]$Machine     = "Panasonic_FS-A1WSX",
     [string]$TapUrl      = "https://build.openvpn.net/downloads/releases/tap-windows-9.24.2-I601-Win10.exe",
     [switch]$SkipPython,
+    [switch]$SkipMpv,
     [switch]$SkipOpenMsx,
     [switch]$SkipTap,
     [switch]$SkipNetwork
@@ -164,10 +165,27 @@ function Install-Winget([string]$id, [string]$what) {
     Update-Path
 }
 
+function Install-Mpv {
+    $mpvExe = "C:\Apps\mpv\mpv.exe"
+    if (Test-Path $mpvExe) { Ok "mpv already installed"; return }
+
+    Step "mpv"
+    $api = Invoke-RestMethod "https://api.github.com/repos/mpv-distributions/mpv-windows-setup/releases/latest"
+    $asset = $api.assets | Where-Object { $_.name -eq "mpv-setup-x86_64-$($api.tag_name).exe" } | Select-Object -First 1
+    if (-not $asset) { Fail "could not find the x86_64 mpv installer" }
+    $installer = Join-Path $Work $asset.name
+    Get-File $asset.browser_download_url $installer | Out-Null
+    & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\Apps\mpv
+    if (-not (Test-Path $mpvExe)) { Fail "mpv installation did not produce $mpvExe" }
+    Ok "mpv installed in C:\Apps\mpv"
+}
+
 Assert-Admin
 Write-Host "MSXPi Windows setup"
 Write-Host "  home    : $MsxPiHome"
 Write-Host "  openMSX : $(if ($OpenMsxDir) { $OpenMsxDir } else { 'auto-detect' })"
+
+if (-not $SkipMpv) { Install-Mpv }
 
 # --- 1. Python and 7-Zip ------------------------------------------------------
 $python = $null
@@ -226,7 +244,7 @@ foreach ($d in @($MsxPiHome, "$MsxPiHome\disks", "$MsxPiHome\native")) {
 }
 
 $srv = "$Raw/Server/Python/src"
-foreach ($f in @("msxpi-server.py", "mapper_detect.py", "msxpi_eth.py", "msxpi_gpio_native.py")) {
+foreach ($f in @("msxpi-server.py", "msxpi_player.py", "mapper_detect.py", "msxpi_eth.py", "msxpi_gpio_native.py")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" | Out-Null
 }
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {

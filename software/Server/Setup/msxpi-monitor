@@ -6,7 +6,6 @@
 # 2026-09-02 : Added TCPIP/UNAPI setup; Added logging to /var/log/msxpi.log
 
 MSXPIHOME=/home/pi/msxpi
-FILELIST="pplay.sh"
 USEROOT=$(/usr/bin/whoami | /bin/grep -c "root")
 UNAPISETUP="/home/pi/msxpi/msxpi-tcpip-setup.sh"
 MSXPI_ROOT_LOG="/var/log/msxpi.log"
@@ -61,11 +60,6 @@ if [[ ! -e /media/ramdisk/senddatablock.msx ]]; then
 fi
 
 ${OSCMDPREFIX}chown -R pi:pi /media/ramdisk
-
-for file in $FILELIST
-do
-    cp -p $MSXPIHOME/$file /media/ramdisk/
-done
 
 R=$(echo $1 | /bin/grep -c "\-t")
 if [[ $# -eq 1 && $R -eq 1 ]]; then
