@@ -310,7 +310,7 @@ install_packages() {
     # network-manager is deliberately not here: the WiFi commands use it where the
     # image already has it, and adding it to an image without it would change how
     # the Pi connects to the network under the running SSH session.
-    apt_optional alsa-utils music123 mplayer smbclient html2text logrotate
+    apt_optional alsa-utils mpv smbclient html2text logrotate
 }
 
 # ------------------------------------------------------------------------------
@@ -440,13 +440,12 @@ install_msxpi() {
     fi
 
     local f
-    for f in msxpi-server.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
+    for f in msxpi-server.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
         [ -s "$MSXPIHOME/$f" ] || err "$f is missing"
     done
 
     fetch_required "$SRC_SETUP" msxpi-monitor "$MSXPIHOME/msxpi-monitor" 0755
     fetch_required "$SRC_SETUP" kill.sh "$MSXPIHOME/kill.sh" 0755
-    fetch_required "$SRC_SETUP" pplay.sh "$MSXPIHOME/pplay.sh" 0755
     ok "server, helpers, monitor"
 
     # Boot and tools disks for the Pi-served drives A: and B:. Kept as .bak when replaced.
