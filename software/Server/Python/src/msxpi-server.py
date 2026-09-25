@@ -2127,10 +2127,20 @@ def dskiow(parms = None):
         rc,buf = recvdata2()
         if  rc == RC_SUCCESS:
             #print("dskiowrs: checksum is a match")
-            if sectorInfo[0] == 0:
-                drive0Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
+            disk = drive0Data if sectorInfo[0] == 0 else drive1Data
+            start = initdataindex + sectorcnt*SECTORSIZE
+            # An mmap slice assignment must match in size exactly: a short or
+            # long payload, or a sector past the end of the image, used to
+            # raise "mmap slice assignment is wrong size" with no clue which.
+            # Skip the sector (still consuming the MSX's remaining sectors so
+            # the link stays in step) and say why.
+            if len(buf) != SECTORSIZE or start + SECTORSIZE > len(disk):
+                print("dskiowrs: rejected drive=%d sector=%d (%d of %d): "
+                      "payload %d bytes, image %d bytes"
+                      % (sectorInfo[0], sectorInfo[3] + sectorcnt, sectorcnt + 1,
+                         numsectors, len(buf), len(disk)))
             else:
-                drive1Data[initdataindex+(sectorcnt*SECTORSIZE):initdataindex+SECTORSIZE+(sectorcnt*SECTORSIZE)] = buf
+                disk[start:start+SECTORSIZE] = buf
             sectorcnt += 1
         else:
             print("dskiowrs: checksum error")
