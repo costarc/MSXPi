@@ -1712,7 +1712,8 @@ def play(data):
             "Syntax:\n"
             "pmusic play|loop|pause|resume|stop|getids|getlids|list "
             "<filename|processid|directory|playlist|radio>\n"
-            "Example: pmusic play music.mp3\n"
+            "Examples: pmusic play music.mp3; pmusic loop music.mp3; "
+            "pmusic stop\n"
         )
         sendmultiblock(help_text.encode())
         return RC_FAILED
@@ -1734,7 +1735,7 @@ def play(data):
         elif cmd.lower() == "resume":
             result = _music_player.resume(parms)
         elif cmd.lower() == "stop":
-            result = _music_player.stop(parms)
+            result = _music_player.stop(parms) if parms else _music_player.stop_all()
         elif cmd.lower() == "list":
             # `p play list` is the process control form: return the IDs that
             # can be passed to pause/resume/stop.  Supplying a directory keeps
