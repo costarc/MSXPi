@@ -143,6 +143,11 @@ class MpvPlayer:
             self.players.pop(pid, None)
         return "Ok"
 
+    def stop_all(self):
+        for pid in list(self.players):
+            self.stop(pid)
+        return "Ok"
+
     def volume(self, value, pid=None):
         value = max(0, min(100, int(value)))
         if pid is not None:

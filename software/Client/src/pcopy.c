@@ -253,8 +253,7 @@ static uint8_t pcopy_body(void) {
     uint8_t *buffer = get_buffer_ptr();
     uint16_t maxbufsize = PCOPY_BLOCK_SIZE;
 
-    // 1. Read command tail directly from MSX-DOS PSP memory
-    get_dos_cmdline(cmdTail);
+    // 1. Command tail was already copied by pcopy(), before the link claim.
 
     // 2. Parse arguments
     parse_args(cmdTail, src, tgt);
@@ -381,6 +380,9 @@ static uint8_t pcopy_body(void) {
 // an interrupt problem.
 uint8_t pcopy(void) {
     uint8_t rc;
+    // Copy the tail FIRST: the claim makes an EXTBIO/UNAPI call that can
+    // overwrite 0x0080, leaving the server "pcopy init m<garbage>".
+    get_dos_cmdline(cmdTail);
     msxpi_link_claim();
     rc = pcopy_body();
     msxpi_link_release();

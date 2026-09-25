@@ -417,23 +417,26 @@ uint8_t loadrom(uint16_t totalSize) {
 #define MAX_STORAGE_SEGMENTS 64   // 64 x 16K = 1MB
 #define PAIR_CACHE0_ENTRIES  8    // page 1 cache entries, see ascii8Handlers
 #define PAIR_CACHE1_ENTRIES  16   // page 2 cache entries, ends at RESIDENT_8K_DISPATCH_ADDR
-#define PAIR_CACHE_MAX_ENTRIES PAIR_CACHE1_ENTRIES
 #define BANK_HALF_SIZE       0x2000
 
-static uint8_t __at(0x3800) storageSegments[MAX_STORAGE_SEGMENTS];
-static uint8_t __at(0x3840) execSegment1;
-static uint8_t __at(0x3841) execSegment2;
-
-static uint16_t __at(0x3843) mapperBlockSize;
-static uint16_t __at(0x3845) mapperReceivedSize;
-static uint16_t __at(0x3847) mapperBankIndex;
-static uint8_t  __at(0x3849) mapperLoadRc;
-static uint8_t  __at(0x384A) mapperCurrentSegment;
-static uint16_t __at(0x384B) mapperCurrentOffset;
-static uint16_t __at(0x384D) mapperBankCount;
-static uint8_t  __at(0x384F) mapperBankSizeKB;
-static uint8_t  __at(0x3850) mapperType;
-static uint8_t  __at(0x3851) safeZoneSegment;
+// This loader-only state must not share the low-memory code/data area: the
+// link map places executable helper code at 0x37EF and _DATA starts at 0x387F,
+// so the former fixed block at 0x3800 overlapped live code. Keep it in the
+// unused page-3 gap immediately below the resident handler table at 0xF975.
+// None of these values are needed after the game is launched.
+static uint8_t  __at(0xF900) storageSegments[MAX_STORAGE_SEGMENTS];
+static uint8_t  __at(0xF940) execSegment1;
+static uint8_t  __at(0xF941) execSegment2;
+static uint16_t __at(0xF942) mapperBlockSize;
+static uint16_t __at(0xF944) mapperReceivedSize;
+static uint16_t __at(0xF946) mapperBankIndex;
+static uint8_t  __at(0xF948) mapperLoadRc;
+static uint8_t  __at(0xF949) mapperCurrentSegment;
+static uint16_t __at(0xF94A) mapperCurrentOffset;
+static uint16_t __at(0xF94C) mapperBankCount;
+static uint8_t  __at(0xF94E) mapperBankSizeKB;
+static uint8_t  __at(0xF94F) mapperType;
+static uint8_t  __at(0xF950) safeZoneSegment;
 
 // ---------------------------------------------------------------------------
 // Memory-mapper segment management WITHOUT MSX-DOS 2.
@@ -453,19 +456,15 @@ static uint8_t  __at(0x3851) safeZoneSegment;
 // ---------------------------------------------------------------------------
 #define SEGPORT_PAGE2   0xFE
 
-// Deliberately NOT __at() fixed addresses. The msxarch browse buffer is
-// get_buffer_ptr()+100 and runs 22*80 bytes from there - with the current
-// binary that is 0x35C8..0x3CA8, straight through the 0x3800 block these
-// used to live in, so the menu text silently overwrote them (segTotal read
-// back as 0 no matter what detection returned). Let the linker place them.
-static uint8_t segInUse0;
-static uint8_t segInUse1;
-static uint8_t segInUse2;
-static uint8_t segInUse3;
-static uint8_t segTotal;
-static uint8_t segNext;
-static uint8_t pairCacheCounts[2];
-static uint8_t pairCacheSegments[2][PAIR_CACHE_MAX_ENTRIES];
+static uint8_t __at(0xF951) segInUse0;
+static uint8_t __at(0xF952) segInUse1;
+static uint8_t __at(0xF953) segInUse2;
+static uint8_t __at(0xF954) segInUse3;
+static uint8_t __at(0xF955) segTotal;
+static uint8_t __at(0xF956) segNext;
+static uint8_t __at(0xF957) pairCacheCounts[2];
+// Flattened to fit 8 page-1 entries and 16 page-2 entries in F959-F970.
+static uint8_t __at(0xF959) pairCacheSegments[PAIR_CACHE0_ENTRIES + PAIR_CACHE1_ENTRIES];
 
 static uint8_t segmentIsReserved(uint8_t seg) {
     return (seg == segInUse0 || seg == segInUse1 ||
@@ -583,17 +582,17 @@ static uint8_t allocateMapperSegments(uint8_t storageCount) {
     // 8K half while screen transitions swap the other.
     pairCacheCounts[0] = 1;
     pairCacheCounts[1] = 1;
-    pairCacheSegments[0][0] = execSegment1;
-    pairCacheSegments[1][0] = execSegment2;
+    pairCacheSegments[0] = execSegment1;
+    pairCacheSegments[PAIR_CACHE0_ENTRIES] = execSegment2;
     while (pairCacheCounts[1] < PAIR_CACHE1_ENTRIES) {
         uint8_t s;
         if (takeSegment(&s) != RC_SUCCESS) break;
-        pairCacheSegments[1][pairCacheCounts[1]++] = s;
+        pairCacheSegments[PAIR_CACHE0_ENTRIES + pairCacheCounts[1]++] = s;
     }
     while (pairCacheCounts[0] < PAIR_CACHE0_ENTRIES) {
         uint8_t s;
         if (takeSegment(&s) != RC_SUCCESS) break;
-        pairCacheSegments[0][pairCacheCounts[0]++] = s;
+        pairCacheSegments[pairCacheCounts[0]++] = s;
     }
     return RC_SUCCESS;
 }
@@ -710,8 +709,13 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
     uint8_t* dst;
     uint16_t i;
 
+    // Keep the caller's interrupt state. This routine is also used by the
+    // Konami pair-cache prewarm, where page 2 temporarily maps an allocated
+    // cache segment instead of the segment DOS/BIOS expects there.
     __asm
+        ld a, i
         di
+        push af
     __endasm;
 
     PutPN_direct(sourcePage, storageSegment);
@@ -723,7 +727,10 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
     PutPN_direct(sourcePage, sourcePage == 1 ? execSegment1 : execSegment2);
 
     __asm
+        pop af
+        jp po, 91$
         ei
+    91$:
     __endasm;
 }
 
@@ -1118,18 +1125,19 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
     // first cache entry; the other entries hold no pair yet.
     for (i = 0; i < 4; i++) cur[i] = (uint8_t)i;
     for (p = 0; p < 2; p++) {
+        uint8_t cacheBase = p ? PAIR_CACHE0_ENTRIES : 0;
         uint8_t count = pairCacheCounts[p];
         uint8_t maxEntries = p ? PAIR_CACHE1_ENTRIES : PAIR_CACHE0_ENTRIES;
-        pg[p][0] = pairCacheSegments[p][0];
+        pg[p][0] = pairCacheSegments[cacheBase];
         pg[p][1] = count > 1 ? 1 : 0;
         pg[p][2] = count;
         cache[p][0] = (uint8_t)(p * 2);
         cache[p][1] = (uint8_t)(p * 2 + 1);
-        cache[p][2] = pairCacheSegments[p][0];
+        cache[p][2] = pairCacheSegments[cacheBase];
         for (e = 1; e < maxEntries; e++) {
             cache[p][e * 3]     = 0xFF;
             cache[p][e * 3 + 1] = 0xFF;
-            cache[p][e * 3 + 2] = pairCacheSegments[p][e];
+            cache[p][e * 3 + 2] = pairCacheSegments[cacheBase + e];
         }
     }
 
@@ -1144,17 +1152,26 @@ static void prewarmKonami16PairCache(void) {
     uint8_t e, b;
     uint8_t* cache;
 
+    // Do not let the DOS/BIOS timer handler run while page 2 points at a
+    // temporary cache segment. mapperCopyBank() preserves this disabled state
+    // between the two 8K copies for each 16K cache pair.
+    __asm
+        ld a, i
+        di
+        push af
+    __endasm;
+
     cache = (uint8_t*)RESIDENT_CACHE1_ADDR;
     for (e = 1, b = 0; e < pairCacheCounts[1]; b++) {
         if (b == 2) b = 4;
         if (b == 16) b = 3;
         if (b >= 16 && b != 3) break;
-        PutPN_direct(2, pairCacheSegments[1][e]);
+        PutPN_direct(2, pairCacheSegments[PAIR_CACHE0_ENTRIES + e]);
         mapperCopyBank(b, 0, 1, 2);
         mapperCopyBank(3, BANK_HALF_SIZE, 1, 2);
         cache[e * 3] = b;
         cache[e * 3 + 1] = 3;
-        cache[e * 3 + 2] = pairCacheSegments[1][e];
+        cache[e * 3 + 2] = pairCacheSegments[PAIR_CACHE0_ENTRIES + e];
         e++;
         if (b == 3) break;
     }
@@ -1162,6 +1179,13 @@ static void prewarmKonami16PairCache(void) {
 
     PutPN_direct(1, execSegment1);
     PutPN_direct(2, execSegment2);
+
+    __asm
+        pop af
+        jp po, 92$
+        ei
+    92$:
+    __endasm;
 }
 
 static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
