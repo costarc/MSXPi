@@ -6,6 +6,7 @@ the MSX is the handle for pause, resume, and stop.
 
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -24,6 +25,7 @@ class MpvPlayer:
         self.base_path = Path(base_path)
         self.executable = executable or self._default_executable()
         self.players = {}
+        self.audio_device = ""
         self._counter = 0
 
     @staticmethod
@@ -86,12 +88,59 @@ class MpvPlayer:
         self.base_path = (base_path if str(base_path).startswith(("http://", "https://"))
                           else Path(base_path))
 
+    @staticmethod
+    def audio_outputs():
+        """Return ALSA card number, device number, stable ID and description."""
+        try:
+            result = subprocess.run(["aplay", "-l"], capture_output=True,
+                                    text=True, timeout=5,
+                                    env=dict(os.environ, LC_ALL="C"))
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise PlayerError(f"Cannot list audio cards: {exc}") from exc
+        if result.returncode:
+            raise PlayerError("Cannot list audio cards: " + result.stderr.strip())
+        return re.findall(
+            r"^card\s+(\d+):\s+([\w-]+)\s+\[([^\]]+)\],\s+device\s+(\d+):\s+([^\r\n]+)",
+            result.stdout, re.MULTILINE)
+
+    def configure_audio(self, selection, current, save):
+        """Select an output for new tracks; never rewrite system ALSA config."""
+        selection = selection.strip()
+        if selection.lower() == "default":
+            save("auto")
+            self.audio_device = "auto"
+            return "Audio output: default (new tracks)\n"
+        cards = self.audio_outputs()
+        if not selection:
+            lines = ["Usage: p music audio <card> [device]",
+                     "       p music audio default",
+                     "Current: " + (current or "default")]
+            lines.extend(f"{number} device {device}: {name} ({identifier})"
+                         for number, identifier, name, device, _ in cards)
+            if not cards:
+                lines.append("No playback cards found")
+            return "\n".join(lines) + "\n"
+        parts = selection.split()
+        if len(parts) not in (1, 2) or not all(p.isdecimal() for p in parts):
+            raise PlayerError("Use: p music audio <card> [device] or default")
+        number = str(int(parts[0]))
+        device = str(int(parts[1])) if len(parts) == 2 else "0"
+        found = next((c for c in cards if c[0] == number and c[3] == device), None)
+        if found is None:
+            raise PlayerError(f"Audio card {number}, device {device} not found")
+        output = f"alsa/plughw:CARD={found[1]},DEV={device}"
+        save(output)
+        self.audio_device = output
+        return f"Audio output: {found[2]} (new tracks)\n"
+
     def play(self, media, loop=False):
         if not media:
             raise PlayerError("A music filename is required")
         endpoint = self._new_endpoint()
         args = [self.executable, "--idle=yes", "--no-video", "--force-window=no",
                 "--really-quiet", f"--input-ipc-server={endpoint}"]
+        if self.audio_device:
+            args.append(f"--audio-device={self.audio_device}")
         process = None
         io = None
         try:

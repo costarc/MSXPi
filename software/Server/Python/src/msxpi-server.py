@@ -1714,6 +1714,7 @@ def play(data):
             "<filename|processid|directory|playlist|radio>\n"
             "Examples: pmusic play music.mp3; pmusic loop music.mp3; "
             "pmusic stop\n"
+            "p music audio [card [device]|default]\n"
         )
         sendmultiblock(help_text.encode())
         return RC_FAILED
@@ -1726,6 +1727,7 @@ def play(data):
         # PATH is the current MSXPi directory.  It can change after startup
         # through the CD command, so never use the initialization-time value.
         _music_player.set_base_path(getMSXPiVar('PATH'))
+        _music_player.audio_device = getMSXPiVar('MUSIC_AUDIO_DEVICE').strip()
         if cmd.lower() == "play":
             result = _music_player.play(parms)
         elif cmd.lower() == "loop":
@@ -1744,6 +1746,12 @@ def play(data):
                 if not parms else _music_player.list_media(parms)
         elif cmd.lower() in ("getids", "getlids"):
             result = _music_player.list_ids()
+        elif cmd.lower() == "audio":
+            if hostType not in ("RaspberryPi", "Linux"):
+                raise PlayerError("Audio card selection requires Linux/ALSA")
+            result = _music_player.configure_audio(
+                parms, getMSXPiVar('MUSIC_AUDIO_DEVICE'),
+                lambda value: setMSXPiVar('MUSIC_AUDIO_DEVICE', value))
         else:
             raise PlayerError(f"Unknown player command: {cmd}")
         sendmultiblock(str(result or "\n").encode())
