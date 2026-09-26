@@ -1,0 +1,42 @@
+{
+  "tracks": {
+    "default": {
+      "filename": "The_Goonies_R_Good_Enough.mp3",
+      "mode": "loop"
+    }
+  },
+  "sounds": {
+    "0f": "default",
+    "10": "default",
+    "11": "default",
+    "12": "default",
+    "13": "default",
+    "14": "default",
+    "15": "default",
+    "16": "default",
+    "17": "default",
+    "18": "default",
+    "19": "default",
+    "1a": "default",
+    "1b": "default",
+    "1c": "default",
+    "1d": "default",
+    "1e": "default",
+    "1f": "default",
+    "20": "default",
+    "21": "default",
+    "22": "default",
+    "23": "default",
+    "24": "default",
+    "25": "default",
+    "26": "default",
+    "27": "default",
+    "28": "default",
+    "29": "default",
+    "2a": "default",
+    "2b": "default",
+    "2c": "default"
+  },
+  "exit_enabled": true,
+  "gap_frames": 120
+}
