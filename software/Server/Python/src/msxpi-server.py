@@ -26,7 +26,10 @@
 # ------------------------------------------------------------------------------
 # External module imports
 
+from __future__ import annotations
+
 # Standard library imports
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 import time
 import subprocess
 import struct
@@ -68,69 +71,90 @@ except ImportError:
     PlayerError = RuntimeError
 
 
-version = "1.6"
-BuildId = "20260926.061"
+# =============================================================================
+# VERSION & BUILD INFORMATION
+# =============================================================================
+VERSION = "1.6"
+BUILD_ID = "20260926.061"
 
-CMDSIZE = 9
-MSGSIZE = 128
-BLKSIZE = 512
-SECTORSIZE = 512
-BULKBLKSIZE = 3 + 4096
-MAXBUFSIZE = 48*1024       # 48 KB buffer in the MSX side
+# =============================================================================
+# PROTOCOL CONSTANTS - SPI and Block Transfer
+# =============================================================================
+CMDSIZE = 9                  # Command size in bytes
+MSGSIZE = 128               # Message size in bytes
+BLKSIZE = 512               # Block size in bytes
+SECTORSIZE = 512            # Disk sector size in bytes
+BULKBLKSIZE = 3 + 4096      # Bulk block size (header + data)
+MAXBUFSIZE = 48 * 1024      # 48 KB buffer in MSX side
 
-SPI_SCLK_LOW_TIME = 0.001
-SPI_SCLK_HIGH_TIME = 0.001
+# SPI Bit-Bang Timing
+SPI_SCLK_LOW_TIME = 0.001   # Clock low period (seconds)
+SPI_SCLK_HIGH_TIME = 0.001  # Clock high period (seconds)
 
-GLOBALRETRIES       = 10
-MAX_BLOCK_RETRIES   = 3
-SPI_INT_TIME        = 3000
-PIWAITTIMEOUTOTHER  = 120     # seconds
-PIWAITTIMEOUTBIOS   = 60      # seconds
-SYNCTIMEOUT         = 30
-# 180, not 30: the MSX drains a block at a few hundred bytes a second, so an
-# 8 KB block can sit for the best part of a minute before the far end answers.
-# At 30 the server gave up mid-transfer and reported a checksum failure that
-# was really just impatience.
-BYTETRANSFTIMEOUT   = 180
-SYNCTRANSFTIMEOUT   = 180
-HTTP_TIMEOUT        = 15     # seconds for any web fetch; an unreachable host must not hang a command
-DISABLETIMEOUT      = False
-READY_ACK           = 0xA0
-SENDNEXT            = 0xA1
-ENDTRANSFER         = 0xA2
-READY               = 0xAA
-RC_CHKSUM_ERR       = 0xAD
-WAIT                = 0xAE
+# Control Byte Values (MSX-Pi Protocol)
+READY_ACK = 0xA0            # Acknowledge READY signal
+SENDNEXT = 0xA1             # Send next block
+ENDTRANSFER = 0xA2          # End of transfer
+READY = 0xAA                # Ready signal
+RC_CHKSUM_ERR = 0xAD        # Checksum error
+WAIT = 0xAE                 # Wait signal
 
-RC_SUCCESS          =    0xE0
-RC_INVALIDCOMMAND   =    0xE1
-RC_ESCPRESSED       =    0xE2
-RC_BUFOVFLW         =    0xE3
-RC_INVALIDDATASIZE  =    0xE4
-RC_HANDSHAKEERR     =    0xE5
-RC_FILENOTFOUND     =    0xE6
-RC_FAILED           =    0xE7
-RC_CONNERR          =    0xE8
-RC_WAIT             =    0xE9
-RC_READY            =    0xEA
-RC_SUCCNOSTD        =    0xEB
-RC_FAILNOSTD        =    0xEC
-RC_TERMINATE        =    0xED
-RC_UNEXPECTEDDATA   =    0xEE
-RC_UNDEFINED        =    0xEF
+# =============================================================================
+# RETURN CODES (RC_*)
+# =============================================================================
+RC_SUCCESS = 0xE0           # Successful operation
+RC_INVALIDCOMMAND = 0xE1    # Invalid command
+RC_ESCPRESSED = 0xE2        # Escape key pressed
+RC_BUFOVFLW = 0xE3          # Buffer overflow
+RC_INVALIDDATASIZE = 0xE4   # Invalid data size
+RC_HANDSHAKEERR = 0xE5      # Handshake error
+RC_FILENOTFOUND = 0xE6      # File not found
+RC_FAILED = 0xE7            # Operation failed
+RC_CONNERR = 0xE8           # Connection error
+RC_WAIT = 0xE9              # Wait status
+RC_READY = 0xEA             # Ready status
+RC_SUCCNOSTD = 0xEB         # Success, no standard
+RC_FAILNOSTD = 0xEC         # Failed, no standard
+RC_TERMINATE = 0xED         # Terminate connection
+RC_UNEXPECTEDDATA = 0xEE    # Unexpected data
+RC_UNDEFINED = 0xEF         # Undefined error
 
-# ROM header sent to the MSX immediately before a ROM image, so the client
-# knows how to load it (plain linear copy vs. mapper-aware loading).
-ROM_HEADER_MAGIC    =    0x52   # 'R'
-ROM_HEADER_VERSION  =    1
-ROM_HEADER_SIZE     =    16
-MAPPER_PLAIN        =    0      # linear ROM, loaded exactly as today
-MAPPER_KONAMI       =    1      # 8K banks
-MAPPER_ASCII8       =    2      # 8K banks
-MAPPER_ASCII16      =    3      # 16K banks
-MAPPER_REJECTED     =    0xFF   # selection rejected; reason string follows the header, no ROM body
-PLAIN_ROM_MAX_SIZE  =    32768  # client's fixed load window for MAPPER_PLAIN
-ROM_MAX_SIZE         =    1048576  # sanity cap for mapped ROMs (1MB covers all commercial Konami/ASCII8/ASCII16 megaROMs)
+# =============================================================================
+# RETRY & TIMEOUT CONFIGURATION
+# =============================================================================
+GLOBALRETRIES = 10          # Global retry limit
+MAX_BLOCK_RETRIES = 3       # Block-level retry limit
+SPI_INT_TIME = 3000         # SPI interrupt time (milliseconds)
+
+# Timeout values (in seconds)
+PIWAITTIMEOUTOTHER = 120    # Standard timeout for most operations
+PIWAITTIMEOUTBIOS = 60      # Timeout for BIOS operations
+SYNCTIMEOUT = 30            # Synchronization timeout
+BYTETRANSFTIMEOUT = 180     # Byte transfer timeout (MSX drains blocks slowly)
+SYNCTRANSFTIMEOUT = 180     # Sync transfer timeout
+HTTP_TIMEOUT = 15           # HTTP request timeout (web fetches)
+DISABLETIMEOUT = False      # Disable timeout checking (debug mode)
+
+# =============================================================================
+# ROM HEADER & MAPPER CONFIGURATION
+# =============================================================================
+ROM_HEADER_MAGIC = 0x52     # ROM header magic ('R')
+ROM_HEADER_VERSION = 1      # ROM header version
+ROM_HEADER_SIZE = 16        # ROM header size in bytes
+
+# Mapper Types
+MAPPER_PLAIN = 0            # Linear ROM (no mapper)
+MAPPER_KONAMI = 1           # Konami mapper (8K banks)
+MAPPER_ASCII8 = 2           # ASCII8 mapper (8K banks)
+MAPPER_ASCII16 = 3          # ASCII16 mapper (16K banks)
+MAPPER_REJECTED = 0xFF      # Mapper rejected (unsupported)
+
+# ROM Size Limits
+PLAIN_ROM_MAX_SIZE = 32768  # Client's fixed load window (32KB)
+ROM_MAX_SIZE = 1048576      # Maximum ROM size cap (1MB)
+
+# Block-size / length bit that marks a /WAIT burst payload (see sendmultiblock).
+BURST_FLAG = 0x8000
 
 # Force stdout to flush on every newline automatically
 sys.stdout.reconfigure(line_buffering=True)
@@ -289,7 +313,7 @@ def eth_handle_opcode(opcode):
         print(f"eth: error serving opcode {hex(opcode)}: {e}")
         return True   # consumed; do not fall through to the garbage branch
 
-def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
+def build_rom_header(mapper_type: int, bank_size_kb: int, bank_count: int, total_size: int) -> bytes:
     """Pack the fixed 16-byte ROM header: magic, protocol version, mapper
     type, bank size (KB), bank count, and total ROM size in bytes.
     mapper_type MAPPER_PLAIN keeps today's client behavior unchanged;
@@ -422,10 +446,10 @@ errcount = 0
 msxdos1boot = False
 
 HOST = '0.0.0.0'  # Listen on all interfaces
-# Port configurable via environment variable (default 5000)
-# Usage: MSXPI_PORT=5001 python msxpi-server.py
-PORT = int(os.environ.get('MSXPI_PORT', '5000'))
-logger.info(f"MSXPi Server will listen on port {PORT}")
+PORT = 5000       # Match this with serverPort in your C++ code
+# MSXPI_PORT overrides it, so a second server can run beside the first. The
+# line above stays literal: test harnesses patch it in the source text.
+PORT = int(os.environ.get('MSXPI_PORT', PORT))
 conn = None
 
 hostType = "RaspberryPi"
@@ -677,11 +701,8 @@ def _spi_byte_fast(byte_out=None):
     return RC_SUCCESS, byte_in
 
 
-# Block-size / length bit that marks a /WAIT burst payload (see sendmultiblock).
-BURST_FLAG = 0x8000
 
-
-def burst_capable():
+def burst_capable() -> bool:
     """True when SPI_BurstOut can hold READY for a whole block (or no READY: TCP)."""
     return hostType != "RaspberryPi" or _NATIVE_GPIO is not None or _FAST_GPIO
 
@@ -722,7 +743,7 @@ _tcp_framed = False
 _tcp_rx = bytearray()       # received but not yet consumed
 
 
-def tcp_handshake(c):
+def tcp_handshake(c: socket.socket) -> bool:
     """Greet a new openMSX connection; True when it speaks virtual SPI."""
     global _tcp_framed, _tcp_rx
     _tcp_framed = False
@@ -777,7 +798,7 @@ def _tcp_cancel(got, count):
     return RC_FAILED, None
 
 
-def tcp_exchange(misos, timeout, hold=True):
+def tcp_exchange(misos: Iterable[int], timeout: Optional[float], hold: bool = True) -> Tuple[int, Optional[bytearray]]:
     """Offer bytes the way the Pi does, one CPLD transfer per byte.  hold=True
     keeps READY up across the run (a burst); hold=False drops READY after every
     byte, as SPI_ByteTransfer does, but still sends all offers in one write so
@@ -804,7 +825,7 @@ def tcp_exchange(misos, timeout, hold=True):
         return RC_CONNERR, None
 
 
-def SPI_BurstOut(data):
+def SPI_BurstOut(data: bytes | bytearray) -> int:
     """Send a run of bytes with RPI_READY held high for the whole run.
 
     This is what makes hardware /WAIT usable.  The CPLD asserts /WAIT only
@@ -887,7 +908,7 @@ def SPI_BurstOut(data):
     return RC_SUCCESS
 
 
-def SPI_BurstIn(length):
+def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     """Receive a run of bytes with RPI_READY held high for the whole run.
 
     The mirror image of SPI_BurstOut, for the MSX's OTIR side: the CPLD only
@@ -991,7 +1012,7 @@ def tick_sclk():
     GPIO.output(SPI_SCLK, GPIO.HIGH)
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
-def SPI_ByteTransfer(byte_out=None):
+def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
     
     global conn, hostType
     byte_in = 0    
@@ -1069,7 +1090,7 @@ def SPI_ByteTransfer(byte_out=None):
     return RC_SUCCESS,byte_in
     
 
-def SPI_ReadPayload(length):
+def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
     """Exactly length bytes; header, checksum and status remain at the caller."""
     if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
         try:
@@ -1100,7 +1121,7 @@ def SPI_ReadPayload(length):
     return RC_SUCCESS, payload
 
 
-def SPI_WritePayload(payload):
+def SPI_WritePayload(payload: bytes | bytearray) -> int:
     """Same per-byte READY/CS contract as SPI_ByteTransfer, in native chunks."""
     if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
         try:
@@ -1139,7 +1160,7 @@ class MyHTMLParser(HTMLParser):
     def convert_charrefs(self, data):
         print("MyHTMLParser: convert_charrefs found :", data)
                 
-def pathExpander(path, basepath = ''):
+def pathExpander(path: str, basepath: str = '') -> List:
     #print(f"pathExpander()")
     
     path=path.strip().rstrip(' \t\n\0')
@@ -1309,7 +1330,7 @@ def dir(data):
 
     return RC_SUCCESS
 
-def normalize_path(path):
+def normalize_path(path: str) -> str:
     """Collapse '.', '..', doubled and trailing slashes in a PATH value, local
     or URL, never climbing above its root ('/' or the URL's host)."""
     m = re.match(r'^([a-z][a-z0-9+.-]*://[^/]*)(.*)$', path, re.I)
@@ -1346,7 +1367,7 @@ def cd(data):
 
     return RC_SUCCESS
 
-def pcopy_handshake() -> tuple[int, int]:
+def pcopy_handshake() -> Tuple[int, int]:
     """Performs the initial handshake with MSX and receives msx_blocksize."""
     # Wait for READY from MSX
     while True:
@@ -1395,7 +1416,7 @@ def _pcopy_read_state():
 def pcopy(msxcmd="pcopy"):
     #print(f"pcopy() called with msxcmd: '{msxcmd}'")
 
-    global psetvar, GLOBALRETRIES, hostType
+    global GLOBALRETRIES, hostType
     basepath = getMSXPiVar('PATH')
 
     # Helper to transmit error block payload to MSX
@@ -1794,7 +1815,7 @@ def vol(data=None):
     
 def pset(data):
     #print(f"pset(): {data}")
-    global psetvar, drive0Data, drive1Data
+    global drive0Data, drive1Data
 
     # Normalize input
     data = data.strip()
@@ -1804,7 +1825,7 @@ def pset(data):
     # ---------------------------------------------------------
     if not data:
         out = ""
-        for name, value in psetvar:
+        for name, value in _config.items():
             out += f"{name}={value}\n"
         return sendmultiblock(out.encode())
 
@@ -1834,7 +1855,7 @@ def pset(data):
     # 2. Single variable display:  set wifi
     # ---------------------------------------------------------
     if len(parts) == 1:
-        for name, value in psetvar:
+        for name, value in _config.items():
             if name.upper() == varname_upper:
                 return sendmultiblock(f"{name}={value}".encode())
         return sendmultiblock(f"{varname} not found".encode())
@@ -1873,60 +1894,97 @@ def pset(data):
             old = drive0Data
             rc, drive0Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
-            updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         elif varname_upper == 'DRIVEB':
             old = drive1Data
             rc, drive1Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
-            updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
 
         return sendmultiblock("Pi:Ok".encode())
 
     return sendmultiblock("Pi:Error".encode())
 
-def setMSXPiVar(pvar='', pvalue=''):
-    global psetvar
-    #print(f"setMSXPiVar(): var={pvar} value={pvalue}")
+class MSXPiConfig:
+    """The msxpi.ini variables: case-insensitive names, original spelling and
+    file order kept for listing and saving."""
 
-    # Normalize name for case-insensitive matching
-    pvar_upper = pvar.upper()
+    def __init__(self, ini_path: str, pairs: Iterable[Tuple[str, str]] = ()):
+        self.ini_path = ini_path
+        self._vars: Dict[str, List[str]] = {}
+        self._lock = threading.RLock()
+        for name, value in pairs:
+            # The first definition wins, as the old list lookup did.
+            self._vars.setdefault(name.upper(), [name, value])
 
-    # ---------------------------------------------------------
-    # 1. Update or delete existing variable
-    # ---------------------------------------------------------
-    for i, (name, value) in enumerate(psetvar):
-        if name.upper() == pvar_upper:
+    @classmethod
+    def load(cls, ini_path: str) -> "MSXPiConfig":
+        pairs = []
+        with open(ini_path, 'r') as f:
+            for line in f:
+                # A "var" line without "=" (say "var RPI_SHUTDOWN") used to
+                # raise IndexError here and kill the server; skip it instead.
+                if line.startswith('var') and '=' in line:
+                    name = line.split(' ')[1].split('=')[0].strip()
+                    value = line.replace('var ', '', 1).replace(name, '', 1).split('=')[1].strip()
+                    pairs.append((name, value))
+        return cls(ini_path, pairs)
 
-            # Delete variable if no value provided
-            if pvalue == '':
-                print(f"Deleting variable {pvar}")
-                del psetvar[i]
+    def get(self, name: str, default: str = '') -> str:
+        with self._lock:
+            entry = self._vars.get(name.upper())
+            return entry[1] if entry else default
+
+    def has(self, name: str) -> bool:
+        with self._lock:
+            return name.upper() in self._vars
+
+    def items(self) -> List[Tuple[str, str]]:
+        with self._lock:
+            return [(n, v) for n, v in self._vars.values()]
+
+    def setdefault(self, name: str, value: str) -> None:
+        """Add a variable only if missing, without saving the file."""
+        with self._lock:
+            self._vars.setdefault(name.upper(), [name, value])
+
+    def set(self, name: str, value: str) -> None:
+        """Set a variable and save; an empty value deletes it."""
+        with self._lock:
+            key = name.upper()
+            if value == '':
+                if self._vars.pop(key, None) is None:
+                    return
+                print(f"Deleting variable {name}")
+            elif key in self._vars:
+                print(f"Updating variable {name} to {value}")
+                self._vars[key][1] = value
             else:
-                print(f"Updating variable {pvar} to {pvalue}")
-                psetvar[i][1] = pvalue
+                print(f"Adding new variable {name}={value}")
+                self._vars[key] = [name, value]
+            self.save()
 
-            updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
-            return RC_SUCCESS
+    def save(self) -> None:
+        with self._lock:
+            updateIniFile(self.ini_path, self.items())
 
-    # ---------------------------------------------------------
-    # 2. Add new variable (dynamic growth)
-    # ---------------------------------------------------------
-    print(f"Adding new variable {pvar}={pvalue}")
-    psetvar.append([pvar, pvalue])
-    updateIniFile(MSXPIHOME + '/msxpi.ini', psetvar)
+
+# MSX command names that cannot be Python function names here, because a
+# function called "set" would shadow the built-in set().
+COMMAND_ALIASES = {"set": "pset"}
+
+
+def resolve_command(cmd: str) -> Callable:
+    """The handler for an MSX command; KeyError if there is none."""
+    name = cmd.lower()
+    return globals()[COMMAND_ALIASES.get(name, name)]
+
+
+def setMSXPiVar(pvar: str = '', pvalue: str = '') -> int:
+    _config.set(pvar, pvalue)
     return RC_SUCCESS
 
-def getMSXPiVar(devname = 'PATH'):
-    global psetvar
-    devval = ''
-    idx = 0
-    for v in psetvar:
-        if devname.upper() ==  psetvar[idx][0].upper():
-            devval = psetvar[idx][1]
-            break
-        idx += 1
-    return devval
+def getMSXPiVar(devname: str = 'PATH') -> str:
+    return _config.get(devname)
     
 def interfaces_report():
     """One line per interface: name, state, IPv4 address - for a 40-column MSX.
@@ -1981,7 +2039,6 @@ def interfaces_report():
 
 def wifi(cmd):
     #print(f"pwifi(): {cmd}")
-    global psetvar
     wifissid = getMSXPiVar('WIFISSID')
     wifipass = getMSXPiVar('WIFIPWD')
     wificountry = getMSXPiVar('WIFICOUNTRY')
@@ -2004,14 +2061,11 @@ def wifi(cmd):
     
     return RC_SUCCESS
 
-def ver(parms = None):
-    #print("pver()")
-    global version,build
-    ver = "MSXPi Server Version "+version+" Build "+ BuildId + "\n";
-    print("Sending version info:",ver)
-    RC = sendmultiblock(ver.encode())
-    #print(f"pver(): returning rc = {hex(rc)}")
-    return rc
+def ver(parms=None):
+    """Send server version information to MSX."""
+    version_string = f"MSXPi Server Version {VERSION} Build {BUILD_ID}\n"
+    logger.info(f"Sending version info: {version_string.strip()}")
+    return sendmultiblock(version_string.encode())
            
 def dosinit(parms = None):
     #print("dosinit()")    
@@ -2273,7 +2327,7 @@ dskiowrs = dskiow
 dskiosct = dskios
 
 
-def recvdata2(maxbufsize = 8192):
+def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
     """
     Python-side counterpart of MSX SENDDATA2().
     Full block-based, multi-block protocol using SPI_ByteTransfer.
@@ -2461,7 +2515,7 @@ def recvdata2(maxbufsize = 8192):
 
         # Otherwise header_rc == RC_READY: loop for next block
 
-def senddata(header_rc, payload):
+def senddata(header_rc: int, payload: bytes | bytearray) -> int:
     """
     Python-side counterpart of MSX RECVDATA2().
 
@@ -2735,7 +2789,7 @@ def senddata(header_rc, payload):
 
     MAX_BLOCK_RETRIES = 3
 
-def recvdata2_oneblock(maxbufsize):
+def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
     """
     Python counterpart of RECVDATA2_ONEBLOCK().
     Reads exactly ONE block sent by MSX.
@@ -3009,7 +3063,7 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     return RC_CONNERR       # unexpected header
 
 
-def PerformHandshake():
+def PerformHandshake() -> Tuple[int, int]:
     # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
     #print("PerformHandshake(): Waiting for READY from MSX")
     while True:
@@ -3041,7 +3095,7 @@ def PerformHandshake():
 
     return RC_SUCCESS, msx_blocksize
 
-def sendmultiblock(payload: bytes, header_rc = None):
+def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
     """
     Sends a large payload to the MSX in multiple blocks using senddata_oneblock().
 
@@ -3109,7 +3163,7 @@ def sendmultiblock(payload: bytes, header_rc = None):
 
     return RC_SUCCESS
 
-def readParameters(errorMsg, needParm=False):
+def readParameters(errorMsg: str, needParm: bool = False) -> Tuple[int, Optional[str]]:
     #print("readparms():")
     rc, data = recvdata2()
 
@@ -4766,7 +4820,7 @@ def irc(parms):
 # lists the names with empty values.
 #
 # Read per call rather than once at import: `p set FINNHUBKEY ...` rewrites the
-# file and updates psetvar, and a key set that way has to take effect without
+# file and updates _config, and a key set that way has to take effect without
 # restarting the server.
 def _api_key(name):
     return getMSXPiVar(name).strip()
@@ -5775,35 +5829,16 @@ def initialize_connection():
 
 # This section reads the persistent user configuration from msxpi.ini configuration file.
 # When msxpi.ini does not exist, it populates the memory variables with default values.
-if exists(MSXPIHOME+'/msxpi.ini'):
-    f = open(MSXPIHOME+'/msxpi.ini','r')
-    idx = 0
-    psetvar = []
-    while True:
-        line = f.readline()
-        if not line:
-            break
-    
-        # A "var" line without "=" (say "var RPI_SHUTDOWN") used to raise
-        # IndexError here and kill the server at start-up; skip it instead.
-        if line.startswith('var') and '=' in line:
-            var = line.split(' ')[1].split('=')[0].strip()
-            value = line.replace('var ','',1).replace(var,'',1).split('=')[1].strip()
-            psetvar.append([var,value])
-            idx += 1
-    f.close()
-    if 'SPI_CS' not in str(psetvar):
-        psetvar.append(["SPI_HW","False"])
-        psetvar.append(["SPI_CS","21"])
-        psetvar.append(["SPI_SCLK","20"])
-        psetvar.append(["SPI_MOSI","16"])
-        psetvar.append(["SPI_MISO","12"])
-        psetvar.append(["RPI_READY","25"])
-    if 'free' not in str(psetvar):
-        psetvar.append(["free","free"])
+_ini_path = MSXPIHOME + '/msxpi.ini'
+if exists(_ini_path):
+    _config = MSXPiConfig.load(_ini_path)
+    if not _config.has('SPI_CS'):
+        for _name, _value in (("SPI_HW", "False"), ("SPI_CS", "21"), ("SPI_SCLK", "20"),
+                              ("SPI_MOSI", "16"), ("SPI_MISO", "12"), ("RPI_READY", "25")):
+            _config.setdefault(_name, _value)
 
 else:
-    psetvar = [['PATH','/home/pi/msxpi'], \
+    _config = MSXPiConfig(_ini_path, [['PATH','/home/pi/msxpi'], \
            ['DriveA','/home/pi/msxpi/disks/msxpiboot.dsk'], \
            ['DriveB','/home/pi/msxpi/disks/tools.dsk'], \
            ['DriveM','https://github.com/costarc/MSXPi/raw/master/software/target'], \
@@ -5830,7 +5865,7 @@ else:
            ['RAPIDAPIHOST',''], \
            ['FINNHUBKEY',''], \
            ['TWELVEDATAKEY',''], \
-           ['ALPHAVANTAGEKEY','']]
+           ['ALPHAVANTAGEKEY','']])
 
 # The music backend is lazy: mpv is not started until the first play command.
 # Windows uses C:\\Apps\\mpv\\mpv.exe by default; Linux/Raspberry Pi uses
@@ -5844,7 +5879,7 @@ if MpvPlayer is not None:
 if _music_player is not None:
     atexit.register(_music_player.close)
 
-print(f"\n** Starting MSXPi Server Version {version} Build {BuildId} **\n")
+logger.info(f"Starting MSXPi Server Version {VERSION} Build {BUILD_ID}")
 
 # Initialize the server
 hostType = detect_host()
@@ -5867,7 +5902,7 @@ RPI_READY = int(getMSXPiVar("RPI_READY"))
 # never set up: there the unconnected pin picked up noise that read as a press
 # and rebooted the Pi in a loop.  Never crash over a bad value - the monitor
 # would just restart the server for ever.
-_has_shut = any(v[0].upper() == "RPI_SHUTDOWN" for v in psetvar)
+_has_shut = _config.has("RPI_SHUTDOWN")
 _shut = getMSXPiVar("RPI_SHUTDOWN").strip() if _has_shut else "26"
 RPI_SHUTDOWN = int(_shut) if _shut.isdigit() and 2 <= int(_shut) <= 27 else None
 
@@ -5917,7 +5952,7 @@ try:
                     parms = " ".join(rest)
                     print(f" -> {cmd} {parms}")
                     try:
-                        result = globals()[cmd.lower()](parms)
+                        result = resolve_command(cmd)(parms)
                         # If handler returned a string or bytes, send it back to MSX
                         if isinstance(result, str):
                             try:
@@ -6009,9 +6044,7 @@ try:
                         parms = " ".join(rest)
                         print(f" -> {cmd} {parms}")
                         try:
-                            if (cmd.lower() == "set"): #workaround to avoid callign Linux "set" command
-                                cmd = "pset"
-                            result = globals()[cmd.lower()](parms)
+                            result = resolve_command(cmd)(parms)
                             # If handler returned a string or bytes, send it back to MSX
                             if isinstance(result, str):
                                 try:
