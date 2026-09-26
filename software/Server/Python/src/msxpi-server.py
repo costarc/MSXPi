@@ -26,25 +26,16 @@
 # ------------------------------------------------------------------------------
 # External module imports
 
-from fileinput import filename
-from tarfile import BLOCKSIZE
+# Standard library imports
 import time
 import subprocess
 import struct
-from urllib.request import urlopen
-from urllib.parse import unquote
-import requests
-import mmap
-# import fcntl # does not work in Windows
+import logging
 import os
 import posixpath
 import sys
 import platform
-from os.path import exists
-from subprocess import Popen,PIPE,STDOUT
-from html.parser import HTMLParser
 import datetime
-import time
 import glob
 import array
 import socket
@@ -53,13 +44,22 @@ import select
 import base64
 import math
 import re
-from random import randint
-from fs import open_fs
 import threading
+import atexit
+from os.path import exists
+from subprocess import Popen, PIPE, STDOUT
+from html.parser import HTMLParser
+from urllib.request import urlopen
+from urllib.parse import unquote
 from io import StringIO
 from contextlib import redirect_stdout
+from random import randint
+
+# Third-party imports
+import requests
+import mmap
+from fs import open_fs
 import shutil
-import atexit
 
 try:
     from msxpi_player import MpvPlayer, PlayerError
@@ -135,14 +135,21 @@ ROM_MAX_SIZE         =    1048576  # sanity cap for mapped ROMs (1MB covers all 
 # Force stdout to flush on every newline automatically
 sys.stdout.reconfigure(line_buffering=True)
 
-# Import IRC client wrappers (module-level functions prefixed with "irc_")
-# Guarded import so server still runs even if irc_client is absent or raises at import.
-''''try:
-    from irc_client import *  # brings irc_connect, irc_read_unread, etc. into globals()
-    print("IRC client integrated: irc_* commands available")
-except Exception as _e:
-    print(f"Warning: failed to import irc_client module: {_e}")
-    '''
+# Set up logging infrastructure
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('msxpi')
+eth_logger = logging.getLogger('msxpi.eth')
+protocol_logger = logging.getLogger('msxpi.protocol')
+disk_logger = logging.getLogger('msxpi.disk')
+
+# IRC client integration (currently disabled - awaiting complete implementation)
+# TODO: Integrate IRC client when msxpi_irc module is ready
+# Intended usage: from irc_client import * to enable irc_* commands
+# IRC_ENABLED = False
+
 # ---------------------------------------------------------------------------
 # Ethernet UNAPI shuttle (msxpi_eth.py).
 #
@@ -415,7 +422,10 @@ errcount = 0
 msxdos1boot = False
 
 HOST = '0.0.0.0'  # Listen on all interfaces
-PORT = 5000       # Match this with serverPort in your C++ code
+# Port configurable via environment variable (default 5000)
+# Usage: MSXPI_PORT=5001 python msxpi-server.py
+PORT = int(os.environ.get('MSXPI_PORT', '5000'))
+logger.info(f"MSXPi Server will listen on port {PORT}")
 conn = None
 
 hostType = "RaspberryPi"
@@ -5747,15 +5757,15 @@ def initialize_connection():
                 # Losing the shutdown button is a far smaller problem than
                 # losing the server, so carry on rather than raise.
                 print(f"MSXPi Server: shutdown button unavailable ({e})")
-        print(f"[MSXPi Server on {hostType}] Listening on GPIOs:\n"
-              f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **\n")
+        logger.info(f"[MSXPi Server on {hostType}] Listening on GPIOs:")
+        logger.info(f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **")
         return None
     else:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
         s.listen(1)
-        print(f"[MSXPi Server on {hostType}] Listening on {HOST}:{PORT}...")
+        logger.info(f"[MSXPi Server on {hostType}] Listening on {HOST}:{PORT}...")
         return s
 
 """ ============================================================================
