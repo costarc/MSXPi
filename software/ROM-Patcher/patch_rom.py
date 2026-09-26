@@ -199,15 +199,19 @@ def main(argv=None):
             return 0
         require(args.rom is not None and args.output is not None, 'ROM and --output are required')
         require(args.rom.resolve() != args.output.resolve(), 'Output must differ from the original ROM')
-        manifest_path = args.output.with_suffix(args.output.suffix + '.json')
-        require(not args.output.exists() and not manifest_path.exists(), 'Output ROM or manifest already exists')
+        # Kept with the profile, not beside the ROM: a ROM folder served to
+        # msxarch listed every manifest as a game. It records the latest build
+        # of that output name, so a rebuild replaces it.
+        manifest_path = args.profile.resolve().parent / 'builds' / (args.output.name + '.json')
+        require(not args.output.exists(), 'Output ROM already exists')
         require(args.rom.stat().st_size <= MAX_ROM, 'Input ROM too large')
         overrides = read_json(args.music) if args.music else None
         data, manifest = build(args.rom.read_bytes(), profile, assets, overrides)
         with args.output.open('xb') as stream:
             stream.write(data)
         try:
-            with manifest_path.open('x', encoding='utf-8') as stream:
+            manifest_path.parent.mkdir(exist_ok=True)
+            with manifest_path.open('w', encoding='utf-8') as stream:
                 json.dump(manifest, stream, indent=2)
                 stream.write('\n')
         except OSError:

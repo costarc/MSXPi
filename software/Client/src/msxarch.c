@@ -25,7 +25,7 @@
  * SOFTWARE.
  * ------------------------------------------------------------------------------
  */
-
+#pragma disable_warning 218
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -614,8 +614,17 @@ static void enterSafeZone(void) {
     PutPN_direct(2, safeZoneSegment);
 }
 
-static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
-    uint16_t chunks;
+// 8KB chunks the server actually sends. A patched ROM may stop part-way into
+// its last bank instead of being padded (ARCTIC_MSXPI.ROM: 136KB, 9 banks):
+// the header's bank count sizes the storage, totalSize the transfer, and the
+// unsent tail of the last segment is never selected by the game.
+static uint16_t mappedChunks(uint16_t bankCount, uint8_t bankSizeKB, uint32_t totalSize) {
+    uint16_t full = bankCount * (uint16_t)(bankSizeKB / 8);
+    uint32_t sent = (totalSize + BANK_HALF_SIZE - 1) / BANK_HALF_SIZE;
+    return (sent != 0 && sent < full) ? (uint16_t)sent : full;
+}
+
+static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB, uint16_t chunks) {
     uint16_t c;
     uint8_t  rc;
 
@@ -632,7 +641,6 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
     // one segment as two halves. So chunk c always lands at segment c/2,
     // offset (c & 1) * 8KB.
     mapperBlockSize = MAXBUFSIZE;
-    chunks = bankCount * (uint16_t)(bankSizeKB / 8);
 
     // The server sends the whole ROM as one multi-block stream, and
     // sendmultiblock() opens it with a handshake. Without this the server sat
@@ -658,8 +666,7 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB) {
     return RC_SUCCESS;
 }
 
-static uint8_t drainMappedRomBody(uint16_t bankCount, uint8_t bankSizeKB) {
-    uint16_t chunks = bankCount * (uint16_t)(bankSizeKB / 8);
+static uint8_t drainMappedRomBody(uint16_t chunks) {
     uint16_t received;
     uint8_t rc;
     uint16_t c;
@@ -784,6 +791,22 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
 #define RESIDENT_8K_DISPATCH_ADDR 0xFAD8
 #define RESIDENT_8K_DISPATCH_SIZE 16
 
+// ASCII16 page-2 slot emulation, in the 8K handlers' space (an ASCII16 game
+// never loads those). ARCTIC.ROM pages its work RAM into 8000h with ENASLT; in
+// msxarch its cartridge and RAM slots are the same slot, so msxpi-server turns
+// those ENASLT calls into CALLs to the RAM and cartridge selects below (see
+// patch_page2_slot_selects in mapper_detect.py). The page-2 bank handler jumps
+// to the select routine, which only records the bank while work RAM is mapped.
+// With MODE left at 0 - every other game - it behaves as before.
+#define RESIDENT_P2_MODE      0xF9B5  // 0 = cartridge bank at 8000h, 1 = work RAM
+#define RESIDENT_P2_CARTSEG   0xF9B6  // segment of the cartridge's page-2 bank
+#define RESIDENT_P2_WORKSEG   0xF9B7  // the game's page-2 work RAM
+#define RESIDENT_P2_SELECT    0xF9C0
+#define RESIDENT_P2_RAM       0xF9E0
+#define RESIDENT_P2_CART      0xF9F0
+#define RESIDENT_P2_SELECT_SIZE 0x20
+#define RESIDENT_P2_STUB_SIZE   0x10
+
 // The server patches the ROM's bank-switch writes into CALLs to our resident
 // handlers, so it has to know where they ended up. Derive the addresses from
 // the RESIDENT_ defines rather than hardcoding them anywhere else - if these
@@ -818,6 +841,13 @@ static void buildSelection(char* out, const char* number) {
     out[i++] = ' ';
     appendHex4(out + i, usableMapperSegments());
     i += 4;
+    // Ninth and tenth: the ASCII16 page-2 work-RAM and cartridge selects.
+    out[i++] = ' ';
+    appendHex4(out + i, RESIDENT_P2_RAM);
+    i += 4;
+    out[i++] = ' ';
+    appendHex4(out + i, RESIDENT_P2_CART);
+    i += 4;
     out[i] = 0;
 }
 
@@ -844,6 +874,13 @@ void ascii16Page1Handler(void) __naked {
 
 void ascii16Page2Handler(void) __naked {
     __asm
+        jp RESIDENT_P2_SELECT
+    __endasm;
+}
+
+// Copied to RESIDENT_P2_SELECT: the page-2 bank select proper.
+void ascii16Page2Select(void) __naked {
+    __asm
         push af
         push hl
         push bc
@@ -853,9 +890,42 @@ void ascii16Page2Handler(void) __naked {
         ld bc, #RESIDENT_TABLE_ADDR
         add hl, bc
         ld a, (hl)
+        ld (RESIDENT_P2_CARTSEG), a
+        ld b, a
+        ld a, (RESIDENT_P2_MODE)
+        or a
+        ld a, b
+        jr nz, 1$        ; work RAM is at 8000h: the bank shows on the next cart select
         out (#0xFE), a
+    1$:
         pop bc
         pop hl
+        pop af
+        ret
+    __endasm;
+}
+
+// Copied to RESIDENT_P2_RAM: replaces ENASLT(RAM slot, 8000h).
+void ascii16Page2Ram(void) __naked {
+    __asm
+        push af
+        ld a, #1
+        ld (RESIDENT_P2_MODE), a
+        ld a, (RESIDENT_P2_WORKSEG)
+        out (#0xFE), a
+        pop af
+        ret
+    __endasm;
+}
+
+// Copied to RESIDENT_P2_CART: replaces ENASLT(own slot, 8000h).
+void ascii16Page2Cart(void) __naked {
+    __asm
+        push af
+        xor a
+        ld (RESIDENT_P2_MODE), a
+        ld a, (RESIDENT_P2_CARTSEG)
+        out (#0xFE), a
         pop af
         ret
     __endasm;
@@ -878,6 +948,19 @@ static void relocateResidentHandlers16K(uint16_t storageCount) {
         table[i] = storageSegments[i % storageCount];
     for (i = 0; i < RESIDENT_16K_SLOT; i++) dst1[i] = src1[i];
     for (i = 0; i < RESIDENT_16K_SLOT; i++) dst2[i] = src2[i];
+
+    *(uint8_t*)RESIDENT_P2_MODE = 0;
+    *(uint8_t*)RESIDENT_P2_CARTSEG = storageSegments[storageCount > 1 ? 1 : 0];
+    *(uint8_t*)RESIDENT_P2_WORKSEG = execSegment2;   // unused otherwise by ASCII16
+    src1 = (uint8_t*)ascii16Page2Select;
+    dst1 = (uint8_t*)RESIDENT_P2_SELECT;
+    for (i = 0; i < RESIDENT_P2_SELECT_SIZE; i++) dst1[i] = src1[i];
+    src1 = (uint8_t*)ascii16Page2Ram;
+    dst1 = (uint8_t*)RESIDENT_P2_RAM;
+    for (i = 0; i < RESIDENT_P2_STUB_SIZE; i++) dst1[i] = src1[i];
+    src1 = (uint8_t*)ascii16Page2Cart;
+    dst1 = (uint8_t*)RESIDENT_P2_CART;
+    for (i = 0; i < RESIDENT_P2_STUB_SIZE; i++) dst1[i] = src1[i];
 }
 
 static void patchAllStorageSegmentsAscii16(uint16_t segmentCount) {
@@ -1229,24 +1312,25 @@ static void ascii8InitialSetup(uint16_t bankCount) {
 
 uint8_t loadMappedRom(RomHeader* hdr) {
     uint16_t storageCount;
+    uint16_t chunks = mappedChunks(hdr->bankCount, hdr->bankSizeKB, hdr->totalSize);
     uint8_t rc;
 
     storageCount = (hdr->bankSizeKB == 16) ? hdr->bankCount : (hdr->bankCount + 1) / 2;
     if (storageCount > MAX_STORAGE_SEGMENTS) {
         pprintf("Too large: ", storageCount); Print(" seg\n");
-        drainMappedRomBody(hdr->bankCount, hdr->bankSizeKB);
+        drainMappedRomBody(chunks);
         progressEnd();
         return RC_FAILED;
     }
 
     rc = allocateMapperSegments((uint8_t)storageCount);
     if (rc != RC_SUCCESS) {
-        drainMappedRomBody(hdr->bankCount, hdr->bankSizeKB);
+        drainMappedRomBody(chunks);
         progressEnd();
         return rc;
     }
 
-    rc = loadBanksIntoStorage(hdr->bankCount, hdr->bankSizeKB);
+    rc = loadBanksIntoStorage(hdr->bankCount, hdr->bankSizeKB, chunks);
     progressEnd();
     if (rc != RC_SUCCESS) {
         Print("Error loading ROM banks\n");
@@ -1521,7 +1605,7 @@ int main(void) {
             }
             else {
                 {
-                    char selcmd[48];
+                    char selcmd[64];
                     buildSelection(selcmd, userNumber);
                     rc = SendCommandToMSXPi(selcmd, false);
                 }

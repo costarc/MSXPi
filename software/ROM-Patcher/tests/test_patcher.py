@@ -36,7 +36,7 @@ class PatcherTests(unittest.TestCase):
         first, manifest = patcher.build(self.original, self.profile, self.assets)
         second, _ = patcher.build(self.original, self.profile, self.assets)
         self.assertEqual(first, second)
-        self.assertEqual(len(first), 65536)
+        self.assertEqual(len(first), 0xC000)
         self.assertEqual(first[:4], b'AB\x10\x40')
         filename = b'The_Goonies_R_Good_Enough.mp3\0'
         self.assertEqual(first[0x1310:0x1310+len(filename)], filename)
@@ -160,7 +160,7 @@ class PatcherTests(unittest.TestCase):
     def test_original_rom(self):
         profile, assets = patcher.load_profile(ROOT/'profiles/goonies/profile.json')
         data, manifest = patcher.build(Path(os.environ['MSXPI_TEST_ROM']).read_bytes(), profile, assets)
-        self.assertEqual(len(data), 65536)
+        self.assertEqual(len(data), 0xC000)
         with self.assertRaises(patcher.PatchError):
             patcher.build(data, profile, assets)
 

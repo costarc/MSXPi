@@ -358,6 +358,61 @@ def patch_bank_switches(rom, mapper_type, handlers):
 _ASCII8_INDEXED_SELECT = bytes([0x7A, 0x87, 0x87, 0x87, 0xC6, 0x60, 0x67, 0xF3, 0x73])
 
 
+# Page-2 slot selects in an ASCII16 game that keeps work RAM at 8000h.
+# ARCTIC.ROM saves its own slot and the RAM slot, derived from RSLREG with the
+# usual idiom, then pages 8000h between them with the BIOS:
+#     call 405Ah / ld (0C000h),a     405A: call 0138h / rrca / rrca  (page 1)
+#     call 4077h / ld (0C001h),a     4077: call 0138h / rlca / rlca  (page 3)
+#     ld a,(0C000h) / ld h,80h / call 0024h    (cartridge bank at 8000h)
+#     ld a,(0C001h) / ld h,80h / call 0024h    (work RAM at 8000h)
+# msxarch runs the image from the RAM slot, so both variables hold the same
+# slot: the ENASLT calls changed nothing, the work RAM landed in whichever ROM
+# bank was mapped at 8000h, and the game drew garbage and hung. Each ENASLT
+# becomes a CALL to the MSX handler that maps the cartridge bank or a separate
+# work-RAM segment. Only a ROM with BOTH variables is touched.
+_OWN_SLOT_PAGE1 = bytes([0xCD, 0x38, 0x01, 0x0F, 0x0F])   # call RSLREG / rrca / rrca
+_OWN_SLOT_PAGE3 = bytes([0xCD, 0x38, 0x01, 0x07, 0x07])   # call RSLREG / rlca / rlca
+_ENASLT_PAGE2 = bytes([0x26, 0x80, 0xCD, 0x24, 0x00])     # ld h,80h / call ENASLT
+
+
+def _slot_variables(rom, routine):
+    """Addresses nn stored by `call r / ld (nn),a`, r being a bank-0 routine
+    that starts with `routine`."""
+    found = set()
+    for i in range(min(len(rom), 0x4000) - 5):
+        if rom[i] != 0xCD or rom[i + 3] != 0x32:
+            continue
+        r = rom[i + 1] | (rom[i + 2] << 8)
+        if 0x4000 <= r < 0x8000 - len(routine) and \
+                rom[r - 0x4000:r - 0x4000 + len(routine)] == routine:
+            found.add(rom[i + 4] | (rom[i + 5] << 8))
+    return found
+
+
+def patch_page2_slot_selects(rom, ram_handler, cart_handler):
+    """Rewrite `ld a,(var) / ld h,80h / call 0024h` (and `ld (var),a / ...`)
+    into calls to the MSX's page-2 RAM / cartridge handlers.
+    Returns (patched_rom, count)."""
+    cart_vars = _slot_variables(rom, _OWN_SLOT_PAGE1)
+    ram_vars = _slot_variables(rom, _OWN_SLOT_PAGE3)
+    if not cart_vars or not ram_vars or cart_vars & ram_vars:
+        return rom, 0
+    out = bytearray(rom)
+    n = 0
+    i = out.find(_ENASLT_PAGE2, 3)
+    while i >= 0:
+        if out[i - 3] in (0x3A, 0x32):          # ld a,(nn) / ld (nn),a
+            var = out[i - 2] | (out[i - 1] << 8)
+            handler = cart_handler if var in cart_vars else \
+                ram_handler if var in ram_vars else None
+            if handler is not None:
+                out[i + 3] = handler & 0xFF
+                out[i + 4] = (handler >> 8) & 0xFF
+                n += 1
+        i = out.find(_ENASLT_PAGE2, i + 1)
+    return bytes(out), n
+
+
 def patch_indexed_switches(rom, mapper_type, dispatch):
     """Replace each ASCII8 computed window select with di / CALL <dispatch>
     (the MSX's window dispatcher, D = window, E = bank) padded with NOPs to the

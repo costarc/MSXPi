@@ -1,0 +1,158 @@
+{
+  "tracks": {
+    "track_0f": {
+      "filename": "goonies_01.mp3",
+      "mode": "loop"
+    },
+    "track_10": {
+      "filename": "goonies_02.mp3",
+      "mode": "loop"
+    },
+    "track_11": {
+      "filename": "goonies_03.mp3",
+      "mode": "loop"
+    },
+    "track_12": {
+      "filename": "goonies_04.mp3",
+      "mode": "loop"
+    },
+    "track_13": {
+      "filename": "goonies_05.mp3",
+      "mode": "loop"
+    },
+    "track_14": {
+      "filename": "goonies_06.mp3",
+      "mode": "loop"
+    },
+    "track_15": {
+      "filename": "goonies_07.mp3",
+      "mode": "loop"
+    },
+    "track_16": {
+      "filename": "goonies_08.mp3",
+      "mode": "loop"
+    },
+    "track_17": {
+      "filename": "goonies_09.mp3",
+      "mode": "loop"
+    },
+    "track_18": {
+      "filename": "goonies_10.mp3",
+      "mode": "loop"
+    },
+    "track_19": {
+      "filename": "goonies_11.mp3",
+      "mode": "loop"
+    },
+    "track_1a": {
+      "filename": "goonies_12.mp3",
+      "mode": "loop"
+    },
+    "track_1b": {
+      "filename": "goonies_13.mp3",
+      "mode": "loop"
+    },
+    "track_1c": {
+      "filename": "goonies_14.mp3",
+      "mode": "loop"
+    },
+    "track_1d": {
+      "filename": "goonies_15.mp3",
+      "mode": "loop"
+    },
+    "track_1e": {
+      "filename": "goonies_16.mp3",
+      "mode": "loop"
+    },
+    "track_1f": {
+      "filename": "goonies_17.mp3",
+      "mode": "loop"
+    },
+    "track_20": {
+      "filename": "goonies_18.mp3",
+      "mode": "loop"
+    },
+    "track_21": {
+      "filename": "goonies_19.mp3",
+      "mode": "loop"
+    },
+    "track_22": {
+      "filename": "goonies_20.mp3",
+      "mode": "loop"
+    },
+    "track_23": {
+      "filename": "goonies_21.mp3",
+      "mode": "loop"
+    },
+    "track_24": {
+      "filename": "goonies_22.mp3",
+      "mode": "loop"
+    },
+    "track_25": {
+      "filename": "goonies_23.mp3",
+      "mode": "loop"
+    },
+    "track_26": {
+      "filename": "goonies_24.mp3",
+      "mode": "loop"
+    },
+    "track_27": {
+      "filename": "goonies_25.mp3",
+      "mode": "loop"
+    },
+    "track_28": {
+      "filename": "goonies_26.mp3",
+      "mode": "loop"
+    },
+    "track_29": {
+      "filename": "goonies_27.mp3",
+      "mode": "loop"
+    },
+    "track_2a": {
+      "filename": "goonies_28.mp3",
+      "mode": "loop"
+    },
+    "track_2b": {
+      "filename": "goonies_29.mp3",
+      "mode": "loop"
+    },
+    "track_2c": {
+      "filename": "goonies_01.mp3",
+      "mode": "loop"
+    }
+  },
+  "sounds": {
+    "0f": "track_0f",
+    "10": "track_10",
+    "11": "track_11",
+    "12": "track_12",
+    "13": "track_13",
+    "14": "track_14",
+    "15": "track_15",
+    "16": "track_16",
+    "17": "track_17",
+    "18": "track_18",
+    "19": "track_19",
+    "1a": "track_1a",
+    "1b": "track_1b",
+    "1c": "track_1c",
+    "1d": "track_1d",
+    "1e": "track_1e",
+    "1f": "track_1f",
+    "20": "track_20",
+    "21": "track_21",
+    "22": "track_22",
+    "23": "track_23",
+    "24": "track_24",
+    "25": "track_25",
+    "26": "track_26",
+    "27": "track_27",
+    "28": "track_28",
+    "29": "track_29",
+    "2a": "track_2a",
+    "2b": "track_2b",
+    "2c": "track_2c"
+  },
+  "exit_enabled": true,
+  "gap_frames": 0
+}

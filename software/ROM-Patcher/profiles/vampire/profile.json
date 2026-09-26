@@ -1,0 +1,463 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 1,
+  "id": "vampire-msxpi-konami-v1",
+  "source": {
+    "size": 131072,
+    "sha256": "99eabaaeb2b6c02220e131043d5a6401d0d8c5f413d89204547adcc04d65e7e2"
+  },
+  "output": {
+    "size": 139264,
+    "fill": 0,
+    "mapper": "Konami"
+  },
+  "requirements": [
+    "MSX2 and MSXPi msxarch writable RAM cartridge loader",
+    "msxarch/msxpi-server that load a ROM ending part-way into a 16 KiB page (17 banks)",
+    "MSXPi music play/loop/stop with decimal playback IDs",
+    "Runtime bank 16 must be writable; direct ROM cartridge loading is unsupported"
+  ],
+  "assets": {
+    "runtime": {
+      "file": "assets/runtime.bin",
+      "sha256": "ce91abdcba17bb8247548237775e67df78e209d872408514e1d84ad3c99e37e9"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 131072,
+      "destination": 0
+    },
+    {
+      "source": "runtime",
+      "offset": 0,
+      "size": 8192,
+      "destination": 131072
+    }
+  ],
+  "patches": [
+    {
+      "offset": 178,
+      "expected": "f33ec3329ffd21284022a0fdaf32dbf3fb18fe",
+      "replace": "f33e10320080c3008000000000000000000000",
+      "reason": "Start the runtime bank and idle in the RAM gateway, servicing music outside interrupt context"
+    },
+    {
+      "offset": 4255,
+      "expected": "e5d5c5",
+      "replace": "c31bf1",
+      "reason": "Record music requests at the sound driver entry; the request itself is unchanged"
+    }
+  ],
+  "music": {
+    "abi": "msxpi-music-v1",
+    "map_offset": 135168,
+    "modes_offset": 135424,
+    "options_offset": 135680,
+    "names_offset": 135696,
+    "names_capacity": 3568,
+    "names_encoding": "escape-32"
+  },
+  "sounds": {
+    "80": {
+      "raw_ids": [
+        128
+      ],
+      "description": "Stage 1 (music 80h)"
+    },
+    "81": {
+      "raw_ids": [
+        129
+      ],
+      "description": "Music 81h; event name not established"
+    },
+    "82": {
+      "raw_ids": [
+        130
+      ],
+      "description": "Music 82h; event name not established"
+    },
+    "83": {
+      "raw_ids": [
+        131
+      ],
+      "description": "Music 83h; event name not established"
+    },
+    "84": {
+      "raw_ids": [
+        132
+      ],
+      "description": "Music 84h; event name not established"
+    },
+    "85": {
+      "raw_ids": [
+        133
+      ],
+      "description": "Music 85h; event name not established"
+    },
+    "86": {
+      "raw_ids": [
+        134
+      ],
+      "description": "Music 86h; event name not established"
+    },
+    "87": {
+      "raw_ids": [
+        135
+      ],
+      "description": "Music 87h; event name not established"
+    },
+    "88": {
+      "raw_ids": [
+        136
+      ],
+      "description": "Music 88h; event name not established"
+    },
+    "89": {
+      "raw_ids": [
+        137
+      ],
+      "description": "Music 89h; event name not established"
+    },
+    "8a": {
+      "raw_ids": [
+        138
+      ],
+      "description": "Prologue (music 8Ah)"
+    },
+    "8b": {
+      "raw_ids": [
+        139
+      ],
+      "description": "Music 8Bh; event name not established"
+    },
+    "8c": {
+      "raw_ids": [
+        140
+      ],
+      "description": "Music 8Ch; event name not established"
+    },
+    "8d": {
+      "raw_ids": [
+        141
+      ],
+      "description": "Music 8Dh; event name not established"
+    },
+    "8e": {
+      "raw_ids": [
+        142
+      ],
+      "description": "Music 8Eh; event name not established"
+    },
+    "8f": {
+      "raw_ids": [
+        143
+      ],
+      "description": "Music 8Fh; event name not established"
+    }
+  },
+  "defaults": {
+    "tracks": {
+      "vampire_80": {
+        "filename": "VAMPIRE_80.mp3",
+        "mode": "loop"
+      },
+      "vampire_81": {
+        "filename": "VAMPIRE_81.mp3",
+        "mode": "loop"
+      },
+      "vampire_82": {
+        "filename": "VAMPIRE_82.mp3",
+        "mode": "loop"
+      },
+      "vampire_83": {
+        "filename": "VAMPIRE_83.mp3",
+        "mode": "loop"
+      },
+      "vampire_84": {
+        "filename": "VAMPIRE_84.mp3",
+        "mode": "loop"
+      },
+      "vampire_85": {
+        "filename": "VAMPIRE_85.mp3",
+        "mode": "loop"
+      },
+      "vampire_86": {
+        "filename": "VAMPIRE_86.mp3",
+        "mode": "loop"
+      },
+      "vampire_87": {
+        "filename": "VAMPIRE_87.mp3",
+        "mode": "loop"
+      },
+      "vampire_88": {
+        "filename": "VAMPIRE_88.mp3",
+        "mode": "loop"
+      },
+      "vampire_89": {
+        "filename": "VAMPIRE_89.mp3",
+        "mode": "loop"
+      },
+      "vampire_8a": {
+        "filename": "VAMPIRE_8A.mp3",
+        "mode": "loop"
+      },
+      "vampire_8b": {
+        "filename": "VAMPIRE_8B.mp3",
+        "mode": "loop"
+      },
+      "vampire_8c": {
+        "filename": "VAMPIRE_8C.mp3",
+        "mode": "loop"
+      },
+      "vampire_8d": {
+        "filename": "VAMPIRE_8D.mp3",
+        "mode": "loop"
+      },
+      "vampire_8e": {
+        "filename": "VAMPIRE_8E.mp3",
+        "mode": "loop"
+      },
+      "vampire_8f": {
+        "filename": "VAMPIRE_8F.mp3",
+        "mode": "loop"
+      }
+    },
+    "sounds": {
+      "80": "vampire_80",
+      "81": "vampire_81",
+      "82": "vampire_82",
+      "83": "vampire_83",
+      "84": "vampire_84",
+      "85": "vampire_85",
+      "86": "vampire_86",
+      "87": "vampire_87",
+      "88": "vampire_88",
+      "89": "vampire_89",
+      "8a": "vampire_8a",
+      "8b": "vampire_8b",
+      "8c": "vampire_8c",
+      "8d": "vampire_8d",
+      "8e": "vampire_8e",
+      "8f": "vampire_8f"
+    },
+    "exit_enabled": true,
+    "gap_frames": 0
+  },
+  "symbols": {
+    "ATOHERR": 34055,
+    "ATOHEX": 34025,
+    "ATOHL": 34045,
+    "ATOHU": 34035,
+    "BLKSIZE": 512,
+    "BULKBLKSIZE": 4096,
+    "BUSY": 174,
+    "CALBAS": 345,
+    "CALLSTAT": 21928,
+    "CALSLT": 28,
+    "CHGET": 159,
+    "CHKPIRDY": 33350,
+    "CHPUT": 162,
+    "CHRGTR": 18022,
+    "CLEARBUF": 34057,
+    "CMDSIZE": 9,
+    "CONTROL_PORT1": 86,
+    "CONTROL_PORT2": 87,
+    "CSRX": 62429,
+    "CSRY": 62428,
+    "DATA_PORT1": 90,
+    "DEVICE": 64921,
+    "DSPFNK": 207,
+    "ENASLT": 36,
+    "ENDTRANSFER": 162,
+    "ERAFNK": 204,
+    "ERRFLG": 62484,
+    "ERRHAND": 16495,
+    "EXPTBL": 64705,
+    "FRESTR": 26576,
+    "FRMEVL": 19556,
+    "GATEWAY": 61696,
+    "GETCPU": 387,
+    "GLOBALRETRIES": 3,
+    "GOONIES_WAIT_PASSES": 18,
+    "HIMEM": 64586,
+    "INITXT": 108,
+    "INLIN": 177,
+    "INLINBUF": 62814,
+    "MAXBUFSIZE": 8192,
+    "MAXBUFSIZE_HI": 32,
+    "MAXBUFSIZE_LO": 0,
+    "MAXRETRIES": 10,
+    "MSGSIZE": 128,
+    "MSXPICALLBUF": 58328,
+    "MSXPI_GETSTASH": 34071,
+    "MSXPI_STASH_BUF": 34078,
+    "PAYLOAD_ADVANCE": 34137,
+    "PAYLOAD_ESCAPE": 34175,
+    "PAYLOAD_ESCAPE_IFF_OFF": 34200,
+    "PAYLOAD_NO_CARRY": 34142,
+    "PAYLOAD_RX": 34086,
+    "PAYLOAD_RX_LOOP": 34089,
+    "PAYLOAD_TX": 34115,
+    "PAYLOAD_TX_LOOP": 34118,
+    "PAYLOAD_WAIT": 34147,
+    "PIREADBYTE": 33357,
+    "PIREADBYTE_ESC": 33374,
+    "PIWRITEBYTE": 33377,
+    "PIWRITEBYTE_ERR": 33388,
+    "PRINT": 33931,
+    "PRINT1": 33944,
+    "PRINTALFA": 33986,
+    "PRINTDIGIT": 33982,
+    "PRINTNLINE": 33950,
+    "PRINTNUM1": 33992,
+    "PRINTNUMBER": 33961,
+    "PRINTNUMERIC": 33990,
+    "PRINTPISTDOUT": 33864,
+    "PRINTPISTDOUT0": 33868,
+    "PROCNM": 64905,
+    "PUTCHAR": 33349,
+    "PerformHandshake": 33558,
+    "RAMAD1": 62274,
+    "RAMAD3": 62276,
+    "RC_BUFOVFLW": 227,
+    "RC_CHKSUM_ERR": 173,
+    "RC_CONNERR": 232,
+    "RC_ESCPRESSED": 226,
+    "RC_FAILED": 231,
+    "RC_FAILNOSTD": 236,
+    "RC_FILENOTFOUND": 230,
+    "RC_HANDSHAKEERR": 229,
+    "RC_INVALIDCOMMAND": 225,
+    "RC_INVALIDDATASIZE": 228,
+    "RC_READY": 234,
+    "RC_SUCCESS": 224,
+    "RC_SUCCNOSTD": 235,
+    "RC_TERMINATE": 237,
+    "RC_UNDEFINED": 239,
+    "RC_UNEXPECTEDDATA": 238,
+    "RC_WAIT": 233,
+    "RDSLT": 12,
+    "READY": 170,
+    "READY_ACK": 160,
+    "RECVDATA_ONEBLOCK": 33599,
+    "RESET": 255,
+    "RSLREG": 312,
+    "RT_DATA": 61744,
+    "SCM_CountDone": 33854,
+    "SCM_CountLoop": 33846,
+    "SCM_HaveFirst": 33842,
+    "SCM_HaveLength": 33861,
+    "SD2_CHKSUM_ERR": 33523,
+    "SD2_CHK_OK": 33526,
+    "SD2_CONN_ERR": 33484,
+    "SD2_EXIT": 33555,
+    "SD2_HS_ERR": 33481,
+    "SD2_HS_LOOP": 33402,
+    "SD2_RETRY": 33436,
+    "SD2_SEND_DONE": 33487,
+    "SECTORSIZE": 512,
+    "SENDDATA": 33396,
+    "SENDNEXT": 161,
+    "SLTATR": 64713,
+    "SNSMAT": 321,
+    "STDOUTTONULL": 33907,
+    "STDOUTTONULL0": 33911,
+    "STORE_BYTE": 33700,
+    "STORE_BYTE_1": 33726,
+    "STREXIT": 34023,
+    "STRTOHEX": 33997,
+    "STRTOHEX_LOOP": 34003,
+    "SendCommandToMSXPi": 33836,
+    "TEXTTERMINATOR": 0,
+    "USR": 63480,
+    "VALTYP": 63075,
+    "WRSLT": 20,
+    "WSLREG": 315,
+    "XF365": 62309,
+    "arytab": 63172,
+    "bad_pid": 33205,
+    "bank_service": 32814,
+    "boot": 32774,
+    "check_exit": 32883,
+    "code_end": 34665,
+    "command": 61766,
+    "current": 61938,
+    "desired": 61939,
+    "desired_music": 32862,
+    "exchange": 33267,
+    "exchange_error": 33339,
+    "exit_enabled": 37376,
+    "exit_reset": 32934,
+    "filename_copy": 33115,
+    "filename_found": 33089,
+    "filename_next": 33082,
+    "filename_plain": 33122,
+    "gap_frames": 37377,
+    "gateway_end": 61743,
+    "gateway_image": 32950,
+    "goonies_size_ok": 33668,
+    "goonies_wait_done": 34172,
+    "goonies_wait_loop": 34158,
+    "goonies_wait_pass": 34155,
+    "gw_done": 61740,
+    "gw_idle": 61704,
+    "gw_music": 61723,
+    "gw_record": 61737,
+    "gw_req": 61696,
+    "gw_restore": 61698,
+    "handshake_err": 33594,
+    "handshake_exit": 33590,
+    "handshake_exit_err": 33595,
+    "link_failed": 61941,
+    "loop_prefix": 61755,
+    "music_decided": 33047,
+    "music_id": 32997,
+    "music_not_detected": 33028,
+    "muted": 61697,
+    "native_silent": 32881,
+    "parse_pid": 33143,
+    "pid": 61927,
+    "pid_done": 33190,
+    "pid_tail": 33175,
+    "play_prefix": 61744,
+    "prefix_ready": 33106,
+    "r2_chk_ok": 33785,
+    "r2_chksum_err": 33781,
+    "r2_conn_err": 33732,
+    "r2_conn_err_x": 33736,
+    "r2_handshake_err_x": 33741,
+    "r2_handshake_loop": 33561,
+    "r2_header_err": 33651,
+    "r2_header_ok": 33655,
+    "r2_payload_done": 33746,
+    "r2_payload_loop": 33691,
+    "r2_retry": 33609,
+    "r2_unexpecteddata": 33728,
+    "resetMSXPI": 33391,
+    "resident_end": 40960,
+    "response": 61943,
+    "response_index": 61942,
+    "response_more": 33326,
+    "response_next": 33287,
+    "rt_data_end": 62200,
+    "rt_data_image": 34209,
+    "service": 33007,
+    "silence_frames": 61940,
+    "sound_map": 36864,
+    "start_music": 33072,
+    "stop_command": 61905,
+    "stop_copy": 33218,
+    "stop_digits": 61916,
+    "stop_music": 33212,
+    "stop_ok": 33262,
+    "strend": 63174,
+    "track_modes": 37120,
+    "track_names": 37392,
+    "txttab": 63094,
+    "unmute": 32849,
+    "vartab": 63170
+  }
+}

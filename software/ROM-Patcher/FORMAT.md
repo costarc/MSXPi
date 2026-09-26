@@ -152,5 +152,6 @@ algorithm for every mapper or cartridge.
 
 The build manifest records input/output hashes, profile identity/fingerprint,
 effective music settings, assigned track indices, symbols, and requirements.
-It contains no timestamp, so identical input/profile/configuration gives
+It is written to `builds/<output name>.json` beside the profile, never next to
+the ROM. It contains no timestamp, so identical input/profile/configuration gives
 identical ROM bytes and manifest content.

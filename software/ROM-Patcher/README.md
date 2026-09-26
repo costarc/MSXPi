@@ -27,7 +27,10 @@ python patch_rom.py "C:\Users\roniv\Dev\MSX\gameroms\GOONIES.ROM" --music my-mus
 Python on Linux/macOS uses the same command with local paths (`python3` where
 appropriate). The default profile is `profiles/goonies/profile.json`.
 An explicit `--profile path/to/profile.json` selects another analysis package.
-The output and its `.ROM.json` build manifest must not already exist. The
+The output ROM must not already exist. Its build manifest is written to the
+profile's `builds/` folder as `<output name>.json` (for example
+`profiles/goonies/builds/GOONIES_REMIX.ROM.json`), not beside the ROM, so a
+folder served to msxarch lists only games; a rebuild replaces it. The
 original ROM is never modified. Only the identified 32 KiB Goonies revision
 is accepted (SHA-256 is recorded in the profile).
 
@@ -107,6 +110,12 @@ emulated read-only cartridge cannot erase its own header. Closing the emulator
 or pressing its external reset button bypasses the exit hook. If the server
 connection has failed after starting music, the game can restore native audio
 and exit, but it cannot guarantee that the unreachable server stopped its player.
+
+## Other profiles
+
+- **Arctic** (128 KiB MSX2 cartridge, ASCII16 output):
+  see [profiles/arctic/README.md](profiles/arctic/README.md). Pass
+  `--profile profiles/arctic/profile.json`.
 
 ## Create another game's analysis package
 
