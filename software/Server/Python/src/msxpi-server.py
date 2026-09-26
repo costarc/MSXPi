@@ -4352,8 +4352,11 @@ def renderpage(parms=None):
     except Exception as exc:
         print(f"renderpage: {exc}")
         detail = (str(exc).splitlines() or [type(exc).__name__])[0]
-        message = ("renderpage: " + detail)[:240]
+        message = ("showpage: " + detail)[:240]
         return sendmultiblock(message.encode("ascii", "replace"), RC_FAILED)
+    if not payload:
+        # scroll at the top or bottom: nothing to draw.
+        return sendmultiblock(b"END", RC_SUCCNOSTD)
     return sendmultiblock(payload)
 
 # showpage is the public command name used by the combined `p` client.

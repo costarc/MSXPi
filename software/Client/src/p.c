@@ -33,7 +33,6 @@
 #include "../../C-common/header/msxpi.h"
 #include <string.h>
 
-#define SHOWPAGE_EMBEDDED
 #include "showpage.c"
 
 // ----------------------------------------------------------------------

@@ -12,7 +12,17 @@ PALETTE = ((0,0,0), (0,0,0), (1,6,1), (3,7,3), (1,1,7),
            (6,6,1), (6,6,4), (1,4,1), (6,2,5), (5,5,5), (7,7,7))
 PAYLOAD_SIZE = 4 + 64 + 6144 * 2
 SCREEN_SIZE = (256, 192)
+SCREEN6_GREYS = [(0, 0, 0), (3, 3, 3), (5, 5, 5), (7, 7, 7)]
 BROWSER_SIZE = (1024, 768)
+# Browser width used for every page. Below ~1000px responsive sites switch to
+# one column (sidebars move under the content); 768 keeps text smaller than a
+# phone layout while staying readable on the MSX.
+RENDER_WIDTH = 768
+# Smallest readable glyph on the MSX, in native lines (the MSX font is 8).
+MIN_TEXT_LINES = 8
+# Raise every text size to at least %dpx; em keeps larger headings larger.
+# A fixed line-height would make the enlarged lines overlap.
+MIN_FONT_CSS = "body * { font-size: max(1em, %dpx) !important; line-height: 1.25 !important; }"
 
 
 def resize_page(image, mode=4, source_size=BROWSER_SIZE):
@@ -69,8 +79,9 @@ def encode_screen4(image):
 MODES = {4: (256, 192, 64), 6: (512, 212, 128), 8: (256, 212, 256)}
 MAX_CSS_HEIGHT = 163840
 MAX_CSS_WIDTH = 4096
-MAX_ROWS = 16
-SCROLL_STEP = 8
+# Rows per request. Responses larger than one 4KB block are streamed with
+# sendmultiblock(); every stride divides 4096, so blocks hold whole rows.
+MAX_ROWS = 256
 
 
 @dataclass(frozen=True)
@@ -114,15 +125,14 @@ def encode_page(image, mode):
                 data.extend(encoded[68 + i] for i in offsets)
                 data.extend(encoded[6212 + i] for i in offsets)
     elif mode == 6:
-        # One stable, page-wide four-colour palette avoids colour changes
-        # while scrolling. Quantize first; send the matching V9938 palette.
-        quantized = image.quantize(colors=4, method=Image.Quantize.MEDIANCUT,
-                                   dither=Image.Dither.NONE)
-        rgb = quantized.getpalette()
-        entries = [tuple(round(c * 7 / 255) for c in rgb[i*3:i*3+3])
-                   for i in range(4)] + [(0, 0, 0)] * 12
+        # Fixed four-level grey scale. A per-page adaptive palette spends its
+        # four entries on the (mostly white) background and leaves text a
+        # single mid tone; by brightness, text is always dark on light.
+        entries = SCREEN6_GREYS + [(0, 0, 0)] * 12
         palette = bytes(v for i, colour in enumerate(entries) for v in (i, *colour))
-        pixels = quantized.tobytes()
+        # Nearest of the levels 0, 3/7, 5/7 and 1 of full brightness.
+        pixels = image.convert("L").point(
+            lambda v: 0 if v < 55 else 1 if v < 146 else 2 if v < 219 else 3).tobytes()
         for i in range(0, len(pixels), 4):
             data.append((pixels[i] << 6) | (pixels[i+1] << 4) |
                         (pixels[i+2] << 2) | pixels[i+3])
@@ -158,14 +168,21 @@ def render_url(url, mode=4):
             # A native-width viewport activates mobile reflow, but also makes
             # responsive sites choose oversized mobile typography. Capture at
             # 2x and downsample to native pixels for a more usable balance.
-            render_width = native_width * 2
-            render_height = native_height * 2
+            # One layout width for every mode; 4:3 for SCREEN 6, whose 512
+            # pixels are narrow, and the native aspect for SCREEN 4 and 8.
+            render_width = RENDER_WIDTH
+            render_height = (RENDER_WIDTH * 3 // 4 if mode == 6 else
+                             RENDER_WIDTH * native_height // native_width)
             page = browser.new_page(viewport={"width": render_width, "height": render_height},
                                     device_scale_factor=1)
             page.set_default_timeout(15000)
             response = page.goto(url, wait_until="load", timeout=30000)
             if response is not None and response.status >= 400:
                 raise ValueError("HTTP %d" % response.status)
+            # Downscaling makes 14-16px body text about 5 lines tall, which is
+            # unreadable; enforce a minimum size before the page is measured.
+            min_font = -(-MIN_TEXT_LINES * render_height // native_height)
+            page.add_style_tag(content=MIN_FONT_CSS % min_font)
             # Full-page screenshots do not reliably trigger lazy-loaded
             # images. Force image loading, visit each document band so
             # IntersectionObserver-based sites schedule their resources, and
@@ -209,16 +226,42 @@ def render_url(url, mode=4):
 
 
 _page = None
+_top = 0
+
+
+def scroll_page(page, top, lines):
+    """Move the view by lines (negative = up), clamped to the document.
+
+    Returns (new_top, rows). Down: the rows entering at the bottom, top to
+    bottom. Up: the rows entering at the top, bottom to top, so the client
+    can place each row as it arrives without knowing the final count.
+    """
+    visible = MODES[page.mode][1]
+    new_top = max(0, min(top + lines, page.height - visible))
+    stride = MODES[page.mode][2]
+    if new_top > top:
+        return new_top, page.data[(top + visible) * stride:(new_top + visible) * stride]
+    rows = bytearray()
+    for row in range(top - 1, new_top - 1, -1):
+        rows += page.data[row * stride:(row + 1) * stride]
+    return new_top, bytes(rows)
 
 
 def handle_command(parameters):
-    """One cached document for the server's single MSX command connection."""
-    global _page
+    """One cached document for the server's single MSX command connection.
+
+    An empty result means there was nothing to send (scroll at top/bottom)."""
+    global _page, _top
     tokens = shlex.split(parameters)
     if tokens and tokens[0].lower() == "rows":
         if len(tokens) != 3 or _page is None:
             raise ValueError("No cached page or invalid row request")
         return _page.rows(int(tokens[1]), int(tokens[2]))
+    if tokens and tokens[0].lower() == "scroll":
+        if len(tokens) != 2 or _page is None:
+            raise ValueError("No cached page or invalid scroll request")
+        _top, rows = scroll_page(_page, _top, int(tokens[1]))
+        return rows
     if tokens == ["close"]:
         _page = None
         return b"OK"
@@ -232,10 +275,11 @@ def handle_command(parameters):
         elif url is None:
             url = token
         else:
-            raise ValueError("Usage: RENDERPA [/4|/6|/8] http[s]://url")
+            raise ValueError("Usage: P SHOWPAGE [/4|/6|/8] http[s]://url")
     if url is None:
-        raise ValueError("Usage: RENDERPA [/4|/6|/8] http[s]://url")
+        raise ValueError("Usage: P SHOWPAGE [/4|/6|/8] http[s]://url")
     # Release the old cache before starting another render, including failures.
     _page = None
+    _top = 0
     _page = render_url(url, mode)
     return _page.header()
