@@ -3,6 +3,7 @@ from io import BytesIO
 from itertools import combinations_with_replacement
 from urllib.parse import urlsplit
 from dataclasses import dataclass
+import re
 import shlex
 import struct
 
@@ -19,7 +20,10 @@ BROWSER_SIZE = (1024, 768)
 # phone layout while staying readable on the MSX.
 RENDER_WIDTH = 768
 # Smallest readable glyph on the MSX, in native lines (the MSX font is 8).
-MIN_TEXT_LINES = 8
+# /f<n> overrides it per page, within FONT_LINES_RANGE.
+MIN_TEXT_LINES = 10
+FONT_LINES_RANGE = range(4, 33)
+USAGE = "Usage: P SHOWPAGE [/4|/6|/8] [/f<4-32>] http[s]://url"
 # Raise every text size to at least %dpx; em keeps larger headings larger.
 # A fixed line-height would make the enlarged lines overlap.
 MIN_FONT_CSS = "body * { font-size: max(1em, %dpx) !important; line-height: 1.25 !important; }"
@@ -147,7 +151,7 @@ def encode_page(image, mode):
     return RenderedPage(mode, image.height, palette, bytes(data))
 
 
-def render_url(url, mode=4):
+def render_url(url, mode=4, text_lines=MIN_TEXT_LINES):
     """Capture once, resize to the selected MSX display and cache every row."""
     if mode not in MODES:
         raise ValueError("Screen mode must be /4, /6 or /8")
@@ -181,7 +185,7 @@ def render_url(url, mode=4):
                 raise ValueError("HTTP %d" % response.status)
             # Downscaling makes 14-16px body text about 5 lines tall, which is
             # unreadable; enforce a minimum size before the page is measured.
-            min_font = -(-MIN_TEXT_LINES * render_height // native_height)
+            min_font = -(-text_lines * render_height // native_height)
             page.add_style_tag(content=MIN_FONT_CSS % min_font)
             # Full-page screenshots do not reliably trigger lazy-loaded
             # images. Force image loading, visit each document band so
@@ -265,21 +269,26 @@ def handle_command(parameters):
     if tokens == ["close"]:
         _page = None
         return b"OK"
-    mode, url = 4, None
+    mode, url, text_lines = 4, None, None
     have_mode = False
     for token in tokens:
-        if token.startswith("/"):
+        font = re.fullmatch(r"/f(\d+)", token, re.I)
+        if font:
+            if text_lines is not None or int(font.group(1)) not in FONT_LINES_RANGE:
+                raise ValueError("Font size: one /f<n>, n from 4 to 32 (default 10)")
+            text_lines = int(font.group(1))
+        elif token.startswith("/"):
             if token not in ("/4", "/6", "/8") or have_mode:
                 raise ValueError("Specify one screen mode: /4, /6 or /8")
             mode, have_mode = int(token[1:]), True
         elif url is None:
             url = token
         else:
-            raise ValueError("Usage: P SHOWPAGE [/4|/6|/8] http[s]://url")
+            raise ValueError(USAGE)
     if url is None:
-        raise ValueError("Usage: P SHOWPAGE [/4|/6|/8] http[s]://url")
+        raise ValueError(USAGE)
     # Release the old cache before starting another render, including failures.
     _page = None
     _top = 0
-    _page = render_url(url, mode)
+    _page = render_url(url, mode, text_lines or MIN_TEXT_LINES)
     return _page.header()

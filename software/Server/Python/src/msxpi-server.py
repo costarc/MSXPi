@@ -69,7 +69,7 @@ except ImportError:
 
 
 version = "1.6"
-BuildId = "20260919.060"
+BuildId = "20260926.061"
 
 CMDSIZE = 9
 MSGSIZE = 128

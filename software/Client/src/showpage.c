@@ -1,5 +1,5 @@
 /* showpage - web pages rendered by the server for SCREEN 4, 6 or 8.
- * Included by p.c; run as: P SHOWPAGE [/4|/6|/8] <url>
+ * Included by p.c; run as: P SHOWPAGE [/4|/6|/8] [/f<n>] <url>
  * Copyright (c) 2026 Ronivon Costa. MIT license (see repository LICENSE).
  *
  * The server captures the page, scales it to the width, visible height and
@@ -211,7 +211,8 @@ int ShowPageMain(const char *args)
         return 1;
     }
     if (!args || !*args) {
-        Print("Usage: P SHOWPAGE [/4|/6|/8] http[s]://url\r\n");
+        Print("Usage: P SHOWPAGE [/4|/6|/8] [/f<4-32>] http[s]://url\r\n");
+        Print("  /f<n>: minimum text height in lines (default 10)\r\n");
         return 1;
     }
     /* SCREEN 7/8 interleave both VRAM banks; with 64KB VRAM they show
