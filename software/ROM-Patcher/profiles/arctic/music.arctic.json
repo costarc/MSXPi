@@ -1,0 +1,78 @@
+{
+  "tracks": {
+    "track_01": {
+      "filename": "artic_01.mp3",
+      "mode": "loop"
+    },
+    "track_02": {
+      "filename": "artic_02.mp3",
+      "mode": "loop"
+    },
+    "track_03": {
+      "filename": "artic_03.mp3",
+      "mode": "loop"
+    },
+    "track_04": {
+      "filename": "artic_04.mp3",
+      "mode": "loop"
+    },
+    "track_05": {
+      "filename": "artic_05.mp3",
+      "mode": "loop"
+    },
+    "track_06": {
+      "filename": "artic_06.mp3",
+      "mode": "loop"
+    },
+    "track_07": {
+      "filename": "artic_07.mp3",
+      "mode": "loop"
+    },
+    "track_08": {
+      "filename": "artic_08.mp3",
+      "mode": "loop"
+    },
+    "track_09": {
+      "filename": "artic_09.mp3",
+      "mode": "loop"
+    },
+    "track_10": {
+      "filename": "artic_10.mp3",
+      "mode": "loop"
+    },
+    "track_11": {
+      "filename": "artic_11.mp3",
+      "mode": "loop"
+    },
+    "track_12": {
+      "filename": "artic_12.mp3",
+      "mode": "loop"
+    },
+    "track_13": {
+      "filename": "artic_13.mp3",
+      "mode": "loop"
+    },
+    "track_14": {
+      "filename": "artic_14.mp3",
+      "mode": "loop"
+    }
+  },
+  "sounds": {
+    "01": "track_01",
+    "02": "track_02",
+    "03": "track_03",
+    "04": "track_04",
+    "05": "track_05",
+    "06": "track_06",
+    "07": "track_07",
+    "08": "track_08",
+    "09": "track_09",
+    "0a": "track_10",
+    "0b": "track_11",
+    "0c": "track_12",
+    "0d": "track_13",
+    "0e": "track_14"
+  },
+  "exit_enabled": true,
+  "gap_frames": 0
+}
