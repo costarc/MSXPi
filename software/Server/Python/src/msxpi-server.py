@@ -313,6 +313,7 @@ def build_rom_header(mapper_type, bank_size_kb, bank_count, total_size):
 # commercial mapper layouts.
 from mapper_detect import (detect_mapper as _detect_mapper_v2,
                             patch_bank_switches, patch_indexed_switches,
+                            patch_page2_slot_selects,
                             PATCH_WINDOWS,
                             neutralise_rom_writes, neutralise_scc_writes,
                             MAPPER_KONAMI_SCC,
@@ -336,7 +337,7 @@ def handlers_for(mapper_type, h):
     return None
 
 
-def patch_for_msx(buf, mapper_type, handlers):
+def patch_for_msx(buf, mapper_type, handlers, slot_handlers=None):
     """Convert the ROM's bank-switch writes into CALLs to the MSX-side
     handlers, so the MSX only has to store blocks and run. Scanning a 128KB ROM
     on a 3.58MHz Z80 cost 16KB per storage segment before the game started."""
@@ -357,6 +358,14 @@ def patch_for_msx(buf, mapper_type, handlers):
         buf, m = patch_indexed_switches(buf, mapper_type, handlers[6])
         if m:
             print(f"patched {m} computed window selects")
+        n += m
+    # Ninth and tenth addresses: the ASCII16 page-2 work-RAM and cartridge
+    # selects, for games that page their RAM into 8000h with ENASLT
+    # (ARCTIC.ROM) - see patch_page2_slot_selects.
+    if slot_handlers and mapper_type == MAPPER_ASCII16:
+        buf, m = patch_page2_slot_selects(buf, *slot_handlers)
+        if m:
+            print(f"patched {m} page-2 slot selects")
         n += m
     return buf, n
 
@@ -4213,6 +4222,7 @@ def msxarchive(parms = None):
                 # segments free for the game; absent => not checked here.
                 msx_handlers = None
                 msx_free_segments = None
+                msx_slot_handlers = None
                 try:
                     fields = str(parm).split()
                     file_num = int(fields[0])
@@ -4220,6 +4230,8 @@ def msxarchive(parms = None):
                         msx_handlers = tuple(int(f, 16) for f in fields[1:8])
                     if len(fields) >= 9:
                         msx_free_segments = int(fields[8], 16)
+                    if len(fields) >= 11:
+                        msx_slot_handlers = (int(fields[9], 16), int(fields[10], 16))
                 except (ValueError, TypeError, IndexError):
                     return reject(f"Invalid input: {cmd}")
 
@@ -4280,7 +4292,8 @@ def msxarchive(parms = None):
                         print(f"{filename}: not in the ROM database - "
                               f"detected mapper type {mapper_type}")
                     if mapper_type is not None and msx_handlers:
-                        buf, npatch = patch_for_msx(buf, mapper_type, msx_handlers)
+                        buf, npatch = patch_for_msx(buf, mapper_type, msx_handlers,
+                                                     msx_slot_handlers)
                         print(f"{filename}: patched {npatch} bank-switch sites "
                               f"server-side")
                     if mapper_type is None:
@@ -4289,7 +4302,12 @@ def msxarchive(parms = None):
                     if len(buf) > ROM_MAX_SIZE:
                         return reject(f"{filename} ({len(buf)} bytes) exceeds the "
                                       f"{ROM_MAX_SIZE} byte cap.")
-                    bank_count = len(buf) // (bank_size_kb * 1024)
+                    # Rounded up: a patched ROM may end part-way into its last
+                    # bank (ARCTIC_MSXPI.ROM is 128KB + an 8KB runtime) rather
+                    # than being padded to a power of two. The MSX allocates
+                    # whole banks but receives only total_size bytes.
+                    bank_bytes = bank_size_kb * 1024
+                    bank_count = (len(buf) + bank_bytes - 1) // bank_bytes
                     print(f"{filename}: detected mapper type {mapper_type}, "
                           f"{bank_size_kb}KB banks, {bank_count} banks")
                     # Refuse a ROM the MSX has no room for BEFORE sending it:

@@ -1,0 +1,651 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 1,
+  "id": "nemesis-msxpi-konami-v1",
+  "source": {
+    "size": 131072,
+    "sha256": "3210f8a0f2309dd4b9a89fc2b24d0f178ce4393a0a1f2854fbce545c361261bc"
+  },
+  "output": {
+    "size": 131072,
+    "fill": 0,
+    "mapper": "Konami"
+  },
+  "requirements": [
+    "MSXPi msxarch writable RAM cartridge loader",
+    "At least 16 KiB page-3 RAM (runtime at C000-DFFF)",
+    "MSXPi music play/loop/stop with decimal playback IDs",
+    "Exit requires msxarch RAM loading; clear server ROM cache after replacing a named ROM"
+  ],
+  "assets": {
+    "runtime": {
+      "file": "assets/runtime.bin",
+      "sha256": "21bd78dc6898c9c99bc3441802e8c47dc16bcaae86d710a0c9eca2d72dd01e35"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 106496,
+      "destination": 0
+    },
+    {
+      "source": "runtime",
+      "offset": 0,
+      "size": 8192,
+      "destination": 106496
+    },
+    {
+      "source": "input",
+      "offset": 114688,
+      "size": 16384,
+      "destination": 114688
+    }
+  ],
+  "patches": [
+    {
+      "offset": 149,
+      "expected": "3ec3329afd212840229bfd",
+      "replace": "f33e0d320080c300800000",
+      "reason": "Load runtime bank 13 into page 3 RAM before the game hook starts"
+    },
+    {
+      "offset": 222,
+      "expected": "fb18fe",
+      "replace": "c326c0",
+      "reason": "Idle in the runtime, servicing music outside interrupt context"
+    },
+    {
+      "offset": 57890,
+      "expected": "790fc688",
+      "replace": "c35cc000",
+      "reason": "Silence mapped music channels only after successful external playback"
+    }
+  ],
+  "music": {
+    "abi": "msxpi-music-v1",
+    "map_offset": 110592,
+    "modes_offset": 110848,
+    "options_offset": 111104,
+    "names_offset": 111120,
+    "names_capacity": 3568,
+    "names_encoding": "escape-32"
+  },
+  "sounds": {
+    "26": {
+      "raw_ids": [
+        38,
+        166
+      ],
+      "description": "Title (three-channel sound 26h)"
+    },
+    "27": {
+      "raw_ids": [
+        39,
+        167
+      ],
+      "description": "Three-channel sound 27h; event name not established"
+    },
+    "28": {
+      "raw_ids": [
+        40,
+        168
+      ],
+      "description": "Three-channel sound 28h; event name not established"
+    },
+    "29": {
+      "raw_ids": [
+        41,
+        169
+      ],
+      "description": "Three-channel sound 29h; event name not established"
+    },
+    "2a": {
+      "raw_ids": [
+        42,
+        170
+      ],
+      "description": "Three-channel sound 2Ah; event name not established"
+    },
+    "2b": {
+      "raw_ids": [
+        43,
+        171
+      ],
+      "description": "Three-channel sound 2Bh; event name not established"
+    },
+    "2c": {
+      "raw_ids": [
+        44,
+        172
+      ],
+      "description": "Stage 1 (three-channel sound 2Ch)"
+    },
+    "2d": {
+      "raw_ids": [
+        45,
+        173
+      ],
+      "description": "Three-channel sound 2Dh; event name not established"
+    },
+    "2e": {
+      "raw_ids": [
+        46,
+        174
+      ],
+      "description": "Three-channel sound 2Eh; event name not established"
+    },
+    "2f": {
+      "raw_ids": [
+        47,
+        175
+      ],
+      "description": "Three-channel sound 2Fh; event name not established"
+    },
+    "30": {
+      "raw_ids": [
+        48,
+        176
+      ],
+      "description": "Three-channel sound 30h; event name not established"
+    },
+    "31": {
+      "raw_ids": [
+        49,
+        177
+      ],
+      "description": "Three-channel sound 31h; event name not established"
+    },
+    "32": {
+      "raw_ids": [
+        50,
+        178
+      ],
+      "description": "Three-channel sound 32h; event name not established"
+    },
+    "33": {
+      "raw_ids": [
+        51,
+        179
+      ],
+      "description": "Three-channel sound 33h; event name not established"
+    },
+    "34": {
+      "raw_ids": [
+        52,
+        180
+      ],
+      "description": "Three-channel sound 34h; event name not established"
+    },
+    "35": {
+      "raw_ids": [
+        53,
+        181
+      ],
+      "description": "Three-channel sound 35h; event name not established"
+    },
+    "36": {
+      "raw_ids": [
+        54,
+        182
+      ],
+      "description": "Three-channel sound 36h; event name not established"
+    },
+    "37": {
+      "raw_ids": [
+        55,
+        183
+      ],
+      "description": "Three-channel sound 37h; event name not established"
+    },
+    "38": {
+      "raw_ids": [
+        56,
+        184
+      ],
+      "description": "Three-channel sound 38h; event name not established"
+    },
+    "39": {
+      "raw_ids": [
+        57,
+        185
+      ],
+      "description": "Three-channel sound 39h; event name not established"
+    },
+    "3a": {
+      "raw_ids": [
+        58,
+        186
+      ],
+      "description": "Three-channel sound 3Ah; event name not established"
+    },
+    "3b": {
+      "raw_ids": [
+        59,
+        187
+      ],
+      "description": "Three-channel sound 3Bh; event name not established"
+    },
+    "3c": {
+      "raw_ids": [
+        60,
+        188
+      ],
+      "description": "Three-channel sound 3Ch; event name not established"
+    },
+    "3d": {
+      "raw_ids": [
+        61,
+        189
+      ],
+      "description": "Three-channel sound 3Dh; event name not established"
+    },
+    "3e": {
+      "raw_ids": [
+        62,
+        190
+      ],
+      "description": "Three-channel sound 3Eh; event name not established"
+    },
+    "3f": {
+      "raw_ids": [
+        63,
+        191
+      ],
+      "description": "Three-channel sound 3Fh; event name not established"
+    },
+    "40": {
+      "raw_ids": [
+        64,
+        192
+      ],
+      "description": "Three-channel sound 40h; event name not established"
+    },
+    "41": {
+      "raw_ids": [
+        65,
+        193
+      ],
+      "description": "Three-channel sound 41h; event name not established"
+    },
+    "42": {
+      "raw_ids": [
+        66,
+        194
+      ],
+      "description": "Requested at power-up (three-channel sound 42h)"
+    },
+    "43": {
+      "raw_ids": [
+        67,
+        195
+      ],
+      "description": "Three-channel sound 43h; event name not established"
+    },
+    "44": {
+      "raw_ids": [
+        68,
+        196
+      ],
+      "description": "Three-channel sound 44h; event name not established"
+    },
+    "45": {
+      "raw_ids": [
+        69,
+        197
+      ],
+      "description": "Three-channel sound 45h; event name not established"
+    },
+    "46": {
+      "raw_ids": [
+        70,
+        198
+      ],
+      "description": "Three-channel sound 46h; event name not established"
+    },
+    "47": {
+      "raw_ids": [
+        71,
+        199
+      ],
+      "description": "Player down (three-channel sound 47h)"
+    },
+    "48": {
+      "raw_ids": [
+        72,
+        200
+      ],
+      "description": "Three-channel sound 48h; event name not established"
+    },
+    "49": {
+      "raw_ids": [
+        73,
+        201
+      ],
+      "description": "Three-channel sound 49h; event name not established"
+    },
+    "4a": {
+      "raw_ids": [
+        74,
+        202
+      ],
+      "description": "Game over (three-channel sound 4Ah)"
+    },
+    "4b": {
+      "raw_ids": [
+        75,
+        203
+      ],
+      "description": "Three-channel sound 4Bh; event name not established"
+    },
+    "4c": {
+      "raw_ids": [
+        76,
+        204
+      ],
+      "description": "Three-channel sound 4Ch; event name not established"
+    },
+    "4d": {
+      "raw_ids": [
+        77,
+        205
+      ],
+      "description": "Game start (three-channel sound 4Dh)"
+    },
+    "4e": {
+      "raw_ids": [
+        78,
+        206
+      ],
+      "description": "Three-channel sound 4Eh; event name not established"
+    },
+    "4f": {
+      "raw_ids": [
+        79,
+        207
+      ],
+      "description": "Three-channel sound 4Fh; event name not established"
+    }
+  },
+  "defaults": {
+    "tracks": {
+      "nemesis_26": {
+        "filename": "NEMESIS_26.mp3",
+        "mode": "loop"
+      },
+      "nemesis_2c": {
+        "filename": "NEMESIS_2C.mp3",
+        "mode": "loop"
+      },
+      "nemesis_42": {
+        "filename": "NEMESIS_42.mp3",
+        "mode": "loop"
+      },
+      "nemesis_47": {
+        "filename": "NEMESIS_47.mp3",
+        "mode": "loop"
+      },
+      "nemesis_4a": {
+        "filename": "NEMESIS_4A.mp3",
+        "mode": "loop"
+      },
+      "nemesis_4d": {
+        "filename": "NEMESIS_4D.mp3",
+        "mode": "loop"
+      }
+    },
+    "sounds": {
+      "26": "nemesis_26",
+      "27": null,
+      "28": null,
+      "29": null,
+      "2a": null,
+      "2b": null,
+      "2c": "nemesis_2c",
+      "2d": null,
+      "2e": null,
+      "2f": null,
+      "30": null,
+      "31": null,
+      "32": null,
+      "33": null,
+      "34": null,
+      "35": null,
+      "36": null,
+      "37": null,
+      "38": null,
+      "39": null,
+      "3a": null,
+      "3b": null,
+      "3c": null,
+      "3d": null,
+      "3e": null,
+      "3f": null,
+      "40": null,
+      "41": null,
+      "42": "nemesis_42",
+      "43": null,
+      "44": null,
+      "45": null,
+      "46": null,
+      "47": "nemesis_47",
+      "48": null,
+      "49": null,
+      "4a": "nemesis_4a",
+      "4b": null,
+      "4c": null,
+      "4d": "nemesis_4d",
+      "4e": null,
+      "4f": null
+    },
+    "exit_enabled": true,
+    "gap_frames": 30
+  },
+  "symbols": {
+    "ATOHERR": 50405,
+    "ATOHEX": 50375,
+    "ATOHL": 50395,
+    "ATOHU": 50385,
+    "BLKSIZE": 512,
+    "BULKBLKSIZE": 4096,
+    "BUSY": 174,
+    "CALBAS": 345,
+    "CALLSTAT": 21928,
+    "CALSLT": 28,
+    "CHGET": 159,
+    "CHKPIRDY": 49700,
+    "CHPUT": 162,
+    "CHRGTR": 18022,
+    "CLEARBUF": 50407,
+    "CMDSIZE": 9,
+    "CONTROL_PORT1": 86,
+    "CONTROL_PORT2": 87,
+    "CSRX": 62429,
+    "CSRY": 62428,
+    "DATA_PORT1": 90,
+    "DEVICE": 64921,
+    "DSPFNK": 207,
+    "ENASLT": 36,
+    "ENDTRANSFER": 162,
+    "ERAFNK": 204,
+    "ERRFLG": 62484,
+    "ERRHAND": 16495,
+    "EXPTBL": 64705,
+    "FRESTR": 26576,
+    "FRMEVL": 19556,
+    "GETCPU": 387,
+    "GLOBALRETRIES": 3,
+    "GOONIES_WAIT_PASSES": 18,
+    "HIMEM": 64586,
+    "INITXT": 108,
+    "INLIN": 177,
+    "INLINBUF": 62814,
+    "MAXBUFSIZE": 8192,
+    "MAXBUFSIZE_HI": 32,
+    "MAXBUFSIZE_LO": 0,
+    "MAXRETRIES": 10,
+    "MSGSIZE": 128,
+    "MSXPICALLBUF": 58328,
+    "MSXPI_GETSTASH": 50421,
+    "MSXPI_STASH_BUF": 50428,
+    "PAYLOAD_ADVANCE": 50487,
+    "PAYLOAD_ESCAPE": 50525,
+    "PAYLOAD_ESCAPE_IFF_OFF": 50550,
+    "PAYLOAD_NO_CARRY": 50492,
+    "PAYLOAD_RX": 50436,
+    "PAYLOAD_RX_LOOP": 50439,
+    "PAYLOAD_TX": 50465,
+    "PAYLOAD_TX_LOOP": 50468,
+    "PAYLOAD_WAIT": 50497,
+    "PIREADBYTE": 49707,
+    "PIREADBYTE_ESC": 49724,
+    "PIWRITEBYTE": 49727,
+    "PIWRITEBYTE_ERR": 49738,
+    "PRINT": 50281,
+    "PRINT1": 50294,
+    "PRINTALFA": 50336,
+    "PRINTDIGIT": 50332,
+    "PRINTNLINE": 50300,
+    "PRINTNUM1": 50342,
+    "PRINTNUMBER": 50311,
+    "PRINTNUMERIC": 50340,
+    "PRINTPISTDOUT": 50214,
+    "PRINTPISTDOUT0": 50218,
+    "PROCNM": 64905,
+    "PUTCHAR": 49699,
+    "PerformHandshake": 49908,
+    "RAMAD1": 62274,
+    "RAMAD3": 62276,
+    "RC_BUFOVFLW": 227,
+    "RC_CHKSUM_ERR": 173,
+    "RC_CONNERR": 232,
+    "RC_ESCPRESSED": 226,
+    "RC_FAILED": 231,
+    "RC_FAILNOSTD": 236,
+    "RC_FILENOTFOUND": 230,
+    "RC_HANDSHAKEERR": 229,
+    "RC_INVALIDCOMMAND": 225,
+    "RC_INVALIDDATASIZE": 228,
+    "RC_READY": 234,
+    "RC_SUCCESS": 224,
+    "RC_SUCCNOSTD": 235,
+    "RC_TERMINATE": 237,
+    "RC_UNDEFINED": 239,
+    "RC_UNEXPECTEDDATA": 238,
+    "RC_WAIT": 233,
+    "RDSLT": 12,
+    "READY": 170,
+    "READY_ACK": 160,
+    "RECVDATA_ONEBLOCK": 49949,
+    "RESET": 255,
+    "RSLREG": 312,
+    "SCM_CountDone": 50204,
+    "SCM_CountLoop": 50196,
+    "SCM_HaveFirst": 50192,
+    "SCM_HaveLength": 50211,
+    "SD2_CHKSUM_ERR": 49873,
+    "SD2_CHK_OK": 49876,
+    "SD2_CONN_ERR": 49834,
+    "SD2_EXIT": 49905,
+    "SD2_HS_ERR": 49831,
+    "SD2_HS_LOOP": 49752,
+    "SD2_RETRY": 49786,
+    "SD2_SEND_DONE": 49837,
+    "SECTORSIZE": 512,
+    "SENDDATA": 49746,
+    "SENDNEXT": 161,
+    "SLTATR": 64713,
+    "SNSMAT": 321,
+    "STDOUTTONULL": 50257,
+    "STDOUTTONULL0": 50261,
+    "STORE_BYTE": 50050,
+    "STORE_BYTE_1": 50076,
+    "STREXIT": 50373,
+    "STRTOHEX": 50347,
+    "STRTOHEX_LOOP": 50353,
+    "SendCommandToMSXPi": 50186,
+    "TEXTTERMINATOR": 0,
+    "USR": 63480,
+    "VALTYP": 63075,
+    "WRSLT": 20,
+    "WSLREG": 315,
+    "XF365": 62309,
+    "arytab": 63172,
+    "bad_pid": 49555,
+    "boot_ram": 49166,
+    "check_exit": 49283,
+    "code_end": 51015,
+    "command": 50581,
+    "current": 50753,
+    "decode_name_byte": 49204,
+    "decode_name_char": 49212,
+    "decode_name_next": 49218,
+    "decode_names": 49201,
+    "desired": 50754,
+    "desired_music": 49221,
+    "exchange": 49617,
+    "exchange_error": 49689,
+    "exit_clear": 49334,
+    "exit_enabled": 53760,
+    "exit_game": 49321,
+    "filename_copy": 49471,
+    "filename_found": 49445,
+    "filename_next": 49438,
+    "gap_frames": 53761,
+    "goonies_size_ok": 50018,
+    "goonies_wait_done": 50522,
+    "goonies_wait_loop": 50508,
+    "goonies_wait_pass": 50505,
+    "handshake_err": 49944,
+    "handshake_exit": 49940,
+    "handshake_exit_err": 49945,
+    "idle": 49190,
+    "link_failed": 50756,
+    "loop_prefix": 50570,
+    "music_decided": 49403,
+    "music_id": 49353,
+    "music_not_detected": 49384,
+    "parse_pid": 49493,
+    "pid": 50742,
+    "pid_done": 49540,
+    "pid_tail": 49525,
+    "play_prefix": 50559,
+    "prefix_ready": 49462,
+    "r2_chk_ok": 50135,
+    "r2_chksum_err": 50131,
+    "r2_conn_err": 50082,
+    "r2_conn_err_x": 50086,
+    "r2_handshake_err_x": 50091,
+    "r2_handshake_loop": 49911,
+    "r2_header_err": 50001,
+    "r2_header_ok": 50005,
+    "r2_payload_done": 50096,
+    "r2_payload_loop": 50041,
+    "r2_retry": 49959,
+    "r2_unexpecteddata": 50078,
+    "resetMSXPI": 49741,
+    "resident_boot": 49152,
+    "resident_end": 57344,
+    "response": 50758,
+    "response_index": 50757,
+    "response_more": 49676,
+    "response_next": 49637,
+    "service": 49363,
+    "silence_frames": 50755,
+    "sound_map": 53248,
+    "start_music": 49428,
+    "stop_command": 50720,
+    "stop_copy": 49568,
+    "stop_digits": 50731,
+    "stop_music": 49562,
+    "stop_ok": 49612,
+    "strend": 63174,
+    "track_modes": 53504,
+    "track_names": 53776,
+    "txttab": 63094,
+    "vartab": 63170,
+    "volume_hook": 49244,
+    "volume_original": 49275
+  }
+}

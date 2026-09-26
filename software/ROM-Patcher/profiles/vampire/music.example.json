@@ -1,0 +1,88 @@
+{
+  "tracks": {
+    "vampire_80": {
+      "filename": "VAMPIRE_80.mp3",
+      "mode": "loop"
+    },
+    "vampire_81": {
+      "filename": "VAMPIRE_81.mp3",
+      "mode": "loop"
+    },
+    "vampire_82": {
+      "filename": "VAMPIRE_82.mp3",
+      "mode": "loop"
+    },
+    "vampire_83": {
+      "filename": "VAMPIRE_83.mp3",
+      "mode": "loop"
+    },
+    "vampire_84": {
+      "filename": "VAMPIRE_84.mp3",
+      "mode": "loop"
+    },
+    "vampire_85": {
+      "filename": "VAMPIRE_85.mp3",
+      "mode": "loop"
+    },
+    "vampire_86": {
+      "filename": "VAMPIRE_86.mp3",
+      "mode": "loop"
+    },
+    "vampire_87": {
+      "filename": "VAMPIRE_87.mp3",
+      "mode": "loop"
+    },
+    "vampire_88": {
+      "filename": "VAMPIRE_88.mp3",
+      "mode": "loop"
+    },
+    "vampire_89": {
+      "filename": "VAMPIRE_89.mp3",
+      "mode": "loop"
+    },
+    "vampire_8a": {
+      "filename": "VAMPIRE_8A.mp3",
+      "mode": "loop"
+    },
+    "vampire_8b": {
+      "filename": "VAMPIRE_8B.mp3",
+      "mode": "loop"
+    },
+    "vampire_8c": {
+      "filename": "VAMPIRE_8C.mp3",
+      "mode": "loop"
+    },
+    "vampire_8d": {
+      "filename": "VAMPIRE_8D.mp3",
+      "mode": "loop"
+    },
+    "vampire_8e": {
+      "filename": "VAMPIRE_8E.mp3",
+      "mode": "loop"
+    },
+    "vampire_8f": {
+      "filename": "VAMPIRE_8F.mp3",
+      "mode": "loop"
+    }
+  },
+  "sounds": {
+    "80": "vampire_80",
+    "81": "vampire_81",
+    "82": "vampire_82",
+    "83": "vampire_83",
+    "84": "vampire_84",
+    "85": "vampire_85",
+    "86": "vampire_86",
+    "87": "vampire_87",
+    "88": "vampire_88",
+    "89": "vampire_89",
+    "8a": "vampire_8a",
+    "8b": "vampire_8b",
+    "8c": "vampire_8c",
+    "8d": "vampire_8d",
+    "8e": "vampire_8e",
+    "8f": "vampire_8f"
+  },
+  "exit_enabled": true,
+  "gap_frames": 0
+}

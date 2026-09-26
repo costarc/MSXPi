@@ -1,0 +1,74 @@
+{
+  "tracks": {
+    "nemesis_26": {
+      "filename": "NEMESIS_26.mp3",
+      "mode": "loop"
+    },
+    "nemesis_2c": {
+      "filename": "NEMESIS_2C.mp3",
+      "mode": "loop"
+    },
+    "nemesis_42": {
+      "filename": "NEMESIS_42.mp3",
+      "mode": "loop"
+    },
+    "nemesis_47": {
+      "filename": "NEMESIS_47.mp3",
+      "mode": "loop"
+    },
+    "nemesis_4a": {
+      "filename": "NEMESIS_4A.mp3",
+      "mode": "loop"
+    },
+    "nemesis_4d": {
+      "filename": "NEMESIS_4D.mp3",
+      "mode": "loop"
+    }
+  },
+  "sounds": {
+    "26": "nemesis_26",
+    "27": null,
+    "28": null,
+    "29": null,
+    "2a": null,
+    "2b": null,
+    "2c": "nemesis_2c",
+    "2d": null,
+    "2e": null,
+    "2f": null,
+    "30": null,
+    "31": null,
+    "32": null,
+    "33": null,
+    "34": null,
+    "35": null,
+    "36": null,
+    "37": null,
+    "38": null,
+    "39": null,
+    "3a": null,
+    "3b": null,
+    "3c": null,
+    "3d": null,
+    "3e": null,
+    "3f": null,
+    "40": null,
+    "41": null,
+    "42": "nemesis_42",
+    "43": null,
+    "44": null,
+    "45": null,
+    "46": null,
+    "47": "nemesis_47",
+    "48": null,
+    "49": null,
+    "4a": "nemesis_4a",
+    "4b": null,
+    "4c": null,
+    "4d": "nemesis_4d",
+    "4e": null,
+    "4f": null
+  },
+  "exit_enabled": true,
+  "gap_frames": 30
+}

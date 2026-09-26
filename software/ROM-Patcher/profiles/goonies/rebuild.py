@@ -52,7 +52,7 @@ def rebuild(assembler):
     profile = {
         'format': 'msxpi-rom-patch', 'version': 1, 'id': 'goonies-msxpi-ascii16-v1',
         'source': {'size': 32768, 'sha256': '2ba602b1a17e4797da1588afe6e65640331c15746bf5959f4778b404be929dde'},
-        'output': {'size': 65536, 'fill': 0, 'mapper': 'ASCII16'},
+        'output': {'size': 0xC000, 'fill': 0, 'mapper': 'ASCII16'},
         'requirements': ['MSXPi music play/loop/stop commands with decimal playback IDs',
                          'Corrected msxarch RAM mapper loader (state at F900, handlers FAC0/FAD8)',
                          'At least 16 KiB page-3 RAM; validated setup Canon V-25 + MSXPi + ram4mb',
