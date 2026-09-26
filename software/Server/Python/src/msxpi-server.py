@@ -1494,7 +1494,7 @@ def pcopy(msxcmd="pcopy"):
         rc, msx_blocksize = pcopy_handshake()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
+        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     if subcmd == "writeblock":
@@ -1553,7 +1553,7 @@ def pcopy(msxcmd="pcopy"):
         rc, msx_blocksize = pcopy_handshake()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
+        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     # =========================================================================
@@ -3434,7 +3434,7 @@ def shut(parm=None):
     no_reply = (parm or "").strip().lower() in ("nowait", "noack", "quiet")
     if hostType == "RaspberryPi" and platform.system() == "Linux":
         if not no_reply:
-            sendmultiblock(b"OK")
+            sendmultiblock(b"Pi:Ok")
         print("Shutting down Raspberry Pi in 2 seconds")
         subprocess.Popen("sleep 2; sudo shutdown -h now", shell=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,

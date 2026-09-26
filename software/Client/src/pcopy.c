@@ -204,7 +204,7 @@ static uint8_t pcopy_upload(void) {
 
         rc = SendCommandToMSXPi("pcopy writeblock", false);
         if (rc != RC_SUCCESS) {
-    Print("Connection error during write.\r\n");
+    Print("\r\nConnection error during write.\r\n");
             fcb_close(&file);
             return parseConnError(rc);
         }
@@ -212,7 +212,7 @@ static uint8_t pcopy_upload(void) {
         Print(".");
         rc = SENDDATA2(buffer, n, &maxbufsize);
         if (rc != RC_SUCCESS) {
-    Print("Transfer aborted.\r\n");
+    Print("\r\nTransfer aborted.\r\n");
             fcb_close(&file);
             return parseConnError(rc);
         }
@@ -243,7 +243,7 @@ static uint8_t pcopy_upload(void) {
         return rc;
     }
 
-    Print("File copied to MSXPi successfully.\r\n");
+    Print("\r\nFile copied to MSXPi successfully.\r\n");
     return RC_SUCCESS;
 }
 
