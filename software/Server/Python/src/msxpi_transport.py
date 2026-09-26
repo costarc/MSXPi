@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-
 # Standard library imports
 from typing import Callable, Iterable, Optional, Tuple
 import time
@@ -39,7 +38,7 @@ import socket
 # Third-party imports
 import mmap
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     RC_CONNERR,
@@ -48,7 +47,7 @@ from msxpi_const import (
     SYNCTRANSFTIMEOUT,
 )
 
-DISABLETIMEOUT = False      # Disable timeout checking (debug mode)
+DISABLETIMEOUT = False  # Disable timeout checking (debug mode)
 conn = None
 # Set by msxpi-server.py at start-up: RPi.GPIO on a Pi, and the pin numbers
 # from msxpi.ini.
@@ -61,6 +60,7 @@ hostType = "RaspberryPi"
 # even configured.
 RPI_SHUTDOWN = None
 press_time = None
+
 
 def detect_host():
     system = platform.system()
@@ -75,7 +75,11 @@ def detect_host():
         try:
             with open("/proc/cpuinfo", "r") as f:
                 cpuinfo = f.read()
-            if "Raspberry Pi" in cpuinfo or "BCM" in cpuinfo or "Raspberry" in platform.uname().node:
+            if (
+                "Raspberry Pi" in cpuinfo
+                or "BCM" in cpuinfo
+                or "Raspberry" in platform.uname().node
+            ):
                 return "RaspberryPi"
         except Exception:
             pass
@@ -83,8 +87,9 @@ def detect_host():
     else:
         return system
 
+
 def init_spi_bitbang():
-# Pin Setup:
+    # Pin Setup:
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SPI_CS, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.setup(SPI_SCLK, GPIO.OUT)
@@ -94,6 +99,7 @@ def init_spi_bitbang():
     if RPI_SHUTDOWN is not None:
         GPIO.setup(RPI_SHUTDOWN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     _init_fast_gpio()
+
 
 # =============================================================================
 # CHANGE 1 + 2: faster GPIO path for the SPI bit-bang.
@@ -124,12 +130,12 @@ def init_spi_bitbang():
 #     MSXPI_SLOW_GPIO=1 ./msxpi-server.py
 #
 # BCM2835/6/7 and BCM2711 GPIO register offsets, as 32-bit word indices:
-_GPSET0 = 0x1C >> 2      # write 1 to set   a pin high
-_GPCLR0 = 0x28 >> 2      # write 1 to clear a pin low
-_GPLEV0 = 0x34 >> 2      # read pin levels
+_GPSET0 = 0x1C >> 2  # write 1 to set   a pin high
+_GPCLR0 = 0x28 >> 2  # write 1 to clear a pin low
+_GPLEV0 = 0x34 >> 2  # read pin levels
 
 _FAST_GPIO = False
-_GPIO_REG  = None
+_GPIO_REG = None
 _NATIVE_GPIO = None
 
 # ---------------------------------------------------------------------------
@@ -140,11 +146,11 @@ _NATIVE_GPIO = None
 # that.  If "in transfer" comes back as a small fraction of elapsed, the cost is
 # in the protocol/Python layers above, or in waiting for the MSX - and no amount
 # of GPIO tuning will touch it.
-_PROFILE   = bool(os.environ.get("MSXPI_PROFILE"))
-_prof_n    = 0        # transfers completed
-_prof_busy = 0.0      # seconds inside SPI_ByteTransfer, total
-_prof_spin = 0.0      # of which: spinning on SPI_CS, i.e. waiting for the MSX
-_prof_t0   = None     # wall clock at the first transfer
+_PROFILE = bool(os.environ.get("MSXPI_PROFILE"))
+_prof_n = 0  # transfers completed
+_prof_busy = 0.0  # seconds inside SPI_ByteTransfer, total
+_prof_spin = 0.0  # of which: spinning on SPI_CS, i.e. waiting for the MSX
+_prof_t0 = None  # wall clock at the first transfer
 _PROF_EVERY = 1024
 
 
@@ -156,12 +162,16 @@ def _prof_report(force=False):
     elapsed = time.perf_counter() - _prof_t0
     per = _prof_busy / _prof_n * 1e6
     spin = _prof_spin / _prof_n * 1e6
-    print(f"[prof] {_prof_n} bytes | wall {elapsed:.2f}s "
-          f"({elapsed / _prof_n * 1e6:.0f} us/byte) | "
-          f"in SPI_ByteTransfer {_prof_busy:.2f}s ({per:.0f} us/byte, "
-          f"{100.0 * _prof_busy / elapsed:.1f}% of wall) | "
-          f"of which spinning on CS {spin:.0f} us/byte | "
-          f"unaccounted {100.0 * (elapsed - _prof_busy) / elapsed:.1f}%")
+    print(
+        f"[prof] {_prof_n} bytes | wall {elapsed:.2f}s "
+        f"({elapsed / _prof_n * 1e6:.0f} us/byte) | "
+        f"in SPI_ByteTransfer {_prof_busy:.2f}s ({per:.0f} us/byte, "
+        f"{100.0 * _prof_busy / elapsed:.1f}% of wall) | "
+        f"of which spinning on CS {spin:.0f} us/byte | "
+        f"unaccounted {100.0 * (elapsed - _prof_busy) / elapsed:.1f}%"
+    )
+
+
 _M_SCLK = _M_MISO = _M_MOSI = _M_CS = _M_RDY = 0
 
 
@@ -178,7 +188,9 @@ def _init_fast_gpio():
     _NATIVE_GPIO = None
 
     if os.environ.get("MSXPI_SLOW_GPIO"):
-        print("init_fast_gpio(): MSXPI_SLOW_GPIO set - using the original RPi.GPIO path")
+        print(
+            "init_fast_gpio(): MSXPI_SLOW_GPIO set - using the original RPi.GPIO path"
+        )
         return
 
     pins = (SPI_SCLK, SPI_MISO, SPI_MOSI, SPI_CS, RPI_READY)
@@ -188,10 +200,12 @@ def _init_fast_gpio():
 
     try:
         import ctypes
+
         fd = os.open("/dev/gpiomem", os.O_RDWR | os.O_SYNC)
         try:
-            mm = mmap.mmap(fd, 4096, mmap.MAP_SHARED,
-                           mmap.PROT_READ | mmap.PROT_WRITE, offset=0)
+            mm = mmap.mmap(
+                fd, 4096, mmap.MAP_SHARED, mmap.PROT_READ | mmap.PROT_WRITE, offset=0
+            )
         finally:
             os.close(fd)
         reg = (ctypes.c_uint32 * 1024).from_buffer(mm)
@@ -202,9 +216,9 @@ def _init_fast_gpio():
         # through RPi.GPIO.  If the offsets or the SoC are wrong this fails here
         # rather than silently corrupting every transfer.
         reg[_GPSET0] = m_rdy
-        hi_ok = (GPIO.input(RPI_READY) == 1)
+        hi_ok = GPIO.input(RPI_READY) == 1
         reg[_GPCLR0] = m_rdy
-        lo_ok = (GPIO.input(RPI_READY) == 0)
+        lo_ok = GPIO.input(RPI_READY) == 0
         if not (hi_ok and lo_ok):
             raise RuntimeError(f"register self-test failed (high={hi_ok} low={lo_ok})")
 
@@ -212,8 +226,8 @@ def _init_fast_gpio():
         _M_SCLK = 1 << SPI_SCLK
         _M_MISO = 1 << SPI_MISO
         _M_MOSI = 1 << SPI_MOSI
-        _M_CS   = 1 << SPI_CS
-        _M_RDY  = m_rdy
+        _M_CS = 1 << SPI_CS
+        _M_RDY = m_rdy
         _FAST_GPIO = True
         print("init_fast_gpio(): direct /dev/gpiomem path active (self-test passed)")
 
@@ -224,6 +238,7 @@ def _init_fast_gpio():
     if _FAST_GPIO and os.environ.get("MSXPI_NATIVE_GPIO") == "1":
         try:
             from msxpi_gpio_native import NativeGPIO
+
             native = NativeGPIO(_GPIO_REG, (_M_SCLK, _M_MISO, _M_MOSI, _M_CS, _M_RDY))
             # msxpi_gpio_native.py is a separate file, and a Pi can end up
             # running this server with an older copy of it. One without
@@ -233,17 +248,26 @@ def _init_fast_gpio():
             # answered mid-sector with an error string and every COPY to an
             # MSXPi drive failed with "Disk error writing". Only use an engine
             # that can burst both ways; the Python GPIO path below does.
-            missing = [m for m in ('read', 'write', 'read_burst', 'write_burst')
-                       if not callable(getattr(native, m, None))]
+            missing = [
+                m
+                for m in ("read", "write", "read_burst", "write_burst")
+                if not callable(getattr(native, m, None))
+            ]
             if missing:
-                raise AttributeError(f"msxpi_gpio_native.py is out of date, no {', '.join(missing)} "
-                                     f"- run update.sh")
+                raise AttributeError(
+                    f"msxpi_gpio_native.py is out of date, no {', '.join(missing)} "
+                    f"- run update.sh"
+                )
             _NATIVE_GPIO = native
-            print(f"init_fast_gpio(): native GPIO payload engine active "
-                  f"(half-period {_NATIVE_GPIO.half_period_ns} ns, "
-                  f"CS setup {getattr(_NATIVE_GPIO, 'cs_setup_ns', 0)} ns)")
+            print(
+                f"init_fast_gpio(): native GPIO payload engine active "
+                f"(half-period {_NATIVE_GPIO.half_period_ns} ns, "
+                f"CS setup {getattr(_NATIVE_GPIO, 'cs_setup_ns', 0)} ns)"
+            )
         except (OSError, ValueError, ImportError, AttributeError) as e:
-            print(f"init_fast_gpio(): native engine unavailable ({e}); using Python GPIO")
+            print(
+                f"init_fast_gpio(): native engine unavailable ({e}); using Python GPIO"
+            )
 
 
 def _spi_byte_fast(byte_out=None):
@@ -269,29 +293,29 @@ def _spi_byte_fast(byte_out=None):
         if _prof_t0 is None:
             _prof_t0 = _t_enter
 
-    reg[SET] = _M_RDY                       # RPI_READY high
-    while reg[LEV] & _M_CS:                 # spin until the CPLD asserts CS
+    reg[SET] = _M_RDY  # RPI_READY high
+    while reg[LEV] & _M_CS:  # spin until the CPLD asserts CS
         pass
 
     if _PROFILE:
         _t_spun = time.perf_counter()
 
-    reg[SET] = m_sclk                       # leading tick
+    reg[SET] = m_sclk  # leading tick
     reg[CLR] = m_sclk
 
     for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
         if byte_out is not None and (byte_out & bit):
             reg[SET] = m_miso
         else:
-            reg[CLR] = m_miso               # passive receive drives MISO low
+            reg[CLR] = m_miso  # passive receive drives MISO low
         reg[SET] = m_sclk
         if reg[LEV] & m_mosi:
             byte_in |= bit
         reg[CLR] = m_sclk
 
-    reg[SET] = m_sclk                       # trailing tick
+    reg[SET] = m_sclk  # trailing tick
     reg[CLR] = m_sclk
-    reg[CLR] = _M_RDY                       # RPI_READY low
+    reg[CLR] = _M_RDY  # RPI_READY low
 
     if _PROFILE:
         _t_done = time.perf_counter()
@@ -303,7 +327,6 @@ def _spi_byte_fast(byte_out=None):
     return RC_SUCCESS, byte_in
 
 
-
 def burst_capable() -> bool:
     """True when SPI_BurstOut can hold READY for a whole block (or no READY: TCP)."""
     return hostType != "RaspberryPi" or _NATIVE_GPIO is not None or _FAST_GPIO
@@ -312,7 +335,7 @@ def burst_capable() -> bool:
 # How long to wait for the MSX to collect a burst before giving up on it.
 # Generous next to a per-byte time of tens of microseconds, but short enough
 # that an abandoned burst cannot wedge the server.
-BURST_CS_TIMEOUT = 0.25     # seconds
+BURST_CS_TIMEOUT = 0.25  # seconds
 
 
 # -----------------------------------------------------------------------------
@@ -339,10 +362,10 @@ TCP_OP_HOLD = 0x02
 TCP_OP_CANCEL = 0x03
 TCP_OP_HELLO = 0x7E
 TCP_PROTOCOL_VERSION = 1
-TCP_HELLO_TIMEOUT = 1.0     # seconds for openMSX to answer the hello
-TCP_BURST_TIMEOUT = 10.0    # emulation can run slower than real time
+TCP_HELLO_TIMEOUT = 1.0  # seconds for openMSX to answer the hello
+TCP_BURST_TIMEOUT = 10.0  # emulation can run slower than real time
 _tcp_framed = False
-_tcp_rx = bytearray()       # received but not yet consumed
+_tcp_rx = bytearray()  # received but not yet consumed
 
 
 def tcp_handshake(c: socket.socket) -> bool:
@@ -396,11 +419,13 @@ def _tcp_cancel(got, count):
     except (socket.timeout, OSError, ConnectionError):
         return RC_CONNERR, None
     if len(got) == count:
-        return RC_SUCCESS, got      # the last one landed while cancelling
+        return RC_SUCCESS, got  # the last one landed while cancelling
     return RC_FAILED, None
 
 
-def tcp_exchange(misos: Iterable[int], timeout: Optional[float], hold: bool = True) -> Tuple[int, Optional[bytearray]]:
+def tcp_exchange(
+    misos: Iterable[int], timeout: Optional[float], hold: bool = True
+) -> Tuple[int, Optional[bytearray]]:
     """Offer bytes the way the Pi does, one CPLD transfer per byte.  hold=True
     keeps READY up across the run (a burst); hold=False drops READY after every
     byte, as SPI_ByteTransfer does, but still sends all offers in one write so
@@ -482,12 +507,12 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
     # including sshd, which drops the session.
     deadline = time.perf_counter() + BURST_CS_TIMEOUT
 
-    reg[SET] = _M_RDY                       # up once, for the whole burst
+    reg[SET] = _M_RDY  # up once, for the whole burst
     try:
         for byte_out in bytearray(data):
             spins = 0
-            while reg[LEV] & m_cs:          # each byte is still its own
-                                            # CPLD transfer, so CS still cycles
+            while reg[LEV] & m_cs:  # each byte is still its own
+                # CPLD transfer, so CS still cycles
                 spins += 1
                 # perf_counter() is far too slow to call every iteration, and
                 # this loop is the hot path; check it rarely instead.
@@ -505,7 +530,7 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
             reg[SET] = m_sclk
             reg[CLR] = m_sclk
     finally:
-        reg[CLR] = _M_RDY                   # and down exactly once
+        reg[CLR] = _M_RDY  # and down exactly once
     return RC_SUCCESS
 
 
@@ -529,7 +554,7 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
         # ordinary byte stream.  Read it in one go rather than byte by byte -
         # the MSX sends it as fast as OTIR can run.
         payload = bytearray()
-        quickack = getattr(socket, 'TCP_QUICKACK', None)
+        quickack = getattr(socket, "TCP_QUICKACK", None)
         try:
             conn.settimeout(None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
             while len(payload) < length:
@@ -557,7 +582,9 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
         try:
             data = _NATIVE_GPIO.read_burst(length)
             if early:
-                print("SPI_BurstIn: CS was already low before READY - the MSX started early")
+                print(
+                    "SPI_BurstIn: CS was already low before READY - the MSX started early"
+                )
             if _PROFILE:
                 _NATIVE_GPIO.report()
             return RC_SUCCESS, data
@@ -577,16 +604,16 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     payload = bytearray(length)
     deadline = time.perf_counter() + BURST_CS_TIMEOUT
 
-    reg[SET] = _M_RDY                       # up once, for the whole burst
+    reg[SET] = _M_RDY  # up once, for the whole burst
     try:
-        reg[CLR] = m_miso                   # passive receive drives MISO low
+        reg[CLR] = m_miso  # passive receive drives MISO low
         for i in range(length):
             spins = 0
             while reg[LEV] & m_cs:
                 spins += 1
                 if not (spins & 0x3FF) and time.perf_counter() > deadline:
                     return RC_FAILED, None
-            reg[SET] = m_sclk               # leading tick
+            reg[SET] = m_sclk  # leading tick
             reg[CLR] = m_sclk
             byte_in = 0
             for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
@@ -594,11 +621,11 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
                 if reg[LEV] & m_mosi:
                     byte_in |= bit
                 reg[CLR] = m_sclk
-            reg[SET] = m_sclk               # trailing tick
+            reg[SET] = m_sclk  # trailing tick
             reg[CLR] = m_sclk
             payload[i] = byte_in
     finally:
-        reg[CLR] = _M_RDY                   # and down exactly once
+        reg[CLR] = _M_RDY  # and down exactly once
     return RC_SUCCESS, payload
 
 
@@ -611,9 +638,10 @@ def tick_sclk():
     GPIO.output(SPI_SCLK, GPIO.HIGH)
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
+
 def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
-    
-    byte_in = 0    
+
+    byte_in = 0
     if hostType == "RaspberryPi":
         # GPIO-based SPI emulation
 
@@ -644,8 +672,10 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
         GPIO.output(RPI_READY, GPIO.LOW)
     elif _tcp_framed:
         # one offer, READY dropped after it - the per-byte GPIO contract
-        rc, got = tcp_exchange((0 if byte_out is None else byte_out,),
-                               None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
+        rc, got = tcp_exchange(
+            (0 if byte_out is None else byte_out,),
+            None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT,
+        )
         if rc != RC_SUCCESS:
             print(f"SPI_ByteTransfer(): virtual SPI transfer failed rc={rc:#04x}")
             return rc, None
@@ -664,20 +694,19 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
         else:
             try:
                 buf = conn.recv(1)
-                if buf == b'':   # connection closed
+                if buf == b"":  # connection closed
                     print("SPI_ByteTransfer(): connection closed by peer")
                     return RC_CONNERR, None
                 byte_in = buf[0]
             except socket.timeout:
                 print("SPI_ByteTransfer(): recv timed out")
-                return RC_FAILED,None
+                return RC_FAILED, None
             except IndexError:
                 print("SPI_ByteTransfer(): e-connection closed by peer")
                 return RC_CONNERR, None
 
-    
-    return RC_SUCCESS,byte_in
-    
+    return RC_SUCCESS, byte_in
+
 
 def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
     """Exactly length bytes; header, checksum and status remain at the caller."""
@@ -693,7 +722,9 @@ def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
     if hostType != "RaspberryPi" and _tcp_framed:
         return tcp_exchange(bytes(length), SYNCTRANSFTIMEOUT, hold=False)
     payload = bytearray(length)
-    quickack = getattr(socket, 'TCP_QUICKACK', None) if hostType != "RaspberryPi" else None
+    quickack = (
+        getattr(socket, "TCP_QUICKACK", None) if hostType != "RaspberryPi" else None
+    )
     for i in range(length):
         # Linux clears TCP_QUICKACK by itself after a few packets, and a burst
         # write arrives as hundreds of one-byte packets, so re-arm it while
@@ -730,7 +761,9 @@ def SPI_WritePayload(payload: bytes | bytearray) -> int:
             return rc
     return RC_SUCCESS
 
+
 _stopping = False
+
 
 def _system_stopping():
     """True once the Pi is shutting down or rebooting.  A server started then
@@ -741,13 +774,17 @@ def _system_stopping():
     global _stopping
     if not _stopping:
         try:
-            state = subprocess.run(["systemctl", "is-system-running"],
-                                   capture_output=True, text=True,
-                                   timeout=1).stdout.strip()
+            state = subprocess.run(
+                ["systemctl", "is-system-running"],
+                capture_output=True,
+                text=True,
+                timeout=1,
+            ).stdout.strip()
             _stopping = state == "stopping"
         except Exception:
             pass
     return _stopping
+
 
 def cpld_announce(online):
     """Tell the CPLD the server is online (True) or going offline (False).
@@ -762,7 +799,7 @@ def cpld_announce(online):
     must never stop the server."""
     if hostType != "RaspberryPi":
         return
-    if online and _stopping:        # set by _system_stopping(), see there
+    if online and _stopping:  # set by _system_stopping(), see there
         return
     try:
         if GPIO.input(SPI_CS) == GPIO.LOW:
@@ -780,6 +817,7 @@ def cpld_announce(online):
     except Exception:
         pass
 
+
 def release_gpio():
     """Clean exit: tell the CPLD we are going offline, then release the pins -
     except SCLK and MISO, which stay driven low.
@@ -790,7 +828,7 @@ def release_gpio():
     they are, so the lines stay quiet until power-off.  RPI_READY is still
     released as before - the /WAIT safety story relies on its pull-down."""
     global _stopping
-    _stopping = True                # nothing may relight the LED from here on
+    _stopping = True  # nothing may relight the LED from here on
     print("MSXPi Server: announcing offline to the CPLD")
     cpld_announce(False)
     try:
@@ -803,7 +841,10 @@ def release_gpio():
     except Exception:
         GPIO.cleanup()
 
-def initialize_connection(host: str, port: int, on_button: Callable) -> Optional[socket.socket]:
+
+def initialize_connection(
+    host: str, port: int, on_button: Callable
+) -> Optional[socket.socket]:
     if hostType == "RaspberryPi":
         init_spi_bitbang()
         # Before READY goes up, so the MSX cannot start a byte under it.
@@ -828,16 +869,21 @@ def initialize_connection(host: str, port: int, on_button: Callable) -> Optional
             except Exception:
                 pass
             try:
-                GPIO.add_event_detect(RPI_SHUTDOWN, GPIO.FALLING,
-                                      callback=on_button, bouncetime=200)
-                print(f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
-                      f"(press: reboot, hold 3 s: shutdown)")
+                GPIO.add_event_detect(
+                    RPI_SHUTDOWN, GPIO.FALLING, callback=on_button, bouncetime=200
+                )
+                print(
+                    f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
+                    f"(press: reboot, hold 3 s: shutdown)"
+                )
             except Exception as e:
                 # Losing the shutdown button is a far smaller problem than
                 # losing the server, so carry on rather than raise.
                 print(f"MSXPi Server: shutdown button unavailable ({e})")
         logger.info(f"[MSXPi Server on {hostType}] Listening on GPIOs:")
-        logger.info(f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **")
+        logger.info(
+            f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **"
+        )
         return None
     else:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

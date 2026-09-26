@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-
 # Standard library imports
 from typing import Optional, Tuple
 import logging
@@ -34,7 +33,8 @@ import logging
 # Third-party imports
 
 from msxpi_settings import TMPDIR
-logger = logging.getLogger('msxpi')
+
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     BURST_FLAG,
@@ -52,7 +52,14 @@ from msxpi_const import (
     READY_ACK,
 )
 from msxpi_ethglue import eth_handle_opcode
-from msxpi_transport import SPI_BurstIn, SPI_BurstOut, SPI_ByteTransfer, SPI_ReadPayload, SPI_WritePayload, burst_capable
+from msxpi_transport import (
+    SPI_BurstIn,
+    SPI_BurstOut,
+    SPI_ByteTransfer,
+    SPI_ReadPayload,
+    SPI_WritePayload,
+    burst_capable,
+)
 
 
 def pcopy_handshake() -> Tuple[int, int]:
@@ -161,8 +168,8 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
         # retry - see senddata_oneblock and the ROM's DSKIO_TXSIZE.
         burst = bool(length & BURST_FLAG)
         length &= ~BURST_FLAG
-        if burst and not globals().get('_burst_in_announced'):
-            globals()['_burst_in_announced'] = True
+        if burst and not globals().get("_burst_in_announced"):
+            globals()["_burst_in_announced"] = True
             print("recvdata2(): MSX sends /WAIT burst payloads - receiving them")
 
         # --- block_index ---
@@ -173,31 +180,39 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
         # Validate block index
         if block_index != expected_block_index:
             # Protocol drift
-            print(f"recvdata2: block index {block_index}, expected {expected_block_index} "
-                  f"(header_rc {header_rc:#04x}, len {length}, burst {burst}) - out of step")
+            print(
+                f"recvdata2: block index {block_index}, expected {expected_block_index} "
+                f"(header_rc {header_rc:#04x}, len {length}, burst {burst}) - out of step"
+            )
             return (RC_CONNERR, None)
 
         # Capacity checks
         if length > block_max:
             # MSX tried to send more than negotiated / allowed
-            print(f"recvdata2: block of {length} bytes exceeds the negotiated {block_max}")
+            print(
+                f"recvdata2: block of {length} bytes exceeds the negotiated {block_max}"
+            )
             return (RC_CONNERR, None)
         if len(data) + length > maxbufsize:
             # Would overflow caller's max buffer
-            print(f"recvdata2: {len(data)}+{length} bytes exceeds the {maxbufsize}-byte buffer")
+            print(
+                f"recvdata2: {len(data)}+{length} bytes exceeds the {maxbufsize}-byte buffer"
+            )
             return (RC_CONNERR, None)
 
         # --- Payload ---
         rc, payload = SPI_BurstIn(length) if burst else SPI_ReadPayload(length)
         if rc != RC_SUCCESS:
-            print(f"recvdata2: payload read failed rc={rc:#04x} "
-                  f"({'burst' if burst else 'polled'}, block {block_index}, {length} bytes)")
+            print(
+                f"recvdata2: payload read failed rc={rc:#04x} "
+                f"({'burst' if burst else 'polled'}, block {block_index}, {length} bytes)"
+            )
             return (RC_CONNERR, None)
         chksum = sum(payload)
 
         # --- Local checksum (Python receiver) ---
         right = chksum & 0xFF
-        left  = (chksum >> 8) & 0xFF
+        left = (chksum >> 8) & 0xFF
         local_sum = (right + left) & 0xFF
 
         # --- Receive MSX checksum ---
@@ -221,17 +236,19 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
             # loop is still waiting for a header, and the next command's bytes
             # then fail the block-index check - so a real checksum problem only
             # ever showed up as "dskiowrs: checksum error" with no cause.
-            print(f"recvdata2: checksum mismatch, block {block_index}, {length} bytes, "
-                  f"{'burst' if burst else 'polled'}: MSX {msxsum:#04x}, Pi {local_sum:#04x} - MSX resends")
+            print(
+                f"recvdata2: checksum mismatch, block {block_index}, {length} bytes, "
+                f"{'burst' if burst else 'polled'}: MSX {msxsum:#04x}, Pi {local_sum:#04x} - MSX resends"
+            )
             # DIAGNOSTIC (not for release): keep what a failed burst delivered,
             # to line it up against the source file - a duplicated byte shows
             # as a repeat at one offset, line noise as changed bits.
             if burst:
                 try:
-                    n = globals().get('_burst_dump_n', 0) + 1
-                    globals()['_burst_dump_n'] = n
+                    n = globals().get("_burst_dump_n", 0) + 1
+                    globals()["_burst_dump_n"] = n
                     dump = f"{TMPDIR}/msxpi-burst-mismatch-{n}.bin"
-                    with open(dump, 'wb') as f:
+                    with open(dump, "wb") as f:
                         f.write(bytes(payload))
                     print(f"recvdata2: received burst payload saved to {dump}")
                 except OSError as e:
@@ -261,8 +278,10 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
         # Expect READY_ACK from MSX
         rc, ack = SPI_ByteTransfer()
         if rc != RC_SUCCESS or ack != READY_ACK:
-            print(f"recvdata2: status handshake failed after block {block_index} "
-                  f"(rc={rc:#04x}, got {ack!r}, want READY_ACK {READY_ACK:#04x})")
+            print(
+                f"recvdata2: status handshake failed after block {block_index} "
+                f"(rc={rc:#04x}, got {ack!r}, want READY_ACK {READY_ACK:#04x})"
+            )
             return (RC_HANDSHAKEERR, None)
 
         # If this was the last block, we're done
@@ -270,6 +289,7 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
             return (RC_SUCCESS, bytes(data))
 
         # Otherwise header_rc == RC_READY: loop for next block
+
 
 def senddata(header_rc: int, payload: bytes | bytearray) -> int:
     """
@@ -435,10 +455,10 @@ def senddata(header_rc: int, payload: bytes | bytearray) -> int:
         # Build block from current offset
         remaining = total_size - offset
         block_size = msxmaxbuf if remaining > msxmaxbuf else remaining
-        block_bytes = payload[offset:offset + block_size]
+        block_bytes = payload[offset : offset + block_size]
         local_sum = compute_checksum(block_bytes)
 
-        is_last_block = (offset + block_size >= total_size)
+        is_last_block = offset + block_size >= total_size
         # First attempt header: RC_SUCCESS if last, else RC_READY
         base_header = RC_SUCCESS if is_last_block else RC_READY
 
@@ -545,6 +565,7 @@ def senddata(header_rc: int, payload: bytes | bytearray) -> int:
 
     MAX_BLOCK_RETRIES = 3
 
+
 def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
     """
     Python counterpart of RECVDATA2_ONEBLOCK().
@@ -645,7 +666,7 @@ def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
 
         # Local checksum
         right = chksum & 0xFF
-        left  = (chksum >> 8) & 0xFF
+        left = (chksum >> 8) & 0xFF
         local_sum = (right + left) & 0xFF
 
         # Receive MSX checksum
@@ -700,15 +721,21 @@ def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
     # -------------------------
 
     if header_rc == RC_SUCCESS:
-        return (RC_SUCCESS, bytes(payload))   # last block
+        return (RC_SUCCESS, bytes(payload))  # last block
 
     if header_rc == RC_READY:
-        return (RC_READY, bytes(payload))     # more blocks coming
+        return (RC_READY, bytes(payload))  # more blocks coming
 
-    return (RC_CONNERR, None)                 # unexpected header
+    return (RC_CONNERR, None)  # unexpected header
 
-def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_index: int = 0,
-                      burst: bool = False) -> int:
+
+def senddata_oneblock(
+    payload: bytes,
+    msx_blocksize: int,
+    header_rc: int,
+    block_index: int = 0,
+    burst: bool = False,
+) -> int:
     length = len(payload)
     if length > msx_blocksize:
         return RC_INVALIDDATASIZE
@@ -716,11 +743,13 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
     # payload with /WAIT (INIR) instead of byte by byte. Only when it asked,
     # and only for whole 256-byte runs (a 512-byte sector): the ROM's burst
     # loop has no room for a remainder. Anything else goes byte by byte.
-    wire_length = length | BURST_FLAG if burst and length and not length % 256 else length
+    wire_length = (
+        length | BURST_FLAG if burst and length and not length % 256 else length
+    )
 
     # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
     # Is performed by sendmultiblock() once before calling this function.
-    
+
     # 2. Send exactly one block with retries
     attempts = 0
     while True:
@@ -747,15 +776,18 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
 
         # payload
         chksum = sum(payload)
-        rc = SPI_BurstOut(payload) if wire_length & BURST_FLAG else SPI_WritePayload(payload)
+        rc = (
+            SPI_BurstOut(payload)
+            if wire_length & BURST_FLAG
+            else SPI_WritePayload(payload)
+        )
         if rc != RC_SUCCESS:
             print("senddata_oneblock(): FAILED sending payload")
             return RC_CONNERR
 
-
         # local checksum
         right = chksum & 0xFF
-        left  = (chksum >> 8) & 0xFF
+        left = (chksum >> 8) & 0xFF
         local_sum = (right + left) & 0xFF
 
         # send checksum
@@ -799,10 +831,10 @@ def senddata_oneblock(payload: bytes, msx_blocksize: int, header_rc: int, block_
 
     # 4. Interpret header_rc (what we told MSX)
     if header_rc == RC_SUCCESS:
-        return RC_SUCCESS   # last block
+        return RC_SUCCESS  # last block
     if header_rc == RC_READY:
-        return RC_READY     # more blocks follow
-    return RC_CONNERR       # unexpected header
+        return RC_READY  # more blocks follow
+    return RC_CONNERR  # unexpected header
 
 
 def PerformHandshake() -> Tuple[int, int]:
@@ -820,7 +852,9 @@ def PerformHandshake() -> Tuple[int, int]:
             SPI_ByteTransfer(READY_ACK)
             break
         else:
-            print(f"PerformHandshake(): discarded stray byte {hex(byte)} while waiting for READY")
+            print(
+                f"PerformHandshake(): discarded stray byte {hex(byte)} while waiting for READY"
+            )
 
     # Receive msx_blocksize
     rc, low = SPI_ByteTransfer()
@@ -833,6 +867,7 @@ def PerformHandshake() -> Tuple[int, int]:
     msx_blocksize = low | (high << 8)
 
     return RC_SUCCESS, msx_blocksize
+
 
 def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
     """
@@ -858,8 +893,8 @@ def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
     # way it is not part of the size.
     burst = bool(msx_blocksize & BURST_FLAG) and burst_capable()
     msx_blocksize &= ~BURST_FLAG
-    if burst and not globals().get('_burst_announced'):
-        globals()['_burst_announced'] = True
+    if burst and not globals().get("_burst_announced"):
+        globals()["_burst_announced"] = True
         print("sendmultiblock(): MSX asked for /WAIT burst payloads - enabled")
 
     offset = 0
@@ -900,19 +935,20 @@ def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
 
     return RC_SUCCESS
 
+
 def readParameters(errorMsg: str, needParm: bool = False) -> Tuple[int, Optional[str]]:
     rc, data = recvdata2()
 
     if rc != RC_SUCCESS:
         print(f"Pi:Error reading parameters")
-        encodederrorMsg = ('Pi:Error reading parameters').encode()
+        encodederrorMsg = ("Pi:Error reading parameters").encode()
         sendmultiblock(encodederrorMsg)
         return RC_FAILED, None
 
     parms = data.decode().split("\x00")[0].strip()
     if needParm and not parms:
         print(f"Pi:Error - {errorMsg}")
-        encodederrorMsg = ('Pi:Error - ' + errorMsg).encode()
+        encodederrorMsg = ("Pi:Error - " + errorMsg).encode()
         sendmultiblock(encodederrorMsg)
         return RC_FAILED, None
 

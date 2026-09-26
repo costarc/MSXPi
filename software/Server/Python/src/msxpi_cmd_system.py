@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-
 # Standard library imports
 import time
 import subprocess
@@ -39,7 +38,7 @@ from subprocess import PIPE, STDOUT
 
 # Third-party imports
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     CommandResult,
@@ -58,7 +57,7 @@ from msxpi_ethglue import _eth_release, _eth_relink
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 from msxpi_transport import release_gpio
 
-    
+
 def pset(data: str) -> CommandResult:
 
     # Normalize input
@@ -127,19 +126,19 @@ def pset(data: str) -> CommandResult:
     # ---------------------------------------------------------
     # 5. Set or update variable:  set wifi MYSSID
     # ---------------------------------------------------------
-    varvalue = data[len(varname):].strip()
+    varvalue = data[len(varname) :].strip()
 
     print(f"Setting variable {varname} to value {varvalue}")
     rc = setMSXPiVar(varname, varvalue)
 
     # Special cases for drives
     if rc == RC_SUCCESS:
-        if varname_upper == 'DRIVEA':
+        if varname_upper == "DRIVEA":
             old = disk.drive0Data
             rc, disk.drive0Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
 
-        elif varname_upper == 'DRIVEB':
+        elif varname_upper == "DRIVEB":
             old = disk.drive1Data
             rc, disk.drive1Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
@@ -147,7 +146,8 @@ def pset(data: str) -> CommandResult:
         return sendmultiblock("Pi:Ok".encode())
 
     return sendmultiblock("Pi:Error".encode())
-    
+
+
 def interfaces_report():
     """One line per interface: name, state, IPv4 address - for a 40-column MSX.
 
@@ -162,10 +162,12 @@ def interfaces_report():
     `ip -o` keeps each record on ONE line, so there is nothing to reassemble
     and no wrapped line to mis-parse.
     """
+
     def ip_out(args):
         try:
-            done = subprocess.run(["ip", "-o"] + args, stdout=PIPE,
-                                  stderr=STDOUT, text=True, timeout=10)
+            done = subprocess.run(
+                ["ip", "-o"] + args, stdout=PIPE, stderr=STDOUT, text=True, timeout=10
+            )
             return done.stdout if done.returncode == 0 else ""
         except Exception as exc:
             print(f"interfaces_report: {exc}")
@@ -200,33 +202,41 @@ def interfaces_report():
 
 
 def wifi(cmd: str) -> CommandResult:
-    wifissid = getMSXPiVar('WIFISSID')
-    wifipass = getMSXPiVar('WIFIPWD')
-    wificountry = getMSXPiVar('WIFICOUNTRY')
+    wifissid = getMSXPiVar("WIFISSID")
+    wifipass = getMSXPiVar("WIFIPWD")
+    wificountry = getMSXPiVar("WIFICOUNTRY")
 
-    if (cmd[:2] == "/h"):
+    if cmd[:2] == "/h":
         sendmultiblock("Pi:Usage:\npwifi display | set".encode())
         return RC_SUCCESS
 
-    if (cmd[:1] == "s" or cmd[:1] == "S"):
+    if cmd[:1] == "s" or cmd[:1] == "S":
         if transport.hostType == "RaspberryPi":
-            wifisetcmd = 'sudo nmcli device wifi connect "' + wifissid + '" password "' + wifipass + '"'
+            wifisetcmd = (
+                'sudo nmcli device wifi connect "'
+                + wifissid
+                + '" password "'
+                + wifipass
+                + '"'
+            )
             run(wifisetcmd)
         else:
-            sendmultiblock(b'Parameter not supported in this platform')
+            sendmultiblock(b"Parameter not supported in this platform")
     else:
         if transport.hostType == "RaspberryPi":
             sendmultiblock(interfaces_report().encode())
         else:
             run("ipconfig")
-    
+
     return RC_SUCCESS
+
 
 def ver(parms: Optional[str] = None) -> CommandResult:
     """Send server version information to MSX."""
     version_string = f"MSXPi Server Version {VERSION} Build {BUILD_ID}\n"
     logger.info(f"Sending version info: {version_string.strip()}")
     return sendmultiblock(version_string.encode())
+
 
 def q(parm: Optional[str] = None) -> CommandResult:
     """Client-side quit notification (see sendQuit() in msxarch.c/p.c). The
@@ -241,15 +251,15 @@ def q(parm: Optional[str] = None) -> CommandResult:
     whatever ran next)."""
     print("q(): client quit")
 
+
 def restart(parm: Optional[str] = None) -> CommandResult:
     if transport.hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
-        sendmultiblock(b'Pi:Ok')
+        sendmultiblock(b"Pi:Ok")
         exitDueToSyncError()
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b'Command not supported by this platform')
-        
+        sendmultiblock(b"Command not supported by this platform")
 
 
 def netreset(parm: Optional[str] = None) -> CommandResult:
@@ -287,14 +297,21 @@ def netreset(parm: Optional[str] = None) -> CommandResult:
     # anything that happened to be set for the server - by the unit file, the
     # monitor, or whoever started it by hand - would silently reconfigure the
     # network differently here than at boot. Only WAIT_SECS is ours to pass.
-    env = {"PATH": os.environ.get("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"),
-           "WAIT_SECS": str(wait)}
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/sbin:/usr/bin:/sbin:/bin"),
+        "WAIT_SECS": str(wait),
+    }
     report = []
     for phase in ("down", "up"):
         try:
-            done = subprocess.run(["sudo", tcpip_setup, phase], env=env,
-                                  stdout=PIPE, stderr=STDOUT, text=True,
-                                  timeout=wait + 60)
+            done = subprocess.run(
+                ["sudo", tcpip_setup, phase],
+                env=env,
+                stdout=PIPE,
+                stderr=STDOUT,
+                text=True,
+                timeout=wait + 60,
+            )
         except Exception as exc:
             return f"Pi:netreset {phase} failed: {exc}"
         out = done.stdout or ""
@@ -309,15 +326,18 @@ def netreset(parm: Optional[str] = None) -> CommandResult:
             # The script says why on its first line or two - pass that on
             # rather than a bare exit code, since "no default route" is the
             # expected answer when this is run too early.
-            ethglue._eth_tap_retry_at = 0.0     # stale TAP: let the opcode path retry
+            ethglue._eth_tap_retry_at = 0.0  # stale TAP: let the opcode path retry
             why = " ".join(out.split())[:70] or f"exit {done.returncode}"
             return f"Pi:netreset {phase}: {why}"
         if phase == "up":
             # Only the lines worth 40 columns on an MSX screen.
             for line in out.splitlines():
-                if line.startswith(("uplink:", "created ", "msxpi0 up:",
-                                    "NAT:", "dns:", "WARN")) \
-                        or "recreating" in line:
+                if (
+                    line.startswith(
+                        ("uplink:", "created ", "msxpi0 up:", "NAT:", "dns:", "WARN")
+                    )
+                    or "recreating" in line
+                ):
                     report.append(line.strip())
 
     state = _eth_relink()
@@ -411,9 +431,16 @@ exit 0
 
 def _wlan0_ipv4():
     try:
-        out = subprocess.run(["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
-                             stdout=PIPE, stderr=STDOUT, text=True,
-                             timeout=5).stdout or ""
+        out = (
+            subprocess.run(
+                ["ip", "-4", "-o", "addr", "show", "dev", "wlan0"],
+                stdout=PIPE,
+                stderr=STDOUT,
+                text=True,
+                timeout=5,
+            ).stdout
+            or ""
+        )
     except Exception:
         return None
     for line in out.split("\n"):
@@ -447,9 +474,13 @@ def wlanreset(parm: Optional[str] = None) -> CommandResult:
             pass
 
     try:
-        done = subprocess.run(["sudo", "sh", "-c", _WLANRESET_SCRIPT],
-                              stdout=PIPE, stderr=STDOUT, text=True,
-                              timeout=60)
+        done = subprocess.run(
+            ["sudo", "sh", "-c", _WLANRESET_SCRIPT],
+            stdout=PIPE,
+            stderr=STDOUT,
+            text=True,
+            timeout=60,
+        )
         print(f"wlanreset: rc={done.returncode}\n{done.stdout or ''}", flush=True)
     except Exception as exc:
         return f"Pi:wlanreset failed: {exc}"
@@ -471,8 +502,9 @@ def reboot(parm: Optional[str] = None) -> CommandResult:
         os.system("sudo reboot")
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b'Command not supported by this platform')
-        
+        sendmultiblock(b"Command not supported by this platform")
+
+
 def shut(parm: Optional[str] = None) -> CommandResult:
     """Shut the Raspberry Pi down. Sent by "p shut", and by msxarch once a game
     is fully loaded, right before it starts the game, when msxarch.ini has
@@ -489,13 +521,19 @@ def shut(parm: Optional[str] = None) -> CommandResult:
         if not no_reply:
             sendmultiblock(b"Pi:Ok")
         print("Shutting down Raspberry Pi in 2 seconds")
-        subprocess.Popen("sleep 2; sudo shutdown -h now", shell=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(
+            "sleep 2; sudo shutdown -h now",
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
     else:
         print("Command not supported by this platform")
         if not no_reply:
-            sendmultiblock(b'Command not supported by this platform')
+            sendmultiblock(b"Command not supported by this platform")
+
 
 def button_handler(channel):
     # A press must hold the line low WITHOUT A BREAK for 200 ms.  Noise coupled
@@ -519,7 +557,7 @@ def button_handler(channel):
         print("Reboot triggered")
         os.system("sudo reboot")
 
-   
+
 def exitDueToSyncError():
     print("Sync error. Recycling MSXPi-Server")
     release_gpio()

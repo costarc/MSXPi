@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-
 # Standard library imports
 import time
 import logging
@@ -35,7 +34,7 @@ import threading
 # Third-party imports
 import requests
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     CommandResult,
@@ -67,28 +66,32 @@ DEFAULT_COOLDOWN = 60  # seconds
 # Yahoo cooldown state
 yahoo_cooldown_until = 0
 
+
 def norm(sym):
     return sym.replace("-", "").upper()
+
 
 # -----------------------------
 # Provider base class
 # -----------------------------
 class QuoteProvider:
     name = "BASE"
+
     def fetch_batch(self, symbols):
         raise NotImplementedError
+
 
 # -----------------------------
 # Yahoo Provider
 # -----------------------------
 class YahooProvider(QuoteProvider):
     name = "Yahoo"
+
     def fetch_batch(self, symbols):
         host = _api_key("RAPIDAPIHOST") or RAPIDAPI_HOST_DEFAULT
         url = f"https://{host}/market/v2/get-quotes"
         params = {"region": "US", "symbols": ",".join(symbols)}
-        headers = {"X-RapidAPI-Key": _api_key("RAPIDAPIKEY"),
-                   "X-RapidAPI-Host": host}
+        headers = {"X-RapidAPI-Key": _api_key("RAPIDAPIKEY"), "X-RapidAPI-Host": host}
 
         r = requests.get(url, headers=headers, params=params, timeout=10)
         r.raise_for_status()
@@ -102,11 +105,13 @@ class YahooProvider(QuoteProvider):
                 out[sym.upper()] = item
         return out
 
+
 # -----------------------------
 # Finnhub Provider
 # -----------------------------
 class FinnhubProvider(QuoteProvider):
     name = "Finnhub"
+
     def fetch_batch(self, symbols):
         out = {}
         for s in symbols:
@@ -119,19 +124,24 @@ class FinnhubProvider(QuoteProvider):
                 "symbol": s,
                 "regularMarketPrice": q.get("c", 0),
                 "regularMarketChange": q.get("d", 0),
-                "regularMarketVolume": int(q.get("v", 0))
+                "regularMarketVolume": int(q.get("v", 0)),
             }
         return out
+
     def fetch_history(self, symbol, interval="1", range_="1d"):
         # interval: 1,5,15,30,60
         # range_: "1d","5d","1mo","3mo","6mo","1y"
         resolution = interval.replace("min", "")
 
         now = int(time.time())
-        if range_ == "1d": start = now - 86400
-        elif range_ == "5d": start = now - 5*86400
-        elif range_ == "1mo": start = now - 30*86400
-        else: start = now - 365*86400
+        if range_ == "1d":
+            start = now - 86400
+        elif range_ == "5d":
+            start = now - 5 * 86400
+        elif range_ == "1mo":
+            start = now - 30 * 86400
+        else:
+            start = now - 365 * 86400
 
         url = "https://finnhub.io/api/v1/stock/candle"
         params = {
@@ -139,7 +149,7 @@ class FinnhubProvider(QuoteProvider):
             "resolution": resolution,
             "from": start,
             "to": now,
-            "token": _api_key("FINNHUBKEY")
+            "token": _api_key("FINNHUBKEY"),
         }
 
         r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
@@ -150,16 +160,19 @@ class FinnhubProvider(QuoteProvider):
 
         candles = []
         for i in range(len(data["t"])):
-            candles.append({
-                "time": data["t"][i],
-                "open": data["o"][i],
-                "high": data["h"][i],
-                "low": data["l"][i],
-                "close": data["c"][i],
-                "volume": data["v"][i]
-            })
+            candles.append(
+                {
+                    "time": data["t"][i],
+                    "open": data["o"][i],
+                    "high": data["h"][i],
+                    "low": data["l"][i],
+                    "close": data["c"][i],
+                    "volume": data["v"][i],
+                }
+            )
 
         return candles
+
 
 # -----------------------------
 # TwelveData Provider
@@ -169,8 +182,10 @@ def normalize_for_twelvedata(symbol):
         return symbol.replace("-", "/")
     return symbol
 
+
 class TwelveDataProvider(QuoteProvider):
     name = "TwelveData"
+
     def fetch_batch(self, symbols):
         # Convert BTC-USD → BTC/USD
         td_symbols = [normalize_for_twelvedata(s) for s in symbols]
@@ -190,9 +205,10 @@ class TwelveDataProvider(QuoteProvider):
                 "symbol": s,
                 "regularMarketPrice": float(q["close"]),
                 "regularMarketChange": float(q["change"]),
-                "regularMarketVolume": int(q.get("volume", 0))
+                "regularMarketVolume": int(q.get("volume", 0)),
             }
         return out
+
 
 class CoinGeckoProvider(QuoteProvider):
     name = "CoinGecko"
@@ -221,7 +237,7 @@ class CoinGeckoProvider(QuoteProvider):
         params = {
             "ids": ",".join(ids),
             "vs_currencies": "usd",
-            "include_24hr_vol": "true"
+            "include_24hr_vol": "true",
         }
 
         try:
@@ -253,26 +269,26 @@ class CoinGeckoProvider(QuoteProvider):
         coin = symbol.split("-")[0].lower()
 
         url = f"https://api.coingecko.com/api/v3/coins/{coin}/market_chart"
-        params = {
-            "vs_currency": "usd",
-            "days": "1" if range_=="1d" else "7"
-        }
+        params = {"vs_currency": "usd", "days": "1" if range_ == "1d" else "7"}
 
         r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
         data = r.json()
 
         candles = []
         for ts, price in data["prices"]:
-            candles.append({
-                "time": ts,
-                "open": price,
-                "high": price,
-                "low": price,
-                "close": price,
-                "volume": 0
-            })
+            candles.append(
+                {
+                    "time": ts,
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "volume": 0,
+                }
+            )
 
         return candles
+
 
 class StooqProvider(QuoteProvider):
     name = "Stooq"
@@ -292,14 +308,16 @@ class StooqProvider(QuoteProvider):
         candles = []
         for line in lines[1:]:
             date, o, h, l, c, v = line.split(",")
-            candles.append({
-                "time": date,
-                "open": float(o),
-                "high": float(h),
-                "low": float(l),
-                "close": float(c),
-                "volume": int(v) if v.isdigit() else 0
-            })
+            candles.append(
+                {
+                    "time": date,
+                    "open": float(o),
+                    "high": float(h),
+                    "low": float(l),
+                    "close": float(c),
+                    "volume": int(v) if v.isdigit() else 0,
+                }
+            )
 
         return candles
 
@@ -324,7 +342,7 @@ class StooqProvider(QuoteProvider):
                 text = r.text.strip()
 
                 # Format: SYMBOL,OPEN,HIGH,LOW,CLOSE,VOLUME
-                parts = text.split(',')
+                parts = text.split(",")
                 if len(parts) < 6:
                     continue
 
@@ -346,6 +364,7 @@ class StooqProvider(QuoteProvider):
 
         return out
 
+
 class AlphaVantageProvider(QuoteProvider):
     name = "AlphaVantage"
 
@@ -365,7 +384,7 @@ class AlphaVantageProvider(QuoteProvider):
             params = {
                 "function": "GLOBAL_QUOTE",
                 "symbol": av_sym,
-                "apikey": _api_key("ALPHAVANTAGEKEY")
+                "apikey": _api_key("ALPHAVANTAGEKEY"),
             }
 
             try:
@@ -382,7 +401,9 @@ class AlphaVantageProvider(QuoteProvider):
                     "regularMarketOpen": float(data.get("02. open", 0)),
                     "regularMarketDayHigh": float(data.get("03. high", 0)),
                     "regularMarketDayLow": float(data.get("04. low", 0)),
-                    "regularMarketPreviousClose": float(data.get("08. previous close", 0)),
+                    "regularMarketPreviousClose": float(
+                        data.get("08. previous close", 0)
+                    ),
                     "regularMarketVolume": int(float(data.get("06. volume", 0))),
                 }
 
@@ -399,7 +420,7 @@ class AlphaVantageProvider(QuoteProvider):
             "symbol": symbol,
             "interval": interval,
             "apikey": _api_key("ALPHAVANTAGEKEY"),
-            "outputsize": "compact" if range_ == "1d" else "full"
+            "outputsize": "compact" if range_ == "1d" else "full",
         }
 
         r = requests.get(url, params=params, timeout=HTTP_TIMEOUT)
@@ -411,17 +432,20 @@ class AlphaVantageProvider(QuoteProvider):
 
         candles = []
         for ts, values in data[key].items():
-            candles.append({
-                "time": ts,
-                "open": float(values["1. open"]),
-                "high": float(values["2. high"]),
-                "low": float(values["3. low"]),
-                "close": float(values["4. close"]),
-                "volume": int(values["5. volume"])
-            })
+            candles.append(
+                {
+                    "time": ts,
+                    "open": float(values["1. open"]),
+                    "high": float(values["2. high"]),
+                    "low": float(values["3. low"]),
+                    "close": float(values["4. close"]),
+                    "volume": int(values["5. volume"]),
+                }
+            )
 
         candles.reverse()  # chronological order
         return candles
+
 
 # -----------------------------
 # Determine symbol type
@@ -433,6 +457,7 @@ def get_symbol_type(symbol):
         return "uk_stock"
     else:
         return "us_stock"
+
 
 # -----------------------------
 # Provider priority per symbol type
@@ -451,19 +476,24 @@ provider_cooldowns = {
     "AlphaVantage": 0,
 }
 
+
 def provider_available(name):
     return time.time() >= provider_cooldowns[name]
+
 
 def cooldown_provider(name, seconds=DEFAULT_COOLDOWN):
     provider_cooldowns[name] = time.time() + seconds
     print(f"[COOLDOWN] {name} disabled for {seconds}s")
 
+
 def is_yahoo_available():
     return time.time() >= yahoo_cooldown_until
 
+
 def mark_yahoo_rate_limited():
     global yahoo_cooldown_until
-    yahoo_cooldown_until = time.time() + 60   # 60-second cooldown
+    yahoo_cooldown_until = time.time() + 60  # 60-second cooldown
+
 
 def choose_providers(symbol):
     if "-USD" in symbol:  # crypto
@@ -475,6 +505,7 @@ def choose_providers(symbol):
     # US stocks
     return [YahooProvider, FinnhubProvider, AlphaVantageProvider]
 
+
 # -----------------------------
 # Progressive batch fetch with failover
 # -----------------------------
@@ -484,7 +515,7 @@ def fetch_batch(symbols):
     pending = list(symbols)
 
     # Split into chunks of 8 to avoid Yahoo throttling
-    chunks = [pending[i:i+8] for i in range(0, len(pending), 8)]
+    chunks = [pending[i : i + 8] for i in range(0, len(pending), 8)]
 
     for chunk in chunks:
         for sym in chunk:
@@ -537,6 +568,7 @@ def fetch_batch(symbols):
 
     return results
 
+
 # -----------------------------
 # Global cache state
 # -----------------------------
@@ -549,6 +581,7 @@ cache_lock = threading.Lock()
 cache_thread = None
 cache_running = False
 cache_interval = 60
+
 
 # -----------------------------
 # Background cache updater
@@ -579,6 +612,7 @@ def cache_updater():
 
     print("[CACHE] stopped")
 
+
 def build_non_temporal_candles(candles, threshold):
     """
     Convert historical OHLC candles into non-temporal candles.
@@ -593,9 +627,9 @@ def build_non_temporal_candles(candles, threshold):
     active = {
         "open": candles[0]["open"],
         "high": candles[0]["open"],
-        "low":  candles[0]["open"],
+        "low": candles[0]["open"],
         "close": candles[0]["open"],
-        "volume": 0
+        "volume": 0,
     }
 
     for c in candles:
@@ -603,7 +637,7 @@ def build_non_temporal_candles(candles, threshold):
 
         # Update active candle
         active["high"] = max(active["high"], price)
-        active["low"]  = min(active["low"], price)
+        active["low"] = min(active["low"], price)
         active["close"] = price
         active["volume"] += c["volume"]
 
@@ -615,15 +649,16 @@ def build_non_temporal_candles(candles, threshold):
             active = {
                 "open": price,
                 "high": price,
-                "low":  price,
+                "low": price,
                 "close": price,
-                "volume": 0
+                "volume": 0,
             }
 
     # Add last candle
     nt.append(active)
 
     return nt
+
 
 def fetch_history_with_failover(symbol, interval="1m", range_="1d"):
     providers = choose_providers(symbol)
@@ -651,7 +686,7 @@ def fetch_history_with_failover(symbol, interval="1m", range_="1d"):
         "DOT": "polkadot",
         "LTC": "litecoin",
         "BCH": "bitcoin-cash",
-        "BNB": "binancecoin"
+        "BNB": "binancecoin",
     }
 
     for provider_cls in providers:
@@ -688,10 +723,14 @@ def fetch_history_with_failover(symbol, interval="1m", range_="1d"):
             if hasattr(p, "fetch_history"):
                 candles = p.fetch_history(symbol_for_provider, interval, range_)
                 if candles:
-                    print(f"[HISTORY] {p.name} OK for {symbol} (as {symbol_for_provider})")
+                    print(
+                        f"[HISTORY] {p.name} OK for {symbol} (as {symbol_for_provider})"
+                    )
                     return candles
                 else:
-                    print(f"[HISTORY] {p.name} returned no data for {symbol_for_provider}")
+                    print(
+                        f"[HISTORY] {p.name} returned no data for {symbol_for_provider}"
+                    )
             else:
                 print(f"[HISTORY] {p.name} has no fetch_history()")
 
@@ -701,6 +740,7 @@ def fetch_history_with_failover(symbol, interval="1m", range_="1d"):
 
     print(f"[HISTORY] No provider succeeded for {symbol}")
     return []
+
 
 def scale_value(price, min_price, max_price):
     """
@@ -723,10 +763,13 @@ def scale_value(price, min_price, max_price):
     y = chart_bottom - int(ratio * chart_height)
 
     # Clamp
-    if y < 0: y = 0
-    if y > 191: y = 191
+    if y < 0:
+        y = 0
+    if y > 191:
+        y = 191
 
     return y
+
 
 # -----------------------------
 # STOCK command handler
@@ -736,9 +779,12 @@ def stock(command_str: str) -> CommandResult:
     global cache, cache_running, cache_thread, cache_interval, cache_symbols, cache_timestamp
 
     def fmt_volume(v):
-        if v >= 1_000_000_000: return f"{v/1_000_000_000:.2f}B"
-        if v >= 1_000_000: return f"{v/1_000_000:.2f}M"
-        if v >= 1_000: return f"{v/1_000:.2f}K"
+        if v >= 1_000_000_000:
+            return f"{v/1_000_000_000:.2f}B"
+        if v >= 1_000_000:
+            return f"{v/1_000_000:.2f}M"
+        if v >= 1_000:
+            return f"{v/1_000:.2f}K"
         return f"{v:.2f}U"
 
     parts = command_str.strip().split(" ", 1)
@@ -796,7 +842,7 @@ def stock(command_str: str) -> CommandResult:
         args = parts[1].replace(" ", "").split(",")
         symbol = args[0]
         interval = args[1] if len(args) > 1 else "1m"
-        range_   = args[2] if len(args) > 2 else "1d"
+        range_ = args[2] if len(args) > 2 else "1d"
 
         candles = fetch_history_with_failover(symbol, interval, range_)
 
@@ -855,10 +901,10 @@ def stock(command_str: str) -> CommandResult:
                 disp = sym.replace("-", "")[:6].ljust(6)
 
                 cur = float(d.get("regularMarketPrice", 0))
-                o   = float(d.get("regularMarketOpen", 0))
-                h   = float(d.get("regularMarketDayHigh", 0))
-                l   = float(d.get("regularMarketDayLow", 0))
-                pc  = float(d.get("regularMarketPreviousClose", 0))
+                o = float(d.get("regularMarketOpen", 0))
+                h = float(d.get("regularMarketDayHigh", 0))
+                l = float(d.get("regularMarketDayLow", 0))
+                pc = float(d.get("regularMarketPreviousClose", 0))
 
                 v_raw = int(d.get("regularMarketVolume", 0))
                 v_fmt = fmt_volume(v_raw)
@@ -878,15 +924,17 @@ def stock(command_str: str) -> CommandResult:
 
     if subcmd == "NTCANDLE":
         if len(parts) < 2:
-            sendmultiblock(b"ERROR: Use NTCANDLE <symbol>,<threshold>,<interval>,<range>")
+            sendmultiblock(
+                b"ERROR: Use NTCANDLE <symbol>,<threshold>,<interval>,<range>"
+            )
             return
 
         # Parse MSX parameters
         args = parts[1].replace(" ", "").split(",")
-        symbol    = args[0]
+        symbol = args[0]
         threshold = float(args[1])
-        interval  = args[2] if len(args) > 2 else "1m"
-        range_    = args[3] if len(args) > 3 else "1d"
+        interval = args[2] if len(args) > 2 else "1m"
+        range_ = args[3] if len(args) > 3 else "1d"
 
         # Fetch history using MSX parameters
         candles = fetch_history_with_failover(symbol, interval, range_)
@@ -914,11 +962,11 @@ def stock(command_str: str) -> CommandResult:
         # Build DRAW commands
         lines = []
         for i, c in enumerate(nt):
-            x = 8 + i*4
+            x = 8 + i * 4
 
-            yo = scale_value(c["open"],  min_price, max_price)
-            yh = scale_value(c["high"],  min_price, max_price)
-            yl = scale_value(c["low"],   min_price, max_price)
+            yo = scale_value(c["open"], min_price, max_price)
+            yh = scale_value(c["high"], min_price, max_price)
+            yl = scale_value(c["low"], min_price, max_price)
             yc = scale_value(c["close"], min_price, max_price)
 
             # Wick
@@ -936,6 +984,6 @@ def stock(command_str: str) -> CommandResult:
             lines.append(f"D:B {x} {yo} {yc} {col}")
 
         lines.append("END")
-        ll=lines
+        ll = lines
         print(len("\r\n".join(lines).encode()))
         sendmultiblock("\r\n".join(lines).encode())

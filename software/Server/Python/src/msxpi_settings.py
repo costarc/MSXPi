@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-
 # Standard library imports
 from typing import Dict, Iterable, List, Tuple
 import logging
@@ -35,12 +34,11 @@ import threading
 
 # Third-party imports
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     RC_SUCCESS,
 )
-
 
 # msxpi-server.py sets both at start-up. MSXPIHOME stays defined there as a
 # literal because the openMSX test harnesses patch that line.
@@ -66,17 +64,22 @@ class MSXPiConfig:
     @classmethod
     def load(cls, ini_path: str) -> "MSXPiConfig":
         pairs = []
-        with open(ini_path, 'r') as f:
+        with open(ini_path, "r") as f:
             for line in f:
                 # A "var" line without "=" (say "var RPI_SHUTDOWN") used to
                 # raise IndexError here and kill the server; skip it instead.
-                if line.startswith('var') and '=' in line:
-                    name = line.split(' ')[1].split('=')[0].strip()
-                    value = line.replace('var ', '', 1).replace(name, '', 1).split('=')[1].strip()
+                if line.startswith("var") and "=" in line:
+                    name = line.split(" ")[1].split("=")[0].strip()
+                    value = (
+                        line.replace("var ", "", 1)
+                        .replace(name, "", 1)
+                        .split("=")[1]
+                        .strip()
+                    )
                     pairs.append((name, value))
         return cls(ini_path, pairs)
 
-    def get(self, name: str, default: str = '') -> str:
+    def get(self, name: str, default: str = "") -> str:
         with self._lock:
             entry = self._vars.get(name.upper())
             return entry[1] if entry else default
@@ -98,7 +101,7 @@ class MSXPiConfig:
         """Set a variable and save; an empty value deletes it."""
         with self._lock:
             key = name.upper()
-            if value == '':
+            if value == "":
                 if self._vars.pop(key, None) is None:
                     return
                 print(f"Deleting variable {name}")
@@ -115,15 +118,17 @@ class MSXPiConfig:
             updateIniFile(self.ini_path, self.items())
 
 
-def setMSXPiVar(pvar: str = '', pvalue: str = '') -> int:
+def setMSXPiVar(pvar: str = "", pvalue: str = "") -> int:
     _config.set(pvar, pvalue)
     return RC_SUCCESS
 
-def getMSXPiVar(devname: str = 'PATH') -> str:
+
+def getMSXPiVar(devname: str = "PATH") -> str:
     return _config.get(devname)
 
-def updateIniFile(fname,memvar):
-    f = open(fname, 'w')
+
+def updateIniFile(fname, memvar):
+    f = open(fname, "w")
     for v in memvar:
-        f.writelines('var '+v[0]+'='+v[1]+'\n')
+        f.writelines("var " + v[0] + "=" + v[1] + "\n")
     f.close()

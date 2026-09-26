@@ -28,7 +28,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-
 # Standard library imports
 import logging
 import socket
@@ -36,7 +35,7 @@ import socket
 # Third-party imports
 import requests
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     CommandResult,
@@ -48,42 +47,46 @@ from msxpi_const import (
 from msxpi_blocks import sendmultiblock
 from msxpi_settings import getMSXPiVar
 
-
 # irc
 channel = "#msxpi"
 allchann = []
 ircsock = None
-    
+
 OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+
 
 def chatgpt(query: str) -> CommandResult:
     print(query)
-    api_key = getMSXPiVar('OPENAIKEY')
+    api_key = getMSXPiVar("OPENAIKEY")
     if not api_key or api_key == "Your OpenAI API Key":
-        print('Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
-        sendmultiblock(b'Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini')
+        print(
+            "Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini"
+        )
+        sendmultiblock(
+            b"Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini"
+        )
         return RC_FAILED
 
     # Model comes from msxpi.ini (var OPENAIMODEL), so it can be changed with
     # `p set OPENAIMODEL <name>` as OpenAI retires models and adds new ones,
     # without touching this file. Unset or empty: fall back to the default.
-    model_engine = getMSXPiVar('OPENAIMODEL').strip() or OPENAI_DEFAULT_MODEL
+    model_engine = getMSXPiVar("OPENAIMODEL").strip() or OPENAI_DEFAULT_MODEL
     url = "https://api.openai.com/v1/chat/completions"
 
     try:
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        
+
         payload = {
             "model": model_engine,
-            "messages": [
-                {"role": "user", "content": query}
-            ]
+            "messages": [{"role": "user", "content": query}],
         }
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=HTTP_TIMEOUT)
+
+        response = requests.post(
+            url, headers=headers, json=payload, timeout=HTTP_TIMEOUT
+        )
         openai_response = response.json()
         if "choices" in openai_response:
             response_text = openai_response["choices"][0]["message"]["content"]
@@ -91,25 +94,31 @@ def chatgpt(query: str) -> CommandResult:
         else:
             # No completion: the API replied with an error object (or something
             # unexpected). It is a dict, so turn it into text before sending.
-            api_error = openai_response.get("error") if isinstance(openai_response, dict) else None
+            api_error = (
+                openai_response.get("error")
+                if isinstance(openai_response, dict)
+                else None
+            )
             if isinstance(api_error, dict):
                 detail = api_error.get("message") or str(api_error)
             elif api_error:
                 detail = str(api_error)
             else:
                 detail = str(openai_response)
-            print('Pi:Error - ' + detail)
-            sendmultiblock(('Pi:Error - ' + detail).encode('ascii', errors='replace'))
+            print("Pi:Error - " + detail)
+            sendmultiblock(("Pi:Error - " + detail).encode("ascii", errors="replace"))
     except Exception as e:
         error_msg = f"Pi:Error - {str(e)}"
         print(error_msg)
         sendmultiblock(error_msg.encode())
+
 
 def renderpage(parms: Optional[str] = None) -> CommandResult:
     # Parameters are already in the command packet, as for stock()/irc().
     # Always send one binary response or one short, explicitly failed response.
     try:
         from msxpi_renderpage import handle_command
+
         payload = handle_command(parms or "")
     except Exception as exc:
         print(f"renderpage: {exc}")
@@ -121,6 +130,7 @@ def renderpage(parms: Optional[str] = None) -> CommandResult:
         return sendmultiblock(b"END", RC_SUCCNOSTD)
     return sendmultiblock(payload)
 
+
 # showpage is the public command name used by the combined `p` client.
 showpage = renderpage
 
@@ -128,7 +138,7 @@ showpage = renderpage
 def template(parms: Optional[str] = None) -> CommandResult:
 
     # This method is a template for new commands
-    # 
+    #
 
     # If your MSX command send parameters, we go read them:
     if parms == None or parms == "":
@@ -139,8 +149,9 @@ def template(parms: Optional[str] = None) -> CommandResult:
     response = f"Response from MSXPi: I received parameter '{parms}'"
     print(f"Sending back: {response}")
     rc = sendmultiblock(response.encode())
-    
+
     return
+
 
 def irc(parms: str) -> CommandResult:
 
@@ -168,9 +179,8 @@ def irc(parms: str) -> CommandResult:
             cmd = str(parms).strip().lower()
 
     ircserver = getMSXPiVar("IRCADDR")
-    ircport   = int(getMSXPiVar("IRCPORT"))
-    msxnick   = getMSXPiVar("IRCNICK")
-
+    ircport = int(getMSXPiVar("IRCPORT"))
+    msxnick = getMSXPiVar("IRCNICK")
 
     try:
         # ------------------------------------------------------------
@@ -209,7 +219,7 @@ def irc(parms: str) -> CommandResult:
 
             sendmsg("Pi:Ok:Connected to " + ircserver, RC_SUCCNOSTD)
             return RC_SUCCNOSTD
-      
+
         # ------------------------------------------------------------
         # SEND MESSAGE
         # ------------------------------------------------------------
@@ -217,16 +227,16 @@ def irc(parms: str) -> CommandResult:
             print("[irc] MSG")
             if ircsock is None:
                 return not_connected()
-        
+
             raw = parms[4:].strip()
-            
+
             parts = raw.split(maxsplit=1)
             if len(parts) == 2:
                 target, text = parts
             else:
                 sendmsg("Pi:Er:Bad format", RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
-            
+
             # Detect /names
             if text.lower().startswith("/names"):
                 print("[irc] /names")
@@ -238,10 +248,10 @@ def irc(parms: str) -> CommandResult:
                     print(f"[irc] NAMES send exception: {e}")
                     sendmsg("Pi:Er:NAMES error: " + str(e), RC_SUCCNOSTD)
                     return RC_SUCCNOSTD
-            
+
                 sendmsg("Pi:Ok:NAMES sent", RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
-        
+
             # Normal SAY → PRIVMSG
             try:
                 line = f"PRIVMSG {raw}\r\n"
@@ -250,8 +260,8 @@ def irc(parms: str) -> CommandResult:
                 print(f"[irc] send exception: {e}")
                 sendmsg("Pi:Er:Send error: " + str(e), RC_SUCCNOSTD)
                 return RC_SUCCNOSTD
-        
-            #sendmsg("Pi:Ok:Sent", RC_SUCCNOSTD)
+
+            # sendmsg("Pi:Ok:Sent", RC_SUCCNOSTD)
             return RC_SUCCNOSTD
 
         # ------------------------------------------------------------

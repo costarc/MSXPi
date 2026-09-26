@@ -26,20 +26,18 @@
 
 from __future__ import annotations
 
-
 # Standard library imports
 import time
 import logging
 
 # Third-party imports
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     RC_SUCCESS,
 )
 from msxpi_transport import SPI_BurstOut, SPI_ByteTransfer
-
 
 # IRC client integration (currently disabled - awaiting complete implementation)
 # TODO: Integrate IRC client when msxpi_irc module is ready
@@ -96,24 +94,23 @@ def eth_get_shuttle():
             # through, or every write would look like a failure.
             write_byte=_eth_write_byte,
             write_burst=_eth_write_burst,
-            log=print)
-        print("eth: Ethernet UNAPI shuttle ready (%s)"
-              % type(link).__name__)
+            log=print,
+        )
+        print("eth: Ethernet UNAPI shuttle ready (%s)" % type(link).__name__)
         _eth_note_link(link)
     return _eth_shuttle
 
 
 # Seconds between attempts to replace a MockLink with the real TAP.
 ETH_TAP_RETRY = 5.0
-_eth_link_is_mock = False   # checked on the opcode path, so keep it a bool
+_eth_link_is_mock = False  # checked on the opcode path, so keep it a bool
 _eth_tap_retry_at = 0.0
 
 
 def _eth_note_link(link):
     """Remember whether the shuttle ended up on MockLink."""
     global _eth_link_is_mock
-    _eth_link_is_mock = (_eth_mod is not None
-                         and isinstance(link, _eth_mod.MockLink))
+    _eth_link_is_mock = _eth_mod is not None and isinstance(link, _eth_mod.MockLink)
 
 
 def _eth_retry_tap():
@@ -159,7 +156,7 @@ def _eth_retry_tap():
 # traffic and not just for opcodes. A module-global frozenset lookup avoids an
 # attribute lookup on _eth_mod each time.
 _eth_opcodes = _eth_mod.OPCODES if _eth_mod is not None else frozenset()
-_eth_handle = None      # the shuttle's bound handle(), cached on first use
+_eth_handle = None  # the shuttle's bound handle(), cached on first use
 
 
 def eth_handle_opcode(opcode):
@@ -183,7 +180,7 @@ def eth_handle_opcode(opcode):
         return _eth_handle(opcode)
     except Exception as e:
         print(f"eth: error serving opcode {hex(opcode)}: {e}")
-        return True   # consumed; do not fall through to the garbage branch
+        return True  # consumed; do not fall through to the garbage branch
 
 
 def _eth_relink():
@@ -197,13 +194,13 @@ def _eth_relink():
     """
     global _eth_handle, _eth_tap_retry_at
     if _eth_mod is None or _eth_shuttle is None:
-        return None                 # nothing attached yet: first opcode will
+        return None  # nothing attached yet: first opcode will
     old = _eth_shuttle.link
     try:
         link = _eth_mod.TapLink()
     except Exception as exc:
         print(f"eth: TAP still unavailable after netreset ({exc})")
-        _eth_tap_retry_at = 0.0      # let the opcode path keep trying
+        _eth_tap_retry_at = 0.0  # let the opcode path keep trying
         return False
     link.enabled = old.enabled
     link.filters = old.filters

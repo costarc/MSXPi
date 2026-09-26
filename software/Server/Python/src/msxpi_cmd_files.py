@@ -28,8 +28,6 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-
-
 # Standard library imports
 import glob
 import logging
@@ -45,7 +43,8 @@ from urllib.request import urlopen
 import requests
 
 from msxpi_settings import TMPDIR
-logger = logging.getLogger('msxpi')
+
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     CommandResult,
@@ -60,7 +59,12 @@ from msxpi_const import (
     RC_SUCCESS,
 )
 import msxpi_transport as transport
-from msxpi_blocks import pcopy_handshake, recvdata2_oneblock, senddata_oneblock, sendmultiblock
+from msxpi_blocks import (
+    pcopy_handshake,
+    recvdata2_oneblock,
+    senddata_oneblock,
+    sendmultiblock,
+)
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 
 
@@ -71,66 +75,75 @@ class MyHTMLParser(HTMLParser):
         self.NEWTAGS = []
         self.NEWATTRS = []
         self.HTMLDATA = []
+
     def handle_starttag(self, tag, attrs):
         self.NEWTAGS.append(tag)
         self.NEWATTRS.append(attrs)
+
     def handle_data(self, data):
         self.HTMLDATA.append(data)
+
     def clean(self):
         self.NEWTAGS = []
         self.NEWATTRS = []
         self.HTMLDATA = []
+
     def convert_charrefs(self, data):
         print("MyHTMLParser: convert_charrefs found :", data)
-                
-def pathExpander(path: str, basepath: str = '') -> List:
-    
-    path=path.strip().rstrip(' \t\n\0')
-    
-    if len(path) == 0 or path == '' or path.strip() == "." or path.strip() == "*":
+
+
+def pathExpander(path: str, basepath: str = "") -> List:
+
+    path = path.strip().rstrip(" \t\n\0")
+
+    if len(path) == 0 or path == "" or path.strip() == "." or path.strip() == "*":
         path = basepath
-        basepath = ''
-    if path.startswith('/'):
-        urltype = 0 # this is an absolute local path
+        basepath = ""
+    if path.startswith("/"):
+        urltype = 0  # this is an absolute local path
         newpath = path
-    elif (path.lower().startswith('m:')):
-        urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveM') + '/' + path.split(':')[1]
-    elif (path.lower().startswith('r1:')):
-        urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveR1') + '/' + path.split(':')[1]
-    elif (path.lower().startswith('r2:')):
-        urltype = 1 # this is a network path
-        newpath = getMSXPiVar('DriveR2') + '/' + path.split(':')[1]
-    elif (path.lower().startswith('http') or \
-        path.lower().startswith('ftp') or \
-        path.lower().startswith('nfs') or \
-        path.lower().startswith('smb')):
-        urltype = 1 # this is a network path
+    elif path.lower().startswith("m:"):
+        urltype = 1  # this is a network path
+        newpath = getMSXPiVar("DriveM") + "/" + path.split(":")[1]
+    elif path.lower().startswith("r1:"):
+        urltype = 1  # this is a network path
+        newpath = getMSXPiVar("DriveR1") + "/" + path.split(":")[1]
+    elif path.lower().startswith("r2:"):
+        urltype = 1  # this is a network path
+        newpath = getMSXPiVar("DriveR2") + "/" + path.split(":")[1]
+    elif (
+        path.lower().startswith("http")
+        or path.lower().startswith("ftp")
+        or path.lower().startswith("nfs")
+        or path.lower().startswith("smb")
+    ):
+        urltype = 1  # this is a network path
         newpath = path
-    elif basepath.startswith('/'):
-        urltype = 0 # this is a local path
-        newpath = normalize_path(basepath + '/' + path)
+    elif basepath.startswith("/"):
+        urltype = 0  # this is a local path
+        newpath = normalize_path(basepath + "/" + path)
     else:
-        urltype = 1 # this is a network path
-        newpath = normalize_path(basepath.rstrip('/') + "/" + path)
+        urltype = 1  # this is a network path
+        newpath = normalize_path(basepath.rstrip("/") + "/" + path)
     return [urltype, newpath]
 
-def dos83format(fname):
-    name = '        '
-    ext = '   '
 
-    finfo = fname.split('.')
+def dos83format(fname):
+    name = "        "
+    ext = "   "
+
+    finfo = fname.split(".")
 
     name = str(finfo[0]).ljust(8)
     if len(finfo) == 2:
         ext = str(finfo[1]).ljust(3)
-    
-    return name+ext
 
-def ini_fcb(fname,fsize):
-    
-    fpath = fname.split(':')
+    return name + ext
+
+
+def ini_fcb(fname, fsize):
+
+    fpath = fname.split(":")
     if len(fpath) == 1:
         msxfile = str(fpath[0])
         msxdrive = 0
@@ -139,23 +152,26 @@ def ini_fcb(fname,fsize):
         drvletter = str(fpath[0]).upper()
         msxdrive = ord(drvletter) - 64
 
-    #convert filename to 8.3 format using all 11 positions required for the FCB
+    # convert filename to 8.3 format using all 11 positions required for the FCB
     msxfcbfname = dos83format(msxfile)
 
     # send FCB structure to MSX
     buf = bytearray()
-    buf.extend(msxdrive.to_bytes(1,'little'))
+    buf.extend(msxdrive.to_bytes(1, "little"))
     buf.extend(msxfcbfname.encode())
-    rc = sendmultiblock(buf)   
+    rc = sendmultiblock(buf)
     return rc
 
-def run(cmd: str = '') -> CommandResult:
-    
-    if (cmd.strip() == '' or len(cmd.strip()) == 0):
-        rc = sendmultiblock("Syntax: run <command> <::> command. To  pipe a command to other, use :: instead of |")
+
+def run(cmd: str = "") -> CommandResult:
+
+    if cmd.strip() == "" or len(cmd.strip()) == 0:
+        rc = sendmultiblock(
+            "Syntax: run <command> <::> command. To  pipe a command to other, use :: instead of |"
+        )
         return RC_FAILED
 
-    cmd = cmd.replace('::','|')
+    cmd = cmd.replace("::", "|")
     rc = RC_SUCCESS
 
     try:
@@ -164,35 +180,38 @@ def run(cmd: str = '') -> CommandResult:
 
         p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
         buf = p.stdout.read().decode()
-        err = (p.stderr.read().decode())
-        if len(err) > 0 and not ('0K ....' in err): # workaround for wget false positive
+        err = p.stderr.read().decode()
+        if len(err) > 0 and not (
+            "0K ...." in err
+        ):  # workaround for wget false positive
             rc = RC_FAILED
-            buf = ("Pi:Error - " + str(err))
+            buf = "Pi:Error - " + str(err)
         elif len(buf) == 0:
             rc = RC_SUCCESS
             buf = "Pi:Ok"
         sendmultiblock(buf.encode())
         return rc
     except Exception as e:
-        print("run: exception:"+str(e))
-        sendmultiblock(("Pi:Error - "+str(e)).encode())
+        print("run: exception:" + str(e))
+        sendmultiblock(("Pi:Error - " + str(e)).encode())
         return rc
 
+
 def dir(data: str) -> CommandResult:
-    
-    basepath = getMSXPiVar('PATH')
-  
+
+    basepath = getMSXPiVar("PATH")
+
     if not data:
-        userPath=''
+        userPath = ""
     else:
         userPath = data
-    pathType, path = pathExpander(userPath, basepath)           
+    pathType, path = pathExpander(userPath, basepath)
     try:
         if pathType == 0:
             if transport.hostType == "Windows":
-                run('dir ' + path)
+                run("dir " + path)
             else:
-                run('ls -l ' + path)
+                run("ls -l " + path)
         else:
             parser = MyHTMLParser()
             # Bounded: an unreachable host otherwise blocks here for ever, with
@@ -210,25 +229,27 @@ def dir(data: str) -> CommandResult:
             buf = " ".join(parser.HTMLDATA)
             rc = sendmultiblock(buf.encode())
     except Exception as e:
-        sendmultiblock(('Pi:Error - ' + str(e)).encode())
+        sendmultiblock(("Pi:Error - " + str(e)).encode())
 
     return RC_SUCCESS
+
 
 def normalize_path(path: str) -> str:
     """Collapse '.', '..', doubled and trailing slashes in a PATH value, local
     or URL, never climbing above its root ('/' or the URL's host)."""
-    m = re.match(r'^([a-z][a-z0-9+.-]*://[^/]*)(.*)$', path, re.I)
-    root, rest = (m.group(1), m.group(2)) if m else ('', path)
-    rest = '/' + posixpath.normpath('/' + rest).lstrip('/')
+    m = re.match(r"^([a-z][a-z0-9+.-]*://[^/]*)(.*)$", path, re.I)
+    root, rest = (m.group(1), m.group(2)) if m else ("", path)
+    rest = "/" + posixpath.normpath("/" + rest).lstrip("/")
     return root + rest
+
 
 def cd(data: str) -> CommandResult:
 
     rc = RC_SUCCESS
-    basepath = getMSXPiVar('PATH')
-    userPath = (data or '').strip().rstrip('\0').strip()
+    basepath = getMSXPiVar("PATH")
+    userPath = (data or "").strip().rstrip("\0").strip()
     try:
-        if userPath in ('', '.'):
+        if userPath in ("", "."):
             rc = sendmultiblock(basepath.encode())
         else:
             # pathExpander joins relative paths as they come; normalising the
@@ -236,19 +257,20 @@ def cd(data: str) -> CommandResult:
             pathType, path = pathExpander(userPath, basepath)
             path = normalize_path(path)
             if pathType == 0:
-                if (os.path.isdir(path)):
-                    setMSXPiVar('PATH',path)
+                if os.path.isdir(path):
+                    setMSXPiVar("PATH", path)
                     rc = sendmultiblock(path.encode())
                 else:
                     sendmultiblock("Pi:Error - not a folder".encode())
             else:
-                setMSXPiVar('PATH',path)
+                setMSXPiVar("PATH", path)
                 rc = sendmultiblock(path.encode())
     except Exception as e:
-        print("pcd:"+str(e))
-        sendmultiblock(('Pi:Error - ' + str(e)).encode())
+        print("pcd:" + str(e))
+        sendmultiblock(("Pi:Error - " + str(e)).encode())
 
     return RC_SUCCESS
+
 
 PCOPY_CACHE = TMPDIR + "/pcopy_session.bin"
 PCOPY_STATE = TMPDIR + "/pcopy_state.txt"
@@ -256,6 +278,7 @@ PCOPY_PUT_STATE = TMPDIR + "/pcopy_put_state.txt"
 # Upload in progress: (target, temp).  Held in memory so a block does not cost
 # a filesystem read; PCOPY_PUT_STATE is the fallback after a restart.
 _pcopy_put_paths = None
+
 
 def _pcopy_read_state():
     """(target, temp) from the state file, or None if there is no session."""
@@ -269,23 +292,25 @@ def _pcopy_read_state():
         return (parts[0], parts[1] if len(parts) > 1 else parts[0])
     except OSError:
         return None
+
+
 def pcopy(msxcmd: str = "pcopy") -> CommandResult:
 
-    basepath = getMSXPiVar('PATH')
+    basepath = getMSXPiVar("PATH")
 
     # Helper to transmit error block payload to MSX
     def send_error_block(err_msg, err_code):
         print(f"Pi:Error - {err_msg}")
         rc, msx_blocksize = pcopy_handshake()
         if rc == RC_SUCCESS:
-            payload = err_msg.encode('ascii', errors='replace')
+            payload = err_msg.encode("ascii", errors="replace")
             senddata_oneblock(payload, msx_blocksize, err_code, 0)
         return err_code
 
     # 1. Clean input payload and resolve global pcmd fallback
     cmd_str = msxcmd.strip()
     if cmd_str == "" or cmd_str.lower() == "pcopy":
-        pcmd_val = str(globals().get('pcmd', '')).strip()
+        pcmd_val = str(globals().get("pcmd", "")).strip()
         if pcmd_val and pcmd_val.lower() != "pcopy":
             cmd_str = pcmd_val
 
@@ -366,7 +391,9 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
             return send_error_block("Missing destination for put", RC_INVALIDCOMMAND)
         tgt_type, tgt_path = pathExpander(parms[1], basepath)
         if tgt_type != 0:
-            return send_error_block("Only local paths can be written", RC_INVALIDCOMMAND)
+            return send_error_block(
+                "Only local paths can be written", RC_INVALIDCOMMAND
+            )
         # Write to a temporary name; the rename in putclose is what publishes
         # the file.  Truncating the real target here destroyed a verified good
         # copy when a later attempt failed part way - the file was left short
@@ -407,7 +434,10 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         # MSX side, so nothing is done here before calling it.
         rc, payload = recvdata2_oneblock(MAXBUFSIZE)
         if payload is None:
-            print("pcopy: writeblock received nothing (rc=%s)" % hex(rc if rc is not None else 0))
+            print(
+                "pcopy: writeblock received nothing (rc=%s)"
+                % hex(rc if rc is not None else 0)
+            )
             return RC_CONNERR
         # Logged per block on purpose: without it a failed upload shows only a
         # run of identical "pcopy writeblock" lines, with no way to tell how
@@ -460,8 +490,8 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
     # 2. Parse paths with smart source/target auto-detection
     # /z must be a whole argument: a substring test also matched paths such
     # as /tmp/zanac.rom, and the target was then read as the source.
-    expand = any(p.lower() == '/z' for p in parms)
-    parms = [p for p in parms if p.lower() != '/z']
+    expand = any(p.lower() == "/z" for p in parms)
+    parms = [p for p in parms if p.lower() != "/z"]
 
     src_param = parms[0] if parms else ""
     tgt_param = parms[1] if len(parms) > 1 else ""
@@ -478,7 +508,7 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
     # 3. Read source file contents
     if pathType == 0:
         try:
-            with open(path, mode='rb') as f:
+            with open(path, mode="rb") as f:
                 buf = f.read()
             filesize = len(buf)
         except Exception as e:
@@ -497,25 +527,28 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
 
     # 4. Decompress if /z option was specified
     if expand:
-        tmpfn0 = path.split('/')
+        tmpfn0 = path.split("/")
         tmpfn = tmpfn0[-1]
-        extract_dir = TMPDIR + '/msxpi'
+        extract_dir = TMPDIR + "/msxpi"
         os.makedirs(extract_dir, exist_ok=True)
-        for old in glob.glob(extract_dir + '/*'):
+        for old in glob.glob(extract_dir + "/*"):
             try:
                 os.remove(old)
             except OSError:
                 pass
 
-        with open(TMPDIR + '/' + tmpfn, 'wb') as tmpfile:
+        with open(TMPDIR + "/" + tmpfn, "wb") as tmpfile:
             tmpfile.write(buf)
 
         if ".lzh" in tmpfn:
-            tool = 'lha' if transport.hostType == "Windows" else '/usr/bin/lhasa'
-            cmd = f'{tool} -xfiw={extract_dir} {TMPDIR}/{tmpfn}'
+            tool = "lha" if transport.hostType == "Windows" else "/usr/bin/lhasa"
+            cmd = f"{tool} -xfiw={extract_dir} {TMPDIR}/{tmpfn}"
         else:
-            cmd = (f'7z.exe e {TMPDIR}/{tmpfn} -aoa -o{extract_dir}/' if transport.hostType == "Windows"
-                   else f'/usr/bin/unar -f -o {extract_dir} {TMPDIR}/{tmpfn}')
+            cmd = (
+                f"7z.exe e {TMPDIR}/{tmpfn} -aoa -o{extract_dir}/"
+                if transport.hostType == "Windows"
+                else f"/usr/bin/unar -f -o {extract_dir} {TMPDIR}/{tmpfn}"
+            )
 
         p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE, close_fds=True)
         perror = p.stderr.read().decode()
@@ -523,11 +556,11 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         if rc is not None and rc != 0:
             return send_error_block(f"Decompression failed: {perror}", RC_FAILED)
 
-        romfiles = [f for f in os.listdir(extract_dir) if f.endswith(('.rom', '.ROM'))]
+        romfiles = [f for f in os.listdir(extract_dir) if f.endswith((".rom", ".ROM"))]
         if romfiles:
-            fname1 = extract_dir + '/' + romfiles[0]
+            fname1 = extract_dir + "/" + romfiles[0]
             try:
-                with open(fname1, mode='rb') as f:
+                with open(fname1, mode="rb") as f:
                     buf = f.read()
                 filesize = len(buf)
             except Exception as e:
@@ -551,15 +584,17 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
     # Send confirmation block back to MSX
     senddata_oneblock(b"READY", msx_blocksize, RC_SUCCESS, 0)
     return RC_SUCCESS
-    
-def formatrsp(rc,lsb,msb,msg,size=BLKSIZE):
+
+
+def formatrsp(rc, lsb, msb, msg, size=BLKSIZE):
     b = bytearray(size)
     b[0] = rc
     b[1] = lsb
     b[2] = msb
-    b[3:len(msg)] = bytearray(msg.encode())
+    b[3 : len(msg)] = bytearray(msg.encode())
     return b
-    
+
+
 def date(parms: Optional[str] = None) -> CommandResult:
 
     pdate = bytearray(8)

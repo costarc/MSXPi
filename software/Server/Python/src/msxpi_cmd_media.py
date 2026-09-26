@@ -28,14 +28,13 @@ from __future__ import annotations
 
 from typing import Optional
 
-
 # Standard library imports
 import logging
 import atexit
 
 # Third-party imports
 
-logger = logging.getLogger('msxpi')
+logger = logging.getLogger("msxpi")
 
 from msxpi_const import (
     CommandResult,
@@ -45,7 +44,6 @@ from msxpi_const import (
 import msxpi_transport as transport
 from msxpi_blocks import sendmultiblock
 from msxpi_settings import getMSXPiVar, setMSXPiVar
-
 
 try:
     from msxpi_player import MpvPlayer, PlayerError
@@ -64,11 +62,12 @@ def init_player() -> None:
     if MpvPlayer is None:
         return
     try:
-        _music_player = MpvPlayer(getMSXPiVar('PATH'))
+        _music_player = MpvPlayer(getMSXPiVar("PATH"))
     except Exception as exc:
         print(f"Warning: music player unavailable: {exc}")
         return
     atexit.register(_music_player.close)
+
 
 def play(data: str) -> CommandResult:
     if not data:
@@ -84,7 +83,7 @@ def play(data: str) -> CommandResult:
         )
         sendmultiblock(help_text.encode())
         return RC_FAILED
-        
+
     cmd, _, parms = data.partition(" ")
     parms = parms.split("\x00", 1)[0].strip()
     try:
@@ -92,8 +91,8 @@ def play(data: str) -> CommandResult:
             raise PlayerError("mpv player is not initialized")
         # PATH is the current MSXPi directory.  It can change after startup
         # through the CD command, so never use the initialization-time value.
-        _music_player.set_base_path(getMSXPiVar('PATH'))
-        _music_player.audio_device = getMSXPiVar('MUSIC_AUDIO_DEVICE').strip()
+        _music_player.set_base_path(getMSXPiVar("PATH"))
+        _music_player.audio_device = getMSXPiVar("MUSIC_AUDIO_DEVICE").strip()
         if cmd.lower() == "play":
             result = _music_player.play(parms)
         elif cmd.lower() == "loop":
@@ -108,16 +107,21 @@ def play(data: str) -> CommandResult:
             # `p play list` is the process control form: return the IDs that
             # can be passed to pause/resume/stop.  Supplying a directory keeps
             # the existing media-file listing behavior.
-            result = (_music_player.list_ids() or "No music playing\n") \
-                if not parms else _music_player.list_media(parms)
+            result = (
+                (_music_player.list_ids() or "No music playing\n")
+                if not parms
+                else _music_player.list_media(parms)
+            )
         elif cmd.lower() in ("getids", "getlids"):
             result = _music_player.list_ids()
         elif cmd.lower() == "audio":
             if transport.hostType not in ("RaspberryPi", "Linux"):
                 raise PlayerError("Audio card selection requires Linux/ALSA")
             result = _music_player.configure_audio(
-                parms, getMSXPiVar('MUSIC_AUDIO_DEVICE'),
-                lambda value: setMSXPiVar('MUSIC_AUDIO_DEVICE', value))
+                parms,
+                getMSXPiVar("MUSIC_AUDIO_DEVICE"),
+                lambda value: setMSXPiVar("MUSIC_AUDIO_DEVICE", value),
+            )
         else:
             raise PlayerError(f"Unknown player command: {cmd}")
         sendmultiblock(str(result or "\n").encode())
@@ -126,11 +130,13 @@ def play(data: str) -> CommandResult:
         sendmultiblock(f"Player error: {exc}".encode())
         return RC_FAILED
 
+
 # `music` is the public command name. Keep `play` above as a compatibility
 # alias for existing MSX software and scripts.
 def music(data: str) -> CommandResult:
     return play(data)
-    
+
+
 def vol(data: Optional[str] = None) -> CommandResult:
 
     try:
