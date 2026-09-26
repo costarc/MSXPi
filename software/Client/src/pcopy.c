@@ -91,9 +91,15 @@ static void parse_args(char *cmd, char *src_buf, char *tgt_buf) {
             strcpy(tgt_buf, src_buf);
         }
     } 
-    // Handle drive specifier targets (e.g., "B:")
+    // Handle drive specifier targets (e.g., "B:"): append only the source's
+    // file name - "B:" + "/tmp/game.rom" is not a name the MSX can create.
     else if (tgt_buf[1] == ':' && tgt_buf[2] == '\0') {
-        strcat(tgt_buf, src_buf);
+        const char *name = src_buf;
+        const char *p;
+        for (p = src_buf; *p != '\0'; p++) {
+            if (*p == '/' || *p == '\\' || *p == ':') name = p + 1;
+        }
+        strcat(tgt_buf, name);
     }
 }
 

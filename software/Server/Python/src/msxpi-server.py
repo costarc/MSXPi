@@ -37,6 +37,7 @@ import requests
 import mmap
 # import fcntl # does not work in Windows
 import os
+import posixpath
 import sys
 import platform
 from os.path import exists
@@ -1124,9 +1125,6 @@ def pathExpander(path, basepath = ''):
     
     path=path.strip().rstrip(' \t\n\0')
     
-    if path.strip() == "..":
-        path = basepath.rsplit('/', 1)[0]
-        basepath = ''
     if len(path) == 0 or path == '' or path.strip() == "." or path.strip() == "*":
         path = basepath
         basepath = ''
@@ -1150,11 +1148,10 @@ def pathExpander(path, basepath = ''):
         newpath = path
     elif basepath.startswith('/'):
         urltype = 0 # this is a local path
-        newpath = basepath + '/' + path
-        newpath = newpath.replace('//','/')
+        newpath = normalize_path(basepath + '/' + path)
     else:
         urltype = 1 # this is a network path
-        newpath = basepath.rstrip('/') + "/" + path
+        newpath = normalize_path(basepath.rstrip('/') + "/" + path)
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -1293,26 +1290,28 @@ def dir(data):
 
     return RC_SUCCESS
 
+def normalize_path(path):
+    """Collapse '.', '..', doubled and trailing slashes in a PATH value, local
+    or URL, never climbing above its root ('/' or the URL's host)."""
+    m = re.match(r'^([a-z][a-z0-9+.-]*://[^/]*)(.*)$', path, re.I)
+    root, rest = (m.group(1), m.group(2)) if m else ('', path)
+    rest = '/' + posixpath.normpath('/' + rest).lstrip('/')
+    return root + rest
+
 def cd(data):
     #print(f"pcd(): {data}")
-    
+
     rc = RC_SUCCESS
-    basepath = getMSXPiVar('PATH') 
-    if not data:
-        userPath=''
-    else:
-        userPath = data 
+    basepath = getMSXPiVar('PATH')
+    userPath = (data or '').strip().rstrip('\0').strip()
     try:
-        if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
+        if userPath in ('', '.'):
             rc = sendmultiblock(basepath.encode())
-        elif (userPath.strip() == ".."):
-            newpath = basepath.rsplit('/', 1)[0]
-            if (newpath == ''):
-                newpath = '/'
-            setMSXPiVar('PATH',newpath)
-            rc = sendmultiblock(newpath.encode())
         else:
+            # pathExpander joins relative paths as they come; normalising the
+            # result is what makes '..', '../dir' and './dir' land properly.
             pathType, path = pathExpander(userPath, basepath)
+            path = normalize_path(path)
             if pathType == 0:
                 if (os.path.isdir(path)):
                     setMSXPiVar('PATH',path)
@@ -1565,17 +1564,14 @@ def pcopy(msxcmd="pcopy"):
             return send_error_block("Missing source file for init", RC_INVALIDCOMMAND)
 
     #print(f"pcopy: Init parsed parameters -> {parms}")
-    userPath = " ".join(parms)
-
     # 2. Parse paths with smart source/target auto-detection
-    expand = '/z' in userPath.lower()
+    # /z must be a whole argument: a substring test also matched paths such
+    # as /tmp/zanac.rom, and the target was then read as the source.
+    expand = any(p.lower() == '/z' for p in parms)
+    parms = [p for p in parms if p.lower() != '/z']
 
-    if expand:
-        src_param = parms[1] if len(parms) > 1 else parms[0]
-        tgt_param = parms[2] if len(parms) > 2 else ""
-    else:
-        src_param = parms[0]
-        tgt_param = parms[1] if len(parms) > 1 else ""
+    src_param = parms[0] if parms else ""
+    tgt_param = parms[1] if len(parms) > 1 else ""
 
     pathType, path = pathExpander(src_param, basepath)
 
