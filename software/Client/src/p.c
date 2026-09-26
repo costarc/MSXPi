@@ -33,7 +33,6 @@
 #include "../../C-common/header/msxpi.h"
 #include <string.h>
 
-#define SHOWPAGE_EMBEDDED
 #include "showpage.c"
 
 // ----------------------------------------------------------------------
@@ -53,14 +52,13 @@ void P_Help(void)
         "set    - Manage MSXPi variables",
         "wifi   - Display and set WiFi configuration",
         "vol    - Volume control",
-        "play   - Play audio files",
+        "music  - Play audio files",
         "reboot - Reboot MSXPi",
         "shut   - Shutdown MSXPi",
         "restart- Restart MSXPi server",
         "netreset [secs] - Rebuild the Pi's TCP/IP setup for UNAPI",
         "reload A: or reload B: - Reload a drive's disk image from disk",
         "showpage [/4|/6|/8] <url> - Render a web page on the MSX screen",
-
         "chatgpt - Interact with ChatGPT",
         NULL
     };

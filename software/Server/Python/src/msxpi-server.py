@@ -37,6 +37,7 @@ import requests
 import mmap
 # import fcntl # does not work in Windows
 import os
+import posixpath
 import sys
 import platform
 from os.path import exists
@@ -68,7 +69,7 @@ except ImportError:
 
 
 version = "1.6"
-BuildId = "20260919.060"
+BuildId = "20260926.061"
 
 CMDSIZE = 9
 MSGSIZE = 128
@@ -1124,9 +1125,6 @@ def pathExpander(path, basepath = ''):
     
     path=path.strip().rstrip(' \t\n\0')
     
-    if path.strip() == "..":
-        path = basepath.rsplit('/', 1)[0]
-        basepath = ''
     if len(path) == 0 or path == '' or path.strip() == "." or path.strip() == "*":
         path = basepath
         basepath = ''
@@ -1150,11 +1148,10 @@ def pathExpander(path, basepath = ''):
         newpath = path
     elif basepath.startswith('/'):
         urltype = 0 # this is a local path
-        newpath = basepath + '/' + path
-        newpath = newpath.replace('//','/')
+        newpath = normalize_path(basepath + '/' + path)
     else:
         urltype = 1 # this is a network path
-        newpath = basepath.rstrip('/') + "/" + path
+        newpath = normalize_path(basepath.rstrip('/') + "/" + path)
     return [urltype, newpath]
 
 def msxdos_inihrd(filename, access=mmap.ACCESS_WRITE):
@@ -1293,26 +1290,28 @@ def dir(data):
 
     return RC_SUCCESS
 
+def normalize_path(path):
+    """Collapse '.', '..', doubled and trailing slashes in a PATH value, local
+    or URL, never climbing above its root ('/' or the URL's host)."""
+    m = re.match(r'^([a-z][a-z0-9+.-]*://[^/]*)(.*)$', path, re.I)
+    root, rest = (m.group(1), m.group(2)) if m else ('', path)
+    rest = '/' + posixpath.normpath('/' + rest).lstrip('/')
+    return root + rest
+
 def cd(data):
     #print(f"pcd(): {data}")
-    
+
     rc = RC_SUCCESS
-    basepath = getMSXPiVar('PATH') 
-    if not data:
-        userPath=''
-    else:
-        userPath = data 
+    basepath = getMSXPiVar('PATH')
+    userPath = (data or '').strip().rstrip('\0').strip()
     try:
-        if (len(userPath) == 0 or userPath == '' or userPath.strip() == "."):
+        if userPath in ('', '.'):
             rc = sendmultiblock(basepath.encode())
-        elif (userPath.strip() == ".."):
-            newpath = basepath.rsplit('/', 1)[0]
-            if (newpath == ''):
-                newpath = '/'
-            setMSXPiVar('PATH',newpath)
-            rc = sendmultiblock(newpath.encode())
         else:
+            # pathExpander joins relative paths as they come; normalising the
+            # result is what makes '..', '../dir' and './dir' land properly.
             pathType, path = pathExpander(userPath, basepath)
+            path = normalize_path(path)
             if pathType == 0:
                 if (os.path.isdir(path)):
                     setMSXPiVar('PATH',path)
@@ -1494,7 +1493,7 @@ def pcopy(msxcmd="pcopy"):
         rc, msx_blocksize = pcopy_handshake()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
+        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     if subcmd == "writeblock":
@@ -1553,7 +1552,7 @@ def pcopy(msxcmd="pcopy"):
         rc, msx_blocksize = pcopy_handshake()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"OK", msx_blocksize, RC_SUCCESS, 0)
+        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     # =========================================================================
@@ -1565,17 +1564,14 @@ def pcopy(msxcmd="pcopy"):
             return send_error_block("Missing source file for init", RC_INVALIDCOMMAND)
 
     #print(f"pcopy: Init parsed parameters -> {parms}")
-    userPath = " ".join(parms)
-
     # 2. Parse paths with smart source/target auto-detection
-    expand = '/z' in userPath.lower()
+    # /z must be a whole argument: a substring test also matched paths such
+    # as /tmp/zanac.rom, and the target was then read as the source.
+    expand = any(p.lower() == '/z' for p in parms)
+    parms = [p for p in parms if p.lower() != '/z']
 
-    if expand:
-        src_param = parms[1] if len(parms) > 1 else parms[0]
-        tgt_param = parms[2] if len(parms) > 2 else ""
-    else:
-        src_param = parms[0]
-        tgt_param = parms[1] if len(parms) > 1 else ""
+    src_param = parms[0] if parms else ""
+    tgt_param = parms[1] if len(parms) > 1 else ""
 
     pathType, path = pathExpander(src_param, basepath)
 
@@ -2049,6 +2045,11 @@ def reload(parms = None):
     if not path:
         return sendmultiblock(f"Pi:Error - {varname} is not set".encode())
 
+    # Windows will not let the image be replaced while it is mapped, so a
+    # remap in place would only pick up the same file again.
+    if platform.system() == "Windows":
+        return reload_delayed(varname_upper, path)
+
     rc, data = msxdos_inihrd(path)
     if rc != RC_SUCCESS:
         return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
@@ -2065,17 +2066,82 @@ def reload(parms = None):
     print(f"reload(): {varname} reloaded from {path}")
     return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
+# Windows only: how long 'reload' leaves a drive released for the image to be
+# replaced, and the drives currently in that window (drive number -> Event set
+# once the image is mapped again).
+RELOAD_DELAY = 10
+_remount_pending = {}
+
+def reload_delayed(drive, path):
+    """Windows 'reload': release the drive's image so it can be replaced,
+    then map it again RELOAD_DELAY seconds later. The MSX cannot be asked
+    to issue a second command (it may have booted from this very drive), so
+    the remount runs on a timer, and dskior/dskiow hold any access to the
+    drive until it is done instead of failing it."""
+    global drive0Data, drive1Data
+
+    drivenum = 0 if drive == "A" else 1
+    if drivenum in _remount_pending:
+        return sendmultiblock(f"Pi:Error - Drive {drive}: is already re-mounting".encode())
+
+    done = threading.Event()
+    _remount_pending[drivenum] = done
+    if drivenum == 0:
+        unmount_drive(drive0Data)
+        drive0Data = ''
+    else:
+        unmount_drive(drive1Data)
+        drive1Data = ''
+    print(f"reload(): Drive {drive}: released - replace {path} now")
+
+    def remount():
+        global drive0Data, drive1Data
+        # The replacement may still be being copied (locked, or not there
+        # yet): keep trying rather than leave the MSX without its drive.
+        try:
+            rc, data = msxdos_inihrd(path)
+        except OSError as e:
+            rc, data = RC_FAILED, str(e)
+        if rc != RC_SUCCESS:
+            print(f"reload(): cannot map {path} yet ({data or 'missing'}), retrying")
+            t = threading.Timer(1, remount)
+            t.daemon = True
+            t.start()
+            return
+        if drivenum == 0:
+            drive0Data = data
+        else:
+            drive1Data = data
+        del _remount_pending[drivenum]
+        done.set()
+        print(f"reload(): Drive {drive}: re-mounted from {path}")
+
+    t = threading.Timer(RELOAD_DELAY, remount)
+    t.daemon = True
+    t.start()
+
+    return sendmultiblock(f"Pi:Ok - Drive {drive}: released, re-mounting in {RELOAD_DELAY} seconds".encode())
+
+def wait_remount(drivenum):
+    """Block a disk access until a pending Windows 'reload' has re-mapped
+    the drive; returns at once otherwise."""
+    done = _remount_pending.get(drivenum)
+    if done:
+        print(f"Drive {'AB'[drivenum]}: access waiting for re-mount")
+        done.wait()
+
 def dskior(parms = None):
     #print("dskiords()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
         dskioini()
-        
+    wait_remount(sectorInfo[0])
+
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
-    
+
     #print("dskiords:deviceNumber=",sectorInfo[0])
     #print("dskiords:numsectors=",sectorInfo[1])
     #print("dskiords:mediaDescriptor=",sectorInfo[2])
@@ -2120,11 +2186,12 @@ def dskiow(parms = None):
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
         dskioini()
-        
+    wait_remount(sectorInfo[0])
+
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
-    
+
     #print("dskiowrs:deviceNumber=",sectorInfo[0])
     #print("dskiowrs:numsectors=",sectorInfo[1])
     #print("dskiowrs:mediaDescriptor=",sectorInfo[2])
@@ -3363,7 +3430,7 @@ def shut(parm=None):
     no_reply = (parm or "").strip().lower() in ("nowait", "noack", "quiet")
     if hostType == "RaspberryPi" and platform.system() == "Linux":
         if not no_reply:
-            sendmultiblock(b"OK")
+            sendmultiblock(b"Pi:Ok")
         print("Shutting down Raspberry Pi in 2 seconds")
         subprocess.Popen("sleep 2; sudo shutdown -h now", shell=True,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -4281,8 +4348,11 @@ def renderpage(parms=None):
     except Exception as exc:
         print(f"renderpage: {exc}")
         detail = (str(exc).splitlines() or [type(exc).__name__])[0]
-        message = ("renderpage: " + detail)[:240]
+        message = ("showpage: " + detail)[:240]
         return sendmultiblock(message.encode("ascii", "replace"), RC_FAILED)
+    if not payload:
+        # scroll at the top or bottom: nothing to draw.
+        return sendmultiblock(b"END", RC_SUCCNOSTD)
     return sendmultiblock(payload)
 
 # showpage is the public command name used by the combined `p` client.
