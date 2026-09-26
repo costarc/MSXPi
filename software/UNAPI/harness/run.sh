@@ -264,6 +264,7 @@ for t in "${TESTS[@]}"; do
     expect_fail=0
     if [ -f "$expect" ]; then
         while IFS= read -r pat; do
+            pat=${pat%$'\r'}    # core.autocrlf checks .expect out with CRLF
             case "$pat" in ""|\#*) continue ;; esac
             if ! grep -q "$pat" "$OUTDIR/$t.server.log" 2>/dev/null; then
                 echo "       server.log missing: $pat"
