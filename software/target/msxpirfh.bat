@@ -5,6 +5,7 @@ pcopy m:INL.CFG
 pcopy m:IRC.BAS
 pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
+pcopy m:SKMSX3.COM
 pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
 pcopy m:Telnet.com

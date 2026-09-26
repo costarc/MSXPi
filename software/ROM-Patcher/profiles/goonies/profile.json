@@ -1,0 +1,559 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 1,
+  "id": "goonies-msxpi-ascii16-v1",
+  "source": {
+    "size": 32768,
+    "sha256": "2ba602b1a17e4797da1588afe6e65640331c15746bf5959f4778b404be929dde"
+  },
+  "output": {
+    "size": 65536,
+    "fill": 0,
+    "mapper": "ASCII16"
+  },
+  "requirements": [
+    "MSXPi music play/loop/stop commands with decimal playback IDs",
+    "Corrected msxarch RAM mapper loader (state at F900, handlers FAC0/FAD8)",
+    "At least 16 KiB page-3 RAM; validated setup Canon V-25 + MSXPi + ram4mb",
+    "Exit requires msxarch RAM loading; clear server ROM cache after replacing a named ROM"
+  ],
+  "assets": {
+    "resident": {
+      "file": "assets/resident.bin",
+      "sha256": "5745195b33e2dee113f03af3b0e531657935daa2a9c767c9913bc124b3ec00ec"
+    }
+  },
+  "layout": [
+    {
+      "source": "resident",
+      "offset": 0,
+      "size": 8192,
+      "destination": 256
+    },
+    {
+      "source": "input",
+      "offset": 16384,
+      "size": 16384,
+      "destination": 16384
+    },
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 16384,
+      "destination": 32768
+    }
+  ],
+  "patches": [
+    {
+      "offset": 0,
+      "expected": "00000000",
+      "replace": "41421040",
+      "reason": "ASCII16 bootstrap cartridge header"
+    },
+    {
+      "offset": 16,
+      "expected": "000000000000000000000000000000",
+      "replace": "f32100411100c0010020edb0c300c0",
+      "reason": "Copy 8 KiB runtime/configuration to page 3 RAM"
+    },
+    {
+      "offset": 32802,
+      "expected": "221c41",
+      "replace": "000000",
+      "reason": "Neutralize original mirrored-ROM write in RAM"
+    },
+    {
+      "offset": 32848,
+      "expected": "222941",
+      "replace": "000000",
+      "reason": "Neutralize original mirrored-ROM write in RAM"
+    },
+    {
+      "offset": 32954,
+      "expected": "cbb6",
+      "replace": "0000",
+      "reason": "Neutralize original mirrored-ROM write in RAM"
+    },
+    {
+      "offset": 32948,
+      "expected": "fb18fe",
+      "replace": "c325c0",
+      "reason": "Service music outside interrupt context"
+    },
+    {
+      "offset": 30572,
+      "expected": "790fc688",
+      "replace": "c34dc000",
+      "reason": "Filter mapped music channel volumes only after successful external playback"
+    }
+  ],
+  "music": {
+    "abi": "msxpi-music-v1",
+    "map_offset": 4352,
+    "modes_offset": 4608,
+    "options_offset": 4864,
+    "names_offset": 4880,
+    "names_capacity": 3568,
+    "names_encoding": "escape-32"
+  },
+  "sounds": {
+    "0f": {
+      "raw_ids": [
+        143,
+        207
+      ],
+      "description": "Normalized melodic sound ID 0x0F; descriptive name not yet identified"
+    },
+    "10": {
+      "raw_ids": [
+        144,
+        208
+      ],
+      "description": "Normalized melodic sound ID 0x10; descriptive name not yet identified"
+    },
+    "11": {
+      "raw_ids": [
+        145,
+        209
+      ],
+      "description": "Normalized melodic sound ID 0x11; descriptive name not yet identified"
+    },
+    "12": {
+      "raw_ids": [
+        146,
+        210
+      ],
+      "description": "Normalized melodic sound ID 0x12; descriptive name not yet identified"
+    },
+    "13": {
+      "raw_ids": [
+        147,
+        211
+      ],
+      "description": "Normalized melodic sound ID 0x13; descriptive name not yet identified"
+    },
+    "14": {
+      "raw_ids": [
+        148,
+        212
+      ],
+      "description": "Normalized melodic sound ID 0x14; descriptive name not yet identified"
+    },
+    "15": {
+      "raw_ids": [
+        149,
+        213
+      ],
+      "description": "Normalized melodic sound ID 0x15; descriptive name not yet identified"
+    },
+    "16": {
+      "raw_ids": [
+        150,
+        214
+      ],
+      "description": "Normalized melodic sound ID 0x16; descriptive name not yet identified"
+    },
+    "17": {
+      "raw_ids": [
+        151,
+        215
+      ],
+      "description": "Normalized melodic sound ID 0x17; descriptive name not yet identified"
+    },
+    "18": {
+      "raw_ids": [
+        152,
+        216
+      ],
+      "description": "Normalized melodic sound ID 0x18; descriptive name not yet identified"
+    },
+    "19": {
+      "raw_ids": [
+        153,
+        217
+      ],
+      "description": "Normalized melodic sound ID 0x19; descriptive name not yet identified"
+    },
+    "1a": {
+      "raw_ids": [
+        154,
+        218
+      ],
+      "description": "Normalized melodic sound ID 0x1A; descriptive name not yet identified"
+    },
+    "1b": {
+      "raw_ids": [
+        155,
+        219
+      ],
+      "description": "Normalized melodic sound ID 0x1B; descriptive name not yet identified"
+    },
+    "1c": {
+      "raw_ids": [
+        156,
+        220
+      ],
+      "description": "Normalized melodic sound ID 0x1C; descriptive name not yet identified"
+    },
+    "1d": {
+      "raw_ids": [
+        157,
+        221
+      ],
+      "description": "Normalized melodic sound ID 0x1D; descriptive name not yet identified"
+    },
+    "1e": {
+      "raw_ids": [
+        158,
+        222
+      ],
+      "description": "Normalized melodic sound ID 0x1E; descriptive name not yet identified"
+    },
+    "1f": {
+      "raw_ids": [
+        159,
+        223
+      ],
+      "description": "Normalized melodic sound ID 0x1F; descriptive name not yet identified"
+    },
+    "20": {
+      "raw_ids": [
+        160,
+        224
+      ],
+      "description": "Normalized melodic sound ID 0x20; descriptive name not yet identified"
+    },
+    "21": {
+      "raw_ids": [
+        161,
+        225
+      ],
+      "description": "Normalized melodic sound ID 0x21; descriptive name not yet identified"
+    },
+    "22": {
+      "raw_ids": [
+        162,
+        226
+      ],
+      "description": "Normalized melodic sound ID 0x22; descriptive name not yet identified"
+    },
+    "23": {
+      "raw_ids": [
+        163,
+        227
+      ],
+      "description": "Normalized melodic sound ID 0x23; descriptive name not yet identified"
+    },
+    "24": {
+      "raw_ids": [
+        164,
+        228
+      ],
+      "description": "Normalized melodic sound ID 0x24; descriptive name not yet identified"
+    },
+    "25": {
+      "raw_ids": [
+        165,
+        229
+      ],
+      "description": "Normalized melodic sound ID 0x25; descriptive name not yet identified"
+    },
+    "26": {
+      "raw_ids": [
+        166,
+        230
+      ],
+      "description": "Normalized melodic sound ID 0x26; descriptive name not yet identified"
+    },
+    "27": {
+      "raw_ids": [
+        167,
+        231
+      ],
+      "description": "Normalized melodic sound ID 0x27; descriptive name not yet identified"
+    },
+    "28": {
+      "raw_ids": [
+        168,
+        232
+      ],
+      "description": "Normalized melodic sound ID 0x28; descriptive name not yet identified"
+    },
+    "29": {
+      "raw_ids": [
+        169,
+        233
+      ],
+      "description": "Normalized melodic sound ID 0x29; descriptive name not yet identified"
+    },
+    "2a": {
+      "raw_ids": [
+        170,
+        234
+      ],
+      "description": "Normalized melodic sound ID 0x2A; descriptive name not yet identified"
+    },
+    "2b": {
+      "raw_ids": [
+        171,
+        235
+      ],
+      "description": "Normalized melodic sound ID 0x2B; descriptive name not yet identified"
+    },
+    "2c": {
+      "raw_ids": [
+        172,
+        236
+      ],
+      "description": "Normalized melodic sound ID 0x2C; descriptive name not yet identified"
+    }
+  },
+  "defaults": {
+    "tracks": {
+      "default": {
+        "filename": "The_Goonies_R_Good_Enough.mp3",
+        "mode": "loop"
+      }
+    },
+    "sounds": {
+      "0f": "default",
+      "10": "default",
+      "11": "default",
+      "12": "default",
+      "13": "default",
+      "14": "default",
+      "15": "default",
+      "16": "default",
+      "17": "default",
+      "18": "default",
+      "19": "default",
+      "1a": "default",
+      "1b": "default",
+      "1c": "default",
+      "1d": "default",
+      "1e": "default",
+      "1f": "default",
+      "20": "default",
+      "21": "default",
+      "22": "default",
+      "23": "default",
+      "24": "default",
+      "25": "default",
+      "26": "default",
+      "27": "default",
+      "28": "default",
+      "29": "default",
+      "2a": "default",
+      "2b": "default",
+      "2c": "default"
+    },
+    "exit_enabled": true,
+    "gap_frames": 120
+  },
+  "symbols": {
+    "ATOHERR": 50400,
+    "ATOHEX": 50370,
+    "ATOHL": 50390,
+    "ATOHU": 50380,
+    "BLKSIZE": 512,
+    "BULKBLKSIZE": 4096,
+    "BUSY": 174,
+    "CALBAS": 345,
+    "CALLSTAT": 21928,
+    "CALSLT": 28,
+    "CHGET": 159,
+    "CHKPIRDY": 49695,
+    "CHPUT": 162,
+    "CHRGTR": 18022,
+    "CLEARBUF": 50402,
+    "CMDSIZE": 9,
+    "CONTROL_PORT1": 86,
+    "CONTROL_PORT2": 87,
+    "CSRX": 62429,
+    "CSRY": 62428,
+    "DATA_PORT1": 90,
+    "DEVICE": 64921,
+    "DSPFNK": 207,
+    "ENASLT": 36,
+    "ENDTRANSFER": 162,
+    "ERAFNK": 204,
+    "ERRFLG": 62484,
+    "ERRHAND": 16495,
+    "EXPTBL": 64705,
+    "FRESTR": 26576,
+    "FRMEVL": 19556,
+    "GETCPU": 387,
+    "GLOBALRETRIES": 3,
+    "GOONIES_WAIT_PASSES": 18,
+    "HIMEM": 64586,
+    "INITXT": 108,
+    "INLIN": 177,
+    "INLINBUF": 62814,
+    "MAXBUFSIZE": 8192,
+    "MAXBUFSIZE_HI": 32,
+    "MAXBUFSIZE_LO": 0,
+    "MAXRETRIES": 10,
+    "MSGSIZE": 128,
+    "MSXPICALLBUF": 58328,
+    "MSXPI_GETSTASH": 50416,
+    "MSXPI_STASH_BUF": 50423,
+    "PAYLOAD_ADVANCE": 50482,
+    "PAYLOAD_ESCAPE": 50520,
+    "PAYLOAD_ESCAPE_IFF_OFF": 50545,
+    "PAYLOAD_NO_CARRY": 50487,
+    "PAYLOAD_RX": 50431,
+    "PAYLOAD_RX_LOOP": 50434,
+    "PAYLOAD_TX": 50460,
+    "PAYLOAD_TX_LOOP": 50463,
+    "PAYLOAD_WAIT": 50492,
+    "PIREADBYTE": 49702,
+    "PIREADBYTE_ESC": 49719,
+    "PIWRITEBYTE": 49722,
+    "PIWRITEBYTE_ERR": 49733,
+    "PRINT": 50276,
+    "PRINT1": 50289,
+    "PRINTALFA": 50331,
+    "PRINTDIGIT": 50327,
+    "PRINTNLINE": 50295,
+    "PRINTNUM1": 50337,
+    "PRINTNUMBER": 50306,
+    "PRINTNUMERIC": 50335,
+    "PRINTPISTDOUT": 50209,
+    "PRINTPISTDOUT0": 50213,
+    "PROCNM": 64905,
+    "PUTCHAR": 49694,
+    "PerformHandshake": 49903,
+    "RAMAD1": 62274,
+    "RAMAD3": 62276,
+    "RC_BUFOVFLW": 227,
+    "RC_CHKSUM_ERR": 173,
+    "RC_CONNERR": 232,
+    "RC_ESCPRESSED": 226,
+    "RC_FAILED": 231,
+    "RC_FAILNOSTD": 236,
+    "RC_FILENOTFOUND": 230,
+    "RC_HANDSHAKEERR": 229,
+    "RC_INVALIDCOMMAND": 225,
+    "RC_INVALIDDATASIZE": 228,
+    "RC_READY": 234,
+    "RC_SUCCESS": 224,
+    "RC_SUCCNOSTD": 235,
+    "RC_TERMINATE": 237,
+    "RC_UNDEFINED": 239,
+    "RC_UNEXPECTEDDATA": 238,
+    "RC_WAIT": 233,
+    "RDSLT": 12,
+    "READY": 170,
+    "READY_ACK": 160,
+    "RECVDATA_ONEBLOCK": 49944,
+    "RESET": 255,
+    "RSLREG": 312,
+    "SCM_CountDone": 50199,
+    "SCM_CountLoop": 50191,
+    "SCM_HaveFirst": 50187,
+    "SCM_HaveLength": 50206,
+    "SD2_CHKSUM_ERR": 49868,
+    "SD2_CHK_OK": 49871,
+    "SD2_CONN_ERR": 49829,
+    "SD2_EXIT": 49900,
+    "SD2_HS_ERR": 49826,
+    "SD2_HS_LOOP": 49747,
+    "SD2_RETRY": 49781,
+    "SD2_SEND_DONE": 49832,
+    "SECTORSIZE": 512,
+    "SENDDATA": 49741,
+    "SENDNEXT": 161,
+    "SLTATR": 64713,
+    "SNSMAT": 321,
+    "STDOUTTONULL": 50252,
+    "STDOUTTONULL0": 50256,
+    "STORE_BYTE": 50045,
+    "STORE_BYTE_1": 50071,
+    "STREXIT": 50368,
+    "STRTOHEX": 50342,
+    "STRTOHEX_LOOP": 50348,
+    "SendCommandToMSXPi": 50181,
+    "TEXTTERMINATOR": 0,
+    "USR": 63480,
+    "VALTYP": 63075,
+    "WRSLT": 20,
+    "WSLREG": 315,
+    "XF365": 62309,
+    "arytab": 63172,
+    "bad_pid": 49550,
+    "check_exit": 49271,
+    "code_end": 51010,
+    "command": 50576,
+    "current": 50748,
+    "decode_name_byte": 49172,
+    "decode_name_char": 49180,
+    "decode_name_next": 49186,
+    "decode_names": 49169,
+    "desired": 50749,
+    "desired_music": 49200,
+    "exchange": 49612,
+    "exchange_error": 49684,
+    "exit_clear": 49322,
+    "exit_enabled": 53760,
+    "exit_game": 49309,
+    "filename_copy": 49466,
+    "filename_found": 49440,
+    "filename_next": 49433,
+    "gap_frames": 53761,
+    "goonies_size_ok": 50013,
+    "goonies_wait_done": 50517,
+    "goonies_wait_loop": 50503,
+    "goonies_wait_pass": 50500,
+    "handshake_err": 49939,
+    "handshake_exit": 49935,
+    "handshake_exit_err": 49940,
+    "idle": 49189,
+    "link_failed": 50751,
+    "loop_prefix": 50565,
+    "music_decided": 49398,
+    "music_id": 49348,
+    "music_not_detected": 49379,
+    "no_music": 49227,
+    "parse_pid": 49488,
+    "pid": 50737,
+    "pid_done": 49535,
+    "pid_tail": 49520,
+    "play_prefix": 50554,
+    "prefix_ready": 49457,
+    "r2_chk_ok": 50130,
+    "r2_chksum_err": 50126,
+    "r2_conn_err": 50077,
+    "r2_conn_err_x": 50081,
+    "r2_handshake_err_x": 50086,
+    "r2_handshake_loop": 49906,
+    "r2_header_err": 49996,
+    "r2_header_ok": 50000,
+    "r2_payload_done": 50091,
+    "r2_payload_loop": 50036,
+    "r2_retry": 49954,
+    "r2_unexpecteddata": 50073,
+    "resetMSXPI": 49736,
+    "resident_boot": 49152,
+    "resident_end": 57344,
+    "response": 50753,
+    "response_index": 50752,
+    "response_more": 49671,
+    "response_next": 49632,
+    "service": 49358,
+    "silence_frames": 50750,
+    "sound_map": 53248,
+    "start_music": 49423,
+    "stop_command": 50715,
+    "stop_copy": 49563,
+    "stop_digits": 50726,
+    "stop_music": 49557,
+    "stop_ok": 49607,
+    "strend": 63174,
+    "track_modes": 53504,
+    "track_names": 53776,
+    "txttab": 63094,
+    "vartab": 63170,
+    "volume_hook": 49229,
+    "volume_original": 49262
+  }
+}

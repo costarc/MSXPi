@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+profiles/*/src/*.lst
+profiles/*/src/*.sym
