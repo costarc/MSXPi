@@ -2049,6 +2049,11 @@ def reload(parms = None):
     if not path:
         return sendmultiblock(f"Pi:Error - {varname} is not set".encode())
 
+    # Windows will not let the image be replaced while it is mapped, so a
+    # remap in place would only pick up the same file again.
+    if platform.system() == "Windows":
+        return reload_delayed(varname_upper, path)
+
     rc, data = msxdos_inihrd(path)
     if rc != RC_SUCCESS:
         return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
@@ -2065,17 +2070,82 @@ def reload(parms = None):
     print(f"reload(): {varname} reloaded from {path}")
     return sendmultiblock(f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode())
 
+# Windows only: how long 'reload' leaves a drive released for the image to be
+# replaced, and the drives currently in that window (drive number -> Event set
+# once the image is mapped again).
+RELOAD_DELAY = 10
+_remount_pending = {}
+
+def reload_delayed(drive, path):
+    """Windows 'reload': release the drive's image so it can be replaced,
+    then map it again RELOAD_DELAY seconds later. The MSX cannot be asked
+    to issue a second command (it may have booted from this very drive), so
+    the remount runs on a timer, and dskior/dskiow hold any access to the
+    drive until it is done instead of failing it."""
+    global drive0Data, drive1Data
+
+    drivenum = 0 if drive == "A" else 1
+    if drivenum in _remount_pending:
+        return sendmultiblock(f"Pi:Error - Drive {drive}: is already re-mounting".encode())
+
+    done = threading.Event()
+    _remount_pending[drivenum] = done
+    if drivenum == 0:
+        unmount_drive(drive0Data)
+        drive0Data = ''
+    else:
+        unmount_drive(drive1Data)
+        drive1Data = ''
+    print(f"reload(): Drive {drive}: released - replace {path} now")
+
+    def remount():
+        global drive0Data, drive1Data
+        # The replacement may still be being copied (locked, or not there
+        # yet): keep trying rather than leave the MSX without its drive.
+        try:
+            rc, data = msxdos_inihrd(path)
+        except OSError as e:
+            rc, data = RC_FAILED, str(e)
+        if rc != RC_SUCCESS:
+            print(f"reload(): cannot map {path} yet ({data or 'missing'}), retrying")
+            t = threading.Timer(1, remount)
+            t.daemon = True
+            t.start()
+            return
+        if drivenum == 0:
+            drive0Data = data
+        else:
+            drive1Data = data
+        del _remount_pending[drivenum]
+        done.set()
+        print(f"reload(): Drive {drive}: re-mounted from {path}")
+
+    t = threading.Timer(RELOAD_DELAY, remount)
+    t.daemon = True
+    t.start()
+
+    return sendmultiblock(f"Pi:Ok - Drive {drive}: released, re-mounting in {RELOAD_DELAY} seconds".encode())
+
+def wait_remount(drivenum):
+    """Block a disk access until a pending Windows 'reload' has re-mapped
+    the drive; returns at once otherwise."""
+    done = _remount_pending.get(drivenum)
+    if done:
+        print(f"Drive {'AB'[drivenum]}: access waiting for re-mount")
+        done.wait()
+
 def dskior(parms = None):
     #print("dskiords()")
     
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
         dskioini()
-        
+    wait_remount(sectorInfo[0])
+
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
-    
+
     #print("dskiords:deviceNumber=",sectorInfo[0])
     #print("dskiords:numsectors=",sectorInfo[1])
     #print("dskiords:mediaDescriptor=",sectorInfo[2])
@@ -2120,11 +2190,12 @@ def dskiow(parms = None):
     global msxdos1boot,sectorInfo,drive0Data,drive1Data,SECTORSIZE
     if not msxdos1boot:
         dskioini()
-        
+    wait_remount(sectorInfo[0])
+
     initdataindex = sectorInfo[3]*SECTORSIZE
     numsectors = sectorInfo[1]
     sectorcnt = 0
-    
+
     #print("dskiowrs:deviceNumber=",sectorInfo[0])
     #print("dskiowrs:numsectors=",sectorInfo[1])
     #print("dskiowrs:mediaDescriptor=",sectorInfo[2])
