@@ -1,0 +1,4660 @@
+(export
+	(version "E")
+	(design
+		(source "C:\\Users\\roniv\\Dev\\github\\MSXPi-v0.8.2-legacy\\hardware\\Schematic\\MSXPi_v0.7.0_Rev_7_KiCad\\msxpi.kicad_sch")
+		(date "2026-09-27T15:21:55")
+		(tool "Eeschema 10.0.5")
+		(sheet
+			(number "1")
+			(name "/")
+			(tstamps "/")
+			(title_block
+				(title)
+				(company)
+				(rev)
+				(date)
+				(source "msxpi.kicad_sch")
+				(comment
+					(number "1")
+					(value "")
+				)
+				(comment
+					(number "2")
+					(value "")
+				)
+				(comment
+					(number "3")
+					(value "")
+				)
+				(comment
+					(number "4")
+					(value "")
+				)
+				(comment
+					(number "5")
+					(value "")
+				)
+				(comment
+					(number "6")
+					(value "")
+				)
+				(comment
+					(number "7")
+					(value "")
+				)
+				(comment
+					(number "8")
+					(value "")
+				)
+				(comment
+					(number "9")
+					(value "")
+				)
+			)
+		)
+	)
+	(components
+		(comp
+			(ref "+5V0")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "a5305d84-8073-4785-9985-faa8ec871b47")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "A14")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "eb2d80ef-5de2-4c3f-ab98-3867b9a68a97")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "A15")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "00a27f9c-ebde-41f8-a705-67a879c3e7ad")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "BUF1")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "503953bd-951d-486f-ba61-aa3e21ee4e63")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "BUF2")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "3460e183-0cdb-4858-8a60-6c5ea195b7ef")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "C1")
+			(value "C2,5-3")
+			(footprint "msxpi:C2.5-3")
+			(fields
+				(field
+					(name "Footprint") "msxpi:C2.5-3")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "C2,5-3")
+				(description "CAPACITOR\n\nnaming: grid - package width")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "74ffc6ff-32cb-4a44-8c08-b396e8fc376d")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "C2")
+			(value "C2,5-3")
+			(footprint "msxpi:C2.5-3")
+			(fields
+				(field
+					(name "Footprint") "msxpi:C2.5-3")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "C2,5-3")
+				(description "CAPACITOR\n\nnaming: grid - package width")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "f0bb5714-f3b2-45d4-860b-fd3750c2fe50")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "C3")
+			(value "CPOL-EUE2.5-5")
+			(footprint "msxpi:E2,5-5")
+			(fields
+				(field
+					(name "Footprint") "msxpi:E2,5-5")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "CPOL-EUE2.5-5")
+				(description "POLARIZED CAPACITOR, European symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "e2d5cc46-db1a-42e2-9c30-4af713aaa452")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "+")
+						)
+						(pin
+							(num "-")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "C4")
+			(value "C2,5-3")
+			(footprint "msxpi:C2.5-3")
+			(fields
+				(field
+					(name "Footprint") "msxpi:C2.5-3")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "C2,5-3")
+				(description "CAPACITOR\n\nnaming: grid - package width")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "a837a946-cc27-41bb-ac54-3b8b68afc3c5")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "CS1")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "ae34817b-9dda-4185-b615-f2abf46c7b1d")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "CS2")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "f2e7d70d-5669-4f89-b928-90cc0cde2c8f")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "CS12")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "71fd0c6c-60c4-454d-99af-ed43f1d08a16")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "EPM3064ALC44")
+			(value "EPM3064S44")
+			(footprint "msxpi:PLCC-S44")
+			(fields
+				(field
+					(name "MPN") "EPM3064SLC44-10N")
+				(field
+					(name "Footprint") "msxpi:PLCC-S44")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "EPM3064S44")
+				(description "EPM3064\n\nMAX 3000 family PLCC through hole socket")
+			)
+			(property
+				(name "MPN")
+				(value "EPM3064SLC44-10N")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "065783fd-b25f-4e98-84d5-9f8cf5d1d830")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "3")
+						)
+						(pin
+							(num "43")
+						)
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "44")
+						)
+						(pin
+							(num "2")
+						)
+						(pin
+							(num "12")
+						)
+						(pin
+							(num "11")
+						)
+						(pin
+							(num "9")
+						)
+						(pin
+							(num "8")
+						)
+						(pin
+							(num "7")
+						)
+						(pin
+							(num "6")
+						)
+						(pin
+							(num "5")
+						)
+						(pin
+							(num "4")
+						)
+						(pin
+							(num "21")
+						)
+						(pin
+							(num "20")
+						)
+						(pin
+							(num "19")
+						)
+						(pin
+							(num "18")
+						)
+						(pin
+							(num "16")
+						)
+						(pin
+							(num "14")
+						)
+						(pin
+							(num "13")
+						)
+						(pin
+							(num "24")
+						)
+						(pin
+							(num "25")
+						)
+						(pin
+							(num "26")
+						)
+						(pin
+							(num "27")
+						)
+						(pin
+							(num "28")
+						)
+						(pin
+							(num "29")
+						)
+						(pin
+							(num "31")
+						)
+						(pin
+							(num "32")
+						)
+						(pin
+							(num "33")
+						)
+						(pin
+							(num "34")
+						)
+						(pin
+							(num "37")
+						)
+						(pin
+							(num "38")
+						)
+						(pin
+							(num "39")
+						)
+						(pin
+							(num "40")
+						)
+						(pin
+							(num "41")
+						)
+						(pin
+							(num "15")
+						)
+						(pin
+							(num "23")
+						)
+						(pin
+							(num "35")
+						)
+						(pin
+							(num "42")
+						)
+						(pin
+							(num "10")
+						)
+						(pin
+							(num "17")
+						)
+						(pin
+							(num "22")
+						)
+						(pin
+							(num "30")
+						)
+						(pin
+							(num "36")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "GND0")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "2e0d393c-1d2e-4a51-977c-6406e3ee9969")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "GND4")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "bac91f55-9a0e-46b8-b900-0622a2e1189e")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "GND9")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "f5bfea62-f7d6-4db3-9490-37b963d99581")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "GND10")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "0059fb2d-e09b-4802-b8c6-276cdbcc8af6")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "GND11")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "3783c435-f5ac-43e4-b57d-05500fd80f4a")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "IC1")
+			(value "LD117A?S33TR")
+			(footprint "msxpi:SOT223")
+			(fields
+				(field
+					(name "Footprint") "msxpi:SOT223")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "LD117A?S33TR")
+				(description "Low drop fixed and adjustable positive voltage regulators 1 A\n\nSource: http://www.st.com/stonline/products/literature/ds/7194/ld1117axx.pdf")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "49455ea6-3249-4ac9-b598-761e36f5e273")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "3")
+						)
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "4")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "JP2")
+			(value "JP1E")
+			(footprint "msxpi:JP1")
+			(fields
+				(field
+					(name "Footprint") "msxpi:JP1")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "JP1E")
+				(description "JUMPER")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "d76ea79e-b6d1-4565-bfb9-e55a62be5ac3")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "JP6")
+			(value "MSXCART1")
+			(footprint "msxpi:MSXCART")
+			(fields
+				(field
+					(name "Footprint") "msxpi:MSXCART")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "MSXCART1")
+				(description "")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "59bf5217-bd82-4529-aeb0-b28041835beb")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "28")
+						)
+						(pin
+							(num "27")
+						)
+						(pin
+							(num "30")
+						)
+						(pin
+							(num "29")
+						)
+						(pin
+							(num "32")
+						)
+						(pin
+							(num "31")
+						)
+						(pin
+							(num "22")
+						)
+						(pin
+							(num "21")
+						)
+						(pin
+							(num "24")
+						)
+						(pin
+							(num "17")
+						)
+						(pin
+							(num "20")
+						)
+						(pin
+							(num "19")
+						)
+						(pin
+							(num "23")
+						)
+						(pin
+							(num "26")
+						)
+						(pin
+							(num "25")
+						)
+						(pin
+							(num "18")
+						)
+						(pin
+							(num "44")
+						)
+						(pin
+							(num "46")
+						)
+						(pin
+							(num "48")
+						)
+						(pin
+							(num "50")
+						)
+						(pin
+							(num "41")
+						)
+						(pin
+							(num "43")
+						)
+						(pin
+							(num "45")
+						)
+						(pin
+							(num "47")
+						)
+						(pin
+							(num "49")
+						)
+						(pin
+							(num "34")
+						)
+						(pin
+							(num "33")
+						)
+						(pin
+							(num "36")
+						)
+						(pin
+							(num "35")
+						)
+						(pin
+							(num "38")
+						)
+						(pin
+							(num "37")
+						)
+						(pin
+							(num "40")
+						)
+						(pin
+							(num "39")
+						)
+						(pin
+							(num "10")
+						)
+						(pin
+							(num "8")
+						)
+						(pin
+							(num "7")
+						)
+						(pin
+							(num "9")
+						)
+						(pin
+							(num "15")
+						)
+						(pin
+							(num "6")
+						)
+						(pin
+							(num "42")
+						)
+						(pin
+							(num "12")
+						)
+						(pin
+							(num "11")
+						)
+						(pin
+							(num "13")
+						)
+						(pin
+							(num "14")
+						)
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+						(pin
+							(num "3")
+						)
+						(pin
+							(num "4")
+						)
+						(pin
+							(num "5")
+						)
+						(pin
+							(num "16")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "JP7")
+			(value "PINHD-2X5/90")
+			(footprint "msxpi:2X05_90")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2X05_90")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "PINHD-2X5/90")
+				(description "PIN HEADER")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "d6df0c31-a296-4b9f-ab66-050820aaf104")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "3")
+						)
+						(pin
+							(num "5")
+						)
+						(pin
+							(num "7")
+						)
+						(pin
+							(num "9")
+						)
+						(pin
+							(num "2")
+						)
+						(pin
+							(num "4")
+						)
+						(pin
+							(num "6")
+						)
+						(pin
+							(num "8")
+						)
+						(pin
+							(num "10")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "LED1")
+			(value "LED3MM")
+			(footprint "msxpi:LED3MM")
+			(fields
+				(field
+					(name "Footprint") "msxpi:LED3MM")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "LED3MM")
+				(description "LED\n\nOSRAM:\n- CHIPLED\nLG R971, LG N971, LY N971, LG Q971, LY Q971, LO R971, LY R971 LH N974, LH R974\nLS Q976, LO Q976, LY Q976\nLO Q996\n- Hyper CHIPLED\nLW Q18S\nLB Q993, LB Q99A, LB R99A\n- SideLED\nLS A670, LO A670, LY A670, LG A670, LP A670\nLB A673, LV A673, LT A673, LW A673\nLH A674\nLY A675\nLS A676, LA A676, LO A676, LY A676, LW A676\nLS A679, LY A679, LG A679\n-  Hyper Micro SIDELED®\nLS Y876, LA Y876, LO Y876, LY Y876\nLT Y87S\n- SmartLED\nLW L88C, LW L88S\nLB L89C, LB L89S, LG L890\nLS L89K, LO L89K, LY L89K\nLS L896, LA L896, LO L896, LY L896\n- TOPLED\nLS T670, LO T670, LY T670, LG T670, LP T670\nLSG T670, LSP T670, LSY T670, LOP T670, LYG T670\nLG T671, LOG T671, LSG T671\nLB T673, LV T673, LT T673, LW T673\nLH T674\nLS T676, LA T676, LO T676, LY T676, LB T676, LH T676, LSB T676, LW T676\nLB T67C, LV T67C, LT T67C, LS T67K, LO T67K, LY T67K, LW E67C\nLS E67B, LA E67B, LO E67B, LY E67B, LB E67C, LV E67C, LT E67C\nLW T67C\nLS T679, LY T679, LG T679\nLS T770, LO T770, LY T770, LG T770, LP T770\nLB T773, LV T773, LT T773, LW T773\nLH T774\nLS E675, LA E675, LY E675, LS T675\nLS T776, LA T776, LO T776, LY T776, LB T776\nLHGB T686\nLT T68C, LB T68C\n- Hyper Mini TOPLED®\nLB M676\n- Mini TOPLED Santana®\nLG M470\nLS M47K, LO M47K, LY M47K\n\nSource: http://www.osram.convergy.de\n\nLUXEON:\n- LUMILED®\nLXK2-PW12-R00, LXK2-PW12-S00, LXK2-PW14-U00, LXK2-PW14-V00\nLXK2-PM12-R00, LXK2-PM12-S00, LXK2-PM14-U00\nLXK2-PE12-Q00, LXK2-PE12-R00, LXK2-PE12-S00, LXK2-PE14-T00, LXK2-PE14-U00\nLXK2-PB12-K00, LXK2-PB12-L00, LXK2-PB12-M00, LXK2-PB14-N00, LXK2-PB14-P00, LXK2-PB14-Q00\nLXK2-PR12-L00, LXK2-PR12-M00, LXK2-PR14-Q00, LXK2-PR14-R00\nLXK2-PD12-Q00, LXK2-PD12-R00, LXK2-PD12-S00\nLXK2-PH12-R00, LXK2-PH12-S00\nLXK2-PL12-P00, LXK2-PL12-Q00, LXK2-PL12-R00\n\nSource: www.luxeon.com\n\nKINGBRIGHT:\n\nKA-3528ASYC\nSource: www.kingbright.com")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "538a3bcb-f1d1-40e2-8b42-fed424517256")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "A")
+						)
+						(pin
+							(num "K")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "PAD1")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "c20a04fc-adb5-42e6-91ff-901d6f690e49")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "PAD2")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "780d037e-ae97-496a-ac15-d61d4498a88a")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "PAD8")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "8106a12d-58b5-4353-b533-43e048d5ed7e")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "PAD9")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "26ce58e7-4ac0-4447-ae1b-b580a78c5f87")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R1")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "024c7cd7-0d18-4bc3-a08c-60bbd61cbc6d")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R2")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "7ecdb790-ec14-4cf5-bf70-76d020fbe7f9")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R3")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "a90e4978-0888-4992-89fc-5b03c58a7850")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R4")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "2357591a-e7a7-4436-ba5c-d5de8c906385")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R5")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "a7166b4f-8fb3-4605-a1d1-a2f70b771695")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "R6")
+			(value "R-US_0207/7")
+			(footprint "msxpi:0207_7")
+			(fields
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "R-US_0207/7")
+				(description "RESISTOR, American symbol")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "f6a47484-8803-45ae-88db-d2b0d07539c9")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "2")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "ROMOE1")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "0aec5b43-eb13-49fe-b119-b3d8bba8c469")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "ROMOE2")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "dfe019d5-7d06-4b8d-9292-c1e3510571da")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "ROMOE3")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "efb5a2f9-0286-4ddf-be32-664d478f93c5")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "ROM_OE0")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "daf04405-211b-4ff0-8d79-578de89560d3")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "SNDIN0")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "d6a87161-8cdf-437f-8c20-aa780977bb0e")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "SPI_CS_GPIO21")
+			(value "2,15/1,0")
+			(footprint "msxpi:2,15_1,0")
+			(fields
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "2,15/1,0")
+				(description "THROUGH-HOLE PAD")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "9d37ca72-29e6-45f8-a7a3-e2f88358785e")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "1")
+						)
+					)
+				)
+			)
+		)
+		(comp
+			(ref "UNK27C256")
+			(value "27256")
+			(footprint "msxpi:DIL28")
+			(fields
+				(field
+					(name "Footprint") "msxpi:DIL28")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(libsource
+				(lib "msxpi-eagle-import")
+				(part "27256")
+				(description "MEMORY")
+			)
+			(property
+				(name "Sheetname")
+				(value "msxpi_1")
+			)
+			(property
+				(name "Sheetfile")
+				(value "msxpi.kicad_sch")
+			)
+			(sheetpath
+				(names "/")
+				(tstamps "/")
+			)
+			(tstamps "96d5f349-e0f7-4937-9ad6-f4bc689300a1")
+			(units
+				(unit
+					(name "A")
+					(pins
+						(pin
+							(num "10")
+						)
+						(pin
+							(num "9")
+						)
+						(pin
+							(num "8")
+						)
+						(pin
+							(num "7")
+						)
+						(pin
+							(num "6")
+						)
+						(pin
+							(num "5")
+						)
+						(pin
+							(num "4")
+						)
+						(pin
+							(num "3")
+						)
+						(pin
+							(num "25")
+						)
+						(pin
+							(num "24")
+						)
+						(pin
+							(num "21")
+						)
+						(pin
+							(num "23")
+						)
+						(pin
+							(num "2")
+						)
+						(pin
+							(num "26")
+						)
+						(pin
+							(num "27")
+						)
+						(pin
+							(num "20")
+						)
+						(pin
+							(num "22")
+						)
+						(pin
+							(num "1")
+						)
+						(pin
+							(num "11")
+						)
+						(pin
+							(num "12")
+						)
+						(pin
+							(num "13")
+						)
+						(pin
+							(num "15")
+						)
+						(pin
+							(num "16")
+						)
+						(pin
+							(num "17")
+						)
+						(pin
+							(num "18")
+						)
+						(pin
+							(num "19")
+						)
+					)
+				)
+				(unit
+					(name "B")
+					(pins
+						(pin
+							(num "28")
+						)
+						(pin
+							(num "14")
+						)
+					)
+				)
+			)
+		)
+	)
+	(groups)
+	(variants)
+	(libparts
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "2,15/1,0")
+			(description "THROUGH-HOLE PAD")
+			(fields
+				(field
+					(name "Reference") "PAD")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:2,15_1,0")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "THROUGH-HOLE PAD")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "P")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "27256")
+			(description "MEMORY")
+			(fields
+				(field
+					(name "Reference") "IC")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:DIL28")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "MEMORY")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "VPP")
+					(type "input")
+				)
+				(pin
+					(num "2")
+					(name "A12")
+					(type "input")
+				)
+				(pin
+					(num "3")
+					(name "A7")
+					(type "input")
+				)
+				(pin
+					(num "4")
+					(name "A6")
+					(type "input")
+				)
+				(pin
+					(num "5")
+					(name "A5")
+					(type "input")
+				)
+				(pin
+					(num "6")
+					(name "A4")
+					(type "input")
+				)
+				(pin
+					(num "7")
+					(name "A3")
+					(type "input")
+				)
+				(pin
+					(num "8")
+					(name "A2")
+					(type "input")
+				)
+				(pin
+					(num "9")
+					(name "A1")
+					(type "input")
+				)
+				(pin
+					(num "10")
+					(name "A0")
+					(type "input")
+				)
+				(pin
+					(num "11")
+					(name "O0")
+					(type "tri_state")
+				)
+				(pin
+					(num "12")
+					(name "O1")
+					(type "tri_state")
+				)
+				(pin
+					(num "13")
+					(name "O2")
+					(type "tri_state")
+				)
+				(pin
+					(num "14")
+					(name "GND")
+					(type "power_in")
+				)
+				(pin
+					(num "15")
+					(name "O3")
+					(type "tri_state")
+				)
+				(pin
+					(num "16")
+					(name "O4")
+					(type "tri_state")
+				)
+				(pin
+					(num "17")
+					(name "O5")
+					(type "tri_state")
+				)
+				(pin
+					(num "18")
+					(name "O6")
+					(type "tri_state")
+				)
+				(pin
+					(num "19")
+					(name "O7")
+					(type "tri_state")
+				)
+				(pin
+					(num "20")
+					(name "~{CE}")
+					(type "input")
+				)
+				(pin
+					(num "21")
+					(name "A10")
+					(type "input")
+				)
+				(pin
+					(num "22")
+					(name "~{OE}")
+					(type "input")
+				)
+				(pin
+					(num "23")
+					(name "A11")
+					(type "input")
+				)
+				(pin
+					(num "24")
+					(name "A9")
+					(type "input")
+				)
+				(pin
+					(num "25")
+					(name "A8")
+					(type "input")
+				)
+				(pin
+					(num "26")
+					(name "A13")
+					(type "input")
+				)
+				(pin
+					(num "27")
+					(name "A14")
+					(type "input")
+				)
+				(pin
+					(num "28")
+					(name "VCC")
+					(type "power_in")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "C2,5-3")
+			(description "CAPACITOR\n\nnaming: grid - package width")
+			(fields
+				(field
+					(name "Reference") "C")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:C2.5-3")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "CAPACITOR\n\nnaming: grid - package width")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "1")
+					(type "passive")
+				)
+				(pin
+					(num "2")
+					(name "2")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "CPOL-EUE2.5-5")
+			(description "POLARIZED CAPACITOR, European symbol")
+			(fields
+				(field
+					(name "Reference") "C")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:E2,5-5")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "POLARIZED CAPACITOR, European symbol")
+			)
+			(pins
+				(pin
+					(num "+")
+					(name "+")
+					(type "passive")
+				)
+				(pin
+					(num "-")
+					(name "-")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "EPM3064S44")
+			(description "EPM3064\n\nMAX 3000 family PLCC through hole socket")
+			(fields
+				(field
+					(name "Reference") "IC")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:PLCC-S44")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "EPM3064\n\nMAX 3000 family PLCC through hole socket")
+				(field
+					(name "MPN") "EPM3064SLC44-10N")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "GCLR/")
+					(type "input")
+				)
+				(pin
+					(num "2")
+					(name "OE2-GCLK2")
+					(type "input")
+				)
+				(pin
+					(num "3")
+					(name "PD/_VCC")
+					(type "passive")
+				)
+				(pin
+					(num "4")
+					(name "IO16")
+					(type "bidirectional")
+				)
+				(pin
+					(num "5")
+					(name "IO14")
+					(type "bidirectional")
+				)
+				(pin
+					(num "6")
+					(name "IO11")
+					(type "bidirectional")
+				)
+				(pin
+					(num "7")
+					(name "IO8/TDI")
+					(type "bidirectional")
+				)
+				(pin
+					(num "8")
+					(name "IO5")
+					(type "bidirectional")
+				)
+				(pin
+					(num "9")
+					(name "IO4")
+					(type "bidirectional")
+				)
+				(pin
+					(num "10")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "11")
+					(name "IO3")
+					(type "bidirectional")
+				)
+				(pin
+					(num "12")
+					(name "IO1")
+					(type "bidirectional")
+				)
+				(pin
+					(num "13")
+					(name "IO32/TMS")
+					(type "bidirectional")
+				)
+				(pin
+					(num "14")
+					(name "IO30")
+					(type "bidirectional")
+				)
+				(pin
+					(num "15")
+					(name "VCC")
+					(type "bidirectional")
+				)
+				(pin
+					(num "16")
+					(name "IO25")
+					(type "bidirectional")
+				)
+				(pin
+					(num "17")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "18")
+					(name "IO21")
+					(type "bidirectional")
+				)
+				(pin
+					(num "19")
+					(name "IO20")
+					(type "bidirectional")
+				)
+				(pin
+					(num "20")
+					(name "IO19")
+					(type "bidirectional")
+				)
+				(pin
+					(num "21")
+					(name "IO17")
+					(type "bidirectional")
+				)
+				(pin
+					(num "22")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "23")
+					(name "VCC")
+					(type "bidirectional")
+				)
+				(pin
+					(num "24")
+					(name "IO33")
+					(type "bidirectional")
+				)
+				(pin
+					(num "25")
+					(name "IO35")
+					(type "bidirectional")
+				)
+				(pin
+					(num "26")
+					(name "IO36")
+					(type "bidirectional")
+				)
+				(pin
+					(num "27")
+					(name "IO37")
+					(type "bidirectional")
+				)
+				(pin
+					(num "28")
+					(name "IO40")
+					(type "bidirectional")
+				)
+				(pin
+					(num "29")
+					(name "IO41")
+					(type "bidirectional")
+				)
+				(pin
+					(num "30")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "31")
+					(name "IO46")
+					(type "bidirectional")
+				)
+				(pin
+					(num "32")
+					(name "IO48/TCK")
+					(type "bidirectional")
+				)
+				(pin
+					(num "33")
+					(name "IO49")
+					(type "bidirectional")
+				)
+				(pin
+					(num "34")
+					(name "IO51")
+					(type "bidirectional")
+				)
+				(pin
+					(num "35")
+					(name "VCC")
+					(type "bidirectional")
+				)
+				(pin
+					(num "36")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "37")
+					(name "IO53")
+					(type "bidirectional")
+				)
+				(pin
+					(num "38")
+					(name "IO56/TDO")
+					(type "bidirectional")
+				)
+				(pin
+					(num "39")
+					(name "IO57")
+					(type "bidirectional")
+				)
+				(pin
+					(num "40")
+					(name "IO62")
+					(type "bidirectional")
+				)
+				(pin
+					(num "41")
+					(name "IO64")
+					(type "bidirectional")
+				)
+				(pin
+					(num "42")
+					(name "GND")
+					(type "bidirectional")
+				)
+				(pin
+					(num "43")
+					(name "GCLK1")
+					(type "input")
+				)
+				(pin
+					(num "44")
+					(name "OE1")
+					(type "input")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "JP1E")
+			(description "JUMPER")
+			(fields
+				(field
+					(name "Reference") "JP")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:JP1")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "JUMPER")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "1")
+					(type "passive")
+				)
+				(pin
+					(num "2")
+					(name "2")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "LD117A?S33TR")
+			(description "Low drop fixed and adjustable positive voltage regulators 1 A\n\nSource: http://www.st.com/stonline/products/literature/ds/7194/ld1117axx.pdf")
+			(fields
+				(field
+					(name "Reference") "IC")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:SOT223")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "Low drop fixed and adjustable positive voltage regulators 1 A\n\nSource: http://www.st.com/stonline/products/literature/ds/7194/ld1117axx.pdf")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "ADJ")
+					(type "input")
+				)
+				(pin
+					(num "3")
+					(name "IN")
+					(type "input")
+				)
+				(pin
+					(num "4")
+					(name "OUT")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "LED3MM")
+			(description "LED\n\nOSRAM:\n- CHIPLED\nLG R971, LG N971, LY N971, LG Q971, LY Q971, LO R971, LY R971 LH N974, LH R974\nLS Q976, LO Q976, LY Q976\nLO Q996\n- Hyper CHIPLED\nLW Q18S\nLB Q993, LB Q99A, LB R99A\n- SideLED\nLS A670, LO A670, LY A670, LG A670, LP A670\nLB A673, LV A673, LT A673, LW A673\nLH A674\nLY A675\nLS A676, LA A676, LO A676, LY A676, LW A676\nLS A679, LY A679, LG A679\n-  Hyper Micro SIDELED®\nLS Y876, LA Y876, LO Y876, LY Y876\nLT Y87S\n- SmartLED\nLW L88C, LW L88S\nLB L89C, LB L89S, LG L890\nLS L89K, LO L89K, LY L89K\nLS L896, LA L896, LO L896, LY L896\n- TOPLED\nLS T670, LO T670, LY T670, LG T670, LP T670\nLSG T670, LSP T670, LSY T670, LOP T670, LYG T670\nLG T671, LOG T671, LSG T671\nLB T673, LV T673, LT T673, LW T673\nLH T674\nLS T676, LA T676, LO T676, LY T676, LB T676, LH T676, LSB T676, LW T676\nLB T67C, LV T67C, LT T67C, LS T67K, LO T67K, LY T67K, LW E67C\nLS E67B, LA E67B, LO E67B, LY E67B, LB E67C, LV E67C, LT E67C\nLW T67C\nLS T679, LY T679, LG T679\nLS T770, LO T770, LY T770, LG T770, LP T770\nLB T773, LV T773, LT T773, LW T773\nLH T774\nLS E675, LA E675, LY E675, LS T675\nLS T776, LA T776, LO T776, LY T776, LB T776\nLHGB T686\nLT T68C, LB T68C\n- Hyper Mini TOPLED®\nLB M676\n- Mini TOPLED Santana®\nLG M470\nLS M47K, LO M47K, LY M47K\n\nSource: http://www.osram.convergy.de\n\nLUXEON:\n- LUMILED®\nLXK2-PW12-R00, LXK2-PW12-S00, LXK2-PW14-U00, LXK2-PW14-V00\nLXK2-PM12-R00, LXK2-PM12-S00, LXK2-PM14-U00\nLXK2-PE12-Q00, LXK2-PE12-R00, LXK2-PE12-S00, LXK2-PE14-T00, LXK2-PE14-U00\nLXK2-PB12-K00, LXK2-PB12-L00, LXK2-PB12-M00, LXK2-PB14-N00, LXK2-PB14-P00, LXK2-PB14-Q00\nLXK2-PR12-L00, LXK2-PR12-M00, LXK2-PR14-Q00, LXK2-PR14-R00\nLXK2-PD12-Q00, LXK2-PD12-R00, LXK2-PD12-S00\nLXK2-PH12-R00, LXK2-PH12-S00\nLXK2-PL12-P00, LXK2-PL12-Q00, LXK2-PL12-R00\n\nSource: www.luxeon.com\n\nKINGBRIGHT:\n\nKA-3528ASYC\nSource: www.kingbright.com")
+			(fields
+				(field
+					(name "Reference") "LED")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:LED3MM")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "LED\n\nOSRAM:\n- CHIPLED\nLG R971, LG N971, LY N971, LG Q971, LY Q971, LO R971, LY R971 LH N974, LH R974\nLS Q976, LO Q976, LY Q976\nLO Q996\n- Hyper CHIPLED\nLW Q18S\nLB Q993, LB Q99A, LB R99A\n- SideLED\nLS A670, LO A670, LY A670, LG A670, LP A670\nLB A673, LV A673, LT A673, LW A673\nLH A674\nLY A675\nLS A676, LA A676, LO A676, LY A676, LW A676\nLS A679, LY A679, LG A679\n-  Hyper Micro SIDELED®\nLS Y876, LA Y876, LO Y876, LY Y876\nLT Y87S\n- SmartLED\nLW L88C, LW L88S\nLB L89C, LB L89S, LG L890\nLS L89K, LO L89K, LY L89K\nLS L896, LA L896, LO L896, LY L896\n- TOPLED\nLS T670, LO T670, LY T670, LG T670, LP T670\nLSG T670, LSP T670, LSY T670, LOP T670, LYG T670\nLG T671, LOG T671, LSG T671\nLB T673, LV T673, LT T673, LW T673\nLH T674\nLS T676, LA T676, LO T676, LY T676, LB T676, LH T676, LSB T676, LW T676\nLB T67C, LV T67C, LT T67C, LS T67K, LO T67K, LY T67K, LW E67C\nLS E67B, LA E67B, LO E67B, LY E67B, LB E67C, LV E67C, LT E67C\nLW T67C\nLS T679, LY T679, LG T679\nLS T770, LO T770, LY T770, LG T770, LP T770\nLB T773, LV T773, LT T773, LW T773\nLH T774\nLS E675, LA E675, LY E675, LS T675\nLS T776, LA T776, LO T776, LY T776, LB T776\nLHGB T686\nLT T68C, LB T68C\n- Hyper Mini TOPLED®\nLB M676\n- Mini TOPLED Santana®\nLG M470\nLS M47K, LO M47K, LY M47K\n\nSource: http://www.osram.convergy.de\n\nLUXEON:\n- LUMILED®\nLXK2-PW12-R00, LXK2-PW12-S00, LXK2-PW14-U00, LXK2-PW14-V00\nLXK2-PM12-R00, LXK2-PM12-S00, LXK2-PM14-U00\nLXK2-PE12-Q00, LXK2-PE12-R00, LXK2-PE12-S00, LXK2-PE14-T00, LXK2-PE14-U00\nLXK2-PB12-K00, LXK2-PB12-L00, LXK2-PB12-M00, LXK2-PB14-N00, LXK2-PB14-P00, LXK2-PB14-Q00\nLXK2-PR12-L00, LXK2-PR12-M00, LXK2-PR14-Q00, LXK2-PR14-R00\nLXK2-PD12-Q00, LXK2-PD12-R00, LXK2-PD12-S00\nLXK2-PH12-R00, LXK2-PH12-S00\nLXK2-PL12-P00, LXK2-PL12-Q00, LXK2-PL12-R00\n\nSource: www.luxeon.com\n\nKINGBRIGHT:\n\nKA-3528ASYC\nSource: www.kingbright.com")
+			)
+			(pins
+				(pin
+					(num "A")
+					(name "A")
+					(type "passive")
+				)
+				(pin
+					(num "K")
+					(name "C")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "MSXCART1")
+			(fields
+				(field
+					(name "Reference") "JP")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:MSXCART")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description")
+				)
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "~{CS1}")
+					(type "output")
+				)
+				(pin
+					(num "2")
+					(name "~{CS2}")
+					(type "output")
+				)
+				(pin
+					(num "3")
+					(name "~{CS12}")
+					(type "output")
+				)
+				(pin
+					(num "4")
+					(name "~{SLTSL}")
+					(type "output")
+				)
+				(pin
+					(num "5")
+					(name "RES")
+					(type "no_connect")
+				)
+				(pin
+					(num "6")
+					(name "~{RFSH}")
+					(type "output")
+				)
+				(pin
+					(num "7")
+					(name "~{WAIT}")
+					(type "open_collector")
+				)
+				(pin
+					(num "8")
+					(name "~{INT}")
+					(type "open_collector")
+				)
+				(pin
+					(num "9")
+					(name "~{M1}")
+					(type "output")
+				)
+				(pin
+					(num "10")
+					(name "BUSDIR")
+					(type "input")
+				)
+				(pin
+					(num "11")
+					(name "~{IORQ}")
+					(type "output")
+				)
+				(pin
+					(num "12")
+					(name "~{MREQ}")
+					(type "output")
+				)
+				(pin
+					(num "13")
+					(name "~{WR}")
+					(type "output")
+				)
+				(pin
+					(num "14")
+					(name "~{RD}")
+					(type "output")
+				)
+				(pin
+					(num "15")
+					(name "~{RESET}")
+					(type "output")
+				)
+				(pin
+					(num "16")
+					(name "RES")
+					(type "no_connect")
+				)
+				(pin
+					(num "17")
+					(name "A9")
+					(type "output")
+				)
+				(pin
+					(num "18")
+					(name "A15")
+					(type "output")
+				)
+				(pin
+					(num "19")
+					(name "A11")
+					(type "output")
+				)
+				(pin
+					(num "20")
+					(name "A10")
+					(type "output")
+				)
+				(pin
+					(num "21")
+					(name "A7")
+					(type "output")
+				)
+				(pin
+					(num "22")
+					(name "A6")
+					(type "output")
+				)
+				(pin
+					(num "23")
+					(name "A12")
+					(type "output")
+				)
+				(pin
+					(num "24")
+					(name "A8")
+					(type "output")
+				)
+				(pin
+					(num "25")
+					(name "A14")
+					(type "output")
+				)
+				(pin
+					(num "26")
+					(name "A13")
+					(type "output")
+				)
+				(pin
+					(num "27")
+					(name "A1")
+					(type "output")
+				)
+				(pin
+					(num "28")
+					(name "A0")
+					(type "output")
+				)
+				(pin
+					(num "29")
+					(name "A3")
+					(type "output")
+				)
+				(pin
+					(num "30")
+					(name "A2")
+					(type "output")
+				)
+				(pin
+					(num "31")
+					(name "A5")
+					(type "output")
+				)
+				(pin
+					(num "32")
+					(name "A4")
+					(type "output")
+				)
+				(pin
+					(num "33")
+					(name "D1")
+					(type "bidirectional")
+				)
+				(pin
+					(num "34")
+					(name "D0")
+					(type "bidirectional")
+				)
+				(pin
+					(num "35")
+					(name "D3")
+					(type "bidirectional")
+				)
+				(pin
+					(num "36")
+					(name "D2")
+					(type "bidirectional")
+				)
+				(pin
+					(num "37")
+					(name "D5")
+					(type "bidirectional")
+				)
+				(pin
+					(num "38")
+					(name "D4")
+					(type "bidirectional")
+				)
+				(pin
+					(num "39")
+					(name "D7")
+					(type "bidirectional")
+				)
+				(pin
+					(num "40")
+					(name "D6")
+					(type "bidirectional")
+				)
+				(pin
+					(num "41")
+					(name "GND")
+					(type "power_in")
+				)
+				(pin
+					(num "42")
+					(name "CLOCK")
+					(type "output")
+				)
+				(pin
+					(num "43")
+					(name "GND")
+					(type "power_in")
+				)
+				(pin
+					(num "44")
+					(name "SW")
+					(type "passive")
+				)
+				(pin
+					(num "45")
+					(name "+5V")
+					(type "power_in")
+				)
+				(pin
+					(num "46")
+					(name "SW")
+					(type "passive")
+				)
+				(pin
+					(num "47")
+					(name "+5V")
+					(type "power_in")
+				)
+				(pin
+					(num "48")
+					(name "+12V")
+					(type "power_in")
+				)
+				(pin
+					(num "49")
+					(name "SOUNDIN")
+					(type "passive")
+				)
+				(pin
+					(num "50")
+					(name "-12V")
+					(type "power_in")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "PINHD-2X5/90")
+			(description "PIN HEADER")
+			(fields
+				(field
+					(name "Reference") "JP")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:2X05_90")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "PIN HEADER")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "1")
+					(type "passive")
+				)
+				(pin
+					(num "2")
+					(name "2")
+					(type "passive")
+				)
+				(pin
+					(num "3")
+					(name "3")
+					(type "passive")
+				)
+				(pin
+					(num "4")
+					(name "4")
+					(type "passive")
+				)
+				(pin
+					(num "5")
+					(name "5")
+					(type "passive")
+				)
+				(pin
+					(num "6")
+					(name "6")
+					(type "passive")
+				)
+				(pin
+					(num "7")
+					(name "7")
+					(type "passive")
+				)
+				(pin
+					(num "8")
+					(name "8")
+					(type "passive")
+				)
+				(pin
+					(num "9")
+					(name "9")
+					(type "passive")
+				)
+				(pin
+					(num "10")
+					(name "10")
+					(type "passive")
+				)
+			)
+		)
+		(libpart
+			(lib "msxpi-eagle-import")
+			(part "R-US_0207/7")
+			(description "RESISTOR, American symbol")
+			(fields
+				(field
+					(name "Reference") "R")
+				(field
+					(name "Value")
+				)
+				(field
+					(name "Footprint") "msxpi:0207_7")
+				(field
+					(name "Datasheet")
+				)
+				(field
+					(name "Description") "RESISTOR, American symbol")
+			)
+			(pins
+				(pin
+					(num "1")
+					(name "1")
+					(type "passive")
+				)
+				(pin
+					(num "2")
+					(name "2")
+					(type "passive")
+				)
+			)
+		)
+	)
+	(libraries
+		(library
+			(logical "msxpi-eagle-import")
+			(uri "${KIPRJMOD}/msxpi-eagle-import.kicad_sym")
+		)
+	)
+	(nets
+		(net
+			(code "1")
+			(name "+5V")
+			(class "Default")
+			(node
+				(ref "+5V0")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "C1")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "C2")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "C3")
+				(pin "+")
+				(pinfunction "+_+")
+				(pintype "passive")
+			)
+			(node
+				(ref "C4")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "15")
+				(pinfunction "VCC_15")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "23")
+				(pinfunction "VCC_23")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "3")
+				(pinfunction "PD/_VCC_3")
+				(pintype "passive")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "35")
+				(pinfunction "VCC_35")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "IC1")
+				(pin "3")
+				(pinfunction "IN_3")
+				(pintype "input")
+			)
+			(node
+				(ref "IC1")
+				(pin "4")
+				(pinfunction "OUT_4")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "45")
+				(pinfunction "+5V_45")
+				(pintype "power_in")
+			)
+			(node
+				(ref "JP6")
+				(pin "47")
+				(pinfunction "+5V_47")
+				(pintype "power_in")
+			)
+			(node
+				(ref "JP7")
+				(pin "4")
+				(pinfunction "4_4")
+				(pintype "passive")
+			)
+			(node
+				(ref "R3")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "R4")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "R5")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "R6")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "2")
+			(name "+12V")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "48")
+				(pinfunction "+12V_48")
+				(pintype "power_in")
+			)
+		)
+		(net
+			(code "3")
+			(name "-12V")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "50")
+				(pinfunction "-12V_50")
+				(pintype "power_in")
+			)
+		)
+		(net
+			(code "4")
+			(name "A0")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "24")
+				(pinfunction "IO33_24")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "25")
+				(pinfunction "IO35_25")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "26")
+				(pinfunction "IO36_26")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "27")
+				(pinfunction "IO37_27")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "29")
+				(pinfunction "IO41_29")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "31")
+				(pinfunction "IO46_31")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "33")
+				(pinfunction "IO49_33")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "4")
+				(pinfunction "IO16_4")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "26")
+				(pinfunction "A13_26")
+				(pintype "output")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "10")
+				(pinfunction "A0_10")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "2")
+				(pinfunction "A12_2")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "21")
+				(pinfunction "A10_21")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "23")
+				(pinfunction "A11_23")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "24")
+				(pinfunction "A9_24")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "25")
+				(pinfunction "A8_25")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "26")
+				(pinfunction "A13_26")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "3")
+				(pinfunction "A7_3")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "4")
+				(pinfunction "A6_4")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "5")
+				(pinfunction "A5_5")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "6")
+				(pinfunction "A4_6")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "7")
+				(pinfunction "A3_7")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "8")
+				(pinfunction "A2_8")
+				(pintype "input")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "9")
+				(pinfunction "A1_9")
+				(pintype "input")
+			)
+		)
+		(net
+			(code "5")
+			(name "A14")
+			(class "Default")
+			(node
+				(ref "A14")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "25")
+				(pinfunction "A14_25")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "6")
+			(name "A15")
+			(class "Default")
+			(node
+				(ref "A15")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "18")
+				(pinfunction "A15_18")
+				(pintype "output")
+			)
+			(node
+				(ref "JP6")
+				(pin "4")
+				(pinfunction "~{SLTSL}_4")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "7")
+			(name "BUSDIR")
+			(class "Default")
+			(node
+				(ref "JP2")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "10")
+				(pinfunction "BUSDIR_10")
+				(pintype "input")
+			)
+		)
+		(net
+			(code "8")
+			(name "CS1")
+			(class "Default")
+			(node
+				(ref "CS1")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "1")
+				(pinfunction "~{CS1}_1")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "9")
+			(name "CS2")
+			(class "Default")
+			(node
+				(ref "CS2")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "2")
+				(pinfunction "~{CS2}_2")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "10")
+			(name "CS12")
+			(class "Default")
+			(node
+				(ref "CS12")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "3")
+				(pinfunction "~{CS12}_3")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "11")
+			(name "D0")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "34")
+				(pinfunction "D0_34")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "39")
+				(pinfunction "D7_39")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "11")
+				(pinfunction "O0_11")
+				(pintype "tri_state")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "19")
+				(pinfunction "O7_19")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "12")
+			(name "D1")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "33")
+				(pinfunction "D1_33")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "12")
+				(pinfunction "O1_12")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "13")
+			(name "D2")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "11")
+				(pinfunction "IO3_11")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "36")
+				(pinfunction "D2_36")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "14")
+			(name "D3")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "18")
+				(pinfunction "IO21_18")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "35")
+				(pinfunction "D3_35")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "15")
+			(name "D4")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "14")
+				(pinfunction "IO30_14")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "38")
+				(pinfunction "D4_38")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "16")
+			(name "D5")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "37")
+				(pinfunction "D5_37")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "17")
+				(pinfunction "O5_17")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "17")
+			(name "D6")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "16")
+				(pinfunction "IO25_16")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "40")
+				(pinfunction "D6_40")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "18")
+			(name "GND")
+			(class "Default")
+			(node
+				(ref "C1")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+			(node
+				(ref "C2")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+			(node
+				(ref "C3")
+				(pin "-")
+				(pinfunction "-_-")
+				(pintype "passive")
+			)
+			(node
+				(ref "C4")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "10")
+				(pinfunction "GND_10")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "17")
+				(pinfunction "GND_17")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "22")
+				(pinfunction "GND_22")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "30")
+				(pinfunction "GND_30")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "36")
+				(pinfunction "GND_36")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "EPM3064ALC44")
+				(pin "42")
+				(pinfunction "GND_42")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "GND0")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "IC1")
+				(pin "1")
+				(pinfunction "ADJ_1")
+				(pintype "input")
+			)
+			(node
+				(ref "JP6")
+				(pin "41")
+				(pinfunction "GND_41")
+				(pintype "power_in")
+			)
+			(node
+				(ref "JP6")
+				(pin "43")
+				(pinfunction "GND_43")
+				(pintype "power_in")
+			)
+			(node
+				(ref "JP7")
+				(pin "10")
+				(pinfunction "10_10")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP7")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+			(node
+				(ref "LED1")
+				(pin "K")
+				(pinfunction "C_K")
+				(pintype "passive")
+			)
+			(node
+				(ref "R2")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "19")
+			(name "IORQ")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "40")
+				(pinfunction "IO62_40")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "11")
+				(pinfunction "~{IORQ}_11")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "20")
+			(name "Net-(EPM3064ALC44-IO1)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "12")
+				(pinfunction "IO1_12")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "PAD2")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "21")
+			(name "Net-(EPM3064ALC44-IO5)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "8")
+				(pinfunction "IO5_8")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "R1")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "22")
+			(name "Net-(EPM3064ALC44-IO11)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "6")
+				(pinfunction "IO11_6")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP2")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "23")
+			(name "Net-(EPM3064ALC44-IO14)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "5")
+				(pinfunction "IO14_5")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "PAD9")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "24")
+			(name "Net-(EPM3064ALC44-IO40)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "28")
+				(pinfunction "IO40_28")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "SPI_CS_GPIO21")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "25")
+			(name "Net-(EPM3064ALC44-IO51)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "34")
+				(pinfunction "IO51_34")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "PAD8")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "26")
+			(name "Net-(EPM3064ALC44-IO64)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "41")
+				(pinfunction "IO64_41")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "PAD1")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "27")
+			(name "Net-(JP6-SW-Pad44)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "44")
+				(pinfunction "SW_44")
+				(pintype "passive")
+			)
+			(node
+				(ref "JP6")
+				(pin "46")
+				(pinfunction "SW_46")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "28")
+			(name "Net-(LED1-PadA)")
+			(class "Default")
+			(node
+				(ref "LED1")
+				(pin "A")
+				(pinfunction "A_A")
+				(pintype "passive")
+			)
+			(node
+				(ref "R1")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "29")
+			(name "PIN1")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "1")
+				(pinfunction "GCLR/_1")
+				(pintype "input")
+			)
+			(node
+				(ref "GND4")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "30")
+			(name "PIN2")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "2")
+				(pinfunction "OE2-GCLK2_2")
+				(pintype "input")
+			)
+			(node
+				(ref "GND9")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "31")
+			(name "PIN43")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "43")
+				(pinfunction "GCLK1_43")
+				(pintype "input")
+			)
+			(node
+				(ref "GND10")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "32")
+			(name "PIN44")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "44")
+				(pinfunction "OE1_44")
+				(pintype "input")
+			)
+			(node
+				(ref "GND11")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "33")
+			(name "RD")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "37")
+				(pinfunction "IO53_37")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "14")
+				(pinfunction "~{RD}_14")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "34")
+			(name "ROM_A14")
+			(class "Default")
+			(node
+				(ref "ROM_OE0")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "27")
+				(pinfunction "A14_27")
+				(pintype "input")
+			)
+		)
+		(net
+			(code "35")
+			(name "ROM_OE")
+			(class "Default")
+			(node
+				(ref "R6")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "ROMOE1")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "ROMOE2")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "ROMOE3")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "UNK27C256")
+				(pin "22")
+				(pinfunction "~{OE}_22")
+				(pintype "input")
+			)
+		)
+		(net
+			(code "36")
+			(name "SNDIN")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "49")
+				(pinfunction "SOUNDIN_49")
+				(pintype "passive")
+			)
+			(node
+				(ref "SNDIN0")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "37")
+			(name "TCK")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "32")
+				(pinfunction "IO48/TCK_32")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP7")
+				(pin "1")
+				(pinfunction "1_1")
+				(pintype "passive")
+			)
+			(node
+				(ref "R2")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "38")
+			(name "TDI")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "7")
+				(pinfunction "IO8/TDI_7")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP7")
+				(pin "9")
+				(pinfunction "9_9")
+				(pintype "passive")
+			)
+			(node
+				(ref "R5")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "39")
+			(name "TDO")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "38")
+				(pinfunction "IO56/TDO_38")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP7")
+				(pin "3")
+				(pinfunction "3_3")
+				(pintype "passive")
+			)
+			(node
+				(ref "R3")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "40")
+			(name "TMS")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "13")
+				(pinfunction "IO32/TMS_13")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP7")
+				(pin "5")
+				(pinfunction "5_5")
+				(pintype "passive")
+			)
+			(node
+				(ref "R4")
+				(pin "2")
+				(pinfunction "2_2")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "41")
+			(name "WR")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "39")
+				(pinfunction "IO57_39")
+				(pintype "bidirectional")
+			)
+			(node
+				(ref "JP6")
+				(pin "13")
+				(pinfunction "~{WR}_13")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "42")
+			(name "unconnected-(BUF1-P-Pad1)")
+			(class "Default")
+			(node
+				(ref "BUF1")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "43")
+			(name "unconnected-(BUF2-P-Pad1)")
+			(class "Default")
+			(node
+				(ref "BUF2")
+				(pin "1")
+				(pinfunction "P_1")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "44")
+			(name "unconnected-(EPM3064ALC44-IO4-Pad9)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "9")
+				(pinfunction "IO4_9")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "45")
+			(name "unconnected-(EPM3064ALC44-IO17-Pad21)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "21")
+				(pinfunction "IO17_21")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "46")
+			(name "unconnected-(EPM3064ALC44-IO19-Pad20)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "20")
+				(pinfunction "IO19_20")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "47")
+			(name "unconnected-(EPM3064ALC44-IO20-Pad19)")
+			(class "Default")
+			(node
+				(ref "EPM3064ALC44")
+				(pin "19")
+				(pinfunction "IO20_19")
+				(pintype "bidirectional")
+			)
+		)
+		(net
+			(code "48")
+			(name "unconnected-(JP6-A0-Pad28)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "28")
+				(pinfunction "A0_28")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "49")
+			(name "unconnected-(JP6-A1-Pad27)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "27")
+				(pinfunction "A1_27")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "50")
+			(name "unconnected-(JP6-A2-Pad30)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "30")
+				(pinfunction "A2_30")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "51")
+			(name "unconnected-(JP6-A3-Pad29)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "29")
+				(pinfunction "A3_29")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "52")
+			(name "unconnected-(JP6-A4-Pad32)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "32")
+				(pinfunction "A4_32")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "53")
+			(name "unconnected-(JP6-A5-Pad31)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "31")
+				(pinfunction "A5_31")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "54")
+			(name "unconnected-(JP6-A6-Pad22)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "22")
+				(pinfunction "A6_22")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "55")
+			(name "unconnected-(JP6-A7-Pad21)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "21")
+				(pinfunction "A7_21")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "56")
+			(name "unconnected-(JP6-A8-Pad24)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "24")
+				(pinfunction "A8_24")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "57")
+			(name "unconnected-(JP6-A9-Pad17)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "17")
+				(pinfunction "A9_17")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "58")
+			(name "unconnected-(JP6-A10-Pad20)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "20")
+				(pinfunction "A10_20")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "59")
+			(name "unconnected-(JP6-A11-Pad19)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "19")
+				(pinfunction "A11_19")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "60")
+			(name "unconnected-(JP6-A12-Pad23)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "23")
+				(pinfunction "A12_23")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "61")
+			(name "unconnected-(JP6-CLOCK-Pad42)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "42")
+				(pinfunction "CLOCK_42")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "62")
+			(name "unconnected-(JP6-RES-Pad5)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "5")
+				(pinfunction "RES_5")
+				(pintype "no_connect")
+			)
+		)
+		(net
+			(code "63")
+			(name "unconnected-(JP6-RES-Pad16)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "16")
+				(pinfunction "RES_16")
+				(pintype "no_connect")
+			)
+		)
+		(net
+			(code "64")
+			(name "unconnected-(JP6-~{INT}-Pad8)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "8")
+				(pinfunction "~{INT}_8")
+				(pintype "open_collector")
+			)
+		)
+		(net
+			(code "65")
+			(name "unconnected-(JP6-~{M1}-Pad9)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "9")
+				(pinfunction "~{M1}_9")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "66")
+			(name "unconnected-(JP6-~{MREQ}-Pad12)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "12")
+				(pinfunction "~{MREQ}_12")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "67")
+			(name "unconnected-(JP6-~{RESET}-Pad15)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "15")
+				(pinfunction "~{RESET}_15")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "68")
+			(name "unconnected-(JP6-~{RFSH}-Pad6)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "6")
+				(pinfunction "~{RFSH}_6")
+				(pintype "output")
+			)
+		)
+		(net
+			(code "69")
+			(name "unconnected-(JP6-~{WAIT}-Pad7)")
+			(class "Default")
+			(node
+				(ref "JP6")
+				(pin "7")
+				(pinfunction "~{WAIT}_7")
+				(pintype "open_collector")
+			)
+		)
+		(net
+			(code "70")
+			(name "unconnected-(JP7-Pad6)")
+			(class "Default")
+			(node
+				(ref "JP7")
+				(pin "6")
+				(pinfunction "6_6")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "71")
+			(name "unconnected-(JP7-Pad7)")
+			(class "Default")
+			(node
+				(ref "JP7")
+				(pin "7")
+				(pinfunction "7_7")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "72")
+			(name "unconnected-(JP7-Pad8)")
+			(class "Default")
+			(node
+				(ref "JP7")
+				(pin "8")
+				(pinfunction "8_8")
+				(pintype "passive")
+			)
+		)
+		(net
+			(code "73")
+			(name "unconnected-(UNK27C256A-O2-Pad13)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "13")
+				(pinfunction "O2_13")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "74")
+			(name "unconnected-(UNK27C256A-O3-Pad15)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "15")
+				(pinfunction "O3_15")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "75")
+			(name "unconnected-(UNK27C256A-O4-Pad16)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "16")
+				(pinfunction "O4_16")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "76")
+			(name "unconnected-(UNK27C256A-O6-Pad18)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "18")
+				(pinfunction "O6_18")
+				(pintype "tri_state")
+			)
+		)
+		(net
+			(code "77")
+			(name "unconnected-(UNK27C256A-VPP-Pad1)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "1")
+				(pinfunction "VPP_1")
+				(pintype "input")
+			)
+		)
+		(net
+			(code "78")
+			(name "unconnected-(UNK27C256A-~{CE}-Pad20)")
+			(class "Default")
+			(node
+				(ref "UNK27C256")
+				(pin "20")
+				(pinfunction "~{CE}_20")
+				(pintype "input")
+			)
+		)
+	)
+)
