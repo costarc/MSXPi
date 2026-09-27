@@ -73,6 +73,118 @@
     "names_encoding": "escape-32"
   },
   "sounds": {
+    "16": {
+      "raw_ids": [
+        22,
+        150
+      ],
+      "description": "heard in stage 2 (two-channel sound 16h)"
+    },
+    "17": {
+      "raw_ids": [
+        23,
+        151
+      ],
+      "description": "event name not established (two-channel sound 17h)"
+    },
+    "18": {
+      "raw_ids": [
+        24,
+        152
+      ],
+      "description": "heard at start of stage 3 (two-channel sound 18h)"
+    },
+    "19": {
+      "raw_ids": [
+        25,
+        153
+      ],
+      "description": "event name not established (two-channel sound 19h)"
+    },
+    "1a": {
+      "raw_ids": [
+        26,
+        154
+      ],
+      "description": "event name not established (two-channel sound 1Ah)"
+    },
+    "1b": {
+      "raw_ids": [
+        27,
+        155
+      ],
+      "description": "event name not established (two-channel sound 1Bh)"
+    },
+    "1c": {
+      "raw_ids": [
+        28,
+        156
+      ],
+      "description": "event name not established (two-channel sound 1Ch)"
+    },
+    "1d": {
+      "raw_ids": [
+        29,
+        157
+      ],
+      "description": "event name not established (two-channel sound 1Dh)"
+    },
+    "1e": {
+      "raw_ids": [
+        30,
+        158
+      ],
+      "description": "event name not established (two-channel sound 1Eh)"
+    },
+    "1f": {
+      "raw_ids": [
+        31,
+        159
+      ],
+      "description": "event name not established (two-channel sound 1Fh)"
+    },
+    "20": {
+      "raw_ids": [
+        32,
+        160
+      ],
+      "description": "event name not established (two-channel sound 20h)"
+    },
+    "21": {
+      "raw_ids": [
+        33,
+        161
+      ],
+      "description": "event name not established (two-channel sound 21h)"
+    },
+    "22": {
+      "raw_ids": [
+        34,
+        162
+      ],
+      "description": "heard in stage 5 (two-channel sound 22h)"
+    },
+    "23": {
+      "raw_ids": [
+        35,
+        163
+      ],
+      "description": "event name not established (two-channel sound 23h)"
+    },
+    "24": {
+      "raw_ids": [
+        36,
+        164
+      ],
+      "description": "event name not established (two-channel sound 24h)"
+    },
+    "25": {
+      "raw_ids": [
+        37,
+        165
+      ],
+      "description": "event name not established (two-channel sound 25h)"
+    },
     "26": {
       "raw_ids": [
         38,
@@ -85,35 +197,35 @@
         39,
         167
       ],
-      "description": "Three-channel sound 27h; event name not established"
+      "description": "event name not established (three-channel sound 27h)"
     },
     "28": {
       "raw_ids": [
         40,
         168
       ],
-      "description": "Three-channel sound 28h; event name not established"
+      "description": "event name not established (three-channel sound 28h)"
     },
     "29": {
       "raw_ids": [
         41,
         169
       ],
-      "description": "Three-channel sound 29h; event name not established"
+      "description": "event name not established (three-channel sound 29h)"
     },
     "2a": {
       "raw_ids": [
         42,
         170
       ],
-      "description": "Three-channel sound 2Ah; event name not established"
+      "description": "event name not established (three-channel sound 2Ah)"
     },
     "2b": {
       "raw_ids": [
         43,
         171
       ],
-      "description": "Three-channel sound 2Bh; event name not established"
+      "description": "event name not established (three-channel sound 2Bh)"
     },
     "2c": {
       "raw_ids": [
@@ -127,147 +239,147 @@
         45,
         173
       ],
-      "description": "Three-channel sound 2Dh; event name not established"
+      "description": "event name not established (three-channel sound 2Dh)"
     },
     "2e": {
       "raw_ids": [
         46,
         174
       ],
-      "description": "Three-channel sound 2Eh; event name not established"
+      "description": "event name not established (three-channel sound 2Eh)"
     },
     "2f": {
       "raw_ids": [
         47,
         175
       ],
-      "description": "Three-channel sound 2Fh; event name not established"
+      "description": "event name not established (three-channel sound 2Fh)"
     },
     "30": {
       "raw_ids": [
         48,
         176
       ],
-      "description": "Three-channel sound 30h; event name not established"
+      "description": "event name not established (three-channel sound 30h)"
     },
     "31": {
       "raw_ids": [
         49,
         177
       ],
-      "description": "Three-channel sound 31h; event name not established"
+      "description": "event name not established (three-channel sound 31h)"
     },
     "32": {
       "raw_ids": [
         50,
         178
       ],
-      "description": "Three-channel sound 32h; event name not established"
+      "description": "event name not established (three-channel sound 32h)"
     },
     "33": {
       "raw_ids": [
         51,
         179
       ],
-      "description": "Three-channel sound 33h; event name not established"
+      "description": "event name not established (three-channel sound 33h)"
     },
     "34": {
       "raw_ids": [
         52,
         180
       ],
-      "description": "Three-channel sound 34h; event name not established"
+      "description": "event name not established (three-channel sound 34h)"
     },
     "35": {
       "raw_ids": [
         53,
         181
       ],
-      "description": "Three-channel sound 35h; event name not established"
+      "description": "heard in stages 3-4 (three-channel sound 35h)"
     },
     "36": {
       "raw_ids": [
         54,
         182
       ],
-      "description": "Three-channel sound 36h; event name not established"
+      "description": "event name not established (three-channel sound 36h)"
     },
     "37": {
       "raw_ids": [
         55,
         183
       ],
-      "description": "Three-channel sound 37h; event name not established"
+      "description": "event name not established (three-channel sound 37h)"
     },
     "38": {
       "raw_ids": [
         56,
         184
       ],
-      "description": "Three-channel sound 38h; event name not established"
+      "description": "event name not established (three-channel sound 38h)"
     },
     "39": {
       "raw_ids": [
         57,
         185
       ],
-      "description": "Three-channel sound 39h; event name not established"
+      "description": "event name not established (three-channel sound 39h)"
     },
     "3a": {
       "raw_ids": [
         58,
         186
       ],
-      "description": "Three-channel sound 3Ah; event name not established"
+      "description": "event name not established (three-channel sound 3Ah)"
     },
     "3b": {
       "raw_ids": [
         59,
         187
       ],
-      "description": "Three-channel sound 3Bh; event name not established"
+      "description": "heard between stages 4 and 5 (three-channel sound 3Bh)"
     },
     "3c": {
       "raw_ids": [
         60,
         188
       ],
-      "description": "Three-channel sound 3Ch; event name not established"
+      "description": "event name not established (three-channel sound 3Ch)"
     },
     "3d": {
       "raw_ids": [
         61,
         189
       ],
-      "description": "Three-channel sound 3Dh; event name not established"
+      "description": "event name not established (three-channel sound 3Dh)"
     },
     "3e": {
       "raw_ids": [
         62,
         190
       ],
-      "description": "Three-channel sound 3Eh; event name not established"
+      "description": "event name not established (three-channel sound 3Eh)"
     },
     "3f": {
       "raw_ids": [
         63,
         191
       ],
-      "description": "Three-channel sound 3Fh; event name not established"
+      "description": "event name not established (three-channel sound 3Fh)"
     },
     "40": {
       "raw_ids": [
         64,
         192
       ],
-      "description": "Three-channel sound 40h; event name not established"
+      "description": "event name not established (three-channel sound 40h)"
     },
     "41": {
       "raw_ids": [
         65,
         193
       ],
-      "description": "Three-channel sound 41h; event name not established"
+      "description": "event name not established (three-channel sound 41h)"
     },
     "42": {
       "raw_ids": [
@@ -281,28 +393,28 @@
         67,
         195
       ],
-      "description": "Three-channel sound 43h; event name not established"
+      "description": "event name not established (three-channel sound 43h)"
     },
     "44": {
       "raw_ids": [
         68,
         196
       ],
-      "description": "Three-channel sound 44h; event name not established"
+      "description": "event name not established (three-channel sound 44h)"
     },
     "45": {
       "raw_ids": [
         69,
         197
       ],
-      "description": "Three-channel sound 45h; event name not established"
+      "description": "event name not established (three-channel sound 45h)"
     },
     "46": {
       "raw_ids": [
         70,
         198
       ],
-      "description": "Three-channel sound 46h; event name not established"
+      "description": "event name not established (three-channel sound 46h)"
     },
     "47": {
       "raw_ids": [
@@ -316,14 +428,14 @@
         72,
         200
       ],
-      "description": "Three-channel sound 48h; event name not established"
+      "description": "event name not established (three-channel sound 48h)"
     },
     "49": {
       "raw_ids": [
         73,
         201
       ],
-      "description": "Three-channel sound 49h; event name not established"
+      "description": "event name not established (three-channel sound 49h)"
     },
     "4a": {
       "raw_ids": [
@@ -337,14 +449,14 @@
         75,
         203
       ],
-      "description": "Three-channel sound 4Bh; event name not established"
+      "description": "event name not established (three-channel sound 4Bh)"
     },
     "4c": {
       "raw_ids": [
         76,
         204
       ],
-      "description": "Three-channel sound 4Ch; event name not established"
+      "description": "event name not established (three-channel sound 4Ch)"
     },
     "4d": {
       "raw_ids": [
@@ -358,14 +470,14 @@
         78,
         206
       ],
-      "description": "Three-channel sound 4Eh; event name not established"
+      "description": "event name not established (three-channel sound 4Eh)"
     },
     "4f": {
       "raw_ids": [
         79,
         207
       ],
-      "description": "Three-channel sound 4Fh; event name not established"
+      "description": "event name not established (three-channel sound 4Fh)"
     }
   },
   "defaults": {
@@ -396,6 +508,22 @@
       }
     },
     "sounds": {
+      "16": null,
+      "17": null,
+      "18": null,
+      "19": null,
+      "1a": null,
+      "1b": null,
+      "1c": null,
+      "1d": null,
+      "1e": null,
+      "1f": null,
+      "20": null,
+      "21": null,
+      "22": null,
+      "23": null,
+      "24": null,
+      "25": null,
       "26": "nemesis_26",
       "27": null,
       "28": null,

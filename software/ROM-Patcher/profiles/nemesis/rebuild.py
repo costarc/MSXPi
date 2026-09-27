@@ -12,8 +12,14 @@ HERE = Path(__file__).resolve().parent
 SOURCE_SHA256 = '3210f8a0f2309dd4b9a89fc2b24d0f178ce4393a0a1f2854fbce545c361261bc'
 RUNTIME_BANK = 13          # 8K bank, all FFh in the original
 RUNTIME_OFFSET = RUNTIME_BANK * 0x2000
-# Three-channel sounds (low 7 bits 26h-4Fh); bit 7 is a request flag.
-MUSIC_IDS = range(0x26, 0x50)
+# Melodic sounds: two-channel 16h-25h and three-channel 26h-4Fh (low 7 bits);
+# bit 7 is a request flag. Below 16h are single-channel effects on channel 3.
+MUSIC_IDS = range(0x16, 0x50)
+# Heard in a forced-stage test (stage number poked mid-game), so the stage is
+# only indicative. Described, not mapped by default.
+HEARD = {0x16: 'heard in stage 2', 0x18: 'heard at start of stage 3',
+         0x22: 'heard in stage 5', 0x35: 'heard in stages 3-4',
+         0x3b: 'heard between stages 4 and 5'}
 KNOWN = {0x26: 'Title', 0x2c: 'Stage 1', 0x42: 'Requested at power-up',
          0x47: 'Player down', 0x4a: 'Game over', 0x4d: 'Game start'}
 
@@ -71,8 +77,8 @@ def main():
     patch(0xe222, bytes.fromhex('790fc688'), jp('volume_hook') + b'\0',
           'Silence mapped music channels only after successful external playback')
     sounds = {f'{i:02x}': {'raw_ids': [i, 0x80 + i],
-                           'description': f'{KNOWN[i]} (three-channel sound {i:02X}h)' if i in KNOWN else
-                           f'Three-channel sound {i:02X}h; event name not established'}
+                           'description': (KNOWN.get(i) or HEARD.get(i, 'event name not established'))
+                                          + f' ({"two" if i < 0x26 else "three"}-channel sound {i:02X}h)'}
               for i in MUSIC_IDS}
     defaults = dict(tracks={f'nemesis_{i:02x}': dict(filename=f'NEMESIS_{i:02X}.mp3', mode='loop')
                             for i in KNOWN},
