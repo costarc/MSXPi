@@ -41,6 +41,15 @@
 #define MAXBUFSIZE			8192  // 8 KB buffer size
 #define BUFADDRESS			0xC000
 
+// Command-line transmit buffer used by SendCommandToMSXPi().  Sized to the
+// longest command any client actually builds (cmdTail/full_cmd in pcopy.c are
+// 128 bytes each; a DOS command tail alone can be up to ~127), with headroom -
+// not to BUFADDRESS's 8 KB, which that buffer never needs for a command
+// string.  Kept as ordinary _DATA (no __at pin): see the comment on
+// SendCommandToMSXPi's own buffer for why sharing BUFADDRESS with it was
+// wrong.
+#define CMDBUFSIZE			256
+
 #define READY_ACK			0xA0
 #define SENDNEXT			0xA1
 #define ENDTRANSFER			0xA2

@@ -664,37 +664,41 @@ uint8_t SendCommandToMSXPi(const char* cmd, bool appendTail) {
     // ---------------------------------------------------------
     // 2. Build final buffer
     // ---------------------------------------------------------
-    // Pinned to a fixed address rather than left to normal _DATA packing:
-    // callers doing mapper-aware ROM loading (msxarch.c) Put_PN a
-    // dedicated segment into page 2 (0x8000-0xBFFF) for the duration of
-    // that work, specifically to relocate this 8K buffer (the single
-    // largest consumer of _DATA) out of the way, since the linker's
-    // normal packing pushed it - and everything after it - past 0x4000,
-    // into memory that mapper-loading's own Put_PN(1,...) calls corrupt.
-    static __at(BUFADDRESS) char buffer[MAXBUFSIZE];
+    // This used to be pinned at BUFADDRESS (0xC000, page 3) - the same fixed
+    // address msxarch.c uses for its 8 KB ROM-landing buffer - to save RAM by
+    // time-sharing one physical scratch region. But BUFADDRESS is a
+    // compile-time guess at "free RAM", not a checked one: a resident TSR
+    // sitting at/near 0xC000 (observed with a TSR left loaded on real
+    // hardware) silently aliases with it. The command string is short - a
+    // DOS command tail plus a command word is at most CMDBUFSIZE bytes - so
+    // it never needed 8 KB or a fixed address in the first place. Ordinary
+    // _DATA is safely inside THIS program's own TPA allocation, which DOS
+    // does not hand to any properly-behaved resident program, so a small
+    // unpinned buffer here cannot collide with one.  msxarch.c's own
+    // BUFADDRESS use for the large ROM payload is untouched - that one does
+    // need a fixed page-3 address to survive its Put_PN bank switching.
+    static char buffer[CMDBUFSIZE];
     uint16_t total = 0;
 
     // Copy primary
-    for (uint16_t i = 0; i < lenPrimary && total < MAXBUFSIZE; i++) {
+    for (uint16_t i = 0; i < lenPrimary && total < CMDBUFSIZE - 1; i++) {
         buffer[total++] = primary[i];
     }
 
     // Append tail if requested
     if (appendTail && lenTail > 0) {
         // Insert a space only if primary is non-empty
-        if (total > 0 && total < MAXBUFSIZE) {
+        if (total > 0 && total < CMDBUFSIZE - 1) {
             buffer[total++] = ' ';
         }
 
-        for (uint16_t i = 0; i < lenTail && total < MAXBUFSIZE; i++) {
+        for (uint16_t i = 0; i < lenTail && total < CMDBUFSIZE - 1; i++) {
             buffer[total++] = tail[i];
         }
     }
 
     // Null-terminate (not sent, but safe)
-    if (total < MAXBUFSIZE) {
-        buffer[total] = 0;
-    }
+    buffer[total] = 0;
 
     if (total == 0) {
         return RC_FAILED;
