@@ -157,7 +157,7 @@ def start_relay(config):
     listen = config.get('PCHESSLISTEN') or '0.0.0.0'
     port = int(config.get('PCHESSPORT') or 5080)
     try:
-        _relay = ThreadingHTTPServer((listen, port), RelayHandler)
+        _relay = RelayServer((listen, port), RelayHandler)
     except OSError as exc:
         # Another relay (e.g. a second server on this host) may own the port.
         print(f'pchess: relay not started on {listen}:{port}: {exc}')
@@ -260,6 +260,11 @@ def packet(state):
     data[240]=len(state['history'])
     data[241]=min(state['ply'],255)
     return bytes(data)
+
+
+class RelayServer(ThreadingHTTPServer):
+    # On Windows SO_REUSEADDR lets a second relay share a busy port.
+    allow_reuse_address = os.name != 'nt'
 
 
 class RelayHandler(BaseHTTPRequestHandler):
