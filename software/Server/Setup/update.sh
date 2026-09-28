@@ -62,6 +62,7 @@ get() {
 
 rc=0
 for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py \
+         msxpi_pchess.py msxpi_pchess_irc.py requirements-pchess.txt \
          msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
          native/gpio_transfer.c native/build.sh; do
     if get "$BASE" "$f"; then
@@ -103,6 +104,7 @@ fi
 if [ "$(id -u)" = 0 ]; then
     owner="$(stat -c %U:%G "$DIR")"
     chown "$owner" msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py \
+        msxpi_pchess.py msxpi_pchess_irc.py requirements-pchess.txt \
         mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         msxpi-tcpip-setup.sh 2>/dev/null
     chown -R "$owner" native 2>/dev/null
