@@ -440,7 +440,7 @@ install_msxpi() {
     fi
 
     local f
-    for f in msxpi-server.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
+    for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
         [ -s "$MSXPIHOME/$f" ] || err "$f is missing"
     done
 
@@ -646,7 +646,7 @@ verify() {
     if ! as_pi python3 -c 'import ast, sys; ast.parse(open(sys.argv[1], encoding="utf-8-sig").read())' \
             "$MSXPIHOME/msxpi-server.py" 2>/dev/null; then
         err "msxpi-server.py has a syntax error - the download may be damaged, run this again"
-    elif out="$(as_pi sh -c "cd '$MSXPIHOME' && python3 -c 'import mapper_detect, msxpi_eth, msxpi_gpio_native, requests, fs'" 2>&1)"; then
+    elif out="$(as_pi sh -c "cd '$MSXPIHOME' && python3 -c 'import mapper_detect, msxpi_eth, msxpi_gpio_native, requests, fs, msxpi_const, msxpi_settings, msxpi_transport, msxpi_ethglue, msxpi_blocks, msxpi_cmd_disk, msxpi_cmd_files, msxpi_cmd_media, msxpi_cmd_rom, msxpi_cmd_stock, msxpi_cmd_system, msxpi_cmd_web'" 2>&1)"; then
         ok "server and modules load"
     else
         err "the server's modules do not load: $(echo "$out" | tail -1)"
