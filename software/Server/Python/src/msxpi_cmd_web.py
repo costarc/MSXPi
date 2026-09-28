@@ -168,7 +168,12 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
                 "IRCPASSWORD",
             )
         }
-        payload = handle_command(parms or "", irc_config=irc_config)
+        room_config = {
+            key: getMSXPiVar(key) for key in ("PCHESSRELAY", "PCHESSLISTEN", "PCHESSPORT")
+        }
+        payload = handle_command(
+            parms or "", irc_config=irc_config, room_config=room_config
+        )
     except ImportError:
         payload = bytearray(256)
         payload[:4] = b"PCH1"

@@ -1,7 +1,10 @@
 """PChess rules, bounded local AI, and optional shared-room relay.
 
-Install requirements-pchess.txt. Run this module with --listen to host a
-relay; point each MSXPi server's PCHESS_RELAY_URL at that relay.
+Install requirements-pchess.txt. Choosing ROOM mode starts a relay inside
+this server (msxpi.ini PCHESSLISTEN/PCHESSPORT); any other mode stops it.
+PCHESSRELAY names the relay both players share: empty means this server's
+own relay, otherwise http://HOST:PORT of the MSXPi hosting the room. The
+module can still run standalone with --listen to host a dedicated relay.
 """
 import argparse
 import json
@@ -143,15 +146,55 @@ _session = None
 _remote = False
 _irc = None
 _use_irc = False
+_relay = None
 
 
-def handle_command(command, irc_config=None):
+def start_relay(config):
+    """Serve the room relay in a background thread; keep it if already up."""
+    global _relay
+    if _relay:
+        return
+    listen = config.get('PCHESSLISTEN') or '0.0.0.0'
+    port = int(config.get('PCHESSPORT') or 5080)
+    try:
+        _relay = ThreadingHTTPServer((listen, port), RelayHandler)
+    except OSError as exc:
+        # Another relay (e.g. a second server on this host) may own the port.
+        print(f'pchess: relay not started on {listen}:{port}: {exc}')
+        return
+    _relay.daemon_threads = True
+    threading.Thread(target=_relay.serve_forever, daemon=True).start()
+    print(f'pchess: relay listening on {listen}:{port}')
+
+
+def stop_relay():
+    global _relay
+    if _relay:
+        _relay.shutdown()
+        _relay.server_close()
+        _relay = None
+        print('pchess: relay stopped')
+
+
+def relay_url(config):
+    url = os.environ.get('PCHESS_RELAY_URL') or config.get('PCHESSRELAY') or ''
+    if not url:
+        url = 'http://127.0.0.1:%d' % int(config.get('PCHESSPORT') or 5080)
+    return url.rstrip('/')
+
+
+def handle_command(command, irc_config=None, room_config=None):
     """Return a fixed 256-byte state packet, including user-visible failures."""
     global _session, _remote, _irc, _use_irc
+    room_config = room_config or {}
     try:
         args = command.split()
         if not args:
             raise ValueError('new local / new ai / join ROOM')
+        if args[0] in ('irc','new'):
+            stop_relay()
+        elif args[0] == 'join':
+            start_relay(room_config)
         if args[0]=='irc':
             from msxpi_pchess_irc import IRC
             if _irc: _irc.close()
@@ -181,10 +224,7 @@ def handle_command(command, irc_config=None):
             if args[0] == 'move' and len(args) == 2:
                 req['move'] = args[1]
         if remote:
-            url = os.environ.get('PCHESS_RELAY_URL','')
-            if not url:
-                raise ValueError('Set PCHESS_RELAY_URL on server')
-            request = Request(url.rstrip('/')+'/game', json.dumps(req).encode(),
+            request = Request(relay_url(room_config)+'/game', json.dumps(req).encode(),
                               {'Content-Type':'application/json'})
             with urlopen(request,timeout=5) as response:
                 result = json.loads(response.read(8192))

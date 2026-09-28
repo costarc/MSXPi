@@ -112,7 +112,9 @@ after time 82 {{
             content=content.replace(f'after time {56+i*8}',f'after time {68+i*8}')
             if i==0:
                 content=content.replace('type_via_keybuf "e2e4\\r"',
-                    'type_via_keybuf [format " %c%c " 30 30]')
+                    'type_via_keybuf " "; after time 0.25 {type_via_keybuf [format "%c" 30]; '
+                    'after time 0.25 {type_via_keybuf [format "%c" 30]; '
+                    'after time 0.25 {type_via_keybuf " "}}}')
             content=content.replace('after time 82','after time 95')
             content=content.replace('bob\\r',nicks[1]+'\\r')
             if real_irc:

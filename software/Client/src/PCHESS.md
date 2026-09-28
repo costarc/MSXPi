@@ -30,10 +30,12 @@ to **C:**, then run `PCHESS`.
 Controls:
 
 - `1`: local two-player; `2`: play white against the server AI.
-- `4`: connect to IRC and join #msxpi; `5`: announce availability.
+- `4 ONLINE`: connect to IRC and join #msxpi; `5`: announce availability.
 - `6`, nickname, Return: privately invite an opponent; `7`: accept an invite.
 - Arrows or joystick port 1 move the cursor. Space, Return or joystick A
   selects source/destination. Cursor promotions choose a queen.
+  Direction events are rate-limited to one per eight jiffies (133–160 ms)
+  to suppress rapid repeats; the first direction is immediate.
 - Type UCI (`e2e4`, `a7a8n`) or SAN (`Nf3`, `O-O`) and press Return.
 - Backspace edits notation; Escape returns to DOS.
 
@@ -42,11 +44,14 @@ in `software/docs/PCHESS-IRC.md`. Both servers must use the same IRC network.
 Games are in memory; reconnect/resume, clocks and Lichess integration are
 not implemented. An IRC connection failure is displayed on the status line.
 
-An alternative dedicated room relay is available using `3`: run
-`python msxpi_pchess.py --listen 0.0.0.0 --port 5080`, set
-`PCHESS_RELAY_URL=http://HOST:5080` on each MSXPi server, and enter the same
-room name on both clients. Use a private LAN or protected tunnel; this
-simple HTTP relay is intended for trusted networks. First player is white.
+ROOM mode (`3`) uses a small HTTP relay built into the MSXPi server. Choosing
+`3` starts it on `PCHESSLISTEN:PCHESSPORT` (msxpi.ini, default `0.0.0.0:5080`,
+reachable from the LAN); choosing any other mode stops it. `PCHESSRELAY`
+selects the relay both players share: leave it empty on the hosting MSXPi,
+and set it to `http://HOST_IP:5080` on the other one. Both players enter the
+same room name; the first to join is white. The relay is plain HTTP for
+trusted networks. `python msxpi_pchess.py --listen 0.0.0.0 --port 5080`
+still runs a standalone relay on a third machine.
 
 Tests: `test_pchess.py` and `test_pchess_irc.py` under `Server/Python/tests`.
 Run `pchess_dual.py --irc` with Windows Python for two OpenMSX instances,

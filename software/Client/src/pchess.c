@@ -12,7 +12,6 @@
 #include <string.h>
 #include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/vdp_graph2.h"
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/vdp_circle.h"
 #include "../../C-common/header/msxpi.h"
 
 #define BOARD_X 8
@@ -127,39 +126,39 @@ static uint8_t exchange(const char *cmd) {
 
 static uint8_t is_white(char piece) { return piece >= 'A' && piece <= 'Z'; }
 
-static void draw_piece(char piece, int x, int y) {
-    uint8_t ink = is_white(piece) ? C_WHITE : C_BLACK;
-    int cx = x + 12;
+/* 24x24 piece bitmaps, one bit per pixel for tile rows 1-20 (MSB is the
+ * left column), in P N B R Q K order. The fill mask is the silhouette; the
+ * detail mask marks collar and base bands drawn in the contrast colour. The
+ * black outline is derived at build time from the 8 neighbours of the fill. */
+static const uint32_t piece_fill[6][20]={
+    { /* P */ 0x000000,0x000000,0x003C00,0x007E00,0x00FF00,0x00FF00,0x007E00,0x00FF00,0x003C00,0x003C00,0x007E00,0x007E00,0x00FF00,0x01FF80,0x03FFC0,0x03FFC0,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+    { /* N */ 0x000000,0x002800,0x007C00,0x00FE00,0x01FE00,0x03FF80,0x07FF80,0x0FFFC0,0x0FFFC0,0x0E7FC0,0x047FC0,0x00FFC0,0x01FFC0,0x01FFC0,0x03FFC0,0x03FFC0,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+    { /* B */ 0x001800,0x003C00,0x001800,0x003C00,0x007E00,0x00FF00,0x01FF80,0x01FF80,0x01FF80,0x01FF80,0x00FF00,0x007E00,0x00FF00,0x003C00,0x003C00,0x007E00,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+    { /* R */ 0x000000,0x000000,0x067E60,0x067E60,0x07FFE0,0x07FFE0,0x03FFC0,0x01FF80,0x01FF80,0x01FF80,0x01FF80,0x01FF80,0x01FF80,0x01FF80,0x03FFC0,0x03FFC0,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+    { /* Q */ 0x000000,0x111888,0x3BBDDC,0x111888,0x19BD98,0x09FF90,0x0FFFF0,0x07FFE0,0x07FFE0,0x03FFC0,0x03FFC0,0x01FF80,0x03FFC0,0x03FFC0,0x01FF80,0x03FFC0,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+    { /* K */ 0x001800,0x001800,0x007E00,0x001800,0x001800,0x003C00,0x0E7E70,0x1FFFF8,0x1FFFF8,0x1FFFF8,0x0FFFF0,0x07FFE0,0x03FFC0,0x03FFC0,0x01FF80,0x03FFC0,0x07FFE0,0x0FFFF0,0x0FFFF0,0x0FFFF0 },
+};
+static const uint32_t piece_detail[6][20]={
+    { /* P */ 0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+    { /* N */ 0x000000,0x000000,0x000000,0x000000,0x002000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+    { /* B */ 0x000000,0x000000,0x000000,0x000000,0x000000,0x000800,0x001000,0x002000,0x004000,0x000000,0x000000,0x000000,0x003C00,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+    { /* R */ 0x000000,0x000000,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+    { /* Q */ 0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x00FF00,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+    { /* K */ 0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x000000,0x00FF00,0x000000,0x000000,0x000000,0x01FF80,0x000000,0x000000,0x000000 },
+};
 
-    /* Every piece has a solid silhouette, so no letters are needed. */
-    BoxFill(x+5,y+20,x+19,y+21,ink,0);
-    if (piece == 'p' || piece == 'P') {
-        CircleFilled(cx, y + 8, 4, ink, 0);
-        BoxFill(x + 6, y + 11, x + 18, y + 19, ink, 0);
-    } else if (piece == 'r' || piece == 'R') {
-        BoxFill(x + 6, y + 7, x + 18, y + 19, ink, 0);
-        BoxFill(x + 5, y + 5, x + 8, y + 9, ink, 0);
-        BoxFill(x + 10, y + 5, x + 13, y + 9, ink, 0);
-        BoxFill(x + 15, y + 5, x + 18, y + 9, ink, 0);
-    } else if (piece == 'n' || piece == 'N') {
-        Line(x + 8, y + 19, x + 8, y + 7, ink, 0);
-        Line(x + 8, y + 7, x + 16, y + 5, ink, 0);
-        Line(x + 16, y + 5, x + 19, y + 12, ink, 0);
-        Line(x + 19, y + 12, x + 15, y + 18, ink, 0);
-    } else if (piece == 'b' || piece == 'B') {
-        Line(x + 7, y + 19, x + 17, y + 19, ink, 0);
-        Line(cx, y + 5, cx - 6, y + 18, ink, 0);
-        Line(cx, y + 5, cx + 6, y + 18, ink, 0);
-    } else if (piece == 'q' || piece == 'Q') {
-        CircleFilled(cx, y + 7, 3, ink, 0);
-        CircleFilled(x + 7, y + 7, 3, ink, 0);
-        CircleFilled(x + 17, y + 7, 3, ink, 0);
-        Line(x + 7, y + 7, x + 9, y + 19, ink, 0);
-        Line(x + 17, y + 7, x + 15, y + 19, ink, 0);
-    } else if (piece == 'k' || piece == 'K') {
-        Line(cx, y + 3, cx, y + 11, ink, 0);
-        Line(cx - 4, y + 7, cx + 4, y + 7, ink, 0);
-        BoxLine(x + 6, y + 11, x + 18, y + 20, ink, 0);
+static uint32_t piece_mask(uint8_t p,int8_t r) {
+    return r>=1 && r<=20 ? piece_fill[p][r-1] : 0;
+}
+static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
+    uint32_t fill=piece_mask(p,r),detail=0,edge,bit=0x800000;
+    uint8_t c;
+    if(r>=1 && r<=20) detail=piece_detail[p][r-1];
+    edge=piece_mask(p,r-1)|fill|piece_mask(p,r+1);
+    edge|=(edge<<1)|(edge>>1);
+    for(c=0;c<24;c++,bit>>=1) {
+        if(fill&bit) px[c]=(detail&bit)?(white?C_BLACK:C_LIGHT):(white?C_WHITE:C_BLACK);
+        else px[c]=(edge&bit)?C_BLACK:bg;
     }
 }
 
@@ -167,12 +166,22 @@ static void draw_piece(char piece, int x, int y) {
  * VDP command routine: subsequent refreshes never redraw piece primitives. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,r,c,pixels[20]; uint16_t bits; int x,y;
+    uint8_t i,j,k,r,c,bg,sy,pixels[24]; uint16_t bits; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
-        HMMV(x,y,24,24,i>=13?C_BLUE:C_LIGHT);
+        bg=i>=13?C_BLUE:C_LIGHT;
         j=i%13;
-        if(j) draw_piece(tile_pieces[j],x,y);
+        if(!j) { HMMV(x,y,24,24,bg); continue; }
+        /* Stage six rows at a time in the unused lines 212-223, alternating
+         * halves so a pending HMMM never reads rows being rewritten. */
+        for(k=0;k<4;k++) {
+            sy=212+(k&1)*6;
+            for(r=0;r<6;r++) {
+                piece_row(pixels,j<7?j-1:j-7,k*6+r,bg,j<7);
+                CopyRamToVram(pixels,((uint16_t)(sy+r)<<8),24);
+            }
+            HMMM(0,sy,x,y+k*6,24,6);
+        }
     }
     for(i=0;i<42;i++) {
         bits=i>0 && i<37?font[i-1]:0;
@@ -197,12 +206,13 @@ static void draw_panel(void) {
         text_at(205,58+i*9,i<move_count?moves[i]:"");
     }
     text_at(205,132,"1 LOCAL 2 AI");
-    text_at(205,140,"3 ROOM 4 IRC");
-    text_at(205,148,"5 SEEK 6 ASK");
-    text_at(205,156,"7 ACCEPT");
-    text_at(205,166,room_entry==2?"PEER NICK":room_entry?"ROOM NAME":"MOVE");
-    text_at(205,174,entry);
-    text_at(205,190,"ESC QUIT");
+    text_at(205,140,"3 ROOM");
+    text_at(205,148,"4 ONLINE");
+    text_at(205,156,"5 SEEK 6 ASK");
+    text_at(205,164,"7 ACCEPT");
+    text_at(205,174,room_entry==2?"PEER NICK":room_entry?"ROOM NAME":"MOVE");
+    text_at(205,182,entry);
+    text_at(205,198,"ESC QUIT");
     text_at(8,205,status);
 }
 
@@ -246,8 +256,8 @@ static void make_move(void) {
 }
 
 int main(void) {
-    uint8_t key,joy,fire,lastjoy=0,lastfire=0;
-    uint16_t lastpoll=0,now;
+    uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
+    uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0;
     field_count=0;
     entry[0]=0;
@@ -274,6 +284,13 @@ int main(void) {
         if(fire && !lastfire) key=' ';
         lastjoy=joy; lastfire=fire;
         now=*(volatile uint16_t *)0xFC9E;
+        /* Consume rapid BIOS repeats without queuing delayed cursor moves.
+         * Eight jiffies is 133 ms at 60 Hz, 160 ms at 50 Hz. The first
+         * arrow is immediate; unsigned subtraction handles timer wrap. */
+        if(key>=0x1c && key<=0x1f) {
+            if(arrow_seen && (uint16_t)(now-lastarrow)<8) key=0;
+            else {lastarrow=now; arrow_seen=1;}
+        }
         if(!key) {
             if(online && (uint16_t)(now-lastpoll)>=120) {
                 lastpoll=now; exchange("pchess poll"); draw_board();
