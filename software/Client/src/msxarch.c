@@ -38,8 +38,13 @@
 
 // Repository list config file
 #define INI_FILENAME     "MSXARCH.INI"
-#define INI_BUFFER_SIZE  1024
-#define MAX_REPOS        8
+// Trimmed from 1024/8 to reclaim _DATA space (msxarch.com must stay under
+// 0x4000: PAGE1ADDRESS, where a plain ROM lands, or the running program
+// overwrites its own tail mid-transfer). The shipped msxarch.ini is ~230
+// bytes with 4 repos; MAX_URL_LEN stays at 100 - the hardcoded
+// web.archive.org fallback URL is 95 chars.
+#define INI_BUFFER_SIZE  320
+#define MAX_REPOS        5
 #define MAX_URL_LEN      100
 
 #define KEY_UP    0x1E   // Fusion-C scancode for Up arrow
@@ -406,7 +411,9 @@ uint8_t loadrom(uint16_t totalSize) {
     // run here also NOPed data that looked like a store and hung GALAGA.
     (void)totalSize;
 
-    Print("Game loaded\n");
+    if (rc == RC_SUCCESS) {
+        Print("Game loaded\n");
+    }
     return rc;
 }
 
