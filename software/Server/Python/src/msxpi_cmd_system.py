@@ -54,7 +54,7 @@ from msxpi_blocks import sendmultiblock
 from msxpi_cmd_disk import msxdos_inihrd, unmount_drive
 from msxpi_cmd_files import run
 from msxpi_ethglue import _eth_release, _eth_relink
-from msxpi_settings import getMSXPiVar, setMSXPiVar
+from msxpi_settings import getMSXPiVar, setMSXPiVar, shown_value
 from msxpi_transport import release_gpio
 
 
@@ -69,7 +69,7 @@ def pset(data: str) -> CommandResult:
     if not data:
         out = ""
         for name, value in settings._config.items():
-            out += f"{name}={value}\n"
+            out += f"{name}={shown_value(name, value)}\n"
         return sendmultiblock(out.encode())
 
     # Split into tokens
@@ -100,7 +100,7 @@ def pset(data: str) -> CommandResult:
     if len(parts) == 1:
         for name, value in settings._config.items():
             if name.upper() == varname_upper:
-                return sendmultiblock(f"{name}={value}".encode())
+                return sendmultiblock(f"{name}={shown_value(name, value)}".encode())
         return sendmultiblock(f"{varname} not found".encode())
 
     # ---------------------------------------------------------
@@ -128,7 +128,7 @@ def pset(data: str) -> CommandResult:
     # ---------------------------------------------------------
     varvalue = data[len(varname) :].strip()
 
-    print(f"Setting variable {varname} to value {varvalue}")
+    print(f"Setting variable {varname}")
     rc = setMSXPiVar(varname, varvalue)
 
     # Special cases for drives

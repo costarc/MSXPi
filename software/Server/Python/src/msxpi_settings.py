@@ -46,6 +46,15 @@ MSXPIHOME = "/home/pi/msxpi"
 # Scratch files (pcopy session, archive extraction). MSXPI_TMP overrides it;
 # "/tmp" is C:	mp on Windows.
 TMPDIR = os.environ.get("MSXPI_TMP", "/tmp")
+
+# Never printed, in p set listings or in the server log.
+SECRET_VARS = {"IRCPASSWORD"}
+
+
+def shown_value(name: str, value: str) -> str:
+    return "[hidden]" if name.upper() in SECRET_VARS else value
+
+
 _config = None
 
 
@@ -70,12 +79,7 @@ class MSXPiConfig:
                 # raise IndexError here and kill the server; skip it instead.
                 if line.startswith("var") and "=" in line:
                     name = line.split(" ")[1].split("=")[0].strip()
-                    value = (
-                        line.replace("var ", "", 1)
-                        .replace(name, "", 1)
-                        .split("=")[1]
-                        .strip()
-                    )
+                    value = line.split("=", 1)[1].strip()
                     pairs.append((name, value))
         return cls(ini_path, pairs)
 
@@ -106,10 +110,10 @@ class MSXPiConfig:
                     return
                 print(f"Deleting variable {name}")
             elif key in self._vars:
-                print(f"Updating variable {name} to {value}")
+                print(f"Updating variable {name}")
                 self._vars[key][1] = value
             else:
-                print(f"Adding new variable {name}={value}")
+                print(f"Adding new variable {name}")
                 self._vars[key] = [name, value]
             self.save()
 

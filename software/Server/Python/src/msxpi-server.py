@@ -124,7 +124,7 @@ from msxpi_cmd_system import (
     wifi,
     wlanreset,
 )
-from msxpi_cmd_web import chatgpt, irc, renderpage, showpage, template
+from msxpi_cmd_web import chatgpt, irc, pchess, renderpage, showpage, template
 from msxpi_const import BUILD_ID, RC_CONNERR, RC_SUCCESS, VERSION
 from msxpi_settings import MSXPiConfig, getMSXPiVar
 
@@ -161,6 +161,7 @@ COMMANDS = {
         dskios,
         dskiow,
         irc,
+        pchess,
         msxarchive,
         music,
         netreset,
@@ -215,7 +216,11 @@ def handle_command(buf: bytes) -> None:
     # instead of an exception that tears down the connection.
     cmd, *rest = buf.decode("utf-8", "replace").split()
     parms = " ".join(rest)
-    print(f" -> {cmd} {parms}")
+    # "p set IRCPASSWORD secret" must not land in the log.
+    shown = (
+        "[hidden]" if parms.upper().startswith(tuple(settings.SECRET_VARS)) else parms
+    )
+    print(f" -> {cmd} {shown}")
     try:
         result = resolve_command(cmd)(parms)
     except KeyError:
@@ -440,7 +445,10 @@ def serve_tcp(server_socket: socket.socket) -> None:
 
 
 def main() -> None:
-    settings._config = load_config(MSXPIHOME + "/msxpi.ini")
+    # MSXPI_INI points at another msxpi.ini (a test's own configuration).
+    settings._config = load_config(
+        os.environ.get("MSXPI_INI", MSXPIHOME + "/msxpi.ini")
+    )
     media.init_player()
     logger.info(f"Starting MSXPi Server Version {VERSION} Build {BUILD_ID}")
 
