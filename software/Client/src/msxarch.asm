@@ -1872,6 +1872,7 @@ WaitForKey:
         ld      ix,B_CHGET
         jr      BiosCall
 Cls:
+        xor     a                       ; BIOS CLS only clears with Z set
         ld      ix,B_CLS
         jr      BiosCall
 ; D = column, E = row, both 0-based
