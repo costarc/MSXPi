@@ -430,8 +430,8 @@ SelectGame:
         call    PrintDec
         jp      Exit
 .launch:
-        ; rebootAfterRomLoad=yes: the game needs nothing more from the Pi.
-        ld      a,(REBOOT_AFTER_ROM_LOAD)
+        ; shutdownAfterRomLoad=yes: the game needs nothing more from the Pi.
+        ld      a,(SHUTDOWN_AFTER_ROM_LOAD)
         or      a
         ld      de,CMD_SHUTDOWN
         call    nz,SendCommandToMSXPi
@@ -2169,7 +2169,7 @@ GetValidInput:
 ; ===========================================================================
 ; MSXARCH.INI: one repository URL per line; ';' and '#' lines are comments.
 ; It may also hold settings, name=value, which are not repositories:
-;     rebootAfterRomLoad=yes   ask the Pi to shut down once a game is loaded
+;     shutdownAfterRomLoad=yes   ask the Pi to shut down once a game is loaded
 ; ===========================================================================
 LoadRepositoryList:
         ld      hl,INI_FCB
@@ -2253,11 +2253,11 @@ LoadRepositoryList:
         ld      b,0
         sbc     hl,bc                   ; HL = start of this entry (CF=0 from xor)
         push    hl
-        ld      de,STR_REBOOT_SETTING
+        ld      de,STR_SHUTDOWN_SETTING
         call    IniSetting
         jr      nc,.notSetting
         call    IniYes
-        ld      (REBOOT_AFTER_ROM_LOAD),a
+        ld      (SHUTDOWN_AFTER_ROM_LOAD),a
         pop     de                      ; reuse the entry
         jr      .next
 .notSetting:
@@ -2356,7 +2356,7 @@ IniYes:
 ; Strings
 ; ===========================================================================
 INI_NAME:           db  "MSXARCH INI"
-STR_REBOOT_SETTING: db  "rebootafterromload",0
+STR_SHUTDOWN_SETTING: db  "shutdownafterromload",0
 STR_YES:            db  "yes",0
 STR_PI_ERROR:       db  "Pi:Error - ",0
 STR_FAILED_LIST:    db  "Failed to list directory:",0
@@ -2412,7 +2412,7 @@ RepoEntryTable:
 ; Variables that need an initial value
 ; ===========================================================================
 REPO_COUNT:             db  0
-REBOOT_AFTER_ROM_LOAD:  db  0
+SHUTDOWN_AFTER_ROM_LOAD:  db  0
 INI_END:                db  0
 
 IMAGE_END:

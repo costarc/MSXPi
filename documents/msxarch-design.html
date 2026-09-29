@@ -131,7 +131,7 @@ ul{padding-left:20px;margin:0 0 14px} li{margin-bottom:6px}
 <ul>
 <li><strong>Game list sizes</strong> come from wherever the location keeps them: local file size, the Size column of <code>00index.txt</code> (msxarchive.nl lists the <em>unpacked</em> ROM size), the size column of an HTTP directory listing, or <code>HEAD</code> requests for the page being shown (to 127.0.0.1 for localhost).</li>
 <li><strong>Loading screen</strong>: <code>Loading &lt;name&gt; (&lt;size&gt;K)</code>, then a fixed-width bar drawn once through the BIOS. Each block then writes only <code>OUT (98h),'#'</code> — the VDP advances by itself — so the transfer loop makes no BIOS calls.</li>
-<li><strong>Shutting the Pi down</strong>: with <code>rebootAfterRomLoad=yes</code> in <code>msxarch.ini</code> (a setting, not shown as a location), msxarch asks the Pi to shut down once the game is fully in RAM and before starting it. The server answers first and halts afterwards, and only on a Raspberry Pi.</li>
+<li><strong>Shutting the Pi down</strong>: with <code>shutdownAfterRomLoad=yes</code> in <code>msxarch.ini</code> (a setting, not shown as a location), msxarch asks the Pi to shut down once the game is fully in RAM and before starting it. The server answers first and halts afterwards, and only on a Raspberry Pi.</li>
 </ul>
 
 <h3>Compatibility</h3>

@@ -255,8 +255,8 @@ static void SetFcbFilename(FCB* fcb, const char* filename) {
 
 // msxarch.ini may also hold settings, one per line as name=value. They are
 // not repositories and are left out of the menu.
-//     rebootAfterRomLoad=yes   ask the Pi to shut down once a game is loaded
-static bool rebootAfterRomLoad;
+//     shutdownAfterRomLoad=yes   ask the Pi to shut down once a game is loaded
+static bool shutdownAfterRomLoad;
 
 static char lowerChar(char c) {
     return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
@@ -305,9 +305,9 @@ static int LoadRepositoryList(void) {
         if (c == '\n') {
             const char* value;
             repoList[count][col] = '\0';
-            value = iniSetting(repoList[count], "rebootafterromload");
+            value = iniSetting(repoList[count], "shutdownafterromload");
             if (value != NULL) {
-                rebootAfterRomLoad = iniYes(value);
+                shutdownAfterRomLoad = iniYes(value);
             }
             else if (col > 0 && repoList[count][0] != ';' && repoList[count][0] != '#') {
                 count++;
@@ -1675,11 +1675,11 @@ int main(void) {
                     return 1;
                 }
                 else {
-                    // msxarch.ini rebootAfterRomLoad=yes. The game is fully in RAM
+                    // msxarch.ini shutdownAfterRomLoad=yes. The game is fully in RAM
                     // and needs nothing more from the Pi. Use the no-reply form so
                     // the launch path does not perform another receive/print after
                     // the ROM image has already been staged.
-                    if (rebootAfterRomLoad) {
+                    if (shutdownAfterRomLoad) {
                         SendCommandToMSXPi("shut nowait", false);
                     }
                     launchGame();
