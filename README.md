@@ -19,9 +19,8 @@ Version 1.6 is the current release. What changed is in
 **Version 1.6 breaks software compatibility with previous ROMs and servers.**
 Upgrade the whole set together: ROM, msxpi-server, the client commands (`.COM`
 files) and, on real hardware, the CPLD firmware. A v1.6 ROM on older CPLD
-firmware still works, using the slower polled transfers. If you must keep an
-older ROM, the matching historical server is kept next to the current one,
-named after the ROM's sha1, in `software/Server/Python/src`.
+firmware still works, using the slower polled transfers. To stay on an older
+ROM, use the server from the matching `release/vX.Y` branch.
 
 **About the DOS.** MSXPi's own ROM contains **MSX-DOS 1 (1.03) only**. It does not
 contain Nextor or MSX-DOS 2. MSXPi *coexists* with them: Nextor or MSX-DOS 2 come
@@ -137,14 +136,8 @@ Raspberry Pi does not need to be attached yet.
 
 ### Step 3 - Prepare the Raspberry Pi
 
-Choose one.
-
-**3a. Ready-made SD card image (easiest).** (This SD card is outdated, and will require the msxpi-setup.sh to be run to update it to latest code - refer to 3b step 2 below to make this update) - Download from
-https://tinyurl.com/MSXPi-SDCardV3, unzip with 7-Zip and write to the SD card
-with Win32DiskImager (https://win32diskimager.org) or Raspberry Pi Imager
-("Use custom"). Insert the card in the Pi.
-
-**3b. Fresh Raspberry Pi OS Lite (32-bit).**
+Install a fresh Raspberry Pi OS Lite and run the MSXPi setup script. (The
+old ready-made SD card image is no longer offered.)
 
 1. Write *Raspberry Pi OS Lite (32-bit)* to the SD card with Raspberry Pi
    Imager (https://www.raspberrypi.com/software). In its settings choose user
@@ -171,17 +164,19 @@ What the setup gives you (check it, or do it by hand):
   by hand). The packages `unar`, `lhasa`, `unzip`, `mpv`, `alsa-utils` and
   `smbclient` are for unpacking archives, playing audio and reading network
   shares; `iptables` gives the MSX its network; `gcc` builds the native GPIO
-  engine.
+  engine. PChess also needs the Python package `chess`
+  (`requirements-pchess.txt`); the rest of the server works without it.
 * **The MSXPi home directory `/home/pi/msxpi`**, owned by user `pi`. The path is
-  built into the server. It holds:
+  built into the server (the environment variable `MSXPI_HOME` overrides it).
+  It holds:
 
   | File | Purpose |
   |---|---|
-  | `msxpi-server.py`, `mapper_detect.py`, `msxpi_eth.py`, `msxpi_gpio_native.py` | the server and its modules |
+  | `msxpi-server.py` and the `msxpi_*.py` modules (`msxpi_cmd_*.py`, `msxpi_transport.py`, `msxpi_settings.py`, ...), `mapper_detect.py` | the server and its modules |
   | `native/` | the native GPIO library `libmsxpi_gpio.so`, built on the Pi (without it the server falls back to slower Python GPIO and says so in its log) |
   | `msxpi.ini` | your settings, see below |
   | `disks/msxpiboot.dsk`, `disks/tools.dsk` | drives A: and B: for the MSX-DOS 1 boot mode |
-  | `msxpi-tcpip-setup.sh`, `kill.sh` | helpers |
+  | `msxpi-monitor`, `msxpi-tcpip-setup.sh`, `update.sh` | helpers |
 
 * **A systemd service** (`msxpi-monitor`) that starts the server at boot. To
   watch it work, run it by hand: `cd /home/pi/msxpi && python3 msxpi-server.py`.
@@ -261,9 +256,9 @@ Pi's WiFi. Details: `software/UNAPI/README.md`.
 Update all three together. Run `p shut` before you switch the MSX off: the Pi is
 powered by the MSX, and an SD card can be corrupted by a sudden power cut.
 
-More detail with pictures: `documents/Quick Start.odt` and the two tutorials
-("Easy Way" with the ready-made image, "Hard Way" from scratch; Portuguese
-versions available) in the `documents` folder.
+More detail with pictures: `documents/Quick Start.odt` and the "Hard Way" tutorial
+(installing Raspberry Pi OS from scratch; Portuguese version available) in the
+`documents` folder.
 
 
 Quick Start 2 - openMSX (no hardware needed)
@@ -289,8 +284,8 @@ the official build yet, so download openMSX from the MSXPi fork instead:
   version - the device, ROM and server share one protocol.
 * If you keep your own openMSX, the two data files are also in this repository:
   `software/openMSX/share/extensions/MSXPi.xml` goes to openMSX's
-  `share/extensions`, and `software/openMSX/share/systemroms/extensions/msxpibios.rom`
-  goes to `share/systemroms/extensions`. The `MSXPiDevice` itself is only in
+  `share/extensions`, and `software/target/msxpibios.rom` goes to
+  `share/systemroms` (the XML checks its sha1). The `MSXPiDevice` itself is only in
   builds of the fork.
 
 ### Step 2 - Python and the MSXPi home directory
@@ -302,11 +297,12 @@ the official build yet, so download openMSX from the MSXPi fork instead:
   server complains about another module when it starts, install that too.
 * **7-Zip** (`7z.exe` on the PATH) for zip, lzh, pma and 7z archives, used by
   msxarch and `pcopy /z`. On Linux/macOS install `p7zip`, `lhasa` and `unar`.
-* **The MSXPi home directory.** The server has `/home/pi/msxpi` built in. On
-  Linux and macOS create that folder. On Windows the path resolves on the
-  *current drive*, so create `C:\home\pi\msxpi` and start the server from drive
-  C:. Put in it: `msxpi-server.py`, `mapper_detect.py` and `msxpi_eth.py`
-  (from `software/Server/Python/src`), `msxpi.ini` (copy `msxpi-JumperLeft.ini`
+* **The MSXPi home directory.** The server has `/home/pi/msxpi` built in
+  (set `MSXPI_HOME` to use another folder). On Linux and macOS create that
+  folder. On Windows the path resolves on the *current drive*, so create
+  `C:\home\pi\msxpi` and start the server from drive C:. Put in it:
+  `msxpi-server.py`, `mapper_detect.py` and every `msxpi_*.py` module (all from
+  `software/Server/Python/src`; the server imports them from its own folder), `msxpi.ini` (copy `msxpi-JumperLeft.ini`
   and rename it), and a `disks` folder with `msxpiboot.dsk` and `tools.dsk` from
   `software/target/disks`.
 * Add the keys you need to `msxpi.ini` (for example `OPENAIKEY` for ChatGPT).
@@ -341,8 +337,8 @@ setting `msxpiserver_port` (default 5000). Change it in the openMSX console
 
         set msxpiserver_port 5001
 
-Make the server listen on the same port by changing the `PORT` value near the
-top of `msxpi-server.py`. Use this when port 5000 is taken, or to run two
+Make the server listen on the same port with the environment variable
+`MSXPI_PORT` (for example `set MSXPI_PORT=5001` on Windows before starting it). Use this when port 5000 is taken, or to run two
 emulators with two servers.
 
 ### Step 4 - Try it
@@ -467,10 +463,12 @@ server), `r1:` and `r2:` (MSX1 and MSX2 ROMs on msxarchive.nl).
 | `p set [NAME value]` | show or change MSXPi variables (saved in `msxpi.ini`) |
 | `p wifi`, `p wifi set` | list interfaces / apply WIFISSID and WIFIPWD |
 | `p wlanreset [secs]`, `p netreset [secs]` | reset the Pi's WiFi / rebuild its TCP/IP setup for UNAPI |
-| `p play`, `p vol` | audio playback and volume on the Pi |
+| `p music`, `p play`, `p vol` | audio playback and volume on the Pi |
 | `p reload A:` (or `B:`) | reload a drive's disk image |
 | `p reboot`, `p shut`, `p restart` | reboot / shut down the Pi, restart the server |
 | `p chatgpt <question>` | ask ChatGPT (needs OPENAIKEY) |
+| `p showpage [/4\|/6\|/8] <url>` | render a web page on the MSX screen |
+| `pchess` | chess on an MSX2 (128 KB VRAM), local or over IRC (see `software/Client/src/PCHESS.md`) |
 | `pcopy` | copy Pi/network file to the MSX drive (`/z` unpacks archives) or an MSX file to the Pi |
 | `msxarch` | browse ROM repositories (listed in `MSXARCH.INI`) and start a game |
 | `LOADROM name /N` | load a plain ROM or MegaROM from the network |
@@ -516,15 +514,15 @@ Bugs and known limitations
   Desktop, Hyper-V and WSL each take one), and if the server prints "falling back
   to MockLink" the MSX looks configured but reaches nothing.
 * **The server on Windows and macOS** runs the commands that make sense there;
-  `wifi`, `reboot`, `shut`, `play` and `vol` are Raspberry Pi only.
+  `wifi`, `reboot`, `shut`, `play`/`music` and `vol` are Raspberry Pi only.
 * **Hardware compatibility.** Some MSX models have unusual slot or bus
   implementations and may not work; MSX-DOS needs 64 KB RAM. The Pi header must
   face the correct way for your PCB (a Zero WH has its header on the wrong side
   for the standard PCB).
 * **ChatGPT and stock commands** need your own API keys in `msxpi.ini`; no key
   ships with MSXPi.
-* **Regression tests** are not carried on the release branch; they live in
-  `software/Tests` on the development branches.
+* **Tests.** Server unit tests are in `software/Server/Python/tests`; the
+  UNAPI harness is in `software/UNAPI/harness`.
 * The PDF copies of the documents in `documents` may be older than the `.odt`
   files.
 
@@ -553,25 +551,26 @@ Directories:
     |   |   `-- transport        generator for the /WAIT burst transfer code
     |   |-- C-common
     |   |   |-- header           msxpi.h - the C BIOS API
-    |   |   `-- lib              msxpi-bios.c and the compiled library
+    |   |   `-- lib              msxpi-bios.c
     |   |-- ROM/src
     |   |   |-- BIOS             CALL MSXPI for BASIC (msxpiext.asm, MSXPIEXT.BIN)
     |   |   `-- MSX-DOS          disk driver and MSX-DOS 1 kernel sources
-    |   |-- Client/src           p, pcopy, pver, msxarch, templates, at28c256
+    |   |-- Client/src           p, pcopy, pver, msxarch, pchess, showpage, templates, at28c256
     |   |   `-- loadrom          the LOADROM.COM network patch
+    |   |-- ROM-Patcher          ROM patch profiles used by msxarch
     |   |-- Server
-    |   |   |-- Python/src       msxpi-server.py, mapper_detect.py, msxpi_eth.py,
-    |   |   |                    ini templates, native GPIO engine
-    |   |   |-- Shell            setup scripts (Pi and Windows), msxpi-monitor
-    |   |   `-- systemd          service unit
-    |   |-- UNAPI                Ethernet UNAPI: sources, tools, INL, documentation
-    |   |-- openMSX              MSXPiDevice source, extension XML, ROMs, README
+    |   |   |-- Python/src       msxpi-server.py and its msxpi_*.py modules, mapper_detect.py,
+    |   |   |                    ini templates, native GPIO engine (native/)
+    |   |   |-- Python/tests     server unit tests
+    |   |   `-- Setup            setup scripts (Pi and Windows), update.sh, msxpi-monitor
+    |   |                        and its systemd unit
+    |   |-- UNAPI                Ethernet UNAPI: sources, tools, INL, test harness, documentation
+    |   |-- openMSX              MSXPiDevice source, extension XML, build files
     |   |-- target               everything you copy to the MSX (.COM, .BAS, ROM, disks)
-    |   |-- VirtualDrive         virtual drive hook sources
-    |   |-- Tests                regression tests (development branches)
-    |   `-- docs                 mapper and ROM design notes
+    |   |-- docs                 mapper, ROM and PChess IRC design notes
+    |   `-- make.bat, make.sh    build scripts for the MSX-side programs
     |-- hardware
     |   |-- CPLD_Project         VHDL, Quartus project, .pof images for every board
     |   `-- Schematic            KiCad schematic and PCB, Fabrication, BOM
-    `-- documents                Users and Developers Guide, Quick Start,
-                                 Legacy Support, tutorials
+    `-- documents                Users and Developers Guide, C BIOS Developers Guide,
+                                 Quick Start, Legacy Support, tutorials

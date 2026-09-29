@@ -308,10 +308,11 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
     # that order is the order the files land in the image's directory. A glob
     # expands pattern by pattern, which reorders the directory and changes the
     # image byte-for-byte for no reason.
+    # *.bat carries msxpiupd.bat and msxpirfh.bat, the MSX-side updater.
     # *.bin picks up msxpiext.bin, the BASIC extension. The BASIC programs
     # BLOAD it as their fallback when CALL MSXPIVER fails, and it was not
     # being shipped at all - so that fallback died with "File not found".
-    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini 2>/dev/null); do
+    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini target/*.bat 2>/dev/null); do
         fname="${file##*/}"
         [ -f "$file" ] || continue
         # Skip empty files. dsktool.py dies with "list index out of range" on a
