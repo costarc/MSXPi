@@ -101,6 +101,18 @@ class Engine(unittest.TestCase):
         self.assertEqual(state['ply'],2)
 
 class Level(unittest.TestCase):
+    def test_players_packet(self):
+        data=p.players_packet(['chp1','Longnickname_xyz'])
+        self.assertEqual((len(data),data[4],data[5],data[240]),(256,0,ord('P'),2))
+        self.assertEqual(data[120:124],b'chp1')
+        self.assertEqual(data[136:152],b'Longnickname_xyz')
+        self.assertTrue(data[72:].startswith(b'2 PLAYERS'))
+        self.assertTrue(p.players_packet([])[72:].startswith(b'NO PLAYERS'))
+    def test_packet_side_and_opponent(self):
+        data=p.packet(dict(board='.'*64,turn=1,side=1,over=False,status='X',
+                           history=[],ply=0,matched=True,opponent='chp1'))
+        self.assertEqual((data[6],data[242]),(1,1))
+        self.assertEqual(data[243:248],b'chp1\0')
     def test_level_packet(self):
         data=p.level_packet('1350')
         self.assertEqual(data[:5],b'PCH1\0')
