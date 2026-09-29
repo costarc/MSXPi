@@ -40,6 +40,39 @@ class Rules(unittest.TestCase):
         state=self.games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))
         self.assertEqual(state['turn'],0)
         with self.assertRaises(ValueError): self.games.request(dict(action='new',mode='room',room='test'))
+    def act(self,state,action):
+        return self.games.request(dict(action=action,game=state['game'],token=state['token']))
+    def test_local_draw_and_resign(self):
+        state=self.act(self.state,'draw')
+        self.assertEqual((state['status'],state['over']),('DRAW AGREED',True))
+        with self.assertRaises(ValueError): self.act(self.state,'resign')
+        self.state=self.games.request(dict(action='new',mode='local'))
+        self.move('e4')
+        self.assertEqual(self.act(self.state,'resign')['status'],'BLACK RESIGNED - WHITE WINS')
+    def test_room_draw(self):
+        a=self.games.request(dict(action='new',mode='room',room='drw'))
+        with self.assertRaises(ValueError): self.act(a,'draw')
+        b=self.games.request(dict(action='new',mode='room',room='drw'))
+        with self.assertRaises(ValueError): self.act(b,'draw')          # not black's move
+        self.assertEqual(self.act(a,'draw')['status'],'DRAW OFFERED')
+        self.assertEqual(self.act(b,'poll')['status'],'OPPONENT OFFERS DRAW - ESC MENU')
+        self.games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))
+        self.games.request(dict(action='move',game=b['game'],token=b['token'],move='e5'))
+        self.assertNotIn('DRAW',self.act(a,'poll')['status'])          # declined by moving
+        self.act(a,'draw')
+        self.assertEqual(self.act(b,'draw')['status'],'DRAW AGREED')
+        self.assertEqual(self.act(b,'poll')['over'],True)
+    def test_ai_draw_and_resign(self):
+        old=p.find_engine; p.find_engine=lambda config:None
+        try:
+            a=self.games.request(dict(action='new',mode='ai'))
+            self.assertEqual(self.act(a,'draw')['status'],'DRAW AGREED')   # level material
+            a=self.games.request(dict(action='new',mode='ai'))
+            self.games.games[a['game']]['board']=chess.Board('k7/8/8/8/8/8/8/K6q w - - 0 1')
+            with self.assertRaises(ValueError): self.act(a,'draw')       # AI a queen up
+            self.assertEqual(self.act(a,'resign')['status'],'WHITE RESIGNED - BLACK WINS')
+        finally:
+            p.find_engine=old
     def test_ai(self):
         a=self.games.request(dict(action='new',mode='ai'))
         state=self.games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))

@@ -48,7 +48,8 @@ class Games:
                 if len(self.games) >= 128:
                     raise ValueError('Relay full')
                 self.games[game_id] = dict(board=chess.Board(), mode=mode,
-                    players=[], history=[], seen=now, resigned=None)
+                    players=[], history=[], seen=now, resigned=None,
+                    offers=set(), agreed=False)
             game = self.games[game_id]
             if len(game['players']) >= (2 if mode == 'room' else 1):
                 raise ValueError('Room full; choose another')
@@ -78,19 +79,42 @@ class Games:
                 move = board.parse_san(notation)
             game['history'].append(board.san(move))
             board.push(move)
+            # Moving declines the opponent's draw offer; one's own stays.
+            game['offers'].discard(board.turn)
             if game['mode'] == 'ai' and not self.finished(game):
                 move = ai_move(board)
                 game['history'].append(board.san(move))
                 board.push(move)
         elif action == 'resign':
+            if self.finished(game):
+                raise ValueError('Game over')
             game['resigned'] = board.turn if game['mode'] == 'local' else side
+        elif action == 'draw':
+            if self.finished(game):
+                raise ValueError('Game over')
+            if game['mode'] == 'local':
+                game['agreed'] = True
+            elif game['mode'] == 'ai':
+                if not ai_accepts_draw(board, not side):
+                    raise ValueError('AI DECLINES THE DRAW')
+                game['agreed'] = True
+            else:
+                if len(game['players']) < 2:
+                    raise ValueError('Waiting for opponent')
+                if (not side) in game['offers']:
+                    game['agreed'] = True
+                elif board.turn != side:
+                    raise ValueError('Offer a draw on your move')
+                else:
+                    game['offers'].add(side)
         elif action != 'poll':
             raise ValueError('Unknown action')
         return self.snapshot(game, token)
 
     @staticmethod
     def finished(game):
-        return game['resigned'] is not None or game['board'].is_game_over(claim_draw=True)
+        return (game['resigned'] is not None or game['agreed'] or
+                game['board'].is_game_over(claim_draw=True))
 
     def snapshot(self, game, token):
         board = game['board']
@@ -109,8 +133,14 @@ class Games:
         if outcome:
             status = ('DRAW' if outcome.winner is None else
                       'WHITE WINS' if outcome.winner else 'BLACK WINS')
+        elif game['offers'] and game['mode'] == 'room':
+            status = ('DRAW OFFERED' if (not side) in game['offers'] else
+                      'OPPONENT OFFERS DRAW - ESC MENU')
+        if game['agreed']:
+            status = 'DRAW AGREED'
         if game['resigned'] is not None:
-            status = 'BLACK WINS' if game['resigned'] else 'WHITE WINS'
+            status = ('WHITE RESIGNED - BLACK WINS' if game['resigned'] else
+                      'BLACK RESIGNED - WHITE WINS')
         return dict(board=''.join(board.piece_at(chess.square(x,7-y)).symbol()
                     if board.piece_at(chess.square(x,7-y)) else '.'
                     for y in range(8) for x in range(8)),
@@ -169,20 +199,54 @@ def stop_engine():
         print('pchess: engine stopped')
 
 
+def open_engine(path):
+    global _engine, _engine_path
+    if _engine is None or path != _engine_path:
+        if _engine:
+            _engine.quit()
+        _engine, _engine_path = chess.engine.SimpleEngine.popen_uci(path), path
+        # Pin resources so a newer Stockfish cannot take more of the Pi.
+        _engine.configure({k: v for k, v in (('Threads', 1), ('Hash', 16))
+                           if k in _engine.options})
+    return _engine
+
+
+def engine_failed(path, exc):
+    global _engine
+    print(f'pchess: engine {path} failed, using built-in AI: {exc}')
+    try:
+        if _engine: _engine.quit()
+    except Exception:
+        pass
+    _engine = None
+
+
+# The AI takes a draw unless it thinks it is ahead by more than this (centipawns).
+DRAW_MARGIN = 50
+
+
+def ai_accepts_draw(board, ai_side):
+    """Accept when the AI is not clearly better (Stockfish eval, else material)."""
+    path = find_engine(_engine_config)
+    if path:
+        try:
+            info = open_engine(path).analyse(board, chess.engine.Limit(time=0.3))
+            return info['score'].pov(ai_side).score(mate_score=100000) <= DRAW_MARGIN
+        except Exception as exc:
+            engine_failed(path, exc)
+    values = (0,100,320,330,500,900,0)
+    material = sum(values[p.piece_type]*(1 if p.color==ai_side else -1)
+                   for p in board.piece_map().values())
+    return material <= DRAW_MARGIN
+
+
 def ai_move(board):
     """Stockfish move at the configured strength, else the built-in search."""
-    global _engine, _engine_path
     config = _engine_config
     path = find_engine(config)
     if path:
         try:
-            if _engine is None or path != _engine_path:
-                if _engine:
-                    _engine.quit()
-                _engine, _engine_path = chess.engine.SimpleEngine.popen_uci(path), path
-                # Pin resources so a newer Stockfish cannot take more of the Pi.
-                _engine.configure({k: v for k, v in (('Threads', 1), ('Hash', 16))
-                                   if k in _engine.options})
+            open_engine(path)
             elo = int(config.get('PCHESSELO') or 800)
             movetime = float(config.get('PCHESSMOVETIME') or 1)
             extra = engine_limits(_engine, elo)
@@ -190,12 +254,7 @@ def ai_move(board):
             if result.move:
                 return result.move
         except Exception as exc:
-            print(f'pchess: engine {path} failed, using built-in AI: {exc}')
-            try:
-                if _engine: _engine.quit()
-            except Exception:
-                pass
-            _engine = None
+            engine_failed(path, exc)
     return choose_move(board)
 
 
@@ -297,7 +356,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             return packet(_irc.poll())
         if args[0]=='players' and not _use_irc:
             raise ValueError('Go online first (4)')
-        if _use_irc and args[0] in ('seek','offer','accept','poll','move','players'):
+        if _use_irc and args[0] in ('seek','offer','accept','poll','move','players','draw','resign'):
             _irc.poll()
             if args[0]!='poll' and not _irc.ready:
                 raise ValueError('Lobby not ready; wait')
@@ -306,6 +365,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             elif args[0]=='offer': _irc.peer.offer(args[1])
             elif args[0]=='accept': _irc.peer.accept()
             elif args[0]=='move': _irc.peer.move(args[1])
+            elif args[0]=='draw': _irc.peer.draw()
+            elif args[0]=='resign': _irc.peer.resign()
             return packet(_irc.poll())
         if args[0] == 'new' and len(args) == 2:
             req = dict(action='new',mode=args[1])

@@ -291,8 +291,9 @@ static void make_move(void) {
 }
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 rotate board, 2 credits, 3 exit
- * to DOS. ESC
+ * msxpi.ini through "pchess level N"), 1 offer (or accept) a draw, 2
+ * resign, each after a Y/N, 3 rotate board, 4 credits, 5 exit to DOS. The AI
+ * answers a draw offer at once; a human opponent accepts by offering too. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
 #define MENU_ROW 6
@@ -303,7 +304,7 @@ static void clear_rows(uint8_t first,uint8_t count) {
     FillVram(NAMTBL+first*32,(char)BLANK,count*32);
 }
 static void clear_popup(void) {
-    clear_rows(MENU_ROW,9);
+    clear_rows(MENU_ROW,11);
 }
 static void credits(void) {
     clear_popup();
@@ -319,8 +320,9 @@ static void credits(void) {
 
 #define MENU_COL 2
 #define MENU_W 20
-static const char *menu_rows[]={"AI LEVEL","ROTATE BOARD","CREDITS","EXIT"};
-#define MENU_ROWS 4
+static const char * const menu_rows[]={"AI LEVEL","OFFER DRAW","RESIGN","ROTATE BOARD",
+                                 "CREDITS","EXIT"};
+#define MENU_ROWS 6
 static uint8_t menu(void) {
     uint8_t key,row=0,level=2,i,quit=0;
     char line[24];
@@ -331,13 +333,13 @@ static uint8_t menu(void) {
     clear_popup();
     text_at(MENU_COL,MENU_ROW,  "+------------------+",MENU_W);
     text_at(MENU_COL,MENU_ROW+1,"|       MENU       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+6,"|                  |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+7,"| ESC RESUME       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+8,"+------------------+",MENU_W);
+    text_at(MENU_COL,MENU_ROW+8,"|                  |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+9,"| ESC RESUME       |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+10,"+------------------+",MENU_W);
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"| > ":"|   ");
-            strcat(line,menu_rows[i]);
+            strcpy(line+4,menu_rows[i]);
             if(i==0) {
                 strcat(line," - 0 +");
                 line[strlen(line)-3]='0'+level;
@@ -353,9 +355,18 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {user_rotate^=1; set_flip(); break;}
-            if(row==2) {credits(); break;}
-            if(row==3) {quit=1; break;}
+            if(row==1 || row==2) {
+                strcpy(status,row==1?"OFFER DRAW? Y/N":"RESIGN? Y/N");
+                draw_status();
+                do key=Inkey(); while(!key);
+                if(key=='y' || key=='Y')
+                    exchange(row==1?"pchess draw":"pchess resign");
+                else strcpy(status,"GAME GOES ON");
+                break;
+            }
+            if(row==3) {user_rotate^=1; set_flip(); break;}
+            if(row==4) {credits(); break;}
+            if(row==5) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);

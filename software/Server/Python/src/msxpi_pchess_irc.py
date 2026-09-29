@@ -37,6 +37,8 @@ class Peer:
         self.last_move=None
         self.players={}
         self.last_seek=-1000
+        self.draw_offer=None   # 'me' or 'peer', until the one offered to moves
+        self.result=None       # 'draw', or the colour (bool) that resigned
 
     def seek(self):
         if self.phase!='lobby': raise ValueError('Already in a match')
@@ -117,7 +119,7 @@ class Peer:
             if text==self.last_move:
                 self.send(self.peer,f'PCH1 ACK {self.match} {fields[3]} {fields[6]}')
                 return
-            if self.pending or self.board.turn==self.side: return
+            if self.result is not None or self.pending or self.board.turn==self.side: return
             if fields[3]!=str(len(self.board.move_stack)+1) or fields[5]!=digest(self.board):
                 self.status='OUT OF SYNC'; self.phase='error'; return
             try: move=self.board.parse_uci(fields[4])
@@ -128,8 +130,14 @@ class Peer:
                 self.board.pop(); self.status='BAD POSITION'; self.phase='error'; return
             self.history.append(san)
             self.last_move=text
+            if self.draw_offer=='me': self.draw_offer=None
             self.send(self.peer,f'PCH1 ACK {self.match} {fields[3]} {fields[6]}')
             self.status=self.turn_status()
+        elif op=='DRAW' and len(fields)==3 and self.phase=='playing' and self.result is None:
+            if self.draw_offer=='me': self.result='draw'
+            else: self.draw_offer='peer'; self.status='OPPONENT OFFERS DRAW - ESC MENU'
+        elif op=='RESIGN' and len(fields)==3 and self.phase=='playing' and self.result is None:
+            self.result=not self.side
         elif op=='ACK' and len(fields)==5 and self.pending:
             if fields[3]==str(len(self.board.move_stack)) and fields[4]==digest(self.board):
                 self.pending=None
@@ -138,7 +146,7 @@ class Peer:
     def move(self,notation):
         if self.phase!='playing' or self.pending: raise ValueError('Waiting for peer')
         if self.board.turn!=self.side: raise ValueError('Opponent turn')
-        if self.board.is_game_over(claim_draw=True): raise ValueError('Game over')
+        if self.over(): raise ValueError('Game over')
         try: move=self.board.parse_uci(notation.lower().replace('-',''))
         except ValueError: move=self.board.parse_san(notation)
         before=digest(self.board)
@@ -149,10 +157,34 @@ class Peer:
         except Exception:
             self.board.pop(); raise
         self.history.append(san)
+        if self.draw_offer=='peer': self.draw_offer=None
         self.pending=(message,time.monotonic(),0)
         self.status='WAIT ACK'
 
+    def over(self):
+        return self.result is not None or self.board.is_game_over(claim_draw=True)
+
+    def draw(self):
+        """Offer a draw on one's move, or accept the peer's offer.
+
+        An offer lasts until the player it was made to moves, so a DRAW
+        crossing a MOVE on the wire is read the same way by both sides."""
+        if self.phase!='playing': raise ValueError('No game in progress')
+        if self.over(): raise ValueError('Game over')
+        if self.draw_offer!='peer' and self.board.turn!=self.side:
+            raise ValueError('Offer a draw on your move')
+        self.send(self.peer,f'PCH1 DRAW {self.match}')
+        if self.draw_offer=='peer': self.result='draw'
+        else: self.draw_offer='me'; self.status='DRAW OFFERED'
+
+    def resign(self):
+        if self.phase!='playing': raise ValueError('No game in progress')
+        if self.over(): raise ValueError('Game over')
+        self.send(self.peer,f'PCH1 RESIGN {self.match}')
+        self.result=self.side
+
     def tick(self):
+        if self.result is not None: self.pending=None
         if self.pending:
             message,sent,retries=self.pending
             if time.monotonic()-sent>=5:
@@ -168,11 +200,14 @@ class Peer:
         outcome=board.outcome(claim_draw=True)
         if outcome:
             status='DRAW' if outcome.winner is None else 'WHITE WINS' if outcome.winner else 'BLACK WINS'
+        elif self.result=='draw': status='DRAW AGREED'
+        elif self.result is not None:
+            status='WHITE RESIGNED - BLACK WINS' if self.result else 'BLACK RESIGNED - WHITE WINS'
         elif board.is_check() and self.phase=='playing' and not self.pending:
             status='WHITE CHECK' if board.turn else 'BLACK CHECK'
         return dict(board=''.join(board.piece_at(chess.square(x,7-y)).symbol()
             if board.piece_at(chess.square(x,7-y)) else '.' for y in range(8) for x in range(8)),
-            turn=int(board.turn),side=int(not self.side),over=bool(outcome),
+            turn=int(board.turn),side=int(not self.side),over=bool(outcome) or self.result is not None,
             matched=self.phase=='playing',opponent=self.peer or '',
             status=status[:47],history=self.history[-12:],ply=len(board.move_stack))
 

@@ -377,8 +377,9 @@ static void credits(void) {
 }
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 rotate board, 2 credits, 3 exit
- * to DOS. ESC
+ * msxpi.ini through "pchess level N"), 1 offer (or accept) a draw, 2
+ * resign, each after a Y/N, 3 rotate board, 4 credits, 5 exit to DOS. The AI
+ * answers a draw offer at once; a human opponent accepts by offering too. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
 #define MENU_X 44
@@ -392,22 +393,23 @@ static void popup_close(void) {
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
 }
-static const char *menu_rows[]={"AI LEVEL","ROTATE BOARD","CREDITS","EXIT"};
-#define MENU_ROWS 4
+static const char * const menu_rows[]={"AI LEVEL","OFFER DRAW","RESIGN","ROTATE BOARD",
+                                 "CREDITS","EXIT"};
+#define MENU_ROWS 6
 static uint8_t menu(void) {
     uint8_t key,row=0,level=2,i,quit=0;
     char line[20];
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
-    solid(MENU_X,MENU_Y,120,66,C_BLACK);
-    frame(MENU_X,MENU_Y,120,66,C_YELLOW);
+    solid(MENU_X,MENU_Y,120,84,C_BLACK);
+    frame(MENU_X,MENU_Y,120,84,C_YELLOW);
     text_at(MENU_X+40,MENU_Y+5,"M E N U");
-    text_at(MENU_X+30,(uint8_t)(MENU_Y+56),"ESC RESUME");
+    text_at(MENU_X+30,(uint8_t)(MENU_Y+74),"ESC RESUME");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"= ":"  ");
-            strcat(line,menu_rows[i]);
+            strcpy(line+2,menu_rows[i]);
             if(i==0) {
                 strcat(line,": - 0 +");
                 line[strlen(line)-3]='0'+level;
@@ -421,9 +423,18 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {user_rotate^=1; set_flip(); break;}
-            if(row==2) {credits(); break;}
-            if(row==3) {quit=1; break;}
+            if(row==1 || row==2) {
+                strcpy(status,row==1?"OFFER DRAW? Y/N":"RESIGN? Y/N");
+                text_at(8,205,status);
+                do key=Inkey(); while(!key);
+                if(key=='y' || key=='Y')
+                    exchange(row==1?"pchess draw":"pchess resign");
+                else strcpy(status,"GAME GOES ON");
+                break;
+            }
+            if(row==3) {user_rotate^=1; set_flip(); break;}
+            if(row==4) {credits(); break;}
+            if(row==5) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);
