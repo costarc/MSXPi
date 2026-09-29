@@ -40,6 +40,11 @@ directory. Use Panasonic_FS-A1WSX, MSXPi, ram4mb, and mount
 `C:/Users/roniv/Dev/MSX/MSXPi/FloppyA` using `diska`. Inside MSX-DOS, switch
 to **C:**, then run `PCHESS`.
 
+Files A-H are labelled above the board and ranks 1-8 to its left; they
+follow the board when it is rotated. The PSG beeps twice when the opponent
+offers a draw, plays a rising tune when you win and a falling one when you
+lose (in local two-player any win plays the rising tune).
+
 Controls:
 
 - `1`: local two-player; `2`: play white against the server AI.

@@ -81,8 +81,44 @@ static void set_flip(void) {
     if(selected_x!=255) {selected_x=7-selected_x; selected_y=7-selected_y;}
 }
 
+/* PSG channel A jingles, played after the board is redrawn. Periods are
+ * 111861/Hz; each note is (period, jiffies), ending with 0,0. Register
+ * 7 keeps port A input / port B output (bits 6-7) for the joystick. */
+__sfr __at 0xA0 psg_reg;
+__sfr __at 0xA1 psg_val;
+static void psg(uint8_t r,uint8_t v) {psg_reg=r; psg_val=v;}
+static const uint16_t tune_offer[]={127,6, 0,4, 127,6, 0,0};
+static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
+static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
+static const uint16_t *pending_tune;
+static void play_pending(void) {
+    const uint16_t *t=pending_tune;
+    uint16_t start;
+    if(!t) return;
+    pending_tune=0;
+    psg(7,0xBE);
+    for(;t[0] || t[1];t+=2) {
+        psg(0,t[0]&255); psg(1,t[0]>>8);
+        psg(8,t[0]?12:0);
+        start=*(volatile uint16_t *)0xFC9E;
+        while((uint16_t)(*(volatile uint16_t *)0xFC9E-start)<t[1]);
+        psg(8,0);
+    }
+}
+/* Called with every state packet: a new draw offer beeps; a game that has
+ * just ended plays the win or lose tune (any win in local two-player). */
+static uint8_t offer_seen;
+static void queue_sounds(uint8_t was_over) {
+    uint8_t offer=!memcmp(status,"OPPONENT OFFERS",15), winner;
+    if(offer && !offer_seen) pending_tune=tune_offer;
+    offer_seen=offer;
+    if(was_over || !game_over) return;
+    winner=strstr(status,"WHITE WINS")?1:strstr(status,"BLACK WINS")?2:0;
+    if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
+}
+
 static uint8_t exchange(const char *cmd) {
-    uint8_t rc,tries=0,i,j; uint16_t size=0;
+    uint8_t rc,tries=0,i,j,was_over=game_over; uint16_t size=0;
     msxpi_link_claim();
     rc=SendCommandToMSXPi(cmd,false);
     if(rc==RC_SUCCESS) rc=PerformHandshake(256);
@@ -97,11 +133,12 @@ static uint8_t exchange(const char *cmd) {
         return 0;
     }
     memcpy(status,reply+72,47); status[47]=0;
-    if(!reply[4]) return 0;
+    if(!reply[4]) {queue_sounds(1); return 0;}
     for(i=0;i<8;i++) for(j=0;j<8;j++)
         board[i][j]=reply[8+i*8+j]=='.'?0:reply[8+i*8+j];
     white_turn=reply[5]; my_side=reply[6]; game_over=reply[7];
     matched=reply[242]==1;
+    queue_sounds(was_over);
     memcpy(opponent,reply+243,12); opponent[12]=0;
     set_flip();
     move_count=reply[240]>8?8:reply[240];
@@ -253,9 +290,23 @@ static void draw_panel(void) {
     draw_status();
 }
 
+/* Coordinates: files A-H on row 0 above the board, ranks in column 0.
+ * Pop-ups clear rows 6-16, so they are rewritten with every refresh. */
+static void draw_coords(void) {
+    uint8_t i; char s[17];
+    for(i=0;i<8;i++) {s[i*2]='A'+BX(i); s[i*2+1]=' ';}
+    s[16]=0;
+    text_at(BOARD_COL,0,s,16);
+    for(i=0;i<8;i++) {
+        s[0]='8'-BY(i); s[1]=0;
+        text_at(0,BOARD_ROW+i*2,s,1);
+    }
+}
+
 static void draw_board(void) {
     uint8_t x,y,tile,cell[2];
     uint16_t addr;
+    draw_coords();
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
             if(painted[y][x]==SQ(y,x)) continue;
@@ -275,6 +326,7 @@ static void draw_board(void) {
     }
     draw_sprites();
     draw_panel();
+    play_pending();
 }
 
 static void make_move(void) {
@@ -441,6 +493,7 @@ int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0;
+    pending_tune=0; offer_seen=0;
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0; sprites_hidden=0;
     entry[0]=0;
     memset(moves,0,sizeof(moves));
