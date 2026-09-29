@@ -205,11 +205,26 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
     }
 }
 
+/* Glyph cache, written while the display is hidden: back-to-back VRAM
+ * writes during active display drop bytes on a real V9938. */
+static void cache_font(void) {
+    uint8_t i,r,c,bits,pixels[FONT_W];
+    for(i=0;i<42;i++)
+        for(r=0;r<FONT_H;r++) {
+            bits=font[i][r];
+            for(c=0;c<FONT_W;c++) {
+                pixels[c]=(bits&0x10)?C_WHITE:C_BLACK;
+                bits<<=1;
+            }
+            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
+        }
+}
+
 /* Build tiles once on the hidden VRAM page. HMMM is Fusion-C's assembly
  * VDP command routine: subsequent refreshes never redraw piece primitives. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,c,bg,sy,bits,pixels[24]; int x,y;
+    uint8_t i,j,k,r,bg,sy,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
@@ -226,17 +241,7 @@ static void cache_graphics(void) {
             HMMM(0,sy,x,y+k*6,24,6);
         }
     }
-    /* Glyph cache, written while the display is still hidden: back-to-back
-     * VRAM writes during active display drop bytes on a real V9938. */
-    for(i=0;i<42;i++)
-        for(r=0;r<FONT_H;r++) {
-            bits=font[i][r];
-            for(c=0;c<FONT_W;c++) {
-                pixels[c]=(bits&0x10)?C_WHITE:C_BLACK;
-                bits<<=1;
-            }
-            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
-        }
+    cache_font();
 }
 
 /* The panel is 51 pixels wide: at most 8 characters per line. */
@@ -262,14 +267,27 @@ static void draw_panel(void) {
     text_at(8,205,status);
 }
 
-/* Square outline built from HMMV fills. The VDP LINE command (Fusion-C
- * BoxLine) is avoided: on a real MSX, yellow and green garbage from these
- * outlines showed up in the text. */
-static void frame(int x,int y,uint8_t size,uint8_t color) {
-    HMMV(x,y,size,1,color);
-    HMMV(x,y+size-1,size,1,color);
-    HMMV(x,y,1,size,color);
-    HMMV(x+size-1,y,1,size,color);
+/* Solid-colour blocks on the hidden page, filled at startup while the
+ * display is off. After that every drawing operation is an HMMM copy: on a
+ * real MSX, runtime HMMV fills and LINE outlines left yellow/green garbage
+ * in the cached glyphs, while HMMM copies drew correctly. */
+#define SOLID_Y 400
+#define BLACK_Y 448
+static void solid(int x,int y,int w,int h,uint8_t color) {
+    int n;
+    if(color==C_BLACK) {
+        while(h>0) {
+            n=h>64?64:h;
+            HMMM(0,BLACK_Y,x,y,w,n);
+            y+=n; h-=n;
+        }
+    } else HMMM(color==C_GREEN?128:0,SOLID_Y,x,y,w,h);
+}
+static void frame(int x,int y,uint8_t w,uint8_t h,uint8_t color) {
+    solid(x,y,w,1,color);
+    solid(x,y+h-1,w,1,color);
+    solid(x,y,1,h,color);
+    solid(x+w-1,y,1,h,color);
 }
 
 static void draw_board(void) {
@@ -290,9 +308,9 @@ static void draw_board(void) {
             if((x+y)&1) tile+=13;
             HMMM((tile%10)*24,256+(tile/10)*24,left,top,24,24);
             if (x == cursor_x && y == cursor_y)
-                frame(left + 1, top + 1, 22, C_YELLOW);
+                frame(left + 1, top + 1, 22, 22, C_YELLOW);
             if (x == selected_x && y == selected_y)
-                frame(left + 3, top + 3, 18, C_GREEN);
+                frame(left + 3, top + 3, 18, 18, C_GREEN);
         }
     }
     draw_panel();
@@ -324,11 +342,8 @@ static uint8_t menu(void) {
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
-    HMMV(MENU_X,MENU_Y,120,48,C_BLACK);
-    HMMV(MENU_X,MENU_Y,120,1,C_YELLOW);
-    HMMV(MENU_X,MENU_Y+47,120,1,C_YELLOW);
-    HMMV(MENU_X,MENU_Y,1,48,C_YELLOW);
-    HMMV(MENU_X+119,MENU_Y,1,48,C_YELLOW);
+    solid(MENU_X,MENU_Y,120,48,C_BLACK);
+    frame(MENU_X,MENU_Y,120,48,C_YELLOW);
     text_at(MENU_X+39,MENU_Y+5,"M E N U");
     text_at(MENU_X+6,MENU_Y+38,"E S C  R E S U M E");
     while(1) {
@@ -358,8 +373,15 @@ static uint8_t menu(void) {
     /* Repaint the whole panel and status line from scratch, so leaving the
      * menu also clears anything stray drawn over the text. */
     field_count=0;
-    HMMV(PANEL_X,0,256-PANEL_X,SCREEN8_BOTTOM-7,C_BLACK);
-    HMMV(0,SCREEN8_BOTTOM-6,256,7,C_BLACK);
+    /* On a real MSX the panel text came back as yellow garbage after the
+     * menu: the cached glyphs had been overwritten. Rewrite them (display
+     * off for a moment) before the panel is redrawn. */
+    while(VDPstatus(2)&1);
+    HideDisplay();
+    cache_font();
+    ShowDisplay();
+    solid(PANEL_X,0,256-PANEL_X,SCREEN8_BOTTOM-7,C_BLACK);
+    solid(0,SCREEN8_BOTTOM-6,256,7,C_BLACK);
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
     return quit;
@@ -370,6 +392,13 @@ int main(void) {
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0;
     field_count=0;
+    /* On a real MSX the panel text came back as yellow garbage after the
+     * menu: the cached glyphs had been overwritten. Rewrite them (display
+     * off for a moment) before the panel is redrawn. */
+    while(VDPstatus(2)&1);
+    HideDisplay();
+    cache_font();
+    ShowDisplay();
     entry[0]=0;
     memset(moves,0,sizeof(moves));
     memset(reply,0,sizeof(reply));
@@ -381,6 +410,9 @@ int main(void) {
     *(uint8_t *)0xFFE8 |= 128;
     VDPwrite(9,*(uint8_t *)0xFFE8);
     HMMV(0,0,256,212,C_BLACK);
+    HMMV(0,SOLID_Y,128,48,C_YELLOW);
+    HMMV(128,SOLID_Y,128,48,C_GREEN);
+    HMMV(0,BLACK_Y,256,64,C_BLACK);
     cache_graphics();
     draw_board();
     ShowDisplay();
