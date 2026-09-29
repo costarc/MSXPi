@@ -422,6 +422,9 @@ static void credits_line(uint8_t y,const char *s) {
     text_at((CREDITS_X+(CREDITS_W-strlen(s)*FONT_W)/2)&0xFE,y,s);
 }
 static void credits(void) {
+    /* The panel and menu already fill all 32 text fields, so text_at()
+     * would drop these lines. popup_close() repaints them afterwards. */
+    field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
     credits_line(82,"PCHESS V1.0 (C) RCC 2026");
