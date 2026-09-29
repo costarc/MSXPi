@@ -5,17 +5,22 @@ this server (msxpi.ini PCHESSLISTEN/PCHESSPORT); any other mode stops it.
 PCHESSRELAY names the relay both players share: empty means this server's
 own relay, otherwise http://HOST:PORT of the MSXPi hosting the room. The
 module can still run standalone with --listen to host a dedicated relay.
+
+The AI opponent is Stockfish when it is installed (PCHESSENGINE, PCHESSELO,
+PCHESSMOVETIME in msxpi.ini); otherwise a small built-in search plays.
 """
 import argparse
 import json
 import os
 import secrets
+import shutil
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
 import chess
+import chess.engine
 
 
 class Games:
@@ -74,7 +79,7 @@ class Games:
             game['history'].append(board.san(move))
             board.push(move)
             if game['mode'] == 'ai' and not self.finished(game):
-                move = choose_move(board)
+                move = ai_move(board)
                 game['history'].append(board.san(move))
                 board.push(move)
         elif action == 'resign':
@@ -106,6 +111,76 @@ class Games:
                     turn=int(board.turn), side=game['players'].index(token),
                     mode=game['mode'], status=status, over=self.finished(game),
                     ply=len(board.move_stack), history=game['history'][-12:])
+
+
+_engine = None
+_engine_path = None
+_engine_config = {}
+
+
+def find_engine(config):
+    path = config.get('PCHESSENGINE') or ''
+    if path:
+        return path if os.path.isfile(path) else None
+    # Debian/Raspberry Pi OS install it in /usr/games, often not on PATH.
+    return (shutil.which('stockfish') or
+            next((p for p in ('/usr/games/stockfish','/usr/local/bin/stockfish')
+                  if os.path.isfile(p)), None))
+
+
+def engine_limits(engine, elo):
+    """Configure strength; return the per-move search limit extras."""
+    option = engine.options.get('UCI_Elo')
+    if option and elo >= option.min:
+        engine.configure({'UCI_LimitStrength': True,
+                          'UCI_Elo': min(elo, option.max)})
+        return {}
+    # Below Stockfish's rating floor (about 1320): weakest skill level and a
+    # shallow search. Approximate, not a calibrated rating.
+    if 'Skill Level' in engine.options:
+        engine.configure({'Skill Level': 0})
+    return {'depth': max(1, min(5, (elo - 600) // 200))}
+
+
+def stop_engine():
+    global _engine
+    if _engine:
+        try:
+            _engine.quit()
+        except Exception:
+            pass
+        _engine = None
+        print('pchess: engine stopped')
+
+
+def ai_move(board):
+    """Stockfish move at the configured strength, else the built-in search."""
+    global _engine, _engine_path
+    config = _engine_config
+    path = find_engine(config)
+    if path:
+        try:
+            if _engine is None or path != _engine_path:
+                if _engine:
+                    _engine.quit()
+                _engine, _engine_path = chess.engine.SimpleEngine.popen_uci(path), path
+                # Pin resources so a newer Stockfish cannot take more of the Pi.
+                _engine.configure({k: v for k, v in (('Threads', 1), ('Hash', 16))
+                                   if k in _engine.options})
+            elo = int(config.get('PCHESSELO') or 800)
+            movetime = float(config.get('PCHESSMOVETIME') or 1)
+            extra = engine_limits(_engine, elo)
+            result = _engine.play(board, chess.engine.Limit(time=movetime, **extra))
+            if result.move:
+                return result.move
+        except Exception as exc:
+            print(f'pchess: engine {path} failed, using built-in AI: {exc}')
+            try:
+                if _engine: _engine.quit()
+            except Exception:
+                pass
+            _engine = None
+    return choose_move(board)
 
 
 def choose_move(board):
@@ -183,16 +258,19 @@ def relay_url(config):
     return url.rstrip('/')
 
 
-def handle_command(command, irc_config=None, room_config=None):
+def handle_command(command, irc_config=None, room_config=None, engine_config=None):
     """Return a fixed 256-byte state packet, including user-visible failures."""
-    global _session, _remote, _irc, _use_irc
+    global _session, _remote, _irc, _use_irc, _engine_config
     room_config = room_config or {}
+    _engine_config = engine_config or {}
     try:
         args = command.split()
         if not args:
             raise ValueError('new local / new ai / join ROOM')
         if args[0] in ('irc','new'):
             stop_relay()
+        if args[0] in ('irc','join') or (args[0]=='new' and args[1:]!=['ai']):
+            stop_engine()
         elif args[0] == 'join':
             start_relay(room_config)
         if args[0]=='irc':

@@ -171,8 +171,15 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
         room_config = {
             key: getMSXPiVar(key) for key in ("PCHESSRELAY", "PCHESSLISTEN", "PCHESSPORT")
         }
+        engine_config = {
+            key: getMSXPiVar(key)
+            for key in ("PCHESSENGINE", "PCHESSELO", "PCHESSMOVETIME")
+        }
         payload = handle_command(
-            parms or "", irc_config=irc_config, room_config=room_config
+            parms or "",
+            irc_config=irc_config,
+            room_config=room_config,
+            engine_config=engine_config,
         )
     except ImportError:
         payload = bytearray(256)

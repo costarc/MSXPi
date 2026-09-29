@@ -51,4 +51,53 @@ class Rules(unittest.TestCase):
         self.assertEqual(data[:5],b'PCH1\0')
         self.assertEqual(len(data),256)
 
+class Engine(unittest.TestCase):
+    """Stockfish integration, using a fake UCI engine that always plays e7e5."""
+    def play(self,config):
+        p._engine_config=config
+        games=p.Games()
+        a=games.request(dict(action='new',mode='ai'))
+        return games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))
+    def tearDown(self):
+        if p._engine: p._engine.quit()
+        p._engine=None; p._engine_config={}
+    def fake(self,log):
+        import tempfile,os
+        script=Path(__file__).with_name('fake_uci_engine.py')
+        wrapper=Path(tempfile.mkdtemp())/('fake.bat' if os.name=='nt' else 'fake.sh')
+        if os.name=='nt': wrapper.write_text(f'@"{sys.executable}" "{script}" "{log}"\n')
+        else:
+            wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{script}" "{log}"\n')
+            wrapper.chmod(0o755)
+        return str(wrapper)
+    def test_low_elo_uses_skill_level(self):
+        import tempfile
+        log=Path(tempfile.mkdtemp())/'uci.log'
+        state=self.play(dict(PCHESSENGINE=self.fake(log),PCHESSELO='800',PCHESSMOVETIME='0.1'))
+        self.assertEqual(state['history'],['e4','e5'])
+        text=log.read_text()
+        self.assertIn('setoption name Skill Level value 0',text)
+        self.assertIn('depth 1',text)
+    def test_high_elo_uses_uci_elo(self):
+        import tempfile
+        log=Path(tempfile.mkdtemp())/'uci.log'
+        self.play(dict(PCHESSENGINE=self.fake(log),PCHESSELO='1600',PCHESSMOVETIME='0.1'))
+        text=log.read_text()
+        self.assertIn('setoption name UCI_Elo value 1600',text)
+        self.assertIn('setoption name UCI_LimitStrength value true',text)
+    def test_resources_pinned_and_engine_stops(self):
+        import tempfile
+        log=Path(tempfile.mkdtemp())/'uci.log'
+        self.play(dict(PCHESSENGINE=self.fake(log),PCHESSMOVETIME='0.1'))
+        self.assertIsNotNone(p._engine)
+        p.handle_command('new local')
+        self.assertIsNone(p._engine)
+        text=log.read_text()
+        self.assertIn('setoption name Threads value 1',text)
+        self.assertIn('setoption name Hash value 16',text)
+        self.assertIn('quit',text)
+    def test_missing_engine_falls_back(self):
+        state=self.play(dict(PCHESSENGINE='/no/such/stockfish'))
+        self.assertEqual(state['ply'],2)
+
 if __name__=='__main__': unittest.main()

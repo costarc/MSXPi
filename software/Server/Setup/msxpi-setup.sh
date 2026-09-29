@@ -360,6 +360,7 @@ setup_user() {
 #   RPi.GPIO   the Pi's GPIO pins
 #   chess      python-chess, for the pchess command only: without it the
 #              server runs and pchess answers "install requirements"
+#   stockfish  apt package, the pchess AI; optional (built-in AI otherwise)
 # (pyfatfs and its signature patch, installed by the old script, are not used.)
 setup_python() {
     step "Python libraries"
@@ -386,6 +387,14 @@ setup_python() {
         ok "chess $(python3 -c 'import chess; print(chess.__version__)') (pchess)"
     else
         warn "python-chess cannot be imported - pchess will not work"
+    fi
+    # Stockfish is the pchess AI opponent; without it a small built-in
+    # search plays instead.
+    [ -x /usr/games/stockfish ] || have stockfish || apt_try stockfish || true
+    if [ -x /usr/games/stockfish ] || have stockfish; then
+        ok "stockfish (pchess AI)"
+    else
+        warn "stockfish not installed - pchess uses its weaker built-in AI"
     fi
 
     if ! pypresent RPi; then

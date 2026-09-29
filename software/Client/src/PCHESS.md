@@ -12,9 +12,22 @@ A normal-speed Panasonic OpenMSX cursor test measured completion within
 
 Install `Server/Python/src/requirements-pchess.txt` with the server's Python.
 Rules include check, mate, stalemate, castling, en passant and underpromotion.
-Claimable draws are automatically accepted. The built-in two-ply AI is a
-simple opponent, not Stockfish. The optional Python package is licensed
-GPL-3.0-or-later; the MSX executable does not link it.
+Claimable draws are automatically accepted.
+
+The AI opponent (`2`) is Stockfish when it is installed on the server
+(`sudo apt install stockfish`; the setup script does this). msxpi.ini:
+
+```text
+var PCHESSENGINE=        # Stockfish path; empty = find it (PATH, /usr/games)
+var PCHESSELO=800        # approximate playing strength
+var PCHESSMOVETIME=1     # seconds of thinking per move
+```
+
+Stockfish's rating limit starts at about 1320; below that PChess uses its
+weakest skill level with a shallow search, so low ratings such as the 800
+default are approximate. Without Stockfish, or if it fails, a much weaker
+built-in two-ply search plays. Stockfish and python-chess are GPL-3.0; they
+run as separate programs on the server and the MSX executable links neither.
 
 Build from `software` with:
 
