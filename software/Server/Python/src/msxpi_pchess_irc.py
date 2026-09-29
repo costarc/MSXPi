@@ -158,7 +158,7 @@ class IRC:
             raise ValueError('Invalid IRC account configuration')
         self.authenticated=False
         self.auth_phase='cap' if self.account else 'none'
-        port=int(os.environ.get('PCHESS_IRC_PORT') or config.get('IRCPORT') or '6697')
+        port=int(os.environ.get('PCHESS_IRC_PORT') or config.get('PCHESSIRCPORT') or '6697')
         tls_value=os.environ.get('PCHESS_IRC_TLS') or config.get('IRCTLS') or ('0' if port==6667 else '1')
         tls=tls_value.lower() in ('1','true','yes','on')
         if self.account and not tls:

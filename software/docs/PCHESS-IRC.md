@@ -35,7 +35,7 @@ Configuration in each server's local `msxpi.ini` (never commit real passwords):
 
 ```text
 var IRCADDR=irc.libera.chat
-var IRCPORT=6697
+var PCHESSIRCPORT=6697
 var IRCTLS=1
 var IRCNICK=pchAlice
 var IRCACCOUNT=your_registered_account
@@ -78,9 +78,11 @@ nicknames of nine characters or fewer for older networks. Join/registration
 failure is reported rather than displaying a false lobby.
 
 PChess uses a separate connection from `IRC.BAS` and the server's `IRC READ`
-command, so it cannot consume chat messages intended for BASIC. PChess now
-honors IRCADDR/IRCPORT/IRCNICK from the shared configuration. Legacy port 6667
-remains plaintext unless IRCTLS is explicitly set; credentials require TLS.
+command, so it cannot consume chat messages intended for BASIC. PChess shares
+IRCADDR/IRCNICK with them but has its own port, PCHESSIRCPORT (default 6697,
+TLS), so IRCPORT can stay 6667 for IRC.BAS, which has no TLS. Setting
+PCHESSIRCPORT=6667 makes PChess plaintext unless IRCTLS is explicitly set;
+credentials require TLS.
 The legacy READ implementation can discard additional lines from a single
 TCP read and does not preserve partial lines; it is not suitable as the
 reliable transport for chess messages without further changes.

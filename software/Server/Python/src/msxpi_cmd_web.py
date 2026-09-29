@@ -161,7 +161,7 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
             key: getMSXPiVar(key)
             for key in (
                 "IRCADDR",
-                "IRCPORT",
+                "PCHESSIRCPORT",
                 "IRCNICK",
                 "IRCTLS",
                 "IRCACCOUNT",

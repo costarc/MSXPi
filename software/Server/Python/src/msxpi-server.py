@@ -307,6 +307,7 @@ def load_config(ini_path: str) -> MSXPiConfig:
             ["IRCNICK", "msxpi"],
             ["IRCADDR", "irc.libera.chat"],
             ["IRCPORT", "6667"],
+            ["PCHESSIRCPORT", "6697"],
             ["PCHESSRELAY", ""],
             ["PCHESSLISTEN", "0.0.0.0"],
             ["PCHESSPORT", "5080"],
