@@ -305,7 +305,7 @@ def load_config(ini_path: str) -> MSXPiConfig:
                 "https://raw.githubusercontent.com/costarc/openMSX/master/share/softwaredb.xml",
             ],
             ["IRCNICK", "msxpi"],
-            ["IRCADDR", "chat.freenode.net"],
+            ["IRCADDR", "irc.libera.chat"],
             ["IRCPORT", "6667"],
             ["PCHESSRELAY", ""],
             ["PCHESSLISTEN", "0.0.0.0"],

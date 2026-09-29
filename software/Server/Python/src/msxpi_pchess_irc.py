@@ -149,7 +149,7 @@ class IRC:
         config=config or {}
         self.nick=os.environ.get('PCHESS_IRC_NICK') or config.get('IRCNICK') or 'pch'+secrets.token_hex(2)
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',self.nick): raise ValueError('Invalid IRC nickname')
-        host=os.environ.get('PCHESS_IRC_HOST') or config.get('IRCADDR') or 'chat.freenode.net'
+        host=os.environ.get('PCHESS_IRC_HOST') or config.get('IRCADDR') or 'irc.libera.chat'
         self.account=config.get('IRCACCOUNT','')
         self.password=config.get('IRCPASSWORD','')
         if bool(self.account)!=bool(self.password):

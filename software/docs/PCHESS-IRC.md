@@ -34,7 +34,7 @@ for public play. TLS is on by default and certificate verification enabled.
 Configuration in each server's local `msxpi.ini` (never commit real passwords):
 
 ```text
-var IRCADDR=chat.freenode.net
+var IRCADDR=irc.libera.chat
 var IRCPORT=6697
 var IRCTLS=1
 var IRCNICK=pchAlice
@@ -43,6 +43,11 @@ var IRCPASSWORD=your_account_password
 ```
 
 Leave both IRCACCOUNT and IRCPASSWORD absent/empty for unauthenticated joining.
+The default network is Libera.Chat, which lets unregistered users exchange
+private messages, so no account is needed to play. Libera can temporarily
+require login during spam waves or from some cloud/VPN addresses; PChess then
+shows `IRC ACCOUNT LOGIN REQUIRED (477)` and a free Libera account fixes it.
+freenode (the previous default) requires every player to be logged in.
 An account is distinct from a nickname: use a different IRCNICK if another
 session already owns the account's usual nick. Credentials must belong to the
 IRC network's account service, not necessarily a web or bouncer login.
@@ -118,3 +123,10 @@ OFFER/ACCEPT/READY, e2-e4/e7-e5 and ACKs all passed. Both VRAM board assertions
 and new-game history clearing passed. Channel traffic contained discovery
 only. Artifacts: work/pchess-dual-zshbp63t. All 23 automated tests pass.
 Credentials remain in local INI files outside the repository, not in this guide.
+
+Libera.Chat live test, 2026-09-29: two Panasonic_FS-A1WSX + MSXPi + ram4mb
+emulators, each with its own server/INI on ports 5041/5042, connected over
+TLS to irc.libera.chat:6697 as msxpichess1/msxpichess2 with no account or
+password. Public SEEK, private OFFER/ACCEPT/READY, e2-e4/e7-e5 and ACKs all
+passed, both VRAM board checks and new-game history clearing passed, and the
+channel carried discovery only. Artifacts: work/pchess-dual-1yngqsw6.
