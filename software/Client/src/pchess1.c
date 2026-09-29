@@ -81,8 +81,44 @@ static void set_flip(void) {
     if(selected_x!=255) {selected_x=7-selected_x; selected_y=7-selected_y;}
 }
 
+/* PSG channel A jingles, played after the board is redrawn. Periods are
+ * 111861/Hz; each note is (period, jiffies), ending with 0,0. Register
+ * 7 keeps port A input / port B output (bits 6-7) for the joystick. */
+__sfr __at 0xA0 psg_reg;
+__sfr __at 0xA1 psg_val;
+static void psg(uint8_t r,uint8_t v) {psg_reg=r; psg_val=v;}
+static const uint16_t tune_offer[]={127,6, 0,4, 127,6, 0,0};
+static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
+static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
+static const uint16_t *pending_tune;
+static void play_pending(void) {
+    const uint16_t *t=pending_tune;
+    uint16_t start;
+    if(!t) return;
+    pending_tune=0;
+    psg(7,0xBE);
+    for(;t[0] || t[1];t+=2) {
+        psg(0,t[0]&255); psg(1,t[0]>>8);
+        psg(8,t[0]?12:0);
+        start=*(volatile uint16_t *)0xFC9E;
+        while((uint16_t)(*(volatile uint16_t *)0xFC9E-start)<t[1]);
+        psg(8,0);
+    }
+}
+/* Called with every state packet: a new draw offer beeps; a game that has
+ * just ended plays the win or lose tune (any win in local two-player). */
+static uint8_t offer_seen;
+static void queue_sounds(uint8_t was_over) {
+    uint8_t offer=!memcmp(status,"OPPONENT OFFERS",15), winner;
+    if(offer && !offer_seen) pending_tune=tune_offer;
+    offer_seen=offer;
+    if(was_over || !game_over) return;
+    winner=strstr(status,"WHITE WINS")?1:strstr(status,"BLACK WINS")?2:0;
+    if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
+}
+
 static uint8_t exchange(const char *cmd) {
-    uint8_t rc,tries=0,i,j; uint16_t size=0;
+    uint8_t rc,tries=0,i,j,was_over=game_over; uint16_t size=0;
     msxpi_link_claim();
     rc=SendCommandToMSXPi(cmd,false);
     if(rc==RC_SUCCESS) rc=PerformHandshake(256);
@@ -97,11 +133,12 @@ static uint8_t exchange(const char *cmd) {
         return 0;
     }
     memcpy(status,reply+72,47); status[47]=0;
-    if(!reply[4]) return 0;
+    if(!reply[4]) {queue_sounds(1); return 0;}
     for(i=0;i<8;i++) for(j=0;j<8;j++)
         board[i][j]=reply[8+i*8+j]=='.'?0:reply[8+i*8+j];
     white_turn=reply[5]; my_side=reply[6]; game_over=reply[7];
     matched=reply[242]==1;
+    queue_sounds(was_over);
     memcpy(opponent,reply+243,12); opponent[12]=0;
     set_flip();
     move_count=reply[240]>8?8:reply[240];
@@ -253,9 +290,23 @@ static void draw_panel(void) {
     draw_status();
 }
 
+/* Coordinates: files A-H on row 0 above the board, ranks in column 0.
+ * Pop-ups clear rows 6-16, so they are rewritten with every refresh. */
+static void draw_coords(void) {
+    uint8_t i; char s[17];
+    for(i=0;i<8;i++) {s[i*2]='A'+BX(i); s[i*2+1]=' ';}
+    s[16]=0;
+    text_at(BOARD_COL,0,s,16);
+    for(i=0;i<8;i++) {
+        s[0]='8'-BY(i); s[1]=0;
+        text_at(0,BOARD_ROW+i*2,s,1);
+    }
+}
+
 static void draw_board(void) {
     uint8_t x,y,tile,cell[2];
     uint16_t addr;
+    draw_coords();
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
             if(painted[y][x]==SQ(y,x)) continue;
@@ -275,6 +326,7 @@ static void draw_board(void) {
     }
     draw_sprites();
     draw_panel();
+    play_pending();
 }
 
 static void make_move(void) {
@@ -291,8 +343,9 @@ static void make_move(void) {
 }
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 rotate board, 2 credits, 3 exit
- * to DOS. ESC
+ * msxpi.ini through "pchess level N"), 1 offer (or accept) a draw, 2
+ * resign, each after a Y/N, 3 rotate board, 4 credits, 5 exit to DOS. The AI
+ * answers a draw offer at once; a human opponent accepts by offering too. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
 #define MENU_ROW 6
@@ -303,7 +356,7 @@ static void clear_rows(uint8_t first,uint8_t count) {
     FillVram(NAMTBL+first*32,(char)BLANK,count*32);
 }
 static void clear_popup(void) {
-    clear_rows(MENU_ROW,9);
+    clear_rows(MENU_ROW,11);
 }
 static void credits(void) {
     clear_popup();
@@ -319,8 +372,9 @@ static void credits(void) {
 
 #define MENU_COL 2
 #define MENU_W 20
-static const char *menu_rows[]={"AI LEVEL","ROTATE BOARD","CREDITS","EXIT"};
-#define MENU_ROWS 4
+static const char * const menu_rows[]={"AI LEVEL","OFFER DRAW","RESIGN","ROTATE BOARD",
+                                 "CREDITS","EXIT"};
+#define MENU_ROWS 6
 static uint8_t menu(void) {
     uint8_t key,row=0,level=2,i,quit=0;
     char line[24];
@@ -331,13 +385,13 @@ static uint8_t menu(void) {
     clear_popup();
     text_at(MENU_COL,MENU_ROW,  "+------------------+",MENU_W);
     text_at(MENU_COL,MENU_ROW+1,"|       MENU       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+6,"|                  |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+7,"| ESC RESUME       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+8,"+------------------+",MENU_W);
+    text_at(MENU_COL,MENU_ROW+8,"|                  |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+9,"| ESC RESUME       |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+10,"+------------------+",MENU_W);
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"| > ":"|   ");
-            strcat(line,menu_rows[i]);
+            strcpy(line+4,menu_rows[i]);
             if(i==0) {
                 strcat(line," - 0 +");
                 line[strlen(line)-3]='0'+level;
@@ -353,9 +407,18 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {user_rotate^=1; set_flip(); break;}
-            if(row==2) {credits(); break;}
-            if(row==3) {quit=1; break;}
+            if(row==1 || row==2) {
+                strcpy(status,row==1?"OFFER DRAW? Y/N":"RESIGN? Y/N");
+                draw_status();
+                do key=Inkey(); while(!key);
+                if(key=='y' || key=='Y')
+                    exchange(row==1?"pchess draw":"pchess resign");
+                else strcpy(status,"GAME GOES ON");
+                break;
+            }
+            if(row==3) {user_rotate^=1; set_flip(); break;}
+            if(row==4) {credits(); break;}
+            if(row==5) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);
@@ -430,6 +493,7 @@ int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0;
+    pending_tune=0; offer_seen=0;
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0; sprites_hidden=0;
     entry[0]=0;
     memset(moves,0,sizeof(moves));

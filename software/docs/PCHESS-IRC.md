@@ -27,6 +27,12 @@ match IDs are ignored. State mismatches suspend the game; reconnect/resume
 and clocks are not part of v1. Both sides independently derive mate/draw.
 TCP disconnect is shown as an error, never as a fabricated opponent move.
 
+`PCH1 RESIGN <match>` ends the game for the sender. `PCH1 DRAW <match>`
+offers a draw (only on the sender's move) or, if the peer's offer is
+open, accepts it; the game is `DRAW AGREED` on both sides. An offer lasts
+until the player it was made to moves, so a DRAW crossing a MOVE on the
+wire is read the same way by both sides. Neither message is acknowledged.
+
 IRC nickname identity is only as trustworthy as the network; match IDs are
 correlation values, not authentication. Use registered nicknames and TLS
 for public play. TLS is on by default and certificate verification enabled.

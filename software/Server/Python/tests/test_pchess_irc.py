@@ -156,6 +156,26 @@ class Protocol(unittest.TestCase):
         self.start()
         self.a.move('e4')
         self.assertTrue(all(target!='#msxpi' for _,target,_ in self.messages))
+    def test_draw_offer_accept_and_decline(self):
+        self.start()
+        with self.assertRaises(ValueError): self.b.draw()   # not Bob's move
+        self.a.draw(); self.deliver()
+        self.assertEqual(self.b.snapshot()['status'],'OPPONENT OFFERS DRAW - ESC MENU')
+        self.a.move('e4'); self.deliver()                   # own move keeps it
+        self.b.move('e5'); self.deliver()                   # Bob moves: declined
+        self.assertIsNone(self.a.draw_offer); self.assertIsNone(self.b.draw_offer)
+        self.a.draw(); self.deliver(); self.b.draw(); self.deliver()
+        for peer in (self.a,self.b):
+            state=peer.snapshot()
+            self.assertEqual((state['status'],state['over']),('DRAW AGREED',True))
+        with self.assertRaises(ValueError): self.a.move('d4')
+    def test_resign(self):
+        self.start(); self.a.move('e4'); self.deliver()
+        self.b.resign(); self.deliver()
+        for peer in (self.a,self.b):
+            self.assertEqual(peer.snapshot()['status'],'BLACK RESIGNED - WHITE WINS')
+            self.assertTrue(peer.snapshot()['over'])
+        with self.assertRaises(ValueError): self.a.resign()
     def test_moves_ack_duplicate(self):
         self.start(); self.a.move('e4')
         frame=self.messages[0]

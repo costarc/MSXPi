@@ -40,6 +40,11 @@ directory. Use Panasonic_FS-A1WSX, MSXPi, ram4mb, and mount
 `C:/Users/roniv/Dev/MSX/MSXPi/FloppyA` using `diska`. Inside MSX-DOS, switch
 to **C:**, then run `PCHESS`.
 
+Files A-H are labelled above the board and ranks 1-8 to its left; they
+follow the board when it is rotated. The PSG beeps twice when the opponent
+offers a draw, plays a rising tune when you win and a falling one when you
+lose (in local two-player any win plays the rising tune).
+
 Controls:
 
 - `1`: local two-player; `2`: play white against the server AI.
@@ -65,6 +70,13 @@ Controls:
   choose 1-8 and Return saves it (`pchess level N` sets PCHESSELO in
   msxpi.ini: 600, 800, 1000, 1350, 1600, 1900, 2200, 2500). `EXIT`
   returns to DOS; Escape resumes the game.
+- `OFFER DRAW` (ESC menu): in local play the game is drawn at once. The AI
+  accepts unless it is ahead by more than half a pawn (Stockfish's
+  evaluation, or material without Stockfish), otherwise the status reads
+  `AI DECLINES THE DRAW`. Online (room or lobby) you offer on your move;
+  the opponent sees `OPPONENT OFFERS DRAW - ESC MENU` and accepts with
+  `OFFER DRAW`, or declines by moving. `RESIGN` asks `RESIGN? Y/N`; in
+  local play the side to move resigns. Both ask Y/N first.
 
 IRC settings and the public-discovery/private-game protocol are documented
 in `software/docs/PCHESS-IRC.md`. Both servers must use the same IRC network.
