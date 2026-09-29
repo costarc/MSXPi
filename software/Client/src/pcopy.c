@@ -273,9 +273,11 @@ static uint8_t pcopy_body(void) {
 
     // A drive letter on the SOURCE means the file is on the MSX: upload.
     // The download form never has one there - its drive, if any, is on the
-    // target - so the two syntaxes cannot be confused.
+    // target - so the two syntaxes cannot be confused.  Only A: to H:, the
+    // drives MSX-DOS has: M: is the Pi's remote drive (pcopy m:file, which
+    // msxpiupd.bat and msxpirfh.bat depend on) and must stay a download.
     if (src[1] == ':' &&
-        ((src[0] >= 'A' && src[0] <= 'Z') || (src[0] >= 'a' && src[0] <= 'z'))) {
+        ((src[0] >= 'A' && src[0] <= 'H') || (src[0] >= 'a' && src[0] <= 'h'))) {
         return pcopy_upload();
     }
 

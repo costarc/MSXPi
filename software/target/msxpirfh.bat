@@ -1,3 +1,12 @@
+copy pcopy.com pcopy.old
+pcopy m:pcopy.com
+echo
+p cd /home/pi/msxpi
+p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh
+p run sh update.sh
+echo
+echo Restarting msxpi-server.py
+p restart
 pcopy m:API.BAS
 pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
@@ -22,12 +31,4 @@ pcopy m:pver.com
 pcopy m:skmsx.com
 pcopy m:templatc.com
 pcopy m:template.com
-pcopy m:pcopy.com
-echo  
-pcd /home/pi/msxpi
-prun wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh
-prun sh update.sh
-echo 
-echo Restarting msxpi-server.py
-prestart
 pver
