@@ -1,5 +1,5 @@
 /*
- * MSXPi PChess - Fusion-C SCREEN 8 client
+ * MSXPi PChess - Fusion-C SCREEN 5 client
  *
  * Graphical board, keyboard notation/cursor and joystick input. The MSXPi
  * server validates rules and supplies AI, IRC and room-relay opponents.
@@ -19,15 +19,25 @@
 #define SQUARE 24
 #define BOARD_SIZE (SQUARE * 8)
 #define PANEL_X 204
-#define SCREEN8_BOTTOM 211
+#define SCREEN_BOTTOM 211
 
-#define C_BLACK 0
-#define C_WHITE 255
-#define C_RED 224
-#define C_GREEN 28
-#define C_BLUE 73
-#define C_YELLOW 252
-#define C_LIGHT 182
+/* SCREEN 5 (16 colours, 4 bits per pixel) so PChess also runs on MSX2
+ * machines with 64 KB VRAM, such as the Canon V-25: SCREEN 7/8 need 128 KB.
+ * Page 0 (VRAM 0x0000-0x7FFF) is displayed; page 1 (lines 256-511) holds
+ * the tile and glyph caches. Palette indices, set in main(). */
+#define C_BLACK 1
+#define C_GREEN 2
+#define C_BLUE 13
+#define C_YELLOW 11
+#define C_LIGHT 14
+#define C_WHITE 15
+#define PAIR(c) ((uint8_t)((c)*17))
+static const Palette palette={{
+    {0,0,0,0},{1,0,0,0},{2,0,6,0},{3,2,7,3},{4,1,1,7},{5,2,3,7},{6,5,1,1},{7,2,6,7},
+    {8,7,1,1},{9,7,3,3},{10,6,6,1},{11,7,7,0},{12,1,4,1},{13,2,2,1},{14,5,5,3},{15,7,7,7}
+}};
+/* VRAM address of pixel (x,y), x even; y may be on page 1 (256-511). */
+#define VADDR(x,y) ((uint16_t)((uint16_t)(y)*128+((x)>>1)))
 
 /* Bold 5x7 font in 6x7 cells, one byte per row (bit 4 is the left column),
  * indexed by glyph(). Vertical strokes are two pixels wide wherever the
@@ -35,7 +45,7 @@
  * can resolve, so thin strokes smear into the background on a real MSX. */
 #define FONT_W 6
 #define FONT_H 7
-#define FONT_Y 224
+#define FONT_Y 336
 static const uint8_t font[42][FONT_H] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
     {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
@@ -205,40 +215,37 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
     }
 }
 
-/* Glyph cache, written while the display is hidden: back-to-back VRAM
- * writes during active display drop bytes on a real V9938. */
+/* Glyph cache on page 1, written once at startup. */
 static void cache_font(void) {
-    uint8_t i,r,c,bits,pixels[FONT_W];
+    uint8_t i,r,c,bits,pixels[FONT_W/2];
     for(i=0;i<42;i++)
         for(r=0;r<FONT_H;r++) {
             bits=font[i][r];
-            for(c=0;c<FONT_W;c++) {
-                pixels[c]=(bits&0x10)?C_WHITE:C_BLACK;
-                bits<<=1;
+            for(c=0;c<FONT_W/2;c++) {
+                pixels[c]=((bits&0x10)?C_WHITE<<4:C_BLACK<<4)|((bits&0x08)?C_WHITE:C_BLACK);
+                bits<<=2;
             }
-            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
+            CopyRamToVram(pixels,VADDR(i*FONT_W,FONT_Y+r),FONT_W/2);
         }
 }
 
 /* Build tiles once on the hidden VRAM page. HMMM is Fusion-C's assembly
- * VDP command routine: subsequent refreshes never redraw piece primitives. */
+ * VDP command routine: subsequent refreshes never redraw piece primitives.
+ * HMMM works on whole bytes (2 pixels) in SCREEN 5, so every HMMM x and
+ * width here is even. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,bg,sy,pixels[24]; int x,y;
+    uint8_t i,j,r,c,bg,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
         j=i%13;
-        if(!j) { HMMV(x,y,24,24,bg); continue; }
-        /* Stage six rows at a time in the unused lines 212-223, alternating
-         * halves so a pending HMMM never reads rows being rewritten. */
-        for(k=0;k<4;k++) {
-            sy=212+(k&1)*6;
-            for(r=0;r<6;r++) {
-                piece_row(pixels,j<7?j-1:j-7,k*6+r,bg,j<7);
-                CopyRamToVram(pixels,((uint16_t)(sy+r)<<8),24);
-            }
-            HMMM(0,sy,x,y+k*6,24,6);
+        if(!j) { HMMV(x,y,24,24,PAIR(bg)); continue; }
+        /* Page 1 is never displayed, so rows go straight into VRAM. */
+        for(r=0;r<24;r++) {
+            piece_row(pixels,j<7?j-1:j-7,r,bg,j<7);
+            for(c=0;c<12;c++) pixels[c]=(pixels[c*2]<<4)|pixels[c*2+1];
+            CopyRamToVram(pixels,VADDR(x,y+r),12);
         }
     }
     cache_font();
@@ -247,41 +254,29 @@ static void cache_graphics(void) {
 /* The panel is 51 pixels wide: at most 8 characters per line. */
 static void draw_panel(void) {
     int i;
-    text_at(205,2,"PCHESS");
-    text_at(205,12,white_turn ? "WHITE" : "BLACK");
-    text_at(205,21,game_over?"GAMEOVER":"TURN");
-    text_at(205,32,"MOVES");
+    text_at(206,2,"PCHESS");
+    text_at(206,12,white_turn ? "WHITE" : "BLACK");
+    text_at(206,21,game_over?"GAMEOVER":"TURN");
+    text_at(206,32,"MOVES");
     for (i = 0; i < 8; i++) {
-        text_at(205,41+i*9,i<move_count?moves[i]:"");
+        text_at(206,41+i*9,i<move_count?moves[i]:"");
     }
-    text_at(205,114,"1 LOCAL");
-    text_at(205,122,"2 A I");
-    text_at(205,130,"3 ROOM");
-    text_at(205,138,"4 ONLINE");
-    text_at(205,146,"5 SEEK");
-    text_at(205,154,"6 A S K");
-    text_at(205,162,"7 ACCEPT");
-    text_at(205,174,room_entry==2?"PEER":room_entry?"ROOM":"MOVE");
-    text_at(205,183,entry_len>8?entry+entry_len-8:entry);
-    text_at(205,195,"ESC MENU");
+    text_at(206,114,"1 LOCAL");
+    text_at(206,122,"2 A I");
+    text_at(206,130,"3 ROOM");
+    text_at(206,138,"4 ONLINE");
+    text_at(206,146,"5 SEEK");
+    text_at(206,154,"6 A S K");
+    text_at(206,162,"7 ACCEPT");
+    text_at(206,174,room_entry==2?"PEER":room_entry?"ROOM":"MOVE");
+    text_at(206,183,entry_len>8?entry+entry_len-8:entry);
+    text_at(206,195,"ESC MENU");
     text_at(8,205,status);
 }
 
-/* Solid-colour blocks on the hidden page, filled at startup while the
- * display is off. After that every drawing operation is an HMMM copy: on a
- * real MSX, runtime HMMV fills and LINE outlines left yellow/green garbage
- * in the cached glyphs, while HMMM copies drew correctly. */
-#define SOLID_Y 400
-#define BLACK_Y 448
+/* Pixel-exact fill (LMMV): outlines start at odd x, which HMMV cannot do. */
 static void solid(int x,int y,int w,int h,uint8_t color) {
-    int n;
-    if(color==C_BLACK) {
-        while(h>0) {
-            n=h>64?64:h;
-            HMMM(0,BLACK_Y,x,y,w,n);
-            y+=n; h-=n;
-        }
-    } else HMMM(color==C_GREEN?128:0,SOLID_Y,x,y,w,h);
+    LMMV(x,y,w,h,color,0);
 }
 static void frame(int x,int y,uint8_t w,uint8_t h,uint8_t color) {
     solid(x,y,w,1,color);
@@ -344,7 +339,7 @@ static uint8_t menu(void) {
     draw_panel();
     solid(MENU_X,MENU_Y,120,48,C_BLACK);
     frame(MENU_X,MENU_Y,120,48,C_YELLOW);
-    text_at(MENU_X+39,MENU_Y+5,"M E N U");
+    text_at(MENU_X+40,MENU_Y+5,"M E N U");
     text_at(MENU_X+6,MENU_Y+38,"E S C  R E S U M E");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
@@ -373,15 +368,8 @@ static uint8_t menu(void) {
     /* Repaint the whole panel and status line from scratch, so leaving the
      * menu also clears anything stray drawn over the text. */
     field_count=0;
-    /* On a real MSX the panel text came back as yellow garbage after the
-     * menu: the cached glyphs had been overwritten. Rewrite them (display
-     * off for a moment) before the panel is redrawn. */
-    while(VDPstatus(2)&1);
-    HideDisplay();
-    cache_font();
-    ShowDisplay();
-    solid(PANEL_X,0,256-PANEL_X,SCREEN8_BOTTOM-7,C_BLACK);
-    solid(0,SCREEN8_BOTTOM-6,256,7,C_BLACK);
+    solid(PANEL_X,0,256-PANEL_X,SCREEN_BOTTOM-7,C_BLACK);
+    solid(0,SCREEN_BOTTOM-6,256,7,C_BLACK);
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
     return quit;
@@ -392,27 +380,18 @@ int main(void) {
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0;
     field_count=0;
-    /* On a real MSX the panel text came back as yellow garbage after the
-     * menu: the cached glyphs had been overwritten. Rewrite them (display
-     * off for a moment) before the panel is redrawn. */
-    while(VDPstatus(2)&1);
-    HideDisplay();
-    cache_font();
-    ShowDisplay();
     entry[0]=0;
     memset(moves,0,sizeof(moves));
     memset(reply,0,sizeof(reply));
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
-    Screen(8);
+    Screen(5);
     HideDisplay();
+    SetSC5Palette((Palette *)&palette);
     SetColors(C_WHITE,C_BLACK,C_BLACK);
     *(uint8_t *)0xFFE8 |= 128;
     VDPwrite(9,*(uint8_t *)0xFFE8);
-    HMMV(0,0,256,212,C_BLACK);
-    HMMV(0,SOLID_Y,128,48,C_YELLOW);
-    HMMV(128,SOLID_Y,128,48,C_GREEN);
-    HMMV(0,BLACK_Y,256,64,C_BLACK);
+    HMMV(0,0,256,212,PAIR(C_BLACK));
     cache_graphics();
     draw_board();
     ShowDisplay();
@@ -477,6 +456,7 @@ int main(void) {
         }
         draw_board();
     }
+    RestoreSC5Palette();
     Screen(0);
     Cls();
     return 0;

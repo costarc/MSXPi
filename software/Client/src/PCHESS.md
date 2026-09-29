@@ -1,6 +1,6 @@
 # PChess
 
-PChess uses SCREEN 8 and Fusion-C on an MSX2 with 128 KB VRAM. Pieces are
+PChess uses SCREEN 5 and Fusion-C on any MSX2 (64 KB VRAM is enough). Pieces are
 graphical silhouettes. The MSXPi server validates all moves using the optional
 `chess` Python package; local two-player mode also requires the server.
 

@@ -81,17 +81,17 @@ after time {40+i*6} {{type_via_keybuf "dualtest\\r"}}
 after time {56+i*8} {{type_via_keybuf "{'e2e4' if i==0 else 'e7e5'}\\r"}}
 after time 82 {{
     set f [open {{{work.as_posix()}/client-{i}.result}} w]
-    set white [debug read VRAM [expr {{116+116*256}}]]
-    set black [debug read VRAM [expr {{116+92*256}}]]
+    set white [expr {{[debug read VRAM [expr {{58+116*128}}]]>>4}}]
+    set black [expr {{[debug read VRAM [expr {{58+92*128}}]]>>4}}]
     puts $f "white=$white black=$black"
-    if {{$white==255 && $black==0}} {{puts $f PASS}} else {{puts $f FAIL}}
+    if {{$white==15 && $black==1}} {{puts $f PASS}} else {{puts $f FAIL}}
     close $f
     screenshot -raw {{{work.as_posix()}/client-{i}.png}}
     type_via_keybuf "1"
     after time 4 {{
         set clean 1
-        for {{set x 205}} {{$x<237}} {{incr x}} {{
-            if {{[debug read VRAM [expr {{$x+41*256}}]]!=0}} {{set clean 0}}
+        for {{set x 103}} {{$x<119}} {{incr x}} {{
+            if {{[debug read VRAM [expr {{$x+41*128}}]]!=17}} {{set clean 0}}
         }}
         set f [open {{{work.as_posix()}/client-{i}.result}} a]
         if {{$clean}} {{puts $f "PASS: new game clears history"}} else {{puts $f "FAIL: stale history"}}
