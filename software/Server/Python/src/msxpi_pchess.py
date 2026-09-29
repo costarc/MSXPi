@@ -122,10 +122,19 @@ def find_engine(config):
     path = config.get('PCHESSENGINE') or ''
     if path:
         return path if os.path.isfile(path) else None
-    # Debian/Raspberry Pi OS install it in /usr/games, often not on PATH.
-    return (shutil.which('stockfish') or
-            next((p for p in ('/usr/games/stockfish','/usr/local/bin/stockfish')
-                  if os.path.isfile(p)), None))
+    # Debian/Raspberry Pi OS install it in /usr/games, often not on PATH;
+    # winget on Windows unpacks it under WinGet\Packages.
+    found = (shutil.which('stockfish') or
+             next((p for p in ('/usr/games/stockfish','/usr/local/bin/stockfish')
+                   if os.path.isfile(p)), None))
+    if not found and os.name == 'nt':
+        import glob
+        for root in (os.environ.get('ProgramFiles',''), os.environ.get('LOCALAPPDATA','')+'/Microsoft'):
+            hits = glob.glob(root+'/WinGet/Packages/Stockfish.Stockfish*/**/stockfish*.exe',
+                             recursive=True)
+            if hits:
+                return hits[0]
+    return found
 
 
 def engine_limits(engine, elo):

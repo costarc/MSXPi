@@ -35,7 +35,8 @@
 
     Steps (each can be skipped with its -Skip switch):
       1. Python 3, 7-Zip (msxpi-server uses 7z.exe for zip/lzh/pma)  [winget]
-      2. Python libraries: requests, fs, and a setuptools that still has pkg_resources
+      2. Python libraries: requests, fs, and a setuptools that still has pkg_resources;
+         chess (python-chess) and Stockfish [winget] for the pchess command
       3. C:\home\pi\msxpi with server, modules, ini files and disk images.
          The server hardcodes /home/pi/msxpi, which Windows resolves on the
          current drive - hence C:\home\pi\msxpi.
@@ -230,11 +231,31 @@ if (-not $SkipPython) {
     # a fresh Python 3.12+ has no setuptools at all - pip then fetches the newest one
     # for "fs" and the server dies on "import fs". Ask for one that still has it.
     # (pyfatfs, which the first version of this script installed, is not used.)
-    & $python -m pip install --upgrade requests fs "setuptools<81" --quiet
+    & $python -m pip install --upgrade requests fs "setuptools<81" "chess==1.11.2" --quiet
     if ($LASTEXITCODE -ne 0) { Fail "pip install failed (see the message above; an error about long paths is fixed by enabling Windows long path support, or by installing Python from python.org into a short folder)" }
     $chk = Test-PyImport $python "requests, fs"
     if (-not $chk.Ok) { Fail "the Python libraries were installed but do not import: $($chk.Text)" }
     Ok "requests fs setuptools<81"
+    # pchess only: the server runs without it, so a failure is a warning.
+    $chk = Test-PyImport $python "chess"
+    if ($chk.Ok) { Ok "chess (pchess)" } else { Warn "python-chess does not import - pchess will not work: $($chk.Text)" }
+
+    # Stockfish is the pchess AI opponent; without it a weaker built-in AI plays.
+    # The server finds winget's install by itself (PATH alias or WinGet\Packages).
+    Step "Stockfish (pchess AI)"
+    if (Get-Command stockfish -ErrorAction SilentlyContinue) {
+        Ok "already on PATH"
+    } else {
+        Install-Winget "Stockfish.Stockfish" "Stockfish"
+        Update-Path
+        $sf = Get-ChildItem "$env:ProgramFiles\WinGet\Packages", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" `
+                -Recurse -Filter "stockfish*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ((Get-Command stockfish -ErrorAction SilentlyContinue) -or $sf) {
+            Ok "installed"
+        } else {
+            Warn "Stockfish not installed - pchess uses its weaker built-in AI (or set PCHESSENGINE in msxpi.ini)"
+        }
+    }
 }
 
 # --- 3. MSXPi home ------------------------------------------------------------
@@ -244,7 +265,8 @@ foreach ($d in @($MsxPiHome, "$MsxPiHome\disks", "$MsxPiHome\native")) {
 }
 
 $srv = "$Raw/Server/Python/src"
-foreach ($f in @("msxpi-server.py", "msxpi_player.py", "mapper_detect.py", "msxpi_eth.py", "msxpi_gpio_native.py")) {
+foreach ($f in @("msxpi-server.py", "msxpi_player.py", "mapper_detect.py", "msxpi_eth.py", "msxpi_gpio_native.py",
+                 "msxpi_pchess.py", "msxpi_pchess_irc.py")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" | Out-Null
 }
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
