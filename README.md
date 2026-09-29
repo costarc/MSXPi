@@ -309,11 +309,14 @@ the official build yet, so download openMSX from the MSXPi fork instead:
   Commands that only make sense on a Pi (`wifi`, `reboot`, `shut`, `play`) answer
   "Command not supported on this platform".
 
-**Windows shortcut:** right-click
-`software/Server/Setup/msxpi-windows-setup.ps1` and choose *Run with
-PowerShell*. It installs Python and 7-Zip (with winget), the modules,
-`C:\home\pi\msxpi`, openMSX with the MSXPi files, the TAP driver, and a
-`start-msxpi.ps1` launcher with a desktop shortcut. Running it again is safe.
+**Windows shortcut:** double-click
+`software/Server/Setup/msxpi-openmsx-install.bat` (it also works downloaded on
+its own). With no administrator rights it installs Python and its packages,
+7-Zip, Stockfish and mpv, the server in `C:\home\pi\msxpi`, the MSXPi build of
+openMSX in `C:\home\pi\msxpi\openMSX` with the MSXPi extension and ROM, and a
+`start-openmsx.bat` launcher with a desktop shortcut. Add `-Network` to also
+install the TAP driver for MSX TCP/IP (this asks for administrator rights).
+Running it again is safe.
 
 ### Step 3 - Start the server, then openMSX
 
