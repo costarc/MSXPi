@@ -508,7 +508,7 @@ def reboot(parm: Optional[str] = None) -> CommandResult:
 def shut(parm: Optional[str] = None) -> CommandResult:
     """Shut the Raspberry Pi down. Sent by "p shut", and by msxarch once a game
     is fully loaded, right before it starts the game, when msxarch.ini has
-    rebootAfterRomLoad=yes.
+    shutdownAfterRomLoad=yes.
 
     For interactive "p shut" the reply goes out FIRST and the MSX waits for it,
     so the exchange is complete before anything else happens.  msxarch uses
