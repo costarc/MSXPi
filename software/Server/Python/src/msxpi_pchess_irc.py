@@ -151,6 +151,21 @@ class Peer:
             status=status[:47],history=self.history[-12:],ply=len(board.move_stack))
 
 
+def tls_context():
+    """System CAs plus certifi's bundle when installed.
+
+    Some system stores (the Microsoft Store Python on Windows, OpenSSL 3.0)
+    build an expired path for Let's Encrypt's 2026 chain; certifi's bundle
+    lets verification find the valid one. Verification stays on."""
+    context=ssl.create_default_context()
+    try:
+        import certifi
+        context.load_verify_locations(certifi.where())
+    except (ImportError,OSError):
+        pass
+    return context
+
+
 class IRC:
     def __init__(self,config=None):
         config=config or {}
@@ -173,7 +188,11 @@ class IRC:
         sock=socket.create_connection((host,port),timeout=5)
         try:
             if tls:
-                sock=ssl.create_default_context().wrap_socket(sock,server_hostname=host)
+                sock=tls_context().wrap_socket(sock,server_hostname=host)
+        except ssl.SSLCertVerificationError as exc:
+            sock.close()
+            print('PCHESS IRC TLS '+str(exc),flush=True)
+            raise ValueError('Lobby certificate error') from None
         except Exception:
             sock.close(); raise
         self.sock=sock
