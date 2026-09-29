@@ -37,8 +37,8 @@ static const uint16_t font[] = {
     23469,18727,24557,27501,31599,27556,31609,27565,31183,29842,
     23407,23402,23549,23213,23186,29351
 };
-static uint8_t field_x[24],field_y[24],field_count;
-static char field_text[24][64];
+static uint8_t field_x[32],field_y[32],field_count;
+static char field_text[32][64];
 static uint8_t glyph(char ch) {
     if(ch>='a' && ch<='z') ch-=32;
     if(ch>='0' && ch<='9') return 1+ch-'0';
@@ -54,7 +54,7 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
     uint8_t f,n=0,oldlen,newlen,g; char ch;
     for(f=0;f<field_count;f++) if(field_x[f]==x && field_y[f]==y) break;
     if(f==field_count) {
-        if(field_count==24) return;
+        if(field_count==32) return;
         field_count++; field_x[f]=x; field_y[f]=y; field_text[f][0]=0;
     }
     oldlen=strlen(field_text[f]); newlen=strlen(s);
@@ -212,7 +212,7 @@ static void draw_panel(void) {
     text_at(205,164,"7 ACCEPT");
     text_at(205,174,room_entry==2?"PEER NICK":room_entry?"ROOM NAME":"MOVE");
     text_at(205,182,entry);
-    text_at(205,198,"ESC QUIT");
+    text_at(205,198,"ESC MENU");
     text_at(8,205,status);
 }
 
@@ -253,6 +253,53 @@ static void make_move(void) {
         command[16]='q'; command[17]=0;
     }
     if(exchange(command)) {selected_x=255; selected_y=255;}
+}
+
+/* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
+ * msxpi.ini through "pchess level N"), 1 exit to DOS. ESC resumes the game.
+ * Add rows by extending menu_rows and the switch on Return. */
+#define MENU_X 44
+#define MENU_Y 72
+static const char *menu_rows[]={"AI LEVEL","EXIT"};
+#define MENU_ROWS 2
+static uint8_t menu(void) {
+    uint8_t key,row=0,level=2,fields=field_count,i,quit=0;
+    char line[20];
+    if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
+        if(reply[242]>=1 && reply[242]<=8) level=reply[242];
+    draw_panel();
+    HMMV(MENU_X,MENU_Y,120,48,C_DARK);
+    BoxLine(MENU_X,MENU_Y,MENU_X+119,MENU_Y+47,C_YELLOW,0);
+    text_at(MENU_X+44,MENU_Y+5,"MENU");
+    text_at(MENU_X+8,MENU_Y+38,"ESC RESUME");
+    while(1) {
+        for(i=0;i<MENU_ROWS;i++) {
+            strcpy(line,i==row?"= ":"  ");
+            strcat(line,menu_rows[i]);
+            if(i==0) {
+                strcat(line,": - 0 +");
+                line[strlen(line)-3]='0'+level;
+            }
+            text_at(MENU_X+8,MENU_Y+16+i*9,line);
+        }
+        do key=Inkey(); while(!key);
+        if(key==27) break;
+        if(key==0x1e && row) row--;
+        else if(key==0x1f && row<MENU_ROWS-1) row++;
+        else if(row==0 && key==0x1d && level>1) level--;
+        else if(row==0 && key==0x1c && level<8) level++;
+        else if(key==13 || key==' ') {
+            if(row==1) {quit=1; break;}
+            strcpy(command,"pchess level ");
+            line[0]='0'+level; line[1]=0; strcat(command,line);
+            exchange(command);
+            text_at(8,205,status);
+        }
+    }
+    field_count=fields;
+    memset(painted,255,sizeof(painted));
+    memset(markers,255,sizeof(markers));
+    return quit;
 }
 
 int main(void) {
@@ -297,7 +344,11 @@ int main(void) {
             }
             continue;
         }
-        if (key == 27) break;
+        if (key == 27) {
+            if(menu()) break;
+            draw_board();
+            continue;
+        }
         if(key==8 && entry_len) entry[--entry_len]=0;
         else if(key==13 && entry_len) {
             strcpy(command,room_entry==2?"pchess offer ":room_entry?"pchess join ":"pchess move ");

@@ -100,4 +100,14 @@ class Engine(unittest.TestCase):
         state=self.play(dict(PCHESSENGINE='/no/such/stockfish'))
         self.assertEqual(state['ply'],2)
 
+class Level(unittest.TestCase):
+    def test_level_packet(self):
+        data=p.level_packet('1350')
+        self.assertEqual(data[:5],b'PCH1\0')
+        self.assertEqual(data[242],4)
+        self.assertTrue(data[72:].startswith(b'AI LEVEL 4 ELO 1350'))
+        self.assertEqual(p.elo_level(''),2)
+        self.assertEqual(p.elo_level('3000'),8)
+        self.assertEqual([p.elo_level(e) for e in p.LEVEL_ELO],list(range(1,9)))
+
 if __name__=='__main__': unittest.main()

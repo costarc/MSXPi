@@ -45,7 +45,7 @@ from msxpi_const import (
     RC_SUCCNOSTD,
 )
 from msxpi_blocks import sendmultiblock
-from msxpi_settings import getMSXPiVar
+from msxpi_settings import getMSXPiVar, setMSXPiVar
 
 # irc
 channel = "#msxpi"
@@ -155,7 +155,14 @@ def template(parms: Optional[str] = None) -> CommandResult:
 
 def pchess(parms: Optional[str] = None) -> CommandResult:
     try:
-        from msxpi_pchess import handle_command
+        from msxpi_pchess import LEVEL_ELO, handle_command, level_packet
+
+        args = (parms or "").split()
+        if args and args[0] == "level":
+            # "pchess level N" saves PCHESSELO to msxpi.ini; no N just reports.
+            if len(args) == 2 and args[1].isdigit() and 1 <= int(args[1]) <= 8:
+                setMSXPiVar("PCHESSELO", str(LEVEL_ELO[int(args[1]) - 1]))
+            return sendmultiblock(level_packet(getMSXPiVar("PCHESSELO")))
 
         irc_config = {
             key: getMSXPiVar(key)
