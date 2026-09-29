@@ -35,8 +35,8 @@
 
     Steps (each can be skipped with its -Skip switch):
       1. Python 3, 7-Zip (msxpi-server uses 7z.exe for zip/lzh/pma)  [winget]
-      2. Python libraries: requests, fs, and a setuptools that still has pkg_resources;
-         chess (python-chess) and Stockfish [winget] for the pchess command
+      2. Python libraries: requests (required); certifi, chess (python-chess) and
+         Stockfish [winget] for pchess; Pillow, playwright and its Chromium for renderpage
       3. C:\home\pi\msxpi with server, modules, ini files and disk images.
          The server hardcodes /home/pi/msxpi, which Windows resolves on the
          current drive - hence C:\home\pi\msxpi.
@@ -101,8 +101,8 @@ function Get-File([string]$url, [string]$dest, [switch]$Optional) {
 }
 
 # Try "import <modules>" and return whether it worked, with the last line of any
-# error. Python writes warnings to stderr even when an import succeeds ("fs" prints
-# a pkg_resources deprecation notice), and Windows PowerShell 5.1 turns any stderr
+# error. Python writes warnings to stderr even when an import succeeds (deprecation
+# notices, for one), and Windows PowerShell 5.1 turns any stderr
 # line into a terminating error under $ErrorActionPreference = "Stop": so the
 # preference is relaxed here and -W ignore silences the warnings at the source.
 function Test-PyImport([string]$python, [string]$modules) {
@@ -226,19 +226,45 @@ if (-not $SkipPython) {
 
     # --- 2. Python libraries --------------------------------------------------
     Step "Python libraries"
-    & $python -m pip install --upgrade pip --quiet
-    # "fs" imports pkg_resources, which setuptools 81 and later no longer ships, and
-    # a fresh Python 3.12+ has no setuptools at all - pip then fetches the newest one
-    # for "fs" and the server dies on "import fs". Ask for one that still has it.
-    # (pyfatfs, which the first version of this script installed, is not used.)
-    & $python -m pip install --upgrade requests fs "setuptools<81" "chess==1.11.2" --quiet
-    if ($LASTEXITCODE -ne 0) { Fail "pip install failed (see the message above; an error about long paths is fixed by enabling Windows long path support, or by installing Python from python.org into a short folder)" }
-    $chk = Test-PyImport $python "requests, fs"
-    if (-not $chk.Ok) { Fail "the Python libraries were installed but do not import: $($chk.Text)" }
-    Ok "requests fs setuptools<81"
-    # pchess only: the server runs without it, so a failure is a warning.
-    $chk = Test-PyImport $python "chess"
-    if ($chk.Ok) { Ok "chess (pchess)" } else { Warn "python-chess does not import - pchess will not work: $($chk.Text)" }
+    # Third-party modules the server imports. Only requests is needed to start;
+    # the others serve single commands, so a failure there is a warning.
+    # ("fs", which earlier versions installed, is no longer used.)
+    #   pip name  = import name  (command)
+    $pyRequired = [ordered]@{ "requests" = "requests" }
+    $pyOptional = [ordered]@{ "certifi" = "certifi"          # pchess lobby TLS
+                              "chess==1.11.2" = "chess"      # pchess
+                              "Pillow" = "PIL"               # renderpage
+                              "playwright" = "playwright" }  # renderpage
+
+    # pip writes notices to stderr, which "Stop" would turn into errors.
+    function Invoke-Py([string[]]$argv) {
+        $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+        try { & $python @argv 2>&1 | Out-Null; return $LASTEXITCODE } finally { $ErrorActionPreference = $old }
+    }
+
+    # A fresh or embedded Python may have no pip at all.
+    if ((Invoke-Py @("-m", "pip", "--version")) -ne 0) {
+        if ((Invoke-Py @("-m", "ensurepip", "--upgrade")) -ne 0) { Fail "pip is missing from $python and ensurepip could not install it" }
+        Ok "pip installed"
+    }
+    Invoke-Py @("-m", "pip", "install", "--upgrade", "--quiet", "pip") | Out-Null
+    foreach ($set in @(@{ Pkgs = $pyRequired; Required = $true }, @{ Pkgs = $pyOptional; Required = $false })) {
+        foreach ($pkg in $set.Pkgs.Keys) {
+            $mod = $set.Pkgs[$pkg]
+            if (-not (Test-PyImport $python $mod).Ok) {
+                Invoke-Py @("-m", "pip", "install", "--upgrade", "--quiet", $pkg) | Out-Null
+            }
+            $chk = Test-PyImport $python $mod
+            if ($chk.Ok) { Ok $pkg }
+            elseif ($set.Required) { Fail "Python package '$pkg' does not import: $($chk.Text)`n    run: `"$python`" -m pip install $pkg (an error about long paths is fixed by enabling Windows long path support, or by installing Python from python.org into a short folder)" }
+            else { Warn "$pkg does not import - the command that uses it will not work: $($chk.Text)" }
+        }
+    }
+    # playwright drives a headless Chromium for renderpage; it is a separate download.
+    if ((Test-PyImport $python "playwright").Ok) {
+        if ((Invoke-Py @("-m", "playwright", "install", "chromium")) -eq 0) { Ok "Chromium for playwright" }
+        else { Warn "Chromium for playwright not installed - renderpage will not work" }
+    }
 
     # Stockfish is the pchess AI opponent; without it a weaker built-in AI plays.
     # The server finds winget's install by itself (PATH alias or WinGet\Packages).
