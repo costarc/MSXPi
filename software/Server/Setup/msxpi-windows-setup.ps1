@@ -26,54 +26,59 @@
     ------------------------------------------------------------------------------
 
     Install MSXPi (emulated, under openMSX) on Windows. The Windows counterpart
-    of msxpi-setup.sh.
+    of msxpi-setup.sh. Double-click msxpi-openmsx-install.bat, or:
 
-    Right-click > "Run with PowerShell" (it asks for administrator rights
-    itself), or from a prompt:
+        powershell -ExecutionPolicy Bypass -File msxpi-windows-setup.ps1 [-Network]
 
-        powershell -ExecutionPolicy Bypass -File msxpi-windows-setup.ps1
+    Everything lands in C:\home\pi\msxpi (the server hardcodes /home/pi/msxpi,
+    which Windows resolves on the current drive) and needs no administrator
+    rights, except -Network:
 
-    Steps (each can be skipped with its -Skip switch):
-      1. Python 3, 7-Zip (msxpi-server uses 7z.exe for zip/lzh/pma)  [winget]
-      2. Python libraries: requests (required); certifi, chess (python-chess) and
-         Stockfish [winget] for pchess; Pillow, playwright and its Chromium for renderpage
-      3. C:\home\pi\msxpi with server, modules, ini files and disk images.
-         The server hardcodes /home/pi/msxpi, which Windows resolves on the
-         current drive - hence C:\home\pi\msxpi.
-      4. openMSX from the costarc/MSXPi releases, plus MSXPi.xml and msxpibios.rom
-      5. OpenVPN TAP driver (tap-windows6)
-      6. start-msxpi.ps1 launcher and desktop shortcut. The launcher sets up
-         the MSX network (msxpi-tcpip-setup.ps1) when it finds it missing.
+      1. Python 3 [winget] and the packages the server imports: requests
+         (required); certifi, chess and Stockfish [winget] for pchess; Pillow,
+         playwright and its Chromium for renderpage. 7-Zip [winget] for
+         zip/lzh/pma, mpv for media playback.
+      2. The server, its modules, ini files and disk images from the costarc/MSXPi
+         branch (default master). msxpi.ini and existing disks are kept.
+      3. openMSX in C:\home\pi\msxpi\openMSX: the MSXPi build (CPLD v1.6
+         emulation) from the costarc/openMSX releases, with MSXPi.xml and
+         msxpibios.rom from the same branch as the server.
+      4. -Network (asks for administrator rights): the OpenVPN TAP driver, and a
+         network check the launcher runs to set up the MSX network (NAT).
+      5. start-openmsx.bat launcher and a desktop shortcut.
 
-    Re-running is safe: every step checks what is already there.
+    Re-running is safe: every step checks what is already there. openMSX is
+    replaced when it is not the build this script pins.
 #>
 
 [CmdletBinding()]
 param(
     [string]$MsxPiHome   = "C:\home\pi\msxpi",
-    # Default: an existing openMSX (PATH, Program Files, LocalAppData), else
-    # a new install in $MsxPiHome\openMSX.
-    [string]$OpenMsxDir  = "",
-    # Local path or URL of an openMSX Windows zip; default is the newest
-    # windows-vc-x64 build attached to a costarc/MSXPi release.
-    [string]$OpenMsxZip  = "",
     [string]$Branch      = "master",
     [string]$Machine     = "Panasonic_FS-A1WSX",
+    # Local path or URL of an openMSX Windows zip, instead of the pinned build.
+    [string]$OpenMsxZip  = "",
     [string]$TapUrl      = "https://build.openvpn.net/downloads/releases/tap-windows-9.24.2-I601-Win10.exe",
+    [switch]$Network,
     [switch]$SkipPython,
     [switch]$SkipMpv,
     [switch]$SkipOpenMsx,
-    [switch]$SkipTap,
-    [switch]$SkipNetwork
+    [switch]$NoPause
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"   # Invoke-WebRequest is 10x slower with the progress bar
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-$Raw     = "https://raw.githubusercontent.com/costarc/MSXPi/$Branch/software"
-$RawXml  = "https://raw.githubusercontent.com/costarc/openMSX/master/share/extensions/MSXPi.xml"
-$Work    = Join-Path $env:TEMP "msxpi-setup"
+# The openMSX build the MSXPi ROM and server are made for. When it changes,
+# existing installs are replaced on the next run.
+$OpenMsxBuild = "openmsx-21.0-547-g352e335f5-mingw-w64-x86_64-bin.zip"
+$OpenMsxUrl   = "https://github.com/costarc/openMSX/releases/download/openMSX/$OpenMsxBuild"
+
+$Raw        = "https://raw.githubusercontent.com/costarc/MSXPi/$Branch/software"
+$OpenMsxDir = "$MsxPiHome\openMSX"
+$openmsxExe = "$OpenMsxDir\openmsx.exe"
+$Work       = Join-Path $env:TEMP "msxpi-setup"
 New-Item -ItemType Directory -Force $Work | Out-Null
 
 function Step([string]$msg) { Write-Host ""; Write-Host "==> $msg" -ForegroundColor Cyan }
@@ -81,8 +86,7 @@ function Ok([string]$msg)   { Write-Host "    ok   $msg" -ForegroundColor Green 
 function Warn([string]$msg) { Write-Host "    warn $msg" -ForegroundColor Yellow }
 function Exit-Setup([int]$code) {
     # Started from Explorer the window closes on exit; keep it up to be read.
-    Write-Host ""
-    Read-Host "Press Enter to close" | Out-Null
+    if (-not $NoPause) { Write-Host ""; Read-Host "Press Enter to close" | Out-Null }
     exit $code
 }
 function Fail([string]$msg) { Write-Host "msxpi-windows-setup: $msg" -ForegroundColor Red; Exit-Setup 1 }
@@ -100,29 +104,30 @@ function Get-File([string]$url, [string]$dest, [switch]$Optional) {
     }
 }
 
-# Try "import <modules>" and return whether it worked, with the last line of any
-# error. Python writes warnings to stderr even when an import succeeds (deprecation
-# notices, for one), and Windows PowerShell 5.1 turns any stderr
-# line into a terminating error under $ErrorActionPreference = "Stop": so the
-# preference is relaxed here and -W ignore silences the warnings at the source.
-function Test-PyImport([string]$python, [string]$modules) {
+# Run Python and return its exit code. Python writes warnings to stderr even
+# when it succeeds, and Windows PowerShell 5.1 turns any stderr line into a
+# terminating error under $ErrorActionPreference = "Stop": so the preference
+# is relaxed here. With -Text, return the last output line as well.
+function Invoke-Py([string[]]$argv, [switch]$Text) {
     $old = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
-        $out = & $python -W ignore -c "import $modules" 2>&1
-        return [pscustomobject]@{ Ok = ($LASTEXITCODE -eq 0); Text = "$($out | Select-Object -Last 1)" }
+        $out = & $python @argv 2>&1
+        if ($Text) { return [pscustomobject]@{ Code = $LASTEXITCODE; Text = "$($out | Select-Object -Last 1)" } }
+        return $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $old
     }
 }
+function Test-PyImport([string]$module) { Invoke-Py @("-W", "ignore", "-c", "import $module") -Text }
+
 function Update-Path {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
 }
 
 function Assert-Admin {
-    # Relaunch elevated (one UAC prompt) instead of failing, so the script can
-    # be started with a double-click or "Run with PowerShell". The bound
+    # Relaunch elevated (one UAC prompt) instead of failing. The bound
     # parameters travel along to the elevated copy.
     $p = New-Object Security.Principal.WindowsPrincipal ([Security.Principal.WindowsIdentity]::GetCurrent())
     if ($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { return }
@@ -134,7 +139,7 @@ function Assert-Admin {
     try {
         Start-Process powershell.exe -Verb RunAs -ArgumentList $argv | Out-Null
     } catch {
-        Fail "administrator rights are needed (driver install and NAT) - the UAC prompt was declined"
+        Fail "-Network needs administrator rights (TAP driver install) - the UAC prompt was declined"
     }
     exit 0
 }
@@ -159,36 +164,52 @@ function Find-Python {
 
 function Install-Winget([string]$id, [string]$what) {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Fail "winget not found - install $what manually and run this again (or install 'App Installer' from the Store)"
+        Warn "winget not found - install $what manually (or install 'App Installer' from the Store)"
+        return
     }
-    & winget install --id $id -e --silent --scope machine --accept-package-agreements --accept-source-agreements
+    # Per-user first, so no administrator rights are needed; some packages
+    # only come as a machine-wide install, and ask for elevation themselves.
+    & winget install --id $id -e --silent --scope user --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
+    }
     # winget returns non-zero for "already installed"; the caller re-checks.
+    Update-Path
+}
+
+function Add-UserPath([string]$dir) {
+    $up = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (($up -split ';') -notcontains $dir) {
+        [Environment]::SetEnvironmentVariable("Path", $(if ($up) { "$up;$dir" } else { $dir }), "User")
+    }
     Update-Path
 }
 
 function Install-Mpv {
     $mpvExe = "C:\Apps\mpv\mpv.exe"
-    if (Test-Path $mpvExe) { Ok "mpv already installed"; return }
-
     Step "mpv"
-    $api = Invoke-RestMethod "https://api.github.com/repos/mpv-distributions/mpv-windows-setup/releases/latest"
-    $asset = $api.assets | Where-Object { $_.name -eq "mpv-setup-x86_64-$($api.tag_name).exe" } | Select-Object -First 1
-    if (-not $asset) { Fail "could not find the x86_64 mpv installer" }
-    $installer = Join-Path $Work $asset.name
-    Get-File $asset.browser_download_url $installer | Out-Null
-    & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\Apps\mpv
-    if (-not (Test-Path $mpvExe)) { Fail "mpv installation did not produce $mpvExe" }
-    Ok "mpv installed in C:\Apps\mpv"
+    if (Test-Path $mpvExe) { Ok "already installed"; return }
+    try {
+        $api = Invoke-RestMethod "https://api.github.com/repos/mpv-distributions/mpv-windows-setup/releases/latest"
+        $asset = $api.assets | Where-Object { $_.name -eq "mpv-setup-x86_64-$($api.tag_name).exe" } | Select-Object -First 1
+        if (-not $asset) { throw "no x86_64 installer in $($api.tag_name)" }
+        $installer = Join-Path $Work $asset.name
+        Get-File $asset.browser_download_url $installer | Out-Null
+        & $installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /DIR=C:\Apps\mpv
+    } catch {
+        Warn "mpv not installed ($($_.Exception.Message)) - media playback will not work"
+        return
+    }
+    if (Test-Path $mpvExe) { Ok "installed in C:\Apps\mpv" } else { Warn "mpv installation did not produce $mpvExe" }
 }
 
-Assert-Admin
-Write-Host "MSXPi Windows setup"
+if ($Network) { Assert-Admin }
+Write-Host "MSXPi Windows setup ($Branch)"
 Write-Host "  home    : $MsxPiHome"
-Write-Host "  openMSX : $(if ($OpenMsxDir) { $OpenMsxDir } else { 'auto-detect' })"
+Write-Host "  openMSX : $OpenMsxDir"
+Write-Host "  network : $(if ($Network) { 'yes' } else { 'no (run with -Network for MSX TCP/IP)' })"
 
-if (-not $SkipMpv) { Install-Mpv }
-
-# --- 1. Python and 7-Zip ------------------------------------------------------
+# --- 1. Python, packages and tools ---------------------------------------------
 $python = $null
 if (-not $SkipPython) {
     Step "Python 3"
@@ -197,50 +218,23 @@ if (-not $SkipPython) {
         Install-Winget "Python.Python.3.12" "Python 3"
         $python = Find-Python
         if (-not $python) {
-            foreach ($p in @("$env:ProgramFiles\Python312\python.exe", "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe")) {
+            foreach ($p in @("$env:LOCALAPPDATA\Programs\Python\Python312\python.exe", "$env:ProgramFiles\Python312\python.exe")) {
                 if (Test-Path $p) { $python = $p; break }
             }
         }
-        if (-not $python) { Fail "Python install did not produce a working interpreter" }
+        if (-not $python) { Fail "Python 3.9+ not found - install it from python.org and run this again" }
     }
     Ok "$python ($(& $python --version 2>&1))"
 
-    Step "7-Zip"
-    # The server runs plain "7z.exe", so any copy on PATH will do.
-    $onPath = Get-Command 7z.exe -ErrorAction SilentlyContinue
-    if ($onPath) {
-        Ok "$($onPath.Source) (already on PATH)"
-    } else {
-        $sevenZip = @("$env:ProgramFiles\7-Zip", "${env:ProgramFiles(x86)}\7-Zip") |
-            Where-Object { Test-Path "$_\7z.exe" } | Select-Object -First 1
-        if (-not $sevenZip) {
-            Install-Winget "7zip.7zip" "7-Zip"
-            $sevenZip = "$env:ProgramFiles\7-Zip"
-            if (-not (Test-Path "$sevenZip\7z.exe")) { Fail "7-Zip not found in $sevenZip" }
-        }
-        $mp = [Environment]::GetEnvironmentVariable("Path", "Machine")
-        [Environment]::SetEnvironmentVariable("Path", "$mp;$sevenZip", "Machine")
-        Update-Path
-        Ok "$sevenZip\7z.exe (added to PATH)"
-    }
-
-    # --- 2. Python libraries --------------------------------------------------
-    Step "Python libraries"
+    Step "Python packages"
     # Third-party modules the server imports. Only requests is needed to start;
     # the others serve single commands, so a failure there is a warning.
-    # ("fs", which earlier versions installed, is no longer used.)
     #   pip name  = import name  (command)
     $pyRequired = [ordered]@{ "requests" = "requests" }
     $pyOptional = [ordered]@{ "certifi" = "certifi"          # pchess lobby TLS
                               "chess==1.11.2" = "chess"      # pchess
                               "Pillow" = "PIL"               # renderpage
                               "playwright" = "playwright" }  # renderpage
-
-    # pip writes notices to stderr, which "Stop" would turn into errors.
-    function Invoke-Py([string[]]$argv) {
-        $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-        try { & $python @argv 2>&1 | Out-Null; return $LASTEXITCODE } finally { $ErrorActionPreference = $old }
-    }
 
     # A fresh or embedded Python may have no pip at all.
     if ((Invoke-Py @("-m", "pip", "--version")) -ne 0) {
@@ -251,17 +245,17 @@ if (-not $SkipPython) {
     foreach ($set in @(@{ Pkgs = $pyRequired; Required = $true }, @{ Pkgs = $pyOptional; Required = $false })) {
         foreach ($pkg in $set.Pkgs.Keys) {
             $mod = $set.Pkgs[$pkg]
-            if (-not (Test-PyImport $python $mod).Ok) {
+            if ((Test-PyImport $mod).Code -ne 0) {
                 Invoke-Py @("-m", "pip", "install", "--upgrade", "--quiet", $pkg) | Out-Null
             }
-            $chk = Test-PyImport $python $mod
-            if ($chk.Ok) { Ok $pkg }
+            $chk = Test-PyImport $mod
+            if ($chk.Code -eq 0) { Ok $pkg }
             elseif ($set.Required) { Fail "Python package '$pkg' does not import: $($chk.Text)`n    run: `"$python`" -m pip install $pkg (an error about long paths is fixed by enabling Windows long path support, or by installing Python from python.org into a short folder)" }
             else { Warn "$pkg does not import - the command that uses it will not work: $($chk.Text)" }
         }
     }
     # playwright drives a headless Chromium for renderpage; it is a separate download.
-    if ((Test-PyImport $python "playwright").Ok) {
+    if ((Test-PyImport "playwright").Code -eq 0) {
         if ((Invoke-Py @("-m", "playwright", "install", "chromium")) -eq 0) { Ok "Chromium for playwright" }
         else { Warn "Chromium for playwright not installed - renderpage will not work" }
     }
@@ -273,18 +267,31 @@ if (-not $SkipPython) {
         Ok "already on PATH"
     } else {
         Install-Winget "Stockfish.Stockfish" "Stockfish"
-        Update-Path
         $sf = Get-ChildItem "$env:ProgramFiles\WinGet\Packages", "$env:LOCALAPPDATA\Microsoft\WinGet\Packages" `
                 -Recurse -Filter "stockfish*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ((Get-Command stockfish -ErrorAction SilentlyContinue) -or $sf) {
-            Ok "installed"
-        } else {
-            Warn "Stockfish not installed - pchess uses its weaker built-in AI (or set PCHESSENGINE in msxpi.ini)"
+        if ((Get-Command stockfish -ErrorAction SilentlyContinue) -or $sf) { Ok "installed" }
+        else { Warn "Stockfish not installed - pchess uses its weaker built-in AI (or set PCHESSENGINE in msxpi.ini)" }
+    }
+
+    Step "7-Zip"
+    # The server runs plain "7z.exe", so any copy on PATH will do.
+    $onPath = Get-Command 7z.exe -ErrorAction SilentlyContinue
+    if ($onPath) {
+        Ok "$($onPath.Source) (already on PATH)"
+    } else {
+        $dirs = @("$env:ProgramFiles\7-Zip", "${env:ProgramFiles(x86)}\7-Zip", "$env:LOCALAPPDATA\Programs\7-Zip")
+        $sevenZip = $dirs | Where-Object { Test-Path "$_\7z.exe" } | Select-Object -First 1
+        if (-not $sevenZip) {
+            Install-Winget "7zip.7zip" "7-Zip"
+            $sevenZip = $dirs | Where-Object { Test-Path "$_\7z.exe" } | Select-Object -First 1
         }
+        if ($sevenZip) { Add-UserPath $sevenZip; Ok "$sevenZip\7z.exe (added to PATH)" }
+        else { Warn "7-Zip not installed - zip/lzh/pma files will not open" }
     }
 }
+if (-not $SkipMpv) { Install-Mpv }
 
-# --- 3. MSXPi home ------------------------------------------------------------
+# --- 2. MSXPi home ------------------------------------------------------------
 Step "MSXPi home $MsxPiHome"
 foreach ($d in @($MsxPiHome, "$MsxPiHome\disks", "$MsxPiHome\native")) {
     New-Item -ItemType Directory -Force $d | Out-Null
@@ -302,7 +309,6 @@ foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxp
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }
-Get-File "$Raw/Server/Setup/msxpi-tcpip-setup.ps1" "$MsxPiHome\msxpi-tcpip-setup.ps1" | Out-Null
 
 # Never overwrite msxpi.ini: it holds the user's API keys and PSET values.
 if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {
@@ -312,7 +318,7 @@ if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {
     Ok "msxpi.ini kept"
 }
 
-foreach ($f in @("msxpiboot.dsk", "tools.dsk", "blank.dsk")) {
+foreach ($f in @("msxpiboot.dsk", "tools.dsk")) {
     if (-not (Test-Path "$MsxPiHome\disks\$f")) {
         Get-File "$Raw/target/disks/$f" "$MsxPiHome\disks\$f" -Optional | Out-Null
     } else {
@@ -320,54 +326,30 @@ foreach ($f in @("msxpiboot.dsk", "tools.dsk", "blank.dsk")) {
     }
 }
 
-# --- 4. openMSX -----------------------------------------------------------------
-# An existing openMSX is used where it is: -OpenMsxDir if given, else one on
-# PATH or in the usual folders, else a fresh install under the MSXPi home.
-$found = $null
-if ($OpenMsxDir) {
-    if (Test-Path "$OpenMsxDir\openmsx.exe") { $found = $OpenMsxDir }
-} else {
-    $cmd = Get-Command openmsx.exe -ErrorAction SilentlyContinue
-    $candidates = @()
-    if ($cmd) { $candidates += Split-Path $cmd.Source }
-    $candidates += "$env:ProgramFiles\openMSX", "${env:ProgramFiles(x86)}\openMSX",
-                   "$env:LOCALAPPDATA\openMSX", "$MsxPiHome\openMSX"
-    $found = $candidates | Where-Object { $_ -and (Test-Path "$_\openmsx.exe") } | Select-Object -First 1
-    $OpenMsxDir = if ($found) { $found } else { "$MsxPiHome\openMSX" }
-}
-$openmsxExe = Join-Path $OpenMsxDir "openmsx.exe"
-
+# --- 3. openMSX -----------------------------------------------------------------
 if (-not $SkipOpenMsx) {
     Step "openMSX"
-    if ($found -and -not $OpenMsxZip) {
-        # Stock openMSX has no MSXPi device; the name is compiled into builds that do.
-        $bin = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($openmsxExe))
-        if ($bin.Contains("MSXPi")) {
-            Ok "found $openmsxExe"
-        } else {
-            Warn "found $openmsxExe, but it does not look like it has the MSXPi device - pass -OpenMsxZip to install the MSXPi build"
+    # The installed build is recorded; a different one is replaced, since the
+    # ROM and server only work with an openMSX that has the CPLD emulation.
+    $want  = if ($OpenMsxZip) { Split-Path -Leaf $OpenMsxZip } else { $OpenMsxBuild }
+    $stamp = "$OpenMsxDir\msxpi-openmsx-build.txt"
+    $have  = if (Test-Path $stamp) { (Get-Content -Raw $stamp).Trim() } else { "" }
+    if ((Test-Path $openmsxExe) -and $have -eq $want) {
+        Ok "$want already installed"
+    } else {
+        if (Get-Process openmsx -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $openmsxExe }) {
+            Fail "openMSX is running from $OpenMsxDir - close it and run this again"
         }
-    }
-    if (-not $found -or $OpenMsxZip) {
-        if (-not $OpenMsxZip) {
-            $rels = Invoke-RestMethod "https://api.github.com/repos/costarc/MSXPi/releases?per_page=50" -UseBasicParsing
-            $asset = $rels | Sort-Object { [datetime]$_.published_at } -Descending |
-                ForEach-Object { $_.assets } |
-                Where-Object { $_.name -like "openmsx-*windows-vc-x64-bin*.zip" } |
-                Select-Object -First 1
-            if (-not $asset) { Fail "no openMSX Windows build found in the costarc/MSXPi releases; pass -OpenMsxZip" }
-            $OpenMsxZip = $asset.browser_download_url
-        }
+        $src = if ($OpenMsxZip) { $OpenMsxZip } else { $OpenMsxUrl }
         $zip = Join-Path $Work "openmsx.zip"
-        if ($OpenMsxZip -match '^https?://') {
-            Write-Host "    downloading $OpenMsxZip"
-            Get-File $OpenMsxZip $zip | Out-Null
+        if ($src -match '^https?://') {
+            Write-Host "    downloading $want"
+            Get-File $src $zip | Out-Null
         } else {
-            Copy-Item $OpenMsxZip $zip -Force
+            Copy-Item $src $zip -Force
         }
 
-        # Release assets are zipped twice (name.zip.zip), so unpack until an
-        # openmsx.exe shows up.
+        # Some builds are zipped twice (name.zip.zip): unpack until openmsx.exe appears.
         $x = Join-Path $Work "openmsx-x"
         Remove-Item -Recurse -Force $x -ErrorAction SilentlyContinue
         Expand-Archive $zip $x -Force
@@ -375,32 +357,33 @@ if (-not $SkipOpenMsx) {
             $inner = Get-ChildItem $x -Recurse -Filter *.zip | Select-Object -First 1
             if (-not $inner) { break }
             $next = "$x-$i"
+            Remove-Item -Recurse -Force $next -ErrorAction SilentlyContinue
             Expand-Archive $inner.FullName $next -Force
             $x = $next
         }
         $exe = Get-ChildItem $x -Recurse -Filter openmsx.exe | Select-Object -First 1
-        if (-not $exe) { Fail "openmsx.exe not found inside $OpenMsxZip" }
+        if (-not $exe) { Fail "openmsx.exe not found inside $src" }
 
         New-Item -ItemType Directory -Force $OpenMsxDir | Out-Null
         Copy-Item "$($exe.DirectoryName)\*" $OpenMsxDir -Recurse -Force
-        Ok "installed to $OpenMsxDir"
+        Set-Content -Encoding ASCII $stamp $want
+        Ok "$want installed"
     }
 
-    # Newest extension definition and BIOS, so the ROM's sha1 is one the XML knows.
+    # Extension and BIOS always from the same branch, so the ROM's sha1 is one the XML knows.
     New-Item -ItemType Directory -Force "$OpenMsxDir\share\extensions", "$OpenMsxDir\share\systemroms" | Out-Null
-    Get-File $RawXml "$OpenMsxDir\share\extensions\MSXPi.xml" -Optional | Out-Null
+    Get-File "$Raw/openMSX/share/extensions/MSXPi.xml" "$OpenMsxDir\share\extensions\MSXPi.xml" | Out-Null
     Get-File "$Raw/target/msxpibios.rom" "$OpenMsxDir\share\systemroms\msxpibios.rom" | Out-Null
-    Copy-Item "$OpenMsxDir\share\systemroms\msxpibios.rom" "$MsxPiHome\msxpibios.rom" -Force
 }
 
-# --- 5. TAP driver and network ---------------------------------------------------
+# --- 4. TAP driver and network check ---------------------------------------------
 function Get-Tap {
     Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
         Where-Object { $_.InterfaceDescription -like "TAP-Windows Adapter*" } |
         Select-Object -First 1
 }
 
-if (-not $SkipTap) {
+if ($Network) {
     Step "OpenVPN TAP driver"
     $created = $false
     $addtap = "$env:ProgramFiles\TAP-Windows\bin\addtap.bat"
@@ -434,83 +417,68 @@ if (-not $SkipTap) {
         try { Rename-NetAdapter -Name $tap.Name -NewName "MSXPi"; $tap = Get-Tap } catch { Warn "could not rename '$($tap.Name)' to MSXPi" }
     }
     Ok "$($tap.Name) [$($tap.InterfaceDescription)]"
+
+    Get-File "$Raw/Server/Setup/msxpi-tcpip-setup.ps1" "$MsxPiHome\msxpi-tcpip-setup.ps1" | Out-Null
+    # The MSX network (TAP address + NAT) is not configured here: the launcher
+    # runs this check each time and asks for elevation only when it is missing.
+    @'
+# MSXPi network check, run by start-openmsx.bat before the server starts.
+# Reading the NAT and the address needs no administrator rights; only
+# (re)creating them does, so UAC appears only when something is missing.
+$tap = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
+    Where-Object { $_.InterfaceDescription -like "TAP-Windows Adapter*" } | Select-Object -First 1
+if (-not $tap) { exit 0 }
+$nat = Get-NetNat -Name MSXPi -ErrorAction SilentlyContinue
+$ip  = Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+       Where-Object { $_.IPAddress -eq "192.168.99.1" }
+if ($nat -and $ip) { exit 0 }
+Write-Host "MSX network not configured - requesting administrator rights to set it up"
+try {
+    Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$PSScriptRoot\msxpi-tcpip-setup.ps1`"")
+} catch {
+    Write-Host "Skipped: MSXPi runs, but the MSX has no TCP/IP."
+}
+'@ | Set-Content -Encoding UTF8 "$MsxPiHome\msxpi-netcheck.ps1"
+    Ok "msxpi-netcheck.ps1"
+
+    # Remove the boot-time task an earlier version of this script made.
+    Unregister-ScheduledTask -TaskName "MSXPi TCPIP Setup" -Confirm:$false -ErrorAction SilentlyContinue
 }
 
-# The MSX network (TAP address + NAT) is not configured here: the launcher
-# checks it each time MSXPi starts and asks for elevation only when it is
-# missing. Remove the boot-time task an earlier version of this script made.
-Unregister-ScheduledTask -TaskName "MSXPi TCPIP Setup" -Confirm:$false -ErrorAction SilentlyContinue
-
-# --- 6. Launcher ------------------------------------------------------------------
+# --- 5. Launcher ------------------------------------------------------------------
 Step "Launcher"
 if (-not $python) { $python = Find-Python }
 if (-not $python) { $python = "python" }
 @"
-machine $Machine
-ext MSXPi
-ext ram4mb
-bind F12 cycle videosource
-set speed 100
-"@ | Set-Content -Encoding ASCII "$MsxPiHome\openmsx-msxpi.tcl"
+@echo off
+rem MSXPi launcher: MSX network check (if installed), msxpi-server, then openMSX.
+cd /d "$MsxPiHome"
+if exist "$MsxPiHome\msxpi-netcheck.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "$MsxPiHome\msxpi-netcheck.ps1"
+powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object { `$_.CommandLine -like '*msxpi-server.py*' }) { exit 1 }"
+if not errorlevel 1 (
+    start "msxpi-server" /D "$MsxPiHome" "$python" "$MsxPiHome\msxpi-server.py"
+    ping -n 3 127.0.0.1 >nul
+)
+start "openMSX" /D "$OpenMsxDir" "$openmsxExe" -machine $Machine -ext MSXPi -ext ram4mb
+"@ | Set-Content -Encoding ASCII "$MsxPiHome\start-openmsx.bat"
+Ok "$MsxPiHome\start-openmsx.bat"
+# Launchers of earlier versions of this script.
+Remove-Item -Force "$MsxPiHome\start-msxpi.ps1", "$MsxPiHome\start-msxpi.bat", "$MsxPiHome\openmsx-msxpi.tcl" -ErrorAction SilentlyContinue
 
-# Single-quoted template, placeholders filled in below: no escaping of the
-# launcher's own $variables.
-$launcher = @'
-# MSXPi launcher: MSX network check, msxpi-server, then openMSX.
-$ErrorActionPreference = "Continue"
-$home_   = '@HOME@'
-$python  = '@PYTHON@'
-$openmsx = '@OPENMSX@'
-$checkNet = @CHECKNET@
-
-if ($checkNet) {
-    # Reading the NAT and the address needs no administrator rights; only
-    # (re)creating them does, so UAC appears only when something is missing.
-    $tap = Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
-        Where-Object { $_.InterfaceDescription -like "TAP-Windows Adapter*" } | Select-Object -First 1
-    $nat = Get-NetNat -Name MSXPi -ErrorAction SilentlyContinue
-    $ip  = if ($tap) { Get-NetIPAddress -InterfaceIndex $tap.ifIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                       Where-Object { $_.IPAddress -eq "192.168.99.1" } }
-    if ($tap -and -not ($nat -and $ip)) {
-        Write-Host "MSX network not configured - requesting administrator rights to set it up"
-        try {
-            Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList @(
-                "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "`"$home_\msxpi-tcpip-setup.ps1`"")
-        } catch {
-            Write-Host "Skipped: MSXPi runs, but the MSX has no TCP/IP."
-        }
-    }
-}
-
-$running = Get-CimInstance Win32_Process -Filter "Name like 'python%'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -like "*msxpi-server.py*" }
-if (-not $running) {
-    Start-Process $python -ArgumentList "`"$home_\msxpi-server.py`"" -WorkingDirectory $home_
-    Start-Sleep -Seconds 2
-}
-if (-not (Get-Process openmsx -ErrorAction SilentlyContinue)) {
-    Start-Process $openmsx -ArgumentList "-script", "`"$home_\openmsx-msxpi.tcl`"" -WorkingDirectory (Split-Path $openmsx)
-}
-'@
-$launcher = $launcher.Replace('@HOME@', $MsxPiHome).Replace('@PYTHON@', $python).
-    Replace('@OPENMSX@', $openmsxExe).Replace('@CHECKNET@', $(if ($SkipNetwork) { '$false' } else { '$true' }))
-Set-Content -Encoding UTF8 -Path "$MsxPiHome\start-msxpi.ps1" -Value $launcher
-Remove-Item -Force "$MsxPiHome\start-msxpi.bat" -ErrorAction SilentlyContinue
-Ok "$MsxPiHome\start-msxpi.ps1"
-
-# A shortcut runs powershell.exe directly, so it starts on double-click and
-# is not subject to the execution policy.
-$lnk = Join-Path ([Environment]::GetFolderPath("CommonDesktopDirectory")) "MSXPi.lnk"
+$desktop = [Environment]::GetFolderPath("Desktop")
 try {
-    $sh = (New-Object -ComObject WScript.Shell).CreateShortcut($lnk)
-    $sh.TargetPath = "powershell.exe"
-    $sh.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$MsxPiHome\start-msxpi.ps1`""
+    $sh = (New-Object -ComObject WScript.Shell).CreateShortcut("$desktop\MSXPi.lnk")
+    $sh.TargetPath = "$MsxPiHome\start-openmsx.bat"
     $sh.WorkingDirectory = $MsxPiHome
+    $sh.WindowStyle = 7   # minimized: the batch window only starts the others
     if (Test-Path $openmsxExe) { $sh.IconLocation = $openmsxExe }
     $sh.Save()
     Ok "desktop shortcut"
 } catch { Warn "desktop shortcut not created" }
+# An earlier version put the shortcut on the all-users desktop (needs admin to remove).
+Remove-Item -Force "$([Environment]::GetFolderPath('CommonDesktopDirectory'))\MSXPi.lnk" -ErrorAction SilentlyContinue
 
 Write-Host ""
-Write-Host "Done. Start MSXPi with the MSXPi desktop icon." -ForegroundColor Green
+Write-Host "Done. Start MSXPi with the MSXPi desktop icon, or $MsxPiHome\start-openmsx.bat" -ForegroundColor Green
 Exit-Setup 0
