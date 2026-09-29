@@ -47,6 +47,7 @@ SERVER_MODULES = (
     "msxpi_cmd_stock.py",
     "msxpi_cmd_system.py",
     "msxpi_cmd_web.py",
+    "msxpi_renderpage.py",
 )
 
 

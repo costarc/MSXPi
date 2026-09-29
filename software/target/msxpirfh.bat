@@ -15,7 +15,6 @@ pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
-pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
 pcopy m:p.com
 pcopy m:pchess.com
