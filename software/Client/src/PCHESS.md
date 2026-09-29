@@ -4,8 +4,7 @@ PChess uses SCREEN 8 and Fusion-C on an MSX2 with 128 KB VRAM. Pieces are
 graphical silhouettes. The MSXPi server validates all moves using the optional
 `chess` Python package; local two-player mode also requires the server.
 
-Pieces are cached in off-screen VRAM at startup; text is written straight
-from the RAM font into VRAM. Refresh uses
+Pieces and glyphs are cached in off-screen VRAM at startup. Refresh uses
 Fusion-C's assembly HMMM VDP blitter; only changed squares and characters
 are copied. The board/panel is not cleared during moves or network polls.
 A normal-speed Panasonic OpenMSX cursor test measured completion within

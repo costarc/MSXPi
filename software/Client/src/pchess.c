@@ -35,6 +35,7 @@
  * can resolve, so thin strokes smear into the background on a real MSX. */
 #define FONT_W 6
 #define FONT_H 7
+#define FONT_Y 224
 static const uint8_t font[42][FONT_H] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
     {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
@@ -79,23 +80,6 @@ static const uint8_t font[42][FONT_H] = {
     {0x00,0x0A,0x1F,0x0A,0x1F,0x0A,0x00}, /* # */
     {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, /* = */
 };
-/* Write one glyph straight from the RAM font into VRAM. No VDP copy and no
- * off-screen glyph cache: on a real MSX the cached glyphs came out garbled.
- * Wait for any running VDP command first (e.g. the menu box fill) so it
- * cannot paint over the glyph afterwards. */
-static void draw_glyph(uint8_t x,uint8_t y,uint8_t g) {
-    uint8_t r,c,bits,px[FONT_W];
-    const uint8_t *rows=font[g];
-    while(VDPstatus(2)&1);
-    for(r=0;r<FONT_H;r++) {
-        bits=rows[r];
-        for(c=0;c<FONT_W;c++) {
-            px[c]=(bits&0x10)?C_WHITE:C_BLACK;
-            bits<<=1;
-        }
-        CopyRamToVram(px,((uint16_t)(y+r)<<8)+x,FONT_W);
-    }
-}
 static uint8_t field_x[32],field_y[32],field_count;
 static char field_text[32][64];
 static uint8_t glyph(char ch) {
@@ -123,7 +107,7 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
         ch=n<newlen?s[n]:' ';
         if(n>=oldlen || field_text[f][n]!=ch) {
             g=glyph(ch);
-            draw_glyph(x+n*FONT_W,y,g);
+            HMMM(g*FONT_W,FONT_Y,x+n*FONT_W,y,FONT_W,FONT_H);
         }
         field_text[f][n]=ch;
         n++;
@@ -225,7 +209,7 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
  * VDP command routine: subsequent refreshes never redraw piece primitives. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,bg,sy,pixels[24]; int x,y;
+    uint8_t i,j,k,r,c,bg,sy,bits,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
@@ -242,6 +226,17 @@ static void cache_graphics(void) {
             HMMM(0,sy,x,y+k*6,24,6);
         }
     }
+    /* Glyph cache, written while the display is still hidden: back-to-back
+     * VRAM writes during active display drop bytes on a real V9938. */
+    for(i=0;i<42;i++)
+        for(r=0;r<FONT_H;r++) {
+            bits=font[i][r];
+            for(c=0;c<FONT_W;c++) {
+                pixels[c]=(bits&0x10)?C_WHITE:C_BLACK;
+                bits<<=1;
+            }
+            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
+        }
 }
 
 /* The panel is 51 pixels wide: at most 8 characters per line. */
