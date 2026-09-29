@@ -40,8 +40,24 @@ class Peer:
         self.draw_offer=None   # 'me' or 'peer', until the one offered to moves
         self.result=None       # 'draw', or the colour (bool) that resigned
 
+    def free(self):
+        # A finished (or failed) match leaves the player free to seek, invite
+        # or accept again without going back through the lobby (key 4).
+        return self.phase=='lobby' or self.phase=='error' or             (self.phase=='playing' and self.over())
+
+    def new_match(self):
+        # Clear the old game only when the next one starts, so its final
+        # position stays on screen until then.
+        self.board=chess.Board()
+        self.side=True
+        self.pending=None
+        self.history=[]
+        self.last_move=None
+        self.draw_offer=None
+        self.result=None
+
     def seek(self):
-        if self.phase!='lobby': raise ValueError('Already in a match')
+        if not self.free(): raise ValueError('Already in a match')
         if time.monotonic()-self.last_seek<60: raise ValueError('Wait before announcing again')
         self.send('#msxpi','PCH1 SEEK')
         self.last_seek=time.monotonic()
@@ -49,7 +65,8 @@ class Peer:
 
     def offer(self,nick):
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',nick): raise ValueError('Invalid nickname')
-        if self.phase!='lobby' or fold(nick)==fold(self.nick): raise ValueError('Cannot challenge now')
+        if not self.free() or fold(nick)==fold(self.nick): raise ValueError('Cannot challenge now')
+        self.new_match()
         self.peer=nick
         self.match=secrets.token_hex(8)
         self.phase='offered'
@@ -57,7 +74,8 @@ class Peer:
         self.status='INVITE SENT'
 
     def accept(self):
-        if self.phase!='lobby' or not self.invite: raise ValueError('No invitation')
+        if not self.free() or not self.invite: raise ValueError('No invitation')
+        self.new_match()
         self.peer,self.match=self.invite
         self.invite=None
         self.side=False
@@ -98,14 +116,14 @@ class Peer:
         if len(fields)<2 or fields[0]!='PCH1' or fold(sender)==fold(self.nick): return
         op=fields[1]
         if fold(target)==fold('#msxpi'):
-            if fields==['PCH1','SEEK'] and self.phase=='lobby':
+            if fields==['PCH1','SEEK'] and self.free():
                 self.seen(sender)
                 self.status='PLAYER '+sender
             return
         if fold(target)!=fold(self.nick): return
         if op=='OFFER' and len(fields)==3 and re.fullmatch('[0-9a-f]{16}',fields[2]):
             self.seen(sender)
-            if self.phase=='lobby':
+            if self.free():
                 self.invite=(sender,fields[2])
                 self.status='INVITE '+sender+' PRESS 7'
             return
@@ -198,7 +216,9 @@ class Peer:
         board=self.board
         status=self.status
         outcome=board.outcome(claim_draw=True)
-        if outcome:
+        if self.invite and self.free():
+            pass   # a new invite outranks the last game's result
+        elif outcome:
             status='DRAW' if outcome.winner is None else 'WHITE WINS' if outcome.winner else 'BLACK WINS'
         elif self.result=='draw': status='DRAW AGREED'
         elif self.result is not None:

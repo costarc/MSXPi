@@ -176,6 +176,19 @@ class Protocol(unittest.TestCase):
             self.assertEqual(peer.snapshot()['status'],'BLACK RESIGNED - WHITE WINS')
             self.assertTrue(peer.snapshot()['over'])
         with self.assertRaises(ValueError): self.a.resign()
+    def test_rematch_without_returning_to_lobby(self):
+        self.start(); self.a.move('e4'); self.deliver()
+        self.b.resign(); self.deliver()
+        self.b.offer('Alice'); self.deliver()               # loser invites back
+        self.assertEqual(self.a.snapshot()['status'],'INVITE Bob PRESS 7')
+        self.a.accept(); self.deliver()
+        for peer in (self.a,self.b):
+            state=peer.snapshot()
+            self.assertFalse(state['over']); self.assertEqual(state['ply'],0)
+            self.assertEqual(state['history'],[])
+        self.assertTrue(self.b.side); self.assertFalse(self.a.side)
+        self.b.move('d4'); self.deliver()
+        self.assertEqual(self.a.board.fen(),self.b.board.fen())
     def test_moves_ack_duplicate(self):
         self.start(); self.a.move('e4')
         frame=self.messages[0]
