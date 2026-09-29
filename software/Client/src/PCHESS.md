@@ -50,7 +50,11 @@ Controls:
   Direction events are rate-limited to one per eight jiffies (133–160 ms)
   to suppress rapid repeats; the first direction is immediate.
 - Type UCI (`e2e4`, `a7a8n`) or SAN (`Nf3`, `O-O`) and press Return.
-- Backspace edits notation; Escape returns to DOS.
+- Backspace edits notation.
+- Escape opens the menu: Up/Down pick a row. On `AI LEVEL`, Left/Right
+  choose 1-8 and Return saves it (`pchess level N` sets PCHESSELO in
+  msxpi.ini: 600, 800, 1000, 1350, 1600, 1900, 2200, 2500). `EXIT`
+  returns to DOS; Escape resumes the game.
 
 IRC settings and the public-discovery/private-game protocol are documented
 in `software/docs/PCHESS-IRC.md`. Both servers must use the same IRC network.

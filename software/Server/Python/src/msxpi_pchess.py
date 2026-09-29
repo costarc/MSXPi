@@ -334,6 +334,29 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         return bytes(data)
 
 
+# Menu AI levels 1-8 map to PCHESSELO; the level is derived back from it.
+LEVEL_ELO = (600, 800, 1000, 1350, 1600, 1900, 2200, 2500)
+
+
+def elo_level(elo):
+    try:
+        elo = int(elo or 800)
+    except ValueError:
+        elo = 800
+    return 1 + min(range(8), key=lambda i: abs(LEVEL_ELO[i]-elo))
+
+
+def level_packet(elo):
+    """Status-only packet (board flag 0 keeps the client board); byte 242 = level."""
+    level = elo_level(elo)
+    data = bytearray(256)
+    data[:4] = b'PCH1'
+    message = ('AI LEVEL %d ELO %d' % (level, LEVEL_ELO[level-1])).encode('ascii')
+    data[72:72+len(message)] = message
+    data[242] = level
+    return bytes(data)
+
+
 def packet(state):
     data = bytearray(256)
     data[:4] = b'PCH1'
