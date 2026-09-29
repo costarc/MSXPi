@@ -270,6 +270,43 @@ that runs on the Pi. The p commands, BASIC, msxarch, ChatGPT and UNAPI
 networking all work as on real hardware, and what you write under openMSX runs
 unchanged on the real interface.
 
+### Windows: install everything in one step
+
+1. Download
+   [`msxpi-openmsx-install.bat`](https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/msxpi-openmsx-install.bat)
+   (right-click the link, *Save link as*) and double-click it. It needs no
+   administrator rights, and downloads everything from this repository and
+   from the MSXPi build of openMSX.
+2. It installs Python 3 and the packages the server uses, 7-Zip, Stockfish
+   and mpv (with winget), then:
+   * `C:\home\pi\msxpi` - the server, `msxpi.ini` and the `disks` folder
+   * `C:\home\pi\msxpi\openMSX` - openMSX with the MSXPi device, the
+     `MSXPi.xml` extension and `msxpibios.rom`
+   * `C:\home\pi\msxpi\start-openmsx.bat` and an **MSXPi** desktop shortcut
+3. Double-click the **MSXPi** shortcut. It starts the server in its own window,
+   then openMSX as a Panasonic FS-A1WSX with the MSXPi and 4 MB RAM
+   extensions. The MSX boots MSX-DOS from the MSXPi boot disk
+   (`disks\msxpiboot.dsk`); no floppy image is needed.
+4. Go on with [Step 4 - Try it](#step-4---try-it).
+
+Notes:
+
+* **Machine ROMs.** openMSX ships only the free C-BIOS ROMs. The FS-A1WSX
+  needs its own system ROMs: put them in
+  `%USERPROFILE%\Documents\openMSX\share\systemroms` (or in
+  `C:\home\pi\msxpi\openMSX\share\systemroms`).
+* **Internet on the MSX.** Run the installer with `-Network` (from a command
+  prompt: `msxpi-openmsx-install.bat -Network`). It also installs the TAP
+  driver, which asks for administrator rights once, and the launcher then sets
+  up the MSX network when needed. See
+  [Internet from the MSX in openMSX](#internet-from-the-msx-in-openmsx-windows).
+* **Updating.** Run the installer again. It refreshes the server, the ROM and
+  the extension, and replaces openMSX when a newer MSXPi build is required. It
+  keeps `msxpi.ini` and the disk images.
+
+Steps 1 to 3 below are the manual installation, for Linux and macOS or to set
+things up by hand on Windows.
+
 ### Step 1 - Install openMSX with the MSXPi device
 
 The official openMSX lives at https://github.com/openMSX/openMSX
@@ -292,9 +329,10 @@ the official build yet, so download openMSX from the MSXPi fork instead:
 
 * **Python 3** (3.9 or newer; on Windows from python.org or the Microsoft
   Store, with *Add to PATH*).
-* **Python modules:** `python -m pip install requests fs "setuptools<81"` (`fs`
-  needs `pkg_resources`, which `setuptools` 81 and later no longer has). If the
-  server complains about another module when it starts, install that too.
+* **Python modules:** `python -m pip install requests` is all the server needs
+  to start. Some commands need more: `certifi` and `chess` for pchess, `Pillow`
+  and `playwright` (then `python -m playwright install chromium`) for
+  renderpage.
 * **7-Zip** (`7z.exe` on the PATH) for zip, lzh, pma and 7z archives, used by
   msxarch and `pcopy /z`. On Linux/macOS install `p7zip`, `lhasa` and `unar`.
 * **The MSXPi home directory.** The server has `/home/pi/msxpi` built in
@@ -308,15 +346,6 @@ the official build yet, so download openMSX from the MSXPi fork instead:
 * Add the keys you need to `msxpi.ini` (for example `OPENAIKEY` for ChatGPT).
   Commands that only make sense on a Pi (`wifi`, `reboot`, `shut`, `play`) answer
   "Command not supported on this platform".
-
-**Windows shortcut:** double-click
-`software/Server/Setup/msxpi-openmsx-install.bat` (it also works downloaded on
-its own). With no administrator rights it installs Python and its packages,
-7-Zip, Stockfish and mpv, the server in `C:\home\pi\msxpi`, the MSXPi build of
-openMSX in `C:\home\pi\msxpi\openMSX` with the MSXPi extension and ROM, and a
-`start-openmsx.bat` launcher with a desktop shortcut. Add `-Network` to also
-install the TAP driver for MSX TCP/IP (this asks for administrator rights).
-Running it again is safe.
 
 ### Step 3 - Start the server, then openMSX
 
@@ -375,6 +404,11 @@ hardware /WAIT flow control (openMSX/openMSX#2194). An older build still
 works: the ROM probes for wait mode, does not find it, and falls back to the
 polled transport - the same path MSXPi has always used under emulation. What
 you lose is the v1.6 speedup, not the connection.
+
+**With the Windows installer**, run it with `-Network` instead of steps 1 and
+2: it installs the TAP driver, and the MSXPi desktop shortcut sets up the
+network (asking for administrator rights) whenever it is missing, including
+after a reboot. Then go on with step 3.
 
 
 #### Step 1: Install the OpenVPN TAP driver
