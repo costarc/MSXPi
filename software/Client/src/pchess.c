@@ -35,7 +35,6 @@
  * can resolve, so thin strokes smear into the background on a real MSX. */
 #define FONT_W 6
 #define FONT_H 7
-#define FONT_Y 224
 static const uint8_t font[42][FONT_H] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
     {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
@@ -80,6 +79,23 @@ static const uint8_t font[42][FONT_H] = {
     {0x00,0x0A,0x1F,0x0A,0x1F,0x0A,0x00}, /* # */
     {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, /* = */
 };
+/* Write one glyph straight from the RAM font into VRAM. No VDP copy and no
+ * off-screen glyph cache: on a real MSX the cached glyphs came out garbled.
+ * Wait for any running VDP command first (e.g. the menu box fill) so it
+ * cannot paint over the glyph afterwards. */
+static void draw_glyph(uint8_t x,uint8_t y,uint8_t g) {
+    uint8_t r,c,bits,px[FONT_W];
+    const uint8_t *rows=font[g];
+    while(VDPstatus(2)&1);
+    for(r=0;r<FONT_H;r++) {
+        bits=rows[r];
+        for(c=0;c<FONT_W;c++) {
+            px[c]=(bits&0x10)?C_WHITE:C_BLACK;
+            bits<<=1;
+        }
+        CopyRamToVram(px,((uint16_t)(y+r)<<8)+x,FONT_W);
+    }
+}
 static uint8_t field_x[32],field_y[32],field_count;
 static char field_text[32][64];
 static uint8_t glyph(char ch) {
@@ -107,7 +123,7 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
         ch=n<newlen?s[n]:' ';
         if(n>=oldlen || field_text[f][n]!=ch) {
             g=glyph(ch);
-            HMMM(g*FONT_W,FONT_Y,x+n*FONT_W,y,FONT_W,FONT_H);
+            draw_glyph(x+n*FONT_W,y,g);
         }
         field_text[f][n]=ch;
         n++;
@@ -209,7 +225,7 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
  * VDP command routine: subsequent refreshes never redraw piece primitives. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,c,bg,sy,pixels[24]; int x,y;
+    uint8_t i,j,k,r,bg,sy,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
@@ -226,12 +242,6 @@ static void cache_graphics(void) {
             HMMM(0,sy,x,y+k*6,24,6);
         }
     }
-    for(i=0;i<42;i++)
-        for(r=0;r<FONT_H;r++) {
-            for(c=0;c<FONT_W;c++)
-                pixels[c]=(c<5 && (font[i][r]&(16>>c)))?C_WHITE:C_BLACK;
-            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
-        }
 }
 
 /* The panel is 51 pixels wide: at most 8 characters per line. */
@@ -257,6 +267,16 @@ static void draw_panel(void) {
     text_at(8,205,status);
 }
 
+/* Square outline built from HMMV fills. The VDP LINE command (Fusion-C
+ * BoxLine) is avoided: on a real MSX, yellow and green garbage from these
+ * outlines showed up in the text. */
+static void frame(int x,int y,uint8_t size,uint8_t color) {
+    HMMV(x,y,size,1,color);
+    HMMV(x,y+size-1,size,1,color);
+    HMMV(x,y,1,size,color);
+    HMMV(x+size-1,y,1,size,color);
+}
+
 static void draw_board(void) {
     uint8_t x, y;
     for (y = 0; y < 8; y++) {
@@ -275,9 +295,9 @@ static void draw_board(void) {
             if((x+y)&1) tile+=13;
             HMMM((tile%10)*24,256+(tile/10)*24,left,top,24,24);
             if (x == cursor_x && y == cursor_y)
-                BoxLine(left + 1, top + 1, left + 22, top + 22, C_YELLOW, 0);
+                frame(left + 1, top + 1, 22, C_YELLOW);
             if (x == selected_x && y == selected_y)
-                BoxLine(left + 3, top + 3, left + 20, top + 20, C_GREEN, 0);
+                frame(left + 3, top + 3, 18, C_GREEN);
         }
     }
     draw_panel();
@@ -310,7 +330,10 @@ static uint8_t menu(void) {
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
     HMMV(MENU_X,MENU_Y,120,48,C_BLACK);
-    BoxLine(MENU_X,MENU_Y,MENU_X+119,MENU_Y+47,C_YELLOW,0);
+    HMMV(MENU_X,MENU_Y,120,1,C_YELLOW);
+    HMMV(MENU_X,MENU_Y+47,120,1,C_YELLOW);
+    HMMV(MENU_X,MENU_Y,1,48,C_YELLOW);
+    HMMV(MENU_X+119,MENU_Y,1,48,C_YELLOW);
     text_at(MENU_X+39,MENU_Y+5,"M E N U");
     text_at(MENU_X+6,MENU_Y+38,"E S C  R E S U M E");
     while(1) {
