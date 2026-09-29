@@ -425,6 +425,11 @@ def level_packet(elo):
     message = ('AI LEVEL %d ELO %d' % (level, LEVEL_ELO[level-1])).encode('ascii')
     data[72:72+len(message)] = message
     data[242] = level
+    # The only pchess reply built in microseconds. On the v0.8.2 board a quick
+    # reply here intermittently fails: the MSX drops out after the block
+    # header and the payload times out (rc=1, completed=0/256). 20 ms failed and
+    # 100 ms was clean on hardware; 200 ms keeps a 2x margin. Not reproducible in openMSX.
+    time.sleep(0.2)
     return bytes(data)
 
 
