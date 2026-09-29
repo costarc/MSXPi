@@ -7,7 +7,7 @@ import threading
 from unittest.mock import patch
 from pchess_irc_fixture import Server
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from msxpi_pchess_irc import Peer, IRC
+from msxpi_pchess_irc import Peer, IRC, PLAYER_TTL
 
 class Transport(unittest.TestCase):
     def test_intentional_disconnect_is_not_network_failure(self):
@@ -183,6 +183,26 @@ class Protocol(unittest.TestCase):
         self.b.receive(sender,target,bad)
         self.assertEqual(len(self.b.board.move_stack),0)
         self.assertEqual(self.b.phase,'error')
+    def test_players_lists_recent_seekers_and_offers(self):
+        self.a.seek(); self.deliver()
+        self.b.receive('Carol','#msxpi','PCH1 SEEK')
+        self.assertEqual(self.b.recent_players(),['Carol','Alice'])
+        self.b.players['Alice']-=PLAYER_TTL
+        self.assertEqual(self.b.recent_players(),['Carol'])
+        self.b.no_such_nick('carol')
+        self.assertEqual(self.b.recent_players(),[])
+        self.a.offer('Bob'); self.deliver()
+        self.assertEqual(self.b.recent_players(),['Alice'])
+    def test_status_names_colours(self):
+        self.start()
+        self.assertEqual(self.a.status,'YOU ARE WHITE - YOUR MOVE')
+        self.assertEqual(self.b.status,'YOU ARE BLACK - Alice MOVES')
+        self.assertTrue(self.a.snapshot()['matched'])
+        self.assertEqual(self.b.snapshot()['opponent'],'Alice')
+        self.assertEqual(self.b.snapshot()['side'],1)
+        self.a.move('e4'); self.deliver()
+        self.assertEqual(self.a.status,'YOU ARE WHITE - Bob MOVES')
+        self.assertEqual(self.b.status,'YOU ARE BLACK - YOUR MOVE')
     def test_missing_ack_retries_then_stops(self):
         self.start(); self.a.move('e4')
         for i in range(4):

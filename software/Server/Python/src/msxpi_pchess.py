@@ -98,6 +98,12 @@ class Games:
         status = 'WHITE TURN' if board.turn else 'BLACK TURN'
         if board.is_check():
             status = 'WHITE CHECK' if board.turn else 'BLACK CHECK'
+        side = game['players'].index(token)
+        matched = game['mode'] == 'ai' or (game['mode'] == 'room' and len(game['players']) == 2)
+        if matched and game['mode'] == 'room' and not board.is_check():
+            colour = 'BLACK' if side else 'WHITE'
+            status = f'YOU ARE {colour} - ' + (
+                'YOUR MOVE' if board.turn != bool(side) else 'OPPONENT MOVES')
         if game['mode'] == 'room' and len(game['players']) < 2:
             status = 'WAIT PLAYER'
         if outcome:
@@ -108,7 +114,8 @@ class Games:
         return dict(board=''.join(board.piece_at(chess.square(x,7-y)).symbol()
                     if board.piece_at(chess.square(x,7-y)) else '.'
                     for y in range(8) for x in range(8)),
-                    turn=int(board.turn), side=game['players'].index(token),
+                    turn=int(board.turn), side=side, matched=matched,
+                    opponent='AI' if game['mode'] == 'ai' else '',
                     mode=game['mode'], status=status, over=self.finished(game),
                     ply=len(board.move_stack), history=game['history'][-12:])
 
@@ -288,10 +295,13 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             _irc=IRC(irc_config)
             _use_irc=True
             return packet(_irc.poll())
-        if _use_irc and args[0] in ('seek','offer','accept','poll','move'):
+        if args[0]=='players' and not _use_irc:
+            raise ValueError('Go online first (4)')
+        if _use_irc and args[0] in ('seek','offer','accept','poll','move','players'):
             _irc.poll()
             if args[0]!='poll' and not _irc.ready:
                 raise ValueError('Lobby not ready; wait')
+            if args[0]=='players': return players_packet(_irc.peer.recent_players())
             if args[0]=='seek': _irc.peer.seek()
             elif args[0]=='offer': _irc.peer.offer(args[1])
             elif args[0]=='accept': _irc.peer.accept()
@@ -369,6 +379,29 @@ def packet(state):
         data[120+i*10:120+i*10+len(text)] = text
     data[240]=len(state['history'])
     data[241]=min(state['ply'],255)
+    # 242: 1 once the player's colour is settled (AI, room or lobby match);
+    # 243-255: opponent name, NUL-terminated (lobby nick, 'AI', or empty).
+    data[242]=int(bool(state.get('matched')))
+    opponent=state.get('opponent','')[:12].encode('ascii','replace')
+    data[243:243+len(opponent)]=opponent
+    return bytes(data)
+
+
+# The lobby player list: byte 4 is 0 (no board) and byte 5 is 'P'. Up to
+# seven nicks in 16-byte slots from byte 120, count in byte 240.
+PLAYER_SLOTS=7
+def players_packet(names):
+    data = bytearray(256)
+    data[:4] = b'PCH1'
+    data[5] = ord('P')
+    status = (f'{len(names)} PLAYER' + ('' if len(names)==1 else 'S') if names
+              else 'NO PLAYERS - ASK THEM TO SEEK (5)').encode('ascii')
+    data[72:72+len(status)] = status
+    names = names[:PLAYER_SLOTS]
+    for i,name in enumerate(names):
+        text = name[:16].encode('ascii','replace')
+        data[120+i*16:120+i*16+len(text)] = text
+    data[240] = len(names)
     return bytes(data)
 
 

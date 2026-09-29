@@ -58,7 +58,28 @@ static char status[48]="1 LOCAL 2 AI";
 static char entry[24];
 static char command[64];
 static uint8_t entry_len,room_entry,online,game_over;
+/* Set by the server once this player's colour is settled (AI, room or
+ * lobby match): my_side 0 = white, 1 = black. */
+static uint8_t matched,my_side;
+static char opponent[13];
+/* Black players see the board rotated 180 degrees. cursor_* and selected_*
+ * are screen squares; SQ() and FILE_OF()/RANK_OF() map them to the board. */
+static uint8_t flip,user_rotate;
+#define BX(x) (flip?7-(x):(x))
+#define BY(y) (flip?7-(y):(y))
+#define SQ(y,x) board[BY(y)][BX(x)]
 static char painted[8][8];
+
+/* Rotated when playing black, toggled by ROTATE BOARD in the ESC menu.
+ * Cursor and selection are mirrored so they stay on the same squares. */
+static void set_flip(void) {
+    uint8_t want=(matched && my_side)^user_rotate;
+    if(flip==want) return;
+    flip=want;
+    memset(painted,255,sizeof(painted));
+    cursor_x=7-cursor_x; cursor_y=7-cursor_y;
+    if(selected_x!=255) {selected_x=7-selected_x; selected_y=7-selected_y;}
+}
 
 static uint8_t exchange(const char *cmd) {
     uint8_t rc,tries=0,i,j; uint16_t size=0;
@@ -79,7 +100,10 @@ static uint8_t exchange(const char *cmd) {
     if(!reply[4]) return 0;
     for(i=0;i<8;i++) for(j=0;j<8;j++)
         board[i][j]=reply[8+i*8+j]=='.'?0:reply[8+i*8+j];
-    white_turn=reply[5]; game_over=reply[7];
+    white_turn=reply[5]; my_side=reply[6]; game_over=reply[7];
+    matched=reply[242]==1;
+    memcpy(opponent,reply+243,12); opponent[12]=0;
+    set_flip();
     move_count=reply[240]>8?8:reply[240];
     for(i=0;i<move_count;i++) {
         memcpy(moves[i],reply+120+(reply[240]-move_count+i)*10,7);
@@ -210,13 +234,18 @@ static void draw_status(void) {
 static void draw_panel(void) {
     uint8_t i;
     text_at(PANEL_COL,1,"PCHESS MSX1",PANEL_W);
+    text_at(PANEL_COL,2,!matched?"":my_side?"YOU ARE BLACK":"YOU ARE WHITE",PANEL_W);
+    strcpy(command,matched && opponent[0]?"VS ":"");
+    strcat(command,matched?opponent:"");
+    text_at(PANEL_COL,5,command,PANEL_W);
     text_at(PANEL_COL,3,white_turn ? "WHITE" : "BLACK",PANEL_W);
     text_at(PANEL_COL,4,game_over?"GAME OVER":"TURN",PANEL_W);
     text_at(PANEL_COL,6,"MOVES",PANEL_W);
     for (i = 0; i < 8; i++)
         text_at(PANEL_COL,7+i,i<move_count?moves[i]:"",PANEL_W);
     text_at(0,18," 1 LOCAL  2 AI  3 ROOM 4 ONLINE",32);
-    text_at(0,19," 5 SEEK 6 ASK 7 ACCEPT ESC MENU",32);
+    text_at(0,19," 5 SEEK 6 ASK 7 ACCEPT 8 PLAYERS",32);
+    text_at(0,20," ESC MENU",32);
     strcpy(command,room_entry==2?" PEER NICK: ":room_entry?" ROOM NAME: ":" MOVE: ");
     strcat(command,entry);
     strcat(command,"_");
@@ -229,11 +258,11 @@ static void draw_board(void) {
     uint16_t addr;
     for (y = 0; y < 8; y++) {
         for (x = 0; x < 8; x++) {
-            if(painted[y][x]==board[y][x]) continue;
-            painted[y][x]=board[y][x];
+            if(painted[y][x]==SQ(y,x)) continue;
+            painted[y][x]=SQ(y,x);
             tile=0;
-            if(board[y][x]) {
-                for(tile=1;tile<13;tile++) if(tile_pieces[tile]==board[y][x]) break;
+            if(SQ(y,x)) {
+                for(tile=1;tile<13;tile++) if(tile_pieces[tile]==SQ(y,x)) break;
                 if(tile==13) tile=0;
             }
             if((x+y)&1) tile+=13;
@@ -251,26 +280,30 @@ static void draw_board(void) {
 static void make_move(void) {
     if(selected_x==255) return;
     strcpy(command,"pchess move ");
-    command[12]='a'+selected_x; command[13]='8'-selected_y;
-    command[14]='a'+cursor_x; command[15]='8'-cursor_y;
+    command[12]='a'+BX(selected_x); command[13]='8'-BY(selected_y);
+    command[14]='a'+BX(cursor_x); command[15]='8'-BY(cursor_y);
     command[16]=0;
-    if((board[selected_y][selected_x]=='P' && cursor_y==0) ||
-       (board[selected_y][selected_x]=='p' && cursor_y==7)) {
+    if((SQ(selected_y,selected_x)=='P' && BY(cursor_y)==0) ||
+       (SQ(selected_y,selected_x)=='p' && BY(cursor_y)==7)) {
         command[16]='q'; command[17]=0;
     }
     if(exchange(command)) {selected_x=255; selected_y=255;}
 }
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 credits, 2 exit to DOS. ESC
+ * msxpi.ini through "pchess level N"), 1 rotate board, 2 credits, 3 exit
+ * to DOS. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
 #define MENU_ROW 6
 /* Credits box over the board; any key closes it and resumes the game. */
 #define CREDITS_COL 1
 #define CREDITS_W 30
+static void clear_rows(uint8_t first,uint8_t count) {
+    FillVram(NAMTBL+first*32,(char)BLANK,count*32);
+}
 static void clear_popup(void) {
-    FillVram(NAMTBL+MENU_ROW*32,(char)BLANK,8*32);
+    clear_rows(MENU_ROW,9);
 }
 static void credits(void) {
     clear_popup();
@@ -286,8 +319,8 @@ static void credits(void) {
 
 #define MENU_COL 2
 #define MENU_W 20
-static const char *menu_rows[]={"AI LEVEL","CREDITS","EXIT"};
-#define MENU_ROWS 3
+static const char *menu_rows[]={"AI LEVEL","ROTATE BOARD","CREDITS","EXIT"};
+#define MENU_ROWS 4
 static uint8_t menu(void) {
     uint8_t key,row=0,level=2,i,quit=0;
     char line[24];
@@ -298,9 +331,9 @@ static uint8_t menu(void) {
     clear_popup();
     text_at(MENU_COL,MENU_ROW,  "+------------------+",MENU_W);
     text_at(MENU_COL,MENU_ROW+1,"|       MENU       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+5,"|                  |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+6,"| ESC RESUME       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+7,"+------------------+",MENU_W);
+    text_at(MENU_COL,MENU_ROW+6,"|                  |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+7,"| ESC RESUME       |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+8,"+------------------+",MENU_W);
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"| > ":"|   ");
@@ -320,8 +353,9 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {credits(); break;}
-            if(row==2) {quit=1; break;}
+            if(row==1) {user_rotate^=1; set_flip(); break;}
+            if(row==2) {credits(); break;}
+            if(row==3) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);
@@ -336,10 +370,67 @@ static uint8_t menu(void) {
     return quit;
 }
 
+/* Key 8: lobby players who sent SEEK or an invite in the last ten minutes.
+ * Up/Down pick a nick, Return invites it (like 6), ESC closes. */
+#define PLAYERS_ROW 4
+#define PLAYERS_ROWS 11
+static void players(void) {
+    uint8_t key,row=0,count,i;
+    char line[24];
+    exchange("pchess players");
+    if(memcmp(reply,"PCH1",4) || reply[5]!='P' || !reply[240]) return;
+    count=reply[240]>7?7:reply[240];
+    sprites_hidden=1; draw_sprites();
+    draw_status();
+    clear_rows(PLAYERS_ROW,PLAYERS_ROWS);
+    text_at(MENU_COL,PLAYERS_ROW,  "+------------------+",MENU_W);
+    text_at(MENU_COL,PLAYERS_ROW+1,"|     PLAYERS      |",MENU_W);
+    for(i=count;i<7;i++)
+        text_at(MENU_COL,PLAYERS_ROW+2+i,"|                  |",MENU_W);
+    text_at(MENU_COL,PLAYERS_ROW+9,"| RET ASK ESC CLOSE|",MENU_W);
+    text_at(MENU_COL,PLAYERS_ROW+10,"+------------------+",MENU_W);
+    while(1) {
+        for(i=0;i<count;i++) {
+            strcpy(line,i==row?"|>":"| ");
+            memcpy(line+2,reply+120+i*16,16); line[18]=0;
+            while(strlen(line)<MENU_W-1) strcat(line," ");
+            strcat(line,"|");
+            text_at(MENU_COL,PLAYERS_ROW+2+i,line,MENU_W);
+        }
+        do key=Inkey(); while(!key);
+        if(key==27) break;
+        if(key==0x1e && row) row--;
+        else if(key==0x1f && row<count-1) row++;
+        else if(key==13 || key==' ') {
+            strcpy(command,"pchess offer ");
+            memcpy(line,reply+120+row*16,16); line[16]=0;
+            strcat(command,line);
+            exchange(command);
+            break;
+        }
+    }
+    clear_rows(PLAYERS_ROW,PLAYERS_ROWS);
+    sprites_hidden=0;
+    memset(painted,255,sizeof(painted));
+}
+
+/* Keys 1-4 while online (lobby or room) would drop the connection or the
+ * game in progress, so they need a Y to go ahead. */
+static uint8_t confirm_leave(void) {
+    uint8_t key;
+    strcpy(status,"LEAVE ONLINE GAME? Y/N");
+    draw_status();
+    do key=Inkey(); while(!key);
+    if(key=='y' || key=='Y') return 1;
+    strcpy(status,"STILL ONLINE");
+    return 0;
+}
+
 int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
-    entry_len=0; room_entry=0; online=0; game_over=0; sprites_hidden=0;
+    entry_len=0; room_entry=0; online=0; game_over=0;
+    matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0; sprites_hidden=0;
     entry[0]=0;
     memset(moves,0,sizeof(moves));
     memset(reply,0,sizeof(reply));
@@ -396,6 +487,8 @@ int main(void) {
                 room_entry=0; entry_len=0; entry[0]=0; selected_x=255;
             }
         }
+        else if(!entry_len && !room_entry && online && key>='1' && key<='4' &&
+                !confirm_leave()) {}
         else if(!entry_len && !room_entry && (key=='1' || key=='2')) {
             online=0; selected_x=255;
             exchange(key=='1'?"pchess new local":"pchess new ai");
@@ -405,13 +498,14 @@ int main(void) {
         else if(!entry_len && !room_entry && key=='5') {exchange("pchess seek");}
         else if(!entry_len && !room_entry && key=='6') {room_entry=2; strcpy(status,"ENTER PEER NICK AND RETURN");}
         else if(!entry_len && !room_entry && key=='7') {exchange("pchess accept");}
+        else if(!entry_len && !room_entry && key=='8') {players();}
         else if(key==0x1e && cursor_y) cursor_y--;
         else if (key == 0x1f && cursor_y < 7) cursor_y++;
         else if (key == 0x1d && cursor_x) cursor_x--;
         else if (key == 0x1c && cursor_x < 7) cursor_x++;
         else if (key == ' ' || key == 13) {
-            if (board[cursor_y][cursor_x] &&
-                is_white(board[cursor_y][cursor_x]) == white_turn) {
+            if (SQ(cursor_y,cursor_x) &&
+                is_white(SQ(cursor_y,cursor_x)) == white_turn) {
                 selected_x = cursor_x;
                 selected_y = cursor_y;
             } else make_move();

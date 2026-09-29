@@ -68,7 +68,10 @@ Host is configurable; availability of the default public endpoint is not
 assumed. For an isolated local IRC test only, `PCHESS_IRC_TLS=0` is supported.
 
 Client controls: `4` connects and joins `#msxpi`; `5` advertises availability;
-`6`, nickname, Return challenges; `7` accepts the displayed invitation.
+`6`, nickname, Return challenges; `7` accepts the displayed invitation;
+`8` lists nicks seen sending SEEK or OFFER in the last ten minutes
+(`pchess players`, server-side only: nothing extra goes to IRC) and
+Return on one challenges it.
 Moves use the same notation/arrows/joystick controls as local play.
 
 Wait for `LOBBY <nick>` before advertising or challenging. PChess waits

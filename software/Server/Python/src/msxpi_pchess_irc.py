@@ -17,6 +17,10 @@ def fold(nick):
 def digest(board):
     return hashlib.sha256(board.fen().encode()).hexdigest()[:16]
 
+# A SEEK or OFFER keeps a nick in the player list for ten minutes.
+PLAYER_TTL=600
+
+
 class Peer:
     def __init__(self,nick,send):
         self.nick=nick
@@ -65,6 +69,27 @@ class Peer:
         if self.peer and fold(nick)==fold(self.peer) and self.phase in ('offered','accepted'):
             self.peer=None; self.match=None; self.phase='lobby'
         self.status=(nick+': No such nick')[:47]
+        for name in list(self.players):
+            if fold(name)==fold(nick): del self.players[name]
+
+    def seen(self,nick):
+        for name in list(self.players):
+            if fold(name)==fold(nick): del self.players[name]
+        if len(self.players)>=64: self.players.pop(next(iter(self.players)))
+        self.players[nick]=time.monotonic()
+
+    def recent_players(self,max_age=PLAYER_TTL):
+        """Nicks that announced themselves (SEEK or OFFER) lately, newest first."""
+        now=time.monotonic()
+        # seen() re-inserts a nick, so dict order is already oldest first.
+        return [name for name,when in reversed(self.players.items())
+                if now-when<max_age and fold(name)!=fold(self.nick)]
+
+    def turn_status(self):
+        # Whose colour is whose, from this player's point of view.
+        colour='WHITE' if self.side else 'BLACK'
+        if self.board.turn==self.side: return f'YOU ARE {colour} - YOUR MOVE'
+        return f'YOU ARE {colour} - {self.peer} MOVES'
 
     def receive(self,sender,target,text):
         fields=text.split()
@@ -72,22 +97,22 @@ class Peer:
         op=fields[1]
         if fold(target)==fold('#msxpi'):
             if fields==['PCH1','SEEK'] and self.phase=='lobby':
-                if len(self.players)>=64: self.players.pop(next(iter(self.players)))
-                self.players[sender]=time.monotonic()
+                self.seen(sender)
                 self.status='PLAYER '+sender
             return
         if fold(target)!=fold(self.nick): return
         if op=='OFFER' and len(fields)==3 and re.fullmatch('[0-9a-f]{16}',fields[2]):
+            self.seen(sender)
             if self.phase=='lobby':
                 self.invite=(sender,fields[2])
                 self.status='INVITE '+sender+' PRESS 7'
             return
         if not self.peer or fold(sender)!=fold(self.peer) or len(fields)<3 or fields[2]!=self.match: return
         if op=='ACCEPT' and len(fields)==3 and self.phase in ('offered','playing'):
-            if self.phase=='offered': self.side=True; self.phase='playing'; self.status='WHITE TURN'
+            if self.phase=='offered': self.side=True; self.phase='playing'; self.status=self.turn_status()
             self.send(self.peer,f'PCH1 READY {self.match}')
         elif op=='READY' and len(fields)==3 and self.phase=='accepted':
-            self.phase='playing'; self.status='WHITE TURN'
+            self.phase='playing'; self.status=self.turn_status()
         elif op=='MOVE' and len(fields)==7 and self.phase=='playing':
             if text==self.last_move:
                 self.send(self.peer,f'PCH1 ACK {self.match} {fields[3]} {fields[6]}')
@@ -104,11 +129,11 @@ class Peer:
             self.history.append(san)
             self.last_move=text
             self.send(self.peer,f'PCH1 ACK {self.match} {fields[3]} {fields[6]}')
-            self.status='WHITE TURN' if self.board.turn else 'BLACK TURN'
+            self.status=self.turn_status()
         elif op=='ACK' and len(fields)==5 and self.pending:
             if fields[3]==str(len(self.board.move_stack)) and fields[4]==digest(self.board):
                 self.pending=None
-                self.status='WHITE TURN' if self.board.turn else 'BLACK TURN'
+                self.status=self.turn_status()
 
     def move(self,notation):
         if self.phase!='playing' or self.pending: raise ValueError('Waiting for peer')
@@ -148,6 +173,7 @@ class Peer:
         return dict(board=''.join(board.piece_at(chess.square(x,7-y)).symbol()
             if board.piece_at(chess.square(x,7-y)) else '.' for y in range(8) for x in range(8)),
             turn=int(board.turn),side=int(not self.side),over=bool(outcome),
+            matched=self.phase=='playing',opponent=self.peer or '',
             status=status[:47],history=self.history[-12:],ply=len(board.move_stack))
 
 

@@ -45,6 +45,16 @@ Controls:
 - `1`: local two-player; `2`: play white against the server AI.
 - `4 ONLINE`: connect to IRC and join #msxpi; `5`: announce availability.
 - `6`, nickname, Return: privately invite an opponent; `7`: accept an invite.
+- `8 PLAYERS`: list players who seeked or invited you in the last ten
+  minutes (up to seven, newest first); Up/Down and Return invite one.
+- Once matched (lobby, room or AI), the panel shows your colour (`AS
+  WHITE`/`AS BLACK`; PChess1: `YOU ARE WHITE` and `VS <nick>`), and the
+  lobby/room status reads e.g. `YOU ARE BLACK - chp1 MOVES`. Black sees
+  the board rotated, with its own pieces at the bottom; the cursor moves as
+  shown on screen and typed moves (`e7e5`) are unchanged. `ROTATE BOARD`
+  in the ESC menu turns the board over at any time, in any mode.
+- While online (after `3` ROOM or `4` ONLINE), keys `1`-`4` first ask
+  `LEAVE ONLINE GAME? Y/N`: any key but `Y` keeps the current game.
 - Arrows or joystick port 1 move the cursor. Space, Return or joystick A
   selects source/destination. Cursor promotions choose a queen.
   Direction events are rate-limited to one per eight jiffies (133–160 ms)
