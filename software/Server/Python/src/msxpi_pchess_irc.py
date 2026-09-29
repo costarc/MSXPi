@@ -26,7 +26,7 @@ class Peer:
         self.match=None
         self.side=True
         self.phase='lobby'
-        self.status='IRC LOBBY'
+        self.status='LOBBY'
         self.invite=None
         self.pending=None
         self.history=[]
@@ -58,6 +58,13 @@ class Peer:
         self.phase='accepted'
         self.send(self.peer,f'PCH1 ACCEPT {self.match}')
         self.status='WAIT READY'
+
+    def no_such_nick(self,nick):
+        # An invite (or acceptance) to a missing player is abandoned; a game
+        # in progress is left to the normal move retransmit and timeout.
+        if self.peer and fold(nick)==fold(self.peer) and self.phase in ('offered','accepted'):
+            self.peer=None; self.match=None; self.phase='lobby'
+        self.status=(nick+': No such nick')[:47]
 
     def receive(self,sender,target,text):
         fields=text.split()
@@ -148,21 +155,21 @@ class IRC:
     def __init__(self,config=None):
         config=config or {}
         self.nick=os.environ.get('PCHESS_IRC_NICK') or config.get('IRCNICK') or 'pch'+secrets.token_hex(2)
-        if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',self.nick): raise ValueError('Invalid IRC nickname')
+        if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',self.nick): raise ValueError('Invalid lobby nickname (IRCNICK)')
         host=os.environ.get('PCHESS_IRC_HOST') or config.get('IRCADDR') or 'irc.libera.chat'
         self.account=config.get('IRCACCOUNT','')
         self.password=config.get('IRCPASSWORD','')
         if bool(self.account)!=bool(self.password):
             raise ValueError('Set both IRCACCOUNT and IRCPASSWORD')
         if any(c in self.account+self.password for c in '\x00\r\n'):
-            raise ValueError('Invalid IRC account configuration')
+            raise ValueError('Invalid lobby account (IRCACCOUNT)')
         self.authenticated=False
         self.auth_phase='cap' if self.account else 'none'
         port=int(os.environ.get('PCHESS_IRC_PORT') or config.get('PCHESSIRCPORT') or '6697')
         tls_value=os.environ.get('PCHESS_IRC_TLS') or config.get('IRCTLS') or ('0' if port==6667 else '1')
         tls=tls_value.lower() in ('1','true','yes','on')
         if self.account and not tls:
-            raise ValueError('IRC authentication requires TLS')
+            raise ValueError('Lobby login requires TLS')
         sock=socket.create_connection((host,port),timeout=5)
         try:
             if tls:
@@ -177,18 +184,18 @@ class IRC:
         self.ready=False
         self.started=time.monotonic()
         self.peer=Peer(self.nick,self.message)
-        self.peer.status='IRC CONNECTING'
+        self.peer.status='ACCESSING LOBBY'
         if self.account: self.line('CAP REQ :sasl')
         self.line(f'NICK {self.nick}')
         self.line(f'USER {self.nick} 0 * :MSXPi PChess')
         threading.Thread(target=self.reader,daemon=True).start()
 
     def line(self,line):
-        if '\r' in line or '\n' in line or len(line)>450: raise ValueError('Invalid IRC line')
+        if '\r' in line or '\n' in line or len(line)>450: raise ValueError('Invalid lobby message')
         with self.lock: self.sock.sendall((line+'\r\n').encode('ascii'))
 
     def message(self,target,text):
-        if not self.ready: raise ValueError('IRC not ready; wait for lobby')
+        if not self.ready: raise ValueError('Lobby not ready; wait')
         self.line(f'PRIVMSG {target} :{text}')
         if os.environ.get('PCHESS_IRC_TRACE')=='1':
             print(f'PCHESS IRC TX {target} :{text}',flush=True)
@@ -199,9 +206,9 @@ class IRC:
             while True:
                 try: data=self.sock.recv(4096)
                 except socket.timeout: continue
-                if not data: raise ConnectionError('IRC disconnected')
+                if not data: raise ConnectionError('Lobby disconnected')
                 buffer+=data
-                if len(buffer)>16384: raise ValueError('IRC line too large')
+                if len(buffer)>16384: raise ValueError('Lobby message too large')
                 while b'\n' in buffer:
                     raw,buffer=buffer.split(b'\n',1)
                     line=raw.decode('utf-8','replace').rstrip('\r')
@@ -212,19 +219,26 @@ class IRC:
                     if line.startswith('ERROR '): raise ConnectionError(line[:150])
                     if len(parts)>1 and parts[1]=='001':
                         if self.account and not self.authenticated:
-                            raise ValueError('IRC login not confirmed')
+                            raise ValueError('Lobby login not confirmed')
                         self.nick=parts[2]
                         self.peer.nick=self.nick
-                        self.peer.status='IRC JOINING'
+                        self.peer.status='JOINING LOBBY'
                         self.line('JOIN #msxpi')
                     if len(parts)>2 and parts[1]=='JOIN' and fold(parts[0][1:].split('!',1)[0])==fold(self.nick) and fold(parts[2].lstrip(':'))==fold('#msxpi'):
                         self.ready=True
-                        self.peer.status='IRC LOBBY '+self.nick
-                    if len(parts)>1 and parts[1] in ('401','403','404','432','464','465','471','473','474','475','477','489'):
+                        self.peer.status='LOBBY '+self.nick
+                    if len(parts)>3 and parts[1]=='401':
+                        # Unknown nickname: report it but stay in the lobby.
+                        self.peer.no_such_nick(parts[3].partition(' :')[0].strip())
+                        continue
+                    if len(parts)>1 and parts[1] in ('403','404','432','464','465','471','473','474','475','477','489'):
                         if parts[1]=='477':
-                            raise ValueError('IRC account login required (477)')
-                        raise ValueError('IRC '+ ' '.join(parts[1:])[:140])
-                    if len(parts)>1 and parts[1]=='433': raise ValueError('IRC nickname in use')
+                            raise ValueError('Lobby account login required (477)')
+                        # ":srv 401 me bob :No such nick/channel" -> "bob: No such nick/channel"
+                        params,_,text=(parts[3] if len(parts)>3 else '').partition(' :')
+                        subject=params.strip()
+                        raise ValueError(((subject+': ' if subject else '')+(text or 'Lobby error '+parts[1]))[:140])
+                    if len(parts)>1 and parts[1]=='433': raise ValueError('Lobby nickname in use')
                     if len(parts)==4 and parts[1]=='PRIVMSG' and parts[3].startswith(':PCH1 '):
                         item=(parts[0][1:].split('!',1)[0],parts[2],parts[3][1:])
                         if os.environ.get('PCHESS_IRC_TRACE')=='1':
@@ -244,13 +258,13 @@ class IRC:
         if not self.account: return False
         if len(parts)>3 and parts[1]=='CAP':
             command=parts[3].split(' ',1)[0]
-            if command=='NAK': raise ValueError('IRC server does not support SASL')
+            if command=='NAK': raise ValueError('Lobby server does not support login')
             if command=='ACK' and self.auth_phase=='cap':
                 caps=parts[3].split(':',1)[-1].split()
                 if not any(c.split('=',1)[0]=='sasl' for c in caps):
-                    raise ValueError('IRC SASL not acknowledged')
+                    raise ValueError('Lobby login not acknowledged')
                 self.auth_phase='challenge'
-                self.peer.status='IRC AUTHENTICATING'
+                self.peer.status='LOBBY LOGIN'
                 self.line('AUTHENTICATE PLAIN')
             return True
         auth_parts=line.split(' ')
@@ -270,14 +284,14 @@ class IRC:
             self.line('CAP END')
             return True
         if len(parts)>1 and parts[1] in ('902','904','905','906','907','908'):
-            raise ValueError('IRC account authentication failed '+parts[1])
+            raise ValueError('Lobby login failed '+parts[1])
         return False
 
     def poll(self):
         if self.error: raise ValueError(self.error)
         if not self.ready and time.monotonic()-self.started>60:
             self.close()
-            raise ValueError('IRC registration/join timed out')
+            raise ValueError('Lobby connection timed out')
         while not self.messages.empty(): self.peer.receive(*self.messages.get_nowait())
         self.peer.tick()
         return self.peer.snapshot()
