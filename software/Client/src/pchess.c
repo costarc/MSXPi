@@ -245,11 +245,11 @@ static void draw_panel(void) {
         text_at(205,41+i*9,i<move_count?moves[i]:"");
     }
     text_at(205,114,"1 LOCAL");
-    text_at(205,122,"2 AI");
+    text_at(205,122,"2 A I");
     text_at(205,130,"3 ROOM");
     text_at(205,138,"4 ONLINE");
     text_at(205,146,"5 SEEK");
-    text_at(205,154,"6 ASK");
+    text_at(205,154,"6 A S K");
     text_at(205,162,"7 ACCEPT");
     text_at(205,174,room_entry==2?"PEER":room_entry?"ROOM":"MOVE");
     text_at(205,183,entry_len>8?entry+entry_len-8:entry);
@@ -301,18 +301,18 @@ static void make_move(void) {
  * Add rows by extending menu_rows and the switch on Return. */
 #define MENU_X 44
 #define MENU_Y 72
-static const char *menu_rows[]={"AI LEVEL","EXIT"};
+static const char *menu_rows[]={"A I LEVEL","EXIT"};
 #define MENU_ROWS 2
 static uint8_t menu(void) {
-    uint8_t key,row=0,level=2,fields=field_count,i,quit=0;
+    uint8_t key,row=0,level=2,i,quit=0;
     char line[20];
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
     HMMV(MENU_X,MENU_Y,120,48,C_BLACK);
     BoxLine(MENU_X,MENU_Y,MENU_X+119,MENU_Y+47,C_YELLOW,0);
-    text_at(MENU_X+44,MENU_Y+5,"MENU");
-    text_at(MENU_X+8,MENU_Y+38,"ESC RESUME");
+    text_at(MENU_X+39,MENU_Y+5,"M E N U");
+    text_at(MENU_X+6,MENU_Y+38,"E S C  R E S U M E");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"= ":"  ");
@@ -337,7 +337,11 @@ static uint8_t menu(void) {
             text_at(8,205,status);
         }
     }
-    field_count=fields;
+    /* Repaint the whole panel and status line from scratch, so leaving the
+     * menu also clears anything stray drawn over the text. */
+    field_count=0;
+    HMMV(PANEL_X,0,256-PANEL_X,SCREEN8_BOTTOM-7,C_BLACK);
+    HMMV(0,SCREEN8_BOTTOM-6,256,7,C_BLACK);
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
     return quit;
