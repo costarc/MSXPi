@@ -153,6 +153,42 @@ def template(parms: Optional[str] = None) -> CommandResult:
     return
 
 
+def pchess(parms: Optional[str] = None) -> CommandResult:
+    try:
+        from msxpi_pchess import handle_command
+
+        irc_config = {
+            key: getMSXPiVar(key)
+            for key in (
+                "IRCADDR",
+                "PCHESSIRCPORT",
+                "IRCNICK",
+                "IRCTLS",
+                "IRCACCOUNT",
+                "IRCPASSWORD",
+            )
+        }
+        room_config = {
+            key: getMSXPiVar(key) for key in ("PCHESSRELAY", "PCHESSLISTEN", "PCHESSPORT")
+        }
+        engine_config = {
+            key: getMSXPiVar(key)
+            for key in ("PCHESSENGINE", "PCHESSELO", "PCHESSMOVETIME")
+        }
+        payload = handle_command(
+            parms or "",
+            irc_config=irc_config,
+            room_config=room_config,
+            engine_config=engine_config,
+        )
+    except ImportError:
+        payload = bytearray(256)
+        payload[:4] = b"PCH1"
+        message = b"Install requirements-pchess.txt on server"
+        payload[72 : 72 + len(message)] = message
+    return sendmultiblock(bytes(payload))
+
+
 def irc(parms: str) -> CommandResult:
 
     global ircsock

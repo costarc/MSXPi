@@ -62,6 +62,7 @@ get() {
 
 rc=0
 for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py \
+         msxpi_pchess.py msxpi_pchess_irc.py requirements-pchess.txt \
          msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
          native/gpio_transfer.c native/build.sh; do
     if get "$BASE" "$f"; then
@@ -99,10 +100,40 @@ else
     echo "skip native build: no C compiler"
 fi
 
+# pchess needs python-chess, and plays its AI with Stockfish when present.
+# Packages need root: run directly as root, else through sudo without a
+# password (the Raspberry Pi OS default); otherwise only report what to run.
+as_root() {
+    if [ "$(id -u)" = 0 ]; then "$@"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then sudo -n "$@"
+    else return 1
+    fi
+}
+apt_add() {
+    as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq         --no-install-recommends "$1" >/dev/null 2>&1
+}
+if python3 -c "import chess" 2>/dev/null ||
+   apt_add python3-chess ||
+   python3 -m pip install -q "chess==1.11.2" >/dev/null 2>&1 ||
+   python3 -m pip install -q --break-system-packages "chess==1.11.2" >/dev/null 2>&1; then
+    python3 -c "import chess" 2>/dev/null && echo "ok   python-chess" ||
+        echo "warn python-chess: pchess off"
+else
+    echo "warn python-chess: pchess off"
+fi
+if [ -x /usr/games/stockfish ] || command -v stockfish >/dev/null 2>&1 ||
+   apt_add stockfish; then
+    echo "ok   stockfish (pchess AI)"
+else
+    echo "warn no stockfish: sudo apt"
+    echo "     install stockfish"
+fi
+
 # msxpi-setup.sh runs this as root; the server runs as the directory's owner.
 if [ "$(id -u)" = 0 ]; then
     owner="$(stat -c %U:%G "$DIR")"
     chown "$owner" msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py \
+        msxpi_pchess.py msxpi_pchess_irc.py requirements-pchess.txt \
         mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         msxpi-tcpip-setup.sh 2>/dev/null
     chown -R "$owner" native 2>/dev/null

@@ -50,3 +50,6 @@ software/zout/**
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Rebuilt by make.bat on every client build
+software/C-common/lib/msxpi-bios.lib

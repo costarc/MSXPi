@@ -18,6 +18,7 @@ pcopy m:msxpiext.bin
 pcopy m:msxpirfh.bat
 pcopy m:msxpiupd.bat
 pcopy m:p.com
+pcopy m:pchess.com
 pcopy m:pver.com
 pcopy m:skmsx.com
 pcopy m:templatc.com

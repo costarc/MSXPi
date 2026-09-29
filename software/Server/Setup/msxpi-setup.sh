@@ -358,6 +358,9 @@ setup_user() {
 #   fs         imported at start-up (nothing calls it any more) - and "fs" needs
 #              pkg_resources, which setuptools 81 and later no longer contains
 #   RPi.GPIO   the Pi's GPIO pins
+#   chess      python-chess, for the pchess command only: without it the
+#              server runs and pchess answers "install requirements"
+#   stockfish  apt package, the pchess AI; optional (built-in AI otherwise)
 # (pyfatfs and its signature patch, installed by the old script, are not used.)
 setup_python() {
     step "Python libraries"
@@ -376,6 +379,22 @@ setup_python() {
         ok "fs $(python3 -c 'import fs; print(fs.__version__)')"
     else
         err "fs cannot be imported: $(python3 -c 'import fs' 2>&1 | tail -1)"
+    fi
+
+    pyok "import chess" || apt_try python3-chess || true
+    pyok "import chess" || pip_install "chess==1.11.2" || true
+    if pyok "import chess"; then
+        ok "chess $(python3 -c 'import chess; print(chess.__version__)') (pchess)"
+    else
+        warn "python-chess cannot be imported - pchess will not work"
+    fi
+    # Stockfish is the pchess AI opponent; without it a small built-in
+    # search plays instead.
+    [ -x /usr/games/stockfish ] || have stockfish || apt_try stockfish || true
+    if [ -x /usr/games/stockfish ] || have stockfish; then
+        ok "stockfish (pchess AI)"
+    else
+        warn "stockfish not installed - pchess uses its weaker built-in AI"
     fi
 
     if ! pypresent RPi; then
@@ -440,7 +459,7 @@ install_msxpi() {
     fi
 
     local f
-    for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
+    for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_pchess.py msxpi_pchess_irc.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
         [ -s "$MSXPIHOME/$f" ] || err "$f is missing"
     done
 
