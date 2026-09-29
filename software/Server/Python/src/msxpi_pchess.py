@@ -291,7 +291,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         if _use_irc and args[0] in ('seek','offer','accept','poll','move'):
             _irc.poll()
             if args[0]!='poll' and not _irc.ready:
-                raise ValueError('IRC not ready; wait for lobby')
+                raise ValueError('Lobby not ready; wait')
             if args[0]=='seek': _irc.peer.seek()
             elif args[0]=='offer': _irc.peer.offer(args[1])
             elif args[0]=='accept': _irc.peer.accept()

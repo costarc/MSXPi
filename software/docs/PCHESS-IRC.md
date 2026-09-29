@@ -46,7 +46,7 @@ Leave both IRCACCOUNT and IRCPASSWORD absent/empty for unauthenticated joining.
 The default network is Libera.Chat, which lets unregistered users exchange
 private messages, so no account is needed to play. Libera can temporarily
 require login during spam waves or from some cloud/VPN addresses; PChess then
-shows `IRC ACCOUNT LOGIN REQUIRED (477)` and a free Libera account fixes it.
+shows `LOBBY ACCOUNT LOGIN REQUIRED (477)` and a free Libera account fixes it.
 freenode (the previous default) requires every player to be logged in.
 An account is distinct from a nickname: use a different IRCNICK if another
 session already owns the account's usual nick. Credentials must belong to the
@@ -71,7 +71,7 @@ Client controls: `4` connects and joins `#msxpi`; `5` advertises availability;
 `6`, nickname, Return challenges; `7` accepts the displayed invitation.
 Moves use the same notation/arrows/joystick controls as local play.
 
-Wait for `IRC LOBBY <nick>` before advertising or challenging. PChess waits
+Wait for `LOBBY <nick>` before advertising or challenging. PChess waits
 for registration and its own JOIN confirmation, answers PING independently
 of MSX polling, and uses the nickname confirmed by the IRC server. Prefer
 nicknames of nine characters or fewer for older networks. Join/registration

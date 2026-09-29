@@ -33,7 +33,7 @@ class Transport(unittest.TestCase):
         client.password='secret'
         client.auth_phase='result'
         client.reader()
-        self.assertEqual(client.error,'IRC account authentication failed 904')
+        self.assertEqual(client.error,'Lobby login failed 904')
         self.assertEqual(client.sent,[])
         self.assertEqual(client.password,'')
 
@@ -107,7 +107,7 @@ class Transport(unittest.TestCase):
         self.assertTrue(client.ready)
         self.assertEqual(client.sent,['JOIN #msxpi','PONG :token'])
         self.assertEqual(client.messages.get_nowait(),('other','actual','PCH1 SEEK'))
-        self.assertEqual(client.error,'IRC disconnected')
+        self.assertEqual(client.error,'Lobby disconnected')
 
     def test_send_before_join_is_rejected(self):
         client=self.client([])
@@ -118,13 +118,22 @@ class Transport(unittest.TestCase):
     def test_join_rejection_is_reported(self):
         client=self.client([b':server 474 nick #msxpi :Banned\r\n'])
         client.reader()
-        self.assertIn('474',client.error)
+        self.assertEqual(client.error,'#msxpi: Banned')
         self.assertFalse(client.ready)
+
+    def test_no_such_nick_stays_in_lobby(self):
+        client=self.client([b':server 401 nick bob :No such nick/channel\r\n'])
+        client.peer.peer='bob'; client.peer.match='0'*16; client.peer.phase='offered'
+        client.reader()
+        self.assertEqual(client.error,'Lobby disconnected')
+        self.assertEqual(client.peer.status,'bob: No such nick')
+        self.assertEqual(client.peer.phase,'lobby')
+        self.assertIsNone(client.peer.peer)
 
     def test_account_requirement_fits_msx_status(self):
         client=self.client([b':server 477 nick peer :You need to be identified to a registered account to message this user\r\n'])
         client.reader()
-        self.assertEqual(client.error,'IRC account login required (477)')
+        self.assertEqual(client.error,'Lobby account login required (477)')
         self.assertLessEqual(len(client.error),47)
 
 class Protocol(unittest.TestCase):
