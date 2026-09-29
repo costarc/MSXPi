@@ -46,7 +46,8 @@ static const Palette palette={{
 #define FONT_W 6
 #define FONT_H 7
 #define FONT_Y 336
-static const uint8_t font[42][FONT_H] = {
+#define GLYPHS 45
+static const uint8_t font[GLYPHS][FONT_H] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
     {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
     {0x0C,0x1C,0x0C,0x0C,0x0C,0x0C,0x1E}, /* 1 */
@@ -89,7 +90,13 @@ static const uint8_t font[42][FONT_H] = {
     {0x00,0x0C,0x0C,0x1F,0x0C,0x0C,0x00}, /* + */
     {0x00,0x0A,0x1F,0x0A,0x1F,0x0A,0x00}, /* # */
     {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, /* = */
+    {0x06,0x0C,0x18,0x18,0x18,0x0C,0x06}, /* ( */
+    {0x0C,0x06,0x03,0x03,0x03,0x06,0x0C}, /* ) */
+    {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C}, /* . */
 };
+/* 42 glyphs fit on one 252-pixel cache row; the rest go on the next. */
+#define GLYPH_X(g) (((g)%42)*FONT_W)
+#define GLYPH_Y(g) (FONT_Y+((g)/42)*(FONT_H+1))
 static uint8_t field_x[32],field_y[32],field_count;
 static char field_text[32][64];
 static uint8_t glyph(char ch) {
@@ -101,6 +108,9 @@ static uint8_t glyph(char ch) {
     if(ch=='+') return 39;
     if(ch=='#') return 40;
     if(ch=='=') return 41;
+    if(ch=='(') return 42;
+    if(ch==')') return 43;
+    if(ch=='.') return 44;
     return 0;
 }
 static void text_at(uint8_t x,uint8_t y,const char *s) {
@@ -117,7 +127,7 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
         ch=n<newlen?s[n]:' ';
         if(n>=oldlen || field_text[f][n]!=ch) {
             g=glyph(ch);
-            HMMM(g*FONT_W,FONT_Y,x+n*FONT_W,y,FONT_W,FONT_H);
+            HMMM(GLYPH_X(g),GLYPH_Y(g),x+n*FONT_W,y,FONT_W,FONT_H);
         }
         field_text[f][n]=ch;
         n++;
@@ -162,7 +172,9 @@ static uint8_t exchange(const char *cmd) {
     }
     msxpi_link_release();
     if(rc!=RC_SUCCESS || size!=256 || memcmp(reply,"PCH1",4)) {
-        strcpy(status,"SERVER ERROR"); return 0;
+        /* A failed background poll stays silent: the next one retries. */
+        if(strcmp(cmd,"pchess poll")) strcpy(status,"LINK ERROR - RETRY");
+        return 0;
     }
     memcpy(status,reply+72,47); status[47]=0;
     if(!reply[4]) return 0;
@@ -218,14 +230,14 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
 /* Glyph cache on page 1, written once at startup. */
 static void cache_font(void) {
     uint8_t i,r,c,bits,pixels[FONT_W/2];
-    for(i=0;i<42;i++)
+    for(i=0;i<GLYPHS;i++)
         for(r=0;r<FONT_H;r++) {
             bits=font[i][r];
             for(c=0;c<FONT_W/2;c++) {
                 pixels[c]=((bits&0x10)?C_WHITE<<4:C_BLACK<<4)|((bits&0x08)?C_WHITE:C_BLACK);
                 bits<<=2;
             }
-            CopyRamToVram(pixels,VADDR(i*FONT_W,FONT_Y+r),FONT_W/2);
+            CopyRamToVram(pixels,VADDR(GLYPH_X(i),GLYPH_Y(i)+r),FONT_W/2);
         }
 }
 
@@ -324,23 +336,39 @@ static void make_move(void) {
     if(exchange(command)) {selected_x=255; selected_y=255;}
 }
 
+/* Credits box over the board; any key closes it and resumes the game. */
+#define CREDITS_X 12
+#define CREDITS_W 184
+static void credits_line(uint8_t y,const char *s) {
+    text_at((CREDITS_X+(CREDITS_W-strlen(s)*FONT_W)/2)&0xFE,y,s);
+}
+static void credits(void) {
+    solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
+    frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
+    credits_line(82,"PCHESS V1.0 (C) RCC 2026");
+    credits_line(98,"DESIGN: RCC");
+    credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
+    while(!Inkey());
+}
+
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 exit to DOS. ESC resumes the game.
- * Add rows by extending menu_rows and the switch on Return. */
+ * msxpi.ini through "pchess level N"), 1 credits, 2 exit to DOS. ESC
+ * resumes the game. Add rows by extending menu_rows and the switch on
+ * Return. */
 #define MENU_X 44
 #define MENU_Y 72
-static const char *menu_rows[]={"A I LEVEL","EXIT"};
-#define MENU_ROWS 2
+static const char *menu_rows[]={"A I LEVEL","CREDITS","EXIT"};
+#define MENU_ROWS 3
 static uint8_t menu(void) {
     uint8_t key,row=0,level=2,i,quit=0;
     char line[20];
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
-    solid(MENU_X,MENU_Y,120,48,C_BLACK);
-    frame(MENU_X,MENU_Y,120,48,C_YELLOW);
+    solid(MENU_X,MENU_Y,120,57,C_BLACK);
+    frame(MENU_X,MENU_Y,120,57,C_YELLOW);
     text_at(MENU_X+40,MENU_Y+5,"M E N U");
-    text_at(MENU_X+6,MENU_Y+38,"E S C  R E S U M E");
+    text_at(MENU_X+6,MENU_Y+47,"E S C  R E S U M E");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"= ":"  ");
@@ -358,7 +386,8 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {quit=1; break;}
+            if(row==1) {credits(); break;}
+            if(row==2) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);
