@@ -346,7 +346,9 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             stop_relay()
         if args[0] in ('irc','join') or (args[0]=='new' and args[1:]!=['ai']):
             stop_engine()
-        elif args[0] == 'join':
+        # Not an elif: 'join' also matches the line above, which left this
+        # unreachable and the relay never started (connection refused).
+        if args[0] == 'join':
             start_relay(room_config)
         if args[0]=='irc':
             from msxpi_pchess_irc import IRC

@@ -156,3 +156,15 @@ class Level(unittest.TestCase):
         self.assertEqual([p.elo_level(e) for e in p.LEVEL_ELO],list(range(1,9)))
 
 if __name__=='__main__': unittest.main()
+
+class RoomRelay(unittest.TestCase):
+    def tearDown(self):
+        p.stop_relay()
+    def test_join_starts_local_relay(self):
+        import socket
+        with socket.socket() as s:
+            s.bind(('127.0.0.1',0)); port=s.getsockname()[1]
+        config={'PCHESSRELAY':'','PCHESSLISTEN':'127.0.0.1','PCHESSPORT':str(port)}
+        data=p.handle_command('join testroom',room_config=config)
+        self.assertEqual(data[:5],b'PCH1\x01',data[72:120])
+        self.assertIsNotNone(p._relay)
