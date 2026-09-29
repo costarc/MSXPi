@@ -27,15 +27,58 @@
 #define C_GREEN 28
 #define C_BLUE 73
 #define C_YELLOW 252
-#define C_DARK 36
 #define C_LIGHT 182
 
-/* Three columns by five rows, packed top-to-bottom, left-to-right. */
-static const uint16_t font[] = {
-    31599,11415,29671,29647,23497,31183,31215,29257,31727,31695,
-    11245,27566,31015,27502,31143,31140,31087,23533,29847,4719,
-    23469,18727,24557,27501,31599,27556,31609,27565,31183,29842,
-    23407,23402,23549,23213,23186,29351
+/* Bold 5x7 font in 6x7 cells, one byte per row (bit 4 is the left column),
+ * indexed by glyph(). Vertical strokes are two pixels wide wherever the
+ * letter allows: a single SCREEN 8 pixel is narrower than composite video
+ * can resolve, so thin strokes smear into the background on a real MSX. */
+#define FONT_W 6
+#define FONT_H 7
+#define FONT_Y 224
+static const uint8_t font[42][FONT_H] = {
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
+    {0x0C,0x1C,0x0C,0x0C,0x0C,0x0C,0x1E}, /* 1 */
+    {0x1E,0x03,0x03,0x0E,0x18,0x18,0x1F}, /* 2 */
+    {0x1E,0x03,0x03,0x0E,0x03,0x03,0x1E}, /* 3 */
+    {0x1B,0x1B,0x1B,0x1F,0x03,0x03,0x03}, /* 4 */
+    {0x1F,0x18,0x18,0x1E,0x03,0x03,0x1E}, /* 5 */
+    {0x0E,0x18,0x18,0x1E,0x1B,0x1B,0x0E}, /* 6 */
+    {0x1F,0x03,0x06,0x06,0x0C,0x0C,0x0C}, /* 7 */
+    {0x0E,0x1B,0x1B,0x0E,0x1B,0x1B,0x0E}, /* 8 */
+    {0x0E,0x1B,0x1B,0x0F,0x03,0x03,0x0E}, /* 9 */
+    {0x0E,0x1B,0x1B,0x1F,0x1B,0x1B,0x1B}, /* A */
+    {0x1E,0x1B,0x1B,0x1E,0x1B,0x1B,0x1E}, /* B */
+    {0x0F,0x18,0x18,0x18,0x18,0x18,0x0F}, /* C */
+    {0x1E,0x1B,0x1B,0x1B,0x1B,0x1B,0x1E}, /* D */
+    {0x1F,0x18,0x18,0x1E,0x18,0x18,0x1F}, /* E */
+    {0x1F,0x18,0x18,0x1E,0x18,0x18,0x18}, /* F */
+    {0x0F,0x18,0x18,0x1B,0x1B,0x1B,0x0F}, /* G */
+    {0x1B,0x1B,0x1B,0x1F,0x1B,0x1B,0x1B}, /* H */
+    {0x1E,0x0C,0x0C,0x0C,0x0C,0x0C,0x1E}, /* I */
+    {0x03,0x03,0x03,0x03,0x03,0x1B,0x0E}, /* J */
+    {0x1B,0x1B,0x1E,0x1C,0x1E,0x1B,0x1B}, /* K */
+    {0x18,0x18,0x18,0x18,0x18,0x18,0x1F}, /* L */
+    {0x11,0x1B,0x1F,0x15,0x11,0x11,0x11}, /* M */
+    {0x11,0x19,0x1D,0x17,0x13,0x11,0x11}, /* N */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* O */
+    {0x1E,0x1B,0x1B,0x1E,0x18,0x18,0x18}, /* P */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1A,0x0D}, /* Q */
+    {0x1E,0x1B,0x1B,0x1E,0x1E,0x1B,0x1B}, /* R */
+    {0x0F,0x18,0x18,0x0E,0x03,0x03,0x1E}, /* S */
+    {0x1F,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C}, /* T */
+    {0x1B,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* U */
+    {0x1B,0x1B,0x1B,0x1B,0x1B,0x0E,0x04}, /* V */
+    {0x11,0x11,0x11,0x15,0x15,0x1F,0x1B}, /* W */
+    {0x1B,0x1B,0x0E,0x04,0x0E,0x1B,0x1B}, /* X */
+    {0x1B,0x1B,0x1B,0x0E,0x0C,0x0C,0x0C}, /* Y */
+    {0x1F,0x03,0x06,0x0C,0x18,0x18,0x1F}, /* Z */
+    {0x00,0x00,0x00,0x1E,0x00,0x00,0x00}, /* - */
+    {0x00,0x0C,0x0C,0x00,0x0C,0x0C,0x00}, /* : */
+    {0x00,0x0C,0x0C,0x1F,0x0C,0x0C,0x00}, /* + */
+    {0x00,0x0A,0x1F,0x0A,0x1F,0x0A,0x00}, /* # */
+    {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, /* = */
 };
 static uint8_t field_x[32],field_y[32],field_count;
 static char field_text[32][64];
@@ -60,11 +103,11 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
     oldlen=strlen(field_text[f]); newlen=strlen(s);
     if(newlen>63) newlen=63;
     while(n<oldlen || n<newlen) {
-        if((uint16_t)x+n*4>252) break;
+        if((uint16_t)x+n*FONT_W+5>255) break;
         ch=n<newlen?s[n]:' ';
         if(n>=oldlen || field_text[f][n]!=ch) {
             g=glyph(ch);
-            HMMM(g*4,224,x+n*4,y,4,5);
+            HMMM(g*FONT_W,FONT_Y,x+n*FONT_W,y,FONT_W,FONT_H);
         }
         field_text[f][n]=ch;
         n++;
@@ -166,7 +209,7 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
  * VDP command routine: subsequent refreshes never redraw piece primitives. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,c,bg,sy,pixels[24]; uint16_t bits; int x,y;
+    uint8_t i,j,k,r,c,bg,sy,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
@@ -183,36 +226,34 @@ static void cache_graphics(void) {
             HMMM(0,sy,x,y+k*6,24,6);
         }
     }
-    for(i=0;i<42;i++) {
-        bits=i>0 && i<37?font[i-1]:0;
-        if(i==37) bits=448;
-        if(i==38) bits=1040;
-        if(i==39) bits=1488;
-        if(i==40) bits=24445;
-        if(i==41) bits=3640;
-        for(r=0;r<5;r++) for(c=0;c<4;c++)
-            pixels[r*4+c]=(c<3 && (bits & ((uint16_t)1<<(14-r*3-c))))?C_WHITE:C_DARK;
-        for(r=0;r<5;r++) CopyRamToVram(pixels+r*4,((uint16_t)(224+r)<<8)+i*4,4);
-    }
+    for(i=0;i<42;i++)
+        for(r=0;r<FONT_H;r++) {
+            for(c=0;c<FONT_W;c++)
+                pixels[c]=(c<5 && (font[i][r]&(16>>c)))?C_WHITE:C_BLACK;
+            CopyRamToVram(pixels,((uint16_t)(FONT_Y+r)<<8)+i*FONT_W,FONT_W);
+        }
 }
 
+/* The panel is 51 pixels wide: at most 8 characters per line. */
 static void draw_panel(void) {
     int i;
-    text_at(205,12,"PCHESS");
-    text_at(205,26,white_turn ? "WHITE" : "BLACK");
-    text_at(205,34,game_over?"GAME OVER":"TURN");
-    text_at(205,48,"MOVES");
+    text_at(205,2,"PCHESS");
+    text_at(205,12,white_turn ? "WHITE" : "BLACK");
+    text_at(205,21,game_over?"GAMEOVER":"TURN");
+    text_at(205,32,"MOVES");
     for (i = 0; i < 8; i++) {
-        text_at(205,58+i*9,i<move_count?moves[i]:"");
+        text_at(205,41+i*9,i<move_count?moves[i]:"");
     }
-    text_at(205,132,"1 LOCAL 2 AI");
-    text_at(205,140,"3 ROOM");
-    text_at(205,148,"4 ONLINE");
-    text_at(205,156,"5 SEEK 6 ASK");
-    text_at(205,164,"7 ACCEPT");
-    text_at(205,174,room_entry==2?"PEER NICK":room_entry?"ROOM NAME":"MOVE");
-    text_at(205,182,entry);
-    text_at(205,198,"ESC MENU");
+    text_at(205,114,"1 LOCAL");
+    text_at(205,122,"2 AI");
+    text_at(205,130,"3 ROOM");
+    text_at(205,138,"4 ONLINE");
+    text_at(205,146,"5 SEEK");
+    text_at(205,154,"6 ASK");
+    text_at(205,162,"7 ACCEPT");
+    text_at(205,174,room_entry==2?"PEER":room_entry?"ROOM":"MOVE");
+    text_at(205,183,entry_len>8?entry+entry_len-8:entry);
+    text_at(205,195,"ESC MENU");
     text_at(8,205,status);
 }
 
@@ -268,7 +309,7 @@ static uint8_t menu(void) {
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
-    HMMV(MENU_X,MENU_Y,120,48,C_DARK);
+    HMMV(MENU_X,MENU_Y,120,48,C_BLACK);
     BoxLine(MENU_X,MENU_Y,MENU_X+119,MENU_Y+47,C_YELLOW,0);
     text_at(MENU_X+44,MENU_Y+5,"MENU");
     text_at(MENU_X+8,MENU_Y+38,"ESC RESUME");
@@ -314,10 +355,10 @@ int main(void) {
     memset(markers,255,sizeof(markers));
     Screen(8);
     HideDisplay();
-    SetColors(C_WHITE,C_DARK,C_DARK);
+    SetColors(C_WHITE,C_BLACK,C_BLACK);
     *(uint8_t *)0xFFE8 |= 128;
     VDPwrite(9,*(uint8_t *)0xFFE8);
-    HMMV(0,0,256,212,C_DARK);
+    HMMV(0,0,256,212,C_BLACK);
     cache_graphics();
     draw_board();
     ShowDisplay();

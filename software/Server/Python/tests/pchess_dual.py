@@ -91,7 +91,7 @@ after time 82 {{
     after time 4 {{
         set clean 1
         for {{set x 205}} {{$x<237}} {{incr x}} {{
-            if {{[debug read VRAM [expr {{$x+58*256}}]]!=36}} {{set clean 0}}
+            if {{[debug read VRAM [expr {{$x+41*256}}]]!=0}} {{set clean 0}}
         }}
         set f [open {{{work.as_posix()}/client-{i}.result}} a]
         if {{$clean}} {{puts $f "PASS: new game clears history"}} else {{puts $f "FAIL: stale history"}}
