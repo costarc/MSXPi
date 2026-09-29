@@ -136,14 +136,8 @@ Raspberry Pi does not need to be attached yet.
 
 ### Step 3 - Prepare the Raspberry Pi
 
-Choose one.
-
-**3a. Ready-made SD card image (easiest).** (This SD card is outdated, and will require the msxpi-setup.sh to be run to update it to latest code - refer to 3b step 2 below to make this update) - Download from
-https://tinyurl.com/MSXPi-SDCardV3, unzip with 7-Zip and write to the SD card
-with Win32DiskImager (https://win32diskimager.org) or Raspberry Pi Imager
-("Use custom"). Insert the card in the Pi.
-
-**3b. Fresh Raspberry Pi OS Lite (32-bit).**
+Install a fresh Raspberry Pi OS Lite and run the MSXPi setup script. (The
+old ready-made SD card image is no longer offered.)
 
 1. Write *Raspberry Pi OS Lite (32-bit)* to the SD card with Raspberry Pi
    Imager (https://www.raspberrypi.com/software). In its settings choose user
@@ -262,9 +256,9 @@ Pi's WiFi. Details: `software/UNAPI/README.md`.
 Update all three together. Run `p shut` before you switch the MSX off: the Pi is
 powered by the MSX, and an SD card can be corrupted by a sudden power cut.
 
-More detail with pictures: `documents/Quick Start.odt` and the two tutorials
-("Easy Way" with the ready-made image, "Hard Way" from scratch; Portuguese
-versions available) in the `documents` folder.
+More detail with pictures: `documents/Quick Start.odt` and the "Hard Way" tutorial
+(installing Raspberry Pi OS from scratch; Portuguese version available) in the
+`documents` folder.
 
 
 Quick Start 2 - openMSX (no hardware needed)
