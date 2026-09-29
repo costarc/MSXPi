@@ -407,6 +407,12 @@ static uint8_t menu(void) {
 int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
+    /* SCREEN 5 and the VDP commands need an MSX2 (V9938) or later. An
+     * MSX1 has no SUB-ROM, so its slot in EXBRSA is 0. */
+    if(!*(volatile uint8_t *)0xFAF8) {
+        Print("PCHESS NEEDS AN MSX2\r\n");
+        return 0;
+    }
     entry_len=0; room_entry=0; online=0; game_over=0;
     field_count=0;
     entry[0]=0;
