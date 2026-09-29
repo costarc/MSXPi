@@ -44,11 +44,19 @@ from msxpi_const import (
 # literal because the openMSX test harnesses patch that line.
 MSXPIHOME = "/home/pi/msxpi"
 # Scratch files (pcopy session, archive extraction). MSXPI_TMP overrides it;
-# "/tmp" is C:	mp on Windows.
+# "/tmp" is C:\tmp on Windows.
 TMPDIR = os.environ.get("MSXPI_TMP", "/tmp")
 
 # Never printed, in p set listings or in the server log.
-SECRET_VARS = {"IRCPASSWORD"}
+SECRET_VARS = {
+    "IRCPASSWORD",
+    "WIFIPWD",
+    "OPENAIKEY",
+    "RAPIDAPIKEY",
+    "FINNHUBKEY",
+    "TWELVEDATAKEY",
+    "ALPHAVANTAGEKEY",
+}
 
 
 def shown_value(name: str, value: str) -> str:

@@ -459,7 +459,7 @@ install_msxpi() {
     fi
 
     local f
-    for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_pchess.py msxpi_pchess_irc.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
+    for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_pchess.py msxpi_pchess_irc.py msxpi_renderpage.py msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py msxpi-tcpip-setup.sh; do
         [ -s "$MSXPIHOME/$f" ] || err "$f is missing"
     done
 
