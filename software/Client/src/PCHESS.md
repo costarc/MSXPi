@@ -76,3 +76,15 @@ two MSXPi servers on ports 5041/5042 and a local IRC fixture on 5081.
 The harness switches each DOS session to C:, sends e4/e5 and checks both
 boards. Test logs/screenshots are in a fresh `work/pchess-dual-*` directory.
 Only processes created by that harness are terminated during cleanup.
+
+## PChess1 (MSX1)
+
+`pchess1.c` is the MSX1 (TMS9918, 16 KB VRAM) version with the same server
+protocol, modes and controls. It uses SCREEN 2 as a tile screen: the same
+256 characters are loaded into all three pattern/colour banks, so refreshes
+only write name-table bytes. Squares are 16x16 (the pchess pieces scaled to
+two thirds) and text uses the BIOS 8x8 font, copied from SCREEN 1 at start.
+Because SCREEN 2 allows two colours per 8 pixels, pieces have no outline,
+and the cursor (red) and selection (green) are hardware sprites.
+
+Build with `make.bat pchess1`; it produces `target\pchess1.com`.
