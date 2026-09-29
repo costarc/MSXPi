@@ -1,5 +1,5 @@
 /*
- * MSXPi PChess - Fusion-C SCREEN 8 client
+ * MSXPi PChess - Fusion-C SCREEN 5 client
  *
  * Graphical board, keyboard notation/cursor and joystick input. The MSXPi
  * server validates rules and supplies AI, IRC and room-relay opponents.
@@ -19,24 +19,84 @@
 #define SQUARE 24
 #define BOARD_SIZE (SQUARE * 8)
 #define PANEL_X 204
-#define SCREEN8_BOTTOM 211
+#define SCREEN_BOTTOM 211
 
-#define C_BLACK 0
-#define C_WHITE 255
-#define C_RED 224
-#define C_GREEN 28
-#define C_BLUE 73
-#define C_YELLOW 252
-#define C_DARK 36
-#define C_LIGHT 182
+/* SCREEN 5 (16 colours, 4 bits per pixel) so PChess also runs on MSX2
+ * machines with 64 KB VRAM, such as the Canon V-25: SCREEN 7/8 need 128 KB.
+ * Page 0 (VRAM 0x0000-0x7FFF) is displayed; page 1 (lines 256-511) holds
+ * the tile and glyph caches. Palette indices, set in main(). */
+#define C_BLACK 1
+#define C_GREEN 2
+#define C_BLUE 13
+#define C_YELLOW 11
+#define C_LIGHT 14
+#define C_WHITE 15
+#define PAIR(c) ((uint8_t)((c)*17))
+static const Palette palette={{
+    {0,0,0,0},{1,0,0,0},{2,0,6,0},{3,2,7,3},{4,1,1,7},{5,2,3,7},{6,5,1,1},{7,2,6,7},
+    {8,7,1,1},{9,7,3,3},{10,6,6,1},{11,7,7,0},{12,1,4,1},{13,2,2,1},{14,5,5,3},{15,7,7,7}
+}};
+/* VRAM address of pixel (x,y), x even; y may be on page 1 (256-511). */
+#define VADDR(x,y) ((uint16_t)((uint16_t)(y)*128+((x)>>1)))
 
-/* Three columns by five rows, packed top-to-bottom, left-to-right. */
-static const uint16_t font[] = {
-    31599,11415,29671,29647,23497,31183,31215,29257,31727,31695,
-    11245,27566,31015,27502,31143,31140,31087,23533,29847,4719,
-    23469,18727,24557,27501,31599,27556,31609,27565,31183,29842,
-    23407,23402,23549,23213,23186,29351
+/* Bold 5x7 font in 6x7 cells, one byte per row (bit 4 is the left column),
+ * indexed by glyph(). Vertical strokes are two pixels wide wherever the
+ * letter allows: a single SCREEN 8 pixel is narrower than composite video
+ * can resolve, so thin strokes smear into the background on a real MSX. */
+#define FONT_W 6
+#define FONT_H 7
+#define FONT_Y 336
+#define GLYPHS 45
+static const uint8_t font[GLYPHS][FONT_H] = {
+    {0x00,0x00,0x00,0x00,0x00,0x00,0x00}, /*   */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* 0 */
+    {0x0C,0x1C,0x0C,0x0C,0x0C,0x0C,0x1E}, /* 1 */
+    {0x1E,0x03,0x03,0x0E,0x18,0x18,0x1F}, /* 2 */
+    {0x1E,0x03,0x03,0x0E,0x03,0x03,0x1E}, /* 3 */
+    {0x1B,0x1B,0x1B,0x1F,0x03,0x03,0x03}, /* 4 */
+    {0x1F,0x18,0x18,0x1E,0x03,0x03,0x1E}, /* 5 */
+    {0x0E,0x18,0x18,0x1E,0x1B,0x1B,0x0E}, /* 6 */
+    {0x1F,0x03,0x06,0x06,0x0C,0x0C,0x0C}, /* 7 */
+    {0x0E,0x1B,0x1B,0x0E,0x1B,0x1B,0x0E}, /* 8 */
+    {0x0E,0x1B,0x1B,0x0F,0x03,0x03,0x0E}, /* 9 */
+    {0x0E,0x1B,0x1B,0x1F,0x1B,0x1B,0x1B}, /* A */
+    {0x1E,0x1B,0x1B,0x1E,0x1B,0x1B,0x1E}, /* B */
+    {0x0F,0x18,0x18,0x18,0x18,0x18,0x0F}, /* C */
+    {0x1E,0x1B,0x1B,0x1B,0x1B,0x1B,0x1E}, /* D */
+    {0x1F,0x18,0x18,0x1E,0x18,0x18,0x1F}, /* E */
+    {0x1F,0x18,0x18,0x1E,0x18,0x18,0x18}, /* F */
+    {0x0F,0x18,0x18,0x1B,0x1B,0x1B,0x0F}, /* G */
+    {0x1B,0x1B,0x1B,0x1F,0x1B,0x1B,0x1B}, /* H */
+    {0x1E,0x0C,0x0C,0x0C,0x0C,0x0C,0x1E}, /* I */
+    {0x03,0x03,0x03,0x03,0x03,0x1B,0x0E}, /* J */
+    {0x1B,0x1B,0x1E,0x1C,0x1E,0x1B,0x1B}, /* K */
+    {0x18,0x18,0x18,0x18,0x18,0x18,0x1F}, /* L */
+    {0x11,0x1B,0x1F,0x15,0x11,0x11,0x11}, /* M */
+    {0x11,0x19,0x1D,0x17,0x13,0x11,0x11}, /* N */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* O */
+    {0x1E,0x1B,0x1B,0x1E,0x18,0x18,0x18}, /* P */
+    {0x0E,0x1B,0x1B,0x1B,0x1B,0x1A,0x0D}, /* Q */
+    {0x1E,0x1B,0x1B,0x1E,0x1E,0x1B,0x1B}, /* R */
+    {0x0F,0x18,0x18,0x0E,0x03,0x03,0x1E}, /* S */
+    {0x1F,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C}, /* T */
+    {0x1B,0x1B,0x1B,0x1B,0x1B,0x1B,0x0E}, /* U */
+    {0x1B,0x1B,0x1B,0x1B,0x1B,0x0E,0x04}, /* V */
+    {0x11,0x11,0x11,0x15,0x15,0x1F,0x1B}, /* W */
+    {0x1B,0x1B,0x0E,0x04,0x0E,0x1B,0x1B}, /* X */
+    {0x1B,0x1B,0x1B,0x0E,0x0C,0x0C,0x0C}, /* Y */
+    {0x1F,0x03,0x06,0x0C,0x18,0x18,0x1F}, /* Z */
+    {0x00,0x00,0x00,0x1E,0x00,0x00,0x00}, /* - */
+    {0x00,0x0C,0x0C,0x00,0x0C,0x0C,0x00}, /* : */
+    {0x00,0x0C,0x0C,0x1F,0x0C,0x0C,0x00}, /* + */
+    {0x00,0x0A,0x1F,0x0A,0x1F,0x0A,0x00}, /* # */
+    {0x00,0x00,0x1F,0x00,0x1F,0x00,0x00}, /* = */
+    {0x06,0x0C,0x18,0x18,0x18,0x0C,0x06}, /* ( */
+    {0x0C,0x06,0x03,0x03,0x03,0x06,0x0C}, /* ) */
+    {0x00,0x00,0x00,0x00,0x00,0x0C,0x0C}, /* . */
 };
+/* 42 glyphs fit on one 252-pixel cache row; the rest go on the next. */
+#define GLYPH_X(g) (((g)%42)*FONT_W)
+#define GLYPH_Y(g) (FONT_Y+((g)/42)*(FONT_H+1))
 static uint8_t field_x[32],field_y[32],field_count;
 static char field_text[32][64];
 static uint8_t glyph(char ch) {
@@ -48,6 +108,9 @@ static uint8_t glyph(char ch) {
     if(ch=='+') return 39;
     if(ch=='#') return 40;
     if(ch=='=') return 41;
+    if(ch=='(') return 42;
+    if(ch==')') return 43;
+    if(ch=='.') return 44;
     return 0;
 }
 static void text_at(uint8_t x,uint8_t y,const char *s) {
@@ -60,11 +123,11 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
     oldlen=strlen(field_text[f]); newlen=strlen(s);
     if(newlen>63) newlen=63;
     while(n<oldlen || n<newlen) {
-        if((uint16_t)x+n*4>252) break;
+        if((uint16_t)x+n*FONT_W+5>255) break;
         ch=n<newlen?s[n]:' ';
         if(n>=oldlen || field_text[f][n]!=ch) {
             g=glyph(ch);
-            HMMM(g*4,224,x+n*4,y,4,5);
+            HMMM(GLYPH_X(g),GLYPH_Y(g),x+n*FONT_W,y,FONT_W,FONT_H);
         }
         field_text[f][n]=ch;
         n++;
@@ -109,7 +172,9 @@ static uint8_t exchange(const char *cmd) {
     }
     msxpi_link_release();
     if(rc!=RC_SUCCESS || size!=256 || memcmp(reply,"PCH1",4)) {
-        strcpy(status,"SERVER ERROR"); return 0;
+        /* A failed background poll stays silent: the next one retries. */
+        if(strcmp(cmd,"pchess poll")) strcpy(status,"LINK ERROR - RETRY");
+        return 0;
     }
     memcpy(status,reply+72,47); status[47]=0;
     if(!reply[4]) return 0;
@@ -162,58 +227,74 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
     }
 }
 
+/* Glyph cache on page 1, written once at startup. */
+static void cache_font(void) {
+    uint8_t i,r,c,bits,pixels[FONT_W/2];
+    for(i=0;i<GLYPHS;i++)
+        for(r=0;r<FONT_H;r++) {
+            bits=font[i][r];
+            for(c=0;c<FONT_W/2;c++) {
+                pixels[c]=((bits&0x10)?C_WHITE<<4:C_BLACK<<4)|((bits&0x08)?C_WHITE:C_BLACK);
+                bits<<=2;
+            }
+            CopyRamToVram(pixels,VADDR(GLYPH_X(i),GLYPH_Y(i)+r),FONT_W/2);
+        }
+}
+
 /* Build tiles once on the hidden VRAM page. HMMM is Fusion-C's assembly
- * VDP command routine: subsequent refreshes never redraw piece primitives. */
+ * VDP command routine: subsequent refreshes never redraw piece primitives.
+ * HMMM works on whole bytes (2 pixels) in SCREEN 5, so every HMMM x and
+ * width here is even. */
 static const char tile_pieces[]=" PNBRQKpnbrqk";
 static void cache_graphics(void) {
-    uint8_t i,j,k,r,c,bg,sy,pixels[24]; uint16_t bits; int x,y;
+    uint8_t i,j,r,c,bg,pixels[24]; int x,y;
     for(i=0;i<26;i++) {
         x=(i%10)*24; y=256+(i/10)*24;
         bg=i>=13?C_BLUE:C_LIGHT;
         j=i%13;
-        if(!j) { HMMV(x,y,24,24,bg); continue; }
-        /* Stage six rows at a time in the unused lines 212-223, alternating
-         * halves so a pending HMMM never reads rows being rewritten. */
-        for(k=0;k<4;k++) {
-            sy=212+(k&1)*6;
-            for(r=0;r<6;r++) {
-                piece_row(pixels,j<7?j-1:j-7,k*6+r,bg,j<7);
-                CopyRamToVram(pixels,((uint16_t)(sy+r)<<8),24);
-            }
-            HMMM(0,sy,x,y+k*6,24,6);
+        if(!j) { HMMV(x,y,24,24,PAIR(bg)); continue; }
+        /* Page 1 is never displayed, so rows go straight into VRAM. */
+        for(r=0;r<24;r++) {
+            piece_row(pixels,j<7?j-1:j-7,r,bg,j<7);
+            for(c=0;c<12;c++) pixels[c]=(pixels[c*2]<<4)|pixels[c*2+1];
+            CopyRamToVram(pixels,VADDR(x,y+r),12);
         }
     }
-    for(i=0;i<42;i++) {
-        bits=i>0 && i<37?font[i-1]:0;
-        if(i==37) bits=448;
-        if(i==38) bits=1040;
-        if(i==39) bits=1488;
-        if(i==40) bits=24445;
-        if(i==41) bits=3640;
-        for(r=0;r<5;r++) for(c=0;c<4;c++)
-            pixels[r*4+c]=(c<3 && (bits & ((uint16_t)1<<(14-r*3-c))))?C_WHITE:C_DARK;
-        for(r=0;r<5;r++) CopyRamToVram(pixels+r*4,((uint16_t)(224+r)<<8)+i*4,4);
-    }
+    cache_font();
 }
 
+/* The panel is 51 pixels wide: at most 8 characters per line. */
 static void draw_panel(void) {
     int i;
-    text_at(205,12,"PCHESS");
-    text_at(205,26,white_turn ? "WHITE" : "BLACK");
-    text_at(205,34,game_over?"GAME OVER":"TURN");
-    text_at(205,48,"MOVES");
+    text_at(206,2,"PCHESS");
+    text_at(206,12,white_turn ? "WHITE" : "BLACK");
+    text_at(206,21,game_over?"GAMEOVER":"TURN");
+    text_at(206,32,"MOVES");
     for (i = 0; i < 8; i++) {
-        text_at(205,58+i*9,i<move_count?moves[i]:"");
+        text_at(206,41+i*9,i<move_count?moves[i]:"");
     }
-    text_at(205,132,"1 LOCAL 2 AI");
-    text_at(205,140,"3 ROOM");
-    text_at(205,148,"4 ONLINE");
-    text_at(205,156,"5 SEEK 6 ASK");
-    text_at(205,164,"7 ACCEPT");
-    text_at(205,174,room_entry==2?"PEER NICK":room_entry?"ROOM NAME":"MOVE");
-    text_at(205,182,entry);
-    text_at(205,198,"ESC MENU");
+    text_at(206,114,"1 LOCAL");
+    text_at(206,122,"2 A I");
+    text_at(206,130,"3 ROOM");
+    text_at(206,138,"4 ONLINE");
+    text_at(206,146,"5 SEEK");
+    text_at(206,154,"6 A S K");
+    text_at(206,162,"7 ACCEPT");
+    text_at(206,174,room_entry==2?"PEER":room_entry?"ROOM":"MOVE");
+    text_at(206,183,entry_len>8?entry+entry_len-8:entry);
+    text_at(206,195,"ESC MENU");
     text_at(8,205,status);
+}
+
+/* Pixel-exact fill (LMMV): outlines start at odd x, which HMMV cannot do. */
+static void solid(int x,int y,int w,int h,uint8_t color) {
+    LMMV(x,y,w,h,color,0);
+}
+static void frame(int x,int y,uint8_t w,uint8_t h,uint8_t color) {
+    solid(x,y,w,1,color);
+    solid(x,y+h-1,w,1,color);
+    solid(x,y,1,h,color);
+    solid(x+w-1,y,1,h,color);
 }
 
 static void draw_board(void) {
@@ -234,9 +315,9 @@ static void draw_board(void) {
             if((x+y)&1) tile+=13;
             HMMM((tile%10)*24,256+(tile/10)*24,left,top,24,24);
             if (x == cursor_x && y == cursor_y)
-                BoxLine(left + 1, top + 1, left + 22, top + 22, C_YELLOW, 0);
+                frame(left + 1, top + 1, 22, 22, C_YELLOW);
             if (x == selected_x && y == selected_y)
-                BoxLine(left + 3, top + 3, left + 20, top + 20, C_GREEN, 0);
+                frame(left + 3, top + 3, 18, 18, C_GREEN);
         }
     }
     draw_panel();
@@ -255,23 +336,39 @@ static void make_move(void) {
     if(exchange(command)) {selected_x=255; selected_y=255;}
 }
 
+/* Credits box over the board; any key closes it and resumes the game. */
+#define CREDITS_X 12
+#define CREDITS_W 184
+static void credits_line(uint8_t y,const char *s) {
+    text_at((CREDITS_X+(CREDITS_W-strlen(s)*FONT_W)/2)&0xFE,y,s);
+}
+static void credits(void) {
+    solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
+    frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
+    credits_line(82,"PCHESS V1.0 (C) RCC 2026");
+    credits_line(98,"DESIGN: RCC");
+    credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
+    while(!Inkey());
+}
+
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 exit to DOS. ESC resumes the game.
- * Add rows by extending menu_rows and the switch on Return. */
+ * msxpi.ini through "pchess level N"), 1 credits, 2 exit to DOS. ESC
+ * resumes the game. Add rows by extending menu_rows and the switch on
+ * Return. */
 #define MENU_X 44
 #define MENU_Y 72
-static const char *menu_rows[]={"AI LEVEL","EXIT"};
-#define MENU_ROWS 2
+static const char *menu_rows[]={"A I LEVEL","CREDITS","EXIT"};
+#define MENU_ROWS 3
 static uint8_t menu(void) {
-    uint8_t key,row=0,level=2,fields=field_count,i,quit=0;
+    uint8_t key,row=0,level=2,i,quit=0;
     char line[20];
     if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
     draw_panel();
-    HMMV(MENU_X,MENU_Y,120,48,C_DARK);
-    BoxLine(MENU_X,MENU_Y,MENU_X+119,MENU_Y+47,C_YELLOW,0);
-    text_at(MENU_X+44,MENU_Y+5,"MENU");
-    text_at(MENU_X+8,MENU_Y+38,"ESC RESUME");
+    solid(MENU_X,MENU_Y,120,57,C_BLACK);
+    frame(MENU_X,MENU_Y,120,57,C_YELLOW);
+    text_at(MENU_X+40,MENU_Y+5,"M E N U");
+    text_at(MENU_X+6,MENU_Y+47,"E S C  R E S U M E");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"= ":"  ");
@@ -289,14 +386,19 @@ static uint8_t menu(void) {
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
         else if(key==13 || key==' ') {
-            if(row==1) {quit=1; break;}
+            if(row==1) {credits(); break;}
+            if(row==2) {quit=1; break;}
             strcpy(command,"pchess level ");
             line[0]='0'+level; line[1]=0; strcat(command,line);
             exchange(command);
             text_at(8,205,status);
         }
     }
-    field_count=fields;
+    /* Repaint the whole panel and status line from scratch, so leaving the
+     * menu also clears anything stray drawn over the text. */
+    field_count=0;
+    solid(PANEL_X,0,256-PANEL_X,SCREEN_BOTTOM-7,C_BLACK);
+    solid(0,SCREEN_BOTTOM-6,256,7,C_BLACK);
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
     return quit;
@@ -305,6 +407,12 @@ static uint8_t menu(void) {
 int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
+    /* SCREEN 5 and the VDP commands need an MSX2 (V9938) or later. An
+     * MSX1 has no SUB-ROM, so its slot in EXBRSA is 0. */
+    if(!*(volatile uint8_t *)0xFAF8) {
+        Print("PCHESS NEEDS AN MSX2\r\n");
+        return 0;
+    }
     entry_len=0; room_entry=0; online=0; game_over=0;
     field_count=0;
     entry[0]=0;
@@ -312,12 +420,13 @@ int main(void) {
     memset(reply,0,sizeof(reply));
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
-    Screen(8);
+    Screen(5);
     HideDisplay();
-    SetColors(C_WHITE,C_DARK,C_DARK);
+    SetSC5Palette((Palette *)&palette);
+    SetColors(C_WHITE,C_BLACK,C_BLACK);
     *(uint8_t *)0xFFE8 |= 128;
     VDPwrite(9,*(uint8_t *)0xFFE8);
-    HMMV(0,0,256,212,C_DARK);
+    HMMV(0,0,256,212,PAIR(C_BLACK));
     cache_graphics();
     draw_board();
     ShowDisplay();
@@ -382,6 +491,7 @@ int main(void) {
         }
         draw_board();
     }
+    RestoreSC5Palette();
     Screen(0);
     Cls();
     return 0;
