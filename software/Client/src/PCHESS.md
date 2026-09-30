@@ -155,7 +155,10 @@ Only processes created by that harness are terminated during cleanup.
 ## PChess1 (MSX1)
 
 `pchess1.c` is the MSX1 (TMS9918, 16 KB VRAM) version with the same server
-protocol, modes and controls. It uses SCREEN 2 as a tile screen: the same
+protocol, modes and controls, including the ESC menu's ROOMS and LINK rows:
+the TCP/IP link code (`pchess_rules.c`, `pchess_sha.c`, `pchess_tcp.c`) is
+shared with pchess.c. On an MSX1 the TCP/IP stack needs a memory mapper
+(`MSR I`, then `INL I`). It uses SCREEN 2 as a tile screen: the same
 256 characters are loaded into all three pattern/colour banks, so refreshes
 only write name-table bytes. Squares are 16x16 (the pchess pieces scaled to
 two thirds) and text uses the BIOS 8x8 font, copied from SCREEN 1 at start.
