@@ -196,6 +196,11 @@ class RoomRelay(unittest.TestCase):
             p._use_irc=False
             server.shutdown(); server.server_close()
 
+    def test_lobby_commands_need_online(self):
+        p._use_irc=False
+        for cmd in ('seek','offer bob','accept','players'):
+            self.assertIn(b'Go online first (4)',p.handle_command(cmd)[72:120],cmd)
+
     def test_level_packet_reports_rooms(self):
         self.assertEqual(p.level_packet('800','irc')[243],1)
         self.assertEqual(p.level_packet('800')[243],0)

@@ -867,7 +867,9 @@ static uint8_t local_exchange(const char *cmd) {
         if(local_end || rules_outcome()) fail="Game over"; else local_end=pos.white?2:3;
     } else if(!strcmp(verb,"poll") && link_mode==MODE_LOCAL) {
     } else if(link_mode!=MODE_IRC) {
-        fail=!strcmp(verb,"players")?"Go online first (4)":"Start a game first";
+        /* Lobby commands before 4 ONLINE, as the server says. */
+        fail=(!strcmp(verb,"players") || !strcmp(verb,"seek") || !strcmp(verb,"offer") ||
+              !strcmp(verb,"accept"))?"Go online first (4)":"Start a game first";
     } else if(!strcmp(verb,"players")) {
         if(irc.room[0]) fail="In a room; no lobby";
         else { players_packet(); return 1; }
