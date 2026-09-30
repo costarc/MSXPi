@@ -1,4 +1,11 @@
-"""PCH1 IRC protocol: discovery in #msxpi, all game traffic private."""
+"""PCH1 IRC protocol: discovery in #msxpi, all game traffic private.
+
+A room is the channel #pchess-<room> instead of #msxpi. Joining sends
+PCH1 ROOM HELLO there; a free player answers PCH1 ROOM HERE (a busy one
+answers PCH1 ROOM BUSY privately). On HELLO or HERE the player whose
+folded nick sorts lower sends the usual private OFFER and so plays white;
+in a room the OFFER is accepted at once. The game is then the same private
+MOVE/ACK/DRAW/RESIGN exchange as a lobby match."""
 import hashlib
 import base64
 import os
@@ -22,9 +29,10 @@ PLAYER_TTL=600
 
 
 class Peer:
-    def __init__(self,nick,send):
+    def __init__(self,nick,send,room=None):
         self.nick=nick
         self.send=send
+        self.room=room         # '#pchess-<room>' in a room, else None (lobby)
         self.board=chess.Board()
         self.peer=None
         self.match=None
@@ -56,7 +64,21 @@ class Peer:
         self.draw_offer=None
         self.result=None
 
+    def channel(self):
+        return self.room or '#msxpi'
+
+    def announce_room(self):
+        """Say HELLO in the room; the lower nick of a free pair then offers."""
+        if not self.free(): raise ValueError('Already in a match')
+        self.send(self.room,'PCH1 ROOM HELLO')
+        self.status=('ROOM '+self.room[8:]+' - WAITING').upper()[:47]
+
+    def room_pair(self,sender):
+        if self.free() and fold(self.nick)<fold(sender):
+            self.offer(sender)
+
     def seek(self):
+        if self.room: raise ValueError('In a room; no lobby')
         if not self.free(): raise ValueError('Already in a match')
         if time.monotonic()-self.last_seek<60: raise ValueError('Wait before announcing again')
         self.send('#msxpi','PCH1 SEEK')
@@ -115,7 +137,15 @@ class Peer:
         fields=text.split()
         if len(fields)<2 or fields[0]!='PCH1' or fold(sender)==fold(self.nick): return
         op=fields[1]
+        if self.room and fold(target)==fold(self.room):
+            if len(fields)==3 and op=='ROOM' and fields[2] in ('HELLO','HERE'):
+                if fields[2]=='HELLO':
+                    if self.free(): self.send(self.room,'PCH1 ROOM HERE')
+                    else: self.send(sender,'PCH1 ROOM BUSY')
+                self.room_pair(sender)
+            return
         if fold(target)==fold('#msxpi'):
+            if self.room: return
             if fields==['PCH1','SEEK'] and self.free():
                 self.seen(sender)
                 self.status='PLAYER '+sender
@@ -126,6 +156,11 @@ class Peer:
             if self.free():
                 self.invite=(sender,fields[2])
                 self.status='INVITE '+sender+' PRESS 7'
+                if self.room: self.accept()
+            return
+        if op=='ROOM' and fields==['PCH1','ROOM','BUSY'] and self.room:
+            if self.free() and self.phase!='playing':
+                self.status='ROOM BUSY - GAME IN PROGRESS'
             return
         if not self.peer or fold(sender)!=fold(self.peer) or len(fields)<3 or fields[2]!=self.match: return
         if op=='ACCEPT' and len(fields)==3 and self.phase in ('offered','playing'):
@@ -248,7 +283,7 @@ def tls_context():
 
 
 class IRC:
-    def __init__(self,config=None):
+    def __init__(self,config=None,room=None):
         config=config or {}
         self.nick=os.environ.get('PCHESS_IRC_NICK') or config.get('IRCNICK') or 'pch'+secrets.token_hex(2)
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',self.nick): raise ValueError('Invalid lobby nickname (IRCNICK)')
@@ -283,7 +318,7 @@ class IRC:
         self.closed=False
         self.ready=False
         self.started=time.monotonic()
-        self.peer=Peer(self.nick,self.message)
+        self.peer=Peer(self.nick,self.message,room)
         self.peer.status='ACCESSING LOBBY'
         if self.account: self.line('CAP REQ :sasl')
         self.line(f'NICK {self.nick}')
@@ -322,11 +357,12 @@ class IRC:
                             raise ValueError('Lobby login not confirmed')
                         self.nick=parts[2]
                         self.peer.nick=self.nick
-                        self.peer.status='JOINING LOBBY'
-                        self.line('JOIN #msxpi')
-                    if len(parts)>2 and parts[1]=='JOIN' and fold(parts[0][1:].split('!',1)[0])==fold(self.nick) and fold(parts[2].lstrip(':'))==fold('#msxpi'):
+                        self.peer.status='JOINING ROOM' if self.peer.room else 'JOINING LOBBY'
+                        self.line('JOIN '+self.peer.channel())
+                    if len(parts)>2 and parts[1]=='JOIN' and fold(parts[0][1:].split('!',1)[0])==fold(self.nick) and fold(parts[2].lstrip(':'))==fold(self.peer.channel()):
                         self.ready=True
                         self.peer.status='LOBBY '+self.nick
+                        if self.peer.room: self.announce=True
                     if len(parts)>3 and parts[1]=='401':
                         # Unknown nickname: report it but stay in the lobby.
                         self.peer.no_such_nick(parts[3].partition(' :')[0].strip())
@@ -392,6 +428,9 @@ class IRC:
         if not self.ready and time.monotonic()-self.started>60:
             self.close()
             raise ValueError('Lobby connection timed out')
+        if getattr(self,'announce',False):
+            self.announce=False
+            self.peer.announce_room()
         while not self.messages.empty(): self.peer.receive(*self.messages.get_nowait())
         self.peer.tick()
         return self.peer.snapshot()

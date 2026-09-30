@@ -155,14 +155,22 @@ def template(parms: Optional[str] = None) -> CommandResult:
 
 def pchess(parms: Optional[str] = None) -> CommandResult:
     try:
-        from msxpi_pchess import LEVEL_ELO, handle_command, level_packet
+        from msxpi_pchess import LEVEL_ELO, handle_command, level_packet, rooms_mode
 
         args = (parms or "").split()
-        if args and args[0] == "level":
-            # "pchess level N" saves PCHESSELO to msxpi.ini; no N just reports.
-            if len(args) == 2 and args[1].isdigit() and 1 <= int(args[1]) <= 8:
+        if args and args[0] in ("level", "rooms"):
+            # "pchess level N" saves PCHESSELO and "pchess rooms relay|irc"
+            # PCHESSROOMS to msxpi.ini; either with no value just reports.
+            if args[0] == "level" and len(args) == 2 and args[1].isdigit() and 1 <= int(args[1]) <= 8:
                 setMSXPiVar("PCHESSELO", str(LEVEL_ELO[int(args[1]) - 1]))
-            return sendmultiblock(level_packet(getMSXPiVar("PCHESSELO")))
+            if args[0] == "rooms" and len(args) == 2 and args[1] in ("relay", "irc"):
+                setMSXPiVar("PCHESSROOMS", args[1])
+            return sendmultiblock(
+                level_packet(
+                    getMSXPiVar("PCHESSELO"),
+                    rooms_mode({"PCHESSROOMS": getMSXPiVar("PCHESSROOMS")}),
+                )
+            )
 
         irc_config = {
             key: getMSXPiVar(key)
@@ -176,7 +184,8 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
             )
         }
         room_config = {
-            key: getMSXPiVar(key) for key in ("PCHESSRELAY", "PCHESSLISTEN", "PCHESSPORT")
+            key: getMSXPiVar(key)
+            for key in ("PCHESSRELAY", "PCHESSLISTEN", "PCHESSPORT", "PCHESSROOMS")
         }
         engine_config = {
             key: getMSXPiVar(key)

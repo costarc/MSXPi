@@ -141,3 +141,16 @@ TLS to irc.libera.chat:6697 as msxpichess1/msxpichess2 with no account or
 password. Public SEEK, private OFFER/ACCEPT/READY, e2-e4/e7-e5 and ACKs all
 passed, both VRAM board checks and new-game history clearing passed, and the
 channel carried discovery only. Artifacts: work/pchess-dual-1yngqsw6.
+
+## Rooms on IRC
+
+With `PCHESSROOMS=irc` (and always on the TCP/IP link) `3 ROOM` joins the
+channel `#pchess-<room>` instead of `#msxpi`; the room name is 1-16 letters
+or digits, folded to lower case. On joining, a player sends
+`PCH1 ROOM HELLO` to the channel. A free player answers `PCH1 ROOM HERE` in
+the channel; a player in a game answers `PCH1 ROOM BUSY` privately. On HELLO
+or HERE, the player whose folded nick sorts lower sends the usual private
+`PCH1 OFFER`, and in a room the OFFER is accepted at once. From then on the
+game is the private MOVE/ACK/DRAW/RESIGN exchange above. Joining the same
+room again sends HELLO again, which is how a rematch starts.
+
