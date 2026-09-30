@@ -591,6 +591,13 @@ int main(void) {
             }
             continue;
         }
+        /* ESC in the ROOM or ASK prompt cancels it rather than opening the
+         * menu, which would leave the prompt taking every key afterwards. */
+        if(key==27 && room_entry) {
+            room_entry=0; entry_len=0; entry[0]=0; strcpy(status,"CANCELLED");
+            draw_board();
+            continue;
+        }
         if (key == 27) {
             if(menu()) break;
             draw_board();
@@ -603,6 +610,10 @@ int main(void) {
             if(exchange(command)) {
                 if(room_entry) online=1;
                 room_entry=0; entry_len=0; entry[0]=0; selected_x=255;
+            } else if(room_entry) {
+                /* A failed ROOM or ASK closes the prompt; the status line
+                 * keeps the reason. A refused move stays to be corrected. */
+                room_entry=0; entry_len=0; entry[0]=0;
             }
         }
         else if(!entry_len && !room_entry && online && key>='1' && key<='4' &&
