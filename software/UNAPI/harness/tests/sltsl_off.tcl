@@ -28,7 +28,7 @@
 # sltsl_off - the SLTSL jumper open: the EEPROM is cut off, the machine boots
 # plain BASIC and CALL MSXPI does not exist.  Needs the whole-board extension:
 #
-#   HW=basic MSXPIEXT=MSXPi32K MSXPISLTSL=OFF ./run.sh sltsl_off
+#   HW=basic MSXPIEXT=MSXPi MSXPISLTSL=OFF ./run.sh sltsl_off
 # =============================================================================
 
 harness::init "sltsl_off"
