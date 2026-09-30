@@ -321,6 +321,17 @@ if [ "$buildOpenMSXConfig" = "yes" ]; then
     cp "$BASICFILE" "$OPENMSXSHARE/systemroms/extensions/$BASICNAME.rom"
     echo "  updated to $BASSHA (MSXPiBasic.xml + $BASICNAME.rom)"
 
+    # MSXPi32K: the whole board in MSXPiDevice - the 32KB EEPROM with the J3
+    # jumpers as settings (msxpirom_bank BANK1|BANK2, msxpirom_sltsl ON|OFF).
+    # Needs the openMSX fork with EEPROM support in MSXPiDevice.
+    SHA32=$(sha1sum "$ROM32FILE" | cut -f1 -d" ")
+    ROM32NAME=$(basename "$ROM32FILE")
+    sed "s/msxpi32ksha/$SHA32/" MSXPi32K.xml.template > openMSX/share/extensions/MSXPi32K.xml
+    cp "$ROM32FILE" "openMSX/share/systemroms/extensions/$ROM32NAME"
+    cp openMSX/share/extensions/MSXPi32K.xml "$OPENMSXSHARE/extensions/MSXPi32K.xml"
+    cp "$ROM32FILE" "$OPENMSXSHARE/systemroms/extensions/$ROM32NAME"
+    echo "  updated to $SHA32 (MSXPi32K.xml + $ROM32NAME)"
+
     # The per-SHA pair, only for a released build: the plain ROM above is
     # replaced by every later build, so a released one needs a copy under a name
     # nothing overwrites.

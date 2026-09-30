@@ -1,0 +1,35 @@
+<?xml version="1.0" ?>
+<!DOCTYPE msxconfig SYSTEM 'msxconfig2.dtd'>
+<msxconfig>
+  <info>
+    <name>MSXPi32K</name>
+    <manufacturer>MSXPi (https://github.com/costarc/MSXPi)</manufacturer>
+    <code/>
+    <release_year/>
+    <description>MSXPi is an extension for openMSX that emulates the MSXPi hardware interface, enabling an MSX computer to interact with modern systems. Unlike the physical version, the emulated interface does not require a Raspberry Pi — it communicates with a Python-based server component that provides access to web resources, files, REST APIs, and other external services.</description>
+    <type>pluggable</type>
+  </info>
+  <devices>
+    <primary slot="any">
+      <secondary slot="any">
+        <!-- The whole board in one device: the CPLD's ports and the 32KB
+             EEPROM, wired as J3 wires it.  The J3 jumpers are settings,
+             read at reset:  "set msxpirom_bank BANK2|BANK1" picks the half
+             at 4000h - BANK2 = MSX-DOS (default), BANK1 = BIOS only - with
+             the other half mirrored at 8000h as on the board, and
+             "set msxpirom_sltsl ON|OFF" connects or cuts the EEPROM.
+             Needs the MSXPi openMSX fork with EEPROM support in MSXPiDevice. -->
+        <MSXPiDevice id="MSXPi">
+          <io base="0x56" num="1"/>
+          <io base="0x57" num="1"/>
+          <io base="0x5A" num="1"/>
+          <mem base="0x0000" size="0x10000"/>
+          <rom>
+            <sha1>msxpi32ksha</sha1>
+            <filename>msxpi32k.rom</filename>
+          </rom>
+        </MSXPiDevice>
+      </secondary>
+    </primary>
+  </devices>
+</msxconfig>
