@@ -73,14 +73,21 @@ HW="${HW:-msxpi}"
 # Extra -command arguments a profile needs (inserting media, say).  Kept
 # separate from RENDER_ARGS, which is rebuilt from scratch further down.
 MEDIA_ARGS=()
+# Which MSXPi ROM the profiles plug in.  MSXPi is the MSX-DOS 1 ROM (the lower
+# EEPROM bank); MSXPiBasic is the BIOS-only bank - CALL MSXPI and UNAPI, no
+# disk system.  HW=nextor MSXPIEXT=MSXPiBasic is the board next to Nextor with
+# the jumper on the BIOS-only bank.
+MSXPIEXT="${MSXPIEXT:-MSXPi}"
 case "$HW" in
+    # BIOS-only bank on a machine with no disk system at all: boots to BASIC.
+    basic) EXTS=(-ext MSXPiBasic) ;;
     # DOS1 target: MSXPi in SLOT 2, booting MSX-DOS 1 from the Pi-served
     # msxpiboot.dsk.  Extension order is slot order, so ram2mb goes first to
     # take slot 1 and leave MSXPi in slot 2, matching the hardware - the
     # driver then reports slot 2 as it does there.  ram2mb is also what
     # supplies the memory mapper INL needs, which a bare V-25 does not have.
-    msxpi) EXTS=(-ext ram2mb -ext MSXPi) ;;
-    msxpi128) EXTS=(-ext MSXPi) ;;   # machine already has >=128K in the RAM slot
+    msxpi) EXTS=(-ext ram2mb -ext "$MSXPIEXT") ;;
+    msxpi128) EXTS=(-ext "$MSXPIEXT") ;;   # machine already has >=128K in the RAM slot
     # The real target: MegaFlashROM SCC+SD in slot 1 running Nextor, MSXPi in
     # slot 2 for the network only.  Extension order is slot order, so MFR must
     # come first to land in slot 1 and match the hardware - the driver then
@@ -96,7 +103,7 @@ case "$HW" in
     # for floppies, not for hd/SD devices.  Re-run that script whenever the
     # tools in the folder change; nothing here detects staleness.
     nextor)
-        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext "$MSXPIEXT")
         NEXTORHD="${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}"
         [ -f "$NEXTORHD" ] || {
             echo "no Nextor HD image at $NEXTORHD - run ./mknextorhd.sh first"
@@ -105,7 +112,7 @@ case "$HW" in
         MEDIA_ARGS=(-command "hdb {$NEXTORHD}")
         ;;
     mfr)
-        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext "$MSXPIEXT")
         if [ -n "${SDIMG:-}" ]; then
             # Either a real .sdc image or a DIRECTORY - openMSX mounts a
             # folder as the card's filesystem, which is how the Nextor boot
@@ -124,7 +131,7 @@ case "$HW" in
         EXTS=()
         MEDIA_ARGS=(-diska "${BOOTDSK:-$HERE/../../target/disks/msxpiboot.dsk}")
         ;;
-    *)     echo "unknown HW='$HW' (want msxpi, msxpi128, nextor, mfr or nomsxpi)"; exit 1 ;;
+    *)     echo "unknown HW='$HW' (want msxpi, msxpi128, basic, nextor, mfr or nomsxpi)"; exit 1 ;;
 esac
 
 # Headless by default.  Tests read the screen out of VRAM through the debugger,
@@ -160,6 +167,8 @@ else
             nextor_*) [ "$HW" = "nextor" ] || continue ;;
             # nomsxpi_* boot a machine with no MSXPi cartridge (HW=nomsxpi).
             nomsxpi_*) [ "$HW" = "nomsxpi" ] || continue ;;
+            # basic_* boot the BIOS-only bank to BASIC (HW=basic).
+            basic_*) [ "$HW" = "basic" ] || continue ;;
         esac
         TESTS+=("$name")
     done
