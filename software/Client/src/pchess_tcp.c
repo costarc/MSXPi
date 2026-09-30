@@ -105,8 +105,9 @@ static uint8_t unapi(uint8_t fn) {
 #define ERR_BUFFER 13
 
 /* Buffers handed to the implementation must not be in page 1, where the
- * RAM helper and CALSLT map it. They live just below the stack, at the top
- * of the TPA, well clear of page 1. */
+ * RAM helper and CALSLT map it. PChess is large enough that its static
+ * data is in page 2; net_memory() checks that, and that the stack still
+ * has room below the TPA top (extra drives and INL lower it). */
 #define RX_SIZE 512
 typedef struct {
     char rx[RX_SIZE];
@@ -114,12 +115,28 @@ typedef struct {
     uint8_t open[13];
     char host[64];
 } NetMem;
+static NetMem net_area;
 static NetMem *net;
+#define STACK_ROOM 768
 
-static uint8_t net_memory(void) {
-    uint16_t top=*(uint16_t *)0x0006-1536-sizeof(NetMem);
-    if(top<0x8000 || top<heap_top) return 0;
-    net=(NetMem *)top;
+static char *put_hex(char *out,uint16_t v) {
+    uint8_t i;
+    for(i=0;i<4;i++,v<<=4) *out++="0123456789ABCDEF"[v>>12];
+    *out=0;
+    return out;
+}
+
+/* 0 with a status naming the addresses when it cannot. */
+static uint8_t net_memory(char *status) {
+    uint16_t top=*(uint16_t *)0x0006;
+    if((uint16_t)&net_area<0x8000) { strcpy(status,"TCP/IP BUFFER IN PAGE 1"); return 0; }
+    if(top<heap_top || top-heap_top<STACK_ROOM) {
+        char *p;
+        strcpy(status,"LOW MEMORY: TPA "); p=put_hex(status+16,top);
+        strcpy(p," END "); put_hex(p+5,heap_top);
+        return 0;
+    }
+    net=&net_area;
     return 1;
 }
 
@@ -746,7 +763,7 @@ static void tcp_init(void) {
 /* Called when LINK changes to TCPIP; 0 with a status when it cannot. */
 static uint8_t tcp_link_start(char *status) {
     if(!tcp_find()) { strcpy(status,"NO TCP/IP UNAPI - RUN INL I"); return 0; }
-    if(!net_memory()) { strcpy(status,"NOT ENOUGH MEMORY FOR TCP/IP"); return 0; }
+    if(!net_memory(status)) return 0;
     load_config();
     link_mode=MODE_LOCAL;
     board_reset();
