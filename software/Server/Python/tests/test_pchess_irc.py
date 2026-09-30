@@ -245,4 +245,83 @@ class Protocol(unittest.TestCase):
         self.assertEqual(self.a.phase,'error')
         self.assertEqual(len(self.a.board.move_stack),1)
 
+class Rooms(unittest.TestCase):
+    ROOM='#pchess-club7'
+    def setUp(self):
+        self.messages=[]
+        self.peers={}
+        for nick in ('Alice','Bob','Carol'):
+            self.peers[nick]=Peer(nick,lambda target,text,nick=nick:self.messages.append((nick,target,text)),self.ROOM)
+        self.members=[]
+    def join(self,nick):
+        self.members.append(nick)
+        self.peers[nick].announce_room()
+    def deliver(self):
+        while self.messages:
+            sender,target,text=self.messages.pop(0)
+            names=self.members if target==self.ROOM else [target]
+            for name in names:
+                if name!=sender: self.peers[name].receive(sender,target,text)
+    def test_lower_nick_offers_and_plays_white(self):
+        self.join('Bob'); self.deliver()
+        self.assertEqual(self.peers['Bob'].status,'ROOM CLUB7 - WAITING')
+        self.join('Alice'); self.deliver()
+        a,b=self.peers['Alice'],self.peers['Bob']
+        self.assertEqual((a.phase,b.phase),('playing','playing'))
+        self.assertTrue(a.side); self.assertFalse(b.side)
+        self.assertEqual(a.peer,'Bob')
+        a.move('e4'); self.deliver()
+        self.assertEqual(b.history,['e4'])
+    def test_join_order_does_not_change_colours(self):
+        self.join('Alice'); self.deliver(); self.join('Bob'); self.deliver()
+        self.assertTrue(self.peers['Alice'].side)
+        self.assertEqual(self.peers['Bob'].phase,'playing')
+    def test_third_player_is_told_busy(self):
+        self.join('Alice'); self.join('Bob'); self.deliver()
+        self.join('Carol'); self.deliver()
+        self.assertEqual(self.peers['Carol'].status,'ROOM BUSY - GAME IN PROGRESS')
+        self.assertEqual(self.peers['Alice'].peer,'Bob')
+    def test_rematch_after_game_over(self):
+        self.join('Alice'); self.join('Bob'); self.deliver()
+        a,b=self.peers['Alice'],self.peers['Bob']
+        a.resign(); self.deliver()
+        self.assertTrue(a.free() and b.free())
+        b.announce_room(); self.deliver()
+        self.assertEqual((a.phase,b.phase),('playing','playing'))
+        self.assertEqual(len(a.board.move_stack),0)
+    def test_lobby_commands_refused_in_room(self):
+        with self.assertRaisesRegex(ValueError,'room'):
+            self.peers['Alice'].seek()
+    def test_lobby_seek_ignored_in_room(self):
+        self.peers['Alice'].receive('Bob','#msxpi','PCH1 SEEK')
+        self.assertEqual(self.peers['Alice'].players,{})
+
+    def test_two_socket_clients_room_game(self):
+        server=Server(('127.0.0.1',0))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        clients=[]
+        def wait_for(predicate):
+            deadline=time.monotonic()+3
+            while not predicate():
+                for client in clients: client.poll()
+                if time.monotonic()>deadline: self.fail('IRC fixture timed out')
+                time.sleep(.01)
+        try:
+            for nick in ('Zed','Amy'):
+                with patch.dict('os.environ',PCHESS_IRC_HOST='127.0.0.1',
+                    PCHESS_IRC_PORT=str(server.server_address[1]),PCHESS_IRC_TLS='0',
+                    PCHESS_IRC_NICK=nick,PCHESS_IRC_TRACE='0'):
+                    clients.append(IRC(None,self.ROOM))
+                wait_for(lambda: all(c.ready for c in clients))
+            z,a=clients
+            wait_for(lambda: a.peer.phase==z.peer.phase=='playing')
+            self.assertTrue(a.peer.side)
+            a.peer.move('d4')
+            wait_for(lambda: len(z.peer.history)==1 and not a.peer.pending)
+            self.assertFalse(any(t=='#msxpi' for _,t,_ in server.transcript))
+        finally:
+            for client in clients: client.close()
+            server.shutdown()
+            server.server_close()
+
 if __name__=='__main__': unittest.main()

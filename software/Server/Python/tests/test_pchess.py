@@ -1,5 +1,7 @@
 import sys
+import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 import chess
@@ -168,3 +170,33 @@ class RoomRelay(unittest.TestCase):
         data=p.handle_command('join testroom',room_config=config)
         self.assertEqual(data[:5],b'PCH1\x01',data[72:120])
         self.assertIsNotNone(p._relay)
+
+    def test_irc_rooms_do_not_start_relay(self):
+        from pchess_irc_fixture import Server
+        import threading
+        server=Server(('127.0.0.1',0))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        try:
+            env=dict(PCHESS_IRC_HOST='127.0.0.1',PCHESS_IRC_PORT=str(server.server_address[1]),
+                     PCHESS_IRC_TLS='0',PCHESS_IRC_NICK='Solo')
+            with patch.dict('os.environ',env):
+                data=p.handle_command('join Club7',room_config={'PCHESSROOMS':'irc'})
+                self.assertEqual(data[:4],b'PCH1')
+                self.assertIsNone(p._relay)
+                self.assertEqual(p._irc.peer.room,'#pchess-club7')
+                for _ in range(300):
+                    data=p.handle_command('poll')
+                    if data[72:76]==b'ROOM': break
+                    time.sleep(.01)
+                self.assertEqual(data[72:92],b'ROOM CLUB7 - WAITING')
+                self.assertIn(b'no lobby',p.handle_command('players')[72:120])
+                self.assertIn(b'Room: 1-16',p.handle_command('join abcdefghijklmnopq',room_config={'PCHESSROOMS':'irc'})[72:120])
+        finally:
+            if p._irc: p._irc.close(); p._irc=None
+            p._use_irc=False
+            server.shutdown(); server.server_close()
+
+    def test_level_packet_reports_rooms(self):
+        self.assertEqual(p.level_packet('800','irc')[243],1)
+        self.assertEqual(p.level_packet('800')[243],0)
+        self.assertEqual(p.rooms_mode({}),'relay')

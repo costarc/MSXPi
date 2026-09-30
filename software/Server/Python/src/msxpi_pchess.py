@@ -5,6 +5,8 @@ this server (msxpi.ini PCHESSLISTEN/PCHESSPORT); any other mode stops it.
 PCHESSRELAY names the relay both players share: empty means this server's
 own relay, otherwise http://HOST:PORT of the MSXPi hosting the room. The
 module can still run standalone with --listen to host a dedicated relay.
+PCHESSROOMS=irc makes ROOM a #pchess-<room> IRC channel instead (see
+msxpi_pchess_irc.py), which MSX machines on TCP/IP UNAPI can join too.
 
 The AI opponent is Stockfish when it is installed (PCHESSENGINE, PCHESSELO,
 PCHESSMOVETIME in msxpi.ini); otherwise a small built-in search plays.
@@ -333,6 +335,18 @@ def relay_url(config):
     return url.rstrip('/')
 
 
+def room_channel(room):
+    room = room.lower()
+    if not room or len(room) > 16 or not room.isalnum():
+        raise ValueError('Room: 1-16 letters or digits')
+    return '#pchess-' + room
+
+
+def rooms_mode(config):
+    mode = (os.environ.get('PCHESS_ROOMS') or config.get('PCHESSROOMS') or 'relay').lower()
+    return 'irc' if mode == 'irc' else 'relay'
+
+
 def handle_command(command, irc_config=None, room_config=None, engine_config=None):
     """Return a fixed 256-byte state packet, including user-visible failures."""
     global _session, _remote, _irc, _use_irc, _engine_config
@@ -342,14 +356,27 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         args = command.split()
         if not args:
             raise ValueError('new local / new ai / join ROOM')
-        if args[0] in ('irc','new'):
+        irc_room = args[0] == 'join' and len(args) == 2 and rooms_mode(room_config) == 'irc'
+        if args[0] in ('irc','new') or irc_room:
             stop_relay()
         if args[0] in ('irc','join') or (args[0]=='new' and args[1:]!=['ai']):
             stop_engine()
         # Not an elif: 'join' also matches the line above, which left this
         # unreachable and the relay never started (connection refused).
-        if args[0] == 'join':
+        if args[0] == 'join' and not irc_room:
             start_relay(room_config)
+        if irc_room:
+            channel = room_channel(args[1])
+            # Joining the same room again (a rematch) just says HELLO again.
+            if _use_irc and _irc and _irc.peer.room == channel and _irc.ready and not _irc.error:
+                _irc.poll()
+                _irc.peer.announce_room()
+                return packet(_irc.poll())
+            from msxpi_pchess_irc import IRC
+            if _irc: _irc.close()
+            _irc = IRC(irc_config, channel)
+            _use_irc = True
+            return packet(_irc.poll())
         if args[0]=='irc':
             from msxpi_pchess_irc import IRC
             if _irc: _irc.close()
@@ -358,6 +385,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             return packet(_irc.poll())
         if args[0]=='players' and not _use_irc:
             raise ValueError('Go online first (4)')
+        if args[0]=='players' and _irc.peer.room:
+            raise ValueError('In a room; no lobby')
         if _use_irc and args[0] in ('seek','offer','accept','poll','move','players','draw','resign'):
             _irc.poll()
             if args[0]!='poll' and not _irc.ready:
@@ -419,14 +448,16 @@ def elo_level(elo):
     return 1 + min(range(8), key=lambda i: abs(LEVEL_ELO[i]-elo))
 
 
-def level_packet(elo):
-    """Status-only packet (board flag 0 keeps the client board); byte 242 = level."""
+def level_packet(elo, rooms='relay'):
+    """Status-only packet (board flag 0 keeps the client board); byte 242 =
+    level, byte 243 = 1 when rooms are IRC channels (PCHESSROOMS=irc)."""
     level = elo_level(elo)
     data = bytearray(256)
     data[:4] = b'PCH1'
     message = ('AI LEVEL %d ELO %d' % (level, LEVEL_ELO[level-1])).encode('ascii')
     data[72:72+len(message)] = message
     data[242] = level
+    data[243] = int(rooms == 'irc')
     # The only pchess reply built in microseconds. On the v0.8.2 board a quick
     # reply here intermittently fails: the MSX drops out after the block
     # header and the payload times out (rc=1, completed=0/256). 20 ms failed and
