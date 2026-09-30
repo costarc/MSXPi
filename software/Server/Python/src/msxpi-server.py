@@ -48,6 +48,7 @@ SERVER_MODULES = (
     "msxpi_cmd_system.py",
     "msxpi_cmd_web.py",
     "msxpi_renderpage.py",
+    "msxpi_nitros.py",
 )
 
 
@@ -126,6 +127,7 @@ from msxpi_cmd_system import (
     wlanreset,
 )
 from msxpi_cmd_web import chatgpt, irc, pchess, renderpage, showpage, template
+from msxpi_nitros import nitros
 from msxpi_const import BUILD_ID, RC_CONNERR, RC_SUCCESS, VERSION
 from msxpi_settings import MSXPiConfig, getMSXPiVar
 
@@ -163,6 +165,7 @@ COMMANDS = {
         dskiow,
         irc,
         pchess,
+        nitros,
         msxarchive,
         music,
         netreset,
