@@ -23,7 +23,7 @@ buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
 buildBIOS="${buildBIOS:-yes}"
-buildLoadrom="${buildLoadrom:-yes}"
+buildLoadrom="${buildLoadrom:-no}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
@@ -101,7 +101,7 @@ check_yes_no updateRomVersion "$updateRomVersion"
 # old value as a search pattern was fragile and could silently fail to match,
 # leaving the id unchanged with no visible error.
 update_build_id() {
-    local fname="$1" anchor="$2" dot="$3" update="$4"
+    local fname="$1" anchor="$2" update="$3"
     [ "$update" = "yes" ] || return 0
     [ -f "$fname" ] || { warn "BuildId: $fname does not exist"; return 0; }
 
@@ -112,7 +112,7 @@ update_build_id() {
            sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
     [ -n "$last" ] || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
     next=$(printf "%03d" $((10#$last + 1)))
-    line="$anchor\"$dot$today.$next\""
+    line="$anchor\"$today.$next\""
 
     sed "s|^$anchor.*|$line|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
     if grep -qF -- "$line" "$fname"; then
@@ -181,7 +181,7 @@ EOF
 # =============================================================================
 # Server
 # =============================================================================
-update_build_id ./Server/Python/src/msxpi-server.py "BuildId = " "" "$updateServerVersion"
+update_build_id ./Server/Python/src/msxpi_const.py "BUILD_ID = " "$updateServerVersion"
 
 # =============================================================================
 # MSX-DOS client commands
@@ -222,9 +222,9 @@ if [ "$buildBIOS" = "yes" ]; then
     # msxpi-driver.mac, so the id must already be updated in the source before
     # zmac runs, or the compiled ROM bakes in the previous run's id and the
     # bump only takes effect on the *next* build.
-    update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "." "$updateRomVersion"
-    update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "." "$updateRomVersion"
-    update_build_id ./ROM/src/BIOS/msxpibios.asm         "BuildId: DB " "." "$updateRomVersion"
+    update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "$updateRomVersion"
+    update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "$updateRomVersion"
+    update_build_id ./ROM/src/BIOS/msxpibios.asm         "BuildId: DB " "$updateRomVersion"
 
     # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
     # exist before zmac runs - and it is built with sjasm, not zmac, because the

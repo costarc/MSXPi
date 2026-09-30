@@ -331,10 +331,10 @@ MY_GETWRK1:
         INCLUDE "msxpi_call.asm"
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6.1"
-BuildId: DB ".20260930.065"
-        DB      " (no DOS)",13,10
-        DB      "    RCC (c) 2015-2026",13,10,0
+        DB      13,10,"MSXPi BIOS v1.6.1",13,10
+		DB		"Build "
+BuildId: DB "20260930.065"
+        DB      13,10,"RCC (c) 2015-2026",13,10,0
 
 CALL_TABLE:
         DB      "MSXPIVER",0
