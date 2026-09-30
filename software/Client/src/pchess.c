@@ -479,7 +479,7 @@ static void set_link(uint8_t tcp) {
         if(!tcp_link_start(status)) return;
         link_tcp=1;
         exchange("pchess new local");
-        strcpy(status,"LINK TCPIP - 1 LOCAL 3 ROOM 4 ONLINE");
+        strcpy(status,"LINK TCPIP");
     } else {
         tcp_link_stop();
         link_tcp=0;

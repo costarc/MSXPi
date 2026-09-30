@@ -258,7 +258,7 @@ def main():
             failures.append(name)
 
     s = screens.get
-    check('link switched', s('link') and s('link')['status'].startswith('LINK TCPIP'), s('link'))
+    check('link switched', s('link') and s('link')['status'] == 'LINK TCPIP', s('link'))
     check('local rules', s('local') and s('local')['moves'][:4] == ['E4', 'E5', 'NF3', ''], s('local'))
     check('local illegal refused', s('local') and 'ILLEGAL' in s('local')['status'], s('local'))
     a, b = alice.irc.peer, bob.irc.peer
