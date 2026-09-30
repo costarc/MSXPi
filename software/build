@@ -49,6 +49,12 @@ releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 # "export BIOSNAME=" shape (software/Tests/nextor_mfr_copy.py).
 export BIOSNAME=msxpibios
 BIOSFILE=target/$BIOSNAME.rom
+# The EEPROM is 32KB, two 16KB banks picked with the A14/A15 jumper:
+# msxpibios.rom (MSX-DOS 1) below, msxpibas.rom (BIOS only, no DOS) above.
+# msxpi32k.rom is the two together - the file to write to the EEPROM.
+BASICNAME=msxpibas
+BASICFILE=target/$BASICNAME.rom
+ROM32FILE=target/msxpi32k.rom
 
 # --- where the tools and the outside directories are -------------------------
 # TOOLS, not HOME: this script used to override HOME for these paths, and every
@@ -183,9 +189,8 @@ if [ "$buildBIOS" = "yes" ]; then
     # zmac runs, or the compiled ROM bakes in the previous run's id and the
     # bump only takes effect on the *next* build.
     update_build_id ./ROM/src/MSX-DOS/msxpi-driver.mac   "BuildId: DB " "." "$updateRomVersion"
-    # msxpibios.asm used to carry a BuildId too; it is gone, and the BIOS
-    # banner now lives in the driver ROM and the BASIC extension.
     update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "." "$updateRomVersion"
+    update_build_id ./ROM/src/BIOS/msxpibios.asm         "BuildId: DB " "." "$updateRomVersion"
 
     # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
     # exist before zmac runs - and it is built with sjasm, not zmac, because the
@@ -222,7 +227,44 @@ if [ "$buildBIOS" = "yes" ]; then
     "$HEX2BIN" -s 4000 ./zout/msx-dos.hex || die "hex2bin failed"
     cp ./zout/msx-dos.bin "$BIOSFILE" || die "could not write $BIOSFILE"
 
+    # msxpibas.rom - the BIOS-only bank: CALL MSXPI and the Ethernet UNAPI
+    # driver without the MSX-DOS 1 kernel (see the header of msxpibios.asm).
+    # It INCBINs the same ethrom.bin as the DOS ROM, hence the second --inc.
+    #
+    # The EEPROM mirrors the other half at 8000h, where the BIOS runs its
+    # header too, so this ROM plants harmless entries at the DOS ROM's header
+    # addresses (see "Living next to the DOS ROM" in msxpibios.asm).  Those
+    # addresses move with every DOS build: read them from the ROM just built.
+    #   DOS_INIT = header INIT (4002h), DOS_STMT = header STATEMENT (4004h),
+    #   DOS_RET  = MTOFF, the target of the JP at 401Fh - must be a plain RET.
+    rom_word() { od -An -tx1 -j "$2" -N2 "$1" | awk '{print $2 $1}'; }
+    rom_byte() { od -An -tx1 -j "$2" -N1 "$1" | tr -d ' '; }
+    DOS_INIT=$(rom_word "$BIOSFILE" 2)
+    DOS_STMT=$(rom_word "$BIOSFILE" 4)
+    [ "$(rom_byte "$BIOSFILE" $((0x1F)))" = "c3" ] || die "$BIOSFILE: no JP MTOFF at 401Fh"
+    DOS_RET=$(rom_word "$BIOSFILE" $((0x20)))
+    [ "$(rom_byte "$BIOSFILE" $((0x$DOS_RET - 0x4000)))" = "c9" ] ||
+        die "$BIOSFILE: MTOFF at $DOS_RET is not a plain RET"
+    echo "Compiling the BIOS-only ROM ($BASICFILE)" \
+         "- DOS INIT $DOS_INIT, STATEMENT $DOS_STMT, RET $DOS_RET"
+    rm -f "$BASICFILE"
+    "$SJASM_DIR/sjasmplus" -DMSXPI_ROM_STASH --inc=./asm-common/include \
+        --inc=./ROM/src/MSX-DOS -DDOS_INIT=0x$DOS_INIT -DDOS_STMT=0x$DOS_STMT \
+        -DDOS_RET=0x$DOS_RET -DOUTFILE="\"$BASICFILE\"" \
+        ./ROM/src/BIOS/msxpibios.asm && [ -f "$BASICFILE" ] ||
+        die "msxpibios.asm did not assemble - $BASICFILE NOT updated"
+
+    # The 32KB EEPROM image: the DOS ROM in the lower half, where a 16KB write
+    # has always landed, and the BIOS-only ROM in the upper half.  Written in
+    # one go - at28c256.com chip-erases all 32KB before it writes, so writing
+    # one half on its own wipes the other.
+    [ "$(wc -c < "$BIOSFILE")" -eq 16384 ] || die "$BIOSFILE is not 16KB"
+    [ "$(wc -c < "$BASICFILE")" -eq 16384 ] || die "$BASICFILE is not 16KB"
+    cat "$BIOSFILE" "$BASICFILE" > "$ROM32FILE" || die "could not write $ROM32FILE"
+
     echo "  $BIOSFILE  $(sha1sum "$BIOSFILE" | cut -c1-40)"
+    echo "  $BASICFILE  $(sha1sum "$BASICFILE" | cut -c1-40)"
+    echo "  $ROM32FILE  $(sha1sum "$ROM32FILE" | cut -c1-40)"
 fi
 
 # =============================================================================
@@ -269,6 +311,26 @@ if [ "$buildOpenMSXConfig" = "yes" ]; then
     cp openMSX/share/extensions/MSXPi.xml "$OPENMSXSHARE/extensions/MSXPi.xml"
     cp "$BIOSFILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.rom"
     echo "  updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
+
+    # MSXPiBasic: the same device with the BIOS-only bank, i.e. the board with
+    # the jumper on the upper half of the EEPROM.  `-ext MSXPiBasic`.
+    BASSHA=$(sha1sum "$BASICFILE" | cut -f1 -d" ")
+    sed "s/msxpibassha/$BASSHA/" MSXPiBasic.xml.template > openMSX/share/extensions/MSXPiBasic.xml
+    cp "$BASICFILE" "openMSX/share/systemroms/extensions/$BASICNAME.rom"
+    cp openMSX/share/extensions/MSXPiBasic.xml "$OPENMSXSHARE/extensions/MSXPiBasic.xml"
+    cp "$BASICFILE" "$OPENMSXSHARE/systemroms/extensions/$BASICNAME.rom"
+    echo "  updated to $BASSHA (MSXPiBasic.xml + $BASICNAME.rom)"
+
+    # MSXPi32K: the whole board in MSXPiDevice - the 32KB EEPROM with the J3
+    # jumpers as settings (msxpirom_bank BANK1|BANK2, msxpirom_sltsl ON|OFF).
+    # Needs the openMSX fork with EEPROM support in MSXPiDevice.
+    SHA32=$(sha1sum "$ROM32FILE" | cut -f1 -d" ")
+    ROM32NAME=$(basename "$ROM32FILE")
+    sed "s/msxpi32ksha/$SHA32/" MSXPi32K.xml.template > openMSX/share/extensions/MSXPi32K.xml
+    cp "$ROM32FILE" "openMSX/share/systemroms/extensions/$ROM32NAME"
+    cp openMSX/share/extensions/MSXPi32K.xml "$OPENMSXSHARE/extensions/MSXPi32K.xml"
+    cp "$ROM32FILE" "$OPENMSXSHARE/systemroms/extensions/$ROM32NAME"
+    echo "  updated to $SHA32 (MSXPi32K.xml + $ROM32NAME)"
 
     # The per-SHA pair, only for a released build: the plain ROM above is
     # replaced by every later build, so a released one needs a copy under a name

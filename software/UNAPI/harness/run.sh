@@ -73,14 +73,23 @@ HW="${HW:-msxpi}"
 # Extra -command arguments a profile needs (inserting media, say).  Kept
 # separate from RENDER_ARGS, which is rebuilt from scratch further down.
 MEDIA_ARGS=()
+# Which MSXPi ROM the profiles plug in.  MSXPi is the MSX-DOS 1 ROM (the lower
+# EEPROM bank); MSXPiBasic is the BIOS-only bank - CALL MSXPI and UNAPI, no
+# disk system.  HW=nextor MSXPIEXT=MSXPiBasic is the board next to Nextor with
+# the jumper on the BIOS-only bank.
+# MSXPi32K is the whole 32KB EEPROM in the device, bank picked by MSXPIBANK.
+BASICEXT="${MSXPIEXT:-MSXPiBasic}"   # HW=basic defaults to the BIOS-only bank
+MSXPIEXT="${MSXPIEXT:-MSXPi}"
 case "$HW" in
+    # BIOS-only bank on a machine with no disk system at all: boots to BASIC.
+    basic) EXTS=(-ext "$BASICEXT") ;;
     # DOS1 target: MSXPi in SLOT 2, booting MSX-DOS 1 from the Pi-served
     # msxpiboot.dsk.  Extension order is slot order, so ram2mb goes first to
     # take slot 1 and leave MSXPi in slot 2, matching the hardware - the
     # driver then reports slot 2 as it does there.  ram2mb is also what
     # supplies the memory mapper INL needs, which a bare V-25 does not have.
-    msxpi) EXTS=(-ext ram2mb -ext MSXPi) ;;
-    msxpi128) EXTS=(-ext MSXPi) ;;   # machine already has >=128K in the RAM slot
+    msxpi) EXTS=(-ext ram2mb -ext "$MSXPIEXT") ;;
+    msxpi128) EXTS=(-ext "$MSXPIEXT") ;;   # machine already has >=128K in the RAM slot
     # The real target: MegaFlashROM SCC+SD in slot 1 running Nextor, MSXPi in
     # slot 2 for the network only.  Extension order is slot order, so MFR must
     # come first to land in slot 1 and match the hardware - the driver then
@@ -96,7 +105,7 @@ case "$HW" in
     # for floppies, not for hd/SD devices.  Re-run that script whenever the
     # tools in the folder change; nothing here detects staleness.
     nextor)
-        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext "$MSXPIEXT")
         NEXTORHD="${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}"
         [ -f "$NEXTORHD" ] || {
             echo "no Nextor HD image at $NEXTORHD - run ./mknextorhd.sh first"
@@ -105,7 +114,7 @@ case "$HW" in
         MEDIA_ARGS=(-command "hdb {$NEXTORHD}")
         ;;
     mfr)
-        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext MSXPi)
+        EXTS=(-ext "MegaFlashROM_SCC+_SD" -ext "$MSXPIEXT")
         if [ -n "${SDIMG:-}" ]; then
             # Either a real .sdc image or a DIRECTORY - openMSX mounts a
             # folder as the card's filesystem, which is how the Nextor boot
@@ -124,8 +133,20 @@ case "$HW" in
         EXTS=()
         MEDIA_ARGS=(-diska "${BOOTDSK:-$HERE/../../target/disks/msxpiboot.dsk}")
         ;;
-    *)     echo "unknown HW='$HW' (want msxpi, msxpi128, nextor, mfr or nomsxpi)"; exit 1 ;;
+    *)     echo "unknown HW='$HW' (want msxpi, msxpi128, basic, nextor, mfr or nomsxpi)"; exit 1 ;;
 esac
+
+# The J3 jumpers of the emulated board, for MSXPIEXT=MSXPi32K (named as on the
+# PCB): MSXPIBANK=BANK2 puts the MSX-DOS half at 4000h (default), BANK1 the
+# BIOS-only half; MSXPISLTSL=OFF disconnects the EEPROM (default ON).  Always
+# set, even to the defaults: openMSX saves settings on exit, so a previous
+# run's jumpers would otherwise carry over.  The device reads them at reset,
+# as the board reads its jumpers at power-on - hence the reset after them.
+if [ "$MSXPIEXT" = "MSXPi32K" ] || [ "$BASICEXT" = "MSXPi32K" ]; then
+    MEDIA_ARGS+=(-command "set msxpirom_bank ${MSXPIBANK:-BANK2}"
+                 -command "set msxpirom_sltsl ${MSXPISLTSL:-ON}"
+                 -command "reset")
+fi
 
 # Headless by default.  Tests read the screen out of VRAM through the debugger,
 # which the VDP keeps updating whether or not anything is drawn, so a window
@@ -160,6 +181,10 @@ else
             nextor_*) [ "$HW" = "nextor" ] || continue ;;
             # nomsxpi_* boot a machine with no MSXPi cartridge (HW=nomsxpi).
             nomsxpi_*) [ "$HW" = "nomsxpi" ] || continue ;;
+            # basic_* boot the BIOS-only bank to BASIC (HW=basic).
+            basic_*) [ "$HW" = "basic" ] || continue ;;
+            # sltsl_* expect the EEPROM cut off (MSXPISLTSL=OFF).
+            sltsl_*) [ "${MSXPISLTSL:-}" = "OFF" ] || continue ;;
         esac
         TESTS+=("$name")
     done

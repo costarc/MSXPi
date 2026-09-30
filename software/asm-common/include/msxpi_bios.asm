@@ -1000,6 +1000,11 @@ MSXPI_GETSTASH equ GETWRK       ; a plain alias, not a trampoline - the
                                 ; driver build stays byte-identical to
                                 ; what it was before this indirection
  else
+  ifdef MSXPI_ROM_STASH
+MSXPI_GETSTASH equ GETWRK       ; the BIOS-only ROM (ROM/src/BIOS/msxpibios.asm):
+                                ; its own GETWRK, without the DSKIO code that
+                                ; MSXPI_DRIVER brings in
+  else
   ifdef MSXPI_RAM_STASH
 MSXPI_GETSTASH:
             ld      hl,MSXPI_STASH_BUF
@@ -1015,6 +1020,7 @@ MSXPI_STASH_BUF:
             db      0,0,0       ; offsets match the driver workarea layout
   else
             dw      MSXPI_DRIVER_or_MSXPI_RAM_STASH_must_be_defined
+  endif
   endif
  endif
 
