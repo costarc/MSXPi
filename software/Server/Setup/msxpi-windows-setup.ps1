@@ -303,7 +303,7 @@ foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxp
                  "msxpi_cmd_disk.py", "msxpi_cmd_files.py", "msxpi_cmd_media.py", "msxpi_cmd_rom.py",
                  "msxpi_cmd_stock.py", "msxpi_cmd_system.py", "msxpi_cmd_web.py",
                  "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py",
-                 "msxpi_renderpage.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_pchess_irc.py")) {
+                 "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_pchess_irc.py")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" | Out-Null
 }
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {

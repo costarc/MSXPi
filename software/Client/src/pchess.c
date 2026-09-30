@@ -5,7 +5,7 @@
  * server validates rules and supplies AI, IRC and room-relay opponents.
  * LINK in the ESC menu switches to TCP/IP UNAPI instead (pchess_tcp.c):
  * rules are then checked here and ROOM/ONLINE go straight to IRC.
- * See PCHESS.md and software/docs/PCHESS-IRC.md for setup and protocol.
+ * See PCHESS.md and documents/PCHESS-IRC.md for setup and protocol.
  */
 
 #include <stdint.h>

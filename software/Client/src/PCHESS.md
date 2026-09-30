@@ -84,7 +84,7 @@ Controls:
   local play the side to move resigns. Both ask Y/N first.
 
 IRC settings and the public-discovery/private-game protocol are documented
-in `software/docs/PCHESS-IRC.md`. Both servers must use the same IRC network.
+in `documents/PCHESS-IRC.md`. Both servers must use the same IRC network.
 Games are in memory; reconnect/resume, clocks and Lichess integration are
 not implemented. An IRC connection failure is displayed on the status line.
 
