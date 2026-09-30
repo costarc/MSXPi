@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6
+# Version 1.6.1
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -43,7 +43,7 @@ logger = logging.getLogger("msxpi")
 # sends for it (str or bytes), or None when the handler replied itself.
 CommandResult = Union[int, str, bytes, None]
 
-VERSION = "1.6"
+VERSION = "1.6.1"
 BUILD_ID = "20260928.062"
 
 # =============================================================================

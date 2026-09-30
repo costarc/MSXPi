@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6
+; Version 1.6.1
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -61,10 +61,10 @@ ARG:        equ     0F847h
 ;           corrupts AF, BC, HL; DE preserved
 ;   GETWRK  HL = IX = this disk driver's work area (MYSIZE bytes)
 ;           corrupts AF, BC, HL, IX; DE preserved
-GETSLT:     equ     06016h
-GETWRK:     equ     06025h
-
             include "../../asm-common/include/unapi_wrk.inc"
+
+GETSLT:     equ     KERNEL_GETSLT       ; addresses kept in unapi_wrk.inc
+GETWRK:     equ     KERNEL_GETWRK
 
             org     UNAPI_ORG
 

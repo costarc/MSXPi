@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6
+; Version 1.6.1
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -24,7 +24,7 @@
 ; SOFTWARE.
 ; ------------------------------------------------------------------------------
 ;
-; MSXPi Driver v1.6 (2026)
+; MSXPi Driver v1.6.1 (2026)
 
 ; Work area layout and load address of the Ethernet UNAPI driver appended at
 ; the end of this ROM.  Shared verbatim with the sjasm build of that driver.
@@ -597,7 +597,7 @@ OEMSTA:
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6"
+        DB      13,10,"MSXPi BIOS v1.6.1"
 BuildId: DB ".20260930.065"
         DB      13,10
         DB      "     RCC (c) 2015-2026",13,10,0
@@ -645,8 +645,8 @@ INCLUDE msxpi_bios.asm
 ; of msx-dos.mac, entirely below this point, so nothing here can move them -
 ; but assert it anyway, since the failure mode is a jump into whatever landed
 ; at the old address.
-        ASSERT  GETSLT EQ 06016H         ; ethrom.asm GETSLT
-        ASSERT  GETWRK EQ 06025H         ; ethrom.asm GETWRK
+        ASSERT  GETSLT EQ KERNEL_GETSLT  ; unapi_wrk.inc, used by ethrom.asm
+        ASSERT  GETWRK EQ KERNEL_GETWRK
 
         ASSERT  $ LE UNAPI_ORG           ; MSXPi code has run into the driver
         DEFS    UNAPI_ORG-$,0

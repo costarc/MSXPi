@@ -22,19 +22,19 @@ python3 asm-common/transport/generate.py --check || exit 1
 buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
-buildBIOS="${buildBIOS:-no}"
-buildLoadrom="${buildLoadrom:-no}"
+buildBIOS="${buildBIOS:-yes}"
+buildLoadrom="${buildLoadrom:-yes}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
 # Bump the BuildId in the server before compiling? Off while iterating, so a
 # rebuild does not churn the version string; on for a server build that is going
 # out.
-updateServerVersion="${updateServerVersion:-no}"
+updateServerVersion="${updateServerVersion:-yes}"
 
 # Bump only the BuildIds that are baked into the ROM artifacts:
 # msxpibios.rom and msxpiext.bin.
-updateRomVersion="${updateRomVersion:-no}"
+updateRomVersion="${updateRomVersion:-yes}"
 
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
@@ -126,39 +126,54 @@ update_build_id() {
 to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 
 # The two .bat files the MSX runs to update itself from the repo.
+#
+# This generator is the source of these files: fixes made to the .bat files by
+# hand (fc7553ea, 48fecc2c) were lost once already when a build regenerated them
+# from an older copy of this function (bb2af89d, restored by db4d0bc3).
+#
+#   - The p.com subcommands, "p set", "p date", ... - pset, pdate, pcd, prun
+#     and prestart were removed in v1.4.
+#   - Neither file copies ITSELF: MSX-DOS reads a running batch file by offset,
+#     so a new version landing mid-run garbles the rest of it.  msxpiupd.bat
+#     fetches msxpirfh.bat; msxpirfh.bat fetches msxpiupd.bat with the rest.
+#   - msxpirfh.bat keeps pcopy.old, fetches pcopy.com first, updates and
+#     restarts the server, then copies everything else with the new pcopy
+#     against the new server.
 gen_update_batch() {
     to_crlf target/msxpiupd.bat <<EOF
 echo Preparing to update...
-pset DriveM ${GITPATH}/target
-pdate
+p set DriveM ${GITPATH}/target
+p date
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
-pcopy m:msxpiupd.bat
 echo
 echo Starting update
 msxpirfh
 EOF
 
-    # pcopy.com goes last: it is the tool doing the copying, so replacing it
-    # first would pull the floor out from under the rest of the list.
     {
-        for f in target/*; do
-            fname="${f##*/}"
-            [ -f "$f" ] || continue
-            [ "$(echo "$fname" | tr 'A-Z' 'a-z')" = "pcopy.com" ] && continue
-            echo "pcopy m:$fname"
-        done
+        echo "copy pcopy.com pcopy.old"
         echo "pcopy m:pcopy.com"
-        echo "echo  "
-        echo "pcd /home/pi/msxpi"
+        echo "echo"
+        echo "p cd /home/pi/msxpi"
         # The server alone is not enough: it imports mapper_detect, msxpi_eth
         # and msxpi_gpio_native, and the native GPIO engine is compiled on the
         # Pi. update.sh fetches all of them and rebuilds the engine.
-        echo "prun wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
-        echo "prun sh update.sh"
-        echo "echo "
+        echo "p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
+        echo "p run sh update.sh"
+        echo "echo"
         echo "echo Restarting msxpi-server.py"
-        echo "prestart"
+        echo "p restart"
+        # Everything else in target/, ROM images included (msxpibios.rom,
+        # msxpibas.rom, msxpi32k.rom).  C collation, so the order does not
+        # depend on the locale the build runs under.
+        for f in $(cd target && LC_ALL=C ls); do
+            [ -f "target/$f" ] || continue
+            case "$(echo "$f" | tr 'A-Z' 'a-z')" in
+                pcopy.com|msxpirfh.bat) continue ;;
+            esac
+            echo "pcopy m:$f"
+        done
         echo "pver"
     } | to_crlf target/msxpirfh.bat
 }
@@ -361,6 +376,9 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
         python3 dsktool.py copy "target/disks/MSXDOS.SYS"  "target/disks/$dsk.dsk:MSXDOS.SYS"
         python3 dsktool.py copy "target/disks/COMMAND.COM" "target/disks/$dsk.dsk:COMMAND.COM"
         python3 dsktool.py copy "$BIOSFILE"                "target/disks/$dsk.dsk:$BIOSNAME.ROM"
+        # The 32KB EEPROM image (MSX-DOS bank + BIOS-only bank), for
+        # at28c256.com - written with the BANK2 jumper, in one go.
+        python3 dsktool.py copy "$ROM32FILE"               "target/disks/$dsk.dsk:MSXPI32K.ROM"
     done
 
     # LOADROM.COM lives under Client/src/loadrom/, not target/ like every other
