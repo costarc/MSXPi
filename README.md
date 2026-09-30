@@ -506,7 +506,7 @@ server), `r1:` and `r2:` (MSX1 and MSX2 ROMs on msxarchive.nl).
 | `p chatgpt <question>` | ask ChatGPT (needs OPENAIKEY) |
 | `p showpage [/4\|/6\|/8] <url>` | render a web page on the MSX screen |
 | `pchess` | chess on an MSX2 (128 KB VRAM), local or over IRC (see `software/Client/src/PCHESS.md`) |
-| `nitros` | on-demand NitrOS-9 console on the Pi with the MSXPi interface, or in openMSX on Windows/Linux, with file exchange; see [setup](software/docs/NITROS-Users-Guide.md) |
+| `nitros` | on-demand NitrOS-9 console on the Pi with the MSXPi interface, or in openMSX on Windows/Linux, with file exchange; see [setup](documents/NITROS-Users-Guide.md) |
 | `pcopy` | copy Pi/network file to the MSX drive (`/z` unpacks archives) or an MSX file to the Pi |
 | `msxarch` | browse ROM repositories (listed in `MSXARCH.INI`) and start a game |
 | `LOADROM name /N` | load a plain ROM or MegaROM from the network |
