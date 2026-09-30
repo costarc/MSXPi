@@ -25,7 +25,10 @@ ROM, use the server from the matching `release/vX.Y` branch.
 **About the DOS.** MSXPi's own ROM contains **MSX-DOS 1 (1.03) only**. It does not
 contain Nextor or MSX-DOS 2. MSXPi *coexists* with them: Nextor or MSX-DOS 2 come
 from another disk interface in the same MSX (for example a MegaFlashROM SCC+ SD),
-and MSXPi's commands, BASIC extension and UNAPI work alongside them.
+and MSXPi's commands, BASIC extension and UNAPI work alongside them. The
+EEPROM holds two ROMs, picked with the bank jumper: MSX-DOS 1 (**BANK2**) or
+the BIOS only - `CALL MSXPI` and UNAPI, no disk system (**BANK1**) - for use
+next to Nextor / MSX-DOS 2.
 
 Contents
 
@@ -49,9 +52,13 @@ How the pieces fit together
     MSX  <-- I/O ports $56 $57 $5A -->  MSXPiDevice      <-- TCP :5000 --> msxpi-server.py
                                         (emulated CPLD)                    (on your PC)
 
-* **MSX side** - the ROM in the interface's EEPROM (`msxpibios.rom`: MSXPi
-  BIOS, disk driver, `CALL MSXPI` for BASIC, Ethernet UNAPI) and the `.COM`
-  programs that you copy to your MSX disk or SD card.
+* **MSX side** - the ROMs in the interface's 32 KB EEPROM and the `.COM`
+  programs that you copy to your MSX disk or SD card. The EEPROM image,
+  `msxpi32k.rom`, holds two 16 KB ROMs:
+  * `msxpibios.rom` - MSXPi BIOS, MSX-DOS 1 disk driver, `CALL MSXPI` for
+    BASIC, Ethernet UNAPI;
+  * `msxpibas.rom` - the same without the disk system: `CALL MSXPI` and
+    Ethernet UNAPI only.
 * **Interface** - a CPLD decodes ports $56/$57/$5A and shifts bytes to and
   from the Pi; since v1.6 it also holds the Z80 /WAIT line while a byte is in
   flight, so the MSX can move data with INIR/OTIR.
@@ -99,40 +106,54 @@ Do the steps in order. Each ends with a check, so you know where a problem is.
 
 ### Step 2 - Write the ROM to the EEPROM with AT28C256.COM
 
-The EEPROM holds `msxpibios.rom` (16 KB). It is written from the MSX itself,
-so you need a working MSX with a disk drive and the interface plugged in. The
-Raspberry Pi does not need to be attached yet.
+The EEPROM (32 KB) holds `msxpi32k.rom`: two 16 KB ROMs, one per bank. It is
+written from the MSX itself, so you need a working MSX with a disk drive and
+the interface plugged in. The Raspberry Pi does not need to be attached yet.
 
-1. Copy `software/target/at28c256.com` and `software/target/msxpibios.rom` to
-   your MSX disk or SD card.
-2. Boot MSX-DOS (from your disk interface) and list the ROMs the tool can see:
+| Bank jumper (as on the PCB) | EEPROM half | ROM | The MSX gets |
+|---|---|---|---|
+| **BANK2** (EEPROM A14 = CPU A15) | lower | `msxpibios.rom` | MSX-DOS 1 from the Pi, `CALL MSXPI`, Ethernet UNAPI |
+| **BANK1** (EEPROM A14 = CPU A14) | upper | `msxpibas.rom` | `CALL MSXPI` and Ethernet UNAPI, no disk system and no extra drives |
+
+1. Copy `software/target/at28c256.com` and `software/target/msxpi32k.rom` to
+   your MSX disk or SD card. (Both are also on the MSXPi boot disk.)
+2. Set the bank jumper to **BANK2**. The EEPROM can only be programmed in
+   that position: the chip's write-protection commands only reach the right
+   addresses when its A14 follows CPU A15.
+3. Boot MSX-DOS (from your disk interface) and list the ROMs the tool can see:
 
         at28c256 /i
 
    If the interface already holds a bootable ROM, remove its enable jumper
    (`SLTSL`, `CS12` on some boards) first, otherwise the MSX finds it, boots
    from it and the tool cannot write. Note the slot number of the interface.
-3. Write the ROM (2 is the slot number here; use yours):
+4. Write the ROM (2 is the slot number here; use yours):
 
-        at28c256 /s 2 msxpibios.rom
+        at28c256 /s 2 msxpi32k.rom
 
-   The tool write-protects the EEPROM (software data protection) when it is
-   done. If your chip fails to program, repeat with `/r`, which writes slowly.
-   The chip is 32 KB: two 16 KB ROMs can share it and be chosen with the
-   A14/A15 bank jumper, if you merge them into one file first.
-4. Switch the MSX off and set the jumpers for how you will use it:
+   Always write the whole 32 KB file in one go: the tool erases the entire
+   chip before writing, so writing one 16 KB ROM on its own wipes the other
+   bank. The tool write-protects the EEPROM (software data protection) when
+   it is done. If your chip fails to program, repeat with `/r`, which writes
+   slowly.
+5. Switch the MSX off and set the jumpers for how you will use it:
 
-   * **With another disk interface (recommended):** remove the enable jumper
-     (`SLTSL`). The MSXPi ROM (and its MSX-DOS 1) is off, the MSX boots Nextor / MSX-DOS 2 from the
-     other interface, and MSXPi still works through the `.COM` commands.
-     (The ROM must be enabled for `CALL MSXPI` in BASIC and for the Ethernet
-     UNAPI; if you want them, leave the jumper closed and put MSXPi in a higher
-     slot than the disk interface.)
-   * **Booting MSX-DOS 1 from a disk image on the Pi:** close `SLTSL` and
-     select the bank that holds the MSXPi ROM. The Pi must finish booting
-     first, so the first cold boot takes a few minutes. Press ESC during boot
-     to go straight to BASIC.
-5. **Check:** in BASIC (ROM enabled), `CALL MSXPIVER` prints the ROM version.
+   * **Booting MSX-DOS 1 from a disk image on the Pi:** close `SLTSL`, bank
+     jumper on **BANK2**. The Pi must finish booting first, so the first cold
+     boot takes a few minutes. Press ESC during boot to go straight to BASIC.
+   * **With another disk interface (recommended):** close `SLTSL`, bank
+     jumper on **BANK1**, and put MSXPi in a higher slot than the disk
+     interface. The MSX boots Nextor / MSX-DOS 2 from the other interface;
+     MSXPi adds no drives and uses almost no memory, and `CALL MSXPI` in
+     BASIC and the Ethernet UNAPI are available.
+   * **MSXPi ROM off:** remove `SLTSL`. MSXPi then works only through the
+     `.COM` commands - no `CALL MSXPI` and no ROM UNAPI.
+
+   The EEPROM answers in every page of its slot, so the bank that is not
+   selected appears at 8000h. The two ROMs are built to tolerate each other
+   there; always write them together, from the same `msxpi32k.rom`.
+6. **Check:** in BASIC, `CALL MSXPIVER` prints the ROM version; with BANK1 it
+   ends in "(no DOS)".
 
 ### Step 3 - Prepare the Raspberry Pi
 
@@ -324,6 +345,13 @@ the official build yet, so download openMSX from the MSXPi fork instead:
   `share/extensions`, and `software/target/msxpibios.rom` goes to
   `share/systemroms` (the XML checks its sha1). The `MSXPiDevice` itself is only in
   builds of the fork.
+* Two more extensions come from the same build (`software/build`, openMSX
+  stage): `MSXPiBasic` - the BIOS-only ROM (`msxpibas.rom`), as on a board with
+  the jumper on BANK1 - and `MSXPi32K`, the whole 32 KB EEPROM with the board's
+  jumpers as openMSX settings, read at reset:
+  `set msxpirom_bank BANK2|BANK1` (default BANK2) and
+  `set msxpirom_sltsl ON|OFF` (default ON). `MSXPi32K` needs a fork build with
+  EEPROM support in `MSXPiDevice` (branch `feature/msxpi-eeprom-jumpers`).
 
 ### Step 2 - Python and the MSXPi home directory
 
@@ -591,7 +619,7 @@ Directories:
     |   |   |-- header           msxpi.h - the C BIOS API
     |   |   `-- lib              msxpi-bios.c
     |   |-- ROM/src
-    |   |   |-- BIOS             CALL MSXPI for BASIC (msxpiext.asm, MSXPIEXT.BIN)
+    |   |   |-- BIOS             BIOS-only ROM bank (msxpibios.asm); BASIC extension (msxpiext.asm)
     |   |   `-- MSX-DOS          disk driver and MSX-DOS 1 kernel sources
     |   |-- Client/src           p, pcopy, pver, msxarch, pchess, showpage, templates, at28c256
     |   |   `-- loadrom          the LOADROM.COM network patch
