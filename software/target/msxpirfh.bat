@@ -25,6 +25,7 @@ pcopy m:pchess.com
 pcopy m:pchess1.com
 pcopy m:pver.com
 pcopy m:skmsx.com
+pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:pcopy.com
