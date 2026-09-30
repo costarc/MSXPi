@@ -22,9 +22,12 @@ pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
+pcopy m:msxpi32k.rom
+pcopy m:msxpibas.rom
 pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
 pcopy m:msxpiupd.bat
+pcopy m:nitros.com
 pcopy m:p.com
 pcopy m:pchess.com
 pcopy m:pchess1.com

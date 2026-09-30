@@ -1,6 +1,6 @@
 #!/bin/bash
 # MSXPi Interface
-# Version 1.6
+# Version 1.6.1
 # ------------------------------------------------------------------------------
 # MIT License - Copyright (c) 2015-2026 Ronivon Costa
 # The full licence text is in the LICENSE file of this repository.

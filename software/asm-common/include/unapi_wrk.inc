@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6
+; Version 1.6.1
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -96,6 +96,17 @@ UNAPI_WRKEND	EQU	UNAPI_WRK+39	; UNAPI size; also the ROM's MYSIZE
 ; below 8000H - so MSXPi code growing into the driver, or the driver growing
 ; past the end of the ROM, fails the build loudly instead of silently
 ; producing a corrupt ROM.
+; The two MSX-DOS kernel routines ethrom.bin calls, by address: zmac (which
+; assembles the kernel) and sjasm (which assembles the driver) cannot share a
+; symbol table.  Anything that adds or removes bytes in the kernel half of
+; msx-dos.mac - a longer banner string, say - moves them; msxpi-driver.mac
+; ASSERTs both against the real labels, so such a change fails the build and
+; these two values are then updated to what its listing shows.  The BIOS-only
+; ROM (ROM/src/BIOS/msxpibios.asm) places its own GETSLT/GETWRK at the same
+; addresses, since it carries the same ethrom.bin.
+KERNEL_GETSLT	EQU	06018H	; kernel GETSLT (msx-dos.mac)
+KERNEL_GETWRK	EQU	06027H	; kernel GETWRK (msx-dos.mac)
+
 UNAPI_ORG	EQU	07AC9H	; Boundary between the DOS driver below and the UNAPI
 				; image above.  Moved up from 07AB8H for the /WAIT disk
 				; bursts and the PerformHandshake fix; the UNAPI image

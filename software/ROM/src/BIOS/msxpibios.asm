@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6
+; Version 1.6.1
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -48,7 +48,8 @@
 ; What the DOS kernel provided, and this ROM now provides itself:
 ;
 ;   GETSLT/GETWRK  ethrom.bin - the UNAPI driver, the SAME binary the DOS ROM
-;                  carries - calls them at the fixed addresses 6016h/6025h.
+;                  carries - calls them at the fixed addresses KERNEL_GETSLT/KERNEL_GETWRK
+;                  (unapi_wrk.inc).
 ;                  Jumps sit at exactly those addresses.
 ;   Work area      The kernel's secondary-diskrom path (A580C) allocates
 ;                  MYSIZE below HIMEM and stores it in SLTWRK.  INIT does the
@@ -330,8 +331,8 @@ MY_GETWRK1:
         INCLUDE "msxpi_call.asm"
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6"
-BuildId: DB ".20260919.060"
+        DB      13,10,"MSXPi BIOS v1.6.1"
+BuildId: DB ".20260930.063"
         DB      " (no DOS)",13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 
@@ -353,11 +354,11 @@ CODE_END:
 ; =============================================================================
 ; Fixed entry points for ethrom.bin (GETSLT/GETWRK in UNAPI/src/ethrom.asm)
 ; =============================================================================
-        ASSERT  CODE_END <= $6016
-        ORG     $6016
+        ASSERT  CODE_END <= KERNEL_GETSLT
+        ORG     KERNEL_GETSLT
 GETSLT:
         jp      MY_GETSLT
-        ORG     $6025
+        ORG     KERNEL_GETWRK
 GETWRK:
         jp      MY_GETWRK
 
@@ -368,7 +369,7 @@ GETWRK:
 ; GETSLT/GETWRK jumps, below the UNAPI image, and clear of each other.
     MACRO CHECK_FREE addr
         ASSERT  addr >= CODE_END && addr+3 <= UNAPI_ORG
-        ASSERT  addr+3 <= $6016 || addr >= $6028
+        ASSERT  addr+3 <= KERNEL_GETSLT || addr >= KERNEL_GETWRK+3
     ENDM
         CHECK_FREE DOS_INIT
         CHECK_FREE DOS_STMT
