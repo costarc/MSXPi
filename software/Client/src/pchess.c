@@ -450,7 +450,7 @@ static void credits(void) {
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
  * msxpi.ini through "pchess level N"), 1 rooms on the MSXPi relay or IRC
- * ("pchess rooms X", also saved), 2 link MSXPI or TCPIP (for this run
+ * ("pchess rooms X", also saved), 2 link MSXPI or TCPIP (Return or ESC applies it; for this run
  * only; every start is MSXPI), 3 offer (or accept) a draw, 4 resign, each
  * after a Y/N, 5 rotate board, 6 credits, 7 exit to DOS. The AI answers a
  * draw offer at once; a human opponent accepts by offering too. ESC
@@ -508,17 +508,21 @@ static uint8_t menu(void) {
                 strcat(line,": - 0 +");
                 line[strlen(line)-3]='0'+level;
             }
-            if(i==1) strcat(line,rooms_irc?": IRC":": RELAY");
+            /* TCP/IP rooms are always IRC: shown (and locked) as soon as
+             * LINK reads TCPIP, before Return applies it. */
+            if(i==1) strcat(line,rooms_irc || tcp || link_tcp?": IRC":": RELAY");
             if(i==2) strcat(line,tcp?": TCPIP":": MSXPI");
             text_at(MENU_X+8,MENU_Y+16+i*9,line);
         }
         do key=Inkey(); while(!key);
-        if(key==27) break;
+        /* ESC keeps a LINK change too: leaving the menu is how most
+         * people finish, and silently dropping it looked like a revert. */
+        if(key==27) { if(tcp!=link_tcp) set_link(tcp); break; }
         if(key==0x1e && row) row--;
         else if(key==0x1f && row<MENU_ROWS-1) row++;
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
-        else if(row==1 && !link_tcp && (key==0x1c || key==0x1d)) rooms_irc^=1;
+        else if(row==1 && !tcp && !link_tcp && (key==0x1c || key==0x1d)) rooms_irc^=1;
         else if(row==2 && (key==0x1c || key==0x1d)) tcp^=1;
         else if(key==13 || key==' ') {
             if(row==3 || row==4) {
@@ -538,7 +542,7 @@ static uint8_t menu(void) {
                 tcp=link_tcp;
                 break;
             }
-            if(link_tcp) {
+            if(link_tcp || (row && tcp)) {
                 strcpy(status,row?"TCPIP ROOMS ARE IRC":"AI NEEDS MSXPI - LINK");
                 text_at(8,205,status);
                 continue;
