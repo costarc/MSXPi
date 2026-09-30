@@ -108,7 +108,7 @@ static uint8_t unapi(uint8_t fn) {
  * RAM helper and CALSLT map it. PChess is large enough that its static
  * data is in page 2; net_memory() checks that, and that the stack still
  * has room below the TPA top (extra drives and INL lower it). */
-#define RX_SIZE 512
+#define RX_SIZE 384    /* longer IRC lines are dropped */
 typedef struct {
     char rx[RX_SIZE];
     char tx[300];

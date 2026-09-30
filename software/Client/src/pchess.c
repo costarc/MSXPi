@@ -100,7 +100,8 @@ static const uint8_t font[GLYPHS][FONT_H] = {
 #define GLYPH_X(g) (((g)%42)*FONT_W)
 #define GLYPH_Y(g) (FONT_Y+((g)/42)*(FONT_H+1))
 static uint8_t field_x[32],field_y[32],field_count;
-static char field_text[32][64];
+/* The longest line is the 47-character status. */
+static char field_text[32][48];
 static uint8_t glyph(char ch) {
     if(ch>='a' && ch<='z') ch-=32;
     if(ch>='0' && ch<='9') return 1+ch-'0';
@@ -123,7 +124,7 @@ static void text_at(uint8_t x,uint8_t y,const char *s) {
         field_count++; field_x[f]=x; field_y[f]=y; field_text[f][0]=0;
     }
     oldlen=strlen(field_text[f]); newlen=strlen(s);
-    if(newlen>63) newlen=63;
+    if(newlen>47) newlen=47;
     while(n<oldlen || n<newlen) {
         if((uint16_t)x+n*FONT_W+5>255) break;
         ch=n<newlen?s[n]:' ';

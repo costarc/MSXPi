@@ -31,7 +31,7 @@ static Pos tries[3];
 static uint8_t depth;
 
 /* Positions since the last irreversible move, for threefold repetition. */
-#define REP_MAX 104
+#define REP_MAX 101    /* the fifty-move claim ends a game by then */
 static uint32_t rep_key[REP_MAX];
 static uint8_t rep_count;
 
