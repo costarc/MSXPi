@@ -733,6 +733,16 @@ static void load_config(void) {
     }
 }
 
+/* Fusion-C's crt0 does not clear static data: whatever the last program
+ * left there is what an uninitialised static starts with. main() calls
+ * this before anything here or in pchess_rules.c runs. */
+static void tcp_init(void) {
+    depth=0; gen_to=255; ep_pos=0;
+    outcome_ok=0; digest_ok=0;
+    memset(&irc,0,sizeof(irc));
+    net=0; link_mode=MODE_LOCAL; hist_n=0; ply=0; local_end=0;
+}
+
 /* Called when LINK changes to TCPIP; 0 with a status when it cannot. */
 static uint8_t tcp_link_start(char *status) {
     if(!tcp_find()) { strcpy(status,"NO TCP/IP UNAPI - RUN INL I"); return 0; }

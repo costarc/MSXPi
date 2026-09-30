@@ -615,7 +615,8 @@ int main(void) {
         Print("PCHESS NEEDS AN MSX2\r\n");
         return 0;
     }
-    entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0; net=0;
+    entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0;
+    tcp_init();
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0;
     field_count=0; pending_tune=0; offer_seen=0; coords_flip=255;
     entry[0]=0;
