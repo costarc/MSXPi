@@ -3,6 +3,8 @@
  *
  * Graphical board, keyboard notation/cursor and joystick input. The MSXPi
  * server validates rules and supplies AI, IRC and room-relay opponents.
+ * LINK in the ESC menu switches to TCP/IP UNAPI instead (pchess_tcp.c):
+ * rules are then checked here and ROOM/ONLINE go straight to IRC.
  * See PCHESS.md and software/docs/PCHESS-IRC.md for setup and protocol.
  */
 
@@ -218,8 +220,20 @@ static void queue_sounds(uint8_t was_over) {
     if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
 }
 
+#include "pchess_rules.c"
+#include "pchess_sha.c"
+#include "pchess_tcp.c"
+
+/* 0: commands go to the MSXPi server; 1: to local_exchange() over TCP/IP. */
+static uint8_t link_tcp;
+
 static uint8_t exchange(const char *cmd) {
     uint8_t rc,tries=0,i,j,was_over=game_over; uint16_t size=0;
+    if(link_tcp) {
+        local_exchange(cmd);
+        size=256; rc=RC_SUCCESS;
+        goto parse;
+    }
     msxpi_link_claim();
     rc=SendCommandToMSXPi(cmd,false);
     if(rc==RC_SUCCESS) rc=PerformHandshake(256);
@@ -228,6 +242,7 @@ static uint8_t exchange(const char *cmd) {
         while(rc==RC_CHKSUM_ERR && ++tries<MAX_BLOCK_RETRIES);
     }
     msxpi_link_release();
+parse:
     if(rc!=RC_SUCCESS || size!=256 || memcmp(reply,"PCH1",4)) {
         /* A failed background poll stays silent: the next one retries. */
         if(strcmp(cmd,"pchess poll")) strcpy(status,"LINK ERROR - RETRY");
@@ -434,9 +449,11 @@ static void credits(void) {
 }
 
 /* ESC pop-up. Rows: 0 AI level (left/right choose, Return saves it to
- * msxpi.ini through "pchess level N"), 1 offer (or accept) a draw, 2
- * resign, each after a Y/N, 3 rotate board, 4 credits, 5 exit to DOS. The AI
- * answers a draw offer at once; a human opponent accepts by offering too. ESC
+ * msxpi.ini through "pchess level N"), 1 rooms on the MSXPi relay or IRC
+ * ("pchess rooms X", also saved), 2 link MSXPI or TCPIP (for this run
+ * only; every start is MSXPI), 3 offer (or accept) a draw, 4 resign, each
+ * after a Y/N, 5 rotate board, 6 credits, 7 exit to DOS. The AI answers a
+ * draw offer at once; a human opponent accepts by offering too. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
 #define MENU_X 44
@@ -450,19 +467,39 @@ static void popup_close(void) {
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
 }
-static const char * const menu_rows[]={"AI LEVEL","OFFER DRAW","RESIGN","ROTATE BOARD",
-                                 "CREDITS","EXIT"};
-#define MENU_ROWS 6
+static const char * const menu_rows[]={"AI LEVEL","ROOMS","LINK","OFFER DRAW","RESIGN",
+                                 "ROTATE BOARD","CREDITS","EXIT"};
+#define MENU_ROWS 8
+#define MENU_H 102
+/* Switch the link: every game and connection of the old one ends. */
+static void set_link(uint8_t tcp) {
+    online=0; selected_x=255;
+    if(tcp) {
+        if(!tcp_link_start(status)) return;
+        link_tcp=1;
+        exchange("pchess new local");
+        strcpy(status,"LINK TCPIP - 1 LOCAL 3 ROOM 4 ONLINE");
+    } else {
+        tcp_link_stop();
+        link_tcp=0;
+        strcpy(status,"LINK MSXPI");
+    }
+}
 static uint8_t menu(void) {
-    uint8_t key,row=0,level=2,i,quit=0;
+    uint8_t key,row=0,level=2,rooms_irc=0,tcp=link_tcp,i,quit=0;
     char line[20];
-    if(exchange("pchess level") || !memcmp(reply,"PCH1",4))
+    if(link_tcp) rooms_irc=1;
+    else if(exchange("pchess level") || !memcmp(reply,"PCH1",4)) {
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
+        rooms_irc=reply[243]==1;
+    }
     draw_panel();
-    solid(MENU_X,MENU_Y,120,84,C_BLACK);
-    frame(MENU_X,MENU_Y,120,84,C_YELLOW);
+    /* The panel fills most of the 32 text fields; the menu needs 11. */
+    field_count=0;
+    solid(MENU_X,MENU_Y,120,MENU_H,C_BLACK);
+    frame(MENU_X,MENU_Y,120,MENU_H,C_YELLOW);
     text_at(MENU_X+40,MENU_Y+5,"M E N U");
-    text_at(MENU_X+30,(uint8_t)(MENU_Y+74),"ESC RESUME");
+    text_at(MENU_X+30,(uint8_t)(MENU_Y+MENU_H-10),"ESC RESUME");
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"= ":"  ");
@@ -471,6 +508,8 @@ static uint8_t menu(void) {
                 strcat(line,": - 0 +");
                 line[strlen(line)-3]='0'+level;
             }
+            if(i==1) strcat(line,rooms_irc?": IRC":": RELAY");
+            if(i==2) strcat(line,tcp?": TCPIP":": MSXPI");
             text_at(MENU_X+8,MENU_Y+16+i*9,line);
         }
         do key=Inkey(); while(!key);
@@ -479,22 +518,36 @@ static uint8_t menu(void) {
         else if(key==0x1f && row<MENU_ROWS-1) row++;
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<8) level++;
+        else if(row==1 && !link_tcp && (key==0x1c || key==0x1d)) rooms_irc^=1;
+        else if(row==2 && (key==0x1c || key==0x1d)) tcp^=1;
         else if(key==13 || key==' ') {
-            if(row==1 || row==2) {
-                strcpy(status,row==1?"OFFER DRAW? Y/N":"RESIGN? Y/N");
+            if(row==3 || row==4) {
+                strcpy(status,row==3?"OFFER DRAW? Y/N":"RESIGN? Y/N");
                 text_at(8,205,status);
                 do key=Inkey(); while(!key);
                 if(key=='y' || key=='Y')
-                    exchange(row==1?"pchess draw":"pchess resign");
+                    exchange(row==3?"pchess draw":"pchess resign");
                 else strcpy(status,"GAME GOES ON");
                 break;
             }
-            if(row==3) {user_rotate^=1; set_flip(); break;}
-            if(row==4) {credits(); break;}
-            if(row==5) {quit=1; break;}
-            strcpy(command,"pchess level ");
-            line[0]='0'+level; line[1]=0; strcat(command,line);
+            if(row==5) {user_rotate^=1; set_flip(); break;}
+            if(row==6) {credits(); break;}
+            if(row==7) {quit=1; break;}
+            if(row==2) {
+                if(tcp!=link_tcp) set_link(tcp);
+                tcp=link_tcp;
+                break;
+            }
+            if(link_tcp) {
+                strcpy(status,row?"TCPIP ROOMS ARE IRC":"AI NEEDS MSXPI - LINK");
+                text_at(8,205,status);
+                continue;
+            }
+            strcpy(command,row?"pchess rooms ":"pchess level ");
+            if(row) strcat(command,rooms_irc?"irc":"relay");
+            else { line[0]='0'+level; line[1]=0; strcat(command,line); }
             exchange(command);
+            if(!row && reply[242]>=1 && reply[242]<=8) level=reply[242];
             text_at(8,205,status);
         }
     }
@@ -562,7 +615,7 @@ int main(void) {
         Print("PCHESS NEEDS AN MSX2\r\n");
         return 0;
     }
-    entry_len=0; room_entry=0; online=0; game_over=0;
+    entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0; net=0;
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0;
     field_count=0; pending_tune=0; offer_seen=0; coords_flip=255;
     entry[0]=0;
@@ -598,7 +651,9 @@ int main(void) {
             else {lastarrow=now; arrow_seen=1;}
         }
         if(!key) {
-            if(online && (uint16_t)(now-lastpoll)>=120) {
+            /* Every 2 s on the MSXPi; every second on TCP/IP, where this
+             * poll is also what reads the IRC connection. */
+            if(online && (uint16_t)(now-lastpoll)>=(link_tcp?60:120)) {
                 lastpoll=now; exchange("pchess poll"); draw_board();
             }
             continue;
@@ -644,6 +699,7 @@ int main(void) {
         }
         draw_board();
     }
+    tcp_link_stop();
     RestoreSC5Palette();
     Screen(0);
     Cls();
