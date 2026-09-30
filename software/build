@@ -30,11 +30,11 @@ buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 # Bump the BuildId in the server before compiling? Off while iterating, so a
 # rebuild does not churn the version string; on for a server build that is going
 # out.
-updateServerVersion="${updateServerVersion:-yes}"
+updateServerVersion="${updateServerVersion:-no}"
 
 # Bump only the BuildIds that are baked into the ROM artifacts:
 # msxpibios.rom and msxpiext.bin.
-updateRomVersion="${updateRomVersion:-yes}"
+updateRomVersion="${updateRomVersion:-no}"
 
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by
