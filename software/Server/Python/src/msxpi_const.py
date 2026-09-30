@@ -44,7 +44,7 @@ logger = logging.getLogger("msxpi")
 CommandResult = Union[int, str, bytes, None]
 
 VERSION = "1.6.1"
-BUILD_ID = "20260928.062"
+BUILD_ID = "20260930.065"
 
 # =============================================================================
 # PROTOCOL CONSTANTS - SPI and Block Transfer

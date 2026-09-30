@@ -1,9 +1,8 @@
 echo Preparing to update...
-pset DriveM https://github.com/costarc/MSXPi/raw/master/software/target
-pdate
+p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target
+p date
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
-pcopy m:msxpiupd.bat
 echo
 echo Starting update
 msxpirfh
