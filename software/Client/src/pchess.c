@@ -495,8 +495,12 @@ static uint8_t menu(void) {
         rooms_irc=reply[243]==1;
     }
     draw_panel();
-    /* The panel fills most of the 32 text fields; the menu needs 11. */
+    /* The panel fills most of the 32 text fields; the menu needs 11. With
+     * the fields forgotten, text_at() no longer erases a longer earlier
+     * status, so blank that line and draw the status again. */
     field_count=0;
+    solid(0,SCREEN_BOTTOM-6,256,7,C_BLACK);
+    text_at(8,205,status);
     solid(MENU_X,MENU_Y,120,MENU_H,C_BLACK);
     frame(MENU_X,MENU_Y,120,MENU_H,C_YELLOW);
     text_at(MENU_X+40,MENU_Y+5,"M E N U");
