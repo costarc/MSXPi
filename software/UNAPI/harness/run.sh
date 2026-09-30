@@ -77,7 +77,6 @@ MEDIA_ARGS=()
 # EEPROM bank); MSXPiBasic is the BIOS-only bank - CALL MSXPI and UNAPI, no
 # disk system.  HW=nextor MSXPIEXT=MSXPiBasic is the board next to Nextor with
 # the jumper on the BIOS-only bank.
-# MSXPi32K is the whole 32KB EEPROM in the device, bank picked by MSXPIBANK.
 BASICEXT="${MSXPIEXT:-MSXPiBasic}"   # HW=basic defaults to the BIOS-only bank
 MSXPIEXT="${MSXPIEXT:-MSXPi}"
 case "$HW" in
@@ -136,13 +135,14 @@ case "$HW" in
     *)     echo "unknown HW='$HW' (want msxpi, msxpi128, basic, nextor, mfr or nomsxpi)"; exit 1 ;;
 esac
 
-# The J3 jumpers of the emulated board, for MSXPIEXT=MSXPi32K (named as on the
-# PCB): MSXPIBANK=BANK2 puts the MSX-DOS half at 4000h (default), BANK1 the
-# BIOS-only half; MSXPISLTSL=OFF disconnects the EEPROM (default ON).  Always
-# set, even to the defaults: openMSX saves settings on exit, so a previous
-# run's jumpers would otherwise carry over.  The device reads them at reset,
-# as the board reads its jumpers at power-on - hence the reset after them.
-if [ "$MSXPIEXT" = "MSXPi32K" ] || [ "$BASICEXT" = "MSXPi32K" ]; then
+# The board's jumpers, for the MSXPi extension (its device serves the 32KB
+# EEPROM; named as on the PCB): MSXPIBANK=BANK2 puts the MSX-DOS half at 4000h
+# (default), BANK1 the BIOS-only half; MSXPISLTSL=OFF disconnects the EEPROM
+# (default ON).  Always set, even to the defaults: openMSX saves settings on
+# exit, so a previous run's jumpers would otherwise carry over.  The device
+# reads them at reset, as the board reads its jumpers at power-on - hence the
+# reset after them.
+if [ "$MSXPIEXT" = "MSXPi" ] && [ "$HW" != "basic" ] || [ "$BASICEXT" = "MSXPi" ]; then
     MEDIA_ARGS+=(-command "set msxpirom_bank ${MSXPIBANK:-BANK2}"
                  -command "set msxpirom_sltsl ${MSXPISLTSL:-ON}"
                  -command "reset")

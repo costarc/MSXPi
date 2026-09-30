@@ -20,6 +20,8 @@ python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
 buildClientCommands="${buildClientCommands:-yes}"
+# The C clients that stage builds with make.sh (Client/src/<name>.c).
+cClientCommands="${cClientCommands:-nitros}"
 buildBIOS="${buildBIOS:-no}"
 buildLoadrom="${buildLoadrom:-no}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
@@ -63,6 +65,7 @@ TOOLS=../../../..
 ZMAC=$TOOLS/Dev/zmac/zmac.exe
 HEX2BIN=$TOOLS/Dev/bin/hex2bin.exe
 SJASM_DIR=$TOOLS/Dev/bin
+FUSION_C_DIR="${FUSION_C:-../../../MSX/MSX-C/WorkingFolder/fusion-c}" # from software/
 OPENMSXSRC=../../openMSX/openMSX                  # the openMSX fork
 OPENMSXSHARE=$TOOLS/Documents/openMSX/share       # what the Windows openMSX reads
 SERVEDDISKS=/c/home/pi/msxpi/disks                # what msxpi-server.py serves
@@ -176,6 +179,22 @@ if [ "$buildClientCommands" = "yes" ]; then
     "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
         --raw=./target/msxarch.com ./Client/src/msxarch.asm ||
         die "msxarch.com did not assemble"
+
+    # C clients (SDCC + Fusion-C), through make.sh - one per program.
+    # make.sh is written for Linux: SDCC 4.2 with --sdcccall 0, objcopy, and
+    # the ABI-0 z80.lib at a /mnt/c path.  On Windows (Git Bash/MSYS) it runs
+    # under WSL, whatever tools happen to be on PATH here - a native objcopy
+    # does not help, the native SDCC 4.0 knows no --sdcccall.  FUSION_C is
+    # relative to software/, so it resolves the same on both sides.
+    for prog in $cClientCommands; do
+        echo "Compiling $prog.com (make.sh)"
+        if [ "$(uname -s)" = "Linux" ]; then
+            FUSION_C="$FUSION_C_DIR" ./make.sh "$prog"
+        else
+            wsl.exe -e bash -c "cd \"\$(wslpath -a '$(cygpath -w "$PWD")')\" &&
+                FUSION_C='$FUSION_C_DIR' ./make.sh '$prog'"
+        fi || die "$prog.com did not build"
+    done
 fi
 
 # =============================================================================
@@ -299,45 +318,27 @@ fi
 # =============================================================================
 if [ "$buildOpenMSXConfig" = "yes" ]; then
     step "Updating the openMSX extension"
-    SHA=$(sha1sum "$BIOSFILE" | cut -f1 -d" ")
-
-    # The plain names, ALWAYS. This is what `-ext MSXPi` resolves to and what
-    # runmsx deploys into /opt/openMSX. Once only the per-SHA copies were
-    # written here, so these two kept whatever ROM they already had: openMSX
-    # went on loading an OLD bios while the build reported success, and a
-    # harness run could pass against a ROM that no longer existed in the tree.
+    # MSXPi.xml carries the whole 32KB EEPROM image, msxpi32k.rom, under the
+    # name msxpibios.rom that the extension - and every install and document -
+    # already uses: the XML gets msxpi32k.rom's sha1, and msxpi32k.rom is the
+    # one ROM copied, renamed to msxpibios.rom.  The template maps it at
+    # 4000h-BFFFh, the way the board shows it with the BANK2 jumper.
+    #
+    # The repository keeps only the XML (openMSX/share/extensions); the ROM
+    # goes to the openMSX share that openMSX actually reads.
+    SHA=$(sha1sum "$ROM32FILE" | cut -f1 -d" ")
     sed "s/msxpibiossha/$SHA/" MSXPi.xml.template > openMSX/share/extensions/MSXPi.xml
-    cp "$BIOSFILE" "openMSX/share/systemroms/extensions/$BIOSNAME.rom"
     cp openMSX/share/extensions/MSXPi.xml "$OPENMSXSHARE/extensions/MSXPi.xml"
-    cp "$BIOSFILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.rom"
-    echo "  updated to $SHA (MSXPi.xml + $BIOSNAME.rom)"
-
-    # MSXPiBasic: the same device with the BIOS-only bank, i.e. the board with
-    # the jumper on the upper half of the EEPROM.  `-ext MSXPiBasic`.
-    BASSHA=$(sha1sum "$BASICFILE" | cut -f1 -d" ")
-    sed "s/msxpibassha/$BASSHA/" MSXPiBasic.xml.template > openMSX/share/extensions/MSXPiBasic.xml
-    cp "$BASICFILE" "openMSX/share/systemroms/extensions/$BASICNAME.rom"
-    cp openMSX/share/extensions/MSXPiBasic.xml "$OPENMSXSHARE/extensions/MSXPiBasic.xml"
-    cp "$BASICFILE" "$OPENMSXSHARE/systemroms/extensions/$BASICNAME.rom"
-    echo "  updated to $BASSHA (MSXPiBasic.xml + $BASICNAME.rom)"
-
-    # MSXPi32K: the whole board in MSXPiDevice - the 32KB EEPROM with the J3
-    # jumpers as settings (msxpirom_bank BANK1|BANK2, msxpirom_sltsl ON|OFF).
-    # Needs the openMSX fork with EEPROM support in MSXPiDevice.
-    SHA32=$(sha1sum "$ROM32FILE" | cut -f1 -d" ")
-    ROM32NAME=$(basename "$ROM32FILE")
-    sed "s/msxpi32ksha/$SHA32/" MSXPi32K.xml.template > openMSX/share/extensions/MSXPi32K.xml
-    cp "$ROM32FILE" "openMSX/share/systemroms/extensions/$ROM32NAME"
-    cp openMSX/share/extensions/MSXPi32K.xml "$OPENMSXSHARE/extensions/MSXPi32K.xml"
-    cp "$ROM32FILE" "$OPENMSXSHARE/systemroms/extensions/$ROM32NAME"
-    echo "  updated to $SHA32 (MSXPi32K.xml + $ROM32NAME)"
+    cp "$ROM32FILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.rom" ||
+        die "could not install $BIOSNAME.rom in $OPENMSXSHARE"
+    echo "  updated to $SHA (MSXPi.xml + $BIOSNAME.rom from $(basename "$ROM32FILE"))"
 
     # The per-SHA pair, only for a released build: the plain ROM above is
     # replaced by every later build, so a released one needs a copy under a name
     # nothing overwrites.
     if [ "$releaseOpenMSXRom" = "yes" ]; then
-        cp openMSX/share/extensions/MSXPi.xml "openMSX/share/extensions/MSXPi.$SHA.xml"
-        cp "$BIOSFILE" "openMSX/share/systemroms/extensions/$BIOSNAME.$SHA.rom"
+        cp openMSX/share/extensions/MSXPi.xml "$OPENMSXSHARE/extensions/MSXPi.$SHA.xml"
+        cp "$ROM32FILE" "$OPENMSXSHARE/systemroms/extensions/$BIOSNAME.$SHA.rom"
         echo "  KEPT as $SHA (MSXPi.$SHA.xml + $BIOSNAME.$SHA.rom)"
     fi
 
