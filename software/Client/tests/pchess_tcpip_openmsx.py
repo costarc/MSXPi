@@ -84,8 +84,20 @@ def screen_report(vram):
 # --- the MSX's script -----------------------------------------------------
 
 ESC, DOWN, RIGHT = chr(27), chr(31), chr(28)
-TIMELINE = [
-    (20, 'MSR I\r'), (32, 'INL I\r'), (50, 'PCHESS\r'),
+HW = os.environ.get('HW', 'msxpi')
+# Getting to PCHESS, per hardware profile; the game timeline follows it.
+# msxpi: MSX-DOS 1 from the MSXPi disk, mapper from ram2mb: MSR I, INL I.
+# nextor: MegaFlashROM SCC+ SD booting Nextor (MSX-DOS 2) from its own SD
+# card; AUTOEXEC starts MultiMente (ESC, Return leaves it). The MSXPi disk
+# is drive D:, where RAMHELPR I and INL I run; RAMHELPR restarts the
+# command interpreter, which goes back to A:.
+PREFIX = {
+    'msxpi': ([(20, 'MSR I\r'), (32, 'INL I\r'), (50, 'PCHESS\r')], 0),
+    # MultiMente reads the key matrix: the keyboard buffer never reaches it.
+    'nextor': ([(30, 'press:7:4'), (33, 'press:7:128'), (36, 'press:7:4'), (39, 'press:7:128'),
+                (44, 'D:\r'), (48, 'RAMHELPR I\r'), (54, 'D:\r'), (58, 'INL I\r'), (78, 'PCHESS\r')], 28),
+}
+GAME = [
     # ESC menu: LINK is the third row; right toggles it, Return applies.
     (66, ESC), (69, DOWN + DOWN + RIGHT + '\r'), (74, 'dump:link'),
     # 1. LOCAL game, rules on the MSX.
@@ -100,6 +112,7 @@ TIMELINE = [
     # 4. EXIT is the last menu row.
     (303, ESC), (306, DOWN * 7 + '\r'), (315, 'quit'),
 ]
+TIMELINE = PREFIX[HW][0] + [(t + PREFIX[HW][1], a) for t, a in GAME]
 
 
 def tcl_string(text):
@@ -116,6 +129,10 @@ def write_script(path, dumps):
     for when, action in TIMELINE:
         if action == 'quit':
             lines.append(f'after time {when} {{dump final; exit}}')
+        elif action.startswith('press:'):
+            _, row, bit = action.split(':')
+            lines.append(f'after time {when} {{keymatrixdown {row} {bit}; '
+                         f'after time 0.3 {{keymatrixup {row} {bit}}}}}')
         elif action.startswith('dump:'):
             lines.append(f'after time {when} {{dump {action[5:]}}}')
         else:
@@ -188,11 +205,13 @@ def main():
     shutil.copy(SOFTWARE / 'target/disks/tools.dsk', home / 'disks/tools.dsk')
     (work / 'PCHESS.INI').write_bytes(b'IRCADDR=192.168.99.1\r\nIRCPORT=6667\r\nIRCNICK=MsxOne\r\n')
     shutil.copy(PCHESS, work / 'pchess.com')
+    script = work / 'pchess.tcl'
     for name, target in (('pchess.com', 'PCHESS.COM'), ('PCHESS.INI', 'PCHESS.INI')):
         subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', name,
                         f'home/disks/msxpiboot.dsk:{target}'], cwd=work, check=True,
                        stdout=subprocess.DEVNULL)
-    script = work / 'pchess.tcl'
+    machine = (['-ext', 'MegaFlashROM_SCC+_SD', '-ext', 'MSXPi'] if HW == 'nextor'
+               else ['-ext', 'ram2mb', '-ext', 'MSXPi'])
     write_script(script, dumps)
 
     log = []
@@ -211,7 +230,7 @@ def main():
     try:
         time.sleep(3)
         with (work / 'openmsx.log').open('w') as out:
-            subprocess.run([OPENMSX, '-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi',
+            subprocess.run([OPENMSX, '-machine', 'Canon_V-25', *machine,
                             '-command', 'set renderer none', '-script', str(script)],
                            stdout=out, stderr=subprocess.STDOUT, timeout=600)
     finally:
