@@ -34,7 +34,7 @@ prog="${1:?Usage: make.sh program [output-directory]}"
 out="${2:-$here/target}"
 mkdir -p "$out"
 out="$(cd "$out" && pwd)"
-fusion="${FUSION_C:-$here/../../../MSX-C/WorkingFolder/fusion-c}"
+fusion="${FUSION_C:-$here/../../../MSX/MSX-C/WorkingFolder/fusion-c}"
 fusion="$(cd "$fusion" && pwd)"
 # The distro's SDCC 4.2 standard library uses ABI 1 even with --sdcccall 0.
 # Use the ABI-0 runtime shipped with the existing Windows SDCC 4.0 toolchain.
