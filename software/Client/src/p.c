@@ -60,7 +60,6 @@ void P_Help(void)
         "reload A: or reload B: - Reload a drive's disk image from disk",
         "showpage [/4|/6|/8] <url> - Render a web page on the MSX screen",
         "chatgpt - Interact with ChatGPT",
-        "ssh    - Interactive SSH terminal via MSXPi",
         NULL
     };
 
