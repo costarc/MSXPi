@@ -484,7 +484,7 @@ static void peer_receive(const char *sender,const char *target,char *text) {
         if(irc.room[0]) return;
         if(n==2 && !strcmp(f[1],"SEEK") && is_free()) {
             seen(sender);
-            strcpy(msg,"PLAYER "); strcat(msg,sender); set_status(msg);
+            strcpy(msg,"PLAYER "); strcat(msg,sender); strcat(msg," WANTS TO PLAY"); set_status(msg);
         }
         return;
     }
