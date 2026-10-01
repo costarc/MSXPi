@@ -90,6 +90,8 @@ static void psg(uint8_t r,uint8_t v) {psg_reg=r; psg_val=v;}
 static const uint16_t tune_offer[]={127,6, 0,4, 127,6, 0,0};
 static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
 static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
+/* "Tcha-Ham": a short G5 then a long C6, for a lobby SEEK. */
+static const uint16_t tune_seek[]={143,5, 0,3, 107,30, 0,0};
 static const uint16_t *pending_tune;
 static void play_pending(void) {
     const uint16_t *t=pending_tune;
@@ -106,12 +108,18 @@ static void play_pending(void) {
     }
 }
 /* Called with every state packet: a new draw offer beeps; a game that has
- * just ended plays the win or lose tune (any win in local two-player). */
+ * just ended plays the win or lose tune (any win in local two-player);
+ * a new "PLAYER <nick> ..." seek announcement plays tcha-ham. */
 static uint8_t offer_seen;
+static char seek_seen[48];
 static void queue_sounds(uint8_t was_over) {
     uint8_t offer=!memcmp(status,"OPPONENT OFFERS",15), winner;
     if(offer && !offer_seen) pending_tune=tune_offer;
     offer_seen=offer;
+    if(!memcmp(status,"PLAYER ",7)) {
+        if(strcmp(status,seek_seen)) pending_tune=tune_seek;
+        strcpy(seek_seen,status);
+    } else seek_seen[0]=0;
     if(was_over || !game_over) return;
     winner=strstr(status,"WHITE WINS")?1:strstr(status,"BLACK WINS")?2:0;
     if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
@@ -377,9 +385,9 @@ static void clear_popup(void) {
 static void credits(void) {
     clear_popup();
     text_at(CREDITS_COL,MENU_ROW,  "+----------------------------+",CREDITS_W);
-    text_at(CREDITS_COL,MENU_ROW+1,"|  PCHESS V1.0 (C) RCC 2026  |",CREDITS_W);
+    text_at(CREDITS_COL,MENU_ROW+1,"| PCHESS V1.0.1 (C) RCC 2026 |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+2,"|                            |",CREDITS_W);
-    text_at(CREDITS_COL,MENU_ROW+3,"|        DESIGN: RCC         |",CREDITS_W);
+    text_at(CREDITS_COL,MENU_ROW+3,"|  DESIGN: RCC (ARCHITECT)   |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+4,"|PROGRAMMING: CLAUDE (INTERN)|",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+5,"|                            |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+6,"+----------------------------+",CREDITS_W);
@@ -545,7 +553,7 @@ int main(void) {
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0;
     tcp_init();
-    pending_tune=0; offer_seen=0;
+    pending_tune=0; offer_seen=0; seek_seen[0]=0;
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0; sprites_hidden=0;
     entry[0]=0;
     memset(moves,0,sizeof(moves));

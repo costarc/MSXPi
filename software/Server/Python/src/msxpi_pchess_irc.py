@@ -148,7 +148,7 @@ class Peer:
             if self.room: return
             if fields==['PCH1','SEEK'] and self.free():
                 self.seen(sender)
-                self.status='PLAYER '+sender
+                self.status='PLAYER '+sender+' WANTS TO PLAY'
             return
         if fold(target)!=fold(self.nick): return
         if op=='OFFER' and len(fields)==3 and re.fullmatch('[0-9a-f]{16}',fields[2]):

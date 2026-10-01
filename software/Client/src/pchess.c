@@ -194,6 +194,8 @@ static void psg(uint8_t r,uint8_t v) {psg_reg=r; psg_val=v;}
 static const uint16_t tune_offer[]={127,6, 0,4, 127,6, 0,0};
 static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
 static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
+/* "Tcha-Ham": a short G5 then a long C6, for a lobby SEEK. */
+static const uint16_t tune_seek[]={143,5, 0,3, 107,30, 0,0};
 static const uint16_t *pending_tune;
 static void play_pending(void) {
     const uint16_t *t=pending_tune;
@@ -210,12 +212,18 @@ static void play_pending(void) {
     }
 }
 /* Called with every state packet: a new draw offer beeps; a game that has
- * just ended plays the win or lose tune (any win in local two-player). */
+ * just ended plays the win or lose tune (any win in local two-player);
+ * a new "PLAYER <nick> ..." seek announcement plays tcha-ham. */
 static uint8_t offer_seen;
+static char seek_seen[48];
 static void queue_sounds(uint8_t was_over) {
     uint8_t offer=!memcmp(status,"OPPONENT OFFERS",15), winner;
     if(offer && !offer_seen) pending_tune=tune_offer;
     offer_seen=offer;
+    if(!memcmp(status,"PLAYER ",7)) {
+        if(strcmp(status,seek_seen)) pending_tune=tune_seek;
+        strcpy(seek_seen,status);
+    } else seek_seen[0]=0;
     if(was_over || !game_over) return;
     winner=strstr(status,"WHITE WINS")?1:strstr(status,"BLACK WINS")?2:0;
     if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
@@ -443,8 +451,8 @@ static void credits(void) {
     field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
-    credits_line(82,"PCHESS V1.0 (C) RCC 2026");
-    credits_line(98,"DESIGN: RCC");
+    credits_line(82,"PCHESS V1.0.1 (C) RCC 2026");
+    credits_line(98,"DESIGN: RCC (ARCHITECT)");
     credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
     while(!Inkey());
 }
@@ -627,7 +635,7 @@ int main(void) {
     entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0;
     tcp_init();
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0;
-    field_count=0; pending_tune=0; offer_seen=0; coords_flip=255;
+    field_count=0; pending_tune=0; offer_seen=0; seek_seen[0]=0; coords_flip=255;
     entry[0]=0;
     memset(moves,0,sizeof(moves));
     memset(reply,0,sizeof(reply));
