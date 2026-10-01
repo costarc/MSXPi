@@ -37,15 +37,12 @@ PAYLOAD_ESCAPE:
     in a,(0xa9)
     ld c,a
     ld a,b
+    and 0xf0
+    or 6
     out (0xaa),a
-    pop af
-    jp po,PAYLOAD_ESCAPE_IFF_OFF
-    ei
-PAYLOAD_ESCAPE_IFF_OFF:
-    ld a,c
-    pop bc
-    and 4
-    ret nz
-    ld a,0xe2
-    scf
-    ret
+    in a,(0xa9)
+    ; Move CTRL to bit 2: bit 2 stays 0 only if both keys are down.
+    rlca
+    or c
+    ld c,a
+    jp PAYLOAD_ESCAPE_DONE

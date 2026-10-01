@@ -100,6 +100,25 @@ PAYLOAD_WAIT_SLOW:
 PAYLOAD_WAIT_DONE:
     pop bc
     ret
+; Tail of PAYLOAD_ESCAPE, placed before it so the DOS ROM keeps it in the wait
+; hole: the ESC hole is too small for the two-row check. C bit 2 = 0 when
+; CTRL+ESC is down, B = port AA to restore, incoming IFF state on the stack.
+PAYLOAD_ESCAPE_DONE:
+    ld a,b
+    out (0xaa),a
+    pop af
+    jp po,PAYLOAD_ESCAPE_IFF_OFF
+    ei
+PAYLOAD_ESCAPE_IFF_OFF:
+    ld a,c
+    pop bc
+    and 4
+    ret nz
+    ld a,0xe2
+    scf
+    ret
+; Abort key is CTRL+ESC: ESC alone stays an ordinary key for programs.
+; ESC = row 7 bit 2, CTRL = row 6 bit 1, both active low.
 ; Preserve row selection, upper PPI bits and the incoming interrupt state.
 ; No BIOS call: safe with interrupts disabled, no reliance on BSS.
 PAYLOAD_ESCAPE:
@@ -115,16 +134,13 @@ PAYLOAD_ESCAPE:
     in a,(0xa9)
     ld c,a
     ld a,b
+    and 0xf0
+    or 6
     out (0xaa),a
-    pop af
-    jp po,PAYLOAD_ESCAPE_IFF_OFF
-    ei
-PAYLOAD_ESCAPE_IFF_OFF:
-    ld a,c
-    pop bc
-    and 4
-    ret nz
-    ld a,0xe2
-    scf
-    ret
+    in a,(0xa9)
+    ; Move CTRL to bit 2: bit 2 stays 0 only if both keys are down.
+    rlca
+    or c
+    ld c,a
+    jp PAYLOAD_ESCAPE_DONE
  endif

@@ -72,45 +72,57 @@ void FastPrint(char* text) {
  */
 static uint8_t chk_spins;
 
+/*
+ * RC_ESCPRESSED while CTRL+ESC is held, else 0. Calls the generated
+ * PAYLOAD_ESCAPE, which reads the key matrix directly: unlike Inkey() it
+ * never consumes a key from the BIOS buffer, and a plain ESC is not an abort.
+ */
+static uint8_t ctrl_esc_pressed(void) __naked
+{
+    __asm
+    call PAYLOAD_ESCAPE
+    jr c,ctrl_esc_pressed_done
+    xor a
+ctrl_esc_pressed_done:
+    ld l,a
+    ret
+    __endasm;
+}
+
 uint8_t CHKPIRDY(void) {
     uint8_t state;
 
     /*
-     * OPTIMISATION: Inkey() no longer runs on every pass.
-     *
-     * Inkey() is a Fusion-C BIOS call - an inter-slot call into the MSX
-     * keyboard routine, which scans the whole matrix and debounces. Measured
-     * on real hardware it was costing ~830 us of the ~975 us the MSX spent
-     * per transferred byte: about 85% of the total, and roughly 6.7x
-     * everything else in the receive path put together. The Pi-side transfer
-     * is only 40 us/byte, so this loop - not the transport - was the
-     * bottleneck for the whole protocol.
+     * The abort key (CTRL+ESC) is sampled once every 256 passes, not on
+     * every pass. The check used to be Inkey(), a Fusion-C inter-slot BIOS
+     * call that cost ~830 us of the ~975 us the MSX spent per byte on real
+     * hardware; it also consumed whatever key was typed during a transfer
+     * and aborted on a plain ESC. The matrix read is cheap, but sampling
+     * rarely still keeps the poll loop tight.
      *
      * The counter is deliberately static rather than local. A local one would
      * reset on every call, and on a fast link CHKPIRDY returns on its first
-     * pass - so ESC would never be sampled at all. Counting across calls
+     * pass - so the key would never be sampled at all. Counting across calls
      * samples it roughly every 128 bytes, a few tens of ms, which is well
      * inside human reaction time.
      *
-     * This also matters for correctness, not just speed: calling the BIOS
-     * keyboard routine from inside a timer-interrupt hook is exactly the
-     * reentrancy the UNAPI/InterNestor work has to avoid.
+     * This also matters for correctness: calling the BIOS keyboard routine
+     * from inside a timer-interrupt hook is exactly the reentrancy the
+     * UNAPI/InterNestor work has to avoid. PAYLOAD_ESCAPE makes no BIOS call.
      */
     while (true) {
         /*
-         * Inkey() ends with EI, because the CALSLT it uses to reach the BIOS
-         * does DI internally and leaves re-enabling to the caller. Calling it
-         * every pass therefore re-enabled interrupts thousands of times per
-         * transfer - a side effect nothing here asked for but which the code
-         * had come to depend on. Now that Inkey() only runs 1 pass in 256,
-         * that no longer happens, so do it explicitly. Four T-states.
+         * Inkey() used to end with EI (its CALSLT does DI and leaves
+         * re-enabling to the caller), and the code came to depend on that.
+         * PAYLOAD_ESCAPE restores the incoming interrupt state instead, so
+         * keep enabling interrupts explicitly. Four T-states.
          */
         __asm
             ei
         __endasm;
 
         if (++chk_spins == 0) {
-            if (Inkey() == 0x1B) {
+            if (ctrl_esc_pressed()) {
                 return RC_ESCPRESSED;
             }
         }

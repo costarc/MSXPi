@@ -111,6 +111,8 @@ goonies_wait_done:
     pop de
     pop bc
     ret
+; Abort key is CTRL+ESC: ESC alone stays an ordinary key for programs.
+; ESC = row 7 bit 2, CTRL = row 6 bit 1, both active low.
 ; Preserve row selection, upper PPI bits and the incoming interrupt state.
 ; No BIOS call: safe with interrupts disabled, no reliance on BSS.
 PAYLOAD_ESCAPE:
@@ -124,6 +126,15 @@ PAYLOAD_ESCAPE:
     or 7
     out (0xaa),a
     in a,(0xa9)
+    ld c,a
+    ld a,b
+    and 0xf0
+    or 6
+    out (0xaa),a
+    in a,(0xa9)
+    ; Move CTRL to bit 2: bit 2 stays 0 only if both keys are down.
+    rlca
+    or c
     ld c,a
     ld a,b
     out (0xaa),a

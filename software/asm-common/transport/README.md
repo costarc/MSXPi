@@ -23,12 +23,16 @@ Polling is intentionally still used for file/disk payloads. UNAPI ETH_END
 leaves /WAIT off, and the existing link claim/disk busy guard prevents network
 transactions from interleaving. The payload kernel does not acquire the link
 itself: callers must hold it over the entire command/response, not each block.
-ESC is sampled at most 256 completed bytes apart and during busy polling. The
-shared helper preserves PPI upper bits, keyboard row selection and IFF state.
+The abort key is CTRL+ESC, read straight from the key matrix (ESC row 7 bit 2,
+CTRL row 6 bit 1). ESC alone is an ordinary key, so programs such as vi over
+SSH can use it, and the BIOS key buffer is never touched. CTRL+STOP is not used
+because the BIOS already acts on it. The key is sampled at most 256 completed
+bytes apart and during busy polling. The shared helper preserves PPI upper
+bits, keyboard row selection and IFF state.
 The existing C header-byte primitives are unchanged.
 
 The DOS ROM uses three pre-existing alignment holes for generated TX, wait,
-and ESC code. Their DEFS expressions enforce capacity; GETSLT/GETWRK and the
+and CTRL+ESC code. Their DEFS expressions enforce capacity; GETSLT/GETWRK and the
 UNAPI placement assertions remain active. The full ROM fits without moving
 these entry points or removing features. Standalone ASM clients include the
 same code contiguously. Assembly was checked with zmac and sjasmplus.
@@ -58,7 +62,7 @@ feature branches cut from it). Check one of those out to run them.
 - `python3 software/Tests/test_payload_z80.py`: executes assembled SDCC output
   with libz80ex. RX/TX and ABI checks cover hardware/TCP status, lengths
   0/1/255/256/257/512/8192, checksum overflow, register preservation, IFF on/off,
-  delayed readiness and ESC both busy and ready. Network TX tests cover frame
+  delayed readiness and CTRL+ESC both busy and ready (ESC alone must not abort). Network TX tests cover frame
   sizes through 1514, checksum, bounded timeout and absence of keyboard scans.
 - `python3 software/Tests/test_native_gpio.py`: protocol framing/retries,
   native failure behavior, burst selection and wrapper boundaries.

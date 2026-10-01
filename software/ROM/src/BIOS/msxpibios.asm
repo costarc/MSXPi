@@ -333,7 +333,7 @@ MY_GETWRK1:
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.6.1",13,10
 		DB		"Build "
-BuildId: DB "20260930.065"
+BuildId: DB "20261001.068"
         DB      13,10,"RCC (c) 2015-2026",13,10,0
 
 CALL_TABLE:
