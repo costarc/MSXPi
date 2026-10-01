@@ -72,8 +72,9 @@ $ProgressPreference    = "SilentlyContinue"   # Invoke-WebRequest is 10x slower 
 
 # The openMSX build the MSXPi ROM and server are made for. When it changes,
 # existing installs are replaced on the next run.
-$OpenMsxBuild = "openmsx-21.0-547-g352e335f5-mingw-w64-x86_64-bin.zip"
-$OpenMsxUrl   = "https://github.com/costarc/openMSX/releases/download/openMSX/$OpenMsxBuild"
+$OpenMsxRelease = "MSXPi_v1.6.1"
+$OpenMsxBuild   = "openmsx-21.0-561-gcb9826d55-mingw-w64-x86_64-bin.zip"
+$OpenMsxUrl     = "https://github.com/costarc/openMSX/releases/download/$OpenMsxRelease/$OpenMsxBuild"
 
 $Raw        = "https://raw.githubusercontent.com/costarc/MSXPi/$Branch/software"
 $OpenMsxDir = "$MsxPiHome\openMSX"
@@ -365,6 +366,11 @@ if (-not $SkipOpenMsx) {
         if (-not $exe) { Fail "openmsx.exe not found inside $src" }
 
         New-Item -ItemType Directory -Force $OpenMsxDir | Out-Null
+        # An openMSX unpacked by WSL or a Linux tool keeps the source tree's
+        # symlinks (share\machines\msx1.xml and others) as WSL links, which
+        # Windows cannot open or overwrite. Remove links before copying over them.
+        Get-ChildItem $OpenMsxDir -Recurse -Force -Attributes ReparsePoint -ErrorAction SilentlyContinue |
+            Remove-Item -Force -ErrorAction SilentlyContinue
         Copy-Item "$($exe.DirectoryName)\*" $OpenMsxDir -Recurse -Force
         Set-Content -Encoding ASCII $stamp $want
         Ok "$want installed"
