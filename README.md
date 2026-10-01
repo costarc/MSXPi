@@ -233,7 +233,7 @@ Copy the contents of `software/target` (at least `p.com`, `pcopy.com`,
 It prints the board (build ID, CPLD, `/WAIT` yes or no) and the server version.
 "Connection error" means the Pi is still booting (the first boot may take three
 minutes), the interface is not seated, or the ROM and server versions do not
-match. Press ESC, wait five seconds, and try again.
+match. Press CTRL+ESC, wait five seconds, and try again.
 
 ### Step 5 - Connect to WiFi and the network
 
@@ -565,8 +565,9 @@ Bugs and known limitations
   finish booting first and depends on the disk images; use another interface
   with Nextor or MSX-DOS 2 for daily work. Do not delete files on drive A: in
   that mode.
-* **A stuck transfer needs ESC.** Press ESC to abort, wait about five seconds
-  while the server resynchronises, and retry. If commands keep failing, restart
+* **A stuck transfer needs CTRL+ESC.** Hold CTRL and press ESC to abort, wait
+  about five seconds while the server resynchronises, and retry. ESC alone is
+  an ordinary key and never aborts a transfer. If commands keep failing, restart
   the server (`p restart`) or reboot the Pi.
 * **msxarch and MegaROMs.** Mappers detected: plain, Konami, Konami SCC, ASCII8
   and ASCII16. Other mappers, ROMs that need more RAM than the MSX has, and some

@@ -550,7 +550,7 @@ PAYLOAD_RX_BURST:
     sbc     a,a                 ; A = FFh send, 00h receive
     ld      l,a                 ; into L: HL is 0 on entry (the sum), and
     res     7,b                 ; EX DE,HL below moves it to E
-    call    PAYLOAD_WAIT        ; Pi ready (READY up); ESC still aborts
+    call    PAYLOAD_WAIT        ; Pi ready (READY up); CTRL+ESC still aborts
     ret     c
     ld      a,1
     out     (CONTROL_PORT2),a   ; wait mode on
