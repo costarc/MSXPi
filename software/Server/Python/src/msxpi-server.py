@@ -49,6 +49,7 @@ SERVER_MODULES = (
     "msxpi_cmd_web.py",
     "msxpi_renderpage.py",
     "msxpi_nitros.py",
+    "msxpi_ssh.py",
 )
 
 
@@ -129,6 +130,7 @@ from msxpi_cmd_system import (
 )
 from msxpi_cmd_web import chatgpt, irc, pchess, renderpage, showpage, template
 from msxpi_nitros import nitros
+from msxpi_ssh import ssh
 from msxpi_const import BUILD_ID, RC_CONNERR, RC_SUCCESS, VERSION
 from msxpi_settings import MSXPiConfig, getMSXPiVar
 
@@ -167,6 +169,7 @@ COMMANDS = {
         irc,
         pchess,
         nitros,
+        ssh,
         msxarchive,
         music,
         netreset,
@@ -222,9 +225,11 @@ def handle_command(buf: bytes) -> None:
     # instead of an exception that tears down the connection.
     cmd, *rest = buf.decode("utf-8", "replace").split()
     parms = " ".join(rest)
+    # SSH poll bytes can contain passwords, even though hex encoded.
     # "p set IRCPASSWORD secret" must not land in the log.
     shown = (
-        "[hidden]" if parms.upper().startswith(tuple(settings.SECRET_VARS)) else parms
+        "[hidden]" if cmd.lower() == "ssh"
+        or parms.upper().startswith(tuple(settings.SECRET_VARS)) else parms
     )
     print(f" -> {cmd} {shown}")
     try:
