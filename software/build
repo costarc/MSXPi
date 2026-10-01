@@ -161,6 +161,11 @@ EOF
         # Pi. update.sh fetches all of them and rebuilds the engine.
         echo "p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
         echo "p run sh update.sh"
+        # Windows has no sh: there the server skips the line above and does
+        # the work on "p update" instead. On the Pi "p update" finds update.sh
+        # has just run and returns; servers older than "p update" answer
+        # "Unknown command" and were already updated by update.sh.
+        echo "p update"
         echo "echo"
         echo "echo Restarting msxpi-server.py"
         echo "p restart"
