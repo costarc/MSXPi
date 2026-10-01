@@ -139,4 +139,8 @@ if [ "$(id -u)" = 0 ]; then
     chown -R "$owner" native 2>/dev/null
 fi
 
+# "p update" (sent by msxpirfh.bat right after this script) skips its own
+# update when this is recent.
+touch .last-update
+
 exit $rc

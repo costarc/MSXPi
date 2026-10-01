@@ -35,6 +35,8 @@ import os
 import posixpath
 import datetime
 import re
+import shlex
+import shutil
 from subprocess import Popen, PIPE
 from html.parser import HTMLParser
 from urllib.request import urlopen
@@ -163,6 +165,36 @@ def ini_fcb(fname, fsize):
     return rc
 
 
+def _wget(args: List[str]) -> str:
+    """Download like "wget [-q] [-O file] URL", for hosts without wget
+    (Windows). Relative names land in the server's working folder, as with
+    the real wget. Returns the reply for the MSX."""
+    out = None
+    url = None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "-O" and i + 1 < len(args):
+            out = args[i + 1]
+            i += 1
+        elif a.startswith("-O") and len(a) > 2:
+            out = a[2:]
+        elif not a.startswith("-"):
+            url = a
+        i += 1
+    if not url:
+        return "Pi:Error - wget: no URL"
+    if not out:
+        out = posixpath.basename(url.split("?")[0]) or "index.html"
+    resp = requests.get(url, timeout=HTTP_TIMEOUT)
+    resp.raise_for_status()
+    tmp = out + ".new"
+    with open(tmp, "wb") as f:
+        f.write(resp.content)
+    os.replace(tmp, out)
+    return "Pi:Ok"
+
+
 def run(cmd: str = "") -> CommandResult:
 
     if cmd.strip() == "" or len(cmd.strip()) == 0:
@@ -173,6 +205,26 @@ def run(cmd: str = "") -> CommandResult:
 
     cmd = cmd.replace("::", "|")
     rc = RC_SUCCESS
+
+    # Windows has no wget: it is done here instead, so updaters and users can
+    # still fetch files. The sh scripts sent to the server (update.sh) are
+    # written for the Pi, and fail even where Git puts an sh on the PATH, so
+    # they are skipped rather than run.
+    if transport.hostType == "Windows" and "|" not in cmd:
+        try:
+            args = shlex.split(cmd)
+        except ValueError:
+            args = []
+        if args and args[0] == "wget" and not shutil.which("wget"):
+            try:
+                reply = _wget(args[1:])
+            except Exception as e:
+                reply = "Pi:Error - " + str(e)
+            sendmultiblock(reply.encode())
+            return RC_SUCCESS if reply == "Pi:Ok" else RC_FAILED
+        if args and args[0] == "sh":
+            sendmultiblock(b"Pi:Skipped - sh scripts are for the Pi")
+            return RC_SUCCESS
 
     try:
         if transport.hostType == "Windows" and "http" not in cmd:

@@ -262,6 +262,73 @@ def restart(parm: Optional[str] = None) -> CommandResult:
         sendmultiblock(b"Command not supported by this platform")
 
 
+UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup"
+# update.sh touches this when it finishes; see update().
+UPDATE_STAMP = ".last-update"
+
+
+def update(parm: Optional[str] = None) -> CommandResult:
+    """Bring the server files up to date, on any host. Sent by msxpirfh.bat.
+
+    Raspberry Pi and other Unix hosts run update.sh. msxpirfh.bat also runs
+    update.sh itself, the way it always did (servers older than this command
+    only know that way), so when update.sh finished a moment ago this has
+    nothing left to do. Windows has no sh: it runs msxpi-windows-setup.ps1 for
+    the server files and Python packages, leaving openMSX alone (it is the
+    program the MSX is running in) and asking for no administrator rights.
+
+    The server is not restarted here: a Pi's msxpi-monitor restarts it on
+    "p restart"; anywhere else the user restarts it.
+    """
+    home = os.path.abspath(settings.MSXPIHOME)
+    stamp = os.path.join(home, UPDATE_STAMP)
+    try:
+        if time.time() - os.path.getmtime(stamp) < 600:
+            return "Pi:Ok - server already updated"
+    except OSError:
+        pass
+
+    windows = transport.hostType == "Windows"
+    name = "msxpi-windows-setup.ps1" if windows else "update.sh"
+    script = os.path.join(home, name)
+    try:
+        import requests  # only needed here; the server imports it elsewhere anyway
+
+        resp = requests.get(f"{UPDATE_SETUP_URL}/{name}", timeout=30)
+        resp.raise_for_status()
+        with open(script + ".new", "wb") as f:
+            f.write(resp.content)
+        os.replace(script + ".new", script)
+    except Exception as e:
+        return f"Pi:Error - cannot get {name}: {e}"
+
+    if windows:
+        cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
+               "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause"]
+    else:
+        cmd = ["sh", script]
+    print(f"update: running {' '.join(cmd)}", flush=True)
+    try:
+        done = subprocess.run(cmd, cwd=home, stdout=PIPE, stderr=STDOUT,
+                              stdin=subprocess.DEVNULL, timeout=1800)
+    except Exception as e:
+        return f"Pi:Error - update: {e}"
+    out = done.stdout.decode("utf-8", "replace")
+    print(out, flush=True)
+
+    if not windows:
+        # update.sh keeps its lines short for the MSX screen.
+        return out.strip() or f"Pi:update exit {done.returncode}"
+    # The Windows setup is chatty: send the count of what went well and every
+    # line that did not.
+    lines = [l.strip() for l in out.splitlines() if l.strip()]
+    ok = sum(1 for l in lines if l.startswith("ok "))
+    bad = [l[:78] for l in lines if l.lower().startswith(("warn", "fail", "msxpi-windows-setup:"))]
+    status = "Pi:Ok" if done.returncode == 0 else f"Pi:Error - exit {done.returncode}"
+    return "\n".join([f"{status} - {ok} items up to date", *bad,
+                      "Restart msxpi-server to use the update."])
+
+
 def netreset(parm: Optional[str] = None) -> CommandResult:
     """Rebuild the Pi's MSX networking from scratch, on demand from the MSX.
 
