@@ -73,7 +73,7 @@ $ProgressPreference    = "SilentlyContinue"   # Invoke-WebRequest is 10x slower 
 # The openMSX build the MSXPi ROM and server are made for. When it changes,
 # existing installs are replaced on the next run.
 $OpenMsxRelease = "MSXPi_v1.6.1"
-$OpenMsxBuild   = "openmsx-21.0-561-gcb9826d55-mingw-w64-x86_64-bin.zip"
+$OpenMsxBuild   = "openmsx-21.0-563-gb87fd21c6-mingw-w64-x86_64-bin.zip"
 $OpenMsxUrl     = "https://github.com/costarc/openMSX/releases/download/$OpenMsxRelease/$OpenMsxBuild"
 
 $Raw        = "https://raw.githubusercontent.com/costarc/MSXPi/$Branch/software"
