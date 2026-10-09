@@ -39,7 +39,6 @@ import shlex
 import shutil
 from subprocess import Popen, PIPE
 from html.parser import HTMLParser
-from urllib.request import urlopen
 
 # Third-party imports
 import requests
@@ -73,7 +72,9 @@ from msxpi_settings import getMSXPiVar, setMSXPiVar
 # create a subclass and override the handler methods
 class MyHTMLParser(HTMLParser):
     def __init__(self):
-        self.reset()
+        # Must run HTMLParser.__init__: newer Pythons set attributes there
+        # (e.g. scripting), and reset() alone does not set them.
+        super().__init__()
         self.NEWTAGS = []
         self.NEWATTRS = []
         self.HTMLDATA = []
@@ -568,8 +569,10 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
             return send_error_block(f"File error: {str(e)}", err_code)
     else:
         try:
-            urlhandler = urlopen(path, timeout=HTTP_TIMEOUT)
-            buf = urlhandler.read()
+            # requests, not urlopen: see the note in the p cd handler above.
+            resp = requests.get(path, timeout=HTTP_TIMEOUT)
+            resp.raise_for_status()
+            buf = resp.content
             filesize = len(buf)
         except Exception as e:
             return send_error_block(f"URL error: {str(e)}", RC_FAILED)
