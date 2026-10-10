@@ -32,7 +32,7 @@ and `WAIT_SUPPORT`.
   upper half.) **Never CS12**: the ROM then also answers
   in page 2, the MSX finds its `AB` header twice and initialises it twice, and
   the second init chains EXTBIO to itself. MSX-DOS still boots and `msxarch`
-  works, but every program that calls EXTBIO - `p`, `pcopy`, `pver` - hangs
+  works, but every program that calls EXTBIO - `p`, `pcopy` - hangs
   the machine with interrupts off (Caps Lock dead).
 - **Pi server.** The older boards use GPIO 21/20/16/12/25, which is
   `msxpi-JumperLeft.ini`. They have no shutdown button, so set
@@ -98,7 +98,7 @@ ID.
 The ID field was 4 bits (`MSXPIVer`) until every value was used up. It is now
 6 bits. The old bits 5-4 were always 0, so every existing ID reads exactly as
 before, and the main v1.6 build still reads $0E / $8E. Every distinct firmware
-image gets its own ID. Run `pver.com` on the MSX to print the board and build
+image gets its own ID. Run `p ver` on the MSX to print the board and build
 name.
 
 | ID | Firmware |
@@ -119,7 +119,7 @@ name.
 
 Next free ID: $15. An ID identifies a board and firmware variant, not a
 build: rebuilding or fixing a variant keeps its ID. Adding a new variant means
-adding a row to this table and to the table in `software/Client/src/pver.c`. IDs go up to $3F. Bit 6 must never be
+adding a row to this table and to the table in `software/Client/src/p.c`. IDs go up to $3F. Bit 6 must never be
 used.
 
 ## Verification
@@ -144,8 +144,8 @@ used.
     each build.
 - Hardware tests:
   - v0.8.2 board (PCB v0.7 Rev.7), `v0.8.2/MSXPi_v1.6_polled.pof` (ID $10, before the LED), MSX
-    running Nextor with the MSXPi ROM disabled: `pver` reads ID $10, and
-    `pver` and `p` commands reach the server. Needs `RPI_SHUTDOWN=none`
+    running Nextor with the MSXPi ROM disabled: `p ver` reads ID $10, and
+    `p` commands reach the server. Needs `RPI_SHUTDOWN=none`
     (server fix `23bd98e`), otherwise the unconnected GPIO 26 reboots the Pi
     in a loop. The 27C256 ROM and MSX-DOS boot are not tested yet.
   - The v1.1 images (PCB V1.1 Rev.1 and V1.2.1b) are not tested on real boards yet.
