@@ -774,7 +774,7 @@ fi
 cat <<EOF
     MSXPi is installed in $MSXPIHOME and starts at every boot.
     Plug the Pi into the MSXPi interface (component side facing you), switch the MSX
-    on and type  pver  at the MSX-DOS prompt.
+    on and type  p ver  at the MSX-DOS prompt.
     Settings and API keys: $MSXPIHOME/msxpi.ini
 EOF
 

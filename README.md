@@ -101,7 +101,7 @@ Do the steps in order. Each ends with a check, so you know where a problem is.
    | v0.8.2 / v1.0 (PCB v0.7 Rev.7) | `v0.8.2/MSXPi_v1.6_polled.pof` |
 
 3. **Check:** in MSX BASIC, `PRINT INP(&H57)` must not print 254 or 255 (that
-   means no CPLD answered); `pver` shows the same build ID in readable form later. Older boards need a few extra settings - see
+   means no CPLD answered); `p ver` shows the same build ID in readable form later. Older boards need a few extra settings - see
    `hardware/CPLD_Project/LEGACY_BOARDS.md` and `documents/Legacy Support.odt`.
 
 ### Step 2 - Write the ROM to the EEPROM with AT28C256.COM
@@ -223,12 +223,12 @@ is running.
 ### Step 4 - Copy the MSX-side programs
 
 Copy the contents of `software/target` (at least `p.com`, `pcopy.com`,
-`pver.com`, `msxarch.com`, `msxarch.ini`, `LOADROM.COM`, `INL.CFG` and the
+`msxarch.com`, `msxarch.ini`, `LOADROM.COM`, `INL.CFG` and the
 `.BAS` programs) to your MSX disk or SD card.
 
 **Check:** at the MSX-DOS prompt type
 
-        pver
+        p ver
 
 It prints the board (build ID, CPLD, `/WAIT` yes or no) and the server version.
 "Connection error" means the Pi is still booting (the first boot may take three
@@ -258,7 +258,7 @@ Pi's WiFi. Details: `software/UNAPI/README.md`.
 
         p dir /home/pi/msxpi
         p run uname -a
-        pcopy m:pver.com
+        pcopy m:p.com
         msxarch                     (browse and start ROM games from the network)
         LOADROM game.rom /N
         p chatgpt Tell me a fun fact about MSX
@@ -405,13 +405,13 @@ emulators with two servers.
 
 At the MSX-DOS prompt:
 
-        pver
+        p ver
         p dir /
         p set
         msxarch
         p chatgpt Tell me a funny fact about MSX
 
-`pver` reports `/WAIT: yes (burst)` when the device emulates the wait flow
+`p ver` reports `/WAIT: yes (burst)` when the device emulates the wait flow
 control. "Connection error" means the server is not running, the ports differ,
 or the ROM and server versions do not match. Read the log window of the server:
 it prints every command it receives.
@@ -521,7 +521,7 @@ server), `r1:` and `r2:` (MSX1 and MSX2 ROMs on msxarchive.nl).
 
 | Command | What it does |
 |---|---|
-| `p ver`, `pver` | server version; `pver` also shows the board, CPLD build and /WAIT support |
+| `p ver` | board, CPLD build and /WAIT support, then the server version |
 | `p cd`, `p dir` | change and list the current path |
 | `p run <cmd>` | run a command on the Pi; use `::` for a pipe |
 | `p date` | set the MSX date and time from the Pi |
@@ -559,7 +559,7 @@ Bugs and known limitations
 * **Older boards need settings**: `RPI_SHUTDOWN=none` without the push-button,
   and `GPIO_CS_SETUP_NS=1000` on the v0.8.2 board. On that board the EPROM
   /OE jumper must be on CS1, never CS12, or programs that call EXTBIO (`p`,
-  `pcopy`, `pver`) hang the MSX. See `hardware/CPLD_Project/LEGACY_BOARDS.md`.
+  `pcopy`) hang the MSX. See `hardware/CPLD_Project/LEGACY_BOARDS.md`.
 * **MSXPi only carries MSX-DOS 1.** Nextor and MSX-DOS 2 are not in the MSXPi
   ROM; they run from another disk interface that MSXPi coexists with.
 * **Booting MSX-DOS 1 from the Pi is slow and fragile.** It needs the Pi to
@@ -623,7 +623,7 @@ Directories:
     |   |-- ROM/src
     |   |   |-- BIOS             BIOS-only ROM bank (msxpibios.asm); BASIC extension (msxpiext.asm)
     |   |   `-- MSX-DOS          disk driver and MSX-DOS 1 kernel sources
-    |   |-- Client/src           p, pcopy, pver, msxarch, pchess, showpage, templates, at28c256
+    |   |-- Client/src           p, pcopy, msxarch, pchess, showpage, templates, at28c256
     |   |   `-- loadrom          the LOADROM.COM network patch
     |   |-- ROM-Patcher          ROM patch profiles used by msxarch
     |   |-- Server

@@ -179,7 +179,7 @@ EOF
             esac
             echo "pcopy m:$f"
         done
-        echo "pver"
+        echo "p ver"
     } | to_crlf target/msxpirfh.bat
 }
 

@@ -335,7 +335,7 @@ begin
             --            always '0', so every existing code reads exactly as
             --            before, and the new IDs ($10-$3F) still sit below
             --            $FE.  Every distinct firmware build gets its own ID;
-            --            pver.com turns it into a board and build name.
+            --            p.com ("p ver") turns it into a board and build name.
             -- Reads $0E with the mode off, $8E with it on (main v1.6 build).
             D_out <= wait_mode & '0' & MSXPIVer;
         else

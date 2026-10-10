@@ -26,18 +26,23 @@
 
 
 # =============================================================================
-# nomsxpi_pver - with no MSXPi cartridge, PVER.COM must say so and return to
-# the prompt at once, without trying to reach the server.
-#   HW=nomsxpi MACHINE=Panasonic_FS-A1WSX ./run.sh nomsxpi_pver
+# p_ver - "P VER" prints the board/CPLD build read from port $57, then the
+# server version ("p ver").  openMSX emulates the main v1.6 CPLD, so the board
+# part must decode build ID $0E, and /WAIT is only reported where the emulator
+# really implements it (the WSL build).
 # =============================================================================
 
-harness::init "nomsxpi_pver"
+harness::init "p_ver"
 
 harness::at_dos_prompt {
-    harness::run_cmd "PVER" 20 {
-        harness::assert_screen_contains "no-board"    "no MSXPi found"
-        harness::assert_screen_lacks    "no-build-id" "Build ID"
-        harness::assert_screen_lacks    "no-server"   "Server"
+    harness::run_cmd "P VER" 60 {
+        harness::assert_screen_contains "port-57"        "Port \$57: \$0E"
+        harness::assert_screen_contains "build-id"       "Build ID: \$0E"
+        harness::assert_screen_contains "board-name"     "Board   : v1.3 to v1.6"
+        harness::assert_screen_contains "firmware-name"  "v1.6 /WAIT build"
+        harness::assert_screen_contains "wait-probe"     "/WAIT   : yes (burst)"
+        harness::assert_screen_contains "server-version" "MSXPi Server Version"
+        harness::assert_screen_lacks    "no-comms-error" "connection error"
         harness::done
     }
 }

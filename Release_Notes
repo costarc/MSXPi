@@ -59,8 +59,8 @@ Older boards
 - CPLD images per board are kept in hardware/CPLD_Project (MSXPi_v1.6.pof for V1.3 Rev.1; v1.1/MSXPi_v1.6_wait.pof; v0.8.2/MSXPi_v1.6_polled.pof), with the details in hardware/CPLD_Project/LEGACY_BOARDS.md and documents/Legacy Support.odt.
 - Boards without the shutdown/reboot button must set "var RPI_SHUTDOWN=none" in msxpi.ini: the unconnected GPIO 26 can otherwise read as a button press and reboot the Pi in a loop. The default remains GPIO 26 (PCB v1.2 Rev.1 and later). The v0.8.2 board also needs "var GPIO_CS_SETUP_NS=1000".
 
-pver, pcopy and other client changes
-- "pver" reports the hardware as well as the server: the CPLD build ID read from port $57, the board it belongs to, and whether /WAIT bursts are available ("yes (burst)" or "no (polled)"), followed by the server version.
+p ver, pcopy and other client changes
+- "p ver" reports the hardware as well as the server (the separate pver.com is gone): the CPLD build ID read from port $57, the board it belongs to, and whether /WAIT bursts are available ("yes (burst)" or "no (polled)"), followed by the server version.
 - "pcopy" now copies in both directions: Pi to MSX as before, and from an MSX drive to the Pi ("pcopy <drive>:<file> <pi file>"), in 16 KB blocks with back-pressure. A bad block no longer kills the transfer, and a failed upload no longer destroys the target file.
 - "p reload A:" / "p reload B:" reloads a drive's disk image from disk. The disk images are mapped directly by the server so that writes made by the MSX persist.
 - "p" with no arguments, "p /h" or "p /help" lists the commands.
