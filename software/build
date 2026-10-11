@@ -19,7 +19,7 @@ set -o pipefail
 python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
-buildClientCommands="${buildClientCommands:-no}"
+buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
 buildBIOS="${buildBIOS:-yes}"
@@ -30,11 +30,11 @@ buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 # Bump the BuildId in the server before compiling? Off while iterating, so a
 # rebuild does not churn the version string; on for a server build that is going
 # out.
-updateServerVersion="${updateServerVersion:-no}"
+updateServerVersion="${updateServerVersion:-yes}"
 
 # Bump only the BuildIds that are baked into the ROM artifacts:
 # msxpibios.rom and msxpiext.bin.
-updateRomVersion="${updateRomVersion:-no}"
+updateRomVersion="${updateRomVersion:-yes}"
 
 # Keep a copy of the openMSX extension named after this build's ROM sha1?
 # Only for a build that is actually RELEASED. openMSX resolves an extension by

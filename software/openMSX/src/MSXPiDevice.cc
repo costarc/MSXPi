@@ -6,6 +6,7 @@
 #include "MSXMotherBoard.hh"
 #include "RealTime.hh"
 #include "Timer.hh"
+#include "serialize.hh"
 
 #include <algorithm>
 #include <array>
@@ -31,9 +32,7 @@ static constexpr auto TRANSFER_TIME = EmuDuration::usec(20);
 MSXPiDevice::MSXPiDevice(DeviceConfig& config)
 	: MSXDevice(config)
 	, activePort(DEFAULT_SERVER_PORT)
-	, rom(config.findChild("rom")
-		? std::make_unique<Rom>(getName() + " ROM", "MSXPi EEPROM", config)
-		: nullptr)
+	, rom(getName() + " ROM", "MSXPi EEPROM", config)
 	, bankSetting(getCommandController(), "msxpirom_bank",
 		"MSXPi bank jumper, as labelled on the PCB: BANK2 (EEPROM A14 = CPU "
 		"A15) puts the lower half (MSX-DOS) at 4000h, BANK1 (EEPROM A14 = CPU "
@@ -50,9 +49,9 @@ MSXPiDevice::MSXPiDevice(DeviceConfig& config)
 {
 	activePort = portSetting.getInt();
 	portSetting.attach(*this);
-	if (rom && rom->size() != 0x4000 && rom->size() != 0x8000) {
+	if (rom.size() != 0x4000 && rom.size() != 0x8000) {
 		throw MSXException("MSXPi EEPROM image must be 16KB or 32KB, got ",
-		                   rom->size(), " bytes");
+		                   rom.size(), " bytes");
 	}
 	bank = bankSetting.getEnum(); // read before the first access
 	romEnabled = sltslSetting.getEnum() == Sltsl::ON;
@@ -122,7 +121,6 @@ void MSXPiDevice::reset(EmuTime /*time*/)
 
 void MSXPiDevice::applyJumpers()
 {
-	if (!rom) return;
 	auto newBank = bankSetting.getEnum();
 	auto newEnabled = sltslSetting.getEnum() == Sltsl::ON;
 	if (newBank == bank && newEnabled == romEnabled) return;
@@ -134,16 +132,11 @@ void MSXPiDevice::applyJumpers()
 const byte* MSXPiDevice::romByte(uint16_t address) const
 {
 	// The chip's A14 is CPU A15 or CPU A14, as the bank jumper wires it.
-	static constexpr std::array<byte, 0x100> ERASED = [] {
-		std::array<byte, 0x100> a{};
-		a.fill(0xFF);
-		return a;
-	}();
-	if (!romEnabled) return &ERASED[address & 0xFF]; // /CE not connected
+	if (!romEnabled) return unmappedRead.data(); // /CE not connected
 	unsigned a14 = (bank == Bank::A15) ? (address >> 15) & 1 : (address >> 14) & 1;
 	unsigned chip = (a14 << 14) | (address & 0x3FFF);
-	if (chip >= rom->size()) return &ERASED[address & 0xFF]; // 16KB image
-	return &(*rom)[chip];
+	if (chip >= rom.size()) return unmappedRead.data(); // 16KB image
+	return &rom[chip];
 }
 
 byte MSXPiDevice::readMem(uint16_t address, EmuTime time)
@@ -153,13 +146,13 @@ byte MSXPiDevice::readMem(uint16_t address, EmuTime time)
 
 byte MSXPiDevice::peekMem(uint16_t address, EmuTime /*time*/) const
 {
-	return rom ? *romByte(address) : 0xFF;
+	return *romByte(address);
 }
 
 const byte* MSXPiDevice::getReadCacheLine(uint16_t start) const
 {
 	// A cache line never crosses a 16KB boundary, so one lookup covers it.
-	return rom ? romByte(start) : MSXDevice::getReadCacheLine(start);
+	return romByte(start);
 }
 
 bool MSXPiDevice::ready() const
@@ -461,6 +454,32 @@ void MSXPiDevice::readLoop()
 	}
 }
 
+// The state the MSX can observe, which is what a savestate has to carry: the
+// EEPROM jumpers as of the last reset, and the port-level state of the
+// interface. The link to the server is deliberately left out - a socket and a
+// reader thread cannot be restored - so after a load the device reconnects
+// exactly as it does at startup, and a transfer that was in flight is dropped:
+// the protocol's checksum/retry layer recovers from that.
+template<typename Archive>
+void MSXPiDevice::serialize(Archive& ar, unsigned /*version*/)
+{
+	ar.template serializeBase<MSXDevice>(*this);
+
+	auto bankA14 = byte(bank == Bank::A14);
+	ar.serialize("bankA14",    bankA14,
+	             "romEnabled", romEnabled,
+	             "latch",      latch,
+	             "busy",       busy,
+	             "waitMode",   waitMode,
+	             "srValue",    srValue);
+
+	if constexpr (Archive::IS_LOADER) {
+		bank = bankA14 ? Bank::A14 : Bank::A15;
+		bound.reset(); // nobody is clocking a transfer any more
+		invalidateDeviceRCache(); // the ROM may be mapped differently now
+	}
+}
+INSTANTIATE_SERIALIZE_METHODS(MSXPiDevice);
 REGISTER_MSXDEVICE(MSXPiDevice, "MSXPiDevice");
 
 } // namespace openmsx
