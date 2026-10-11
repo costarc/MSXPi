@@ -35,6 +35,7 @@
 ;      - Changed way how EEPROM is detected and fixed bug that was writting to MSX RAM in some models
 ; 1.3 - Changes to the write logic to address some issues with some eeproms
 ; 1.4 - Added option /r via command line to write very slowly to the eeprom 
+; 1.5 - /i also flags ROMs that carry the MSXPI tag in header bytes 400Ah-400Eh
 ;
 ; Note on this code:
 ; This version does not identify the AT28C256 automatically.
@@ -1177,7 +1178,7 @@ showcontent:
     ld      b,6
     call    showcontent0
     call    PRINTNEWLINE
-    ret
+    jp      showtag
       
 showcontent0:
     exx
@@ -1193,6 +1194,29 @@ showcontent0:
     djnz    showcontent0
     call    restore_ram_slots
     ret
+
+; Prints a note when the slot ROM carries the MSXPI tag in the reserved
+; header bytes 400Ah-400Eh. The slot must be enabled by the caller or not -
+; the bytes are copied to RAM with the slot switched in, then it is restored.
+showtag:
+    call    enable_eeprom_slot
+    ld      hl,$400A
+    ld      de,tagbuf
+    ld      bc,5
+    ldir
+    call    restore_ram_slots
+    ld      hl,tagbuf
+    ld      de,msxpitag
+    ld      b,5
+showtag0:
+    ld      a,(de)
+    cp      (hl)
+    ret     nz
+    inc     hl
+    inc     de
+    djnz    showtag0
+    ld      hl,txt_msxpitag
+    jp      print
 
 param_p:
     ld     a,1
@@ -1252,6 +1276,7 @@ txt_nextslot:		db "Checking slot ",0
 txt_ramsearch:		db "Searching for EEPROM",13,10,0
 txt_ramfound:		db "Found writable memory in slot ",0
 txt_ramfoundnoteeprom:	db "Found writable memory but its not the eeprom in slot ",0
+txt_msxpitag:		db "MSXPI tag found - MSXPi ROM",13,10,0
 txt_newline:		db 13,10,0
 txt_ramnotfound:	db "EEPROM not found in slot ",0
 txt_writingflash:	db "Writing file to EEPROM in slot ",0
@@ -1280,14 +1305,14 @@ txt_writefailed:	db 13,10,"Writing process failed!",13,10
 txt_invparms:		db "Invalid parameters",13,10
 txt_help:		db "Command line options: at28c256 </h | /i | /e> | </s <slot> </r> </f> file.rom>",13,10,13,10
 			db "/h Show this help",13,10
-			db "/i Show initial 24 bytes of the slot cartridge",13,10
+			db "/i Show slot ROM header (flags MSXPi)",13,10
 			db "/e Erase the EEPROM",13,10
 			db "/s <slot number>",13,10
 			db "/r Slow write to work around unstable eeproms",13,10
 			db "/f File name with extension, for example game.rom",13,10,0
 txt_credits:		db 13,10,"AT28C256 EEPROM Programmer for MSX",13,10
-			db "v1.4."
-BuildId: db "20230307.037"
+			db "v1.5."
+BuildId: db "20261011.038"
 			db 13,10
 			db "RCC (c) 2020-2023",13,10,13,10,0
 
@@ -1313,6 +1338,8 @@ parms_table:
     db 0    ; end of table. this byte is mandatory to be zero
 
 thisslt:		db $00
+tagbuf:			db 0,0,0,0,0
+msxpitag:		db "MSXPI"
 parm_index:		db $ff
 parm_found:		db $ff
 ignorerc:		db $ff

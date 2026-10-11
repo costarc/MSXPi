@@ -125,7 +125,7 @@ and initial hardware checks. Complete those steps before installing the
 NitrOS-9 for MSX files below.
 
 1. Install Raspberry Pi OS and the MSXPi software on the Pi. Confirm the
-   MSXPi interface works with the existing `pver` command before adding
+   MSXPi interface works with the existing `p ver` command before adding
    NitrOS-9 for MSX.
 2. Install XRoar with Becker-port support, ToolShed's `os9` tools, LWTOOLS
    and `make`. The [NitrOS-9 for MSX image build instructions](NITROS-build.md)

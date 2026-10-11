@@ -86,7 +86,7 @@ UNAPI_ENTRY:
             push    hl
             call    ETH_WRK                 ; IX = work area
             ; Routine 129 (link claim/release) never touches the link, and
-            ; P.COM, PCOPY.COM and PVER.COM call it before every command
+            ; P.COM and PCOPY.COM call it before every command
             ; whether or not UNAPI is in use.  Probing on it put an Ethernet
             ; transaction in front of their first command, which hung them on
             ; a v0.8.2 board.  Leave the probe to the first real Ethernet call.

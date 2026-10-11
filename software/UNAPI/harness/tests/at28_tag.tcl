@@ -24,25 +24,21 @@
 # SOFTWARE.
 # ------------------------------------------------------------------------------
 
-
 # =============================================================================
-# pver - PVER.COM prints the board/CPLD build read from port $57, then the
-# server version ("p ver").  openMSX emulates the main v1.6 CPLD, so the board
-# part must decode build ID $0E, and /WAIT is only reported where the emulator
-# really implements it (the WSL build).
+# at28_tag - AT28C256 /i flags the MSXPi ROM by the MSXPI tag in its header.
+#
+# The tag is the reserved header bytes 400Ah-400Eh of both EEPROM halves.
+# The harness puts MSXPi in slot 2 (see run.sh), so "/s 2 /i" dumps its header
+# and has to print the tag note.
 # =============================================================================
 
-harness::init "pver"
+harness::init "at28_tag"
 
 harness::at_dos_prompt {
-    harness::run_cmd "PVER" 60 {
-        harness::assert_screen_contains "port-57"        "Port \$57: \$0E"
-        harness::assert_screen_contains "build-id"       "Build ID: \$0E"
-        harness::assert_screen_contains "board-name"     "Board   : v1.3 to v1.6"
-        harness::assert_screen_contains "firmware-name"  "v1.6 /WAIT build"
-        harness::assert_screen_contains "wait-probe"     "/WAIT   : yes (burst)"
-        harness::assert_screen_contains "server-version" "MSXPi Server Version"
-        harness::assert_screen_lacks    "no-comms-error" "connection error"
+    harness::run_cmd "AT28C256 /s 2 /i" 60 {
+        harness::assert_screen_contains "header-ab"      "41 42"
+        harness::assert_screen_contains "tag-flagged"    "MSXPI tag found"
+        harness::assert_screen_lacks    "no-dos-error"   "Bad command"
         harness::done
     }
 }
