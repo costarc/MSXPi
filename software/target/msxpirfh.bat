@@ -30,6 +30,7 @@ pcopy m:msxpiext.bin
 pcopy m:msxpiupd.bat
 pcopy m:nitros.com
 pcopy m:p.com
+pcopy m:pcheckers.com
 pcopy m:pchess.com
 pcopy m:pchess1.com
 pcopy m:pver.com
