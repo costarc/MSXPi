@@ -441,7 +441,7 @@ RETRTN	equ	0F38BH		; adres with a RET instruction, allways available
 	defw	A6576
 	defw	0
 	defw	0
-	defs	6
+	defb	"MSXPI",0		; reserved: MSXPi tag, shown by at28c256 /i
 
 ; diskdriver entries
 

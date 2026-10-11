@@ -125,7 +125,7 @@ MYSIZE:     EQU     UNAPI_WRKEND        ; the DOS ROM's work area, same layout
         dw      DOS_STMT        ; STATEMENT - JP CALLHAND here
         dw      0               ; DEVICE
         dw      0               ; TEXT
-        dw      0,0,0           ; reserved
+        db      "MSXPI",0       ; reserved - MSXPi tag, shown by at28c256 /i
 
 ; =============================================================================
 ; INIT
