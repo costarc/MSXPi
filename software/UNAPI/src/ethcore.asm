@@ -228,15 +228,22 @@ ETH_DETECT:
             call    ETH_VERIFY
             ret     c                   ; nothing answers at all
 
+            ; Did bit 7 of $57 come on when wait mode was switched on?  The
+            ; same test as DSKIO_RXSIZE, not a compare against one build's
+            ; read-back: the low bits are the build ID, so the v1.3 board
+            ; answers $8E and the v1.1 / v1.2.1b boards $94.
+            in      a,(CTRL2)           ; wait mode off
+            ld      b,a
             ld      a,WAITMODE_ON
             out     (CTRL2),a
             in      a,(CTRL2)
+            xor     b                   ; the bits that changed
             ld      b,a
             xor     a
             out     (CTRL2),a           ; never leave it on outside a
-            ld      a,b                 ; transaction - see ethops.asm
-            cp      VER_WAIT_ON         ; $8E - CPLD v1.6
-            jr      z,.trywait
+                                        ; transaction - see ethops.asm
+            bit     7,b
+            jr      nz,.trywait
             or      a                   ; CF=0: polled, and it works
             ret
 
