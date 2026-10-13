@@ -75,9 +75,6 @@ DATA1:      equ     5Ah             ; data
 
 WAITMODE_ON:  equ   01h
 
-; $57 read value with wait mode on ($0E with it off).
-VER_WAIT_ON:  equ   8Eh
-
 ; Polled-mode spin limit, in iterations of an ~30 T-state loop.  2048 is about
 ; 17 ms at 3.58 MHz: comfortably longer than the Pi's worst observed per-byte
 ; latency, and short enough that a single failure does not eat several

@@ -394,9 +394,10 @@ ARG:        equ     0F847h
 .nosend:
 
 ; --- The device must be left out of wait mode ------------------------------
-; While wait mode is on, $57 reads $8E and every IN from $5A starts a transfer.
-; A driver that leaked wait mode would silently break every other piece of
-; MSXPi software, so check it explicitly: $57 must read $0E here.
+; While wait mode is on, $57 has bit 7 set and every IN from $5A starts a
+; transfer.  A driver that leaked wait mode would silently break every other
+; piece of MSXPi software, so check it explicitly: $57 must read the bare
+; build ID here ($0E on the v1.3 board, $14 on v1.1 / v1.2.1b).
             ld      de,PORT57_S
             ld      c,_STROUT
             call    BDOS
