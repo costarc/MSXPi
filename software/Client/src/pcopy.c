@@ -143,6 +143,25 @@ static void init_fcb(FCB *fcb_ptr, const char *path) {
     p[15] = 0;
 }
 
+// One block from the Pi, asked for again when it fails its checksum.
+//
+// RECVDATA_ONEBLOCK makes a single attempt and returns RC_CHKSUM_ERR, while
+// the server's senddata_oneblock() goes straight on to resend the same block,
+// up to MAX_BLOCK_RETRIES times.  Calling it once therefore turned one bad
+// byte into an aborted copy, and left the server part way through a resend
+// that nobody was reading.  Each attempt refills the buffer from its start, so
+// nothing of a rejected block survives into the next one.
+static uint8_t recv_block(uint8_t *buffer, uint16_t *block_size,
+                          uint16_t maxbufsize) {
+    uint8_t rc;
+    uint8_t attempts = 0;
+
+    do {
+        rc = RECVDATA_ONEBLOCK(buffer, block_size, maxbufsize);
+    } while (rc == RC_CHKSUM_ERR && ++attempts < MAX_BLOCK_RETRIES);
+    return rc;
+}
+
 // ---------------------------------------------------------------------------
 // Upload: MSX drive -> Pi.   pcopy A:game.rom game.rom
 // ---------------------------------------------------------------------------
@@ -190,7 +209,7 @@ static uint8_t pcopy_upload(void) {
 
     // The server explains itself in the payload - no such directory,
     // read-only, and so on - so print it rather than a generic code.
-    rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+    rc = recv_block(buffer, &block_size, maxbufsize);
     if (rc != RC_SUCCESS) {
         if (block_size < maxbufsize) buffer[block_size] = 0;
         else buffer[maxbufsize - 1] = 0;
@@ -237,7 +256,7 @@ static uint8_t pcopy_upload(void) {
     if (rc != RC_SUCCESS) return parseConnError(rc);
     rc = PerformHandshake(maxbufsize);
     if (rc != RC_SUCCESS) return parseConnError(rc);
-    rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+    rc = recv_block(buffer, &block_size, maxbufsize);
     if (rc != RC_SUCCESS) {
         // Do NOT print the buffer here.  On a failed receive block_size is
         // whatever it was last left as, and the buffer still holds the last
@@ -296,7 +315,7 @@ static uint8_t pcopy_body(void) {
     if (rc != RC_SUCCESS) return parseConnError(rc);
 
     // Receive initialization result payload
-    rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+    rc = recv_block(buffer, &block_size, maxbufsize);
 
     // If init returned an error (e.g. RC_FILENOTFOUND), print error payload and abort
     if (rc != RC_SUCCESS) {
@@ -339,7 +358,7 @@ static uint8_t pcopy_body(void) {
         }
 
         Print(".");
-        rc = RECVDATA_ONEBLOCK(buffer, &block_size, maxbufsize);
+        rc = recv_block(buffer, &block_size, maxbufsize);
 
         // A failed receive can leave block_size and the buffer partially filled.
         // Never commit that data to disk.
