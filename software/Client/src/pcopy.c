@@ -33,12 +33,19 @@
 #include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../C-common/header/msxpi.h"
 
+// Longest source or target argument kept, terminator included.
+#define PCOPY_ARG_MAX 64
+
 // Static buffers to prevent Z80 stack overflow
 static char cmdTail[128];
-static char src[64];
-static char tgt[64];
-static char full_cmd[128];
+static char src[PCOPY_ARG_MAX];
+// Room for a drive, a file name taken from the source, and ".ROM".
+static char tgt[PCOPY_ARG_MAX + 8];
+// "pcopy init /z " + source + " " + target
+static char full_cmd[160];
 static FCB file;
+// /z on the command line: the Pi unpacks the archive and sends the ROM in it.
+static bool expand;
 
 // Safely copy raw MSX-DOS command line tail from PSP (0x0080)
 static void get_dos_cmdline(char *buf) {
@@ -58,48 +65,72 @@ static bool is_delim(char c) {
     return (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\0');
 }
 
+// The file name inside a path: the text after the last '/', '\\' or ':'.
+// That covers Pi paths, URLs and the m:, r1: and r2: remote drives alike.
+static const char *base_name(const char *path) {
+    const char *name = path;
+
+    for (; *path != '\0'; path++) {
+        if (*path == '/' || *path == '\\' || *path == ':') name = path + 1;
+    }
+    return name;
+}
+
+// Split the command tail into the source, the optional target and the /z
+// option.  /z is an option wherever it stands - before, between or after the
+// two names - but only as a whole argument, so /zanac.rom is still a path.
+// It used to be read as the source, which made the archive's name the target.
+// Anything after the target is ignored.
 static void parse_args(char *cmd, char *src_buf, char *tgt_buf) {
-    uint8_t i = 0;
+    uint8_t nargs = 0;
 
-    // Skip leading whitespace
-    while (*cmd != '\0' && (*cmd == ' ' || *cmd == '\t')) cmd++;
+    expand = false;
+    src_buf[0] = '\0';
+    tgt_buf[0] = '\0';
 
-    // Extract source parameter
-    while (*cmd != '\0' && !is_delim(*cmd)) {
-        src_buf[i++] = *cmd++;
-    }
-    src_buf[i] = '\0';
+    while (1) {
+        char *dst;
+        uint8_t i = 0;
 
-    // Skip whitespace between arguments
-    while (*cmd != '\0' && (*cmd == ' ' || *cmd == '\t')) cmd++;
+        while (*cmd == ' ' || *cmd == '\t') cmd++;
+        if (is_delim(*cmd)) break;
 
-    // Extract target parameter
-    i = 0;
-    while (*cmd != '\0' && !is_delim(*cmd)) {
-        tgt_buf[i++] = *cmd++;
-    }
-    tgt_buf[i] = '\0';
-
-    // If target is omitted, default to the source filename - but WITHOUT any
-    // drive letter.  For an upload (pcopy A:GAME.ROM) the source carries one,
-    // and copying it verbatim asked the Pi to create a file literally named
-    // "A:GAME.ROM".
-    if (tgt_buf[0] == '\0') {
-        if (src_buf[0] != '\0' && src_buf[1] == ':') {
-            strcpy(tgt_buf, src_buf + 2);
-        } else {
-            strcpy(tgt_buf, src_buf);
+        if (cmd[0] == '/' && (cmd[1] == 'z' || cmd[1] == 'Z') && is_delim(cmd[2])) {
+            expand = true;
+            cmd += 2;
+            continue;
         }
-    } 
-    // Handle drive specifier targets (e.g., "B:"): append only the source's
-    // file name - "B:" + "/tmp/game.rom" is not a name the MSX can create.
-    else if (tgt_buf[1] == ':' && tgt_buf[2] == '\0') {
-        const char *name = src_buf;
-        const char *p;
-        for (p = src_buf; *p != '\0'; p++) {
-            if (*p == '/' || *p == '\\' || *p == ':') name = p + 1;
+
+        dst = (nargs == 0) ? src_buf : (nargs == 1) ? tgt_buf : NULL;
+        while (!is_delim(*cmd)) {
+            if (dst != NULL && i < PCOPY_ARG_MAX - 1) dst[i++] = *cmd;
+            cmd++;
         }
-        strcat(tgt_buf, name);
+        if (dst != NULL) dst[i] = '\0';
+        nargs++;
+    }
+}
+
+// Name the target when the command line did not: no target at all, or only a
+// drive ("B:").  It gets the source's file name and nothing else of the
+// source - "B:" + "/tmp/game.rom" is not a name the MSX can create, and
+// neither is "r1:frogger.zip".  For an upload this is also what drops the
+// drive letter: the Pi must not be asked for a file named "A:GAME.ROM".
+//
+// With rom_ext the name ends in .ROM instead of the archive's extension: under
+// /z the Pi sends the .rom it found inside the archive, not the archive.  The
+// cut is at the FIRST dot, which is where init_fcb ends the name, so
+// frogger.tar.gz becomes frogger.ROM.
+static void default_target(bool rom_ext) {
+    char *dot;
+
+    if (tgt[0] != '\0' && !(tgt[1] == ':' && tgt[2] == '\0')) return;
+
+    strcat(tgt, base_name(src));
+    if (rom_ext) {
+        dot = strchr(tgt, '.');
+        if (dot != NULL) *dot = '\0';
+        strcat(tgt, ".ROM");
     }
 }
 
@@ -192,8 +223,8 @@ static uint8_t pcopy_upload(void) {
     // The Pi has no drive letters, so strip one if it reached here - from
     // the default (pcopy A:GAME.ROM, target omitted) or typed outright.
     // Without this the Pi was asked to create a file literally named
-    // "A:GAME.ROM".  Done here as well as in parse_args because this is
-    // the only place that knows the name is bound for the Pi.
+    // "A:GAME.ROM".  Done here as well as in default_target because this
+    // is the only place that knows the name is bound for the Pi.
     dest = tgt;
     if (dest[0] != '\0' && dest[1] == ':') {
         dest += 2;
@@ -277,6 +308,7 @@ static uint8_t pcopy_body(void) {
     uint16_t block_size;
     uint8_t *buffer = get_buffer_ptr();
     uint16_t maxbufsize = PCOPY_BLOCK_SIZE;
+    bool typed;
 
     // 1. Command tail was already copied by pcopy(), before the link claim.
 
@@ -285,8 +317,11 @@ static uint8_t pcopy_body(void) {
 
     if (src[0] == '\0') {
         Print("Usage:\r\n");
-        Print("  pcopy <pi file> [drive:][target]   Pi  -> MSX\r\n");
-        Print("  pcopy <drive>:<file> <pi file>     MSX -> Pi\r\n");
+        Print("  pcopy [/z] <pi file> [drive:][target]   Pi  -> MSX\r\n");
+        Print("  pcopy <drive>:<file> <pi file>          MSX -> Pi\r\n");
+        Print("  /z: unpack an archive, copy its ROM\r\n");
+        Print("  No target: the source's file name,\r\n");
+        Print("  with .ROM when /z is used\r\n");
         return RC_INVALIDCOMMAND;
     }
 
@@ -297,13 +332,26 @@ static uint8_t pcopy_body(void) {
     // msxpiupd.bat and msxpirfh.bat depend on) and must stay a download.
     if (src[1] == ':' &&
         ((src[0] >= 'A' && src[0] <= 'H') || (src[0] >= 'a' && src[0] <= 'h'))) {
+        default_target(false);      // /z means nothing to an upload
         return pcopy_upload();
+    }
+
+    // The server gets the target only when one was typed: a defaulted one
+    // would hand its "is the target really the source?" fallback a file name
+    // the user never gave.
+    typed = (tgt[0] != '\0');
+    default_target(expand);
+
+    if (*base_name(tgt) == '\0') {
+        Print("Error: no file name in the source; give a target.\r\n");
+        return RC_INVALIDCOMMAND;
     }
 
     // 3. PHASE 1: Send 'pcopy init' command to prepare session on Pi
     strcpy(full_cmd, "pcopy init ");
+    if (expand) strcat(full_cmd, "/z ");
     strcat(full_cmd, src);
-    if (tgt[0] != '\0') {
+    if (typed) {
         strcat(full_cmd, " ");
         strcat(full_cmd, tgt);
     }
