@@ -34,6 +34,7 @@ import logging
 import os
 import posixpath
 import datetime
+import fnmatch
 import re
 import shlex
 import shutil
@@ -259,6 +260,13 @@ def dir(data: str) -> CommandResult:
     else:
         userPath = data
     pathType, path = pathExpander(userPath, basepath)
+    # "p dir zanac*": a wildcard in the last part of a URL filters the
+    # listing.  Local paths keep it, since dir / ls expand it themselves.
+    pattern = None
+    if pathType != 0:
+        head, _, tail = path.rstrip("/").rpartition("/")
+        if head and ("*" in tail or "?" in tail):
+            path, pattern = head, tail.lower()
     try:
         if pathType == 0:
             if transport.hostType == "Windows":
@@ -279,7 +287,20 @@ def dir(data: str) -> CommandResult:
             htmldata = resp.text
             parser = MyHTMLParser()
             parser.feed(htmldata)
-            buf = " ".join(parser.HTMLDATA)
+            # Plain ASCII lines ending in CR LF: the page's own LF-only line
+            # ends, &nbsp; (UTF-8 C2 A0) and other non-ASCII bytes print as
+            # junk characters on the MSX.
+            text = " ".join(parser.HTMLDATA).replace("\xa0", " ")
+            text = text.encode("ascii", "ignore").decode()
+            lines = []
+            for line in text.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                if pattern and not fnmatch.fnmatch(line.split()[0].lower(), pattern):
+                    continue
+                lines.append(line)
+            buf = "\r\n".join(lines) if lines else "Pi:No match"
             rc = sendmultiblock(buf.encode())
     except Exception as e:
         sendmultiblock(("Pi:Error - " + str(e)).encode())
