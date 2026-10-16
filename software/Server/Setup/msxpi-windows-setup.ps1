@@ -263,7 +263,10 @@ if (-not $SkipPython) {
             if ((Test-PyImport $mod).Code -ne 0) {
                 # Keep pip's output: when a package fails, its reason is the only clue.
                 $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
-                $pipOut = & $python -m pip install --upgrade --quiet $pkg 2>&1
+                # --prefer-binary: a very new Python often has no prebuilt wheel yet
+                # for a dependency (greenlet, under playwright), and building it from
+                # source needs a C compiler. An older release with a wheel is used instead.
+                $pipOut = & $python -m pip install --upgrade --prefer-binary --quiet $pkg 2>&1
                 $pipCode = $LASTEXITCODE
                 $ErrorActionPreference = $old
                 if ($pipCode -ne 0) {
