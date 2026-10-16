@@ -52,3 +52,11 @@ Worth keeping both: the patched build reports "InterNestor Lite is not
 installed" for `INL S` even when it is working perfectly, and the stock one
 does not.  That defect was blamed on this driver and on the machine for a long
 time before the patch turned out to be the cause.
+
+## PING.COM
+
+Not vendored here any more.  The MSXPi `ping.com` is built from
+`Client/src/ping.asm` (a modified copy of Konamiman's PING: 4 requests by
+default, `-n count`, `-t`, timeouts, round-trip time, summary) and lands in
+`target/ping.com`.  Konamiman's original source and binary (v1.1) are kept in
+`../ping-konamiman/`, with his MIT license.

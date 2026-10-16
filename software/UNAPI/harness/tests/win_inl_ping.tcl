@@ -1,0 +1,52 @@
+# MSXPi Interface
+# Version 1.6.1
+# ------------------------------------------------------------------------------
+# MIT License
+#
+# Copyright (c) 2015-2026 Ronivon Costa
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+# ------------------------------------------------------------------------------
+
+# =============================================================================
+# win_inl_ping - the MSXPi PING.COM (Client/src/ping.asm) over the TAP.
+#
+# Same install flow as win_inl_dns, then "PING CLOUDFLARE.COM": four echo requests,
+# one second apart, and a summary (asserted on "Lost = 0": the 32-column
+# screen wraps the longer "Received = 4" text).  PING returns to the prompt on its own, so
+# run_cmd is enough.  Requirements are those of win_inl_dns.
+# =============================================================================
+
+harness::init "win_inl_ping"
+
+harness::at_dos_prompt {
+    harness::run_cmd "MSR I" 60 {
+        harness::run_cmd "INL I" 90 {
+            harness::run_cmd "PING CLOUDFLARE.COM" 90 {
+                set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
+                foreach l [harness::screen_lines] { puts $fh "|$l" }
+                close $fh
+                harness::assert_screen_contains "title" "MSXPi UNAPI version by RCC"
+                harness::assert_screen_contains "summary" "Lost = 0"
+                harness::assert_screen_lacks "no-timeout" "timed out"
+                harness::done
+            }
+        }
+    }
+}
