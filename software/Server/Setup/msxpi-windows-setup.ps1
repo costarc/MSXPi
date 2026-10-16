@@ -70,6 +70,18 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference    = "SilentlyContinue"   # Invoke-WebRequest is 10x slower with the progress bar
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Any error not handled below (a terminating error under "Stop") would end the
+# script with the window closing behind it. Show what failed and where, then
+# wait for Enter like the other exits do.
+trap {
+    Write-Host ""
+    Write-Host "msxpi-windows-setup: unexpected error" -ForegroundColor Red
+    Write-Host "    $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "    at line $($_.InvocationInfo.ScriptLineNumber): $($_.InvocationInfo.Line.Trim())" -ForegroundColor Red
+    if (-not $NoPause) { Write-Host ""; Read-Host "Press Enter to close" | Out-Null }
+    exit 1
+}
+
 # The openMSX build the MSXPi ROM and server are made for. When it changes,
 # existing installs are replaced on the next run.
 $OpenMsxRelease = "MSXPi_v1.6.1"
