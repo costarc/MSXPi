@@ -182,9 +182,11 @@ function Install-Winget([string]$id, [string]$what) {
     }
     # Per-user first, so no administrator rights are needed; some packages
     # only come as a machine-wide install, and ask for elevation themselves.
-    & winget install --id $id -e --silent --scope user --accept-package-agreements --accept-source-agreements
+    # --source winget: without it winget also queries the msstore source, which
+    # can fail (certificate errors on some networks) and blocks the install.
+    & winget install --id $id -e --silent --source winget --scope user --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -ne 0) {
-        & winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements
+        & winget install --id $id -e --silent --source winget --accept-package-agreements --accept-source-agreements
     }
     # winget returns non-zero for "already installed"; the caller re-checks.
     Update-Path
@@ -259,7 +261,15 @@ if (-not $SkipPython) {
         foreach ($pkg in $set.Pkgs.Keys) {
             $mod = $set.Pkgs[$pkg]
             if ((Test-PyImport $mod).Code -ne 0) {
-                Invoke-Py @("-m", "pip", "install", "--upgrade", "--quiet", $pkg) | Out-Null
+                # Keep pip's output: when a package fails, its reason is the only clue.
+                $old = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+                $pipOut = & $python -m pip install --upgrade --quiet $pkg 2>&1
+                $pipCode = $LASTEXITCODE
+                $ErrorActionPreference = $old
+                if ($pipCode -ne 0) {
+                    Write-Host "    pip install $pkg failed:" -ForegroundColor Yellow
+                    $pipOut | Select-Object -Last 8 | ForEach-Object { Write-Host "      $_" }
+                }
             }
             $chk = Test-PyImport $mod
             if ($chk.Code -eq 0) { Ok $pkg }
