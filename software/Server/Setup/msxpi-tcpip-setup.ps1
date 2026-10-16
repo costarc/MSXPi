@@ -178,6 +178,7 @@ if ($clash) {
 }
 # -ErrorAction Stop: New-NetNat reports this failure as a non-terminating error,
 # which try/catch would not see, and the script would print a NAT that was never made.
+$natOk = $true
 try {
     New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
 } catch {
@@ -189,10 +190,19 @@ try {
     try {
         New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
     } catch {
-        Fail "New-NetNat failed for $prefixCidr`: $($_.Exception.Message). Check with Get-NetNat; if a NAT is listed, remove it with Remove-NetNat, or reboot and run this again"
+        # Not fatal: the TAP adapter and its address are already up, so the MSX
+        # reaches this PC (and the server) without NAT; only the internet needs it.
+        $natOk = $false
+        Write-Host ""
+        Write-Host "warn: could not create the NAT for $prefixCidr`: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      Windows NAT (WinNAT) is not working on this PC (try: Get-NetNat)." -ForegroundColor Yellow
+        Write-Host "      The MSX can reach this PC but not the internet. To share the internet" -ForegroundColor Yellow
+        Write-Host "      instead, open ncpa.cpl > $uplinkAlias > Properties > Sharing, enable" -ForegroundColor Yellow
+        Write-Host "      sharing and choose the '$($tap.Name)' adapter. Windows then moves that" -ForegroundColor Yellow
+        Write-Host "      adapter to 192.168.137.1, so the MSX network settings must change too." -ForegroundColor Yellow
     }
 }
-Write-Host "NAT: $prefixCidr -> $uplinkAlias"
+if ($natOk) { Write-Host "NAT: $prefixCidr -> $uplinkAlias" }
 
 # --- What the MSX has to be told --------------------------------------------
 $dns = (Get-DnsClientServerAddress -InterfaceIndex $uplink.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses |
