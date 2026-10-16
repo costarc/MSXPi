@@ -25,12 +25,11 @@
 # ------------------------------------------------------------------------------
 
 # =============================================================================
-# win_inl_ping - Konamiman's PING.COM (vendored in target/ping.com) over the TAP.
+# win_inl_ping - the MSXPi PING.COM (Client/src/ping.asm) over the TAP.
 #
-# Same install flow as win_inl_dns, then PING of a hostname.  PING uses
-# raw IP sockets, so a reply proves ICMP crosses the whole path both ways.
-# PING waits for a key after each reply, so the test waits for the reply text
-# rather than an idle prompt.  Requirements are those of win_inl_dns.
+# Same install flow as win_inl_dns, then "PING GOOGLE.COM": four echo requests,
+# one second apart, and a summary.  PING returns to the prompt on its own, so
+# run_cmd is enough.  Requirements are those of win_inl_dns.
 # =============================================================================
 
 harness::init "win_inl_ping"
@@ -38,12 +37,13 @@ harness::init "win_inl_ping"
 harness::at_dos_prompt {
     harness::run_cmd "MSR I" 60 {
         harness::run_cmd "INL I" 90 {
-            harness::run_until "PING GOOGLE.COM" "Received echo reply" 90 {
+            harness::run_cmd "PING GOOGLE.COM" 90 {
                 set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
                 foreach l [harness::screen_lines] { puts $fh "|$l" }
                 close $fh
-                harness::assert_screen_contains "ping-reply" "Received echo reply"
-                harness::assert_screen_lacks "no-timeout" "imed out"
+                harness::assert_screen_contains "title" "MSXPi UNAPI version by RCC"
+                harness::assert_screen_contains "summary" "Sent = 4, Received = 4"
+                harness::assert_screen_lacks "no-timeout" "timed out"
                 harness::done
             }
         }

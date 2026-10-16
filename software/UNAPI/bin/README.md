@@ -55,14 +55,8 @@ time before the patch turned out to be the cause.
 
 ## PING.COM
 
-Konamiman's PING client 1.1 (raw IP sockets over the TCP/IP UNAPI), downloaded
-unmodified from https://www.konamiman.com/msx/networking/ping.com.  Not built
-here.  Lives in software/target/ping.com, so ../build puts it on
-msxpiboot.dsk with the other target/ programs.
-
-sha1: 80232774f6e05cd5873cd9d8be9da4cd9a3e9a78
-
-    PING <host or IP>
-
-Needs a TCP/IP UNAPI implementation installed (INL or the MSXPi ROM driver).
-Konamiman notes it always reports TTL 0.
+Not vendored here any more.  The MSXPi `ping.com` is built from
+`Client/src/ping.asm` (a modified copy of Konamiman's PING: 4 requests by
+default, `-n count`, `-t`, timeouts, round-trip time, summary) and lands in
+`target/ping.com`.  Konamiman's original source and binary (v1.1) are kept in
+`../ping-konamiman/`, with his MIT license.

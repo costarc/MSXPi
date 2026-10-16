@@ -199,6 +199,9 @@ if [ "$buildClientCommands" = "yes" ]; then
     "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
         --raw=./target/msxarch.com ./Client/src/msxarch.asm ||
         die "msxarch.com did not assemble"
+    "$SJASM_DIR/sjasmplus" --inc=./asm-common/include \
+        --raw=./target/ping.com ./Client/src/ping.asm ||
+        die "ping.com did not assemble"
 
     # C clients (SDCC + Fusion-C), through make.sh - one per program.
     # make.sh is written for Linux: SDCC 4.2 with --sdcccall 0, objcopy, and
