@@ -25,7 +25,7 @@
 # ------------------------------------------------------------------------------
 
 # =============================================================================
-# win_inl_ping - Konamiman's PING.COM (vendored in UNAPI/bin) over the TAP.
+# win_inl_ping - Konamiman's PING.COM (vendored in target/ping.com) over the TAP.
 #
 # Same install flow as win_inl_dns, then PING of a hostname.  PING uses
 # raw IP sockets, so a reply proves ICMP crosses the whole path both ways.

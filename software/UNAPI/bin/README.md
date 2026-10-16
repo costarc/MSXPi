@@ -57,7 +57,8 @@ time before the patch turned out to be the cause.
 
 Konamiman's PING client 1.1 (raw IP sockets over the TCP/IP UNAPI), downloaded
 unmodified from https://www.konamiman.com/msx/networking/ping.com.  Not built
-here.  `build.sh` copies it to msxpiboot.dsk with the rest of bin/.
+here.  Lives in software/target/ping.com, so ../build puts it on
+msxpiboot.dsk with the other target/ programs.
 
 sha1: 80232774f6e05cd5873cd9d8be9da4cd9a3e9a78
 
