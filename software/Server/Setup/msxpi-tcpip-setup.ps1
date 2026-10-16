@@ -176,8 +176,33 @@ if ($clash) {
     $clash | Format-Table Name, InternalIPInterfaceAddressPrefix -AutoSize | Out-String | Write-Host
     Fail "remove it (Remove-NetNat -Name '$($clash[0].Name)') or stop what created it (Docker Desktop, Hyper-V), then run this again"
 }
-New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr | Out-Null
-Write-Host "NAT: $prefixCidr -> $uplinkAlias"
+# -ErrorAction Stop: New-NetNat reports this failure as a non-terminating error,
+# which try/catch would not see, and the script would print a NAT that was never made.
+$natOk = $true
+try {
+    New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
+} catch {
+    # "Invalid class" (0x80041010) usually means WinNAT kept stale state from an
+    # earlier NAT. Restarting the service clears it; retry once before giving up.
+    Write-Host "New-NetNat failed ($($_.Exception.Message)) - restarting WinNAT and retrying"
+    Restart-Service -Name WinNat -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    try {
+        New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
+    } catch {
+        # Not fatal: the TAP adapter and its address are already up, so the MSX
+        # reaches this PC (and the server) without NAT; only the internet needs it.
+        $natOk = $false
+        Write-Host ""
+        Write-Host "warn: could not create the NAT for $prefixCidr`: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "      Windows NAT (WinNAT) is not working on this PC (try: Get-NetNat)." -ForegroundColor Yellow
+        Write-Host "      The MSX can reach this PC but not the internet. To share the internet" -ForegroundColor Yellow
+        Write-Host "      instead, open ncpa.cpl > $uplinkAlias > Properties > Sharing, enable" -ForegroundColor Yellow
+        Write-Host "      sharing and choose the '$($tap.Name)' adapter. Windows then moves that" -ForegroundColor Yellow
+        Write-Host "      adapter to 192.168.137.1, so the MSX network settings must change too." -ForegroundColor Yellow
+    }
+}
+if ($natOk) { Write-Host "NAT: $prefixCidr -> $uplinkAlias" }
 
 # --- What the MSX has to be told --------------------------------------------
 $dns = (Get-DnsClientServerAddress -InterfaceIndex $uplink.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses |
