@@ -176,8 +176,10 @@ if ($clash) {
     $clash | Format-Table Name, InternalIPInterfaceAddressPrefix -AutoSize | Out-String | Write-Host
     Fail "remove it (Remove-NetNat -Name '$($clash[0].Name)') or stop what created it (Docker Desktop, Hyper-V), then run this again"
 }
+# -ErrorAction Stop: New-NetNat reports this failure as a non-terminating error,
+# which try/catch would not see, and the script would print a NAT that was never made.
 try {
-    New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr | Out-Null
+    New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
 } catch {
     # "Invalid class" (0x80041010) usually means WinNAT kept stale state from an
     # earlier NAT. Restarting the service clears it; retry once before giving up.
@@ -185,7 +187,7 @@ try {
     Restart-Service -Name WinNat -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
     try {
-        New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr | Out-Null
+        New-NetNat -Name $NatName -InternalIPInterfaceAddressPrefix $prefixCidr -ErrorAction Stop | Out-Null
     } catch {
         Fail "New-NetNat failed for $prefixCidr`: $($_.Exception.Message). Check with Get-NetNat; if a NAT is listed, remove it with Remove-NetNat, or reboot and run this again"
     }
