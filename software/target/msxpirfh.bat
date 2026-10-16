@@ -33,6 +33,7 @@ pcopy m:p.com
 pcopy m:pcheckers.com
 pcopy m:pchess.com
 pcopy m:pchess1.com
+pcopy m:ping.com
 pcopy m:skmsx.com
 pcopy m:ssh.com
 pcopy m:templatc.com
