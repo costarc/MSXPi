@@ -52,3 +52,16 @@ Worth keeping both: the patched build reports "InterNestor Lite is not
 installed" for `INL S` even when it is working perfectly, and the stock one
 does not.  That defect was blamed on this driver and on the machine for a long
 time before the patch turned out to be the cause.
+
+## PING.COM
+
+Konamiman's PING client 1.1 (raw IP sockets over the TCP/IP UNAPI), downloaded
+unmodified from https://www.konamiman.com/msx/networking/ping.com.  Not built
+here.  `build.sh` copies it to msxpiboot.dsk with the rest of bin/.
+
+sha1: 80232774f6e05cd5873cd9d8be9da4cd9a3e9a78
+
+    PING <host or IP>
+
+Needs a TCP/IP UNAPI implementation installed (INL or the MSXPi ROM driver).
+Konamiman notes it always reports TTL 0.
