@@ -27,8 +27,9 @@
 # =============================================================================
 # win_inl_ping - the MSXPi PING.COM (Client/src/ping.asm) over the TAP.
 #
-# Same install flow as win_inl_dns, then "PING GOOGLE.COM": four echo requests,
-# one second apart, and a summary.  PING returns to the prompt on its own, so
+# Same install flow as win_inl_dns, then "PING CLOUDFLARE.COM": four echo requests,
+# one second apart, and a summary (asserted on "Lost = 0": the 32-column
+# screen wraps the longer "Received = 4" text).  PING returns to the prompt on its own, so
 # run_cmd is enough.  Requirements are those of win_inl_dns.
 # =============================================================================
 
@@ -37,12 +38,12 @@ harness::init "win_inl_ping"
 harness::at_dos_prompt {
     harness::run_cmd "MSR I" 60 {
         harness::run_cmd "INL I" 90 {
-            harness::run_cmd "PING GOOGLE.COM" 90 {
+            harness::run_cmd "PING CLOUDFLARE.COM" 90 {
                 set fh [open "$::env(MSXPI_HARNESS_OUT).screen" w]
                 foreach l [harness::screen_lines] { puts $fh "|$l" }
                 close $fh
                 harness::assert_screen_contains "title" "MSXPi UNAPI version by RCC"
-                harness::assert_screen_contains "summary" "Sent = 4, Received = 4"
+                harness::assert_screen_contains "summary" "Lost = 0"
                 harness::assert_screen_lacks "no-timeout" "timed out"
                 harness::done
             }
