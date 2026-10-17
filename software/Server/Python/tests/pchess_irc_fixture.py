@@ -36,6 +36,8 @@ class Handler(socketserver.StreamRequestHandler):
                         channel=line[5:].lower()
                         self.server.channels.setdefault(channel,set()).add(nick)
                         self.send(f':{nick}!test@localhost JOIN :{channel}')
+                        self.send(f':test 353 {nick} = {channel} :'+' '.join(sorted(self.server.channels[channel])))
+                        self.send(f':test 366 {nick} {channel} :End of /NAMES list.')
                     elif line.startswith('PRIVMSG ') and nick:
                         target,text=line[8:].split(' :',1)
                         self.server.transcript.append((nick,target,text))

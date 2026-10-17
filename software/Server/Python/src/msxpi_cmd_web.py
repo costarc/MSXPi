@@ -205,6 +205,24 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
     return sendmultiblock(bytes(payload))
 
 
+def mchat(parms: Optional[str] = None) -> CommandResult:
+    from msxpi_chat import handle_command
+
+    irc_config = {
+        key: getMSXPiVar(key)
+        for key in (
+            "IRCADDR",
+            "PCHESSIRCPORT",
+            "IRCNICK",
+            "IRCTLS",
+            "IRCACCOUNT",
+            "IRCPASSWORD",
+            "MCHATROOM",
+        )
+    }
+    return sendmultiblock(handle_command(parms or "", irc_config))
+
+
 def irc(parms: str) -> CommandResult:
 
     global ircsock

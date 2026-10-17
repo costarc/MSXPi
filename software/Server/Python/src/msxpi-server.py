@@ -128,7 +128,7 @@ from msxpi_cmd_system import (
     wifi,
     wlanreset,
 )
-from msxpi_cmd_web import chatgpt, irc, pchess, renderpage, showpage, template
+from msxpi_cmd_web import chatgpt, irc, mchat, pchess, renderpage, showpage, template
 from msxpi_nitros import nitros
 from msxpi_ssh import ssh
 from msxpi_const import BUILD_ID, RC_CONNERR, RC_SUCCESS, VERSION
@@ -167,6 +167,7 @@ COMMANDS = {
         dskios,
         dskiow,
         irc,
+        mchat,
         pchess,
         nitros,
         ssh,
