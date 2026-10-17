@@ -194,4 +194,6 @@ two thirds) and text uses the BIOS 8x8 font, copied from SCREEN 1 at start.
 Because SCREEN 2 allows two colours per 8 pixels, pieces have no outline,
 and the cursor (red) and selection (green) are hardware sprites.
 
+Version 1.1 adds in-game chat as in pchess.c, on both links: TAB or the ESC menu's CHAT row opens a full-screen window (32 columns, 21 rows of scrollback), private rows are yellow, and a blip plus `TAB CHAT n` on the panel announce unread rows. Server rows (42 columns) are re-wrapped to 32. While the window is open the yellow font temporarily replaces the board tiles; closing rebuilds them. The ESC menu moved up one row to fit its ninth entry.
+
 Build with `make.bat pchess1`; it produces `target\pchess1.com`.

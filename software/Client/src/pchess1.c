@@ -31,6 +31,7 @@
 #define C_BLACK 1
 #define C_WHITE 15
 #define C_RED 8
+#define C_YELLOW 11
 #define C_GREEN 2
 #define C_LIGHTSQ 10
 #define C_DARKSQ 5
@@ -56,8 +57,12 @@ static char moves[8][8];
 static uint8_t reply[256];
 static char status[48]="1 LOCAL 2 AI";
 static char entry[24];
-static char command[64];
+/* "pchess say " plus up to 100 characters of chat. */
+static char command[120];
 static uint8_t entry_len,room_entry,online,game_over;
+/* Unread chat rows the server holds (reply[255] of every game packet), and
+ * the count already beeped for. */
+static uint8_t chat_unread,chat_seen;
 /* Set by the server once this player's colour is settled (AI, room or
  * lobby match): my_side 0 = white, 1 = black. */
 static uint8_t matched,my_side;
@@ -92,6 +97,8 @@ static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
 static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
 /* "Tcha-Ham": a short G5 then a long C6, for a lobby SEEK. */
 static const uint16_t tune_seek[]={143,5, 0,3, 107,30, 0,0};
+/* A short high blip for new chat. */
+static const uint16_t tune_chat[]={95,4, 0,0};
 static const uint16_t *pending_tune;
 static void play_pending(void) {
     const uint16_t *t=pending_tune;
@@ -125,6 +132,69 @@ static void queue_sounds(uint8_t was_over) {
     if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
 }
 
+/* Chat scrollback, shared by both links as in pchess.c: chat_add() takes the
+ * player's own words and what the TCP/IP link's IRC reader hears; with the
+ * MSXPi link the chat window fetches rows from the server instead. Rows are
+ * 32 characters, the width of the screen. */
+#define CHAT_LINES 21
+#define CHAT_COLS 32
+#define SERVER_COLS 42      /* width of the rows the MSXPi server sends */
+static char chat_log[CHAT_LINES][CHAT_COLS+1];
+static uint8_t chat_private[CHAT_LINES];   /* 1: said privately, drawn yellow */
+static uint8_t chat_rows,chat_new;
+
+/* The BIOS font draws every printable character. */
+static uint8_t glyph(char ch) {return ch>=32 && ch<127;}
+
+static void chat_push(const char *row,uint8_t priv) {
+    if(chat_rows==CHAT_LINES) {
+        memmove(chat_log[0],chat_log[1],(CHAT_LINES-1)*(CHAT_COLS+1));
+        memmove(chat_private,chat_private+1,CHAT_LINES-1);
+        chat_rows--;
+    }
+    chat_new++;
+    strncpy(chat_log[chat_rows],row,CHAT_COLS);
+    chat_log[chat_rows][CHAT_COLS]=0;
+    chat_private[chat_rows]=priv;
+    chat_rows++;
+}
+
+/* prefix and text wrapped into rows (continuation rows start with two
+ * blanks), the way the server wraps. priv rows are drawn in yellow. */
+static void chat_add(const char *prefix,const char *text,uint8_t priv) {
+    char row[CHAT_COLS+1];
+    uint8_t n,first=1;
+    while(first || *text) {
+        strcpy(row,first?prefix:"  ");
+        n=strlen(row);
+        while(*text && n<CHAT_COLS) row[n++]=*text++;
+        row[n]=0;
+        chat_push(row,priv);
+        first=0;
+    }
+}
+
+/* Fold text to what the font can draw, as the server does: upper case, runs
+ * of blanks become one, other characters it cannot draw become '?'; at most
+ * 100 characters. */
+static void chat_clean(char *s) {
+    char *out=s,*start=s,c;
+    uint8_t space=1;
+    for(;(c=*s)!=0 && out-start<100;s++) {
+        if(c>='a' && c<='z') c-=32;
+        if(c==' ' || c=='\t' || c=='\r' || c=='\n') {
+            if(!space) *out++=' ';
+            space=1;
+            continue;
+        }
+        if(c<' ' || c==127) continue;
+        *out++=glyph(c)?c:'?';
+        space=0;
+    }
+    if(out>start && out[-1]==' ') out--;
+    *out=0;
+}
+
 /* TCP/IP UNAPI link, shared with pchess.c: see pchess_tcp.c. */
 #include "pchess_rules.c"
 #include "pchess_sha.c"
@@ -154,12 +224,18 @@ parse:
         if(strcmp(cmd,"pchess poll")) strcpy(status,"LINK ERROR - RETRY");
         return 0;
     }
+    /* A chat block ('C') carries text where the status would be: the chat
+     * window reads it from reply and the status line stays as it was. */
+    if(!reply[4] && reply[5]=='C') return 1;
     memcpy(status,reply+72,47); status[47]=0;
     if(!reply[4]) {queue_sounds(1); return 0;}
     for(i=0;i<8;i++) for(j=0;j<8;j++)
         board[i][j]=reply[8+i*8+j]=='.'?0:reply[8+i*8+j];
     white_turn=reply[5]; my_side=reply[6]; game_over=reply[7];
     matched=reply[242]==1;
+    chat_unread=reply[255];
+    if(chat_unread>chat_seen) pending_tune=tune_chat;
+    chat_seen=chat_unread;
     queue_sounds(was_over);
     memcpy(opponent,reply+243,12); opponent[12]=0;
     set_flip();
@@ -304,7 +380,12 @@ static void draw_panel(void) {
         text_at(PANEL_COL,7+i,i<move_count?moves[i]:"",PANEL_W);
     text_at(0,18," 1 LOCAL  2 AI  3 ROOM 4 ONLINE",32);
     text_at(0,19," 5 SEEK 6 ASK 7 ACCEPT 8 PLAYERS",32);
-    text_at(0,20," ESC MENU",32);
+    if(chat_unread) {
+        strcpy(command," ESC MENU  TAB CHAT ");
+        command[20]=chat_unread>9?'+':'0'+chat_unread;
+        command[21]=0;
+        text_at(0,20,command,32);
+    } else text_at(0,20," ESC MENU  TAB CHAT",32);
     strcpy(command,room_entry==2?" PEER NICK: ":room_entry?" ROOM NAME: ":" MOVE: ");
     strcat(command,entry);
     strcat(command,"_");
@@ -368,11 +449,12 @@ static void make_move(void) {
  * msxpi.ini through "pchess level N"), 1 rooms on the MSXPi relay or IRC
  * ("pchess rooms X", also saved), 2 link MSXPI or TCPIP (Return or ESC
  * applies it; every start is MSXPI), 3 offer (or accept) a draw, 4 resign,
- * each after a Y/N, 5 rotate board, 6 credits, 7 exit to DOS. The AI
+ * each after a Y/N, 5 rotate board, 6 chat (also the TAB key; menu() returns 2 and main()
+ * opens it), 7 credits, 8 exit to DOS. The AI
  * answers a draw offer at once; a human opponent accepts by offering too.
  * ESC resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
-#define MENU_ROW 6
+#define MENU_ROW 5
 /* Credits box over the board; any key closes it and resumes the game. */
 #define CREDITS_COL 1
 #define CREDITS_W 30
@@ -380,12 +462,12 @@ static void clear_rows(uint8_t first,uint8_t count) {
     FillVram(NAMTBL+first*32,(char)BLANK,count*32);
 }
 static void clear_popup(void) {
-    clear_rows(MENU_ROW,12);
+    clear_rows(MENU_ROW,13);
 }
 static void credits(void) {
     clear_popup();
     text_at(CREDITS_COL,MENU_ROW,  "+----------------------------+",CREDITS_W);
-    text_at(CREDITS_COL,MENU_ROW+1,"| PCHESS V1.0.1 (C) RCC 2026 |",CREDITS_W);
+    text_at(CREDITS_COL,MENU_ROW+1,"| PCHESS V1.1 (C) RCC 2026   |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+2,"|                            |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+3,"|  DESIGN: RCC (ARCHITECT)   |",CREDITS_W);
     text_at(CREDITS_COL,MENU_ROW+4,"|PROGRAMMING: CLAUDE (INTERN)|",CREDITS_W);
@@ -397,8 +479,8 @@ static void credits(void) {
 #define MENU_COL 2
 #define MENU_W 20
 static const char * const menu_rows[]={"AI LEVEL","ROOMS","LINK","OFFER DRAW","RESIGN",
-                                 "ROTATE BOARD","CREDITS","EXIT"};
-#define MENU_ROWS 8
+                                 "ROTATE BOARD","CHAT","CREDITS","EXIT"};
+#define MENU_ROWS 9
 /* Switch the link: every game and connection of the old one ends. */
 static void set_link(uint8_t tcp) {
     online=0; selected_x=255;
@@ -426,8 +508,8 @@ static uint8_t menu(void) {
     clear_popup();
     text_at(MENU_COL,MENU_ROW,  "+------------------+",MENU_W);
     text_at(MENU_COL,MENU_ROW+1,"|       MENU       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+10,"| ESC RESUME       |",MENU_W);
-    text_at(MENU_COL,MENU_ROW+11,"+------------------+",MENU_W);
+    text_at(MENU_COL,MENU_ROW+11,"| ESC RESUME       |",MENU_W);
+    text_at(MENU_COL,MENU_ROW+12,"+------------------+",MENU_W);
     while(1) {
         for(i=0;i<MENU_ROWS;i++) {
             strcpy(line,i==row?"| > ":"|   ");
@@ -464,8 +546,9 @@ static uint8_t menu(void) {
                 break;
             }
             if(row==5) {user_rotate^=1; set_flip(); break;}
-            if(row==6) {credits(); break;}
-            if(row==7) {quit=1; break;}
+            if(row==6) {quit=2; break;}
+            if(row==7) {credits(); break;}
+            if(row==8) {quit=1; break;}
             if(row==2) {
                 if(tcp!=link_tcp) set_link(tcp);
                 tcp=link_tcp;
@@ -548,12 +631,125 @@ static uint8_t confirm_leave(void) {
     return 0;
 }
 
+/* Chat: a full-screen text window over the board (TAB or ESC menu, while
+ * playing online). The MSXPi server queues what the opponent or channel says
+ * and hands it over in blocks of up to five rows ("pchess chat"); the
+ * TCP/IP link has already put it in the scrollback. Private rows are drawn
+ * in yellow: while the window is open the yellow font replaces the board
+ * tiles in characters 32-127, and closing restores them. */
+#define CHAT_TOP 1
+#define CHAT_INPUT_ROW 22
+#define CHAT_MAX_INPUT 100
+
+/* One screen row replacing whatever it held; priv draws it in yellow. */
+static void chat_line(uint8_t row,const char *s,uint8_t priv) {
+    uint8_t n; char ch;
+    for(n=0;n<32;n++) {
+        ch=*s?*s++:' ';
+        if(ch<32 || ch>126) ch=' ';
+        linebuf[n]=priv?ch:ch+FONT_BASE;
+    }
+    CopyRamToVram(linebuf,NAMTBL+row*32,32);
+}
+
+static void chat_draw_log(void) {
+    uint8_t i;
+    for(i=0;i<CHAT_LINES;i++)
+        chat_line(CHAT_TOP+i,i<chat_rows?chat_log[i]:"",i<chat_rows && chat_private[i]);
+}
+
+static void chat_draw_input(const char *input,uint8_t len) {
+    char line[CHAT_COLS+1];
+    uint8_t shown=len>CHAT_COLS-3?CHAT_COLS-3:len;
+    strcpy(line,"> ");
+    memcpy(line+2,input+len-shown,shown);
+    line[2+shown]='_'; line[3+shown]=0;
+    chat_line(CHAT_INPUT_ROW,line,0);
+}
+
+/* Fetch what the server holds; false when the link failed. The server's
+ * 42-character rows are wrapped again to the 32 this screen holds. */
+static uint8_t chat_pull(void) {
+    uint8_t i,n,rounds=0;
+    char row[SERVER_COLS+1];
+    do {
+        if(!exchange("pchess chat") || reply[5]!='C') return 0;
+        for(i=0;i<reply[240] && i<5;i++) {
+            memcpy(row,reply+8+i*44,SERVER_COLS); row[SERVER_COLS]=0;
+            for(n=SERVER_COLS;n && row[n-1]==' ';) row[--n]=0;
+            chat_add("",row,reply[8+i*44+SERVER_COLS+1]);
+        }
+        chat_unread=reply[241]; chat_seen=chat_unread;
+    } while(reply[241] && ++rounds<4);
+    return 1;
+}
+
+static void chat_close(void) {
+    FillVram(NAMTBL,(char)BLANK,768);
+    cache_graphics();
+    sprites_hidden=0;
+    memset(painted,255,sizeof(painted));
+    chat_unread=0; chat_seen=0;
+    if(pending_tune==tune_chat) pending_tune=0;
+}
+
+static void chat_window(void) {
+    char input[CHAT_MAX_INPUT+1];
+    uint8_t key,len=0,i,colr[8];
+    uint16_t lastpoll,now;
+    if(!online) {strcpy(status,"CHAT NEEDS AN ONLINE GAME (3 OR 4)"); return;}
+    input[0]=0;
+    sprites_hidden=1; draw_sprites();
+    memset(colr,(C_YELLOW<<4)|C_BLACK,8);
+    for(i=0;i<96;i++) put_char(i+32,fontdata+i*8,colr);
+    FillVram(NAMTBL,(char)BLANK,768);
+    chat_line(0,"CHAT - ESC OR TAB CLOSES",0);
+    chat_pull();
+    chat_draw_log();
+    chat_draw_input(input,len);
+    lastpoll=*(volatile uint16_t *)0xFC9E;
+    while(1) {
+        key=Inkey();
+        now=*(volatile uint16_t *)0xFC9E;
+        if(!key) {
+            if((uint16_t)(now-lastpoll)>=90) {
+                lastpoll=now;
+                chat_new=0;
+                if(chat_pull() && chat_new) chat_draw_log();
+            }
+            continue;
+        }
+        if(key==27 || key==9) break;
+        if(key==8) {
+            if(len) input[--len]=0;
+        } else if(key==13) {
+            if(len) {
+                strcpy(command,"pchess say ");
+                strcat(command,input);
+                if(exchange(command)) {
+                    chat_add("YOU: ",input,matched);
+                    len=0; input[0]=0;
+                    chat_pull();
+                    chat_draw_log();
+                    chat_line(0,"CHAT - ESC OR TAB CLOSES",0);
+                } else chat_line(0,status,0);
+            }
+        } else if(key>=32 && key<=126 && len<CHAT_MAX_INPUT) {
+            input[len++]=key; input[len]=0;
+        }
+        chat_draw_input(input,len);
+    }
+    chat_close();
+    exchange("pchess poll");
+}
+
 int main(void) {
     uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
     uint16_t lastpoll=0,lastarrow=0,now;
     entry_len=0; room_entry=0; online=0; game_over=0; link_tcp=0;
     tcp_init();
     pending_tune=0; offer_seen=0; seek_seen[0]=0;
+    chat_unread=0; chat_seen=0; chat_rows=0; chat_new=0;
     matched=0; my_side=0; flip=0; user_rotate=0; opponent[0]=0; sprites_hidden=0;
     entry[0]=0;
     memset(moves,0,sizeof(moves));
@@ -607,16 +803,20 @@ int main(void) {
             continue;
         }
         if (key == 27) {
-            if(menu()) break;
+            uint8_t quit=menu();
+            if(quit==1) break;
+            if(quit==2) chat_window();
             draw_board();
             continue;
         }
+        if(key==9) {chat_window(); draw_board(); continue;}
         if(key==8 && entry_len) entry[--entry_len]=0;
         else if(key==13 && entry_len) {
             strcpy(command,room_entry==2?"pchess offer ":room_entry?"pchess join ":"pchess move ");
             strcat(command,entry);
             if(exchange(command)) {
                 if(room_entry) online=1;
+                if(room_entry==1) chat_rows=0;
                 room_entry=0; entry_len=0; entry[0]=0; selected_x=255;
             } else if(room_entry) {
                 /* A failed ROOM or ASK closes the prompt; the status line
@@ -631,7 +831,7 @@ int main(void) {
             exchange(key=='1'?"pchess new local":"pchess new ai");
         }
         else if(!entry_len && !room_entry && key=='3') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
-        else if(!entry_len && !room_entry && key=='4') {if(exchange("pchess irc")) online=1;}
+        else if(!entry_len && !room_entry && key=='4') {if(exchange("pchess irc")) {online=1; chat_rows=0;}}
         else if(!entry_len && !room_entry && key=='5') {exchange("pchess seek");}
         else if(!entry_len && !room_entry && key=='6') {room_entry=2; strcpy(status,"ENTER PEER NICK AND RETURN");}
         else if(!entry_len && !room_entry && key=='7') {exchange("pchess accept");}
