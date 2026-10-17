@@ -151,7 +151,7 @@ channel carried discovery only. Artifacts: work/pchess-dual-1yngqsw6.
 
 ## Rooms on IRC
 
-With `PCHESSROOMS=irc` (and always on the TCP/IP link) `3 ROOM` joins the
+With `PCHESSROOMS=irc` (and always on the TCP/IP link) `4 ROOM` joins the
 channel `#pchess-<room>` instead of `#msxpi`; the room name is 1-16 letters
 or digits, folded to lower case. On joining, a player sends
 `PCH1 ROOM HELLO` to the channel. A free player answers `PCH1 ROOM HERE` in

@@ -54,13 +54,19 @@ class Games:
                     raise ValueError('Relay full')
                 self.games[game_id] = dict(board=chess.Board(), mode=mode,
                     players=[], history=[], seen=now, resigned=None,
-                    offers=set(), agreed=False, chat={})
+                    offers=set(), agreed=False, chat={},
+                    human_black=mode == 'ai' and bool(req.get('black')))
             game = self.games[game_id]
             if len(game['players']) >= (2 if mode == 'room' else 1):
                 raise ValueError('Room full; choose another')
             token = secrets.token_hex(16)
             game['players'].append(token)
             game['chat'][token] = collections.deque(maxlen=CHAT_QUEUE)
+            if game['human_black']:
+                # Human plays black: the AI opens as white.
+                move = ai_move(game['board'])
+                game['history'].append(game['board'].san(move))
+                game['board'].push(move)
             result = self.snapshot(game, token)
             result.update(game=game_id, token=token)
             return result
@@ -70,7 +76,7 @@ class Games:
             raise ValueError('Game not found; start new')
         game['seen'] = time.monotonic()
         board = game['board']
-        side = game['players'].index(token) == 0
+        side = game['players'].index(token) == 0 and not game['human_black']
         if action == 'move':
             if self.finished(game):
                 raise ValueError('Game over')
@@ -144,7 +150,7 @@ class Games:
         status = 'WHITE TURN' if board.turn else 'BLACK TURN'
         if board.is_check():
             status = 'WHITE CHECK' if board.turn else 'BLACK CHECK'
-        side = game['players'].index(token)
+        side = 1 if game['human_black'] else game['players'].index(token)
         matched = game['mode'] == 'ai' or (game['mode'] == 'room' and len(game['players']) == 2)
         if matched and game['mode'] == 'room' and not board.is_check():
             colour = 'BLACK' if side else 'WHITE'
@@ -381,7 +387,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         irc_room = args[0] == 'join' and len(args) == 2 and rooms_mode(room_config) == 'irc'
         if args[0] in ('irc','new') or irc_room:
             stop_relay()
-        if args[0] in ('irc','join') or (args[0]=='new' and args[1:]!=['ai']):
+        if args[0] in ('irc','join') or (args[0]=='new' and args[1:2]!=['ai']):
             stop_engine()
         # Not an elif: 'join' also matches the line above, which left this
         # unreachable and the relay never started (connection refused).
@@ -405,7 +411,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             _irc=IRC(irc_config)
             _use_irc=True
             return packet(_irc.poll())
-        # Lobby commands before 4 ONLINE: say so, not "Start a game first".
+        # Lobby commands before 5 ONLINE: say so, not "Start a game first".
         if args[0] in ('players','seek','offer','accept') and not _use_irc:
             raise ValueError('Go online first (4)')
         if args[0]=='players' and _irc.peer.room:
@@ -426,8 +432,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
                 _irc.poll()
                 return chat_packet(*_irc.peer.take_chat(CHAT_FETCH))
             return packet(_irc.poll())
-        if args[0] == 'new' and len(args) == 2:
-            req = dict(action='new',mode=args[1])
+        if args[0] == 'new' and (len(args) == 2 or args[1:] == ['ai','black']):
+            req = dict(action='new',mode=args[1],black=len(args) == 3)
             remote = False
         elif args[0] == 'join' and len(args) == 2:
             req = dict(action='new',mode='room',room=args[1])

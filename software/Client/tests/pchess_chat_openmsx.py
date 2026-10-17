@@ -1,6 +1,6 @@
 """End-to-end chat: two openMSX + two MSXPi servers + the IRC fixture.
 
-Alice and Bob are matched through the lobby (4 ONLINE, SEEK, ASK, ACCEPT).
+Alice and Bob are matched through the lobby (5 ONLINE, SEEK, ASK, ACCEPT).
 Alice then opens the chat window with TAB and says "hello bob"; Bob opens it,
 sees her line arrive by polling, and answers "hi alice!". Both screens are
 read back from VRAM with PChess's own font, then ESC closes the window and
@@ -43,11 +43,11 @@ TAB = '\\t'
 KEYS = (
     # Alice speaks in the lobby first (public), then gets matched with Bob. Both
     # close the window at 98 and open it again at 100: the history stays.
-    [(38, '4'), (44, TAB), (46, 'anyone here\\r'), (49, '\\x1b'), (51, '5'), (55, '6'),
+    [(38, '5'), (44, TAB), (46, 'anyone here\\r'), (49, '\\x1b'), (51, '6'), (55, '7'),
      (57, 'bob\\r'), (68, TAB), (70, 'hello bob\\r'), (94, 'dump:chat'),
      (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
     # Bob lets the lines arrive while he is still looking at the board.
-    [(38, '4'), (64, '7'), (78, 'dump:unread'), (82, TAB), (86, 'hi alice!\\r'), (94, 'dump:chat'),
+    [(38, '5'), (64, '8'), (78, 'dump:unread'), (82, TAB), (86, 'hi alice!\\r'), (94, 'dump:chat'),
      (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
 )
 

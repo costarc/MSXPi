@@ -75,6 +75,34 @@ class Rules(unittest.TestCase):
             self.assertEqual(self.act(a,'resign')['status'],'WHITE RESIGNED - BLACK WINS')
         finally:
             p.find_engine=old
+    def test_ai_black(self):
+        old=p.find_engine; p.find_engine=lambda config:None
+        try:
+            a=self.games.request(dict(action='new',mode='ai',black=True))
+            self.assertEqual(a['side'],1)                          # client shows AS BLACK
+            self.assertEqual(a['ply'],1)                           # the AI already opened
+            self.assertEqual(a['turn'],0)                          # black to move
+            with self.assertRaises(ValueError):                    # not white's moves
+                self.games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))
+            board=self.games.games[a['game']]['board']
+            reply=next(m for m in board.legal_moves)
+            state=self.games.request(dict(action='move',game=a['game'],token=a['token'],move=reply.uci()))
+            self.assertEqual((state['ply'],state['turn'],state['side']),(3,0,1))
+            self.assertEqual(self.act(a,'resign')['status'],'BLACK RESIGNED - WHITE WINS')
+            a=self.games.request(dict(action='new',mode='ai',black=True))
+            self.assertEqual(self.act(a,'draw')['status'],'DRAW AGREED')
+        finally:
+            p.find_engine=old
+    def test_ai_black_command(self):
+        old=p.find_engine; p.find_engine=lambda config:None
+        try:
+            data=p.handle_command('new ai black')
+            self.assertEqual(data[:4],b'PCH1')
+            self.assertEqual(data[4:8],bytes((1,0,1,0)))           # black, to move, not over
+            data=p.handle_command('new ai')
+            self.assertEqual(data[4:8],bytes((1,1,0,0)))           # white, to move
+        finally:
+            p.find_engine=old
     def test_ai(self):
         a=self.games.request(dict(action='new',mode='ai'))
         state=self.games.request(dict(action='move',game=a['game'],token=a['token'],move='e4'))

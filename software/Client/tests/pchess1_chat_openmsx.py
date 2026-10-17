@@ -32,10 +32,10 @@ NAMTBL, CHAT_TOP, CHAT_ROWS = 0x1800, 1, 21
 TAB = '\\t'
 BOOT_EXTRA = 8   # the DOS date prompt and loading pchess1 take longer than on the MSX2
 KEYS = (
-    [(38, '4'), (44, TAB), (46, 'anyone here\\r'), (49, '\\x1b'), (51, '5'), (55, '6'),
+    [(38, '5'), (44, TAB), (46, 'anyone here\\r'), (49, '\\x1b'), (51, '6'), (55, '7'),
      (57, 'bob\\r'), (68, TAB), (70, 'hello bob\\r'), (94, 'dump:chat'),
      (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
-    [(38, '4'), (64, '7'), (78, 'dump:unread'), (82, TAB), (86, 'hi alice!\\r'), (94, 'dump:chat'),
+    [(38, '5'), (64, '8'), (78, 'dump:unread'), (82, TAB), (86, 'hi alice!\\r'), (94, 'dump:chat'),
      (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
 )
 
@@ -159,10 +159,10 @@ def main():
             again = chat_lines((work / f'client-{i}-reopened.vram').read_bytes())
             check(again == shown[i], f'client {i} history kept when the window is reopened: {again}')
         unread = (work / 'client-1-unread.vram').read_bytes()
-        check(row(unread, 20)[0] == 'ESC MENU  TAB CHAT 2', "bob's panel shows the unread chat count")
+        check(row(unread, 17, 18, 14)[0] == 'TAB CHAT 2', "bob's panel shows the unread chat count")
         for i in range(2):
             vram = (work / f'client-{i}-closed.vram').read_bytes()
-            check(row(vram, 20)[0] == 'ESC MENU  TAB CHAT', f'client {i} unread note cleared')
+            check(row(vram, 17, 18, 14)[0] == 'TAB CHAT', f'client {i} unread note cleared')
             want = 'YOU ARE WHITE' if i == 0 else 'YOU ARE BLACK'
             check(row(vram, 2, 18, 14)[0] == want, f'client {i} board panel repainted ({want})')
             # Board tiles are back in characters 0-103: the grid is not text.
