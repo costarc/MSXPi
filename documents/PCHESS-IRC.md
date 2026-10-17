@@ -1,6 +1,13 @@
 # PChess IRC protocol v1
 
-`#msxpi` is a shared chat channel. PChess ignores ordinary conversation.
+`#msxpi` is a shared chat channel. The game ignores ordinary conversation in
+its protocol; the MSXPi client's chat window (TAB) shows plain `PRIVMSG` text
+that is not `PCH1 ...`: from the opponent once matched, otherwise from the
+lobby or room channel. Chat is sent as plain text, upper-cased and limited
+to the client font (other characters become `?`) and 100 characters. A chat
+line that begins `PCH1` is sent with a leading space so it cannot be taken
+for a game message, and chat is queued apart from game messages so a busy
+channel cannot delay a move.
 Only availability is public: `PRIVMSG #msxpi :PCH1 SEEK`, sent by explicit
 user action and limited to once per minute. No positions, moves or ACKs
 are sent to the channel. Seeing SEEK displays the available nickname.

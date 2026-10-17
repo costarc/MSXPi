@@ -68,6 +68,16 @@ Controls:
   to suppress rapid repeats; the first direction is immediate.
 - Type UCI (`e2e4`, `a7a8n`) or SAN (`Nf3`, `O-O`) and press Return.
 - Backspace edits notation.
+- Chat: `TAB` (or `CHAT` in the ESC menu) opens a full-screen chat window
+  during an online game (`3 ROOM` or `4 ONLINE`, over the MSXPi link). Type
+  a line and press Return; it goes to the opponent once matched, otherwise
+  to the lobby or room channel. The window shows the last 20 rows, polls once
+  a second and keeps the board paused until `ESC` or `TAB` closes it. New
+  messages while you look at the board beep and show `CHAT n` in the panel
+  in place of `ESC MENU`. The font has A-Z, 0-9 and `- : + # = ( ) . ? ! , ' /`;
+  other characters show as `?`, and text is capitalised. Lines are up to 100
+  characters. Chat is not available on the TCP/IP link yet, and local, AI
+  and relay games without an opponent answer `NO ONE TO CHAT WITH`.
 - Escape opens the menu: Up/Down pick a row. On `AI LEVEL`, Left/Right
   choose 1-8 and Return saves it (`pchess level N` sets PCHESSELO in
   msxpi.ini: 600, 800, 1000, 1350, 1600, 1900, 2200, 2500). `ROOMS`

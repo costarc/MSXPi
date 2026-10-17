@@ -148,6 +148,22 @@ class Level(unittest.TestCase):
                            history=[],ply=0,matched=True,opponent='chp1'))
         self.assertEqual((data[6],data[242]),(1,1))
         self.assertEqual(data[243:248],b'chp1\0')
+    def test_packet_carries_unread_chat_in_the_last_byte(self):
+        state=dict(board='.'*64,turn=1,side=0,over=False,status='X',history=[],ply=0,
+                   matched=True,opponent='Longnicknamexyz')
+        self.assertEqual(p.packet(state)[255],0)
+        self.assertEqual(p.packet(dict(state,chat_unread=7))[255],7)
+        self.assertEqual(p.packet(dict(state,chat_unread=900))[255],255)
+        self.assertEqual(p.packet(dict(state,chat_unread=3))[243:255],b'Longnickname')
+    def test_chat_packet(self):
+        data=p.chat_packet(['ALICE: HI','  MORE'],4)
+        self.assertEqual((len(data),data[4],data[5],data[240],data[241]),(256,0,ord('C'),2,4))
+        self.assertEqual(data[8:17],b'ALICE: HI')
+        self.assertEqual(data[17],0)
+        self.assertEqual(data[52:58],b'  MORE')
+        full=p.chat_packet(['X'*42]*9,300)
+        self.assertEqual((full[240],full[241]),(5,255))
+        self.assertEqual(full[8:50],b'X'*42)
     def test_level_packet(self):
         data=p.level_packet('1350')
         self.assertEqual(data[:5],b'PCH1\0')
@@ -156,6 +172,54 @@ class Level(unittest.TestCase):
         self.assertEqual(p.elo_level(''),2)
         self.assertEqual(p.elo_level('3000'),8)
         self.assertEqual([p.elo_level(e) for e in p.LEVEL_ELO],list(range(1,9)))
+
+
+class RelayChat(unittest.TestCase):
+    def setUp(self):
+        self.g=p.Games()
+        self.w=self.g.request(dict(action='new',mode='room',room='chatty'))
+        self.b=self.g.request(dict(action='new',mode='room',room='chatty'))
+    def req(self,who,**kw):
+        return self.g.request(dict(kw,game=who['game'],token=who['token']))
+    def test_say_reaches_only_the_other_player(self):
+        r=self.req(self.w,action='say',text='hello, black')
+        self.assertEqual(r['chat_unread'],0)
+        self.assertEqual(self.req(self.b,action='poll')['chat_unread'],1)
+        got=self.req(self.b,action='chat')
+        self.assertEqual((got['chat_rows'],got['chat_unread']),(['WHITE: HELLO, BLACK'],0))
+        self.assertEqual(self.req(self.w,action='chat')['chat_rows'],[])
+        self.assertEqual(self.req(self.b,action='poll')['chat_unread'],0)
+    def test_say_needs_an_opponent_and_text(self):
+        solo=self.g.request(dict(action='new',mode='room',room='lonely'))
+        with self.assertRaisesRegex(ValueError,'NO ONE'):
+            self.req(solo,action='say',text='hi')
+        with self.assertRaisesRegex(ValueError,'Nothing'):
+            self.req(self.w,action='say',text=' ')
+        ai=self.g.request(dict(action='new',mode='ai'))
+        with self.assertRaisesRegex(ValueError,'NO ONE'):
+            self.req(ai,action='say',text='hi')
+    def test_handle_command_say_and_chat_over_the_relay(self):
+        import socket
+        with socket.socket() as s:
+            s.bind(('127.0.0.1',0)); port=s.getsockname()[1]
+        config={'PCHESSRELAY':'','PCHESSLISTEN':'127.0.0.1','PCHESSPORT':str(port)}
+        try:
+            p.handle_command('join chatroom',room_config=config)
+            white=p._session
+            other=p._games.request(dict(action='new',mode='room',room='chatroom'))
+            p._games.request(dict(action='say',game=white['game'],token=other['token'],text='yo'))
+            data=p.handle_command('poll',room_config=config)
+            self.assertEqual(data[255],1)
+            data=p.handle_command('chat',room_config=config)
+            self.assertEqual((data[5],data[240],data[241]),(ord('C'),1,0))
+            self.assertEqual(data[8:18],b'BLACK: YO\0')
+            data=p.handle_command('say  hi  there',room_config=config)
+            self.assertEqual(data[:5],b'PCH1\x01')
+            chat=p._games.games['room-chatroom']['chat']
+            self.assertEqual(list(chat[other['token']]),['WHITE: HI THERE'])
+            self.assertEqual(list(chat[white['token']]),[])
+        finally:
+            p.stop_relay()
 
 if __name__=='__main__': unittest.main()
 
