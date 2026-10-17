@@ -94,7 +94,7 @@ def main():
     try:
         for i in range(2):
             env = os.environ.copy()
-            env.update(MSXPI_PORT=str(PORTS[i]), PCHESS_RELAY_URL=f'http://127.0.0.1:{PORTS[2]}')
+            env.update(MSXPI_PORT=str(PORTS[i]), PCHESS_ROOMS='relay', PCHESS_RELAY_URL=f'http://127.0.0.1:{PORTS[2]}')
             start([sys.executable, '-u', 'msxpi-server.py'], cwd=SOFTWARE / 'Server/Python/src', env=env, name='server')
         time.sleep(2)
         emulators = []

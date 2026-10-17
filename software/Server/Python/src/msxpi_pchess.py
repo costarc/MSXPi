@@ -496,6 +496,12 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             _use_irc = True
             _irc.poll()
             return checkers_packet(_irc.peer.snapshot())
+        if args[0] == 'cleave':
+            # PCheckers leaves its room or the lobby: drop the IRC connection
+            # and the relay session. The reply carries no status.
+            if _irc: _irc.close()
+            _irc, _use_irc, _session = None, False, None
+            return b'PCH1' + bytes(252)
         ck_peer = _irc.peer if _use_irc and _irc and isinstance(_irc.peer, CheckersPeer) else None
         if ck_peer and args[0] in CHESS_IRC_COMMANDS:
             raise ValueError('Not a chess game')

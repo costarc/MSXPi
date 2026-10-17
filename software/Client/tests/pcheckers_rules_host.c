@@ -12,7 +12,7 @@ static Move tm[MAXM];
 
 static uint32_t perft(uint8_t *b,uint8_t side,uint8_t depth) {
     Move list[MAXM]; uint8_t n,i,nb[64]; uint32_t t=0;
-    n=gen(b,side,list,0);
+    n=gen(b,side,list,0,MAXM);
     if(depth==1) return n;
     for(i=0;i<n;i++) {
         memcpy(nb,b,64); apply(nb,&list[i]);
@@ -36,32 +36,32 @@ void main(void) {
     put(5,2,WM); put(4,3,BM); put(4,1,BM); put(2,1,BM);
     /* right: jump d4 -> e5 (row 3 col 4), left: b4 -> a5 (row 3 col 0) then
      * from a5 jump b6 (row 2 col 1) -> c7 (row 1 col 2). */
-    n=gen(tb,0,tm,0);
+    n=gen(tb,0,tm,0,MAXM);
     result[4]=n; result[5]=n?tm[0].caps:0; result[6]=n?tm[0].n:0;
 
     /* Flying king a1 takes d4: lands on e5, f6, g7 or h8. */
     memset(tb,0,64);
     put(7,0,WK); put(4,3,BM);
-    n=gen(tb,0,tm,0);
+    n=gen(tb,0,tm,0,MAXM);
     result[7]=n; result[8]=gen_capture;
 
     /* A man captures backward: white on c5 takes the black man on d4. */
     memset(tb,0,64);
     put(3,2,WM); put(4,3,BM);
-    n=gen(tb,0,tm,0);
+    n=gen(tb,0,tm,0,MAXM);
     result[9]=n; result[10]=n?tm[0].caps:0;
 
     /* Passing through the far row without ending there keeps the man a man. */
     memset(tb,0,64);
     put(2,1,WM); put(1,2,BM); put(1,4,BM);
-    n=gen(tb,0,tm,0);
+    n=gen(tb,0,tm,0,MAXM);
     result[11]=n; result[12]=n?tm[0].caps:0;
     if(n) {apply(tb,&tm[0]); result[13]=tb[tm[0].sq[tm[0].n-1]];}
 
     /* A man ending on the far row is crowned. */
     memset(tb,0,64);
     put(1,2,WM);
-    n=gen(tb,0,tm,0);
+    n=gen(tb,0,tm,0,MAXM);
     result[14]=n;
     { uint8_t i; for(i=0;i<n;i++) if(tm[i].sq[1]==3) {apply(tb,&tm[i]); result[15]=tb[3];} }
 

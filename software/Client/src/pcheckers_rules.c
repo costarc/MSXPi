@@ -19,9 +19,12 @@
 #define BM 3
 #define BK 4
 #define TAKEN 8
-#define MAXM 40
+/* MAXM bounds the list the player's moves are kept in; the AI's search lists
+ * (one per ply, so they dominate the data size) are shorter. */
+#define MAXM 48
+#define SMAXM 26
 #define MAXN 13
-#define MAXPLY 14
+#define MAXPLY 12
 #define ROW(s) ((s)>>3)
 #define COL(s) ((s)&7)
 #define INB(r,c) ((r)>=0 && (r)<8 && (c)>=0 && (c)<8)
@@ -50,11 +53,11 @@ static void rules_setup(uint8_t *b) {
  * marked TAKEN in place and restored), gl/gn the move list being filled. */
 static uint8_t *gb;
 static Move *gl;
-static uint8_t gn,gbest,gen_capture,plen,path[MAXN];
+static uint8_t gn,gmax,gbest,gen_capture,plen,path[MAXN];
 
 static void record(uint8_t caps) {
     if(caps>gbest) {gbest=caps; gn=0;}
-    if(caps==gbest && gn<MAXM) {
+    if(caps==gbest && gn<gmax) {
         gl[gn].n=plen; gl[gn].caps=caps;
         memcpy(gl[gn].sq,path,plen);
         gn++;
@@ -100,9 +103,9 @@ static uint8_t cap_dfs(uint8_t sq,uint8_t king,uint8_t side,uint8_t caps) {
  * count and sets gen_capture when the moves are captures. With captures_only
  * the plain moves are not generated: the result is only complete when
  * gen_capture is set, which is all a quiet-position check needs. */
-static uint8_t gen(uint8_t *b,uint8_t side,Move *list,uint8_t captures_only) {
+static uint8_t gen(uint8_t *b,uint8_t side,Move *list,uint8_t captures_only,uint8_t max) {
     uint8_t i,s,p,d,king,r;
-    gb=b; gl=list; gn=0; gbest=0;
+    gb=b; gl=list; gn=0; gbest=0; gmax=max;
     for(i=0;i<32;i++) {
         s=dark[i]; p=b[s];
         if(!p || SIDE_OF(p)!=side) continue;
@@ -120,7 +123,7 @@ static uint8_t gen(uint8_t *b,uint8_t side,Move *list,uint8_t captures_only) {
             if(!king && dir_r[d]!=(side?1:-1)) continue;
             r=nbr[s*4+d];
             while(r!=NONE && !b[r]) {
-                if(gn<MAXM) {
+                if(gn<max) {
                     list[gn].n=2; list[gn].caps=0;
                     list[gn].sq[0]=s; list[gn].sq[1]=r;
                     gn++;
@@ -177,7 +180,7 @@ static int16_t eval(const uint8_t *b) {
 #define INF 30000
 #define MATE 20000
 static uint8_t bd[MAXPLY][64];
-static Move mlist[MAXPLY][MAXM];
+static Move mlist[MAXPLY][SMAXM];
 static uint16_t ai_seed=1;
 static uint16_t nodes;
 
@@ -186,7 +189,7 @@ static int16_t search(int8_t depth,int16_t alpha,int16_t beta,uint8_t side,uint8
     nodes++;
     /* A leaf with a capture on the board is searched on: the capture is
      * forced, so the line is not quiet yet. */
-    n=gen(bd[ply],side,ml,depth<=0); cap=gen_capture;
+    n=gen(bd[ply],side,ml,depth<=0,SMAXM); cap=gen_capture;
     if(depth<=0 && (!cap || ply>=MAXPLY-1)) {
         v=eval(bd[ply]);
         return side?-v:v;
@@ -210,7 +213,7 @@ static int16_t search(int8_t depth,int16_t alpha,int16_t beta,uint8_t side,uint8
 static int16_t ai_pick(const uint8_t *b,uint8_t side,uint8_t depth,Move *out) {
     Move *ml=mlist[0]; uint8_t n,i,k,pick=0; int16_t best=-INF,v;
     memcpy(bd[0],b,64);
-    n=gen(bd[0],side,ml,0);
+    n=gen(bd[0],side,ml,0,SMAXM);
     if(!n) return -INF;
     if(n==1) {*out=ml[0]; return 0;}
     ai_seed=ai_seed*25173u+13849u;

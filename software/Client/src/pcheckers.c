@@ -230,6 +230,9 @@ static void psg(uint8_t r,uint8_t v) {psg_reg=r; psg_val=v;}
 static const uint16_t tune_offer[]={127,6, 0,4, 127,6, 0,0};
 static const uint16_t tune_win[]={214,8, 170,8, 143,8, 107,24, 0,0};
 static const uint16_t tune_lose[]={285,16, 302,16, 320,16, 339,40, 0,0};
+/* "Tcha-Ham": a short G5 then a long C6, for a lobby SEEK. */
+static const uint16_t tune_seek[]={143,5, 0,3, 107,30, 0,0};
+static char seek_seen[48];
 /* A short high blip for new chat. */
 static const uint16_t tune_chat[]={95,4, 0,0};
 static const uint16_t *pending_tune;
@@ -342,11 +345,15 @@ static void draw_panel(void) {
     for (i = 0; i < 8; i++) {
         text_at(206,41+i*9,i<move_count?moves[i]:"");
     }
-    text_at(206,122,"1 LOCAL");
-    text_at(206,130,"2 AI WHT");
-    text_at(206,138,"3 AI BLK");
-    text_at(206,146,"4 ROOM");
-    text_at(206,179,room_entry?"ROOM":"");
+    text_at(206,114,"1 LOCAL");
+    text_at(206,122,"2 AI WHT");
+    text_at(206,130,"3 AI BLK");
+    text_at(206,138,"4 ROOM");
+    text_at(206,146,"5 ONLINE");
+    text_at(206,154,"6 SEEK");
+    text_at(206,162,"7 ASK");
+    text_at(206,170,"8 ACCEPT");
+    text_at(206,178,"9 PLAYER");
     text_at(206,187,entry_len>8?entry+entry_len-8:entry);
     if(chat_unread) {
         char note[8]="CHAT ";
@@ -426,7 +433,7 @@ static void finish(uint8_t winner,const char *text) {
 }
 
 static void new_turn(void) {
-    legal_n=gen(cb,turn,legal,0); legal_cap=gen_capture;
+    legal_n=gen(cb,turn,legal,0,MAXM); legal_cap=gen_capture;
     if(!legal_n) finish(turn^1,turn?"WHITE WINS":"BLACK WINS");
     else if(quiet>=40) finish(2,"DRAW - 20 KING MOVES");
     else {
@@ -453,7 +460,10 @@ static void play(const Move *m) {
     new_turn();
 }
 
+static uint8_t exchange(const char *cmd);
 static void new_game(uint8_t ai,uint8_t human_side) {
+    /* Leaving a room or the lobby drops the connection (IRC) or the room. */
+    if(online) exchange("pchess cleave");
     rules_setup(cb);
     turn=0; game_over=0; quiet=0; move_count=0; vs_ai=ai; ai_side=human_side^1;
     my_side=human_side; online=0; ply_net=0; end_by_server=0; matched=0;
@@ -525,7 +535,16 @@ static void net_apply(void) {
         } else {
             offer_seen=0;
             if(reply[242]==2) strcpy(status,"DRAW OFFERED");
-            else if(!matched) strcpy(status,"WAITING FOR OPPONENT");
+            else if(!matched) {
+                /* Lobby or room not matched yet: the peer's own status
+                 * (SEEK SENT, INVITE bob PRESS 8, ROOM x - WAITING...). */
+                if(reply[72]) {memcpy(status,reply+72,47); status[47]=0;}
+                else strcpy(status,"WAITING FOR OPPONENT");
+                if(!memcmp(status,"PLAYER ",7)) {
+                    if(strcmp(status,seek_seen)) pending_tune=tune_seek;
+                    strcpy(seek_seen,status);
+                } else seek_seen[0]=0;
+            }
         }
     }
     set_flip();
@@ -586,13 +605,45 @@ static void commit(const Move *m) {
 /* Return/Space: first pick a piece that can move, then the destination.
  * A capture with several routes is entered one landing square at a time;
  * when only one legal move still fits the squares entered, it is played. */
-static void activate(void) {
-    uint8_t s=BY(cursor_y)*8+BX(cursor_x),i,hits=0,k=0;
-    if(game_over || (vs_ai && turn==ai_side)) return;
+/* 0 with a status when it is not the player's turn to move. */
+static uint8_t my_turn(void) {
+    if(game_over || (vs_ai && turn==ai_side)) return 0;
     if(online && (!matched || turn!=my_side)) {
         strcpy(status,matched?"OPPONENT MOVES":"WAITING FOR OPPONENT");
-        return;
+        return 0;
     }
+    return 1;
+}
+
+/* A typed move: "c3d4" (also "c3-d4", "c3xe5"), or every landing square of
+ * a capture ("c3e5g7"). From and to alone are enough when only one legal
+ * move fits. */
+static void type_move(const char *text) {
+    uint8_t sq[MAXN],n=0,i,j,hits=0,k=0;
+    char c,d;
+    if(!my_turn()) return;
+    while((c=*text++)!=0) {
+        if(c>='A' && c<='H') c+=32;
+        if(c=='-' || c=='x' || c=='X' || c==' ') continue;
+        d=*text++;
+        if(c<'a' || c>'h' || d<'1' || d>'8' || n>=MAXN) {strcpy(status,"BAD MOVE - TYPE C3D4"); return;}
+        sq[n++]=(uint8_t)((8-(d-'0'))*8+(c-'a'));
+    }
+    if(n<2) {strcpy(status,"BAD MOVE - TYPE C3D4"); return;}
+    for(i=0;i<legal_n;i++) {
+        if(legal[i].n==n) {
+            for(j=0;j<n && legal[i].sq[j]==sq[j];j++);
+            if(j==n) {commit(&legal[i]); return;}
+        }
+        if(n==2 && legal[i].sq[0]==sq[0] && legal[i].sq[legal[i].n-1]==sq[1]) {hits++; k=i;}
+    }
+    if(hits==1) commit(&legal[k]);
+    else strcpy(status,hits?"SEVERAL ROUTES - TYPE EVERY SQUARE":"ILLEGAL MOVE");
+}
+
+static void activate(void) {
+    uint8_t s=BY(cursor_y)*8+BX(cursor_x),i,hits=0,k=0;
+    if(!my_turn()) return;
     if(slen==1 && s==spath[0]) {clear_sel(); return;}
     if(!slen || (slen==1 && cb[s] && SIDE_OF(cb[s])==turn)) {
         if(!cb[s] || SIDE_OF(cb[s])!=turn) {strcpy(status,"SELECT ONE OF YOUR PIECES"); return;}
@@ -763,16 +814,12 @@ static void chat_window(void) {
 }
 
 
-/* ESC pop-up. Rows: 0 AI level (left/right), 1 offer a draw, 2 resign, each
- * after a Y/N, 3 rotate board, 4 chat (also the TAB key; menu() returns 2
- * and main() opens it), 5 rematch in an online room, 6 link MSXPI or TCPIP
- * (Return or ESC applies it; for this run only), 7 credits, 8 exit to DOS.
- * The AI accepts a draw when it is not ahead; online, the offer goes to the
- * other player, who accepts by offering too. ESC resumes the game. */
+/* Lobby players who sent SEEK or an invitation in the last ten minutes
+ * (key 9): Up/Down pick a nick, Return invites it (like 7), ESC closes. */
 #define MENU_X 44
 #define MENU_Y 72
-#define MENU_ROWS 9
-#define MENU_H 102
+#define PLAYERS_Y 56
+#define PLAYERS_H 93
 static void popup_close(void) {
     field_count=0;
     solid(PANEL_X,0,256-PANEL_X,SCREEN_BOTTOM-7,C_BLACK);
@@ -780,11 +827,57 @@ static void popup_close(void) {
     memset(painted,255,sizeof(painted));
     memset(markers,255,sizeof(markers));
 }
-static const char * const menu_rows[]={"AI LEVEL","OFFER DRAW","RESIGN","ROTATE BOARD",
-                                       "CHAT","REMATCH","LINK","CREDITS","EXIT"};
+static void players(void) {
+    uint8_t key,row=0,count,i;
+    char line[20];
+    exchange("pchess cplayers");
+    if(reply[5]!='P' || !reply[240]) {
+        text_at(8,205,status);
+        return;
+    }
+    count=reply[240]>7?7:reply[240];
+    solid(MENU_X,PLAYERS_Y,120,PLAYERS_H,C_BLACK);
+    frame(MENU_X,PLAYERS_Y,120,PLAYERS_H,C_YELLOW);
+    text_at(MENU_X+39,PLAYERS_Y+5,"PLAYERS");
+    text_at(MENU_X+6,(uint8_t)(PLAYERS_Y+83),"RET ASK  ESC CLOSE");
+    text_at(8,205,status);
+    while(1) {
+        for(i=0;i<count;i++) {
+            strcpy(line,i==row?"= ":"  ");
+            memcpy(line+2,reply+120+i*16,16); line[18]=0;
+            text_at(MENU_X+8,PLAYERS_Y+16+i*9,line);
+        }
+        do key=Inkey(); while(!key);
+        if(key==27) break;
+        if(key==0x1e && row) row--;
+        else if(key==0x1f && row<count-1) row++;
+        else if(key==13 || key==' ') {
+            strcpy(command,"pchess coffer ");
+            memcpy(line,reply+120+row*16,16); line[16]=0;
+            strcat(command,line);
+            exchange(command);
+            break;
+        }
+    }
+    popup_close();
+}
+
+/* ESC pop-up. Rows: 0 AI level (left/right; the AI runs on the MSX), 1 rooms
+ * on the MSXPi relay or IRC (left/right, Return saves "pchess rooms X" in
+ * msxpi.ini; the TCP/IP link is always IRC), 2 link MSXPI or TCPIP (Return or
+ * ESC applies it; for this run only), 3 offer a draw, 4 resign, each after a
+ * Y/N, 5 rotate board, 6 chat (also the TAB key; menu() returns 2 and main()
+ * opens it), 7 rematch in an online game, 8 credits, 9 exit to DOS. The AI
+ * accepts a draw when it is not ahead; online the offer goes to the other
+ * player, who accepts by offering too. ESC resumes the game. */
+#define MENU_ROWS 10
+#define MENU_H 120
+static const char * const menu_rows[]={"AI LEVEL","ROOMS","LINK","OFFER DRAW","RESIGN",
+                                       "ROTATE BOARD","CHAT","REMATCH","CREDITS","EXIT"};
 /* Switch the link: every game and connection of the old one ends. */
 static void set_link(uint8_t tcp) {
     clear_sel();
+    if(online) {exchange("pchess cleave"); online=0;}
     if(tcp) {
         if(!tcp_link_start(status)) return;
         link_tcp=1;
@@ -794,12 +887,20 @@ static void set_link(uint8_t tcp) {
         link_tcp=0;
         strcpy(status,"LINK MSXPI");
     }
-    if(online) new_game(0,0);
+    new_game(0,0);
 }
 static uint8_t menu(void) {
-    uint8_t key,row=0,i,quit=0,tcp=link_tcp;
+    uint8_t key,row=0,i,quit=0,tcp=link_tcp,rooms_irc=0;
     char line[20];
     int16_t v;
+    /* The server tells which rooms it uses (the reply is a level packet). */
+    if(link_tcp) rooms_irc=1;
+    else {
+        strcpy(command,status);
+        exchange("pchess level");
+        if(!memcmp(reply,"PCH1",4)) rooms_irc=reply[243]==1;
+        strcpy(status,command);
+    }
     draw_panel();
     field_count=0;
     solid(0,SCREEN_BOTTOM-6,256,7,C_BLACK);
@@ -816,7 +917,10 @@ static uint8_t menu(void) {
                 strcat(line,": - 0 +");
                 line[strlen(line)-3]='0'+level;
             }
-            if(i==6) strcat(line,tcp?": TCPIP":": MSXPI");
+            /* TCP/IP rooms are always IRC: shown (and locked) as soon as
+             * LINK reads TCPIP, before Return applies it. */
+            if(i==1) strcat(line,rooms_irc || tcp || link_tcp?": IRC":": RELAY");
+            if(i==2) strcat(line,tcp?": TCPIP":": MSXPI");
             text_at(MENU_X+8,MENU_Y+16+i*9,line);
         }
         do key=Inkey(); while(!key);
@@ -827,15 +931,33 @@ static uint8_t menu(void) {
         else if(key==0x1f && row<MENU_ROWS-1) row++;
         else if(row==0 && key==0x1d && level>1) level--;
         else if(row==0 && key==0x1c && level<6) level++;
-        else if(row==6 && (key==0x1c || key==0x1d)) tcp^=1;
+        else if(row==1 && !tcp && !link_tcp && (key==0x1c || key==0x1d)) rooms_irc^=1;
+        else if(row==2 && (key==0x1c || key==0x1d)) tcp^=1;
         else if(key==13 || key==' ') {
-            if((row==1 || row==2) && !game_over) {
-                strcpy(status,row==1?"OFFER DRAW? Y/N":"RESIGN? Y/N");
+            if(row==1) {
+                if(link_tcp || tcp) {
+                    strcpy(status,"TCPIP ROOMS ARE IRC");
+                    text_at(8,205,status);
+                    continue;
+                }
+                strcpy(command,"pchess rooms ");
+                strcat(command,rooms_irc?"irc":"relay");
+                exchange(command);
+                text_at(8,205,status);
+                continue;
+            }
+            if(row==2) {
+                if(tcp!=link_tcp) set_link(tcp);
+                tcp=link_tcp;
+                break;
+            }
+            if((row==3 || row==4) && !game_over) {
+                strcpy(status,row==3?"OFFER DRAW? Y/N":"RESIGN? Y/N");
                 text_at(8,205,status);
                 do key=Inkey(); while(!key);
                 if(key!='y' && key!='Y') strcpy(status,"GAME GOES ON");
-                else if(online) exchange(row==1?"pchess cdraw":"pchess cresign");
-                else if(row==2) {
+                else if(online) exchange(row==3?"pchess cdraw":"pchess cresign");
+                else if(row==4) {
                     /* Against the AI the player resigns; otherwise the side to move. */
                     uint8_t loser=vs_ai?ai_side^1:turn;
                     finish(loser^1,loser?"WHITE WINS - BLACK RESIGNED":"BLACK WINS - WHITE RESIGNED");
@@ -847,20 +969,15 @@ static uint8_t menu(void) {
                 }
                 break;
             }
-            if(row==3) {user_rotate^=1; set_flip(); break;}
-            if(row==4) {quit=2; break;}
-            if(row==5) {
+            if(row==5) {user_rotate^=1; set_flip(); break;}
+            if(row==6) {quit=2; break;}
+            if(row==7) {
                 if(online && game_over) exchange("pchess creset");
                 else strcpy(status,"REMATCH NEEDS AN ENDED ONLINE GAME");
                 break;
             }
-            if(row==6) {
-                if(tcp!=link_tcp) set_link(tcp);
-                tcp=link_tcp;
-                break;
-            }
-            if(row==7) {credits(); break;}
-            if(row==8) {quit=1; break;}
+            if(row==8) {credits(); break;}
+            if(row==9) {quit=1; break;}
         }
     }
     popup_close();
@@ -877,7 +994,7 @@ int main(void) {
     }
     field_count=0; pending_tune=0; coords_flip=255; flip=0; user_rotate=0;
     entry_len=0; room_entry=0; online=0; link_tcp=0; entry[0]=0;
-    chat_unread=0; chat_seen=0; chat_rows=0; chat_new=0; offer_seen=0;
+    chat_unread=0; chat_seen=0; chat_rows=0; chat_new=0; offer_seen=0; seek_seen[0]=0;
     memset(reply,0,sizeof(reply));
     tcp_init();
     memset(painted,255,sizeof(painted));
@@ -940,30 +1057,53 @@ int main(void) {
         if(room_entry) {
             if(key==8 && entry_len) entry[--entry_len]=0;
             else if(key==13 && entry_len) {
-                strcpy(command,"pchess cjoin ");
+                /* 1: join the room (4); 2: invite a nick (7). */
+                strcpy(command,room_entry==2?"pchess coffer ":"pchess cjoin ");
                 strcat(command,entry);
                 clear_sel();
-                if(exchange(command)) {
+                if(exchange(command) && room_entry==1) {
                     online=1; vs_ai=0; chat_rows=0;
                     restart_online();
                     /* The server may hold moves already played in this room. */
                     ply_net=0; poll_server();
                 }
                 room_entry=0; entry_len=0; entry[0]=0;
-            } else if(((key>='0' && key<='9') || (key>='a' && key<='z') || (key>='A' && key<='Z')) && entry_len<16) {
+            } else if(((key>='0' && key<='9') || (key>='a' && key<='z') || (key>='A' && key<='Z') ||
+                       (room_entry==2 && (key=='_' || key=='-'))) && entry_len<16) {
                 entry[entry_len++]=key; entry[entry_len]=0;
             }
         }
-        else if(online && key>='1' && key<='4' && !confirm_leave()) {}
-        else if(key=='1') new_game(0,0);
-        else if(key=='2') new_game(1,0);
-        else if(key=='3') new_game(1,1);
-        else if(key=='4') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
+        else if(key==8 && entry_len) entry[--entry_len]=0;
+        else if(key==13 && entry_len) {
+            type_move(entry);
+            entry_len=0; entry[0]=0;
+        }
+        else if(!entry_len && online && key>='1' && key<='5' && !confirm_leave()) {}
+        else if(!entry_len && key=='1') new_game(0,0);
+        else if(!entry_len && key=='2') new_game(1,0);
+        else if(!entry_len && key=='3') new_game(1,1);
+        else if(!entry_len && key=='4') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
+        else if(!entry_len && key=='5') {
+            clear_sel();
+            if(exchange("pchess circ")) {
+                online=1; vs_ai=0; chat_rows=0;
+                restart_online();
+                ply_net=0;
+            }
+        }
+        else if(!entry_len && key=='6') exchange("pchess cseek");
+        else if(!entry_len && key=='7') {room_entry=2; strcpy(status,"ENTER NICK AND RETURN");}
+        else if(!entry_len && key=='8') exchange("pchess caccept");
+        else if(!entry_len && key=='9') players();
         else if(key==0x1e && cursor_y) cursor_y--;
         else if(key==0x1f && cursor_y<7) cursor_y++;
         else if(key==0x1d && cursor_x) cursor_x--;
         else if(key==0x1c && cursor_x<7) cursor_x++;
         else if(key==' ' || key==13) activate();
+        else if(((key>='a' && key<='h') || (key>='A' && key<='H') || key=='-' || key=='x' ||
+                 (key>='1' && key<='8')) && entry_len<26) {
+            entry[entry_len++]=key; entry[entry_len]=0;
+        }
         draw_board();
     }
     tcp_link_stop();

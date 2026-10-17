@@ -1,12 +1,13 @@
 /*
  * PCheckers over TCP/IP UNAPI (InterNestor Lite, GR8NET, ObsoNET...), chosen
  * with LINK in the ESC menu. local_exchange() takes the same "pchess ..."
- * room commands the MSXPi relay does (cjoin, cmove, cpoll, cdraw, cresign,
- * creset, say, chat) and answers with the same 256-byte PCH1 packet, so the
+ * commands the MSXPi server does (cjoin, circ, cseek, coffer, caccept,
+ * cplayers, cmove, cpoll, cdraw, cresign, creset, cleave, say, chat) and answers with the same 256-byte PCH1 packet, so the
  * rest of pcheckers.c does not know which link is in use.
  *
- * Rooms are the IRC channel #pdamas-<room>; the two players talk PCK1 lines
- * to each other (see peer_receive()) and everything else said there is chat.
+ * Rooms and the lobby are PChess's own IRC channels (#pchess-<room>, #msxpi),
+ * so chess and checkers players share the public talk; the game lines are
+ * "PCH1 CK ..." (see peer_receive()), which PChess ignores.
  * IRC over plain TCP: no TLS on a Z80, so the server must accept port 6667
  * (Libera does). The AI plays on the MSX itself and needs no link.
  *
@@ -219,8 +220,10 @@ static const char *fail;
 static struct {
     uint8_t net,conn,ready,announce;
     uint16_t started;
-    char nick[17],peer[17],match[1],room[26];
-    uint8_t phase,side,draw_offer,result;
+    char nick[17],peer[17],match[1],room[26],invite[17];
+    uint8_t phase,side,draw_offer,result,has_invite,seeked;
+    uint16_t last_seek;
+    char players[7][17]; uint16_t seen_at[7]; uint8_t players_n;
     char status[48];
     /* Moves received and not yet handed to the client, as "c3e5g7". */
     char inbox[INBOX][PATH_MAX_TEXT+1]; uint8_t inbox_n;
@@ -264,6 +267,11 @@ static uint8_t say(const char *target,const char *text) {
 }
 
 static uint8_t playing(void) { return irc.phase==PH_PLAYING; }
+/* The channel everyone shares with PChess: #msxpi, or the room's. */
+static const char *chan(void) { return irc.room[0]?irc.room:"#msxpi"; }
+static uint8_t is_free(void) {
+    return irc.phase==PH_LOBBY || irc.phase==PH_ERROR || (irc.phase==PH_PLAYING && irc.result);
+}
 
 /* "pchess say TEXT": to the opponent once matched, else to the channel.
  * text is the caller's command buffer and is cleaned in place; it has room
@@ -271,21 +279,38 @@ static uint8_t playing(void) { return irc.phase==PH_PLAYING; }
 static void chat_say(char *text) {
     chat_clean(text);
     if(!*text) { fail="Nothing to say"; return; }
-    if(!strncmp(text,"PCK1",4)) { memmove(text+1,text,strlen(text)+1); text[0]=' '; }
-    say(playing() && irc.peer[0]?irc.peer:irc.room,text);
+    if(!strncmp(text,"PCH1",4)) { memmove(text+1,text,strlen(text)+1); text[0]=' '; }
+    say(playing() && irc.peer[0]?irc.peer:chan(),text);
 }
 
 static void new_game_state(void) {
     irc.ply=0; irc.draw_offer=0; irc.result=0; irc.inbox_n=0;
 }
 
-/* The lower nick plays white, so both sides agree without a message. */
-static void pair_with(const char *nick) {
+static void pair(const char *nick,uint8_t side) {
     strncpy(irc.peer,nick,16); irc.peer[16]=0;
-    irc.phase=PH_PLAYING;
-    irc.side=fold_cmp(irc.nick,nick)<0?0:1;
+    irc.phase=PH_PLAYING; irc.side=side;
     new_game_state();
-    set_status(irc.side?"YOU ARE BLACK":"YOU ARE WHITE");
+    set_status(side?"YOU ARE BLACK":"YOU ARE WHITE");
+}
+
+/* The lower nick plays white, so both ends agree without a message. */
+static void pair_by_name(const char *nick) {
+    pair(nick,fold_cmp(irc.nick,nick)<0?0:1);
+}
+
+static void seen(const char *nick) {
+    uint8_t i;
+    for(i=0;i<irc.players_n;i++) if(same(irc.players[i],nick)) break;
+    if(i==irc.players_n) {
+        if(i==7) { memmove(irc.players[0],irc.players[1],6*17); memmove(irc.seen_at,irc.seen_at+1,12); i=6; }
+        else irc.players_n++;
+    } else {
+        /* Newest last. */
+        for(;i+1<irc.players_n;i++) { strcpy(irc.players[i],irc.players[i+1]); irc.seen_at[i]=irc.seen_at[i+1]; }
+    }
+    strncpy(irc.players[i],nick,16); irc.players[i][16]=0;
+    irc.seen_at[i]=JIFFY;
 }
 
 static uint8_t valid_path(const char *s) {
@@ -303,7 +328,7 @@ static void chat_in(const char *sender,const char *target,char *text) {
     uint8_t i,priv,before=chat_new;
     if(*text==1 || same(sender,irc.nick)) return;           /* CTCP, own echo */
     priv=same(target,irc.nick) && irc.peer[0] && same(sender,irc.peer);
-    if(!priv && !same(target,irc.room)) return;
+    if(!priv && !same(target,chan())) return;
     chat_clean(text);
     if(!*text) return;
     for(i=0;i<12 && sender[i];i++) {
@@ -316,47 +341,67 @@ static void chat_in(const char *sender,const char *target,char *text) {
     chat_unread=(uint16_t)chat_unread+i>255?255:chat_unread+i;
 }
 
-/* One PCK1 message from sender to target (our nick or the room):
- *   HELLO                  room: someone joined; answered with HERE
- *   HERE                   direct: the answer, both sides are now paired
- *   MOVE <ply> <path>      the opponent's move, e.g. MOVE 0 c3d4
- *   DRAW / RESIGN / RESET  as the menu entries */
+/* One game line from sender to target (our nick, #msxpi or the room), all
+ * of the form "PCH1 CK <op> ..." (PChess ignores them); see
+ * msxpi_pcheckers_irc.py for the list. */
 static void peer_receive(const char *sender,const char *target,char *text) {
-    char *op=text+5,*arg;
-    if(same(sender,irc.nick)) return;
+    char *op=text+8,*arg;
+    uint8_t same_peer;
+    if(strncmp(text,"PCH1 CK ",8) || same(sender,irc.nick)) return;
     arg=strchr(op,' ');
     if(arg) *arg++=0;
-    if(same(target,irc.room)) {
-        if(!strcmp(op,"HELLO") && (!irc.peer[0] || same(sender,irc.peer))) {
-            irc_line("PRIVMSG ",sender," :PCK1 HERE",0);
-            pair_with(sender);
+    same_peer=irc.peer[0] && same(sender,irc.peer);
+    if(irc.room[0] && same(target,irc.room)) {
+        if(!strcmp(op,"HELLO") && !arg) {
+            if(!irc.peer[0] || same_peer || is_free()) {
+                irc_line("PRIVMSG ",sender," :PCH1 CK HERE",0);
+                pair_by_name(sender);
+            } else irc_line("PRIVMSG ",sender," :PCH1 CK BUSY",0);
+        }
+        return;
+    }
+    if(same(target,"#msxpi")) {
+        if(!irc.room[0] && !strcmp(op,"SEEK") && !arg && is_free()) {
+            char *s=irc.status;
+            seen(sender);
+            strcpy(s,"PLAYER "); strncat(s,sender,16); strcat(s," WANTS TO PLAY");
         }
         return;
     }
     if(!same(target,irc.nick)) return;
-    if(!strcmp(op,"HERE") && (!irc.peer[0] || same(sender,irc.peer))) {
-        pair_with(sender);
-        return;
-    }
-    if(!irc.peer[0] || !same(sender,irc.peer) || !playing()) return;
-    if(!strcmp(op,"MOVE") && arg) {
-        uint16_t n=0;
-        char *path=arg;
-        while(*path>='0' && *path<='9') n=n*10+(*path++-'0');
-        if(*path++!=' ' || n!=irc.ply || !valid_path(path) || irc.inbox_n>=INBOX
-           || irc.result || (irc.ply&1)==irc.side) {
-            set_status("OUT OF SYNC - REJOIN THE ROOM");
-            return;
+    if(!strcmp(op,"OFFER") && !arg && !irc.room[0]) {
+        seen(sender);
+        if(is_free() || same_peer) {
+            char *s=irc.status;
+            strncpy(irc.invite,sender,16); irc.invite[16]=0; irc.has_invite=1;
+            strcpy(s,"INVITE "); strncat(s,sender,16); strcat(s," PRESS 8");
         }
-        strcpy(irc.inbox[irc.inbox_n++],path);
-        irc.ply++;
-        if(irc.draw_offer==1) irc.draw_offer=0;
-    } else if(!strcmp(op,"DRAW") && !irc.result) {
-        if(irc.draw_offer==1) irc.result=3; else irc.draw_offer=2;
-    } else if(!strcmp(op,"RESIGN") && !irc.result) {
-        irc.result=irc.side?2:1;    /* the peer is the other colour */
-    } else if(!strcmp(op,"RESET")) {
-        new_game_state();
+    } else if(!strcmp(op,"ACCEPT") && !arg) {
+        if(irc.phase==PH_OFFERED && same_peer) pair(sender,0);
+    } else if(!strcmp(op,"HERE") && !arg && irc.room[0]) {
+        if(!irc.peer[0] || same_peer || is_free()) pair_by_name(sender);
+    } else if(!strcmp(op,"BUSY") && !arg && irc.room[0]) {
+        if(irc.phase!=PH_PLAYING) set_status("ROOM BUSY - GAME IN PROGRESS");
+    } else if(same_peer && playing()) {
+        if(!strcmp(op,"MOVE") && arg && !irc.result) {
+            uint16_t n=0;
+            char *path=arg;
+            while(*path>='0' && *path<='9') n=n*10+(*path++-'0');
+            if(*path++!=' ' || n!=irc.ply || !valid_path(path) || irc.inbox_n>=INBOX
+               || (irc.ply&1)==irc.side) {
+                set_status("OUT OF SYNC - REJOIN THE ROOM");
+                return;
+            }
+            strcpy(irc.inbox[irc.inbox_n++],path);
+            irc.ply++;
+            if(irc.draw_offer==1) irc.draw_offer=0;
+        } else if(!strcmp(op,"DRAW") && !irc.result) {
+            if(irc.draw_offer==1) irc.result=3; else irc.draw_offer=2;
+        } else if(!strcmp(op,"RESIGN") && !irc.result) {
+            irc.result=irc.side?2:1;    /* the peer is the other colour */
+        } else if(!strcmp(op,"RESET")) {
+            new_game_state();
+        }
     }
 }
 
@@ -371,8 +416,8 @@ static void peer_cmove(const char *arg) {
     if(*path++!=' ' || !valid_path(path)) { fail="Bad move"; return; }
     if(n!=irc.ply || irc.inbox_n) { fail="Out of sync; poll"; return; }
     if((irc.ply&1)!=irc.side) { fail="Opponent turn"; return; }
-    strcpy(line,"PCK1 MOVE ");
-    put_dec(line+10,n);
+    strcpy(line,"PCH1 CK MOVE ");
+    put_dec(line+13,n);
     strcat(line," ");
     strcat(line,path);
     if(!say(irc.peer,line)) return;
@@ -383,30 +428,57 @@ static void peer_cmove(const char *arg) {
 static void peer_draw(void) {
     if(!playing()) { fail="Waiting for opponent"; return; }
     if(irc.result) { fail="Game over"; return; }
-    if(!say(irc.peer,"PCK1 DRAW")) return;
+    if(!say(irc.peer,"PCH1 CK DRAW")) return;
     if(irc.draw_offer==2) irc.result=3; else irc.draw_offer=1;
 }
 
 static void peer_resign(void) {
     if(!playing()) { fail="Waiting for opponent"; return; }
     if(irc.result) { fail="Game over"; return; }
-    if(!say(irc.peer,"PCK1 RESIGN")) return;
+    if(!say(irc.peer,"PCH1 CK RESIGN")) return;
     irc.result=irc.side?1:2;
 }
 
 static void peer_reset(void) {
     if(!playing()) { fail="Waiting for opponent"; return; }
-    if(!say(irc.peer,"PCK1 RESET")) return;
+    if(!say(irc.peer,"PCH1 CK RESET")) return;
     new_game_state();
 }
 
 static uint8_t announce_room(void) {
-    if(!say(irc.room,"PCK1 HELLO")) return 0;
+    char *p;
+    if(!say(irc.room,"PCH1 CK HELLO")) return 0;
     if(!irc.peer[0]) {
         strcpy(irc.status,"ROOM "); strcat(irc.status,irc.room+8); strcat(irc.status," - WAITING");
-        { char *p; for(p=irc.status;*p;p++) if(*p>='a' && *p<='z') *p-=32; }
+        for(p=irc.status;*p;p++) if(*p>='a' && *p<='z') *p-=32;
     }
     return 1;
+}
+
+static void peer_seek(void) {
+    if(irc.room[0]) { fail="In a room; no lobby"; return; }
+    if(!is_free()) { fail="Already in a match"; return; }
+    if(irc.seeked && (uint16_t)(JIFFY-irc.last_seek)<SECONDS(60)) { fail="Wait before announcing again"; return; }
+    if(!say("#msxpi","PCH1 CK SEEK")) return;
+    irc.last_seek=JIFFY; irc.seeked=1;
+    set_status("SEEK SENT");
+}
+
+static void peer_offer(const char *nick) {
+    if(!valid_nick(nick)) { fail="Invalid nickname"; return; }
+    if(!is_free() || same(nick,irc.nick)) { fail="Cannot challenge now"; return; }
+    strcpy(irc.peer,nick);
+    irc.phase=PH_OFFERED;
+    new_game_state();
+    if(!say(nick,"PCH1 CK OFFER")) return;
+    set_status("INVITE SENT");
+}
+
+static void peer_accept(void) {
+    if(!is_free() || !irc.has_invite) { fail="No invitation"; return; }
+    irc.has_invite=0;
+    pair(irc.invite,1);
+    say(irc.peer,"PCH1 CK ACCEPT");
 }
 
 /* -------------------------------------------------------- IRC transport */
@@ -443,14 +515,14 @@ static void irc_input(char *line) {
         /* rest = "<nick> :Welcome..." */
         p=strchr(rest,' '); if(p) *p=0;
         strncpy(irc.nick,rest,16); irc.nick[16]=0;
-        set_status("JOINING ROOM");
-        irc_line("JOIN ",irc.room,0,0);
+        set_status(irc.room[0]?"JOINING ROOM":"JOINING LOBBY");
+        irc_line("JOIN ",irc.room[0]?irc.room:"#msxpi",0,0);
     } else if(!strcmp(cmd,"JOIN") && prefix && same(prefix,irc.nick)) {
         if(*rest==':') rest++;
-        if(same(rest,irc.room)) {
+        if(same(rest,irc.room[0]?irc.room:"#msxpi")) {
             irc.ready=1; irc.net=NET_READY;
-            set_status("IN THE ROOM");
-            irc.announce=1;
+            strcpy(irc.status,"LOBBY "); strcat(irc.status,irc.nick);
+            if(irc.room[0]) irc.announce=1;
         }
     } else if(!strcmp(cmd,"401")) {
         /* "<me> <nick> :No such nick" */
@@ -476,7 +548,7 @@ static void irc_input(char *line) {
         if(!text) return;
         *text++=0;
         if(*text!=':') return;
-        if(strncmp(text+1,"PCK1 ",5)) chat_in(prefix,target,text+1);
+        if(strncmp(text+1,"PCH1 ",5)) chat_in(prefix,target,text+1);
         else peer_receive(prefix,target,text+1);
     }
 }
@@ -561,6 +633,8 @@ static uint8_t net_start(const char *room) {
 }
 
 
+
+
 /* ------------------------------------------------------------ settings */
 
 static void load_config(void) {
@@ -595,9 +669,10 @@ static void load_config(void) {
 /* Fusion-C's crt0 does not clear static data: whatever the last program
  * left there is what an uninitialised static starts with. main() calls
  * this before anything here runs. */
+static uint8_t irc_on;
 static void tcp_init(void) {
     memset(&irc,0,sizeof(irc));
-    net=0;
+    net=0; irc_on=0;
 }
 
 /* Called when LINK changes to TCPIP; 0 with a status when it cannot. */
@@ -611,6 +686,7 @@ static uint8_t tcp_link_start(char *status) {
 static void tcp_link_stop(void) {
     if(net) net_close();
     memset(&irc,0,sizeof(irc));
+    irc_on=0;
 }
 
 /* ----------------------------------------------------------- packets */
@@ -644,6 +720,19 @@ static void net_poll(void) {
     if(irc.announce && irc.ready) { irc.announce=0; announce_room(); fail=0; }
 }
 
+static void players_packet(void) {
+    uint8_t i,n=0;
+    reply[5]='P';
+    for(i=irc.players_n;i--;) {
+        if((uint16_t)(JIFFY-irc.seen_at[i])>=SECONDS(600) || same(irc.players[i],irc.nick)) continue;
+        memcpy(reply+120+n*16,irc.players[i],strlen(irc.players[i]));
+        n++;
+    }
+    reply[240]=n;
+    if(!n) packet_status("NO PLAYERS - ASK THEM TO SEEK (6)");
+    else { static char s[12]; put_dec(s,n); strcat(s,n==1?" PLAYER":" PLAYERS"); packet_status(s); }
+}
+
 /* The server's handle_command() for this link. cmd is "pchess ...". */
 static uint8_t local_exchange(const char *cmd) {
     static char args[64];
@@ -658,7 +747,7 @@ static uint8_t local_exchange(const char *cmd) {
     if(irc.net!=NET_OFF) net_poll();
     if(!strcmp(verb,"cjoin")) {
         static char room[26]; uint8_t i,n=(uint8_t)strlen(arg);
-        strcpy(room,"#pdamas-");
+        strcpy(room,"#pchess-");
         for(i=0;i<n && i<16;i++) {
             char c=arg[i];
             if(c>='A' && c<='Z') c+=32;
@@ -668,9 +757,19 @@ static uint8_t local_exchange(const char *cmd) {
         room[8+i]=0;
         if(!n || n>16 || i!=n) fail="Room: 1-16 letters or digits";
         else if(irc.ready && same(irc.room,room)) {irc.peer[0]=0; irc.phase=PH_LOBBY; new_game_state(); announce_room();}
-        else net_start(room);
-    } else if(!irc.room[0]) {
-        fail=(!strcmp(verb,"say") || !strcmp(verb,"chat"))?"NO ONE TO CHAT WITH":"Start a game first";
+        else { irc_on=1; net_start(room); }
+    } else if(!strcmp(verb,"circ")) {
+        irc_on=1; net_start(0);
+    } else if(!strcmp(verb,"cleave")) {
+        net_close(); memset(&irc,0,sizeof(irc)); irc_on=0;
+    } else if(!irc_on) {
+        /* Lobby commands before going online, as the server says. */
+        fail=(!strcmp(verb,"cplayers") || !strcmp(verb,"cseek") || !strcmp(verb,"coffer") ||
+              !strcmp(verb,"caccept"))?"Go online first (5)":
+             (!strcmp(verb,"say") || !strcmp(verb,"chat"))?"NO ONE TO CHAT WITH":"Start a game first";
+    } else if(!strcmp(verb,"cplayers")) {
+        if(irc.room[0]) fail="In a room; no lobby";
+        else { players_packet(); return 1; }
     } else if(!strcmp(verb,"chat")) {
         /* The rows are in the scrollback already: an empty chat block. */
         reply[5]='C';
@@ -678,7 +777,10 @@ static uint8_t local_exchange(const char *cmd) {
     } else if(!irc.ready) {
         fail=irc.net==NET_OFF?irc.status:"Lobby not ready; wait";
     } else if(!strcmp(verb,"cpoll")) {
-    } else if(!strcmp(verb,"cmove")) peer_cmove(arg);
+    } else if(!strcmp(verb,"cseek")) peer_seek();
+    else if(!strcmp(verb,"coffer")) peer_offer(arg);
+    else if(!strcmp(verb,"caccept")) peer_accept();
+    else if(!strcmp(verb,"cmove")) peer_cmove(arg);
     else if(!strcmp(verb,"cdraw")) peer_draw();
     else if(!strcmp(verb,"cresign")) peer_resign();
     else if(!strcmp(verb,"creset")) peer_reset();
