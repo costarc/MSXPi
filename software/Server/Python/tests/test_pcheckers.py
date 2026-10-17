@@ -2,6 +2,7 @@
 the pchess chat."""
 import sys
 import unittest
+from unittest import mock
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
 import msxpi_pchess as p
@@ -41,7 +42,7 @@ class Room(unittest.TestCase):
         self.assertEqual((data[4],data[5],data[6],data[7]),(1,1,1,0))
         # c3 = row 5 col 2 = 42, d4 = row 4 col 3 = 35
         self.assertEqual(tuple(data[120:123]),(2,42,35))
-        self.assertEqual((data[240],data[241]),(1,1))
+        self.assertEqual((data[240],data[241],data[238]),(1,1,0))
     def test_draw_resign_reset(self):
         self.assertEqual(self.act(self.a,'cdraw')['offer'],2)
         self.assertEqual(self.act(self.b,'cpoll',ply=0)['offer'],1)
@@ -73,13 +74,26 @@ class Room(unittest.TestCase):
 
 
 class Command(unittest.TestCase):
-    def test_cjoin_through_handle_command(self):
+    def test_cjoin_cmove_chat_through_the_relay(self):
+        import threading
         p._games=p.Games()
-        with __import__('unittest.mock').mock.patch.object(p,'start_relay'):
-            data=p.handle_command('cjoin dama2',room_config={})
-        self.assertEqual(data[:4],b'PCH1')
-        self.assertEqual(data[4],1)   # checkers state
-        self.assertEqual(bytes(data[72:83]),b'WAIT PLAYER')
+        relay=p.RelayServer(('127.0.0.1',0),p.RelayHandler)
+        threading.Thread(target=relay.serve_forever,daemon=True).start()
+        self.addCleanup(relay.server_close)
+        self.addCleanup(relay.shutdown)
+        config={'PCHESSRELAY':'http://127.0.0.1:%d'%relay.server_address[1]}
+        with mock.patch.object(p,'start_relay'):
+            data=p.handle_command('cjoin dama2',room_config=config)
+            self.assertEqual((data[:4],data[4],data[5]),(b'PCH1',1,0))
+            self.assertEqual(bytes(data[72:83]),b'WAIT PLAYER')
+            # The second player joins straight on the relay.
+            other=p._games.request(dict(action='new',mode='room',room='dama2',kind='checkers'))
+            data=p.handle_command('cmove 0 c3d4',room_config=config)
+            self.assertEqual((data[4],data[5],data[241]),(1,1,1))
+            data=p.handle_command('say OLA',room_config=config)
+            self.assertEqual(data[4],1)
+            rows=p._games.request(dict(action='chat',game=other['game'],token=other['token']))
+            self.assertEqual(rows['chat_rows'],[(1,'WHITE: OLA')])
 
 
 if __name__=='__main__':

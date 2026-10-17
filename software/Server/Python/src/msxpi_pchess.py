@@ -106,8 +106,10 @@ class Games:
             self.checkers_over_check(game)
             game['resigned'] = side
         elif action == 'creset':
-            if not self.checkers_finished(game):
-                raise ValueError('Game not over')
+            # The clients end a game by the rules themselves, so only the
+            # rematch menu (offered once a game is over) sends this.
+            if len(game['players']) < 2:
+                raise ValueError('Waiting for opponent')
             game.update(moves=[], resigned=None, agreed=False, offers=set())
         elif action == 'cpoll':
             return self.snapshot(game, token, max(0, int(req.get('ply', 0))))
@@ -615,7 +617,7 @@ def packet(state):
 # side (0 white), 7 how the game ended (0 playing, 1 white wins by
 # resignation, 2 black wins, 3 draw agreed), status from byte 72, moves from
 # byte 120 in 14-byte slots (length, then the board squares row*8+col with
-# row 0 at the top), moves in this block in 240, total moves in 241, draw
+# row 0 at the top), moves in this block in 240, total moves in 241 (low) and 238 (high), draw
 # offer in 242 (1 the opponent offered, 2 this player did) and unread chat
 # rows in 255. The server does not know the rules: the MSX clients check
 # every move they receive.
@@ -630,7 +632,8 @@ def checkers_packet(state):
         data[120+i*14] = len(squares)
         data[121+i*14:121+i*14+len(squares)] = bytes(squares)
     data[240] = len(state['moves'][:CHECKERS_FETCH])
-    data[241] = min(state['ply'],255)
+    data[241] = state['ply'] & 255
+    data[238] = min(state['ply'] >> 8,255)
     data[242] = state['offer']
     data[255] = min(state.get('chat_unread',0),255)
     return bytes(data)
