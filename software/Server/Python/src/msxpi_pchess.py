@@ -15,6 +15,7 @@ import argparse
 import collections
 import json
 import os
+import re
 import secrets
 import shutil
 import threading
@@ -26,6 +27,11 @@ import chess
 import chess.engine
 
 from msxpi_pchess_irc import CHAT_QUEUE, CHAT_ROW, chat_rows, chat_text
+
+
+CHECKERS_ACTIONS = ('cmove', 'cdraw', 'cresign', 'creset', 'cpoll')
+# Moves handed over per poll; a client further behind polls again.
+CHECKERS_FETCH = 8
 
 
 class Games:
@@ -48,14 +54,21 @@ class Games:
             room = req.get('room', '').lower()
             if mode == 'room' and (not room or len(room)>16 or not room.isalnum()):
                 raise ValueError('Room: 1-16 letters or digits')
-            game_id = 'room-' + room if mode == 'room' else secrets.token_hex(8)
+            checkers = req.get('kind') == 'checkers'
+            if checkers and mode != 'room':
+                raise ValueError('Checkers are played in rooms')
+            game_id = ('ckr-' if checkers else 'room-') + room if mode == 'room' else secrets.token_hex(8)
             if game_id not in self.games:
                 if len(self.games) >= 128:
                     raise ValueError('Relay full')
-                self.games[game_id] = dict(board=chess.Board(), mode=mode,
+                # A checkers room keeps only the moves, as the paths its
+                # players typed: the MSX clients hold the rules and check
+                # every move they receive.
+                self.games[game_id] = dict(board=None if checkers else chess.Board(), mode=mode,
                     players=[], history=[], seen=now, resigned=None,
                     offers=set(), agreed=False, chat={},
-                    human_black=mode == 'ai' and bool(req.get('black')))
+                    human_black=mode == 'ai' and bool(req.get('black')),
+                    kind='checkers' if checkers else 'chess', moves=[])
             game = self.games[game_id]
             if len(game['players']) >= (2 if mode == 'room' else 1):
                 raise ValueError('Room full; choose another')
@@ -77,7 +90,28 @@ class Games:
         game['seen'] = time.monotonic()
         board = game['board']
         side = game['players'].index(token) == 0 and not game['human_black']
-        if action == 'move':
+        if (game['kind'] == 'checkers') != (action in CHECKERS_ACTIONS) and action not in ('say', 'chat'):
+            raise ValueError('Not a %s game' % game['kind'])
+        if action == 'cmove':
+            self.checkers_move(game, token, side, req)
+        elif action == 'cdraw':
+            self.checkers_over_check(game)
+            if len(game['players']) < 2:
+                raise ValueError('Waiting for opponent')
+            if (not side) in game['offers']:
+                game['agreed'] = True
+            else:
+                game['offers'].add(side)
+        elif action == 'cresign':
+            self.checkers_over_check(game)
+            game['resigned'] = side
+        elif action == 'creset':
+            if not self.checkers_finished(game):
+                raise ValueError('Game not over')
+            game.update(moves=[], resigned=None, agreed=False, offers=set())
+        elif action == 'cpoll':
+            return self.snapshot(game, token, max(0, int(req.get('ply', 0))))
+        elif action == 'move':
             if self.finished(game):
                 raise ValueError('Game over')
             if game['mode'] == 'room' and len(game['players']) < 2:
@@ -140,11 +174,53 @@ class Games:
         return self.snapshot(game, token)
 
     @staticmethod
+    def checkers_finished(game):
+        return game['resigned'] is not None or game['agreed']
+
+    def checkers_over_check(self, game):
+        if self.checkers_finished(game):
+            raise ValueError('Game over')
+
+    def checkers_move(self, game, token, side, req):
+        self.checkers_over_check(game)
+        if len(game['players']) < 2:
+            raise ValueError('Waiting for opponent')
+        moves = game['moves']
+        if int(req.get('ply', -1)) != len(moves):
+            raise ValueError('Out of sync; poll')
+        # White (the first player) moves on even plies.
+        if side != (len(moves) % 2 == 0):
+            raise ValueError('Opponent turn')
+        text = req.get('move', '').lower()
+        if not re.fullmatch(r'(?:[a-h][1-8]){2,13}', text):
+            raise ValueError('Bad move')
+        moves.append(text)
+        # Moving declines the opponent's draw offer; one's own stays.
+        game['offers'].discard(not side)
+
+    @staticmethod
     def finished(game):
         return (game['resigned'] is not None or game['agreed'] or
                 game['board'].is_game_over(claim_draw=True))
 
-    def snapshot(self, game, token):
+    def snapshot_checkers(self, game, token, since):
+        side = game['players'].index(token) == 0      # True: white
+        matched = len(game['players']) == 2
+        moves = game['moves']
+        # over: 1 white wins (black resigned), 2 black wins, 3 draw agreed.
+        over = (3 if game['agreed'] else 0 if game['resigned'] is None
+                else 2 if game['resigned'] else 1)
+        # offer: 1 the opponent offered a draw, 2 this player did.
+        offer = 1 if (not side) in game['offers'] else 2 if side in game['offers'] else 0
+        status = 'WAIT PLAYER' if not matched else 'YOU ARE ' + ('WHITE' if side else 'BLACK')
+        since = len(moves) if since is None else min(since, len(moves))
+        return dict(kind='checkers', matched=matched, side=int(not side), over=over,
+                    status=status, ply=len(moves), moves=moves[since:since + CHECKERS_FETCH],
+                    offer=offer, chat_unread=len(game['chat'][token]))
+
+    def snapshot(self, game, token, since=None):
+        if game['kind'] == 'checkers':
+            return self.snapshot_checkers(game, token, since)
         board = game['board']
         outcome = board.outcome(claim_draw=True)
         status = 'WHITE TURN' if board.turn else 'BLACK TURN'
@@ -387,11 +463,11 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         irc_room = args[0] == 'join' and len(args) == 2 and rooms_mode(room_config) == 'irc'
         if args[0] in ('irc','new') or irc_room:
             stop_relay()
-        if args[0] in ('irc','join') or (args[0]=='new' and args[1:2]!=['ai']):
+        if args[0] in ('irc','join','cjoin') or (args[0]=='new' and args[1:2]!=['ai']):
             stop_engine()
         # Not an elif: 'join' also matches the line above, which left this
         # unreachable and the relay never started (connection refused).
-        if args[0] == 'join' and not irc_room:
+        if (args[0] == 'join' and not irc_room) or args[0] == 'cjoin':
             start_relay(room_config)
         if irc_room:
             channel = room_channel(args[1])
@@ -438,6 +514,10 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         elif args[0] == 'join' and len(args) == 2:
             req = dict(action='new',mode='room',room=args[1])
             remote = True
+        elif args[0] == 'cjoin' and len(args) == 2:
+            # PCheckers rooms always use the relay: the IRC peer plays chess.
+            req = dict(action='new',mode='room',room=args[1],kind='checkers')
+            remote = True
         else:
             if _session is None:
                 raise ValueError('Start a game first')
@@ -445,6 +525,10 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             remote = _remote
             if args[0] == 'move' and len(args) == 2:
                 req['move'] = args[1]
+            if args[0] in ('cmove','cpoll') and len(args) >= 2:
+                req['ply'] = int(args[1])
+                if args[0] == 'cmove' and len(args) == 3:
+                    req['move'] = args[2]
             if args[0] == 'say':
                 req['text'] = say_text
         if remote:
@@ -464,6 +548,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
                 _irc=None
         if args[0] == 'chat':
             return chat_packet(result['chat_rows'], result['chat_unread'])
+        if result.get('kind') == 'checkers':
+            return checkers_packet(result)
         return packet(result)
     except Exception as exc:
         data = bytearray(256)
@@ -522,6 +608,31 @@ def packet(state):
     data[243:243+len(opponent)]=opponent
     # 255: unread chat rows waiting for 'pchess chat' (0-255).
     data[255]=min(state.get('chat_unread',0),255)
+    return bytes(data)
+
+
+# The PCheckers state: byte 4 is 1, 5 matched (two players), 6 this player's
+# side (0 white), 7 how the game ended (0 playing, 1 white wins by
+# resignation, 2 black wins, 3 draw agreed), status from byte 72, moves from
+# byte 120 in 14-byte slots (length, then the board squares row*8+col with
+# row 0 at the top), moves in this block in 240, total moves in 241, draw
+# offer in 242 (1 the opponent offered, 2 this player did) and unread chat
+# rows in 255. The server does not know the rules: the MSX clients check
+# every move they receive.
+def checkers_packet(state):
+    data = bytearray(256)
+    data[:4] = b'PCH1'
+    data[4:8] = bytes((1,int(state['matched']),state['side'],state['over']))
+    status = state['status'].encode('ascii')
+    data[72:72+len(status)] = status
+    for i,move in enumerate(state['moves'][:CHECKERS_FETCH]):
+        squares = [(8-int(move[j+1]))*8+ord(move[j])-97 for j in range(0,len(move),2)]
+        data[120+i*14] = len(squares)
+        data[121+i*14:121+i*14+len(squares)] = bytes(squares)
+    data[240] = len(state['moves'][:CHECKERS_FETCH])
+    data[241] = min(state['ply'],255)
+    data[242] = state['offer']
+    data[255] = min(state.get('chat_unread',0),255)
     return bytes(data)
 
 
