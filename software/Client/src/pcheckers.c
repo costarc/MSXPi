@@ -489,13 +489,6 @@ static void move_text(const Move *m,char *out) {
     *out=0;
 }
 
-static char *put_dec(char *out,uint16_t n) {
-    char tmp[6]; uint8_t i=0;
-    do {tmp[i++]='0'+n%10; n/=10;} while(n);
-    while(i) *out++=tmp[--i];
-    *out=0;
-    return out;
-}
 
 /* Apply a state packet from the server or the TCP/IP link (see
  * checkers_packet() in msxpi_pchess.py): opponent moves, how the game ended,
