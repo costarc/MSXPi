@@ -56,7 +56,8 @@ def clean(text):
 class Room:
     def __init__(self, name):
         self.name = name
-        self.rows = collections.deque(maxlen=ROWS_KEPT)
+        self.msgs = collections.deque(maxlen=ROWS_KEPT)   # what was said, unwrapped
+        self.rows = collections.deque(maxlen=ROWS_KEPT)   # the same, wrapped for the client
         self.first = 0              # absolute index of rows[0]
         self.users = {}             # folded nick -> display nick with prefix
         self.topic = ''
@@ -66,14 +67,30 @@ class Room:
     def next(self):
         return self.first + len(self.rows)
 
-    def add(self, kind, nick_part, text, width):
-        """Wrap "<nick_part><text>"; the first row carries the nick length."""
+    @staticmethod
+    def wrap(kind, nick_part, text, width):
         lines = textwrap.wrap(clean(nick_part + text), width, subsequent_indent=' ',
                               break_long_words=True, replace_whitespace=True) or ['']
-        for i, line in enumerate(lines):
+        return [(kind, len(nick_part) if i == 0 else 0, line) for i, line in enumerate(lines)]
+
+    def add(self, kind, nick_part, text, width):
+        """Wrap "<nick_part><text>"; the first row carries the nick length."""
+        self.msgs.append((kind, nick_part, text))
+        for row in self.wrap(kind, nick_part, text, width):
             if len(self.rows) == self.rows.maxlen:
                 self.first += 1
-            self.rows.append((kind, len(nick_part) if i == 0 else 0, line))
+            self.rows.append(row)
+
+    def rewrap(self, width):
+        """New width (the client changed screen mode): wrap the history again.
+        Row numbers restart, so the client must start from the header."""
+        self.rows.clear()
+        self.first = 0
+        for kind, nick_part, text in self.msgs:
+            for row in self.wrap(kind, nick_part, text, width):
+                if len(self.rows) == self.rows.maxlen:
+                    self.first += 1
+                self.rows.append(row)
 
     def user_list(self):
         def order(display):
@@ -100,6 +117,14 @@ class ChatIRC(IRC):
         for room in self.rooms:
             if fold(room.name) == key: return room
         return None
+
+    def set_width(self, width):
+        width = max(MIN_WIDTH, min(MAX_WIDTH, width))
+        with self.state_lock:
+            if width != self.width:
+                self.width = width
+                for room in self.rooms: room.rewrap(width)
+                self.meta = (self.meta + 1) & 255
 
     def say_system(self, text, room=None):
         with self.state_lock:
@@ -376,7 +401,7 @@ def handle_command(command, irc_config=None):
             nick = args[1] if len(args) > 1 else '-'
             width = int(args[2]) if len(args) > 2 else 40
             if _chat and not _chat.error and not _chat.closed:
-                _chat.width = max(MIN_WIDTH, min(MAX_WIDTH, width))
+                _chat.set_width(width)
                 return _chat.rows_packet(_chat.cur, 1 << 30)
             config = dict(irc_config or {})
             if nick != '-': config['IRCNICK'] = nick

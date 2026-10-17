@@ -32,6 +32,8 @@ import gen_mchat_font  # noqa: E402
 
 OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
 MCHAT = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('MCHAT_COM', SOFTWARE / 'target/mchat.com'))
+MACHINE = os.environ.get('MCHAT_MACHINE', 'msx1')      # msx1 (Canon V-25) or msx2 (Panasonic FS-A1WSX)
+FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
 MSXPI_PORT = int(os.environ.get('MSXPI_TEST_PORT', '5044'))
 IRC_PORT = int(os.environ.get('MCHAT_IRC_PORT', '6668'))
 
@@ -43,6 +45,13 @@ TIMELINE = [
     (78, UP + UP), (86, 'dump:scrolled'),
     (90, ESC), (100, 'quit'),
 ]
+if MACHINE == 'msx2':
+    # DOS from FloppyA; no /1, so the MSX2 build starts in SCREEN 6 and /screen goes to SCREEN 2.
+    # Slower than the MSX1 script: a whole screen takes a second to repaint.
+    TIMELINE = [(27, 'dump:font'), (22, 'c:\r'), (25, 'dir mchat.com\r'), (30, 'mchat alice\r'),
+                (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (74, 'dump:second'),
+                (76, 'only here\r'), (82, TAB), (94, 'dump:back'), (96, UP + UP), (108, 'dump:scrolled'),
+                (112, '/screen\r'), (124, 'dump:switched'), (125, 'shot:switched'), (128, ESC), (136, 'quit')]
 
 GLYPH_ROWS = {}
 for _i, _g in enumerate(gen_mchat_font.GLYPHS):
@@ -67,6 +76,26 @@ def screen_text(vram):
     return lines
 
 
+def screen_text6(vram, font):
+    """SCREEN 6 (2 bits a pixel, 128 bytes a line): 85 x 26 cells of 6x8 pixels, BIOS font."""
+    glyphs = {}
+    for ch in range(32, 127):
+        glyphs[tuple(font[ch * 8 + r] >> 2 for r in range(8))] = chr(ch)
+    def pixel(x, y):
+        return vram[y * 128 + x // 4] >> (6 - 2 * (x % 4)) & 3
+    lines = []
+    for r in range(26):
+        line = ''
+        for c in range(85):
+            px = [[pixel(c * 6 + x, r * 8 + y) for x in range(6)] for y in range(8)]
+            flat = [v for row in px for v in row]
+            bg = max(set(flat), key=flat.count)
+            rows = tuple(sum((px[y][x] != bg) << (5 - x) for x in range(6)) for y in range(8))
+            line += glyphs.get(rows, '?') if any(rows) else ' '
+        lines.append(line)
+    return lines
+
+
 def tcl_string(text):
     return ''.join(c if c.isalnum() or c in ' ' else '\\x%02x' % ord(c) for c in text)
 
@@ -77,7 +106,7 @@ def write_script(path, dumps):
              'proc dump {name} {',
              f'    set f [open "{dumps.as_posix()}/$name.vram" w]',
              '    fconfigure $f -translation binary',
-             '    puts -nonewline $f [debug read_block VRAM 0 16384]',
+             '    puts -nonewline $f [debug read_block VRAM 0 ' + ('32768' if MACHINE == 'msx2' else '16384') + ']',
              '    close $f', '}']
     for when, action in TIMELINE:
         if action == 'quit':
@@ -136,6 +165,9 @@ def main():
     shutil.copy(MCHAT, work / 'mchat.com')
     subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'mchat.com',
                     'home/disks/msxpiboot.dsk:MCHAT.COM'], cwd=work, check=True, stdout=subprocess.DEVNULL)
+    if MACHINE == 'msx2':
+        shutil.copytree(FLOPPY, work / 'floppy')
+        shutil.copy(MCHAT, work / 'floppy/mchat.com')
     script = work / 'mchat.tcl'
     write_script(script, dumps)
 
@@ -158,7 +190,9 @@ def main():
         time.sleep(3)
         bob.start()
         with (work / 'openmsx.log').open('w') as out:
-            subprocess.run([OPENMSX, '-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi',
+            machine = (['-machine', 'Panasonic_FS-A1WSX', '-ext', 'ram4mb', '-ext', 'MSXPi', '-diska', str(work / 'floppy')]
+                       if MACHINE == 'msx2' else ['-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi'])
+            subprocess.run([OPENMSX, *machine,
                             '-command', 'set renderer none' if not os.environ.get('MCHAT_SHOW') else 'set speed 100', '-script', str(script)],
                            stdout=out, stderr=subprocess.STDOUT, timeout=600)
     finally:
@@ -168,16 +202,19 @@ def main():
         server_log.close()
 
     screens = {}
-    for name in ('start', 'second', 'back', 'scrolled'):
+    font = (dumps / 'font.vram').read_bytes() if (dumps / 'font.vram').exists() else None
+    for name in ('start', 'second', 'back', 'scrolled', 'switched'):
         path = dumps / f'{name}.vram'
         if path.exists():
-            screens[name] = screen_text(path.read_bytes())
+            screens[name] = (screen_text6(path.read_bytes(), font) if MACHINE == 'msx2' and name != 'switched'
+                             else screen_text(path.read_bytes()))
             print(f'[{name}]')
             print('\n'.join(line.rstrip() for line in screens[name]), flush=True)
     start = '\n'.join(screens.get('start', []))
     check('#MSXPI' in start.upper() or '#msxpi' in start, 'room tab is shown')
-    check('bob: hello everyone' in start, 'bob\'s public line is shown')
-    check('*bob* psst alice' in start, 'private line is shown')
+    later = '\n'.join(screens.get('second', []))
+    check('bob: hello everyone' in start or 'bob: hello everyone' in later, 'bob\'s public line is shown')
+    check('*bob* psst alice' in start or '*bob* psst alice' in later, 'private line is shown')
     check('USERS' in start and 'bob' in start.split('\n')[2] + start.split('\n')[3], 'user list shows bob')
     check(any(m == 'hello bob' for _, t, m in fixture.transcript), 'alice\'s line reached the IRC server')
     second = '\n'.join(screens.get('second', []))
@@ -187,6 +224,10 @@ def main():
     check('#msxpi' in back and 'filler line 30' in back, 'TAB returns to #msxpi at the latest line')
     scrolled = '\n'.join(screens.get('scrolled', []))
     check('SCROLLED' in scrolled and 'filler line 30' not in scrolled, 'UP scrolls back through history')
+    if MACHINE == 'msx2':
+        switched = chr(10).join(screens.get('switched', []))
+        check('#msxpi' in switched and 'bob: filler line' in switched, '/screen switched to SCREEN 2 and kept the chat')
+        check(any(line.find('bob: hello everyone') == 16 for line in screens.get('second', [])), 'SCREEN 6 uses the 85 column layout (chat from column 16)')
     print('Test artifacts:', work, flush=True)
     fixture.shutdown()
     fixture.server_close()

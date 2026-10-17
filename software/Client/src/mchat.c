@@ -23,11 +23,35 @@
 #include "../../C-common/header/msxpi.h"
 #include "mchat_ui.h"
 
-#include "mchat_ui_s2.c"        /* the backend; see mchat_ui.h */
+/* The backends; see mchat_ui.h. ui_*() calls the one chosen in ui_mode. */
+uint8_t ui_mode = UI_MSX1;
+uint8_t ui_cols, ui_rows, ui_side;
+#include "mchat_ui_s2.c"
+#include "mchat_ui_s6.c"
+
+void ui_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint8_t style) {
+    if (ui_mode == UI_MSX2) s6_text(col, row, s, width, style);
+    else s2_text(col, row, s, width, style);
+}
+void ui_flush(void) {
+    if (ui_mode == UI_MSX2) s6_flush(); else s2_flush();
+}
+void ui_cursor(uint8_t col, uint8_t row, uint8_t visible) {
+    if (ui_mode == UI_MSX2) s6_cursor(col, row, visible); else s2_cursor(col, row, visible);
+}
+uint8_t ui_open(void) {
+    uint8_t ok;
+    if (ui_mode == UI_MSX2) {ok = s6_open(); ui_cols = S6_COLS; ui_rows = S6_ROWS; ui_side = 16;}
+    else {ok = s2_open(); ui_cols = GRID_COLS; ui_rows = GRID_ROWS; ui_side = 8;}
+    return ok;
+}
+void ui_close(void) {
+    if (ui_mode == UI_MSX2) s6_close(); else s2_close();
+}
 
 #define MAXR 4
-#define VR_MAX 21               /* chat rows on screen (ui_rows - 3) */
-#define TW_MAX 46               /* widest chat line the server may send */
+#define VR_MAX 23               /* chat rows on screen (ui_rows - 3) */
+#define TW_MAX 72               /* widest chat line the server may send */
 #define HDR 24
 #define UMAX 24
 #define MAX_INPUT 100
@@ -316,10 +340,39 @@ static void switch_room(uint8_t i) {
     fetch_meta();
 }
 
+static uint8_t machine;
+
+static void layout(void) {
+    cw = ui_cols - ui_side;
+    if (cw > TW_MAX) cw = TW_MAX;
+    vr = ui_rows - 3;
+    if (vr > VR_MAX) vr = VR_MAX;
+}
+
+/* /screen: the other display mode (MSX2 only). The server wraps to a new
+ * width and numbers its rows again, so the window is fetched afresh. */
+static void switch_screen(void) {
+    uint8_t i;
+    ui_close();
+    ui_mode = ui_mode == UI_MSX2 ? UI_MSX1 : UI_MSX2;
+    ui_open();
+    layout();
+    ring_clear();
+    start_session("");
+    for (i = 0; i < MAXR; i++) rseen[i] = rnext[i];
+}
+
 static void send_input(void) {
     char *p;
     if (!ilen) return;
     if (!strcmp(input, "/quit") || !strcmp(input, "/exit")) {ilen = 0xFF; return;}
+    if (!strcmp(input, "/screen")) {
+        ilen = 0;
+        input[0] = 0;
+        if (machine) switch_screen();
+        else strcpy(note, "THIS IS AN MSX1: SCREEN 2 ONLY");
+        return;
+    }
     p = put_str(cmd, "mchat say ");
     put_str(p, input);
     ilen = 0;
@@ -395,9 +448,8 @@ int main(void) {
     uint8_t key;
     uint16_t now, lastpoll;
     read_args(nick);
-    /* One backend exists so far (SCREEN 2). An MSX2 backend is chosen here:
-     * use it when msx_version() != 0 and !force_msx1. */
-    (void)msx_version;
+    machine = msx_version();
+    ui_mode = (machine && !force_msx1) ? UI_MSX2 : UI_MSX1;
     /* No C runtime start-up here: nothing is zeroed for us. */
     conn = nrooms = cur = utotal = ushown = ilen = 0;
     meta_ver = 0; meta_stale = 1; live = 1;
@@ -412,11 +464,9 @@ int main(void) {
     memset(rtext, 0, sizeof(rtext));
     memset(input, 0, sizeof(input));
     memset(note, 0, sizeof(note));
+    font6_loaded = 0;                  /* the S6 font is read from the BIOS once */
     if (!ui_open()) return 1;
-    cw = ui_cols - ui_side;
-    if (cw > TW_MAX) cw = TW_MAX;
-    vr = ui_rows - 3;
-    if (vr > VR_MAX) vr = VR_MAX;
+    layout();
     ring_clear();
     strcpy(rname[0], "#MSXPI");
     strcpy(mynick, "...");

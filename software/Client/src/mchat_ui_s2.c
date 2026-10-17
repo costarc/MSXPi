@@ -1,5 +1,6 @@
 /*
  * MSX Free Chat - MSX1 display backend (TMS9918 SCREEN 2). See mchat_ui.h.
+ * Included by mchat.c, which dispatches ui_*() to s2_*() or s6_*().
  *
  * SCREEN 2 is used as a bitmap: the name table is the identity map, so tile
  * n has its own 8 bytes of pattern and colour and text is drawn into
@@ -8,7 +9,7 @@
  * so tiles and columns line up every 40 pixels = 8 columns = 5 tiles: that is
  * ui_side, where the user list ends and the chat begins.
  *
- * Characters live in a shadow grid; ui_text() queues tiles and ui_flush()
+ * Characters live in a shadow grid; s2_text() queues tiles and s2_flush()
  * redraws only those. One colour pair per tile row, so a tile takes the
  * style of whatever was written to it last.
  */
@@ -23,9 +24,6 @@
 #define COLTBL 0x2000
 #define SPRATR 0x1B00
 #define SPRPAT 0x3800
-
-uint8_t ui_cols = GRID_COLS, ui_rows = GRID_ROWS;
-uint8_t ui_side = 8;
 
 static char cell[GRID_ROWS][GRID_COLS];
 static uint8_t tile_style[GRID_ROWS * 32];
@@ -50,7 +48,7 @@ static const uint8_t style_color[UI_STYLES] = {
     0xF1    /* INPUT     white on black */
 };
 
-void ui_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint8_t style) {
+static void s2_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint8_t style) {
     uint8_t i, last, t, first;
     uint16_t n;
     char c;
@@ -105,7 +103,7 @@ static void paint(uint8_t row, uint8_t tile) {
     CopyRamToVram(colr, COLTBL + ((uint16_t)row * 32 + tile) * 8, 8);
 }
 
-void ui_flush(void) {
+static void s2_flush(void) {
     uint16_t n;
     for (n = 0; n < GRID_ROWS * 32; n++) {
         if (!(dirty[n >> 3] & (1 << (n & 7)))) continue;
@@ -114,7 +112,7 @@ void ui_flush(void) {
     }
 }
 
-void ui_cursor(uint8_t col, uint8_t row, uint8_t visible) {
+static void s2_cursor(uint8_t col, uint8_t row, uint8_t visible) {
     cursor_attr[0] = visible ? row * 8 - 1 : 0xD0;       /* 0xD0 ends the list */
     cursor_attr[1] = col * PITCH;
     cursor_attr[2] = 0;
@@ -123,7 +121,7 @@ void ui_cursor(uint8_t col, uint8_t row, uint8_t visible) {
     CopyRamToVram(cursor_attr, SPRATR, 5);
 }
 
-uint8_t ui_open(void) {
+static uint8_t s2_open(void) {
     static const uint8_t underline[8] = {0, 0, 0, 0, 0, 0, 0, 0xF0};
     uint8_t ramp[256];
     uint16_t i;
@@ -140,14 +138,14 @@ uint8_t ui_open(void) {
     memset(cell, ' ', sizeof(cell));
     memset(tile_style, UI_TEXT, sizeof(tile_style));
     memset(dirty, 0, sizeof(dirty));
-    ui_cursor(0, 0, 0);
+    s2_cursor(0, 0, 0);
     *(uint8_t *)0xF3E0 |= 0x40;
     VDPwrite(1, *(uint8_t *)0xF3E0);
     return 1;
 }
 
-void ui_close(void) {
-    ui_cursor(0, 0, 0);
+static void s2_close(void) {
+    s2_cursor(0, 0, 0);
     Screen(0);
     Cls();
 }

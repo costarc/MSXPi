@@ -98,6 +98,16 @@ class Chat(unittest.TestCase):
         self.assertTrue(any('only room' in t for t in texts))
         self.assertTrue(any('Unknown' in t for t in texts))
 
+    def test_width_change_rewraps_history(self):
+        handle_command('say '+'word '*20)
+        narrow=self.chat.rooms[0].next
+        handle_command('start - 70')
+        wide=self.chat.rooms[0]
+        self.assertLess(wide.next,narrow)
+        self.assertEqual(wide.first,0)
+        packet=handle_command('get 0 0')
+        self.assertTrue(all(len(r[2])<=70 for r in rows(packet,70)))
+
     def test_no_session(self):
         handle_command('quit')
         self.assertEqual(handle_command('get 0 0')[4],4)
