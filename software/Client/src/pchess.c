@@ -260,6 +260,61 @@ static void queue_sounds(uint8_t was_over) {
     if(winner) pending_tune=(!matched || (winner==1)==(my_side==0))?tune_win:tune_lose;
 }
 
+/* Chat scrollback, shared by both links: chat_add() is called by the chat
+ * window (the player's own words) and by the TCP/IP link's IRC reader
+ * (what others say); with the MSXPi link the window fetches rows from the
+ * server instead. Rows are 42 characters, the most a 256-pixel line holds. */
+static uint8_t chat_rows,chat_new;
+
+static void chat_push(const char *row,uint8_t priv) {
+    if(chat_rows==CHAT_LINES) {
+        memmove(chat_log[0],chat_log[1],(CHAT_LINES-1)*(CHAT_COLS+1));
+        memmove(chat_private,chat_private+1,CHAT_LINES-1);
+        chat_rows--;
+    }
+    chat_new++;
+    strncpy(chat_log[chat_rows],row,CHAT_COLS);
+    chat_log[chat_rows][CHAT_COLS]=0;
+    chat_private[chat_rows]=priv;
+    chat_rows++;
+}
+
+/* prefix and text wrapped into rows (continuation rows start with two
+ * blanks), the way the server wraps. priv rows are drawn in yellow. */
+static void chat_add(const char *prefix,const char *text,uint8_t priv) {
+    char row[CHAT_COLS+1];
+    uint8_t n,first=1;
+    while(first || *text) {
+        strcpy(row,first?prefix:"  ");
+        n=strlen(row);
+        while(*text && n<CHAT_COLS) row[n++]=*text++;
+        row[n]=0;
+        chat_push(row,priv);
+        first=0;
+    }
+}
+
+/* Fold text to what the font can draw, as the server does: upper case, runs
+ * of blanks become one, other characters it cannot draw become '?'; at most
+ * 100 characters. */
+static void chat_clean(char *s) {
+    char *out=s,*start=s,c;
+    uint8_t space=1;
+    for(;(c=*s)!=0 && out-start<100;s++) {
+        if(c>='a' && c<='z') c-=32;
+        if(c==' ' || c=='\t' || c=='\r' || c=='\n') {
+            if(!space) *out++=' ';
+            space=1;
+            continue;
+        }
+        if(c<' ' || c==127) continue;
+        *out++=glyph(c)?c:'?';
+        space=0;
+    }
+    if(out>start && out[-1]==' ') out--;
+    *out=0;
+}
+
 #include "pchess_rules.c"
 #include "pchess_sha.c"
 #include "pchess_tcp.c"
@@ -297,7 +352,7 @@ parse:
         board[i][j]=reply[8+i*8+j]=='.'?0:reply[8+i*8+j];
     white_turn=reply[5]; my_side=reply[6]; game_over=reply[7];
     matched=reply[242]==1;
-    chat_unread=link_tcp?0:reply[255];
+    chat_unread=reply[255];
     if(chat_unread>chat_seen) pending_tune=tune_chat;
     chat_seen=chat_unread;
     queue_sounds(was_over);
@@ -672,44 +727,14 @@ static uint8_t confirm_leave(void) {
 }
 
 /* Chat: a full-screen text window over the board (TAB or ESC menu, while
- * playing online over the MSXPi link). The server queues what the opponent
- * or channel says and hands it over in blocks of up to five rows
- * ("pchess chat"); the rows are kept here so the window can scroll back.
- * Closing repaints the board from scratch. Rows are 42 characters, the most
- * a 256-pixel line holds. The scrollback is kept while the program runs and
+ * playing online). The MSXPi server queues what the opponent or channel says
+ * and hands it over in blocks of up to five rows ("pchess chat"); the
+ * TCP/IP link has already put it in the scrollback. Closing repaints the
+ * board from scratch. The scrollback is kept while the program runs and
  * starts empty when a new online session begins. */
 #define CHAT_TOP 12
 #define CHAT_INPUT_Y 199
 #define CHAT_MAX_INPUT 100
-static uint8_t chat_rows,chat_new;
-
-static void chat_push(const char *row,uint8_t priv) {
-    if(chat_rows==CHAT_LINES) {
-        memmove(chat_log[0],chat_log[1],(CHAT_LINES-1)*(CHAT_COLS+1));
-        memmove(chat_private,chat_private+1,CHAT_LINES-1);
-        chat_rows--;
-    }
-    chat_new++;
-    strncpy(chat_log[chat_rows],row,CHAT_COLS);
-    chat_log[chat_rows][CHAT_COLS]=0;
-    chat_private[chat_rows]=priv;
-    chat_rows++;
-}
-
-/* The player's own words, wrapped the way the server wraps the others'.
- * Once matched they go to the opponent alone, so they are private. */
-static void chat_own(const char *text) {
-    char row[CHAT_COLS+1];
-    uint8_t n,first=1;
-    while(first || *text) {
-        strcpy(row,first?"YOU: ":"  ");
-        n=strlen(row);
-        while(*text && n<CHAT_COLS) row[n++]=*text++;
-        row[n]=0;
-        chat_push(row,matched);
-        first=0;
-    }
-}
 
 /* One line of text at y, replacing whatever the row held; priv draws it in
  * the yellow font. */
@@ -766,7 +791,6 @@ static void chat_window(void) {
     char input[CHAT_MAX_INPUT+1];
     uint8_t key,len=0;
     uint16_t lastpoll,now;
-    if(link_tcp) {strcpy(status,"CHAT NEEDS THE MSXPI LINK"); return;}
     if(!online) {strcpy(status,"CHAT NEEDS AN ONLINE GAME (3 OR 4)"); return;}
     input[0]=0;
     HMMV(0,0,256,212,PAIR(C_BLACK));
@@ -796,7 +820,7 @@ static void chat_window(void) {
                 strcpy(command,"pchess say ");
                 strcat(command,input);
                 if(exchange(command)) {
-                    chat_own(input);
+                    chat_add("YOU: ",input,matched);
                     len=0; input[0]=0;
                     chat_pull();
                     chat_draw_log();

@@ -8,15 +8,18 @@ and INL I, starts PCHESS, switches LINK to TCPIP in the ESC menu and then:
      msxpi_pchess_irc.IRC client an MSXPi server runs, so this is cross-play,
   3. goes ONLINE: seeks in #msxpi, accepts "Bob"'s invitation, plays, and
      accepts Bob's draw offer from the ESC menu,
-  4. exits to DOS.
+  4. chats: Alice greets the MSX in the room and Bob in the lobby (first in
+     public, then privately), the MSX opens the chat window with TAB, reads
+     them (private rows yellow, public white) and answers,
+  5. exits to DOS.
 
 The IRC server is pchess_irc_fixture on this host; the MSX reaches it at
 192.168.99.1 through the Windows TAP (msxpi-tcpip-setup.ps1). The screen is
 SCREEN 5, so its text is read back from VRAM with PChess's own font.
 
     python pchess_tcpip_openmsx.py
-Needs Windows Python with python-chess, the TAP set up, and port 5000 and
-6667 free. Artefacts go to <repo>/../work/pchess-tcpip-*/.
+Needs Windows Python with python-chess, the TAP set up, and ports 5043
+(MSXPI_TEST_PORT) and 6667 free. Artefacts go to <repo>/../work/pchess-tcpip-*/.
 """
 import os
 import re
@@ -35,9 +38,12 @@ sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
 from msxpi_pchess_irc import IRC  # noqa: E402
 
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
 PCHESS = Path(os.environ.get('PCHESS_COM', SOFTWARE / 'target/pchess.com'))
 IRC_PORT = 6667
+# The test's own MSXPi server port, so a server already running on 5000 (and the
+# emulator that would reach it) cannot be mixed up with it.
+MSXPI_PORT = int(os.environ.get('MSXPI_TEST_PORT', '5043'))
 ROOM = '#pchess-club7'
 
 
@@ -73,6 +79,42 @@ def text_at(vram, x, y, count=41):
     return out.rstrip()
 
 
+WHITE, YELLOW = 15, 11
+CHAT_TOP, CHAT_ROWS = 12, 20
+
+
+def chat_row(vram, y, x=2, count=42):
+    """Text of one chat-window row and the colours of its lit pixels."""
+    out, colours = '', set()
+    for n in range(count):
+        left = x + n * 6
+        if left + 5 > 255:
+            break
+        rows = []
+        for r in range(7):
+            bits = 0
+            for c in range(5):
+                px = left + c
+                byte = vram[(y + r) * 128 + px // 2]
+                value = (byte >> 4) if px % 2 == 0 else (byte & 15)
+                if value in (WHITE, YELLOW):
+                    bits |= 0x10 >> c
+                    colours.add(value)
+            rows.append(bits)
+        out += FONT.get(tuple(rows), '?')
+    return out.rstrip(), colours
+
+
+def chat_lines(vram):
+    """[(text, 'public' | 'private')] for the chat window's non-empty rows."""
+    rows = []
+    for i in range(CHAT_ROWS):
+        text, colours = chat_row(vram, CHAT_TOP + i * 9)
+        if text:
+            rows.append((text, 'private' if colours == {YELLOW} else 'public' if colours == {WHITE} else 'mixed'))
+    return rows
+
+
 def screen_report(vram):
     lines = {'status': text_at(vram, 8, 205)}
     for label, y in (('title', 2), ('turn', 12), ('state', 21)):
@@ -83,7 +125,7 @@ def screen_report(vram):
 
 # --- the MSX's script -----------------------------------------------------
 
-ESC, DOWN, RIGHT = chr(27), chr(31), chr(28)
+ESC, DOWN, RIGHT, TAB = chr(27), chr(31), chr(28), chr(9)
 HW = os.environ.get('HW', 'msxpi')
 # Getting to PCHESS, per hardware profile; the game timeline follows it.
 # msxpi: MSX-DOS 1 from the MSXPi disk, mapper from ram2mb: MSR I, INL I.
@@ -104,10 +146,15 @@ GAME = [
     (76, 'e4\r'), (80, 'e5\r'), (84, 'Nf3\r'), (88, 'Qh5\r'), (92, 'dump:local'),
     # 2. ROOM club7 over IRC: Alice (lower nick) offers and plays white.
     (94, chr(8) * 4), (95, '3'), (97, 'club7\r'), (125, 'dump:room-matched'),
+    # Chat: Alice has greeted the MSX; it reads that (TAB), answers, closes (ESC).
+    (127, TAB), (131, 'dump:chat-room'), (132, 'hi alice\r'), (136, 'dump:chat-room-sent'), (138, ESC),
     (140, 'e5\r'), (165, 'Nc6\r'), (190, 'dump:room-end'),
     # 3. ONLINE lobby: leave the room (Y), seek, accept Bob, play, draw.
     (193, '4y'), (215, '5'), (232, '7'), (255, 'dump:lobby-matched'),
-    (262, 'd5\r'), (285, 'dump:draw-offered'),
+    (262, 'd5\r'),
+    # Bob spoke in the lobby before inviting, and privately once matched.
+    (270, TAB), (274, 'dump:chat-lobby'), (275, 'thanks bob\r'), (279, 'dump:chat-lobby-sent'), (281, ESC),
+    (285, 'dump:draw-offered'),
     (288, ESC), (291, DOWN * 3 + '\r'), (293, 'y'), (300, 'dump:draw-agreed'),
     # 4. EXIT is the last menu row.
     (303, ESC), (306, DOWN * 7 + '\r'), (315, 'quit'),
@@ -120,7 +167,8 @@ def tcl_string(text):
 
 
 def write_script(path, dumps):
-    lines = ['set save_settings_on_exit off', 'set speed 100', 'set power on',
+    lines = ['set save_settings_on_exit off', f'set msxpiserver_port {MSXPI_PORT}',
+             'set speed 100', 'set power on',
              'proc dump {name} {',
              f'    set f [open "{dumps.as_posix()}/$name.vram" w]',
              '    fconfigure $f -translation binary',
@@ -146,7 +194,7 @@ class Player(threading.Thread):
     """An MSXPi server's IRC client, scripted: plays 'moves' in turn, then
     does 'finish' ('resign' or 'draw') once 'after' plies are on the board."""
 
-    def __init__(self, nick, room, moves, finish, after, log):
+    def __init__(self, nick, room, moves, finish, after, log, hello=None, greet=None):
         super().__init__(daemon=True)
         os.environ.update(PCHESS_IRC_HOST='127.0.0.1', PCHESS_IRC_PORT=str(IRC_PORT),
                           PCHESS_IRC_TLS='0', PCHESS_IRC_NICK=nick, PCHESS_IRC_TRACE='0')
@@ -154,6 +202,9 @@ class Player(threading.Thread):
         self.nick, self.moves, self.finish, self.after, self.log = nick, list(moves), finish, after, log
         self.done = False
         self.error = None
+        # hello: said in the lobby channel before inviting; greet: said to the
+        # opponent once the game starts. heard: chat rows received.
+        self.hello, self.greet, self.heard = hello, greet, []
 
     def say(self, text):
         self.log.append(f'{time.strftime("%H:%M:%S")} {self.nick}: {text}')
@@ -164,14 +215,23 @@ class Player(threading.Thread):
         try:
             while not self.done:
                 state = self.irc.poll()
+                self.heard.extend(peer.take_chat()[0])
                 if state['status'] != last:
                     last = state['status']
                     self.say(last)
                 if self.irc.ready and not peer.room and peer.phase == 'lobby':
                     names = peer.recent_players()
                     if names:
+                        if self.hello:
+                            self.say('says in the lobby: ' + self.hello)
+                            peer.say(self.hello)
+                            self.hello = None
                         self.say('offering ' + names[0])
                         peer.offer(names[0])
+                if peer.phase == 'playing' and self.greet:
+                    self.say('says: ' + self.greet)
+                    peer.say(self.greet)
+                    self.greet = None
                 if peer.phase == 'playing' and not peer.pending and peer.result is None:
                     plies = len(peer.board.move_stack)
                     if plies >= self.after and self.finish:
@@ -217,12 +277,12 @@ def main():
     log = []
     irc = Server(('0.0.0.0', IRC_PORT))
     threading.Thread(target=irc.serve_forever, daemon=True).start()
-    alice = Player('Alice', ROOM, ['e4', 'Nf3'], 'resign', 4, log)
-    bob = Player('Bob', None, ['d4'], 'draw', 2, log)
+    alice = Player('Alice', ROOM, ['e4', 'Nf3'], 'resign', 4, log, greet='good luck msx')
+    bob = Player('Bob', None, ['d4'], 'draw', 2, log, hello='hello lobby', greet='good game')
     alice.start()
     bob.start()
 
-    env = dict(os.environ, MSXPI_HOME=str(home))
+    env = dict(os.environ, MSXPI_HOME=str(home), MSXPI_PORT=str(MSXPI_PORT))
     server_log = (work / 'server.log').open('w')
     server = subprocess.Popen([sys.executable, '-u', 'msxpi-server.py'], env=env,
                               cwd=SOFTWARE / 'Server/Python/src', stdout=server_log,
@@ -271,6 +331,21 @@ def main():
           s('draw-offered'))
     check('draw agreed both sides', b.result == 'draw' and s('draw-agreed') and
           'DRAW' in s('draw-agreed')['status'], (b.result, s('draw-agreed')))
+    def window(name):
+        path = dumps / f'{name}.vram'
+        return chat_lines(path.read_bytes()) if path.exists() else None
+
+    greeting = ('ALICE: GOOD LUCK MSX', 'private')
+    check('room chat: greeting shown, private (yellow)', window('chat-room') == [greeting], window('chat-room'))
+    check('room chat: answer shown', window('chat-room-sent') == [greeting, ('YOU: HI ALICE', 'private')],
+          window('chat-room-sent'))
+    check('room chat: alice received the answer', (1, 'MSXONE: HI ALICE') in alice.heard, alice.heard)
+    check('lobby chat: public white then private yellow',
+          window('chat-lobby') == [('BOB: HELLO LOBBY', 'public'), ('BOB: GOOD GAME', 'private')],
+          window('chat-lobby'))
+    check('lobby chat: answer shown',
+          (window('chat-lobby-sent') or [])[-1:] == [('YOU: THANKS BOB', 'private')], window('chat-lobby-sent'))
+    check('lobby chat: bob received the answer', (1, 'MSXONE: THANKS BOB') in bob.heard, bob.heard)
     check('no player errors', not alice.error and not bob.error, (alice.error, bob.error))
     print('artefacts in', work)
     irc.shutdown()
