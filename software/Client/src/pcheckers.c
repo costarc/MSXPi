@@ -684,7 +684,7 @@ static void credits(void) {
     field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
-    credits_line(82,"PCHECKERS V1.1 (C) RCC 2026");
+    credits_line(82,"PCHECKERS V1.0 (C) RCC 2026");
     credits_line(98,"DESIGN: RCC (ARCHITECT)");
     credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
     while(!Inkey());
