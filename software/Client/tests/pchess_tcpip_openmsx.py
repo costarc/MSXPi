@@ -145,12 +145,12 @@ GAME = [
     # 1. LOCAL game, rules on the MSX.
     (76, 'e4\r'), (80, 'e5\r'), (84, 'Nf3\r'), (88, 'Qh5\r'), (92, 'dump:local'),
     # 2. ROOM club7 over IRC: Alice (lower nick) offers and plays white.
-    (94, chr(8) * 4), (95, '3'), (97, 'club7\r'), (125, 'dump:room-matched'),
+    (94, chr(8) * 4), (95, '4'), (97, 'club7\r'), (125, 'dump:room-matched'),
     # Chat: Alice has greeted the MSX; it reads that (TAB), answers, closes (ESC).
     (127, TAB), (131, 'dump:chat-room'), (132, 'hi alice\r'), (136, 'dump:chat-room-sent'), (138, ESC),
     (140, 'e5\r'), (165, 'Nc6\r'), (190, 'dump:room-end'),
     # 3. ONLINE lobby: leave the room (Y), seek, accept Bob, play, draw.
-    (193, '4y'), (215, '5'), (232, '7'), (255, 'dump:lobby-matched'),
+    (193, '5y'), (215, '6'), (232, '8'), (255, 'dump:lobby-matched'),
     (262, 'd5\r'),
     # Bob spoke in the lobby before inviting, and privately once matched.
     (270, TAB), (274, 'dump:chat-lobby'), (275, 'thanks bob\r'), (279, 'dump:chat-lobby-sent'), (281, ESC),

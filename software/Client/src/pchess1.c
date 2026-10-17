@@ -55,7 +55,7 @@ static uint8_t white_turn = 1;
 static uint8_t move_count = 0;
 static char moves[8][8];
 static uint8_t reply[256];
-static char status[48]="1 LOCAL 2 AI";
+static char status[48]="1 LOCAL 2 AI WHT 3 AI BLK";
 static char entry[24];
 /* "pchess say " plus up to 100 characters of chat. */
 static char command[120];
@@ -378,14 +378,16 @@ static void draw_panel(void) {
     text_at(PANEL_COL,6,"MOVES",PANEL_W);
     for (i = 0; i < 8; i++)
         text_at(PANEL_COL,7+i,i<move_count?moves[i]:"",PANEL_W);
-    text_at(0,18," 1 LOCAL  2 AI  3 ROOM 4 ONLINE",32);
-    text_at(0,19," 5 SEEK 6 ASK 7 ACCEPT 8 PLAYERS",32);
+    text_at(0,18," 1 LOCAL 2 AI WHT 3 AI BLK",32);
+    text_at(0,19," 4 ROOM 5 ONLINE 6 SEEK",32);
+    text_at(0,20," 7 ASK 8 ACCEPT 9 PLAYERS",32);
+    text_at(PANEL_COL,16,"ESC MENU",PANEL_W);
     if(chat_unread) {
-        strcpy(command," ESC MENU  TAB CHAT ");
-        command[20]=chat_unread>9?'+':'0'+chat_unread;
-        command[21]=0;
-        text_at(0,20,command,32);
-    } else text_at(0,20," ESC MENU  TAB CHAT",32);
+        strcpy(command,"TAB CHAT ");
+        command[9]=chat_unread>9?'+':'0'+chat_unread;
+        command[10]=0;
+        text_at(PANEL_COL,17,command,PANEL_W);
+    } else text_at(PANEL_COL,17,"TAB CHAT",PANEL_W);
     strcpy(command,room_entry==2?" PEER NICK: ":room_entry?" ROOM NAME: ":" MOVE: ");
     strcat(command,entry);
     strcat(command,"_");
@@ -836,18 +838,18 @@ int main(void) {
                 room_entry=0; entry_len=0; entry[0]=0;
             }
         }
-        else if(!entry_len && !room_entry && online && key>='1' && key<='4' &&
+        else if(!entry_len && !room_entry && online && key>='1' && key<='5' &&
                 !confirm_leave()) {}
-        else if(!entry_len && !room_entry && (key=='1' || key=='2')) {
+        else if(!entry_len && !room_entry && key>='1' && key<='3') {
             online=0; selected_x=255;
-            exchange(key=='1'?"pchess new local":"pchess new ai");
+            exchange(key=='1'?"pchess new local":key=='2'?"pchess new ai":"pchess new ai black");
         }
-        else if(!entry_len && !room_entry && key=='3') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
-        else if(!entry_len && !room_entry && key=='4') {if(exchange("pchess irc")) {online=1; chat_rows=0;}}
-        else if(!entry_len && !room_entry && key=='5') {exchange("pchess seek");}
-        else if(!entry_len && !room_entry && key=='6') {room_entry=2; strcpy(status,"ENTER PEER NICK AND RETURN");}
-        else if(!entry_len && !room_entry && key=='7') {exchange("pchess accept");}
-        else if(!entry_len && !room_entry && key=='8') {players();}
+        else if(!entry_len && !room_entry && key=='4') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
+        else if(!entry_len && !room_entry && key=='5') {if(exchange("pchess irc")) {online=1; chat_rows=0;}}
+        else if(!entry_len && !room_entry && key=='6') {exchange("pchess seek");}
+        else if(!entry_len && !room_entry && key=='7') {room_entry=2; strcpy(status,"ENTER PEER NICK AND RETURN");}
+        else if(!entry_len && !room_entry && key=='8') {exchange("pchess accept");}
+        else if(!entry_len && !room_entry && key=='9') {players();}
         else if(key==0x1e && cursor_y) cursor_y--;
         else if (key == 0x1f && cursor_y < 7) cursor_y++;
         else if (key == 0x1d && cursor_x) cursor_x--;
