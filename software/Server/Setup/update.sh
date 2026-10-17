@@ -121,6 +121,16 @@ if python3 -c "import chess" 2>/dev/null ||
 else
     echo "warn python-chess: pchess off"
 fi
+# certifi: pchess ONLINE (IRC over TLS) imports it.
+if python3 -c "import certifi" 2>/dev/null ||
+   apt_add python3-certifi ||
+   python3 -m pip install -q "certifi>=2023.7.22" >/dev/null 2>&1 ||
+   python3 -m pip install -q --break-system-packages "certifi>=2023.7.22" >/dev/null 2>&1; then
+    python3 -c "import certifi" 2>/dev/null && echo "ok   certifi" ||
+        echo "warn certifi: pchess online off"
+else
+    echo "warn certifi: pchess online off"
+fi
 if [ -x /usr/games/stockfish ] || command -v stockfish >/dev/null 2>&1 ||
    apt_add stockfish; then
     echo "ok   stockfish (pchess AI)"
