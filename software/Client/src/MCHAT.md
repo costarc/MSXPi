@@ -5,9 +5,10 @@ the PChess lobby (PChess game traffic is hidden). `MCHAT.COM` is the MSX1
 build: SCREEN 2, 51 columns. It is about 15 KB, so it leaves most of the TPA
 free.
 
-    mchat [nick]
+    mchat [/1] [nick]
 
-Without a nick the server uses `IRCNICK` from `msxpi.ini`, else `msxNNNN`.
+`/1` forces the MSX1 screen (SCREEN 2) on any machine; today it is the only
+backend, so it changes nothing yet. Without a nick the server uses `IRCNICK` from `msxpi.ini`, else `msxNNNN`.
 `IRCADDR`, `PCHESSIRCPORT`, `IRCTLS`, `IRCACCOUNT` and `IRCPASSWORD` are the
 PChess IRC settings; `MCHATROOM` changes the first room (default `#msxpi`).
 

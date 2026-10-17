@@ -37,7 +37,7 @@ IRC_PORT = int(os.environ.get('MCHAT_IRC_PORT', '6668'))
 
 UP, DOWN, TAB, ESC = chr(30), chr(31), chr(9), chr(27)
 TIMELINE = [
-    (15, 'shot:boot'), (22, 'mchat alice\r'), (30, 'shot:early'), (40, 'dump:start'), (41, 'shot:start'),
+    (15, 'shot:boot'), (22, 'mchat /1 alice\r'), (30, 'shot:early'), (40, 'dump:start'), (41, 'shot:start'),
     (42, 'hello bob\r'), (50, '/join #second\r'), (60, 'dump:second'),
     (62, 'only here\r'), (68, TAB), (76, 'dump:back'),
     (78, UP + UP), (86, 'dump:scrolled'),

@@ -8,7 +8,7 @@
  * display backend can be replaced (MSX2 modes, another screen mode) without
  * touching this file.
  *
- *   MCHAT [nick]       ESC quits (disconnects)
+ *   MCHAT [/1] [nick]  ESC quits (disconnects); /1 = MSX1 screen on any machine
  *   TAB, LEFT/RIGHT    next/previous room       UP/DOWN  read older/newer
  *   HOME               back to the latest       /help    commands
  *
@@ -346,23 +346,58 @@ static void scroll_log(int8_t dir) {
     cache_fill();
 }
 
-static void read_nick(char *dest) {
+/* Command line: "[/1] [nick]". /1 forces the MSX1 screen on any machine. */
+static uint8_t force_msx1;
+
+static void read_args(char *dest) {
     uint8_t len = *(uint8_t *)0x80, n = 0, i = 0;
     char *s = (char *)0x81, c;
-    while (i < len && s[i] == ' ') i++;
-    for (; i < len && n < 15; i++) {
-        c = s[i];
-        if (c == ' ' || c < 33 || c > 126) break;
-        dest[n++] = c;
+    dest[0] = 0;
+    force_msx1 = 0;
+    while (i < len) {
+        while (i < len && s[i] == ' ') i++;
+        if (i + 1 < len && s[i] == '/' && (s[i + 1] == '1')) {
+            force_msx1 = 1;
+            i += 2;
+            continue;
+        }
+        for (n = 0; i < len && n < 15; i++) {
+            c = s[i];
+            if (c == ' ' || c < 33 || c > 126) break;
+            dest[n++] = c;
+        }
+        dest[n] = 0;
+        break;
     }
-    dest[n] = 0;
+}
+
+/* MSXVER of the main ROM: 0 MSX1, 1 MSX2, 2 MSX2+, 3 turbo R. The BIOS is
+ * read through RDSLT by way of CALSLT, because page 0 is RAM under DOS. */
+static uint8_t msx_version(void) __naked {
+__asm
+    push ix
+    push iy
+    ld a,(#0xFCC1)
+    ld iy,(#0xFCC0)
+    ld ix,#0x000C
+    ld hl,#0x002D
+    call #0x001C
+    ei
+    pop iy
+    pop ix
+    ld l,a
+    ret
+__endasm;
 }
 
 int main(void) {
     char nick[16];
     uint8_t key;
     uint16_t now, lastpoll;
-    read_nick(nick);
+    read_args(nick);
+    /* One backend exists so far (SCREEN 2). An MSX2 backend is chosen here:
+     * use it when msx_version() != 0 and !force_msx1. */
+    (void)msx_version;
     /* No C runtime start-up here: nothing is zeroed for us. */
     conn = nrooms = cur = utotal = ushown = ilen = 0;
     meta_ver = 0; meta_stale = 1; live = 1;
