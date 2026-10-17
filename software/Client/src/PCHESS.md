@@ -44,12 +44,17 @@ to **C:**, then run `PCHESS`.
 
 Memory is tight. MSX-DOS refuses a program that reaches the top of the TPA
 (`Program too big to fit in memory`), and that top is only 0xD606 on the
-Panasonic_FS-A1WSX and 0xCA06 on one real MSX. The file size is the program
-end (the data areas are part of it), now 50,304 bytes, ending at 0xC57F.
-`make.bat` builds PChess with `--max-allocs-per-node 30000`, which makes it
-about 2 KB smaller; keep it. Check a new build against the lowest top you
-support, leaving at least 768 bytes for the stack (the TCP/IP link refuses to
-start with less: `LOW MEMORY`). `MEMTOP.COM` prints a machine's TPA top.
+Panasonic_FS-A1WSX, 0xCA06 on a Canon V-25 and 0xC806 on that Canon once the
+TCP/IP driver (`INL I`) is loaded. The file size is the program end (the data
+areas are part of it): 49,764 bytes now, ending at 0xC363. `make.bat` builds
+PChess with `--max-allocs-per-node 100000`, which makes it about 2.4 KB smaller
+than the default but takes about 3 minutes; keep it. The TCP/IP link refuses to
+start with less than 768 bytes between the program end and the top
+(`LOW MEMORY: TPA xxxx END yyyy`, the two addresses compared), so a build must
+leave that on the lowest top you support. `MEMTOP.COM` prints a machine's TPA
+top: run it after `INL I`, not before. `Client\tests\pchess_memory_test.py`
+checks a build against the tops measured so far; add a machine to it when you
+measure one.
 
 Files A-H are labelled above the board and ranks 1-8 to its left; they
 follow the board when it is rotated. The PSG beeps twice when the opponent
