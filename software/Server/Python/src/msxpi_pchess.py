@@ -27,6 +27,7 @@ import chess
 import chess.engine
 
 from msxpi_pchess_irc import CHAT_QUEUE, CHAT_ROW, chat_rows, chat_text
+from msxpi_pcheckers_irc import CheckersPeer
 
 
 CHECKERS_ACTIONS = ('cmove', 'cdraw', 'cresign', 'creset', 'cpoll')
@@ -452,6 +453,11 @@ def rooms_mode(config):
     return 'irc' if mode == 'irc' else 'relay'
 
 
+CHECKERS_IRC_COMMANDS = ('cpoll','cmove','cdraw','cresign','creset','cseek','coffer','caccept',
+                         'cplayers','say','chat')
+CHESS_IRC_COMMANDS = ('seek','offer','accept','poll','move','players','draw','resign')
+
+
 def handle_command(command, irc_config=None, room_config=None, engine_config=None):
     """Return a fixed 256-byte state packet, including user-visible failures."""
     global _session, _remote, _irc, _use_irc, _engine_config
@@ -463,14 +469,59 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             raise ValueError('new local / new ai / join ROOM')
         say_text = command.partition(' ')[2].strip() if args[0] == 'say' else ''
         irc_room = args[0] == 'join' and len(args) == 2 and rooms_mode(room_config) == 'irc'
-        if args[0] in ('irc','new') or irc_room:
+        # PCheckers: cjoin ROOM is a relay room or, with PCHESSROOMS=irc, the
+        # same #pchess-<room> channel PChess uses; circ is the shared lobby.
+        ck_irc_room = args[0] == 'cjoin' and len(args) == 2 and rooms_mode(room_config) == 'irc'
+        ck_lobby = args[0] == 'circ'
+        if args[0] in ('irc','new','circ') or irc_room or ck_irc_room:
             stop_relay()
-        if args[0] in ('irc','join','cjoin') or (args[0]=='new' and args[1:2]!=['ai']):
+        if args[0] in ('irc','join','cjoin','circ') or (args[0]=='new' and args[1:2]!=['ai']):
             stop_engine()
         # Not an elif: 'join' also matches the line above, which left this
         # unreachable and the relay never started (connection refused).
-        if (args[0] == 'join' and not irc_room) or args[0] == 'cjoin':
+        if (args[0] == 'join' and not irc_room) or (args[0] == 'cjoin' and not ck_irc_room):
             start_relay(room_config)
+        if ck_irc_room or ck_lobby:
+            channel = room_channel(args[1]) if ck_irc_room else None
+            if (_use_irc and _irc and isinstance(_irc.peer, CheckersPeer) and _irc.peer.room == channel
+                    and _irc.ready and not _irc.error):
+                # The same room again (a rematch) just says HELLO again.
+                _irc.poll()
+                if channel: _irc.peer.announce_room()
+                _irc.poll()
+                return checkers_packet(_irc.peer.snapshot())
+            from msxpi_pchess_irc import IRC
+            if _irc: _irc.close()
+            _irc = IRC(irc_config, channel, CheckersPeer)
+            _use_irc = True
+            _irc.poll()
+            return checkers_packet(_irc.peer.snapshot())
+        ck_peer = _irc.peer if _use_irc and _irc and isinstance(_irc.peer, CheckersPeer) else None
+        if ck_peer and args[0] in CHESS_IRC_COMMANDS:
+            raise ValueError('Not a chess game')
+        if ck_peer and args[0] in CHECKERS_IRC_COMMANDS:
+            _irc.poll()
+            if args[0] != 'cpoll' and not _irc.ready:
+                raise ValueError('Lobby not ready; wait')
+            if args[0] == 'cplayers':
+                if ck_peer.room: raise ValueError('In a room; no lobby')
+                return players_packet(ck_peer.recent_players())
+            if args[0] == 'chat':
+                return chat_packet(*ck_peer.take_chat(CHAT_FETCH))
+            since = None
+            if args[0] == 'cseek': ck_peer.seek()
+            elif args[0] == 'coffer': ck_peer.offer(args[1])
+            elif args[0] == 'caccept': ck_peer.accept()
+            elif args[0] == 'cmove' and len(args) == 3: ck_peer.cmove(int(args[1]), args[2])
+            elif args[0] == 'cdraw': ck_peer.draw()
+            elif args[0] == 'cresign': ck_peer.resign()
+            elif args[0] == 'creset': ck_peer.reset()
+            elif args[0] == 'say': ck_peer.say(say_text)
+            elif args[0] == 'cpoll': since = int(args[1]) if len(args) > 1 else None
+            _irc.poll()
+            return checkers_packet(ck_peer.snapshot(since))
+        if _use_irc and _irc and not ck_peer and args[0] in CHECKERS_IRC_COMMANDS and args[0] not in ('say', 'chat'):
+            raise ValueError('Not a checkers game')
         if irc_room:
             channel = room_channel(args[1])
             # Joining the same room again (a rematch) just says HELLO again.

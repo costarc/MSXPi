@@ -325,7 +325,7 @@ def tls_context():
 
 
 class IRC:
-    def __init__(self,config=None,room=None):
+    def __init__(self,config=None,room=None,peer_class=None):
         config=config or {}
         self.nick=os.environ.get('PCHESS_IRC_NICK') or config.get('IRCNICK') or 'pch'+secrets.token_hex(2)
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',self.nick): raise ValueError('Invalid lobby nickname (IRCNICK)')
@@ -361,7 +361,7 @@ class IRC:
         self.closed=False
         self.ready=False
         self.started=time.monotonic()
-        self.peer=Peer(self.nick,self.message,room)
+        self.peer=(peer_class or Peer)(self.nick,self.message,room)
         self.peer.status='ACCESSING LOBBY'
         if self.account: self.line('CAP REQ :sasl')
         self.line(f'NICK {self.nick}')
