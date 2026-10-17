@@ -29,7 +29,7 @@ sys.path.insert(0, str(SOFTWARE / 'Server/Python/src'))
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 sys.path.insert(0, str(HERE))
 from pchess_irc_fixture import Server  # noqa: E402
-from pchess_tcpip_openmsx import text_at  # noqa: E402
+from pchess_tcpip_openmsx import FONT, text_at  # noqa: E402
 
 OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6/openmsx.exe'))
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
@@ -41,11 +41,14 @@ CHAT_TOP, CHAT_ROWS = 12, 20
 TAB = '\\t'
 # (emulated seconds, keys) per player, after the common boot to DOS (28 s).
 KEYS = (
-    [(38, '4'), (44, '5'), (48, '6'), (50, 'bob\\r'), (66, TAB), (68, 'hello bob\\r'), (92, 'dump:chat'),
-     (96, '\\x1b'), (100, 'dump:closed'), (102, 'quit')],
-    # Bob lets the line arrive while he is still looking at the board.
-    [(38, '4'), (57, '7'), (76, 'dump:unread'), (80, TAB), (84, 'hi alice!\\r'), (92, 'dump:chat'),
-     (96, '\\x1b'), (100, 'dump:closed'), (102, 'quit')],
+    # Alice speaks in the lobby first (public), then gets matched with Bob. Both
+    # close the window at 98 and open it again at 100: the history stays.
+    [(38, '4'), (44, TAB), (46, 'anyone here\\r'), (49, '\\x1b'), (51, '5'), (55, '6'),
+     (57, 'bob\\r'), (68, TAB), (70, 'hello bob\\r'), (94, 'dump:chat'),
+     (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
+    # Bob lets the lines arrive while he is still looking at the board.
+    [(38, '4'), (64, '7'), (78, 'dump:unread'), (82, TAB), (86, 'hi alice!\\r'), (94, 'dump:chat'),
+     (98, '\\x1b'), (100, TAB), (104, 'dump:reopened'), (106, '\\x1b'), (110, 'dump:closed'), (112, 'quit')],
 )
 
 
@@ -70,8 +73,39 @@ def tcl_script(index, work):
     return '\n'.join(lines) + '\n'
 
 
+WHITE, YELLOW = 15, 11
+
+
+def row_text(vram, y, x=2, count=42):
+    """Text of one chat row and the set of colours its lit pixels use."""
+    out, colours = '', set()
+    for n in range(count):
+        left = x + n * 6
+        if left + 5 > 255:
+            break
+        rows = []
+        for r in range(7):
+            bits = 0
+            for c in range(5):
+                px = left + c
+                byte = vram[(y + r) * 128 + px // 2]
+                value = (byte >> 4) if px % 2 == 0 else (byte & 15)
+                if value in (WHITE, YELLOW):
+                    bits |= 0x10 >> c
+                    colours.add(value)
+            rows.append(bits)
+        out += FONT.get(tuple(rows), '?')
+    return out.rstrip(), colours
+
+
 def chat_lines(vram):
-    return [text_at(vram, 2, CHAT_TOP + i * 9, 42) for i in range(CHAT_ROWS)]
+    """[(text, 'public' | 'private')] for the rows that are not empty."""
+    rows = []
+    for i in range(CHAT_ROWS):
+        text, colours = row_text(vram, CHAT_TOP + i * 9)
+        if text:
+            rows.append((text, 'private' if colours == {YELLOW} else 'public' if colours == {WHITE} else 'mixed'))
+    return rows
 
 
 def main():
@@ -123,17 +157,21 @@ def main():
         shown = []
         for i in range(2):
             vram = (work / f'client-{i}-chat.vram').read_bytes()
-            rows = [r for r in chat_lines(vram) if r]
+            rows = chat_lines(vram)
             shown.append(rows)
             print(f'client {i} chat window: {rows}', flush=True)
             check(text_at(vram, 2, 1, 24) == 'CHAT - ESC OR TAB CLOSES', f'client {i} shows the chat title')
-        check('YOU: HELLO BOB' in shown[0], 'alice sees her own line')
-        check('BOB: HI ALICE!' in shown[0], 'alice receives bob\'s answer')
-        check('ALICE: HELLO BOB' in shown[1], 'bob receives alice\'s line')
-        check('YOU: HI ALICE!' in shown[1], 'bob sees his own line')
+        # Public lobby talk is white; once matched, everything is private and yellow.
+        check(shown[0] == [('YOU: ANYONE HERE', 'public'), ('YOU: HELLO BOB', 'private'),
+                           ('BOB: HI ALICE!', 'private')], 'alice sees public white and private yellow rows')
+        check(shown[1] == [('ALICE: ANYONE HERE', 'public'), ('ALICE: HELLO BOB', 'private'),
+                           ('YOU: HI ALICE!', 'private')], 'bob sees public white and private yellow rows')
 
+        for i in range(2):
+            again = chat_lines((work / f'client-{i}-reopened.vram').read_bytes())
+            check(again == shown[i], f'client {i} history kept when the window is reopened: {again}')
         unread = (work / 'client-1-unread.vram').read_bytes()
-        check(text_at(unread, 206, 197, 8) == 'CHAT 1', "bob's panel shows the unread chat count")
+        check(text_at(unread, 206, 197, 8) == 'CHAT 2', "bob's panel shows the unread chat count")
         for i in range(2):
             vram = (work / f'client-{i}-closed.vram').read_bytes()
             check(text_at(vram, 206, 197, 8) == 'ESC MENU', f'client {i} unread note cleared')
@@ -145,7 +183,9 @@ def main():
         private = [(s, t, m) for s, t, m in fixture.transcript if not m.startswith('PCH1 ')]
         check(('alice', 'bob', 'HELLO BOB') in private, 'alice -> bob went privately')
         check(('bob', 'alice', 'HI ALICE!') in private, 'bob -> alice went privately')
-        check(all(t != '#msxpi' for _, t, m in private), 'no chat on the public channel')
+        check(('alice', '#msxpi', 'ANYONE HERE') in private, 'the lobby line went to the public channel')
+        check(all(m == 'ANYONE HERE' for _, t, m in private if t == '#msxpi'),
+              'nothing else was said on the public channel')
     finally:
         for proc in reversed(processes):
             if proc.poll() is None:

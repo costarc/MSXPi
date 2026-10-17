@@ -198,7 +198,7 @@ class Protocol(unittest.TestCase):
         self.b.chat_in('Alice','Bob','hi there')
         self.assertEqual(self.b.snapshot()['chat_unread'],1)
         rows,left=self.b.take_chat()
-        self.assertEqual((rows,left),(['ALICE: HI THERE'],0))
+        self.assertEqual((rows,left),([(1,'ALICE: HI THERE')],0))
         self.assertEqual(self.b.snapshot()['chat_unread'],0)
 
     def test_chat_from_strangers_and_self_is_ignored(self):
@@ -208,7 +208,7 @@ class Protocol(unittest.TestCase):
         self.b.chat_in('Bob','#msxpi','echo')               # own message
         self.assertEqual(self.b.take_chat(),([],0))
         self.b.chat_in('Mallory','#msxpi','lobby talk')     # the lobby channel is open
-        self.assertEqual(self.b.take_chat()[0],['MALLORY: LOBBY TALK'])
+        self.assertEqual(self.b.take_chat()[0],[(0,'MALLORY: LOBBY TALK')])
 
     def test_chat_rows_are_taken_five_at_a_time_and_oldest_dropped(self):
         for n in range(8): self.b.chat_in('Alice','#msxpi','LINE %d'%n)
@@ -415,10 +415,10 @@ class Rooms(unittest.TestCase):
             wait_for(lambda: a.peer.phase==z.peer.phase=='playing')
             a.peer.say('gl hf')
             wait_for(lambda: z.peer.chat)
-            self.assertEqual(z.peer.take_chat(),(['AMY: GL HF'],0))
+            self.assertEqual(z.peer.take_chat(),([(1,'AMY: GL HF')],0))
             z.peer.say('thanks')
             wait_for(lambda: a.peer.chat)
-            self.assertEqual(a.peer.take_chat(),(['ZED: THANKS'],0))
+            self.assertEqual(a.peer.take_chat(),([(1,'ZED: THANKS')],0))
             a.peer.move('d4')
             wait_for(lambda: len(z.peer.history)==1 and not a.peer.pending)
         finally:

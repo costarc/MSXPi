@@ -156,12 +156,13 @@ class Level(unittest.TestCase):
         self.assertEqual(p.packet(dict(state,chat_unread=900))[255],255)
         self.assertEqual(p.packet(dict(state,chat_unread=3))[243:255],b'Longnickname')
     def test_chat_packet(self):
-        data=p.chat_packet(['ALICE: HI','  MORE'],4)
+        data=p.chat_packet([(1,'ALICE: HI'),(0,'  MORE')],4)
         self.assertEqual((len(data),data[4],data[5],data[240],data[241]),(256,0,ord('C'),2,4))
         self.assertEqual(data[8:17],b'ALICE: HI')
         self.assertEqual(data[17],0)
         self.assertEqual(data[52:58],b'  MORE')
-        full=p.chat_packet(['X'*42]*9,300)
+        self.assertEqual((data[8+43],data[52+43],data[96+43]),(1,0,0))   # private flags
+        full=p.chat_packet([(0,'X'*42)]*9,300)
         self.assertEqual((full[240],full[241]),(5,255))
         self.assertEqual(full[8:50],b'X'*42)
     def test_level_packet(self):
@@ -186,7 +187,7 @@ class RelayChat(unittest.TestCase):
         self.assertEqual(r['chat_unread'],0)
         self.assertEqual(self.req(self.b,action='poll')['chat_unread'],1)
         got=self.req(self.b,action='chat')
-        self.assertEqual((got['chat_rows'],got['chat_unread']),(['WHITE: HELLO, BLACK'],0))
+        self.assertEqual((got['chat_rows'],got['chat_unread']),([(1,'WHITE: HELLO, BLACK')],0))
         self.assertEqual(self.req(self.w,action='chat')['chat_rows'],[])
         self.assertEqual(self.req(self.b,action='poll')['chat_unread'],0)
     def test_say_needs_an_opponent_and_text(self):
@@ -213,10 +214,11 @@ class RelayChat(unittest.TestCase):
             data=p.handle_command('chat',room_config=config)
             self.assertEqual((data[5],data[240],data[241]),(ord('C'),1,0))
             self.assertEqual(data[8:18],b'BLACK: YO\0')
+            self.assertEqual(data[8+43],1)
             data=p.handle_command('say  hi  there',room_config=config)
             self.assertEqual(data[:5],b'PCH1\x01')
             chat=p._games.games['room-chatroom']['chat']
-            self.assertEqual(list(chat[other['token']]),['WHITE: HI THERE'])
+            self.assertEqual(list(chat[other['token']]),[(1,'WHITE: HI THERE')])
             self.assertEqual(list(chat[white['token']]),[])
         finally:
             p.stop_relay()

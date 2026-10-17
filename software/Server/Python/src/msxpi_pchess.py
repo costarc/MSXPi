@@ -122,7 +122,7 @@ class Games:
             rows = chat_rows('WHITE' if side else 'BLACK', text)
             for other in game['players']:
                 if other != token:
-                    game['chat'][other].extend(rows)
+                    game['chat'][other].extend((1, row) for row in rows)
         elif action == 'chat':
             queued = game['chat'][token]
             result = self.snapshot(game, token)
@@ -521,15 +521,17 @@ def packet(state):
 
 # The chat fetch: byte 4 is 0 (no board) and byte 5 is 'C'. Up to five rows
 # of 42 characters in 44-byte slots from byte 8 (so byte 72 is chat text, not
-# a status), row count in byte 240 and rows still unread in byte 241.
+# a status; byte 43 of a slot is 1 for a private row), row count in byte 240
+# and rows still unread in byte 241. Rows are (private, text).
 CHAT_FETCH=5
 def chat_packet(rows,unread):
     data = bytearray(256)
     data[:4] = b'PCH1'
     data[5] = ord('C')
-    for i,row in enumerate(rows[:CHAT_FETCH]):
+    for i,(private,row) in enumerate(rows[:CHAT_FETCH]):
         text = row[:CHAT_ROW].encode('ascii','replace')
         data[8+i*44:8+i*44+len(text)] = text
+        data[8+i*44+43] = 1 if private else 0
     data[240] = min(len(rows),CHAT_FETCH)
     data[241] = min(unread,255)
     return bytes(data)

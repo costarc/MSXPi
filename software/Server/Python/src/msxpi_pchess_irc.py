@@ -160,7 +160,8 @@ class Peer:
         private=fold(target)==fold(self.nick) and self.peer and fold(sender)==fold(self.peer)
         if not private and fold(target)!=fold(self.channel()): return
         text=chat_text(text)
-        if text: self.chat.extend(chat_rows(sender,text))
+        # Rows are (private, text): the MSX draws private ones in another colour.
+        if text: self.chat.extend((int(bool(private)),row) for row in chat_rows(sender,text))
 
     def say(self,text):
         text=chat_text(text)

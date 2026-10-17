@@ -104,9 +104,22 @@ static const uint8_t font[GLYPHS][FONT_H] = {
 /* 42 glyphs fit on one 252-pixel cache row; the rest go on the next. */
 #define GLYPH_X(g) (((g)%42)*FONT_W)
 #define GLYPH_Y(g) (FONT_Y+((g)/42)*(FONT_H+1))
+/* A yellow copy of the font (private chat rows) sits 16 lines further down. */
+#define PRIVATE_FONT 16
 static uint8_t field_x[32],field_y[32],field_count;
-/* The longest line is the 47-character status. */
-static char field_text[32][48];
+/* The longest line is the 47-character status at (8,205), which has its own
+ * buffer; every other line (the longest are the credits) is at most 28
+ * characters. PChess is close to the MSX-DOS memory limit, so the fields are
+ * not 48 bytes each. */
+#define FIELD_TEXT 29
+#define STATUS_X 8
+#define STATUS_Y 205
+static char field_text[32][FIELD_TEXT];
+static char status_text[48];
+#define CHAT_LINES 20
+#define CHAT_COLS 42
+static char chat_log[CHAT_LINES][CHAT_COLS+1];
+static uint8_t chat_private[CHAT_LINES];   /* 1: said privately, drawn yellow */
 static uint8_t glyph(char ch) {
     if(ch>='a' && ch<='z') ch-=32;
     if(ch>='0' && ch<='9') return 1+ch-'0';
@@ -127,25 +140,27 @@ static uint8_t glyph(char ch) {
     return 0;
 }
 static void text_at(uint8_t x,uint8_t y,const char *s) {
-    uint8_t f,n=0,oldlen,newlen,g; char ch;
+    uint8_t f,n=0,oldlen,newlen,cap,g; char ch,*ft;
     for(f=0;f<field_count;f++) if(field_x[f]==x && field_y[f]==y) break;
+    if(x==STATUS_X && y==STATUS_Y) {ft=status_text; cap=47;}
+    else {ft=field_text[f<32?f:31]; cap=FIELD_TEXT-1;}
     if(f==field_count) {
         if(field_count==32) return;
-        field_count++; field_x[f]=x; field_y[f]=y; field_text[f][0]=0;
+        field_count++; field_x[f]=x; field_y[f]=y; ft[0]=0;
     }
-    oldlen=strlen(field_text[f]); newlen=strlen(s);
-    if(newlen>47) newlen=47;
+    oldlen=strlen(ft); newlen=strlen(s);
+    if(newlen>cap) newlen=cap;
     while(n<oldlen || n<newlen) {
         if((uint16_t)x+n*FONT_W+5>255) break;
         ch=n<newlen?s[n]:' ';
-        if(n>=oldlen || field_text[f][n]!=ch) {
+        if(n>=oldlen || ft[n]!=ch) {
             g=glyph(ch);
             HMMM(GLYPH_X(g),GLYPH_Y(g),x+n*FONT_W,y,FONT_W,FONT_H);
         }
-        field_text[f][n]=ch;
+        ft[n]=ch;
         n++;
     }
-    field_text[f][newlen<n?newlen:n]=0;
+    ft[newlen<n?newlen:n]=0;
 }
 
 static char board[8][8] = {
@@ -336,16 +351,19 @@ static void piece_row(uint8_t *px,uint8_t p,int8_t r,uint8_t bg,uint8_t white) {
 
 /* Glyph cache on page 1, written once at startup. */
 static void cache_font(void) {
-    uint8_t i,r,c,bits,pixels[FONT_W/2];
-    for(i=0;i<GLYPHS;i++)
-        for(r=0;r<FONT_H;r++) {
-            bits=font[i][r];
-            for(c=0;c<FONT_W/2;c++) {
-                pixels[c]=((bits&0x10)?C_WHITE<<4:C_BLACK<<4)|((bits&0x08)?C_WHITE:C_BLACK);
-                bits<<=2;
+    uint8_t i,r,c,bits,pixels[FONT_W/2],set,fg;
+    for(set=0;set<2;set++) {
+        fg=set?C_YELLOW:C_WHITE;
+        for(i=0;i<GLYPHS;i++)
+            for(r=0;r<FONT_H;r++) {
+                bits=font[i][r];
+                for(c=0;c<FONT_W/2;c++) {
+                    pixels[c]=((bits&0x10)?fg<<4:C_BLACK<<4)|((bits&0x08)?fg:C_BLACK);
+                    bits<<=2;
+                }
+                CopyRamToVram(pixels,VADDR(GLYPH_X(i),GLYPH_Y(i)+r+set*PRIVATE_FONT),FONT_W/2);
             }
-            CopyRamToVram(pixels,VADDR(GLYPH_X(i),GLYPH_Y(i)+r),FONT_W/2);
-        }
+    }
 }
 
 /* Build tiles once on the hidden VRAM page. HMMM is Fusion-C's assembly
@@ -479,7 +497,7 @@ static void credits(void) {
     field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
-    credits_line(82,"PCHESS V1.0.1 (C) RCC 2026");
+    credits_line(82,"PCHESS V1.1 (C) RCC 2026");
     credits_line(98,"DESIGN: RCC (ARCHITECT)");
     credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
     while(!Inkey());
@@ -489,8 +507,8 @@ static void credits(void) {
  * msxpi.ini through "pchess level N"), 1 rooms on the MSXPi relay or IRC
  * ("pchess rooms X", also saved), 2 link MSXPI or TCPIP (Return or ESC applies it; for this run
  * only; every start is MSXPI), 3 offer (or accept) a draw, 4 resign, each
- * after a Y/N, 5 rotate board, 6 credits, 7 chat (also the TAB key; menu()
- * returns 2 and main() opens it), 8 exit to DOS. The AI answers a
+ * after a Y/N, 5 rotate board, 6 chat (also the TAB key; menu()
+ * returns 2 and main() opens it), 7 credits, 8 exit to DOS. The AI answers a
  * draw offer at once; a human opponent accepts by offering too. ESC
  * resumes the game. Add rows by extending menu_rows and the switch on
  * Return. */
@@ -506,7 +524,7 @@ static void popup_close(void) {
     memset(markers,255,sizeof(markers));
 }
 static const char * const menu_rows[]={"AI LEVEL","ROOMS","LINK","OFFER DRAW","RESIGN",
-                                 "ROTATE BOARD","CREDITS","CHAT","EXIT"};
+                                 "ROTATE BOARD","CHAT","CREDITS","EXIT"};
 #define MENU_ROWS 9
 #define MENU_H 111
 /* Switch the link: every game and connection of the old one ends. */
@@ -577,8 +595,8 @@ static uint8_t menu(void) {
                 break;
             }
             if(row==5) {user_rotate^=1; set_flip(); break;}
-            if(row==6) {credits(); break;}
-            if(row==7) {quit=2; break;}
+            if(row==6) {quit=2; break;}
+            if(row==7) {credits(); break;}
             if(row==8) {quit=1; break;}
             if(row==2) {
                 if(tcp!=link_tcp) set_link(tcp);
@@ -658,27 +676,28 @@ static uint8_t confirm_leave(void) {
  * or channel says and hands it over in blocks of up to five rows
  * ("pchess chat"); the rows are kept here so the window can scroll back.
  * Closing repaints the board from scratch. Rows are 42 characters, the most
- * a 256-pixel line holds. */
-#define CHAT_LINES 20
-#define CHAT_COLS 42
+ * a 256-pixel line holds. The scrollback is kept while the program runs and
+ * starts empty when a new online session begins. */
 #define CHAT_TOP 12
 #define CHAT_INPUT_Y 199
 #define CHAT_MAX_INPUT 100
-static char chat_log[CHAT_LINES][CHAT_COLS+1];
 static uint8_t chat_rows,chat_new;
 
-static void chat_push(const char *row) {
+static void chat_push(const char *row,uint8_t priv) {
     if(chat_rows==CHAT_LINES) {
         memmove(chat_log[0],chat_log[1],(CHAT_LINES-1)*(CHAT_COLS+1));
+        memmove(chat_private,chat_private+1,CHAT_LINES-1);
         chat_rows--;
     }
     chat_new++;
     strncpy(chat_log[chat_rows],row,CHAT_COLS);
     chat_log[chat_rows][CHAT_COLS]=0;
+    chat_private[chat_rows]=priv;
     chat_rows++;
 }
 
-/* The player's own words, wrapped the way the server wraps the others'. */
+/* The player's own words, wrapped the way the server wraps the others'.
+ * Once matched they go to the opponent alone, so they are private. */
 static void chat_own(const char *text) {
     char row[CHAT_COLS+1];
     uint8_t n,first=1;
@@ -687,24 +706,25 @@ static void chat_own(const char *text) {
         n=strlen(row);
         while(*text && n<CHAT_COLS) row[n++]=*text++;
         row[n]=0;
-        chat_push(row);
+        chat_push(row,matched);
         first=0;
     }
 }
 
-/* One line of text at y, replacing whatever the row held. */
-static void chat_line(uint8_t y,const char *s) {
+/* One line of text at y, replacing whatever the row held; priv draws it in
+ * the yellow font. */
+static void chat_line(uint8_t y,const char *s,uint8_t priv) {
     uint8_t n,g;
     solid(0,y,256,FONT_H+1,C_BLACK);
     for(n=0;s[n] && n<CHAT_COLS;n++) {
         g=glyph(s[n]);
-        HMMM(GLYPH_X(g),GLYPH_Y(g),2+n*FONT_W,y,FONT_W,FONT_H);
+        HMMM(GLYPH_X(g),GLYPH_Y(g)+(priv?PRIVATE_FONT:0),2+n*FONT_W,y,FONT_W,FONT_H);
     }
 }
 
 static void chat_draw_log(void) {
     uint8_t i;
-    for(i=0;i<CHAT_LINES;i++) chat_line(CHAT_TOP+i*9,i<chat_rows?chat_log[i]:"");
+    for(i=0;i<CHAT_LINES;i++) chat_line(CHAT_TOP+i*9,i<chat_rows?chat_log[i]:"",i<chat_rows && chat_private[i]);
 }
 
 static void chat_draw_input(const char *input,uint8_t len) {
@@ -713,7 +733,7 @@ static void chat_draw_input(const char *input,uint8_t len) {
     strcpy(line,"> ");
     memcpy(line+2,input+len-shown,shown);
     line[2+shown]='_'; line[3+shown]=0;
-    chat_line(CHAT_INPUT_Y,line);
+    chat_line(CHAT_INPUT_Y,line,0);
 }
 
 /* Fetch what the server holds; false when the link failed. */
@@ -724,7 +744,7 @@ static uint8_t chat_pull(void) {
         if(!exchange("pchess chat") || reply[5]!='C') return 0;
         for(i=0;i<reply[240] && i<5;i++) {
             memcpy(row,reply+8+i*44,CHAT_COLS); row[CHAT_COLS]=0;
-            chat_push(row);
+            chat_push(row,reply[8+i*44+CHAT_COLS+1]);
         }
         chat_unread=reply[241]; chat_seen=chat_unread;
     } while(reply[241] && ++rounds<4);
@@ -750,7 +770,7 @@ static void chat_window(void) {
     if(!online) {strcpy(status,"CHAT NEEDS AN ONLINE GAME (3 OR 4)"); return;}
     input[0]=0;
     HMMV(0,0,256,212,PAIR(C_BLACK));
-    chat_line(1,"CHAT - ESC OR TAB CLOSES");
+    chat_line(1,"CHAT - ESC OR TAB CLOSES",0);
     solid(0,9,256,1,C_YELLOW);
     solid(0,CHAT_INPUT_Y-3,256,1,C_YELLOW);
     chat_pull();
@@ -780,8 +800,8 @@ static void chat_window(void) {
                     len=0; input[0]=0;
                     chat_pull();
                     chat_draw_log();
-                    chat_line(1,"CHAT - ESC OR TAB CLOSES");
-                } else chat_line(1,status);
+                    chat_line(1,"CHAT - ESC OR TAB CLOSES",0);
+                } else chat_line(1,status,0);
             }
         } else if(key>=32 && key<=126 && len<CHAT_MAX_INPUT) {
             input[len++]=key; input[len]=0;
@@ -867,6 +887,7 @@ int main(void) {
             strcat(command,entry);
             if(exchange(command)) {
                 if(room_entry) online=1;
+                if(room_entry==1) chat_rows=0;
                 room_entry=0; entry_len=0; entry[0]=0; selected_x=255;
             } else if(room_entry) {
                 /* A failed ROOM or ASK closes the prompt; the status line
@@ -881,7 +902,7 @@ int main(void) {
             exchange(key=='1'?"pchess new local":"pchess new ai");
         }
         else if(!entry_len && !room_entry && key=='3') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}
-        else if(!entry_len && !room_entry && key=='4') {if(exchange("pchess irc")) online=1;}
+        else if(!entry_len && !room_entry && key=='4') {if(exchange("pchess irc")) {online=1; chat_rows=0;}}
         else if(!entry_len && !room_entry && key=='5') {exchange("pchess seek");}
         else if(!entry_len && !room_entry && key=='6') {room_entry=2; strcpy(status,"ENTER PEER NICK AND RETURN");}
         else if(!entry_len && !room_entry && key=='7') {exchange("pchess accept");}
