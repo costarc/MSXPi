@@ -288,12 +288,23 @@ static char cfg_nick[17];
 
 static void set_status(const char *s) { strncpy(irc.status,s,47); irc.status[47]=0; }
 
-static uint8_t tcp_send(const char *data,uint16_t len) {
+/* The one buffer the PCH1 messages are built in (never two at a time). */
+static char msg[80];
+
+/* Send one IRC line (CR LF added). It is built straight in the network
+ * buffer net->tx: a second 300-byte line buffer would cost memory PChess
+ * does not have. The parts must not point into net->tx. */
+static uint8_t irc_line(const char *a,const char *b,const char *c,const char *d) {
     uint8_t tries=0,err;
-    if(irc.net<NET_REGISTER) return 0;
-    memcpy(net->tx,data,len);
+    uint16_t n=strlen(a)+(b?strlen(b):0)+(c?strlen(c):0)+(d?strlen(d):0);
+    if(irc.net<NET_REGISTER || n>296) return 0;
+    strcpy(net->tx,a);
+    if(b) strcat(net->tx,b);
+    if(c) strcat(net->tx,c);
+    if(d) strcat(net->tx,d);
+    net->tx[n++]='\r'; net->tx[n++]='\n';
     do {
-        ur_bc=((uint16_t)irc.conn<<8)|1; ur_de=(uint16_t)net->tx; ur_hl=len;
+        ur_bc=((uint16_t)irc.conn<<8)|1; ur_de=(uint16_t)net->tx; ur_hl=n;
         err=unapi(TCPIP_TCP_SEND);
         if(err!=ERR_BUFFER) break;
         { uint16_t t=JIFFY; while(JIFFY==t); }
@@ -301,25 +312,20 @@ static uint8_t tcp_send(const char *data,uint16_t len) {
     return err==0;
 }
 
-/* Send one IRC line (CR LF added). */
-static uint8_t irc_line(const char *a,const char *b,const char *c) {
-    static char line[300];
-    uint16_t n;
-    strcpy(line,a);
-    if(b) strcat(line,b);
-    if(c) strcat(line,c);
-    n=strlen(line);
-    if(n>296) return 0;
-    line[n++]='\r'; line[n++]='\n';
-    return tcp_send(line,n);
+static uint8_t say(const char *target,const char *text) {
+    if(!irc.ready) { fail="Lobby not ready; wait"; return 0; }
+    if(!irc_line("PRIVMSG ",target," :",text)) { fail="Lobby send failed"; return 0; }
+    return 1;
 }
 
-static uint8_t say(const char *target,const char *text) {
-    static char head[40];
-    if(!irc.ready) { fail="Lobby not ready; wait"; return 0; }
-    strcpy(head,"PRIVMSG "); strcat(head,target); strcat(head," :");
-    if(!irc_line(head,text,0)) { fail="Lobby send failed"; return 0; }
-    return 1;
+/* "pchess say TEXT": to the opponent once matched, else to the channel.
+ * text is the caller's command buffer and is cleaned in place; it has room
+ * for the one blank that keeps chat from looking like a game message. */
+static void chat_say(char *text) {
+    chat_clean(text);
+    if(!*text) { fail="Nothing to say"; return; }
+    if(!strncmp(text,"PCH1",4)) { memmove(text+1,text,strlen(text)+1); text[0]=' '; }
+    say(irc.peer[0] && irc.phase==PH_PLAYING?irc.peer:irc.room[0]?irc.room:"#msxpi",text);
 }
 
 static uint8_t game_over_now(void) {
@@ -359,7 +365,6 @@ static void seen(const char *nick) {
 }
 
 static uint8_t peer_offer(const char *nick) {
-    static char msg[40];
     uint8_t i;
     if(!valid_nick(nick)) { fail="Invalid nickname"; return 0; }
     if(!is_free() || same(nick,irc.nick)) { fail="Cannot challenge now"; return 0; }
@@ -375,7 +380,6 @@ static uint8_t peer_offer(const char *nick) {
 }
 
 static uint8_t peer_accept(void) {
-    static char msg[40];
     if(!is_free() || !irc.has_invite) { fail="No invitation"; return 0; }
     new_match();
     strcpy(irc.peer,irc.invite); strcpy(irc.match,irc.invite_match);
@@ -429,7 +433,6 @@ static uint8_t peer_move(const char *text) {
 }
 
 static uint8_t peer_draw(void) {
-    static char msg[40];
     if(irc.phase!=PH_PLAYING) { fail="No game in progress"; return 0; }
     if(game_over_now()) { fail="Game over"; return 0; }
     if(irc.draw_offer!=2 && pos.white!=irc.side) { fail="Offer a draw on your move"; return 0; }
@@ -441,7 +444,6 @@ static uint8_t peer_draw(void) {
 }
 
 static uint8_t peer_resign(void) {
-    static char msg[40];
     if(irc.phase!=PH_PLAYING) { fail="No game in progress"; return 0; }
     if(game_over_now()) { fail="Game over"; return 0; }
     strcpy(msg,"PCH1 RESIGN "); strcat(msg,irc.match);
@@ -456,9 +458,29 @@ static uint8_t is_hex16(const char *s) {
     return n==16;
 }
 
+/* Ordinary talk: the opponent's private lines, or the lobby or room channel
+ * (the server's Peer.chat_in). Rows go straight into the chat scrollback,
+ * yellow when private; each counts as unread until the window shows it. */
+static void chat_in(const char *sender,const char *target,char *text) {
+    char prefix[16];
+    uint8_t i,priv,before=chat_new;
+    if(*text==1 || same(sender,irc.nick)) return;           /* CTCP, own echo */
+    priv=same(target,irc.nick) && irc.peer[0] && same(sender,irc.peer);
+    if(!priv && !same(target,irc.room[0]?irc.room:"#msxpi")) return;
+    chat_clean(text);
+    if(!*text) return;
+    for(i=0;i<12 && sender[i];i++) {
+        prefix[i]=sender[i];
+        if(prefix[i]>='a' && prefix[i]<='z') prefix[i]-=32;
+    }
+    prefix[i++]=':'; prefix[i++]=' '; prefix[i]=0;
+    chat_add(prefix,text,priv);
+    i=(uint8_t)(chat_new-before);
+    chat_unread=(uint16_t)chat_unread+i>255?255:chat_unread+i;
+}
+
 /* One PCH1 message from sender to target (our nick, #msxpi or the room). */
 static void peer_receive(const char *sender,const char *target,char *text) {
-    static char msg[80];
     char *f[8]; uint8_t n=0; char *p=text;
     static char copy[80];
     strncpy(copy,text,79); copy[79]=0;
@@ -524,7 +546,7 @@ static void peer_receive(const char *sender,const char *target,char *text) {
         {
             /* UCI only, like parse_uci(); undo is by replay, so check first. */
             Pos saved; uint8_t saved_rep=rep_count,saved_n=hist_n; uint16_t saved_ply=ply;
-            static char saved_hist[8][10];
+            char *saved_hist=msg;   /* msg is idle here; the history is 8 x 10 bytes */
             memcpy(&saved,&pos,sizeof(Pos)); memcpy(saved_hist,hist,sizeof(hist));
             if(!play_text(f[4],san,0)) return;
             position_digest(digest);
@@ -568,7 +590,7 @@ static void peer_tick(void) {
 
 static void net_close(void) {
     if(irc.net>=NET_REGISTER) {
-        irc_line("QUIT :bye",0,0);
+        irc_line("QUIT :bye",0,0,0);
         ur_bc=(uint16_t)irc.conn<<8; unapi(TCPIP_TCP_CLOSE);
     } else if(irc.net==NET_OPEN) {
         ur_bc=(uint16_t)irc.conn<<8; unapi(TCPIP_TCP_ABORT);
@@ -588,7 +610,7 @@ static uint8_t net_error(const char *s) {
 static void irc_input(char *line) {
     char *prefix=0,*cmd,*rest,*p;
     if(*line=='@') { line=strchr(line,' '); if(!line) return; line++; }
-    if(!strncmp(line,"PING ",5)) { irc_line("PONG ",line+5,0); return; }
+    if(!strncmp(line,"PING ",5)) { irc_line("PONG ",line+5,0,0); return; }
     if(!strncmp(line,"ERROR ",6)) { line[46]=0; net_error(line); return; }
     if(*line==':') { prefix=line+1; line=strchr(line,' '); if(!line) return; *line++=0; }
     cmd=line; rest=strchr(line,' ');
@@ -599,7 +621,7 @@ static void irc_input(char *line) {
         p=strchr(rest,' '); if(p) *p=0;
         strncpy(irc.nick,rest,16); irc.nick[16]=0;
         set_status(irc.room[0]?"JOINING ROOM":"JOINING LOBBY");
-        irc_line("JOIN ",irc.room[0]?irc.room:"#msxpi",0);
+        irc_line("JOIN ",irc.room[0]?irc.room:"#msxpi",0,0);
     } else if(!strcmp(cmd,"JOIN") && prefix && same(prefix,irc.nick)) {
         if(*rest==':') rest++;
         if(same(rest,irc.room[0]?irc.room:"#msxpi")) {
@@ -630,8 +652,9 @@ static void irc_input(char *line) {
         char *target=rest,*text=strchr(rest,' ');
         if(!text) return;
         *text++=0;
-        if(*text!=':' || strncmp(text+1,"PCH1 ",5)) return;
-        peer_receive(prefix,target,text+1);
+        if(*text!=':') return;
+        if(strncmp(text+1,"PCH1 ",5)) chat_in(prefix,target,text+1);
+        else peer_receive(prefix,target,text+1);
     }
 }
 
@@ -671,8 +694,8 @@ static void net_step(void) {
         if(err) { net_error("CONNECTION FAILED"); return; }
         if(state!=4) return;
         irc.net=NET_REGISTER;
-        irc_line("NICK ",irc.nick,0);
-        irc_line("USER ",irc.nick," 0 * :MSX PChess");
+        irc_line("NICK ",irc.nick,0,0);
+        irc_line("USER ",irc.nick," 0 * :MSX PChess",0);
         return;
     }
     /* Registered or ready: read what arrived and handle whole lines. */
@@ -724,7 +747,7 @@ static void net_poll(void) {
 
 static void load_config(void) {
     static FCB fcb;
-    static char data[256];
+    char *data=(char *)reply;   /* idle until the next exchange(): no 256-byte buffer of its own */
     char *line,*eq,*end; uint16_t n; uint8_t i;
     strcpy(cfg_nick,"pch");
     for(i=3;i<7;i++) cfg_nick[i]="0123456789abcdef"[rnd()&15];
@@ -812,6 +835,7 @@ static void build_packet(void) {
     for(i=0;i<hist_n;i++) memcpy(reply+120+i*10,hist[i],strlen(hist[i]));
     reply[240]=hist_n; reply[241]=ply>255?255:(uint8_t)ply;
     reply[242]=matched;
+    reply[255]=chat_unread;
 }
 
 static void players_packet(void) {
@@ -869,11 +893,16 @@ static uint8_t local_exchange(const char *cmd) {
     } else if(link_mode!=MODE_IRC) {
         /* Lobby commands before 4 ONLINE, as the server says. */
         fail=(!strcmp(verb,"players") || !strcmp(verb,"seek") || !strcmp(verb,"offer") ||
-              !strcmp(verb,"accept"))?"Go online first (4)":"Start a game first";
+              !strcmp(verb,"accept"))?"Go online first (4)":
+             (!strcmp(verb,"say") || !strcmp(verb,"chat"))?"NO ONE TO CHAT WITH":"Start a game first";
     } else if(!strcmp(verb,"players")) {
         if(irc.room[0]) fail="In a room; no lobby";
         else { players_packet(); return 1; }
     } else if(!strcmp(verb,"poll")) {
+    } else if(!strcmp(verb,"chat")) {
+        /* The rows are in the scrollback already: an empty chat block. */
+        reply[5]='C';
+        return 1;
     } else if(!irc.ready) {
         fail=irc.net==NET_OFF?irc.status:"Lobby not ready; wait";
     } else if(!strcmp(verb,"seek")) peer_seek();
@@ -882,6 +911,7 @@ static uint8_t local_exchange(const char *cmd) {
     else if(!strcmp(verb,"move")) peer_move(arg);
     else if(!strcmp(verb,"draw")) peer_draw();
     else if(!strcmp(verb,"resign")) peer_resign();
+    else if(!strcmp(verb,"say")) chat_say((char *)cmd+11);
     else fail="Unknown action";
     if(fail) { packet_status(fail); ok=0; }
     else build_packet();

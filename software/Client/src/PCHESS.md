@@ -45,7 +45,7 @@ to **C:**, then run `PCHESS`.
 Memory is tight. MSX-DOS refuses a program that reaches the top of the TPA
 (`Program too big to fit in memory`), and that top is only 0xD606 on the
 Panasonic_FS-A1WSX and 0xCA06 on one real MSX. The file size is the program
-end (the data areas are part of it), now 50,208 bytes, ending at 0xC51F.
+end (the data areas are part of it), now 50,304 bytes, ending at 0xC57F.
 `make.bat` builds PChess with `--max-allocs-per-node 30000`, which makes it
 about 2 KB smaller; keep it. Check a new build against the lowest top you
 support, leaving at least 768 bytes for the stack (the TCP/IP link refuses to
@@ -78,7 +78,7 @@ Controls:
 - Type UCI (`e2e4`, `a7a8n`) or SAN (`Nf3`, `O-O`) and press Return.
 - Backspace edits notation.
 - Chat: `TAB` (or `CHAT` in the ESC menu) opens a full-screen chat window
-  during an online game (`3 ROOM` or `4 ONLINE`, over the MSXPi link). Type
+  during an online game (`3 ROOM` or `4 ONLINE`, on either link). Type
   a line and press Return; it goes to the opponent once matched, otherwise
   to the lobby or room channel. The window shows the last 20 rows, polls once
   a second and keeps the board paused until `ESC` or `TAB` closes it. The
@@ -88,8 +88,10 @@ Controls:
   messages while you look at the board beep and show `CHAT n` in the panel
   in place of `ESC MENU`. The font has A-Z, 0-9 and `- : + # = ( ) . ? ! , ' /`;
   other characters show as `?`, and text is capitalised. Lines are up to 100
-  characters. Chat is not available on the TCP/IP link yet, and local, AI
-  and relay games without an opponent answer `NO ONE TO CHAT WITH`.
+  characters. On the MSXPi link the server queues what others say and the
+  MSXPi server must be a version with chat; on the TCP/IP link PChess reads
+  it from IRC itself. Local and AI games, and a room still waiting for its
+  second player on the relay, answer `NO ONE TO CHAT WITH`.
 - Escape opens the menu: Up/Down pick a row. On `AI LEVEL`, Left/Right
   choose 1-8 and Return saves it (`pchess level N` sets PCHESSELO in
   msxpi.ini: 600, 800, 1000, 1350, 1600, 1900, 2200, 2500). `ROOMS`
