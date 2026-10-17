@@ -61,6 +61,8 @@ class Peer:
         self.status='LOBBY'
         self.invite=None
         self.pending=None
+        self.offline=False     # our IRC link is down and being re-established
+        self.peer_gone=None    # when the server first said the opponent has no nick
         self.history=[]
         self.last_move=None
         self.players={}
@@ -131,6 +133,8 @@ class Peer:
         # in progress is left to the normal move retransmit and timeout.
         if self.peer and fold(nick)==fold(self.peer) and self.phase in ('offered','accepted'):
             self.peer=None; self.match=None; self.phase='lobby'
+        elif self.peer and fold(nick)==fold(self.peer) and self.peer_gone is None:
+            self.peer_gone=time.monotonic()   # probably reconnecting: tick() keeps retrying
         self.status=(nick+': No such nick')[:47]
         for name in list(self.players):
             if fold(name)==fold(nick): del self.players[name]
@@ -204,6 +208,7 @@ class Peer:
                 self.status='ROOM BUSY - GAME IN PROGRESS'
             return
         if not self.peer or fold(sender)!=fold(self.peer) or len(fields)<3 or fields[2]!=self.match: return
+        self.peer_gone=None
         if op=='ACCEPT' and len(fields)==3 and self.phase in ('offered','playing'):
             if self.phase=='offered': self.side=True; self.phase='playing'; self.status=self.turn_status()
             self.send(self.peer,f'PCH1 READY {self.match}')
@@ -279,10 +284,20 @@ class Peer:
 
     def tick(self):
         if self.result is not None: self.pending=None
+        if self.offline:
+            # Our own link is down: the opponent's silence is not their fault,
+            # so the retransmit clock stands still until we are back.
+            if self.pending: self.pending=(self.pending[0],time.monotonic(),self.pending[2])
+            return
         if self.pending:
             message,sent,retries=self.pending
             if time.monotonic()-sent>=5:
-                if retries>=3:
+                if retries>=3 and self.peer_gone is not None and time.monotonic()-self.peer_gone<RECONNECT_WINDOW:
+                    # The server says the opponent's nick is gone: they are most
+                    # likely reconnecting. Keep resending for the same window.
+                    self.send(self.peer,message)
+                    self.pending=(message,time.monotonic(),retries)
+                elif retries>=3:
                     self.phase='error'; self.status='PEER TIMEOUT'; self.pending=None
                 else:
                     self.send(self.peer,message)
@@ -301,12 +316,19 @@ class Peer:
             status='WHITE RESIGNED - BLACK WINS' if self.result else 'BLACK RESIGNED - WHITE WINS'
         elif board.is_check() and self.phase=='playing' and not self.pending:
             status='WHITE CHECK' if board.turn else 'BLACK CHECK'
+        if self.offline: status='IRC LINK LOST - RECONNECTING'
         return dict(board=''.join(board.piece_at(chess.square(x,7-y)).symbol()
             if board.piece_at(chess.square(x,7-y)) else '.' for y in range(8) for x in range(8)),
             turn=int(board.turn),side=int(not self.side),over=bool(outcome) or self.result is not None,
             matched=self.phase=='playing',opponent=self.peer or '',
             status=status[:47],history=self.history[-12:],ply=len(board.move_stack),
             chat_unread=len(self.chat))
+
+
+# How long a dropped IRC link is redialled (same nick) before the game is given up.
+# Measured on Libera: a link the server saw drop frees the nick at once; one it did
+# not (network vanished) holds it until its ping timeout, about 270 s.
+RECONNECT_WINDOW=int(os.environ.get('PCHESS_IRC_RECONNECT') or 300)
 
 
 def tls_context():
@@ -325,6 +347,11 @@ def tls_context():
 
 
 class IRC:
+    reconnecting=False
+    restored=False
+    lost_at=None
+    closed=False
+    secret=''
     def __init__(self,config=None,room=None,peer_class=None):
         config=config or {}
         self.nick=os.environ.get('PCHESS_IRC_NICK') or config.get('IRCNICK') or 'pch'+secrets.token_hex(2)
@@ -336,6 +363,7 @@ class IRC:
             raise ValueError('Set both IRCACCOUNT and IRCPASSWORD')
         if any(c in self.account+self.password for c in '\x00\r\n'):
             raise ValueError('Invalid lobby account (IRCACCOUNT)')
+        self.secret=self.password   # kept so a redial can log in again
         self.authenticated=False
         self.auth_phase='cap' if self.account else 'none'
         port=int(os.environ.get('PCHESS_IRC_PORT') or config.get('PCHESSIRCPORT') or '6697')
@@ -343,45 +371,105 @@ class IRC:
         tls=tls_value.lower() in ('1','true','yes','on')
         if self.account and not tls:
             raise ValueError('Lobby login requires TLS')
-        sock=socket.create_connection((host,port),timeout=5)
+        self.host,self.port,self.tls=host,port,tls
+        self.lock=threading.Lock()
+        self.sock=self.dial()
+        self.messages=queue.Queue(256)
+        self.chat=queue.Queue(64)   # apart from messages: chatter must not crowd out moves
+        self.error=None
+        self.closed=False
+        self.ready=False
+        self.reconnecting=False
+        self.lost_at=None
+        self.started=time.monotonic()
+        self.peer=(peer_class or Peer)(self.nick,self.message,room)
+        self.peer.status='ACCESSING LOBBY'
+        self.register()
+        threading.Thread(target=self.reader,daemon=True).start()
+
+    def dial(self):
+        sock=socket.create_connection((self.host,self.port),timeout=5)
         try:
-            if tls:
-                sock=tls_context().wrap_socket(sock,server_hostname=host)
+            if self.tls:
+                sock=tls_context().wrap_socket(sock,server_hostname=self.host)
         except ssl.SSLCertVerificationError as exc:
             sock.close()
             print('PCHESS IRC TLS '+str(exc),flush=True)
             raise ValueError('Lobby certificate error') from None
         except Exception:
             sock.close(); raise
-        self.sock=sock
-        self.lock=threading.Lock()
-        self.messages=queue.Queue(256)
-        self.chat=queue.Queue(64)   # apart from messages: chatter must not crowd out moves
-        self.error=None
-        self.closed=False
-        self.ready=False
-        self.started=time.monotonic()
-        self.peer=(peer_class or Peer)(self.nick,self.message,room)
-        self.peer.status='ACCESSING LOBBY'
+        return sock
+
+    def register(self):
+        self.password=self.secret
+        self.authenticated=False
+        self.auth_phase='cap' if self.account else 'none'
         if self.account: self.line('CAP REQ :sasl')
         self.line(f'NICK {self.nick}')
         self.line(f'USER {self.nick} 0 * :MSXPi PChess')
-        threading.Thread(target=self.reader,daemon=True).start()
 
     def line(self,line):
         if '\r' in line or '\n' in line or len(line)>450: raise ValueError('Invalid lobby message')
         with self.lock: self.sock.sendall((line+'\r\n').encode('ascii'))
 
     def message(self,target,text):
+        if self.reconnecting: raise ValueError('IRC LINK LOST - RECONNECTING')
         if not self.ready: raise ValueError('Lobby not ready; wait')
-        self.line(f'PRIVMSG {target} :{text}')
+        try: self.line(f'PRIVMSG {target} :{text}')
+        except OSError: raise ValueError('IRC LINK LOST - RECONNECTING') from None
         if os.environ.get('PCHESS_IRC_TRACE')=='1':
             print(f'PCHESS IRC TX {target} :{text}',flush=True)
 
     def reader(self):
-        buffer=b''
         try:
             while True:
+                try: self.read_loop()
+                except Exception as exc:
+                    if self.closed: break
+                    if isinstance(exc,OSError):
+                        if self.redial(exc): continue
+                        if self.lost_at is not None: raise ConnectionError('LOBBY DISCONNECTED - PRESS 5') from None
+                    raise
+        except Exception as exc:
+            self.error=None if self.closed else str(exc)
+            if self.error and os.environ.get('PCHESS_IRC_TRACE')=='1':
+                print('PCHESS IRC ERROR '+self.error,flush=True)
+        finally:
+            self.password=''
+            self.secret=''
+            self.sock.close()
+
+    def redial(self,exc):
+        """The link dropped: keep the Peer (and its game) and dial again with the
+        same nick until RECONNECT_WINDOW runs out. False means give up."""
+        if RECONNECT_WINDOW<=0: return False
+        if self.lost_at is None: self.lost_at=time.monotonic()
+        if os.environ.get('PCHESS_IRC_TRACE')=='1':
+            print('PCHESS IRC LINK LOST '+str(exc)+' - redialling',flush=True)
+        self.reconnecting=True
+        self.ready=False
+        self.peer.offline=True
+        try: self.sock.close()
+        except OSError: pass
+        delay=2
+        while not self.closed and time.monotonic()-self.lost_at<RECONNECT_WINDOW:
+            time.sleep(delay)
+            delay=min(delay*2,15)
+            try:
+                self.started=time.monotonic()
+                self.sock=self.dial()
+                self.register()
+                return True
+            except ValueError: raise
+            except OSError as again:
+                if os.environ.get('PCHESS_IRC_TRACE')=='1':
+                    print('PCHESS IRC REDIAL FAILED '+str(again),flush=True)
+        return False
+
+    def read_loop(self):
+        buffer=b''
+        while True:
+            if True:
                 try: data=self.sock.recv(4096)
                 except socket.timeout: continue
                 if not data: raise ConnectionError('Lobby disconnected')
@@ -404,8 +492,15 @@ class IRC:
                         self.line('JOIN '+self.peer.channel())
                     if len(parts)>2 and parts[1]=='JOIN' and fold(parts[0][1:].split('!',1)[0])==fold(self.nick) and fold(parts[2].lstrip(':'))==fold(self.peer.channel()):
                         self.ready=True
-                        self.peer.status='LOBBY '+self.nick
-                        if self.peer.room: self.announce=True
+                        if self.reconnecting:
+                            self.reconnecting=False; self.lost_at=None
+                            self.peer.offline=False
+                            self.restored=True   # poll() tells the Peer, on its own thread
+                            if os.environ.get('PCHESS_IRC_TRACE')=='1':
+                                print('PCHESS IRC LINK RESTORED',flush=True)
+                        if self.peer.phase!='playing': self.peer.status='LOBBY '+self.nick
+                        elif hasattr(self.peer,'turn_status'): self.peer.status=self.peer.turn_status()
+                        if self.peer.room and self.peer.free(): self.announce=True
                     if len(parts)>3 and parts[1]=='401':
                         # Unknown nickname: report it but stay in the lobby.
                         self.peer.no_such_nick(parts[3].partition(' :')[0].strip())
@@ -417,7 +512,10 @@ class IRC:
                         params,_,text=(parts[3] if len(parts)>3 else '').partition(' :')
                         subject=params.strip()
                         raise ValueError(((subject+': ' if subject else '')+(text or 'Lobby error '+parts[1]))[:140])
-                    if len(parts)>1 and parts[1]=='433': raise ValueError('Lobby nickname in use')
+                    if len(parts)>1 and parts[1]=='433':
+                        # Our old connection is still on the server: try again later.
+                        if self.reconnecting: raise ConnectionError('Lobby nickname in use')
+                        raise ValueError('Lobby nickname in use')
                     if len(parts)==4 and parts[1]=='PRIVMSG' and parts[3].startswith(':PCH1 '):
                         item=(parts[0][1:].split('!',1)[0],parts[2],parts[3][1:])
                         if os.environ.get('PCHESS_IRC_TRACE')=='1':
@@ -427,13 +525,6 @@ class IRC:
                     elif len(parts)==4 and parts[1]=='PRIVMSG' and parts[3][1:2] not in ('',''):
                         try: self.chat.put_nowait((parts[0][1:].split('!',1)[0],parts[2],parts[3][1:]))
                         except queue.Full: pass
-        except Exception as exc:
-            self.error=None if getattr(self,'closed',False) else str(exc)
-            if self.error and os.environ.get('PCHESS_IRC_TRACE')=='1':
-                print('PCHESS IRC ERROR '+self.error,flush=True)
-        finally:
-            self.password=''
-            self.sock.close()
 
     def authenticate(self,line,parts):
         """SASL PLAIN over verified TLS; never send credentials to chat/logs."""
@@ -471,9 +562,13 @@ class IRC:
 
     def poll(self):
         if self.error: raise ValueError(self.error)
-        if not self.ready and time.monotonic()-self.started>60:
+        if not self.ready and not self.reconnecting and time.monotonic()-self.started>60:
             self.close()
             raise ValueError('Lobby connection timed out')
+        if self.restored:
+            self.restored=False
+            hook=getattr(self.peer,'link_restored',None)
+            if hook: hook()
         if getattr(self,'announce',False):
             self.announce=False
             self.peer.announce_room()

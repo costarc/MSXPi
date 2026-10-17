@@ -18,9 +18,13 @@ as chat there. They go to one nick except HELLO and SEEK:
   nick             PCH1 CK MOVE <n> <path>  Move number n (from 0), e.g. c3e5g7.
   nick             PCH1 CK DRAW / RESIGN    As the menu entries.
   nick             PCH1 CK RESET            A rematch: both clear the game.
+  nick             PCH1 CK SYNC <n>         After a reconnect: I hold n moves. The one
+                                         with more resends the missing MOVE lines;
+                                         the one with fewer answers with its own SYNC.
 
 The rules are the MSX clients' business: moves are only checked for form and
-order here. IRC is reliable, so there are no acknowledgements."""
+order here. IRC is reliable while connected, so there are no acknowledgements;
+a dropped IRC link is repaired by SYNC."""
 import collections
 import re
 import textwrap
@@ -50,6 +54,7 @@ class CheckersPeer:
         self.players = {}
         self.last_seek = -1000
         self.chat = collections.deque(maxlen=CHAT_QUEUE)
+        self.offline = False        # our IRC link is down and being re-established
         self.new_game()
 
     # -- state ------------------------------------------------------------
@@ -176,6 +181,11 @@ class CheckersPeer:
     def tick(self):
         pass
 
+    def link_restored(self):
+        """The IRC link is back: lines may have been lost in either direction."""
+        if self.peer and self.phase == 'playing':
+            self.send(self.peer, f'PCH1 CK SYNC {len(self.moves)}')
+
     def no_such_nick(self, nick):
         if self.peer and fold(nick) == fold(self.peer) and self.phase == 'offered':
             self.peer, self.phase = None, 'lobby'
@@ -253,6 +263,13 @@ class CheckersPeer:
             self.result = 2 if self.side else 1     # the peer is the other colour
         elif op == 'RESET' and len(fields) == 2:
             self.new_game()
+        elif op == 'SYNC' and len(fields) == 3 and fields[2].isdigit():
+            theirs = int(fields[2])
+            if theirs < len(self.moves):
+                for ply in range(theirs, len(self.moves)):
+                    self.send(self.peer, f'PCH1 CK MOVE {ply} {self.moves[ply]}')
+            elif theirs > len(self.moves):
+                self.send(self.peer, f'PCH1 CK SYNC {len(self.moves)}')
 
     # -- state for the MSX --------------------------------------------------
     def snapshot(self, since=None):
@@ -261,6 +278,8 @@ class CheckersPeer:
         status = self.status
         if matched and not self.result:
             status = 'YOU ARE ' + ('BLACK' if self.side else 'WHITE')
+        if self.offline:
+            status = 'IRC LINK LOST - RECONNECTING'
         return dict(kind='checkers', matched=matched, side=self.side, over=self.result,
                     status=status[:47], ply=len(self.moves),
                     moves=self.moves[since:since + FETCH],

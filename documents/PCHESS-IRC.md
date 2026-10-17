@@ -161,3 +161,22 @@ or HERE, the player whose folded nick sorts lower sends the usual private
 game is the private MOVE/ACK/DRAW/RESIGN exchange above. Joining the same
 room again sends HELLO again, which is how a rematch starts.
 
+## Dropped IRC link
+
+If the IRC connection drops in the middle of a game (for example WinError 10054
+when the IRC server resets it), the MSXPi server keeps the game and dials again
+with the same nick, backing off 2, 4, 8, 15 s, for up to 300 s
+(`PCHESS_IRC_RECONNECT`). The MSX status line shows `IRC LINK LOST -
+RECONNECTING`, moves are refused meanwhile, and play resumes by itself when the
+link is back. If the window runs out the status becomes `LOBBY DISCONNECTED -
+PRESS 5`.
+
+Measured on irc.libera.chat: when the server saw the old connection die, the nick
+was free at the first redial (a few seconds); when it did not (the network simply
+vanished), the nick stayed taken until the server's ping timeout, about 270 s.
+
+PChess and PChess1 resend the unacknowledged MOVE as before; the clock stands still
+while we are offline, and the opponent keeps resending for the same window when the
+server answers `No such nick`. PCheckers has no acknowledgements, so after a
+reconnect each side sends `PCH1 CK SYNC <n>` (moves held): the side with more moves
+resends the missing `MOVE` lines, the side with fewer answers with its own SYNC.

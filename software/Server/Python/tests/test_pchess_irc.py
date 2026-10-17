@@ -7,9 +7,14 @@ import threading
 from unittest.mock import patch
 from pchess_irc_fixture import Server
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
+import msxpi_pchess_irc as irc
 from msxpi_pchess_irc import Peer, IRC, PLAYER_TTL, chat_text, chat_rows
 
 class Transport(unittest.TestCase):
+    def setUp(self):
+        # A scripted socket that runs dry is a dead link; do not redial it.
+        old=irc.RECONNECT_WINDOW; irc.RECONNECT_WINDOW=0
+        self.addCleanup(setattr,irc,'RECONNECT_WINDOW',old)
     def test_intentional_disconnect_is_not_network_failure(self):
         client=self.client([])
         client.closed=True
@@ -425,5 +430,86 @@ class Rooms(unittest.TestCase):
             for client in clients: client.close()
             server.shutdown()
             server.server_close()
+
+class Reconnect(unittest.TestCase):
+    """A dropped IRC link is redialled with the same nick and the game goes on."""
+    ROOM='#pchess-club7'
+    def setUp(self):
+        self.server=Server(('127.0.0.1',0))
+        threading.Thread(target=self.server.serve_forever,daemon=True).start()
+        self.clients=[]
+        self.addCleanup(self.stop)
+    def stop(self):
+        for client in self.clients: client.close()
+        self.server.shutdown(); self.server.server_close()
+    def wait_for(self,predicate,seconds=3):
+        deadline=time.monotonic()+seconds
+        while not predicate():
+            for client in self.clients:
+                try: client.poll()
+                except ValueError: pass
+            if time.monotonic()>deadline: self.fail('IRC fixture timed out')
+            time.sleep(.01)
+    def start(self):
+        for nick in ('Zed','Amy'):
+            with patch.dict('os.environ',PCHESS_IRC_HOST='127.0.0.1',
+                PCHESS_IRC_PORT=str(self.server.server_address[1]),PCHESS_IRC_TLS='0',
+                PCHESS_IRC_NICK=nick,PCHESS_IRC_TRACE='0'):
+                self.clients.append(IRC(None,self.ROOM))
+            self.wait_for(lambda: all(c.ready for c in self.clients))
+        z,a=self.clients
+        self.wait_for(lambda: a.peer.phase==z.peer.phase=='playing')
+        a.peer.move('d4')
+        self.wait_for(lambda: len(z.peer.history)==1 and not a.peer.pending)
+        return z,a
+    def drop(self,nick):
+        link=self.server.clients[nick]
+        link.connection.shutdown(2)
+
+    def test_game_continues_after_the_link_drops(self):
+        z,a=self.start()
+        self.drop('Amy')
+        self.wait_for(lambda: a.reconnecting)
+        self.assertTrue(a.peer.offline)
+        self.assertEqual(a.peer.snapshot()['status'],'IRC LINK LOST - RECONNECTING')
+        with self.assertRaisesRegex(ValueError,'RECONNECTING'): a.peer.resign()
+        self.wait_for(lambda: a.ready and not a.reconnecting,seconds=8)
+        self.assertFalse(a.peer.offline)
+        self.assertEqual(a.peer.phase,'playing')
+        self.assertEqual(a.peer.snapshot()['status'],a.peer.turn_status())
+        z.peer.move('d5')
+        self.wait_for(lambda: len(a.peer.history)==2 and not z.peer.pending)
+        a.peer.move('c4')
+        self.wait_for(lambda: len(z.peer.history)==3 and not a.peer.pending)
+        self.assertEqual(a.peer.board.fen(),z.peer.board.fen())
+
+    def test_waits_while_the_old_connection_holds_the_nick(self):
+        self.server.ghost_delay=3
+        z,a=self.start()
+        self.drop('Amy')
+        self.wait_for(lambda: a.reconnecting)
+        self.wait_for(lambda: a.ready and not a.reconnecting,seconds=15)
+        self.assertEqual(a.nick,'Amy')
+        self.assertEqual(a.peer.phase,'playing')
+
+    def test_opponent_keeps_resending_while_we_are_away(self):
+        self.server.ghost_delay=3
+        z,a=self.start()
+        self.drop('Amy')
+        self.wait_for(lambda: a.reconnecting)
+        z.peer.move('d5')                       # Amy is offline: the server answers 401
+        self.wait_for(lambda: z.peer.peer_gone is not None,seconds=8)
+        self.wait_for(lambda: len(a.peer.history)==2 and not z.peer.pending,seconds=25)
+        self.assertEqual(z.peer.phase,'playing')   # no PEER TIMEOUT
+        self.assertEqual(a.peer.board.fen(),z.peer.board.fen())
+
+    def test_gives_up_after_the_window(self):
+        z,a=self.start()
+        self.server.ghost_delay=60
+        old=irc.RECONNECT_WINDOW; irc.RECONNECT_WINDOW=3
+        self.addCleanup(setattr,irc,'RECONNECT_WINDOW',old)
+        self.drop('Amy')
+        self.wait_for(lambda: a.error is not None,seconds=10)
+        with self.assertRaisesRegex(ValueError,'LOBBY DISCONNECTED - PRESS 5'): a.poll()
 
 if __name__=='__main__': unittest.main()
