@@ -12,6 +12,7 @@ The AI opponent is Stockfish when it is installed (PCHESSENGINE, PCHESSELO,
 PCHESSMOVETIME in msxpi.ini); otherwise a small built-in search plays.
 """
 import argparse
+import collections
 import json
 import os
 import secrets
@@ -23,6 +24,8 @@ from urllib.request import Request, urlopen
 
 import chess
 import chess.engine
+
+from msxpi_pchess_irc import CHAT_QUEUE, CHAT_ROW, chat_rows, chat_text
 
 
 class Games:
@@ -51,12 +54,13 @@ class Games:
                     raise ValueError('Relay full')
                 self.games[game_id] = dict(board=chess.Board(), mode=mode,
                     players=[], history=[], seen=now, resigned=None,
-                    offers=set(), agreed=False)
+                    offers=set(), agreed=False, chat={})
             game = self.games[game_id]
             if len(game['players']) >= (2 if mode == 'room' else 1):
                 raise ValueError('Room full; choose another')
             token = secrets.token_hex(16)
             game['players'].append(token)
+            game['chat'][token] = collections.deque(maxlen=CHAT_QUEUE)
             result = self.snapshot(game, token)
             result.update(game=game_id, token=token)
             return result
@@ -109,6 +113,22 @@ class Games:
                     raise ValueError('Offer a draw on your move')
                 else:
                     game['offers'].add(side)
+        elif action == 'say':
+            if game['mode'] != 'room' or len(game['players']) < 2:
+                raise ValueError('NO ONE TO CHAT WITH')
+            text = chat_text(req.get('text', ''))
+            if not text:
+                raise ValueError('Nothing to say')
+            rows = chat_rows('WHITE' if side else 'BLACK', text)
+            for other in game['players']:
+                if other != token:
+                    game['chat'][other].extend((1, row) for row in rows)
+        elif action == 'chat':
+            queued = game['chat'][token]
+            result = self.snapshot(game, token)
+            result['chat_rows'] = [queued.popleft() for _ in range(min(5, len(queued)))]
+            result['chat_unread'] = len(queued)
+            return result
         elif action != 'poll':
             raise ValueError('Unknown action')
         return self.snapshot(game, token)
@@ -149,7 +169,8 @@ class Games:
                     turn=int(board.turn), side=side, matched=matched,
                     opponent='AI' if game['mode'] == 'ai' else '',
                     mode=game['mode'], status=status, over=self.finished(game),
-                    ply=len(board.move_stack), history=game['history'][-12:])
+                    ply=len(board.move_stack), history=game['history'][-12:],
+                    chat_unread=len(game['chat'][token]))
 
 
 _engine = None
@@ -356,6 +377,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
         args = command.split()
         if not args:
             raise ValueError('new local / new ai / join ROOM')
+        say_text = command.partition(' ')[2].strip() if args[0] == 'say' else ''
         irc_room = args[0] == 'join' and len(args) == 2 and rooms_mode(room_config) == 'irc'
         if args[0] in ('irc','new') or irc_room:
             stop_relay()
@@ -388,7 +410,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             raise ValueError('Go online first (4)')
         if args[0]=='players' and _irc.peer.room:
             raise ValueError('In a room; no lobby')
-        if _use_irc and args[0] in ('seek','offer','accept','poll','move','players','draw','resign'):
+        if _use_irc and args[0] in ('seek','offer','accept','poll','move','players','draw','resign','say','chat'):
             _irc.poll()
             if args[0]!='poll' and not _irc.ready:
                 raise ValueError('Lobby not ready; wait')
@@ -399,6 +421,10 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             elif args[0]=='move': _irc.peer.move(args[1])
             elif args[0]=='draw': _irc.peer.draw()
             elif args[0]=='resign': _irc.peer.resign()
+            elif args[0]=='say': _irc.peer.say(say_text)
+            elif args[0]=='chat':
+                _irc.poll()
+                return chat_packet(*_irc.peer.take_chat(CHAT_FETCH))
             return packet(_irc.poll())
         if args[0] == 'new' and len(args) == 2:
             req = dict(action='new',mode=args[1])
@@ -413,6 +439,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             remote = _remote
             if args[0] == 'move' and len(args) == 2:
                 req['move'] = args[1]
+            if args[0] == 'say':
+                req['text'] = say_text
         if remote:
             request = Request(relay_url(room_config)+'/game', json.dumps(req).encode(),
                               {'Content-Type':'application/json'})
@@ -428,6 +456,8 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             if _irc:
                 _irc.close()
                 _irc=None
+        if args[0] == 'chat':
+            return chat_packet(result['chat_rows'], result['chat_unread'])
         return packet(result)
     except Exception as exc:
         data = bytearray(256)
@@ -484,6 +514,26 @@ def packet(state):
     data[242]=int(bool(state.get('matched')))
     opponent=state.get('opponent','')[:12].encode('ascii','replace')
     data[243:243+len(opponent)]=opponent
+    # 255: unread chat rows waiting for 'pchess chat' (0-255).
+    data[255]=min(state.get('chat_unread',0),255)
+    return bytes(data)
+
+
+# The chat fetch: byte 4 is 0 (no board) and byte 5 is 'C'. Up to five rows
+# of 42 characters in 44-byte slots from byte 8 (so byte 72 is chat text, not
+# a status; byte 43 of a slot is 1 for a private row), row count in byte 240
+# and rows still unread in byte 241. Rows are (private, text).
+CHAT_FETCH=5
+def chat_packet(rows,unread):
+    data = bytearray(256)
+    data[:4] = b'PCH1'
+    data[5] = ord('C')
+    for i,(private,row) in enumerate(rows[:CHAT_FETCH]):
+        text = row[:CHAT_ROW].encode('ascii','replace')
+        data[8+i*44:8+i*44+len(text)] = text
+        data[8+i*44+43] = 1 if private else 0
+    data[240] = min(len(rows),CHAT_FETCH)
+    data[241] = min(unread,255)
     return bytes(data)
 
 

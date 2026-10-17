@@ -46,7 +46,11 @@ del %MSXPIBIOSLIB%.asm
 
 echo -------- Compilation of : %1
 
-SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size fusion.lib %MSXPIBIOSLIB%.lib -L %LIBDIR% -L %MSXPILIB% %INC1% %proga%.c
+REM PChess is near the MSX-DOS memory limit (TPA top can be as low as 0xCA06): the larger
+REM register-allocation search makes it about 2 KB smaller.
+SET OPTX=
+IF /I "%1"=="pchess" SET OPTX=--max-allocs-per-node 30000
+SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size %OPTX% fusion.lib %MSXPIBIOSLIB%.lib -L %LIBDIR% -L %MSXPILIB% %INC1% %proga%.c
 SET cpath=%~dp0
 IF NOT EXIST %sourcename%.ihx GOTO _end_
 echo ... Compilation OK

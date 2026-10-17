@@ -7,7 +7,7 @@ import threading
 from unittest.mock import patch
 from pchess_irc_fixture import Server
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-from msxpi_pchess_irc import Peer, IRC, PLAYER_TTL
+from msxpi_pchess_irc import Peer, IRC, PLAYER_TTL, chat_text, chat_rows
 
 class Transport(unittest.TestCase):
     def test_intentional_disconnect_is_not_network_failure(self):
@@ -92,10 +92,29 @@ class Transport(unittest.TestCase):
         client.ready=False
         client.error=None
         client.messages=queue.Queue(256)
+        client.chat=queue.Queue(64)
         client.started=time.monotonic()
         client.sent=[]
         client.line=client.sent.append
         return client
+
+    def test_chat_is_queued_apart_from_game_messages(self):
+        client=self.client([b':server 001 actual :Welcome\r\n:actual!u@h JOIN :#msxpi\r\n'
+            b':bob!u@h PRIVMSG #msxpi :hello all\r\n'
+            b':bob!u@h PRIVMSG actual :\x01ACTION waves\x01\r\n'
+            b':bob!u@h PRIVMSG actual :PCH1 SEEK\r\n'])
+        client.reader()
+        self.assertEqual(client.chat.get_nowait(),('bob','#msxpi','hello all'))
+        self.assertTrue(client.chat.empty())
+        self.assertEqual(client.messages.get_nowait(),('bob','actual','PCH1 SEEK'))
+
+    def test_chat_flood_is_bounded_and_does_not_touch_the_move_queue(self):
+        lines=b''.join(b':bob!u@h PRIVMSG #msxpi :spam %d\r\n' % n for n in range(300))
+        client=self.client([b':server 001 actual :Welcome\r\n:actual!u@h JOIN :#msxpi\r\n'+lines+
+                            b':bob!u@h PRIVMSG actual :PCH1 SEEK\r\n'])
+        client.reader()
+        self.assertEqual(client.chat.qsize(),64)
+        self.assertEqual(client.messages.get_nowait(),('bob','actual','PCH1 SEEK'))
 
     def test_fragmented_registration_ping_and_private_message(self):
         client=self.client([b':server 001 actual :Welcome\r\nPI',
@@ -147,6 +166,57 @@ class Protocol(unittest.TestCase):
             (self.a if target=='Alice' else self.b).receive(sender,target,text)
     def start(self):
         self.a.offer('Bob'); self.deliver(); self.b.accept(); self.deliver()
+    def test_chat_text_uses_only_font_characters(self):
+        self.assertEqual(chat_text("  hello,   World! caf\u00e9 <b> "),"HELLO, WORLD! CAF? ?B?")
+        self.assertEqual(len(chat_text('x'*500)),100)
+        self.assertEqual(chat_text('\x00\r\n'),'')
+
+    def test_chat_rows_wrap_to_the_row_width(self):
+        rows=chat_rows('Alice','WORD '*30)
+        self.assertTrue(rows[0].startswith('ALICE: WORD'))
+        self.assertTrue(all(len(r)<=42 for r in rows))
+        self.assertTrue(all(r.startswith('  ') for r in rows[1:]))
+        self.assertEqual(chat_rows('A'*16,'X')[0],'AAAAAAAAAAAA: X')
+
+    def test_chat_goes_to_the_channel_until_matched_then_private(self):
+        self.a.say('anyone for chess?')
+        self.assertEqual(self.messages[-1],('Alice','#msxpi','ANYONE FOR CHESS?'))
+        self.start()
+        self.a.say('good luck')
+        self.assertEqual(self.messages[-1],('Alice','Bob','GOOD LUCK'))
+        with self.assertRaises(ValueError): self.a.say('   ')
+
+    def test_chat_cannot_forge_a_game_message(self):
+        self.start()
+        self.a.say('PCH1 RESIGN '+self.a.match)
+        self.assertTrue(self.messages[-1][2].startswith(' PCH1'))
+        self.deliver()
+        self.assertIsNone(self.b.result)
+
+    def test_private_chat_from_the_opponent_is_queued_and_read(self):
+        self.start()
+        self.b.chat_in('Alice','Bob','hi there')
+        self.assertEqual(self.b.snapshot()['chat_unread'],1)
+        rows,left=self.b.take_chat()
+        self.assertEqual((rows,left),([(1,'ALICE: HI THERE')],0))
+        self.assertEqual(self.b.snapshot()['chat_unread'],0)
+
+    def test_chat_from_strangers_and_self_is_ignored(self):
+        self.start()
+        self.b.chat_in('Mallory','Bob','psst')              # private, not the opponent
+        self.b.chat_in('Mallory','#elsewhere','psst')       # some other channel
+        self.b.chat_in('Bob','#msxpi','echo')               # own message
+        self.assertEqual(self.b.take_chat(),([],0))
+        self.b.chat_in('Mallory','#msxpi','lobby talk')     # the lobby channel is open
+        self.assertEqual(self.b.take_chat()[0],[(0,'MALLORY: LOBBY TALK')])
+
+    def test_chat_rows_are_taken_five_at_a_time_and_oldest_dropped(self):
+        for n in range(8): self.b.chat_in('Alice','#msxpi','LINE %d'%n)
+        rows,left=self.b.take_chat(5)
+        self.assertEqual((len(rows),left),(5,3))
+        for n in range(200): self.b.chat_in('Alice','#msxpi','X')
+        self.assertEqual(len(self.b.chat),64)
+
     def test_channel_is_only_discovery(self):
         self.a.seek()
         self.assertEqual(self.messages,[('Alice','#msxpi','PCH1 SEEK')])
@@ -319,6 +389,38 @@ class Rooms(unittest.TestCase):
             a.peer.move('d4')
             wait_for(lambda: len(z.peer.history)==1 and not a.peer.pending)
             self.assertFalse(any(t=='#msxpi' for _,t,_ in server.transcript))
+        finally:
+            for client in clients: client.close()
+            server.shutdown()
+            server.server_close()
+
+    def test_room_chat_between_two_socket_clients(self):
+        server=Server(('127.0.0.1',0))
+        threading.Thread(target=server.serve_forever,daemon=True).start()
+        clients=[]
+        def wait_for(predicate):
+            deadline=time.monotonic()+3
+            while not predicate():
+                for client in clients: client.poll()
+                if time.monotonic()>deadline: self.fail('IRC fixture timed out')
+                time.sleep(.01)
+        try:
+            for nick in ('Zed','Amy'):
+                with patch.dict('os.environ',PCHESS_IRC_HOST='127.0.0.1',
+                    PCHESS_IRC_PORT=str(server.server_address[1]),PCHESS_IRC_TLS='0',
+                    PCHESS_IRC_NICK=nick,PCHESS_IRC_TRACE='0'):
+                    clients.append(IRC(None,self.ROOM))
+                wait_for(lambda: all(c.ready for c in clients))
+            z,a=clients
+            wait_for(lambda: a.peer.phase==z.peer.phase=='playing')
+            a.peer.say('gl hf')
+            wait_for(lambda: z.peer.chat)
+            self.assertEqual(z.peer.take_chat(),([(1,'AMY: GL HF')],0))
+            z.peer.say('thanks')
+            wait_for(lambda: a.peer.chat)
+            self.assertEqual(a.peer.take_chat(),([(1,'ZED: THANKS')],0))
+            a.peer.move('d4')
+            wait_for(lambda: len(z.peer.history)==1 and not a.peer.pending)
         finally:
             for client in clients: client.close()
             server.shutdown()

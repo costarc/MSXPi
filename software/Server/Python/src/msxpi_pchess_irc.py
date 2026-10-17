@@ -8,12 +8,14 @@ in a room the OFFER is accepted at once. The game is then the same private
 MOVE/ACK/DRAW/RESIGN exchange as a lobby match."""
 import hashlib
 import base64
+import collections
 import os
 import queue
 import re
 import secrets
 import socket
 import ssl
+import textwrap
 import threading
 import time
 import chess
@@ -26,6 +28,24 @@ def digest(board):
 
 # A SEEK or OFFER keeps a nick in the player list for ten minutes.
 PLAYER_TTL=600
+
+# Chat is shown with PChess's own font, so only these characters survive;
+# keep in step with the glyphs in pchess.c. Rows are 42 characters at most
+# and the MSX asks for five at a time.
+CHAT_CHARS=" ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:+#=().?!,'/"
+CHAT_MAX=100
+CHAT_ROW=42
+CHAT_QUEUE=64
+
+def chat_text(text):
+    text=' '.join(text.upper().split())
+    text=''.join(c if c in CHAT_CHARS else '?' for c in text if c>=' ' and c!='')
+    return text[:CHAT_MAX]
+
+def chat_rows(nick,text):
+    prefix=nick[:12].upper()+': '
+    return textwrap.wrap(text,CHAT_ROW,initial_indent=prefix,subsequent_indent='  ',
+                         break_long_words=True,break_on_hyphens=False) or [prefix.rstrip()]
 
 
 class Peer:
@@ -47,6 +67,7 @@ class Peer:
         self.last_seek=-1000
         self.draw_offer=None   # 'me' or 'peer', until the one offered to moves
         self.result=None       # 'draw', or the colour (bool) that resigned
+        self.chat=collections.deque(maxlen=CHAT_QUEUE)   # unread chat rows
 
     def free(self):
         # A finished (or failed) match leaves the player free to seek, invite
@@ -132,6 +153,26 @@ class Peer:
         colour='WHITE' if self.side else 'BLACK'
         if self.board.turn==self.side: return f'YOU ARE {colour} - YOUR MOVE'
         return f'YOU ARE {colour} - {self.peer} MOVES'
+
+    def chat_in(self,sender,target,text):
+        # Lobby or room channel chat, or a private line from the opponent.
+        if fold(sender)==fold(self.nick): return
+        private=fold(target)==fold(self.nick) and self.peer and fold(sender)==fold(self.peer)
+        if not private and fold(target)!=fold(self.channel()): return
+        text=chat_text(text)
+        # Rows are (private, text): the MSX draws private ones in another colour.
+        if text: self.chat.extend((int(bool(private)),row) for row in chat_rows(sender,text))
+
+    def say(self,text):
+        text=chat_text(text)
+        if not text: raise ValueError('Nothing to say')
+        # A chat line must never be mistaken for a game message.
+        if text.startswith('PCH1'): text=' '+text
+        self.send(self.peer if self.peer and self.phase=='playing' else self.channel(),text)
+
+    def take_chat(self,count=5):
+        rows=[self.chat.popleft() for _ in range(min(count,len(self.chat)))]
+        return rows,len(self.chat)
 
     def receive(self,sender,target,text):
         fields=text.split()
@@ -264,7 +305,8 @@ class Peer:
             if board.piece_at(chess.square(x,7-y)) else '.' for y in range(8) for x in range(8)),
             turn=int(board.turn),side=int(not self.side),over=bool(outcome) or self.result is not None,
             matched=self.phase=='playing',opponent=self.peer or '',
-            status=status[:47],history=self.history[-12:],ply=len(board.move_stack))
+            status=status[:47],history=self.history[-12:],ply=len(board.move_stack),
+            chat_unread=len(self.chat))
 
 
 def tls_context():
@@ -314,6 +356,7 @@ class IRC:
         self.sock=sock
         self.lock=threading.Lock()
         self.messages=queue.Queue(256)
+        self.chat=queue.Queue(64)   # apart from messages: chatter must not crowd out moves
         self.error=None
         self.closed=False
         self.ready=False
@@ -381,6 +424,9 @@ class IRC:
                             print('PCHESS IRC RX '+' '.join(item),flush=True)
                         try: self.messages.put_nowait(item)
                         except queue.Full: pass
+                    elif len(parts)==4 and parts[1]=='PRIVMSG' and parts[3][1:2] not in ('',''):
+                        try: self.chat.put_nowait((parts[0][1:].split('!',1)[0],parts[2],parts[3][1:]))
+                        except queue.Full: pass
         except Exception as exc:
             self.error=None if getattr(self,'closed',False) else str(exc)
             if self.error and os.environ.get('PCHESS_IRC_TRACE')=='1':
@@ -432,6 +478,7 @@ class IRC:
             self.announce=False
             self.peer.announce_room()
         while not self.messages.empty(): self.peer.receive(*self.messages.get_nowait())
+        while not self.chat.empty(): self.peer.chat_in(*self.chat.get_nowait())
         self.peer.tick()
         return self.peer.snapshot()
 
