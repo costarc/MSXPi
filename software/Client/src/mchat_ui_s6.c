@@ -7,7 +7,7 @@
  * but with a colour per cell. There is no tile clash here: every cell has its
  * own style, so ui_side only says how wide the user list is.
  *
- * Palette: 0 black, 1 white, 2 yellow, 3 blue. With four colours the styles
+ * Palette: 0 black, 1 white, 2 yellow, 3 blue (colour 0 is shown, not transparent). With four colours the styles
  * differ less than on MSX1: your own lines are plain white and system lines
  * are blue.
  *
@@ -138,7 +138,14 @@ static uint8_t s6_open(void) {
     set_pal(1, 0x77, 7);
     set_pal(2, 0x70, 7);
     set_pal(3, 0x26, 3);
-    FillVram(0, 0, 27136);
+    /* Colour 0 is "transparent" unless R#8 bit 5 is set: it then shows the
+     * backdrop, which SCREEN 6 draws as a stripe of two palette colours. Show
+     * palette 0 (black) instead, and make the backdrop black as well. */
+    *(uint8_t *)0xFFE7 |= 0x20;
+    VDPwrite(8, *(uint8_t *)0xFFE7);
+    *(uint8_t *)0xF3E6 = 0;
+    VDPwrite(7, 0);
+    vram_fill(0, 0, 27136);
     for (fg = 0; fg < 4; fg++)
         for (bg = 0; bg < 4; bg++)
             for (nib = 0; nib < 16; nib++) {

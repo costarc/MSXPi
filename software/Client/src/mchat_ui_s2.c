@@ -132,8 +132,8 @@ static uint8_t s2_open(void) {
     VDPwrite(1, *(uint8_t *)0xF3E0);
     for (i = 0; i < 256; i++) ramp[i] = (uint8_t)i;
     for (i = 0; i < 3; i++) CopyRamToVram(ramp, NAMTBL + i * 256, 256);
-    FillVram(PATTBL, 0, 6144);
-    FillVram(COLTBL, (char)style_color[UI_TEXT], 6144);
+    vram_fill(PATTBL, 0, 6144);
+    vram_fill(COLTBL, style_color[UI_TEXT], 6144);
     CopyRamToVram((void *)underline, SPRPAT, 8);
     memset(cell, ' ', sizeof(cell));
     memset(tile_style, UI_TEXT, sizeof(tile_style));

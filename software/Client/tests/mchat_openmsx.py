@@ -1,7 +1,7 @@
 """End-to-end: MCHAT.COM (MSX1, SCREEN 2) in openMSX through a real MSXPi server.
 
-The emulated MSX (Canon V-25 + MSXPi, MSX-DOS 1 from msxpiboot.dsk) starts
-"MCHAT alice". The IRC server is pchess_irc_fixture on this host (the MSXPi
+The emulated MSX (Canon V-25, which is an MSX2, with MSXPi, MSX-DOS 1 from msxpiboot.dsk) starts
+"MCHAT /1 alice" (SCREEN 2, the MSX1 screen). Another machine can be set with MCHAT_OPENMSX_MACHINE. The IRC server is pchess_irc_fixture on this host (the MSXPi
 server is pointed at it with PCHESS_IRC_* variables) and "bob" is a plain
 socket in the fixture. Bob talks in #msxpi and sends alice a private line;
 alice answers, joins a second room, switches rooms and scrolls back. The
@@ -35,7 +35,7 @@ MCHAT = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('MCHAT_COM', S
 MACHINE = os.environ.get('MCHAT_MACHINE', 'msx1')      # msx1 (Canon V-25) or msx2 (Panasonic FS-A1WSX)
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
 MSXPI_PORT = int(os.environ.get('MSXPI_TEST_PORT', '5044'))
-IRC_PORT = int(os.environ.get('MCHAT_IRC_PORT', '6668'))
+IRC_PORT = int(os.environ.get('MCHAT_IRC_PORT', '6667' if os.environ.get('MCHAT_LINK') == 'tcp' else '6668'))
 
 UP, DOWN, TAB, ESC = chr(30), chr(31), chr(9), chr(27)
 TIMELINE = [
@@ -49,9 +49,18 @@ if MACHINE == 'msx2':
     # DOS from FloppyA; no /1, so the MSX2 build starts in SCREEN 6 and /screen goes to SCREEN 2.
     # Slower than the MSX1 script: a whole screen takes a second to repaint.
     TIMELINE = [(27, 'dump:font'), (22, 'c:\r'), (25, 'dir mchat.com\r'), (30, 'mchat alice\r'),
-                (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (74, 'dump:second'),
-                (76, 'only here\r'), (82, TAB), (94, 'dump:back'), (96, UP + UP), (108, 'dump:scrolled'),
-                (112, '/screen\r'), (124, 'dump:switched'), (125, 'shot:switched'), (128, ESC), (136, 'quit')]
+                (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (80, 'dump:second'),
+                (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (108, UP + UP), (122, 'dump:scrolled'),
+                (126, '/screen\r'), (140, 'dump:switched'), (141, 'shot:switched'), (144, ESC), (152, 'quit')]
+
+LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or tcp (TCP/IP UNAPI, INL)
+if LINK == 'tcp':
+    # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
+    # at 192.168.99.1 through the Windows TAP (msxpi-tcpip-setup.ps1) and needs no MSXPi server for chat.
+    TIMELINE = [(20, 'MSR I\r'), (32, 'INL I\r'), (46, 'memtop\r'), (49, 'shot:memtop'), (50, os.environ.get('MCHAT_CMD', 'mchat /t alice') + '\r')] + [
+        (int(58 + (t - 30) * 1.5), a) for t, a in TIMELINE if t >= 30]   # the TCP/IP link is slower
+    if os.environ.get('MCHAT_FORCE1'):
+        TIMELINE = [(t, a.replace('mchat /t', 'mchat /1 /t')) for t, a in TIMELINE]
 
 GLYPH_ROWS = {}
 for _i, _g in enumerate(gen_mchat_font.GLYPHS):
@@ -168,10 +177,17 @@ def main():
     if MACHINE == 'msx2':
         shutil.copytree(FLOPPY, work / 'floppy')
         shutil.copy(MCHAT, work / 'floppy/mchat.com')
+    if LINK == 'tcp':
+        shutil.copy(SOFTWARE / 'target/memtop.com', work / 'memtop.com')
+        subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'memtop.com',
+                        'home/disks/msxpiboot.dsk:MEMTOP.COM'], cwd=work, check=True, stdout=subprocess.DEVNULL)
+        (work / 'MCHAT.INI').write_bytes(b'IRCADDR=192.168.99.1\r\nIRCPORT=%d\r\n' % IRC_PORT)
+        subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'MCHAT.INI',
+                        'home/disks/msxpiboot.dsk:MCHAT.INI'], cwd=work, check=True, stdout=subprocess.DEVNULL)
     script = work / 'mchat.tcl'
     write_script(script, dumps)
 
-    fixture = Server(('127.0.0.1', IRC_PORT))
+    fixture = Server(('0.0.0.0' if LINK == 'tcp' else '127.0.0.1', IRC_PORT))
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
     bob = Bob(fixture)
     env = dict(os.environ, MSXPI_HOME=str(home), MSXPI_PORT=str(MSXPI_PORT), PCHESS_IRC_HOST='127.0.0.1',
@@ -191,7 +207,7 @@ def main():
         bob.start()
         with (work / 'openmsx.log').open('w') as out:
             machine = (['-machine', 'Panasonic_FS-A1WSX', '-ext', 'ram4mb', '-ext', 'MSXPi', '-diska', str(work / 'floppy')]
-                       if MACHINE == 'msx2' else ['-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi'])
+                       if MACHINE == 'msx2' else ['-machine', os.environ.get('MCHAT_OPENMSX_MACHINE', 'Canon_V-25'), '-ext', 'ram2mb', '-ext', 'MSXPi'])
             subprocess.run([OPENMSX, *machine,
                             '-command', 'set renderer none' if not os.environ.get('MCHAT_SHOW') else 'set speed 100', '-script', str(script)],
                            stdout=out, stderr=subprocess.STDOUT, timeout=600)
@@ -227,7 +243,7 @@ def main():
     if MACHINE == 'msx2':
         switched = chr(10).join(screens.get('switched', []))
         check('#msxpi' in switched and 'bob: filler line' in switched, '/screen switched to SCREEN 2 and kept the chat')
-        check(any(line.find('bob: hello everyone') == 16 for line in screens.get('second', [])), 'SCREEN 6 uses the 85 column layout (chat from column 16)')
+        check(any(line.find('bob: filler line') == 16 for line in screens.get('back', [])), 'SCREEN 6 uses the 85 column layout (chat from column 16)')
     print('Test artifacts:', work, flush=True)
     fixture.shutdown()
     fixture.server_close()

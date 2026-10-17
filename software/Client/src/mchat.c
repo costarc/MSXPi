@@ -8,7 +8,7 @@
  * display backend can be replaced (MSX2 modes, another screen mode) without
  * touching this file.
  *
- *   MCHAT [/1] [nick]  ESC quits (disconnects); /1 = MSX1 screen on any machine
+ *   MCHAT [/1] [/t] [nick]   ESC quits; /1 MSX1 screen on an MSX2, /t TCP/IP
  *   TAB, LEFT/RIGHT    next/previous room       UP/DOWN  read older/newer
  *   HOME               back to the latest       /help    commands
  *
@@ -22,6 +22,14 @@
 #include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
 #include "../../C-common/header/msxpi.h"
 #include "mchat_ui.h"
+
+/* Fills VRAM with block copies (FillVram() is not used: see mchat_ui_s6.c). */
+static void vram_fill(uint16_t addr, uint8_t value, uint16_t len) {
+    uint8_t block[256];
+    uint16_t n;
+    memset(block, value, sizeof(block));
+    for (n = 0; n < len; n += 256) CopyRamToVram(block, addr + n, len - n < 256 ? len - n : 256);
+}
 
 /* The backends; see mchat_ui.h. ui_*() calls the one chosen in ui_mode. */
 uint8_t ui_mode = UI_MSX1;
@@ -85,9 +93,18 @@ static char cmd[MAX_INPUT + 16];
 
 /* ------------------------------------------------------------ transport */
 
+/* 0: commands go to the MSXPi server; 1: to local_exchange() over TCP/IP. */
+static uint8_t link_tcp;
+#include "mchat_local.c"
+
 static uint8_t xchg(const char *c) {
     uint8_t rc, tries = 0;
     uint16_t size = 0;
+    if (link_tcp) {
+        if (local_exchange(c)) return 1;
+        strcpy(note, "LINK ERROR - RETRYING");
+        return 0;
+    }
     msxpi_link_claim();
     rc = SendCommandToMSXPi(c, false);
     if (rc == RC_SUCCESS) rc = PerformHandshake(256);
@@ -399,7 +416,8 @@ static void scroll_log(int8_t dir) {
     cache_fill();
 }
 
-/* Command line: "[/1] [nick]". /1 forces the MSX1 screen on any machine. */
+/* Command line: "[/1] [/t] [nick]". /1 forces the MSX1 screen on any machine,
+ * /t talks to IRC over TCP/IP UNAPI instead of the MSXPi server. */
 static uint8_t force_msx1;
 
 static void read_args(char *dest) {
@@ -407,10 +425,11 @@ static void read_args(char *dest) {
     char *s = (char *)0x81, c;
     dest[0] = 0;
     force_msx1 = 0;
+    link_tcp = 0;
     while (i < len) {
         while (i < len && s[i] == ' ') i++;
-        if (i + 1 < len && s[i] == '/' && (s[i + 1] == '1')) {
-            force_msx1 = 1;
+        if (i + 1 < len && s[i] == '/' && (s[i + 1] == '1' || s[i + 1] == 't' || s[i + 1] == 'T')) {
+            if (s[i + 1] == '1') force_msx1 = 1; else link_tcp = 1;
             i += 2;
             continue;
         }
@@ -424,23 +443,13 @@ static void read_args(char *dest) {
     }
 }
 
-/* MSXVER of the main ROM: 0 MSX1, 1 MSX2, 2 MSX2+, 3 turbo R. The BIOS is
- * read through RDSLT by way of CALSLT, because page 0 is RAM under DOS. */
-static uint8_t msx_version(void) __naked {
-__asm
-    push ix
-    push iy
-    ld a,(#0xFCC1)
-    ld iy,(#0xFCC0)
-    ld ix,#0x000C
-    ld hl,#0x002D
-    call #0x001C
-    ei
-    pop iy
-    pop ix
-    ld l,a
-    ret
-__endasm;
+/* 0 on an MSX1, else 1: ask the BIOS for SCREEN 6, which only an MSX2 has;
+ * SCRMOD (0xFCAF) says whether it took. The version bytes the BIOS offers
+ * (MSXVER in ROM, EXBRSA in RAM) read as MSX2 on an MSX1 once MSR and
+ * InterNestor Lite were loaded, so they cannot be trusted here. */
+static uint8_t msx_version(void) {
+    Screen(6);
+    return *(volatile uint8_t *)0xFCAF == 6;
 }
 
 int main(void) {
@@ -448,6 +457,7 @@ int main(void) {
     uint8_t key;
     uint16_t now, lastpoll;
     read_args(nick);
+    net = 0;
     machine = msx_version();
     ui_mode = (machine && !force_msx1) ? UI_MSX2 : UI_MSX1;
     /* No C runtime start-up here: nothing is zeroed for us. */
@@ -465,6 +475,10 @@ int main(void) {
     memset(input, 0, sizeof(input));
     memset(note, 0, sizeof(note));
     font6_loaded = 0;                  /* the S6 font is read from the BIOS once */
+    if (link_tcp) {
+        const char *why = tcp_link_start();
+        if (why) {Print((char *)why); Print("\r\n"); return 1;}
+    }
     if (!ui_open()) return 1;
     layout();
     ring_clear();
@@ -501,6 +515,7 @@ int main(void) {
         }
     }
     xchg("mchat quit");
+    tcp_link_stop();
     ui_close();
     return 0;
 }
