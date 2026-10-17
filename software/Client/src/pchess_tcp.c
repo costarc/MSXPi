@@ -109,11 +109,14 @@ static uint8_t unapi(uint8_t fn) {
  * data is in page 2; net_memory() checks that, and that the stack still
  * has room below the TPA top (extra drives and INL lower it). */
 #define RX_SIZE 384    /* longer IRC lines are dropped */
+/* The longest line sent is a PRIVMSG with 100 characters of chat (about 130
+ * bytes with its header and CR LF); the host name is at most 47. */
+#define TX_SIZE 160
 typedef struct {
     char rx[RX_SIZE];
-    char tx[300];
+    char tx[TX_SIZE];
     uint8_t open[13];
-    char host[64];
+    char host[48];
 } NetMem;
 static NetMem net_area;
 static NetMem *net;
@@ -297,7 +300,7 @@ static char msg[80];
 static uint8_t irc_line(const char *a,const char *b,const char *c,const char *d) {
     uint8_t tries=0,err;
     uint16_t n=strlen(a)+(b?strlen(b):0)+(c?strlen(c):0)+(d?strlen(d):0);
-    if(irc.net<NET_REGISTER || n>296) return 0;
+    if(irc.net<NET_REGISTER || n>TX_SIZE-4) return 0;
     strcpy(net->tx,a);
     if(b) strcat(net->tx,b);
     if(c) strcat(net->tx,c);
