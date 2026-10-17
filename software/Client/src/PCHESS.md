@@ -52,7 +52,7 @@ than the default but takes about 3 minutes; keep it. The TCP/IP link refuses to
 start with less than 768 bytes between the program end and the top
 (`LOW MEMORY: TPA xxxx END yyyy`, the two addresses compared), so a build must
 leave that on the lowest top you support. `MEMTOP.COM` prints a machine's TPA
-top: run it after `INL I`, not before. `Client	ests\pchess_memory_test.py`
+top: run it after `INL I`, not before. `Client\tests\pchess_memory_test.py`
 checks a build against the tops measured so far; add a machine to it when you
 measure one.
 
