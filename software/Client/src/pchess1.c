@@ -636,7 +636,9 @@ static uint8_t confirm_leave(void) {
  * and hands it over in blocks of up to five rows ("pchess chat"); the
  * TCP/IP link has already put it in the scrollback. Private rows are drawn
  * in yellow: while the window is open the yellow font replaces the board
- * tiles in characters 32-127, and closing restores them. */
+ * tiles in characters 32-127, which wait in free VRAM at STASH and are put
+ * back on closing (rebuilding them with cache_graphics() takes seconds). */
+#define STASH 0x3840
 #define CHAT_TOP 1
 #define CHAT_INPUT_ROW 22
 #define CHAT_MAX_INPUT 100
@@ -685,8 +687,12 @@ static uint8_t chat_pull(void) {
 }
 
 static void chat_close(void) {
+    uint8_t n,tile[16];
     FillVram(NAMTBL,(char)BLANK,768);
-    cache_graphics();
+    for(n=32;n<128;n++) {
+        CopyVramToRam(STASH+(n-32)*16,tile,16);
+        put_char(n,tile,tile+8);
+    }
     sprites_hidden=0;
     memset(painted,255,sizeof(painted));
     chat_unread=0; chat_seen=0;
@@ -695,13 +701,18 @@ static void chat_close(void) {
 
 static void chat_window(void) {
     char input[CHAT_MAX_INPUT+1];
-    uint8_t key,len=0,i,colr[8];
+    uint8_t key,len=0,i,colr[8],tile[16];
     uint16_t lastpoll,now;
     if(!online) {strcpy(status,"CHAT NEEDS AN ONLINE GAME (3 OR 4)"); return;}
     input[0]=0;
     sprites_hidden=1; draw_sprites();
     memset(colr,(C_YELLOW<<4)|C_BLACK,8);
-    for(i=0;i<96;i++) put_char(i+32,fontdata+i*8,colr);
+    for(i=32;i<128;i++) {
+        CopyVramToRam(PATTBL+i*8,tile,8);
+        CopyVramToRam(COLTBL+i*8,tile+8,8);
+        CopyRamToVram(tile,STASH+(i-32)*16,16);
+        put_char(i,fontdata+(i-32)*8,colr);
+    }
     FillVram(NAMTBL,(char)BLANK,768);
     chat_line(0,"CHAT - ESC OR TAB CLOSES",0);
     chat_pull();
@@ -727,6 +738,7 @@ static void chat_window(void) {
                 strcpy(command,"pchess say ");
                 strcat(command,input);
                 if(exchange(command)) {
+                    chat_clean(input);
                     chat_add("YOU: ",input,matched);
                     len=0; input[0]=0;
                     chat_pull();
