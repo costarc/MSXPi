@@ -484,14 +484,30 @@ if (-not $python) { $python = "python" }
 @"
 @echo off
 rem MSXPi launcher: MSX network check (if installed), msxpi-server, then openMSX.
+rem Set MSXPI_PORT to run msxpi-server on that TCP port and point openMSX's MSXPi at it.
+rem Leave it empty to use the defaults.
+set "MSXPI_PORT="
+
 cd /d "$MsxPiHome"
 if exist "$MsxPiHome\msxpi-netcheck.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "$MsxPiHome\msxpi-netcheck.ps1"
-powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object { `$_.CommandLine -like '*msxpi-server.py*' }) { exit 1 }"
+rem Is a server already up? With MSXPI_PORT set, only a listener on that port counts;
+rem otherwise any running msxpi-server.py does.
+if defined MSXPI_PORT (
+    powershell -NoProfile -Command "if (Get-NetTCPConnection -State Listen -LocalPort %MSXPI_PORT% -ErrorAction SilentlyContinue) { exit 1 }"
+) else (
+    powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object { `$_.CommandLine -like '*msxpi-server.py*' }) { exit 1 }"
+)
 if not errorlevel 1 (
+    rem msxpi-server reads MSXPI_PORT from the environment inherited by start
     start "msxpi-server" /D "$MsxPiHome" "$python" "$MsxPiHome\msxpi-server.py"
     ping -n 3 127.0.0.1 >nul
+) else (
+    if defined MSXPI_PORT echo Something is already listening on port %MSXPI_PORT%; reusing it.
 )
-start "openMSX" /D "$OpenMsxDir" "$openmsxExe" -machine $Machine -ext MSXPi -ext ram4mb
+
+set "PORTARG="
+if defined MSXPI_PORT set PORTARG=-command "set msxpiserver_port %MSXPI_PORT%"
+start "openMSX" /D "$OpenMsxDir" "$openmsxExe" -machine $Machine -ext MSXPi -ext ram4mb %PORTARG%
 "@ | Set-Content -Encoding ASCII "$MsxPiHome\start-openmsx.bat"
 Ok "$MsxPiHome\start-openmsx.bat"
 # Launchers of earlier versions of this script.
