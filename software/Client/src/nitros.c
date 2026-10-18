@@ -94,7 +94,6 @@ int main(void) {
         if(!exchange(command)) { Print("MSXPi connection error\r\n"); return 1; }
         display(); return reply[4]==3;
     }
-    Print("NitrOS-9 on Raspberry Pi. ESC: close\r\n");
     if(!exchange("nitros start")) {
         exchange("nitros stop");
         Print("MSXPi connection error\r\n"); return 1;
