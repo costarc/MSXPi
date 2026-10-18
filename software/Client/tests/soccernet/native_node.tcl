@@ -3,11 +3,11 @@
 # optional delay (emulated seconds) and loss (percent) on the way IN.
 #   ROLEARG=H|C  START=<s>  OUT=<file> IN=<file> TRACE=<file>
 #   LAG=<s> DROP=<pct> STOPF=<frame>
-# One lockstep node over the MSXPi-native transport (SOCNAT.COM on B:).
+# One lockstep node over the MSXPi-native transport (SOCCERNET.COM on B:).
 # The machine is started by the caller with -ext MSXPi; the harness (-script harness.tcl)
 # boots DOS from the MSXPi server. Network = the two servers (msxpi_server_np.py).
 #   ROLEARG=H|C  TRACE=<file>  STOPF=<frame>  TMAX=<emulated s>
-# SOCCERNET_SRC = software/Client/src/soccernet (stub_nat.bin), SOCCERNET_BUILD = its build/ folder
+# SOCCERNET_BUILD = software/Client/src/soccernet/build/test (stub_nat.bin, stub_syms_nat.tcl)
 set srcerr [catch {source $::env(SOCCERNET_BUILD)/stub_syms_nat.tcl} srcmsg]
 set roleArg $::env(ROLEARG)
 set stopf   $::env(STOPF)
@@ -33,7 +33,7 @@ set polls 0
 set sent 0; set dropped 0; set got 0
 
 proc codeDiff {} {
-    set f [open $::env(SOCCERNET_SRC)/stub_nat.bin rb]; set img [read $f]; close $f
+    set f [open $::env(SOCCERNET_BUILD)/stub_nat.bin rb]; set img [read $f]; close $f
     binary scan $img c* bytes
     set n [expr {$::s_nf - $::s_pad1c}]
     set d {}

@@ -17,9 +17,10 @@ history: `documents/SOCCERNET-NETPLAY.md`.
 Transport: one MSXPi opcode (C9) per poll, served by `msxpi_netplay.py` on the Pi/PC, which does the UDP, the
 handshake (version, round trip, input delay) and dead-peer detection. See that file's header for the wire format.
 
-Build (needs sjasmplus and Python 3): `SJASMPLUS=/path/to/sjasmplus sh build.sh` -> `build/SOCNAT.COM`
-(scripted input, for the test rig) plus the mailbox-transport test variants. The real-joystick production
-build has not been made or run yet. The stub must stay below F300h: the game's stack reaches F30Ch.
+Build (needs sjasmplus and Python 3): `SJASMPLUS=/path/to/sjasmplus sh build.sh` ->
+`build/prod/SOCCERNET.COM` (real joystick; built but never run) and `build/test/SOCCERNET.COM` (scripted
+input, for the test rigs). The mailbox-transport variant of the stub (no `-DNATIVE`) is only kept for the old
+file-based rig of the prototype and is not built. The stub must stay below F300h: the game's stack reaches F30Ch.
 
 Test: `software/Server/Python/tests/test_netplay.py` (no emulator) and
 `software/Client/tests/soccernet/run_native.sh` (two openMSX, needs your own `SOCCER.ROM`).

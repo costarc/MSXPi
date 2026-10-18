@@ -26,13 +26,9 @@ CALSLT:         EQU     $001C
 ENASLT:         EQU     $0024
 INIT32:         EQU     $006F
 ROM_SUM_A:      EQU     $40                ; Fletcher-16 (mod 256) of the 32K ROM;
-ROM_SUM_B:      EQU     $CE                ; check with netplay/software/Client/src/soccernet/rom_check.py
+ROM_SUM_B:      EQU     $CE                ; check with rom_check.py
 STUB:           EQU     $F000
-        IFDEF NATIVE
-        INCLUDE "stub_nat.inc"
-        ELSE
-        INCLUDE "stub.inc"
-        ENDIF             ; pad1t, pad1c, pad2c, rng1, rng2, ROLE
+        INCLUDE "stub_nat.inc"          ; pad1t, pad1c, pad2c, rng1, rng2, ROLE (from the stub build)
 BUF:            EQU     $2000
 CHUNK:          EQU     $2000
 
@@ -273,11 +269,7 @@ patches:
         defw    0
 
 stubSrc:
-        IFDEF NATIVE
         INCBIN  "stub_nat.bin"
-        ELSE
-        INCBIN  "stub.bin"
-        ENDIF
 stubEnd:
 
 fcb:    defb    0
