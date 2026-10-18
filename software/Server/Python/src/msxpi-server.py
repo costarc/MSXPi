@@ -39,6 +39,7 @@ SERVER_MODULES = (
     "msxpi_settings.py",
     "msxpi_transport.py",
     "msxpi_ethglue.py",
+    "msxpi_netplay.py",
     "msxpi_blocks.py",
     "msxpi_cmd_disk.py",
     "msxpi_cmd_files.py",

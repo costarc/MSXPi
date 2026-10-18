@@ -76,6 +76,7 @@ OP_IN_STATUS   = 0xC5   # the hot path - INL calls this 50/60 times a second
 OP_GET_FRAME   = 0xC6   # bulk
 OP_SEND_FRAME  = 0xC7   # bulk
 OP_RESET       = 0xC8
+# 0xC9 is taken by msxpi_netplay.py (served in msxpi_ethglue, not by the shuttle).
 
 # frozenset, not a tuple: this is tested against EVERY byte the server reads
 # while waiting for READY, so a linear scan is paid on all ordinary traffic too,
