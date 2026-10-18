@@ -131,7 +131,12 @@ harness::at_dos_prompt {
         type "MCHAT /1 $::env(NICK)\r"
         after time 3 arm
         if {$::env(INVITE) eq "1"} {
-            after time $::env(PLAY_AT) { type "/play $::env(OPPONENT) soccer\r" }
+            if {[info exists ::env(PICK)] && $::env(PICK) eq "1"} {
+                # pick the opponent from the user list: Ctrl-U, Down (alice is first, bob second), Enter, Enter
+                after time $::env(PLAY_AT) { type "[format %c 21][format %c 31]\r\r" }
+            } else {
+                after time $::env(PLAY_AT) { type "/play $::env(OPPONENT) soccer\r" }
+            }
         } else {
             after time $::env(ACCEPT_AT) { type "/accept\r" }
         }

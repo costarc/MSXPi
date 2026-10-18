@@ -75,6 +75,7 @@ static char mynick[12];
 static uint16_t rnext[MAXR], rseen[MAXR];
 static char ulist[UMAX][12];
 static uint8_t ushown;
+static uint8_t usel = 0xFF;     /* highlighted user while picking a player (Ctrl-U), 0xFF = not picking */
 static uint16_t utotal;
 static char note[48];
 
@@ -250,6 +251,7 @@ static void fetch_meta(void) {
         from += got;
     } while (got == 15 && from < utotal && shown < UMAX);
     ushown = shown;
+    if (usel != 0xFF && usel >= ushown) usel = ushown ? ushown - 1 : 0xFF;
     meta_stale = 0;
 }
 
@@ -275,7 +277,7 @@ static void draw_side(void) {
     put_num(p, utotal);
     ui_text(0, 1, head, ui_side, UI_SIDE_HEAD);
     for (i = 0; i + 1 < vr; i++)
-        ui_text(0, 2 + i, i < ushown ? ulist[i] : "", ui_side, UI_SIDE);
+        ui_text(0, 2 + i, i < ushown ? ulist[i] : "", ui_side, i == usel ? UI_TAB_ON : UI_SIDE);
 }
 
 static void draw_log(void) {
@@ -299,7 +301,8 @@ static void draw_status(void) {
         *p++ = ' ';
         p = put_str(p, rname[cur]);
         p = put_str(p, conn == 1 ? "  " : "  CONNECTING ");
-        if (gflags & GF_INVITED) p = put_str(p, " GAME INVITE: /ACCEPT /DECLINE");
+        if (usel != 0xFF) p = put_str(p, " PICK: UP/DOWN, ENTER=INVITE, ESC");
+        else if (gflags & GF_INVITED) p = put_str(p, " GAME INVITE: /ACCEPT /DECLINE");
         else if (!live) p = put_str(p, " SCROLLED-HOME=LATEST");
         else if (conn == 1) p = put_str(p, " /HELP");
     }
@@ -339,6 +342,32 @@ static void poll(void) {
     cache_fill();
     rseen[cur] = rnext[cur];
     if (meta_stale || before != conn) {fetch_meta();}
+}
+
+/* Picking a player (Ctrl-U, Up/Down, Enter): the input line becomes "/play NICK " so a game can be added
+ * or Enter pressed again. The server picks its default game; the client knows no game by name. */
+static void pick_start(void) {
+    if (!ushown) {strcpy(note, "NOBODY TO INVITE"); return;}
+    usel = 0;
+}
+
+static void pick_key(uint8_t key) {
+    const char *n;
+    char *p;
+    if (key == 0x1E) {if (usel) usel--;}
+    else if (key == 0x1F) {if (usel + 1 < ushown && usel + 2 < vr) usel++;}
+    else if (key == 13) {
+        n = ulist[usel];
+        while (*n == '@' || *n == '%' || *n == '+') n++;
+        if (!strcmp(n, mynick)) {strcpy(note, "THAT IS YOU"); usel = 0xFF; return;}
+        p = put_str(input, "/play ");
+        p = put_str(p, n);
+        *p++ = ' ';
+        *p = 0;
+        ilen = p - input;
+        usel = 0xFF;
+    }
+    else usel = 0xFF;                   /* ESC, Ctrl-U again, anything else: back to typing */
 }
 
 /* A game is ready: fetch its command line. 1 = launch_cmd is set. */
@@ -513,6 +542,7 @@ int main(void) {
     memset(input, 0, sizeof(input));
     memset(note, 0, sizeof(note));
     gflags = launching = 0;
+    usel = 0xFF;
     font6_loaded = 0;                  /* the S6 font is read from the BIOS once */
     if (link_tcp) {
         const char *why = tcp_link_start();
@@ -533,6 +563,8 @@ int main(void) {
         key = Inkey();
         if (key) {
             if (note[0] && conn == 1) note[0] = 0;
+            if (usel != 0xFF) {pick_key(key); draw_all(); continue;}
+            if (key == 0x15) {pick_start(); draw_all(); continue;}
             if (key == 27) break;
             else if (key == 13) {send_input(); if (ilen == 0xFF) break;}
             else if (key == 8 || key == 127) {if (ilen) input[--ilen] = 0;}

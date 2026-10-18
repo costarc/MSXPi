@@ -11,6 +11,7 @@ program, such as a chess or checkers client) can be added without touching the c
 |---|---|
 | `/games` | list the games this chat can start |
 | `/play NICK [GAME]` | invite `NICK` (default game: `soccer`) |
+| Ctrl-U | pick a player in the user list: Up/Down move the highlight, Enter puts `/play NICK ` on the input line (add a game name, or press Enter again for the default game), Esc goes back to typing |
 | `/accept`, `/decline` | answer an invitation (shown as a chat line, and in the status bar) |
 | `/cancel` | withdraw an invitation or leave a game that is about to start |
 

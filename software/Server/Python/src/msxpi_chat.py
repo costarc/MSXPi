@@ -53,7 +53,7 @@ MIN_WIDTH = 20
 K_TEXT, K_PRIV_IN, K_SYSTEM, K_OWN, K_ACTION, K_PRIV_OUT = range(6)
 NICK_RE = re.compile(r'[A-Za-z\[\]\\`_^{|}][A-Za-z0-9\[\]\\`_^{|}-]{0,15}')
 HELP = ('/nick N  /msg N TEXT  /join #ROOM  /part  /me TEXT  /who  /topic  '
-        '/play N [GAME]  /accept  /decline  /cancel  /games  /help.  F1-F3 switch room, F4 users, ESC quit')
+        '/play N [GAME]  /accept  /decline  /cancel  /games  /help.  Ctrl-U pick a player to invite, ESC quit')
 
 
 def clean(text):
