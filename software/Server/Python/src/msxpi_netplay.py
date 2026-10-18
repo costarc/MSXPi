@@ -18,7 +18,9 @@ for the match, keep-alive/dead detection, and the delay/loss injection used by t
 
 Peer datagrams: 13 bytes = game packet, 14 bytes = control (type, version, nonce, a, b).
 
-Session (for now from the environment, later set by the lobby):
+Session: normally set by the chat (msxpi_chat.py) once both players agreed to a game:
+    open(), candidates(), set_peers() - then the MSX side starts it (flags 0x40).  For the test rigs it
+    can also come from the environment:
     MSXPI_NETPLAY            local_port:peer_host:peer_port
     MSXPI_NETPLAY_LAG_MS     one-way delay added to incoming datagrams (default 0)
     MSXPI_NETPLAY_JITTER_MS  extra random 0..N ms per datagram (default 0)
@@ -29,6 +31,7 @@ Session (for now from the environment, later set by the lobby):
 import collections
 import heapq
 import os
+import queue
 import random
 import socket
 import struct
@@ -56,6 +59,83 @@ DEAD_AFTER = 15.0
 MIN_DELAY, MAX_DELAY = 2, 6
 
 
+STUN_SERVER = ("stun.l.google.com", 19302)
+STUN_COOKIE = struct.pack(">I", 0x2112A442)
+
+
+def lan_address():
+    """The address this machine would use to reach the internet (no packet is sent)."""
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect(("192.0.2.1", 9))
+        return probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+
+
+def stun_query(sock, server, timeout=2.0, inbox=None):
+    """Public (ip, port) of `sock` as seen by a STUN server (RFC 5389 binding request), or None.
+    With `inbox` (a queue the receive thread fills with STUN replies) the socket may be in use by
+    that thread; without it the reply is read from the socket here."""
+    txid = os.urandom(12)
+    request = struct.pack(">HHI", 0x0001, 0, 0x2112A442) + txid
+    try:
+        address = socket.gethostbyname(server[0])
+    except OSError:
+        return None
+    old = sock.gettimeout()
+    try:
+        for _ in range(2):
+            sock.sendto(request, (address, server[1]))
+            end = time.monotonic() + timeout / 2
+            while time.monotonic() < end:
+                try:
+                    if inbox is not None:
+                        data = inbox.get(timeout=max(0.01, end - time.monotonic()))
+                    else:
+                        sock.settimeout(max(0.01, end - time.monotonic()))
+                        data, _ = sock.recvfrom(512)
+                except (queue.Empty, socket.timeout, OSError):
+                    break
+                parsed = parse_stun(data, txid)
+                if parsed:
+                    return parsed
+    finally:
+        if inbox is None:
+            sock.settimeout(old)
+    return None
+
+
+def parse_stun(data, txid):
+    if len(data) < 20 or data[8:20] != txid or struct.unpack(">H", data[:2])[0] != 0x0101:
+        return None
+    pos = 20
+    while pos + 4 <= len(data):
+        kind, length = struct.unpack(">HH", data[pos:pos + 4])
+        body = data[pos + 4:pos + 4 + length]
+        if kind == 0x0020 and length >= 8 and body[1] == 1:            # XOR-MAPPED-ADDRESS, IPv4
+            port = struct.unpack(">H", body[2:4])[0] ^ 0x2112
+            ip = bytes(b ^ m for b, m in zip(body[4:8], b"\x21\x12\xa4\x42"))
+            return socket.inet_ntoa(ip), port
+        if kind == 0x0001 and length >= 8 and body[1] == 1:            # MAPPED-ADDRESS
+            return socket.inet_ntoa(body[4:8]), struct.unpack(">H", body[2:4])[0]
+        pos += 4 + ((length + 3) & ~3)
+    return None
+
+
+_instance = None
+
+
+def instance():
+    """The one session object of this server process (the chat prepares it, the MSX transaction uses it)."""
+    global _instance
+    if _instance is None:
+        _instance = Netplay(None, None)
+    return _instance
+
+
 def choose_delay(rtts):
     """Input delay in frames from measured round trips (seconds)."""
     s = sorted(rtts)
@@ -79,7 +159,10 @@ class Netplay:
         self.n = 0
         self.ready = collections.deque()  # game packets released, in order
         self.sock = None
-        self.peer = None
+        self.stun_inbox = queue.Queue()   # STUN replies, handed over by the receive thread
+        self.peers = []                   # candidate (ip, port) of the opponent
+        self.peer_ips = set()
+        self.peer = None                  # the address that answered: locked once known
         self.state = S_IDLE
         self.delay = 0
         self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0)
@@ -87,15 +170,70 @@ class Netplay:
         self._reset_session()
         if spec:
             lport, host, pport = spec.split(":")
-            self.peer = (host, int(pport))
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.bind(("0.0.0.0", int(lport)))
-            threading.Thread(target=self._rx_loop, daemon=True).start()
-            threading.Thread(target=self._timer_loop, daemon=True).start()
+            self.open(int(lport))
+            self.set_peers([(host, int(pport))])
             log("netplay: local %s peer %s lag=%.0fms jitter=%.0fms loss=%.1f%% version=%d"
-                % (lport, self.peer, self.lag * 1000, self.jitter * 1000, self.loss, self.version))
-        else:
-            log("netplay: MSXPI_NETPLAY not set - packets are discarded")
+                % (lport, self.peers, self.lag * 1000, self.jitter * 1000, self.loss, self.version))
+
+    # ---- session set-up (chat or environment) ---------------------------------------
+    def open(self, local_port=0):
+        """Bind the UDP socket (once) and start the threads.  Returns the local port."""
+        with self.lock:
+            if self.sock is None:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.bind(("0.0.0.0", local_port))
+                self.sock = sock
+                threading.Thread(target=self._rx_loop, args=(sock,), daemon=True).start()
+                threading.Thread(target=self._timer_loop, args=(sock,), daemon=True).start()
+            return self.sock.getsockname()[1]
+
+    def close(self):
+        """End the session and free the port."""
+        with self.lock:
+            sock, self.sock = self.sock, None
+            self.state = S_IDLE
+            self.peers, self.peer_ips, self.peer = [], set(), None
+            self.heap.clear()
+            self.ready.clear()
+        if sock:
+            sock.close()
+
+    def candidates(self, stun=True, stun_server=None):
+        """'ip:port' strings the opponent can try: the LAN address, and the public one (STUN) if it answers.
+        STUN uses the game socket itself, so the NAT mapping it learns is the one the game will use."""
+        port = self.open()
+        found = []
+        lan = lan_address()
+        if lan:
+            found.append("%s:%d" % (lan, port))
+        if stun and not os.environ.get("MSXPI_NETPLAY_NOSTUN"):
+            public = stun_query(self.sock, stun_server or STUN_SERVER, inbox=self.stun_inbox)
+            if public and "%s:%d" % public not in found:
+                found.append("%s:%d" % public)
+        return found
+
+    def set_peers(self, peers):
+        """peers: [(host, port)] - every address the opponent may be reached at.  The first one that
+        answers is kept (NAT hole punching: both sides send to all candidates at the same time)."""
+        resolved = []
+        for host, port in peers:
+            try:
+                resolved.append((socket.gethostbyname(host), int(port)))
+            except OSError:
+                pass
+        with self.lock:
+            self.peers = resolved
+            self.peer_ips = {h for h, _ in resolved}
+            self.peer = None
+
+    @property
+    def configured(self):
+        return self.sock is not None and bool(self.peers)
+
+    def describe(self):
+        names = {S_IDLE: "idle", S_CONNECT: "connecting", S_SETUP: "connecting", S_READY: "playing",
+                 S_VERSION: "version mismatch", S_FAILED: "failed", S_DEAD: "lost"}
+        return names.get(self.state, "?")
 
     # ---- session state -------------------------------------------------------------
     def _reset_session(self):
@@ -116,28 +254,47 @@ class Netplay:
     def restart(self):
         with self.lock:
             self._reset_session()
-            self.state = S_CONNECT if self.sock else S_FAILED
-            self.log("netplay: session restart nonce=%08x" % self.nonce)
+            self.peer = None
+            self.state = S_CONNECT if self.configured else S_FAILED
+            self.log("netplay: session restart nonce=%08x%s" % (self.nonce, "" if self.configured else " (not configured)"))
 
-    def _send_ctl(self, typ, a=0, b=0):
-        if self.sock:
+    def _targets(self):
+        return [self.peer] if self.peer else self.peers
+
+    def _send(self, data):
+        sock = self.sock
+        if not sock:
+            return
+        for target in self._targets():
             try:
-                self.sock.sendto(CTL.pack(typ, self.version, self.nonce, a, b), self.peer)
+                sock.sendto(data, target)
             except OSError:
                 pass
 
+    def _send_ctl(self, typ, a=0, b=0):
+        self._send(CTL.pack(typ, self.version, self.nonce, a, b))
+
     # ---- network threads -----------------------------------------------------------
-    def _rx_loop(self):
+    def _rx_loop(self, sock):
         while True:
             try:
-                data, _ = self.sock.recvfrom(64)
+                data, addr = sock.recvfrom(512)
             except OSError:
-                if self.sock.fileno() == -1:
+                if sock.fileno() == -1:
                     return                # closed
                 continue                  # e.g. Windows ConnectionResetError after an ICMP
                                           # 'port unreachable' for a peer that is not up yet
+            if len(data) >= 20 and data[4:8] == STUN_COOKIE:
+                self.stun_inbox.put(data)         # a STUN reply, not the opponent
+                continue
             if len(data) not in (PKT, CTL.size):
                 continue
+            with self.lock:
+                if self.peer:
+                    if addr != self.peer:
+                        continue
+                elif addr[0] not in self.peer_ips:
+                    continue              # not from the opponent
             self.stats["rx"] += 1
             if self.loss and self.rng.random() * 100 < self.loss:
                 self.stats["dropped"] += 1
@@ -145,17 +302,20 @@ class Netplay:
             t = time.monotonic() + self.lag + (self.rng.random() * self.jitter)
             with self.lock:
                 self.n += 1
-                heapq.heappush(self.heap, (t, self.n, data))
+                heapq.heappush(self.heap, (t, self.n, data, addr))
 
-    def _timer_loop(self):
-        while True:
+    def _timer_loop(self, sock):
+        while self.sock is sock:
             time.sleep(0.005)
             with self.lock:
                 self._pump(time.monotonic())
 
     def _pump(self, now):
         while self.heap and self.heap[0][0] <= now:
-            _, _, data = heapq.heappop(self.heap)
+            _, _, data, addr = heapq.heappop(self.heap)
+            if self.peer is None and self.state in (S_CONNECT, S_SETUP):
+                self.peer = addr          # first answer: keep talking to this address only
+                self.log("netplay: opponent at %s:%d" % addr)
             if len(data) == CTL.size:
                 self._on_ctl(now, *CTL.unpack(data))
             else:
@@ -234,17 +394,19 @@ class Netplay:
             self.ready.append(data)
 
     # ---- one MSX transaction -------------------------------------------------------
-    def handle(self, opcode):
-        flags = self.read()
+    def handle(self, opcode, read=None, write=None):
+        read = read or self.read
+        write = write or self.write
+        flags = read()
         if flags is None:
             return True
         pkt = bytearray()
         for _ in range(PKT):
-            b = self.read()
+            b = read()
             if b is None:
                 return True
             pkt.append(b)
-        s = self.read()
+        s = read()
         if s is None:
             return True
         if (sum(pkt) & 0xFF) != s:
@@ -263,23 +425,20 @@ class Netplay:
                 if code != getattr(self, '_last_code', None):
                     self._last_code = code
                     self.log('netplay: status -> %d delay %d (state %d)' % (code, d, self.state))
-                self.write(bytes([0xA0 + code, d, d]))
+                write(bytes([0xA0 + code, d, d]))
                 return True
-            if flags & 1 and self.sock and self.state == S_READY:
-                try:
-                    self.sock.sendto(bytes(pkt), self.peer)
-                    self.stats["tx"] += 1
-                except OSError:
-                    pass
+            if flags & 1 and self.state == S_READY:
+                self._send(bytes(pkt))
+                self.stats["tx"] += 1
             if flags & 2 and self.state in (S_DEAD, S_FAILED):
-                self.write(b"\xff\x00")
+                write(b"\xff\x00")
                 return True
             out = self.ready.popleft() if (flags & 2 and self.ready) else b""
         if out:
             self.stats["delivered"] += 1
-            self.write(bytes([PKT]) + out + bytes([sum(out) & 0xFF]))
+            write(bytes([PKT]) + out + bytes([sum(out) & 0xFF]))
         else:
-            self.write(b"\x00\x00")
+            write(b"\x00\x00")
         now = time.monotonic()
         if now - self.last_log > 10:
             self.last_log = now
