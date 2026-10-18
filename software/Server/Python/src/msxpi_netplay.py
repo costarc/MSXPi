@@ -64,7 +64,10 @@ STUN_COOKIE = struct.pack(">I", 0x2112A442)
 
 
 def lan_address():
-    """The address this machine would use to reach the internet (no packet is sent)."""
+    """The address this machine would use to reach the internet (no packet is sent).
+    MSXPI_NETPLAY_LAN overrides it (tests on one machine use 127.0.0.1)."""
+    if os.environ.get("MSXPI_NETPLAY_LAN"):
+        return os.environ["MSXPI_NETPLAY_LAN"]
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         probe.connect(("192.0.2.1", 9))

@@ -21,7 +21,7 @@ SERVER="$ROOT/software/Server/Python/src"
 OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 [ -f "$SOCCER_ROM" ] || { echo "set SOCCER_ROM to your own SOCCER.ROM"; exit 1; }
-[ -f "$SRC/build/SOCNAT.COM" ] || { echo "build first: sh $SRC/build.sh"; exit 1; }
+[ -f "$SRC/build/test/SOCCERNET.COM" ] || { echo "build first: sh $SRC/build.sh"; exit 1; }
 WORK=${WORK:-${TMP:-/tmp}/soccernet-work}
 mkdir -p "$WORK"; WORKW=$(cd "$WORK" && pwd -W 2>/dev/null || echo "$WORK")
 
@@ -44,7 +44,7 @@ var DriveM=https://github.com/costarc/MSXPi/raw/master/software/target
 var WIDTH=80
 var SPI_HW=False
 INI
-  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/SOCNAT.COM" SOCNAT.COM > /dev/null
+  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/test/SOCCERNET.COM" SOCCERNET.COM > /dev/null
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SOCCER_ROM" SOCCER.ROM > /dev/null
 done
 rm -f "$WORK/stop_servers"
@@ -64,14 +64,14 @@ start 2 8116 5102 5101 ${VER2:-1}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 node() {  # role port
-  SOCCERNET_BUILD="$SRCW/build" SOCCERNET_SRC="$SRCW" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF \
+  SOCCERNET_BUILD="$SRCW/build/test" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF \
   MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
   timeout ${NODETMO:-1500} "$OMX" -machine Canon_V-25 -ext ram2mb -ext MSXPi \
     -command "set msxpiserver_port $2" -command "set msxpirom_bank BANK2" \
     -command "set msxpirom_sltsl ON" -command "reset" -command "set renderer ${RENDERER:-none}" \
     -script "$HARNESS" -script "$RW/software/Client/tests/soccernet/native_node.tcl" > "$WORK/np/$1.log" 2>&1
 }
-PROG=SOCNAT
+PROG=SOCCERNET
 export PROG
 node H 8115 &
 if [ -z "$ONLY" ]; then sleep 5; node C 8116 & fi
