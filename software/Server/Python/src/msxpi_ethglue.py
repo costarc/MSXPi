@@ -166,9 +166,6 @@ except Exception as _e:
     _NETPLAY_OP = -1
     print(f"Warning: failed to import msxpi_netplay module: {_e}")
 
-_netplay = None
-
-
 def _netplay_read():
     rc, v = SPI_ByteTransfer()
     return v if rc == RC_SUCCESS else None
@@ -179,11 +176,9 @@ def _netplay_write(data):
 
 
 def _netplay_handle(opcode):
-    global _netplay
-    if _netplay is None:
-        _netplay = _np_mod.Netplay(_netplay_read, _netplay_write, log=print)
+    # the session object is shared with the chat (msxpi_chat), which sets the opponent up
     try:
-        return _netplay.handle(opcode)
+        return _np_mod.instance().handle(opcode, _netplay_read, _netplay_write)
     except Exception as e:
         print(f"netplay: error serving opcode {hex(opcode)}: {e}")
         return True

@@ -230,5 +230,115 @@ class Loss(unittest.TestCase):
             b.sock.close()
 
 
+class Api(unittest.TestCase):
+    """The session API the chat uses: open, candidates, set_peers, close."""
+
+    def tearDown(self):
+        for s in getattr(self, 'objs', ()):
+            s.close()
+
+    def make(self, count=2):
+        quiet = lambda *a: None
+        self.objs = [n.Netplay(None, None, {}, quiet) for _ in range(count)]
+        return self.objs
+
+    def test_restart_without_configuration_fails_at_once(self):
+        a, = self.make(1)
+        a.restart()
+        self.assertEqual(a.state, n.S_FAILED)
+        self.assertFalse(a.configured)
+
+    def test_two_sessions_by_candidates_with_a_dead_one(self):
+        a, b = self.make()
+        pa, pb = a.open(), b.open()
+        dead = free_ports(1)[0]
+        a.set_peers([('127.0.0.1', dead), ('127.0.0.1', pb)])       # first candidate goes nowhere
+        b.set_peers([('127.0.0.1', pa)])
+        self.assertTrue(a.configured)
+        a.restart()
+        b.restart()
+        self.assertTrue(wait_for(lambda: a.state == n.S_READY and b.state == n.S_READY))
+        self.assertEqual(a.peer, ('127.0.0.1', pb))                  # locked on the one that answered
+
+    def test_strangers_are_ignored(self):
+        a, b = self.make()
+        pa, pb = a.open(), b.open()
+        a.set_peers([('127.0.0.1', pb)])
+        a.restart()
+        stranger = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            stranger.bind(('127.0.0.1', 0))
+            # same IP, other port: allowed before a peer is locked (NAT may rewrite the port) ...
+            a.set_peers([('127.0.0.1', pb)])
+            a.peer = ('127.0.0.1', pb)                                # ... but not once it is locked
+            stranger.sendto(bytes(n.CTL.size), ('127.0.0.1', pa))
+            time.sleep(0.2)
+            self.assertEqual(a.stats['rx'], 0)
+        finally:
+            stranger.close()
+
+    def test_close_frees_the_port(self):
+        a, = self.make(1)
+        port = a.open()
+        a.close()
+        probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            probe.bind(('0.0.0.0', port))
+        finally:
+            probe.close()
+        self.assertEqual(a.state, n.S_IDLE)
+
+
+class Stun(unittest.TestCase):
+    def reply(self, txid, ip, port, xor=True):
+        if xor:
+            cookie = bytes([0x21, 0x12, 0xA4, 0x42])
+            body = bytes([0, 1]) + (port ^ 0x2112).to_bytes(2, 'big') +                 bytes(b ^ c for b, c in zip(socket.inet_aton(ip), cookie))
+            attr = (0x0020).to_bytes(2, 'big')
+        else:
+            body = bytes([0, 1]) + port.to_bytes(2, 'big') + socket.inet_aton(ip)
+            attr = (0x0001).to_bytes(2, 'big')
+        return (0x0101).to_bytes(2, 'big') + len(body).__add__(4).to_bytes(2, 'big') +             bytes([0x21, 0x12, 0xA4, 0x42]) + txid + attr + len(body).to_bytes(2, 'big') + body
+
+    def test_parse_both_address_kinds(self):
+        txid = bytes(range(12))
+        self.assertEqual(n.parse_stun(self.reply(txid, '203.0.113.9', 40000), txid), ('203.0.113.9', 40000))
+        self.assertEqual(n.parse_stun(self.reply(txid, '203.0.113.9', 40000, xor=False), txid),
+                         ('203.0.113.9', 40000))
+
+    def test_parse_rejects_wrong_transaction_and_junk(self):
+        txid = bytes(range(12))
+        self.assertIsNone(n.parse_stun(self.reply(txid, '1.2.3.4', 5), bytes(12)))
+        self.assertIsNone(n.parse_stun(b'short', txid))
+
+    def test_query_against_a_local_server(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        server.bind(('127.0.0.1', 0))
+        import threading
+
+        def serve():
+            data, addr = server.recvfrom(64)
+            server.sendto(self.reply(data[8:20], '198.51.100.7', addr[1]), addr)
+        threading.Thread(target=serve, daemon=True).start()
+        a = n.Netplay(None, None, {}, lambda *x: None)
+        try:
+            a.open()
+            found = n.stun_query(a.sock, ('127.0.0.1', server.getsockname()[1]), inbox=a.stun_inbox)
+            self.assertEqual(found, ('198.51.100.7', a.sock.getsockname()[1]))
+            cands = a.candidates(stun=True, stun_server=('127.0.0.1', 9))   # nobody there: LAN only
+            self.assertTrue(all(c.endswith(':%d' % a.sock.getsockname()[1]) for c in cands))
+        finally:
+            a.close()
+            server.close()
+
+    def test_query_without_an_answer_gives_up(self):
+        a = n.Netplay(None, None, {}, lambda *x: None)
+        try:
+            a.open()
+            self.assertIsNone(n.stun_query(a.sock, ('127.0.0.1', 9), timeout=0.4, inbox=a.stun_inbox))
+        finally:
+            a.close()
+
+
 if __name__ == '__main__':
     unittest.main()
