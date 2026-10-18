@@ -25,6 +25,12 @@ Reply 'U' (CHT1): 5 'U', 6 rooms, 7 current, 8-9 users, 10 users here,
 12-23 nick, 24-71 four 12-byte room names, 72.. 15 users of 12 bytes
 (prefix @ or + kept).
 Row kinds: 0 text, 1 private in, 2 system, 3 own, 4 action, 5 private out.
+
+Games (msxpi_games.py): /play NICK [GAME], /accept, /decline, /cancel, /games.  Header byte 22 of the
+'M' reply carries flags: bit 0 a game is ready to start, bit 1 an invitation is waiting.  The command
+"launch" answers with an 'L' packet: 4 state, 5 'L', 6 flag (1 = a command follows), 24.. the MSX-DOS
+command line, zero-terminated.  The client puts it in the keyboard buffer and returns to MSX-DOS; running
+"mchat" again resumes the same chat session.
 """
 import collections
 import os
@@ -36,6 +42,7 @@ import threading
 import time
 
 from msxpi_pchess_irc import IRC, fold
+from msxpi_games import Invites, load_registry
 
 DEFAULT_ROOM = '#msxpi'
 MAX_ROOMS = 4
@@ -46,7 +53,7 @@ MIN_WIDTH = 20
 K_TEXT, K_PRIV_IN, K_SYSTEM, K_OWN, K_ACTION, K_PRIV_OUT = range(6)
 NICK_RE = re.compile(r'[A-Za-z\[\]\\`_^{|}][A-Za-z0-9\[\]\\`_^{|}-]{0,15}')
 HELP = ('/nick N  /msg N TEXT  /join #ROOM  /part  /me TEXT  /who  /topic  '
-        '/help.  F1-F3 switch room, F4 users, ESC quit')
+        '/play N [GAME]  /accept  /decline  /cancel  /games  /help.  F1-F3 switch room, F4 users, ESC quit')
 
 
 def clean(text):
@@ -101,7 +108,8 @@ class Room:
 class ChatIRC(IRC):
     """The IRC transport of PChess, with a chat reader instead of the game's."""
 
-    def __init__(self, config, room, width):
+    def __init__(self, config, room, width, netplay=None):
+        self.invites = Invites(load_registry(config), self.send_game, self.say_system, netplay)
         self.width = max(MIN_WIDTH, min(MAX_WIDTH, width))
         self.rooms = [Room(room)]
         self.cur = 0
@@ -133,6 +141,10 @@ class ChatIRC(IRC):
     def post(self, room, kind, nick_part, text):
         with self.state_lock:
             room.add(kind, nick_part, text, self.width)
+
+    def send_game(self, nick, text):
+        """Private game-control message to another chat (never shown as chat)."""
+        self.message(nick, text)
 
     def set_user(self, room, nick, prefix=''):
         room.users[fold(nick)] = prefix + nick
@@ -239,6 +251,9 @@ class ChatIRC(IRC):
         elif cmd in ('PRIVMSG', 'NOTICE'):
             text = tail[1:] if tail.startswith(':') else tail
             if text.startswith('PCH1 '): return        # PChess game traffic
+            if text.startswith('MSXG1 '):               # game invitations (msxpi_games)
+                if not rest.startswith('#'): self.invites.on_message(sender, text)
+                return
             kind, body = K_TEXT, text
             if text.startswith('\x01ACTION ') and text.endswith('\x01'):
                 kind, body = K_ACTION, text[8:-1]
@@ -312,6 +327,19 @@ class ChatIRC(IRC):
             self.say_system(f'{len(names)} in {room.name}: ' + ' '.join(names))
         elif cmd == 'topic':
             self.say_system('Topic: ' + (room.topic or '(none)'))
+        elif cmd == 'play':
+            nick, _, game = arg.partition(' ')
+            if not nick: raise ValueError('Use /play NICK [GAME]; ' + self.invites.list_games())
+            if fold(nick) == fold(self.nick): raise ValueError('Pick somebody else')
+            self.invites.play(nick, game.strip() or None)
+        elif cmd == 'accept':
+            self.invites.accept()
+        elif cmd == 'decline':
+            self.invites.decline()
+        elif cmd == 'cancel':
+            self.invites.cancel()
+        elif cmd == 'games':
+            self.say_system(self.invites.list_games())
         elif cmd in ('help', '?'):
             self.say_system(HELP)
         else:
@@ -340,6 +368,7 @@ class ChatIRC(IRC):
                 data[12 + i * 2:14 + i * 2] = (r.next & 0xFFFF).to_bytes(2, 'little')
             data[20] = self.meta & 255
             data[21] = self.cur
+            data[22] = self.invites.flags()
             for i in range(count):
                 kind, nicklen, text = room.rows[start - room.first + i]
                 at = HEADER + i * slot
@@ -371,12 +400,31 @@ class ChatIRC(IRC):
 _chat = None
 
 
+def default_netplay():
+    """The session object the MSX transaction (opcode C9) talks to."""
+    import msxpi_netplay
+    return msxpi_netplay.instance()
+
+
 def no_session(message='Not started'):
     data = bytearray(256)
     data[:4] = b'CHT1'
     data[4] = 4
     data[5] = ord('M')
     data[HEADER + 2:HEADER + 2 + len(message)] = message.encode('ascii')
+    return bytes(data)
+
+
+def launch_packet(chat):
+    """'L' reply: the command line of a game that is ready, once."""
+    data = bytearray(256)
+    data[:4] = b'CHT1'
+    data[4] = chat.state_byte()
+    data[5] = ord('L')
+    line = chat.invites.take_launch()
+    if line:
+        data[6] = 1
+        data[HEADER:HEADER + len(line)] = line.encode('ascii')
     return bytes(data)
 
 
@@ -402,13 +450,14 @@ def handle_command(command, irc_config=None):
             width = int(args[2]) if len(args) > 2 else 40
             if _chat and not _chat.error and not _chat.closed:
                 _chat.set_width(width)
+                _chat.invites.resumed()
                 return _chat.rows_packet(_chat.cur, 1 << 30)
             config = dict(irc_config or {})
             if nick != '-': config['IRCNICK'] = nick
             elif not config.get('IRCNICK') and not os.environ.get('PCHESS_IRC_NICK'):
                 config['IRCNICK'] = 'msx' + secrets.token_hex(2)
             if _chat: _chat.close()
-            _chat = ChatIRC(config, config.get('MCHATROOM') or DEFAULT_ROOM, width)
+            _chat = ChatIRC(config, config.get('MCHATROOM') or DEFAULT_ROOM, width, netplay=default_netplay)
             _chat.say_system('Connecting...')
             return _chat.rows_packet(0, 1 << 30)
         if op == 'quit':
@@ -417,6 +466,8 @@ def handle_command(command, irc_config=None):
             return no_session('Closed')
         if _chat is None: return no_session()
         chat = _chat
+        if op == 'launch':
+            return launch_packet(chat)
         if op == 'get':
             return chat.rows_packet(int(args[1]), int(args[2]))
         if op == 'meta':

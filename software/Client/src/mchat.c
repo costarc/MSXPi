@@ -78,6 +78,17 @@ static uint8_t ushown;
 static uint16_t utotal;
 static char note[48];
 
+/* Games: the server decides when one is ready (header byte 22) and gives the MSX-DOS command line that
+ * starts it (reply to "mchat launch"). The client knows nothing about any game: it leaves the chat
+ * running on the server, types the line into the keyboard buffer and returns to MSX-DOS; running MCHAT
+ * again resumes the chat. */
+#define GF_LAUNCH 1
+#define GF_INVITED 2
+#define KBUF_START 0xFBF0
+#define KBUF_END 0xFC18
+static uint8_t gflags, launching;
+static char launch_cmd[40];
+
 /* The visible window of the current room: row 'a' lives in slot a % vr. */
 static uint16_t rabs[VR_MAX];
 static uint8_t rkind[VR_MAX], rnick[VR_MAX];
@@ -159,6 +170,7 @@ static uint8_t parse_m(void) {
         note[47] = 0;
         return 0;
     }
+    gflags = reply[22];
     if (reply[6] < nrooms) for (i = 0; i < MAXR; i++) rseen[i] = u16(reply + 12 + i * 2);
     nrooms = reply[6];
     for (i = 0; i < nrooms; i++) rnext[i] = u16(reply + 12 + i * 2);
@@ -287,7 +299,8 @@ static void draw_status(void) {
         *p++ = ' ';
         p = put_str(p, rname[cur]);
         p = put_str(p, conn == 1 ? "  " : "  CONNECTING ");
-        if (!live) p = put_str(p, " SCROLLED-HOME=LATEST");
+        if (gflags & GF_INVITED) p = put_str(p, " GAME INVITE: /ACCEPT /DECLINE");
+        else if (!live) p = put_str(p, " SCROLLED-HOME=LATEST");
         else if (conn == 1) p = put_str(p, " /HELP");
     }
     ui_text(0, vr + 1, line, ui_cols, UI_STATUS);
@@ -326,6 +339,31 @@ static void poll(void) {
     cache_fill();
     rseen[cur] = rnext[cur];
     if (meta_stale || before != conn) {fetch_meta();}
+}
+
+/* A game is ready: fetch its command line. 1 = launch_cmd is set. */
+static uint8_t fetch_launch(void) {
+    if (!(gflags & GF_LAUNCH) || link_tcp) return 0;
+    gflags &= ~GF_LAUNCH;
+    if (!xchg("mchat launch") || reply[5] != 'L' || !reply[6]) return 0;
+    memcpy(launch_cmd, reply + HDR, 39);
+    launch_cmd[39] = 0;
+    return launch_cmd[0] != 0;
+}
+
+/* Type "line<Enter>" into the BIOS keyboard buffer (40 bytes, get/put pointers at F3FA/F3F8),
+ * dropping what was there, so MSX-DOS runs it as soon as it shows its prompt. */
+static void type_ahead(const char *line) {
+    uint16_t at = KBUF_START;
+    char *b;
+    *(volatile uint16_t *)0xF3FA = KBUF_START;
+    for (;; line++) {
+        b = (char *)at;
+        *b = *line ? *line : 13;
+        if (++at >= KBUF_END) at = KBUF_START;
+        if (!*line) break;
+    }
+    *(volatile uint16_t *)0xF3F8 = at;
 }
 
 static void start_session(const char *nick) {
@@ -474,6 +512,7 @@ int main(void) {
     memset(rtext, 0, sizeof(rtext));
     memset(input, 0, sizeof(input));
     memset(note, 0, sizeof(note));
+    gflags = launching = 0;
     font6_loaded = 0;                  /* the S6 font is read from the BIOS once */
     if (link_tcp) {
         const char *why = tcp_link_start();
@@ -512,10 +551,12 @@ int main(void) {
             if (conn == 4) start_session("");
             else poll();
             draw_all();
+            if (fetch_launch()) {launching = 1; break;}
         }
     }
-    xchg("mchat quit");
+    if (!launching) xchg("mchat quit");   /* a game start leaves the chat running on the server */
     tcp_link_stop();
     ui_close();
+    if (launching) type_ahead(launch_cmd);
     return 0;
 }
