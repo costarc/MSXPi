@@ -182,5 +182,56 @@ class Commands(Base):
         self.assertEqual((data[5], data[6]), (1, 0))   # the offerer plays white
 
 
+class Reconnect(Base):
+    """A dropped IRC link is redialled with the same nick; SYNC repairs lost moves."""
+    def start(self):
+        room = '#pchess-dama'
+        a = self.client('Alice', room, CheckersPeer)
+        self.pump(a, until=lambda: a.ready)
+        b = self.client('Bob', room, CheckersPeer)
+        self.pump(a, b, until=lambda: a.peer.phase == 'playing' and b.peer.phase == 'playing')
+        a.peer.cmove(0, 'c3d4')
+        self.pump(a, b, until=lambda: b.peer.moves == ['c3d4'])
+        return a, b
+
+    def drop(self, nick):
+        self.server.clients[nick].connection.shutdown(2)
+
+    def test_game_continues_after_the_link_drops(self):
+        self.server.ghost_delay = 3
+        a, b = self.start()
+        self.drop('Bob')
+        self.pump(a, b, until=lambda: b.reconnecting)
+        self.assertEqual(b.peer.snapshot()['status'], 'IRC LINK LOST - RECONNECTING')
+        with self.assertRaisesRegex(ValueError, 'RECONNECTING'):
+            b.peer.cmove(1, 'b6a5')
+        self.pump(a, b, until=lambda: b.ready and not b.reconnecting, seconds=15)
+        self.assertEqual(b.nick, 'Bob')
+        b.peer.cmove(1, 'b6a5')
+        self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5'])
+        a.peer.cmove(2, 'd4e5')
+        self.pump(a, b, until=lambda: b.peer.moves == ['c3d4', 'b6a5', 'd4e5'])
+
+    def test_sync_resends_a_move_made_while_he_was_away(self):
+        self.server.ghost_delay = 3
+        a, b = self.start()
+        b.peer.cmove(1, 'b6a5')
+        self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5'])
+        self.drop('Bob')
+        self.pump(a, b, until=lambda: b.reconnecting)
+        a.peer.cmove(2, 'd4e5')        # Bob is offline: the server drops that line
+        self.pump(a, b, until=lambda: b.ready and not b.reconnecting, seconds=15)
+        self.pump(a, b, until=lambda: b.peer.moves == ['c3d4', 'b6a5', 'd4e5'])
+
+    def test_sync_asks_for_a_move_lost_in_the_dead_socket(self):
+        self.server.ghost_delay = 3
+        a, b = self.start()
+        self.drop('Bob')
+        self.pump(a, b, until=lambda: b.reconnecting)
+        b.peer.moves.append('b6a5')    # as if Bob's move had gone into the dead socket
+        self.pump(a, b, until=lambda: b.ready and not b.reconnecting, seconds=15)
+        self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5'])
+
+
 if __name__ == '__main__':
     unittest.main()
