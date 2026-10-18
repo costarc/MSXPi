@@ -151,6 +151,44 @@ def _eth_retry_tap():
     print("eth: msxpi0 is up now - MockLink replaced by the TAP", flush=True)
 
 
+# ---------------------------------------------------------------------------
+# Netplay (msxpi_netplay.py): opcode 0xC9 carries one lockstep transaction of a
+# two-player game (Konami's Soccer, see software/Client/src/soccernet).  It lives
+# on the same wait-for-READY path as the Ethernet opcodes but is independent of
+# the shuttle: it never builds the TAP link.  Guarded like the other optional
+# imports so a missing module cannot stop the server.
+# ---------------------------------------------------------------------------
+try:
+    import msxpi_netplay as _np_mod
+    _NETPLAY_OP = _np_mod.OP_NETPLAY
+except Exception as _e:
+    _np_mod = None
+    _NETPLAY_OP = -1
+    print(f"Warning: failed to import msxpi_netplay module: {_e}")
+
+_netplay = None
+
+
+def _netplay_read():
+    rc, v = SPI_ByteTransfer()
+    return v if rc == RC_SUCCESS else None
+
+
+def _netplay_write(data):
+    SPI_BurstOut(bytes(data))
+
+
+def _netplay_handle(opcode):
+    global _netplay
+    if _netplay is None:
+        _netplay = _np_mod.Netplay(_netplay_read, _netplay_write, log=print)
+    try:
+        return _netplay.handle(opcode)
+    except Exception as e:
+        print(f"netplay: error serving opcode {hex(opcode)}: {e}")
+        return True
+
+
 # Hoisted out of eth_handle_opcode: the membership test below runs on EVERY
 # byte recvdata2() reads while waiting for READY, so it is on the path for all
 # traffic and not just for opcodes. A module-global frozenset lookup avoids an
@@ -160,7 +198,9 @@ _eth_handle = None  # the shuttle's bound handle(), cached on first use
 
 
 def eth_handle_opcode(opcode):
-    """True if `opcode` was an Ethernet UNAPI op and has been served."""
+    """True if `opcode` was an Ethernet UNAPI (or netplay) op and has been served."""
+    if opcode == _NETPLAY_OP:
+        return _netplay_handle(opcode)
     if opcode not in _eth_opcodes:
         return False
     global _eth_handle
