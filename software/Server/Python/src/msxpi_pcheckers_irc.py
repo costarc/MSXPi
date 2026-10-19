@@ -247,6 +247,10 @@ class CheckersPeer:
     def game_line(self, op, fields):
         if op == 'MOVE' and len(fields) == 4 and not self.result:
             ply, path = fields[2], fields[3]
+            # When both links dropped, both ends send SYNC and the peer resends
+            # the same MOVE twice: a move we already hold is no news.
+            if ply.isdigit() and int(ply) < len(self.moves) and self.moves[int(ply)] == path:
+                return
             if (not ply.isdigit() or int(ply) != len(self.moves) or not PATH.fullmatch(path)
                     or len(self.moves) % 2 == self.side):
                 self.status = 'OUT OF SYNC - REJOIN THE ROOM'
