@@ -18,6 +18,9 @@ tIrq:   jp      0                       ; +6  XIRQ: the loader writes the game's
         ret                             ; +9  reserved
 tLen:   defb    22                      ; game packet length L = 14 + 8W (the loader)
 tImage: defw    $4000                   ; the image's AB header, wiped before a reset (the loader)
+tRet:   defw    0                       ; PLAYNET.COM's return routine in page 0, 0 = reset (the loader)
+tDosA8: defb    0                       ; the primary slot register under MSX-DOS (the loader)
+tDosSub: defb   0                       ; what MSX-DOS had at FFFFh: its sub-slot register, or the RAM byte
 
 ; XCHG. In: HL = packet to send, or 0; DE = receive buffer (L bytes). Out: A = 0 nothing received,
 ; 1 a packet is at DE, 2 the opponent is gone, 3 the opponent left (B = its result code).
@@ -91,11 +94,11 @@ c9send: ld      a,$C9
         ld      a,c
         jp      c9txb                   ; SUM
 
-; XEND. A = result code. Tells the opponent (BYE, through the Pi) and leaves the game: for now by a reset
-; (the return to MSX-DOS without one is implementation step 5). Does not return.
+; XEND. A = result code. Tells the opponent (BYE, through the Pi) and leaves the game: back to MSX-DOS
+; when the loader saved it (PROTOCOLS 14), else by a reset. Does not return.
 xend:   di
         ld      (tCode),a
-        ld      hl,xReset
+        ld      hl,xBack
         push    hl                      ; where a failed transaction goes
         ld      (tSp),sp
         ld      bc,$0120                ; L = 1, FLAGS bit 5: BYE
@@ -103,6 +106,27 @@ xend:   di
         call    c9send
         call    c9rxb                   ; 00, 00
         call    c9rxb
+xBack:  di
+        ld      hl,(tRet)
+        ld      a,h
+        or      l
+        jr      z,xReset                ; nothing saved
+        in      a,($A8)
+        ld      b,a                     ; B, C = the game's slot registers, for xBoot
+        ld      a,($FFFF)
+        cpl
+        ld      c,a
+        ld      a,(tDosA8)              ; MSX-DOS's slots: page 0 is RAM again, with PLAYNET.COM in it
+        out     ($A8),a
+        ld      a,(tDosSub)
+        ld      ($FFFF),a
+        ld      a,(tCode)
+        jp      (hl)                    ; A = the result code; the routine does not return
+; PLAYNET.COM could not restore MSX-DOS. B, C = the game's slot registers: back to them (BIOS in page 0)
+xBoot:  ld      a,b
+        out     ($A8),a
+        ld      a,c
+        ld      ($FFFF),a
 xReset: di
         xor     a                       ; wipe the AB header of the image, or the BIOS
         ld      hl,(tImage)             ; would boot it as a cartridge after the reset

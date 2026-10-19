@@ -269,6 +269,13 @@ class Flow(unittest.TestCase):
         p.b.resumed()
         self.assertIn('ended (playing)', p.said['b'][-1])           # what the session object says
 
+    def test_resume_after_playnet_ended_the_game(self):
+        p = self.launched()
+        p.b.session_record()
+        p.np['b'].local_result = 1                                  # PLAYNET's XEND: the exit key here
+        p.b.resumed()
+        self.assertIn('ended (you ended it)', p.said['b'][-1])
+
 
 class PlaynetCommands(unittest.TestCase):
     """playnet_command(), what the MSXPi command "playnet ..." runs."""

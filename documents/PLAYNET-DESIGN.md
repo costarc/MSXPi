@@ -474,6 +474,10 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    (PROTOCOLS 9.2, game packet L = 14 + 8W). Measured: 60 ticks a second, as the original.
 5. **Return without a reset, Pi path** (save to a segment, and to the Pi without a mapper). *Proof:* a rig scenario where Ctrl+Shift+F5
    on one node brings both back to `MCHAT`, with the result line.
+   **Done 2026-10-19**: on the Pi path the DOS area always goes to the Pi (one code path, any machine; the segment is the TCP/IP path's,
+   step 7). `XEND` goes back through `PLAYNET.COM`, still in page 0 (PROTOCOLS 14). Rig `SCENARIO=chat EXITKEY=600`: Ctrl+Shift+F5 on
+   bob's machine at frame 600 ends the game on both; both are back in `MCHAT` with nick and room, showing "Game with alice ended (you
+   ended it)" and "Game with bob ended (the opponent ended it)". Measured: 8 KB saved (HIMEM = DF6Eh), restored in under a second.
 6. **Measurements** (section 8). They decide the details of steps 7 and 8.
 7. **netcore** (portable C) plus the conformance test against `Netplay` on the PC; then `PLAYNET.OVL`, the shim and the IRQ trampoline.
    *Proof:* `SCENARIO=mixed` (Pi node against INL node), then two INL nodes.

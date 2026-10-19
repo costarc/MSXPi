@@ -351,6 +351,8 @@ class Invites:
         peer, np = self.peer, self._np()
         if self.result is not None:
             how = RESULTS[self.result]
+        elif np and getattr(np, 'local_result', None) in RESULTS:     # the code PLAYNET's XEND sent with BYE
+            how = RESULTS[np.local_result]
         elif not self.started and self.game.transport == 'lockstep':
             how = 'not started'
         else:

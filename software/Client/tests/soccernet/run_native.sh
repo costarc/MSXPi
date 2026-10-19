@@ -13,6 +13,7 @@
 #   TMAX/NODETMO  emulated / wall seconds before a node is stopped.   RENDERER=SDLGL-PP to watch it
 #   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements)
 #   RECORD=file.wav  node H records its sound (openMSX record -audioonly) and node C is muted
+#   EXITKEY=n     (chat) node C presses Ctrl+Shift+F5 at frame n; both must return to MCHAT
 #   SCENARIO=chat the players meet in MCHAT (against a local IRC server), alice invites bob to play, and the
 #                 chat starts the game itself. Needs software/target/mchat.com. PLAY_AT / ACCEPT_AT: emulated seconds.
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
@@ -101,6 +102,13 @@ wait $NPIDS
 python "$HERE/cmp_pair.py" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "desync=" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -12
+if [ -n "$EXITKEY" ]; then              # both machines must be back in MCHAT: restore, then "mchat start"
+  for n in 1 2; do
+    if awk '/-> playnet restore/ { r = 1 } r && /-> mchat start/ { ok = 1 } END { exit !ok }' "$WORK/server$n.log"
+    then echo "server $n: back in MCHAT after the game"; else echo "server $n: NOT back in MCHAT"; fi
+  done
+  grep -h "^# back" "$WORK/np/H.trace" "$WORK/np/C.trace"
+fi
 touch "$WORK/stop_servers"
 for port in 8115 8116 $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)

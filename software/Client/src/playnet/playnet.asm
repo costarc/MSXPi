@@ -13,8 +13,11 @@
 ;
 ; Memory (any MSX with 64 KB RAM and MSX-DOS):
 ;   0100h-17FFh  this program          1800h-1BFFh  CRC-32 tables (4 x 256)
-;   1C00h-2FFFh  the GPF (5 KB)        3000h-3FFFh  disk bounce buffer (DOS cannot read into page 1)
+;   1C00h-2FFFh  the GPF (5 KB)        3000h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
+;                                                   then the relocated transport at 3800h
 ;   4000h-BFFFh  the game image        C000h-       the start-up trampoline, copied there at the end
+; The game never maps page 0's RAM: this program is still here when the game ends, and pnBack brings
+; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
 
 PLAYNET_VERSION: EQU    1
 
@@ -27,6 +30,10 @@ F_RDRND:        EQU     $27
 INIT32:         EQU     $006F
 EXBRSA:         EQU     $FAF8
 JIFFY:          EQU     $FC9E
+SCRMOD:         EQU     $FCAF
+KEYBUF:         EQU     $FBF0
+PUTPNT:         EQU     $F3F8
+GETPNT:         EQU     $F3FA
 
 CRCT:           EQU     $1800
 GPFBUF:         EQU     $1C00
@@ -34,6 +41,11 @@ GPFMAX:         EQU     $1400
 BOUNCE:         EQU     $3000
 CHUNK:          EQU     $1000
 TRAMP:          EQU     $C000
+SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', HIMEM, length, then HIMEM-FFFEh
+SV_MAX:         EQU     $4000                   ; at most 16 KB (HIMEM >= C000h)
+RBUF:           EQU     $4000                   ; the restore buffer: the game image's RAM, dead by then
+BKSTACK:        EQU     $C000                   ; pnBack's stack, at the top of that RAM
+        ASSERT  RBUF+SV_HDR+SV_MAX <= BKSTACK-256
 
 R_LEFT:         EQU     2                       ; result codes (13.2)
 R_CONNECT:      EQU     5
@@ -1156,6 +1168,7 @@ install:
         ld      (vStart),hl
         ld      a,(RAMAD1)
         ld      (vRam1),a
+        call    saveDos
         di
         jp      TRAMP
 
@@ -1229,8 +1242,239 @@ vRam1:          defb    0
         DEPHASE
 trampEnd:
 
+; ---- the return to MSX-DOS (PROTOCOLS 14) ---------------------------------------------------------
+; Before the game: HIMEM-FFFEh goes to the MSXPi ("playnet save"); the slot registers stay here and in the
+; transport. The game never maps page 0's RAM, so this program is still there when XEND comes back to pnBack.
+saveDos:
+        ld      hl,(HIMEM)
+        ld      (svHimem),hl
+        ld      de,$10000-SV_MAX
+        call    cpHLDE
+        jr      c,.no                           ; HIMEM below C000h: more than the MSXPi keeps
+        ex      de,hl
+        ld      hl,$FFFF                        ; HIMEM-FFFEh: FFFFh - HIMEM bytes
+        or      a
+        sbc     hl,de
+        ld      (svLen),hl
+        in      a,($A8)
+        ld      (tBuf+TR_DOSA8),a
+        rlca                                    ; page 3's primary slot: is it expanded?
+        rlca
+        and     3
+        ld      e,a
+        ld      d,0
+        ld      hl,EXPTBL
+        add     hl,de
+        ld      a,(hl)
+        and     $80
+        ld      a,($FFFF)
+        jr      z,.flat                         ; no: FFFFh is RAM, kept as it is
+        cpl                                     ; yes: the sub-slot register
+.flat:  ld      (svFFFF),a
+        ld      (tBuf+TR_DOSSUB),a
+        ld      a,1
+        ld      (pcUp),a
+        ld      de,cmdSave
+        ld      hl,BOUNCE
+        ld      bc,256
+        call    piCommand
+        ld      hl,pcUp
+        ld      (hl),0
+        jr      c,.lost
+        cp      RC_SUCCESS
+        jr      nz,.no
+        ld      hl,pnBack
+        ld      (tBuf+TR_RET),hl
+        ret
+.lost:  call    resetMSXPI
+.no:    ld      hl,msgNoSave                    ; the game still runs, and ends with a reset
+        call    PRINT
+        jp      PRINTNLINE
+
+; "playnet save", after the command: the header and HIMEM-FFFEh as one transfer that the MSXPi's recvdata2
+; takes (one handshake, blocks of at most MAXBUFSIZE, RC_READY on all but the last). CF on a link error.
+sendSave:
+.hs:    ld      a,READY
+        call    PIWRITEBYTE
+        ret     c
+        call    PIREADBYTE
+        ret     c
+        cp      READY_ACK
+        jr      nz,.hs
+        ld      a,MAXBUFSIZE_LO
+        call    PIWRITEBYTE
+        ret     c
+        ld      a,MAXBUFSIZE_HI
+        call    PIWRITEBYTE
+        ret     c
+        xor     a
+        ld      (sbIdx),a
+        ld      hl,svHdr
+        ld      bc,SV_HDR
+        ld      a,RC_READY
+        call    sendBlk
+        ret     c
+        ld      hl,(svHimem)
+        ld      (sbSrc),hl
+        ld      hl,(svLen)
+        ld      (sbLeft),hl
+.next:  ld      hl,(sbLeft)
+        ld      de,MAXBUFSIZE+1
+        call    cpHLDE
+        ld      b,h
+        ld      c,l
+        ld      a,RC_SUCCESS
+        jr      c,.size                         ; the rest fits one block: the last one
+        ld      bc,MAXBUFSIZE
+        ld      a,RC_READY
+.size:  push    af
+        ld      hl,(sbLeft)
+        or      a
+        sbc     hl,bc
+        ld      (sbLeft),hl
+        ld      hl,(sbSrc)
+        push    hl
+        add     hl,bc
+        ld      (sbSrc),hl
+        pop     hl
+        pop     af
+        push    af
+        call    sendBlk
+        pop     de                              ; D = this block's header code
+        ret     c
+        ld      a,d
+        cp      RC_READY
+        jr      z,.next
+        or      a
+        ret
+
+; one block: HL = data, BC = length, A = header code (RC_READY / RC_SUCCESS). Resent on a checksum
+; mismatch, as SENDDATA does. CF on an error.
+sendBlk:
+        ld      (sbRc),a
+        ld      (sbPtr),hl
+        ld      (sbLen),bc
+        ld      a,GLOBALRETRIES
+        ld      (sbTry),a
+.try:   ld      a,(sbRc)
+        call    PIWRITEBYTE
+        ret     c
+        ld      a,(sbLen)
+        call    PIWRITEBYTE
+        ret     c
+        ld      a,(sbLen+1)
+        call    PIWRITEBYTE
+        ret     c
+        ld      a,(sbIdx)
+        call    PIWRITEBYTE
+        ret     c
+        ld      de,(sbPtr)
+        ld      bc,(sbLen)
+        ld      hl,0
+        call    PAYLOAD_TX
+        ret     c
+        ld      a,l
+        add     a,h
+        ld      (sbSum),a
+        call    PIWRITEBYTE                     ; our checksum, then the MSXPi's
+        ret     c
+        call    PIREADBYTE
+        ret     c
+        ld      hl,sbSum
+        cp      (hl)
+        jr      z,.ok
+        ld      hl,sbTry
+        dec     (hl)
+        jr      nz,.try
+        scf
+        ret
+.ok:    call    PIREADBYTE                      ; READY, its status, then our READY_ACK
+        ret     c
+        cp      READY
+        scf
+        ret     nz
+        call    PIREADBYTE
+        ret     c
+        cp      RC_SUCCESS
+        scf
+        ret     nz
+        ld      a,READY_ACK
+        call    PIWRITEBYTE
+        ret     c
+        ld      hl,sbIdx
+        inc     (hl)
+        or      a
+        ret
+
+; XEND comes here (the transport's xBack) with MSX-DOS's slots, interrupts off, A = the result code and
+; B, C = the game's slot registers. Fetch the saved area, put it back, set up the screen MSX-DOS had and
+; leave to it with MCHAT typed. If any of that fails: the transport's reset (xBoot, with B and C).
+pnBack:
+        ld      sp,BKSTACK                      ; not in page 0: CALSLT puts the BIOS there
+        ld      (bkSlots),bc
+        ld      a,8                             ; the PSG's three channels silent
+        ld      b,3
+.psg:   out     ($A0),a
+        ld      c,a
+        xor     a
+        out     ($A1),a
+        ld      a,c
+        inc     a
+        djnz    .psg
+        call    resetMSXPI
+        ld      de,cmdRestore
+        ld      hl,RBUF
+        ld      bc,SV_HDR+SV_MAX+1
+        call    piCommand
+        jr      c,.fail
+        cp      RC_SUCCESS
+        jr      nz,.fail
+        ld      hl,(svLen)                      ; all of it, and with our header
+        ld      de,SV_HDR
+        add     hl,de
+        or      a
+        sbc     hl,bc
+        jr      nz,.fail
+        ld      hl,RBUF
+        ld      de,svHdr
+        ld      b,SV_HDR
+.chk:   ld      a,(de)
+        cp      (hl)
+        jr      nz,.fail
+        inc     hl
+        inc     de
+        djnz    .chk
+        ld      de,(svHimem)                    ; HL = RBUF + SV_HDR
+        ld      bc,(svLen)
+        ldir
+        ld      a,(svFFFF)
+        ld      ($FFFF),a                       ; MSX-DOS's sub-slot register, or its RAM byte
+        ei                                      ; MSX-DOS's page 3 and hooks are back; the MSX2 BIOS
+        ld      ix,INITXT                       ; waits for interrupts while it sets the screen up
+        ld      a,(SCRMOD)
+        or      a
+        jr      z,.scr
+        ld      ix,INIT32
+.scr:   ld      iy,(EXPTBL-1)
+        call    CALSLT
+        di
+        ld      hl,keysMchat                    ; MCHAT and Enter, typed for MSX-DOS
+        ld      de,KEYBUF
+        ld      bc,6
+        ldir
+        ld      (PUTPNT),de
+        ld      hl,KEYBUF
+        ld      (GETPNT),hl
+.dos:   jp      0                               ; MSX-DOS warm start
+.fail:  ld      hl,(npTArea)
+        ld      de,TR_BOOT
+        add     hl,de
+        ld      bc,(bkSlots)
+        jp      (hl)
+
 ; ---- MSXPi commands --------------------------------------------------------------------------
 ; DE = command (zero-terminated), HL = destination, BC = room. Receives every block of the reply.
+; With pcUp set, "playnet save" sends the saved area right after the command (sendSave).
 ; Out: CF on a link error; else A = the last block's header code, BC = bytes received, the reply
 ; zero-terminated (text replies).
 piCommand:
@@ -1248,6 +1492,10 @@ piCommand:
 .bsz:   ld      (pcBsz),hl
         ld      de,(pcCmd)
         call    SendCommandToMSXPi
+        ret     c
+        ld      a,(pcUp)
+        or      a
+        call    nz,sendSave
         ret     c
         ld      de,(pcDst)
         ld      bc,(pcBsz)
@@ -1524,6 +1772,10 @@ magicPNS:       defb    "PNS1"
 magicGPF:       defb    "GPF1"
 zero4:          defb    0,0,0,0
 cmdSession:     defb    "playnet session",0
+cmdSave:        defb    "playnet save",0
+cmdRestore:     defb    "playnet restore",0
+keysMchat:      defb    "MCHAT",13
+msgNoSave:      defb    "MSX-DOS could not be saved: the game will end with a reset",0
 cmdResult:      defb    "playnet result "
 cmdResultN:     defb    "0",0
 cmdProfile:     defb    "playnet profile "
@@ -1597,7 +1849,22 @@ pcLim:          defw    0
 pcIdx:          defb    0
 pcBsz:          defw    0
 pcCmd:          defw    0
+tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until the trampoline copies it
+        ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
+pcUp:           defb    0                       ; 1: piCommand uploads the saved area (sendSave)
+svHdr:          defb    "PNSV"                  ; the saved area's header (SV_HDR bytes)
+svHimem:        defw    0
+svLen:          defw    0                       ; bytes from HIMEM to FFFEh
+svFFFF:         defb    0                       ; what to write back at FFFFh
+bkSlots:        defw    0                       ; the game's slot registers, for the fallback reset
+sbIdx:          defb    0
+sbSrc:          defw    0
+sbLeft:         defw    0
+sbRc:           defb    0
+sbPtr:          defw    0
+sbLen:          defw    0
+sbTry:          defb    0
+sbSum:          defb    0
 crcVal:         defs    4
-tBuf:           defs    TR_SIZE
 programEnd:
         ASSERT  programEnd <= CRCT

@@ -657,13 +657,19 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 
 `XEND` brings the machine back to the MSX-DOS prompt with `MCHAT` typed, whenever the loader managed to save the DOS area:
 
-1. **Saved by the loader**, before the game started: `HIMEM` to `FFFFh`, the primary and sub-slot registers, the memory mapper segments of
-   pages 0-3, and `SCRMOD`. With a memory mapper the save goes to a segment that is allocated for it. On an MSXPi machine without a mapper,
-   it goes to the Pi (`playnet save`).
-2. **Restore**, from a routine copied into page 2 with its own stack there: interrupts off, PSG silenced, the saved area copied back
-   (`playnet restore` on the Pi path), the slot and mapper registers set, the screen set up again for `SCRMOD`, `MCHAT` and Enter put in the
-   keyboard buffer, and a jump to the DOS warm start (`0000h` with RAM in page 0).
-3. **Fallback**: if nothing was saved, or the saved area fails its check, wipe the `AB` header of the RAM image and reset.
+1. **Saved by the loader**, just before the game starts: `HIMEM` to `FFFEh` (at most 16 KB, so `HIMEM` >= C000h), with an 8-byte header
+   (`'PNSV'`, `HIMEM`, length). The loader keeps the primary slot register and what is at `FFFFh` (the sub-slot register of page 3's slot,
+   complemented, or the RAM byte when that slot is not expanded) in the transport and in its own memory. On the MSXPi path the area goes
+   to the Pi (`playnet save`), with or without a mapper; on the TCP/IP path it goes to a mapper segment.
+2. **Restore**. The game never maps page 0's RAM, so `PLAYNET.COM` is still there. `XEND` sends BYE, puts back MSX-DOS's slot registers
+   (page 0 is RAM again) and jumps to `PLAYNET.COM`'s return routine with the result code. That routine uses a stack in page 2 (the dead
+   game image; never page 0, which `CALSLT` turns into the BIOS), silences the PSG, fetches the area (`playnet restore`) into page 1,
+   checks its header and length, copies it back, writes `FFFFh`, enables interrupts (MSX-DOS's hooks are back, and the MSX2 BIOS waits
+   for interrupts while it sets the screen up), calls `INITXT` or `INIT32` through `CALSLT` as `SCRMOD` says, puts `MCHAT` and Enter
+   in the keyboard buffer and jumps to `0000h` (the MSX-DOS warm start). Back in the chat, the Pi says "Game with X ended (reason)".
+3. **Fallback**: if nothing was saved, or the restore fails (link error, wrong header or length), back to the game's slots (BIOS in page 0),
+   wipe the `AB` header of the RAM image and reset. A game started without the chat (`PLAYNET <game> <role>`) has no session on the Pi,
+   so its save is refused and it always ends this way.
 
 On the TCP/IP path the IRC connection survives the game: `MCHAT /t` leaves it open, `PLAYNET`'s network engine answers the IRC server's
 `PING` during the game and discards everything else, and `MCHAT /t` takes it back with the connection number, nick and rooms from
@@ -679,7 +685,7 @@ payload below. On failure it has `RC_FAILED` (E7h) and carries a message startin
 |---|---|
 | `playnet session` | the first 40 bytes of the session record (13). Fails if no game was handed to the MSX. Fetching it marks the game as started. |
 | `playnet profile <game_id>` | the GPF file. Works with or without a chat session. Fails for a game that is not installed, or whose transport is `none`. |
-| `playnet save` | After the command, the MSX sends the saved area (14) with `SENDDATA2`: at most 16640 bytes (16 KB of `HIMEM-FFFFh` plus a 256-byte header of registers). Reply `OK`. Fails when no game is in progress. |
+| `playnet save` | After the command, the MSX sends the saved area (14) as one block transfer that the Pi's `recvdata2` takes: one handshake, then blocks of at most 8 KB (`RC_READY` on all but the last, `RC_SUCCESS` on the last). At most 16640 bytes; PLAYNET sends the 8-byte header in the first block, then `HIMEM-FFFEh`. Reply `OK`. Fails when no game is in progress. |
 | `playnet restore` | the saved area. The Pi then forgets it, so a second restore fails. |
 | `playnet result <code>` | `OK`. The chat shows the result (13.2) when the player is back in `MCHAT`. |
 

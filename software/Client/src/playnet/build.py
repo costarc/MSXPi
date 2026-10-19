@@ -54,6 +54,10 @@ def transport(assembler):
              f'TR_IRQ:         EQU     {names["tIrq"] + 1}      ; XIRQ jump target (the game\'s interrupt handler)',
              f'TR_LEN:         EQU     {names["tLen"]}     ; game packet length L',
              f'TR_IMAGE:       EQU     {names["tImage"]}     ; the image\'s AB header',
+             f'TR_RET:         EQU     {names["tRet"]}     ; PLAYNET.COM\'s return routine, 0 = reset',
+             f'TR_DOSA8:       EQU     {names["tDosA8"]}     ; MSX-DOS\'s slot registers',
+             f'TR_DOSSUB:      EQU     {names["tDosSub"]}',
+             f'TR_BOOT:        EQU     {names["xBoot"]}    ; the fallback reset, from the return routine',
              'trImage:        INCBIN  "transport_msxpi.bin"',
              'trRelocs:       defw    ' + ', '.join(str(r) for r in relocs) + ', $FFFF']
     (BUILD / 'transport_msxpi.inc').write_text('\n'.join(lines) + '\n')

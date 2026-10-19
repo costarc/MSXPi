@@ -8,6 +8,9 @@
 # boots DOS from the MSXPi server. Network = the two servers (msxpi_server_np.py).
 #   ROLEARG=H|C  TRACE=<file>  STOPF=<frame>  TMAX=<emulated s>
 # PLAYNET_SYMS = the test stub's symbols (stub_syms.tcl, the stub itself beside it as stub_syms.bin)
+# EXITKEY=<frame>: node C presses Ctrl+Shift+F5 there; both nodes must come back to MCHAT, which shows
+#   "Game with ... ended (...)" (screenshot $TRACE.back.png; run_native.sh checks the MSXPi logs).
+#   Set STOPF above it.
 set srcerr [catch {source $::env(PLAYNET_SYMS)} srcmsg]
 set roleArg $::env(ROLEARG)
 set stopf   $::env(STOPF)
@@ -20,6 +23,8 @@ set ::poked 0
 set lastTx 0
 set inPos 0
 set started 0
+set ::ended 0
+set ::pressed 0
 set frames 0
 set prevNf -1
 set tf [open $::env(TRACE) w]
@@ -45,7 +50,7 @@ proc codeDiff {} {
 proc line {} {
     global tf sym started frames prevNf stopf
     set nf [peek $::s_nf]
-    if {!$started} { return }
+    if {!$started || $::ended} { return }
     if {$nf == 255 && $prevNf < 0} { return }   ;# INIT's RAM clear, before the first tick
     if {$nf < $prevNf} { incr frames 256 }
     set prevNf $nf
@@ -55,6 +60,12 @@ proc line {} {
     puts $tf "$f [peek 0xE000] [peek 0xE001] $b [format %02X [peek 0xE52B]] [format %02X [peek 0xE007]] [format %02X [peek 0xE009]]"
     if {[info exists ::env(POKEF)] && $::roleArg eq "H" && $f >= $::env(POKEF) && !$::poked} { set ::poked 1; poke 0xE2A0 [expr {[peek 0xE2A0] ^ 0x10}]; puts $tf "# poked ball at frame $f" }
     if {[info exists ::env(EXITF)] && $::roleArg eq "C" && $f >= $::env(EXITF)} { exit }
+    if {[info exists ::env(EXITKEY)] && $::roleArg eq "C" && $f >= $::env(EXITKEY) && !$::pressed} {
+        set ::pressed 1
+        puts $tf "# exit key pressed at frame $f"
+        keymatrixdown 6 0x03; keymatrixdown 7 0x02           ;# SHIFT + CTRL, F5
+        after time 1 { keymatrixup 6 0x03; keymatrixup 7 0x02 }
+    }
     if {$f >= $stopf} {
         global sent dropped got
         puts $tf "# desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
@@ -80,6 +91,7 @@ proc tlog {} {
 # diagnostic: how deep does the stack go? Lowest address written in F200-F37F.
 set ::minw 0xFFFF
 proc minw {} {
+    if {$::ended} { return }
     if {[catch {set a $::wp_last_address} e]} { return }
     if {$a < $::minw} { set ::minw $a }
 }
@@ -100,6 +112,7 @@ proc c0log {} {
 set ::gw 0
 proc gwlog {} {
     global tf
+    if {$::ended} { return }
     if {$::gw >= 20} { return }
     incr ::gw
     set a ?
@@ -118,6 +131,7 @@ proc arm_ {} {
     if {[peek $::s_pad1c] == 0x3A && [peek $::s_nf] == 0xFF && [peek $::s_started] == 0 && [peek $::s_txbuf] == 0x10} {
         set started 1
         debug set_bp $::s_tickDone {} { tlog }
+        debug set_bp 0xC503 {!$::ended} { xendHit }
         debug set_watchpoint write_mem {0xF200 0xF37F} {} { minw }
         debug set_watchpoint write_mem {0xC100 0xC5FF} {([reg PC] < 0xC000 || [reg PC] >= 0xC100) && ([reg PC] < 0xC100 || [reg PC] >= 0xC600)} { gwlog }
         debug set_watchpoint write_mem 0xE003 {[reg PC] == 0x40CC || [reg PC] == 0x40CB} { line }   ;# only the frame increment
@@ -126,6 +140,22 @@ proc arm_ {} {
     after time 0.002 arm
 }
 
+proc xendHit {} {
+    global tf
+    set ::ended 1
+    puts $tf "# xend result=[reg A] frame=[expr {$::frames + [peek $::s_nf]}] desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
+    flush $tf
+    after time 45 backShot
+}
+# MCHAT draws its own font, so its screen cannot be read as text: after the return a screenshot
+# ($TRACE.back.png), and run_native.sh checks that the MSXPi saw "mchat start" after "playnet restore".
+proc backShot {} {
+    global tf
+    catch { screenshot $::env(TRACE).back.png }
+    puts $tf "# back: PC=[format %04X [reg PC]] t=[expr {int([machine_info time])}]"
+    close $tf
+    after time 1 exit
+}
 proc dumpscreen {} {
     after time 20 dumpscreen
     set fh [open "$::env(TRACE).screen" a]
