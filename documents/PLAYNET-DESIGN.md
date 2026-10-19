@@ -442,6 +442,13 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    scan). *Proof:* user review. **Draft written 2026-10-19, awaiting review.**
 2. **ROM-Patcher v2 + Soccer package + `--gpf`**, with the equivalence test against today's patched image. Music packages must still
    build bit-identical ROMs. *Proof:* `test_gpf.py` and the existing patcher tests.
+   **Done 2026-10-19**:
+   - `patch_rom.py` reads versions 1 and 2, has the netplay rules, and writes and reads GPF.
+   - `profiles/soccer/` exists, and its image is byte-identical to `SOCCERNET.COM`'s on the real dump.
+   - The four music packages build identical ROMs and manifests on their real dumps.
+   - 38 tests pass.
+   - The Soccer GPF itself is refused until step 4, because today's stub (729 bytes) does not fit the 576 bytes the PLAYNET layout
+     reserves. Step 4 also adds the 4096h hook patch.
 3. **Server side**: `msxpi_games` from GPFs, profhash in MSXG, HELLO fields, P3, BYE, the session/profile/save/restore commands.
    *Proof:* the existing 98 tests plus new ones.
 4. **`PLAYNET.COM`, Pi path**: generic loader, connect phase out of the stub, Soccer stub built from the package. *Proof:* the rig with

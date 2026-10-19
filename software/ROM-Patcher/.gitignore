@@ -2,3 +2,6 @@ __pycache__/
 *.pyc
 profiles/*/src/*.lst
 profiles/*/src/*.sym
+profiles/soccer/src/stub.asm
+# package assets are part of the package (their SHA-256 is in profile.json)
+!profiles/*/assets/*.bin

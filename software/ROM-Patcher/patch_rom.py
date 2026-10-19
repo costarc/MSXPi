@@ -1,13 +1,40 @@
 #!/usr/bin/env python3
-"""Dependency-free MSXPi ROM patcher. Profiles are data, never executed code."""
+"""Dependency-free MSXPi ROM patcher. Profiles are data, never executed code.
+
+Package format msxpi-rom-patch, versions 1 and 2 (see FORMAT.md). Version 2 makes the
+music ABI optional and adds the msxpi-netplay-v1 ABI: such a package is compiled to a GPF
+file for PLAYNET (--gpf) and never to a patched ROM file."""
 import argparse
 import hashlib
 import json
 from pathlib import Path
+import re
+import struct
 import sys
+import zlib
 
 ROOT = Path(__file__).resolve().parent
 MAX_ROM = 16 * 1024 * 1024
+
+ABI_MUSIC = 'msxpi-music-v1'
+ABI_NETPLAY = 'msxpi-netplay-v1'
+KNOWN_ABIS = (ABI_MUSIC, ABI_NETPLAY)
+
+# GPF, the compiled netplay package (documents/PLAYNET-PROTOCOLS.md, section 8)
+GPF_MAGIC = b'GPF1'
+GPF_FORMAT = 1
+GPF_HEADER = 128
+GPF_MAX = 16384
+PLAYNET_VERSION = 1                     # the newest min_playnet this tool understands
+SEC_END, SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_ASSET = range(6)
+PAGE3_LOW, PAGE3_HIGH = 0xC000, 0xF37F  # RAM below the BIOS work area
+MIN_TRANSPORT = 192
+INPUT_ROM = 0xFF                        # layout source "input" in a GPF
+
+GAME_ID_RE = re.compile(r'[a-z0-9-]{1,8}')
+ROLE_RE = re.compile(r'[A-Za-z0-9]{1,8}')
+COMMAND_RE = re.compile(r'(?:[A-Za-z0-9 ._:/\-]|\{role\}|\{peer\}|\{token\}){1,37}')
+FILE83_RE = re.compile(r'[A-Z0-9_\-]{1,8}\.[A-Z0-9_\-]{1,3}')
 
 
 class PatchError(ValueError):
@@ -21,6 +48,10 @@ def require(condition, message):
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def crc32(data):
+    return zlib.crc32(data) & 0xFFFFFFFF
 
 
 def integer(value, low, high, label):
@@ -48,12 +79,24 @@ def read_json(path):
     return value
 
 
+def abis(profile):
+    """The ABIs a package uses. Version 1 packages are music packages."""
+    if profile['version'] == 1:
+        return [ABI_MUSIC]
+    names = profile['abi']
+    require(isinstance(names, list) and names and len(set(names)) == len(names)
+            and all(name in KNOWN_ABIS for name in names), f'abi must list known ABIs: {", ".join(KNOWN_ABIS)}')
+    return names
+
+
 def load_profile(path):
     path = Path(path).resolve()
     profile = read_json(path)
-    require(profile['format'] == 'msxpi-rom-patch' and type(profile['version']) is int and profile['version'] == 1,
+    require(profile['format'] == 'msxpi-rom-patch' and type(profile['version']) is int and profile['version'] in (1, 2),
             'Unsupported patch profile format/version')
-    require(profile['music']['abi'] == 'msxpi-music-v1', 'Unsupported music ABI')
+    used = abis(profile)
+    if ABI_MUSIC in used:
+        require(profile['music']['abi'] == ABI_MUSIC, 'Unsupported music ABI')
     require(isinstance(profile['id'], str) and profile['id'], 'Missing profile ID')
     assets = {}
     for name, spec in profile['assets'].items():
@@ -64,6 +107,8 @@ def load_profile(path):
         data = asset.read_bytes()
         require(digest(data) == spec['sha256'], f'Asset checksum mismatch: {name}')
         assets[name] = data
+    if ABI_NETPLAY in used:
+        check_netplay(netplay_values(profile), {i: len(data) for i, data in enumerate(assets.values())})
     return profile, assets
 
 
@@ -127,31 +172,54 @@ def music_config(profile, overrides=None):
     return result, bytes(mapping), bytes(modes), bytes(names), records
 
 
+def apply_layout_and_patches(original, assets, size, fill, layout, patches):
+    """Shared by build() and gpf_image(). layout: (source, offset, size, destination), source None = the ROM;
+    patches: (offset, expected, replacement, reason)."""
+    output = bytearray([fill]) * size
+    used = bytearray(size)
+    for source, offset, length, destination in layout:
+        data = original if source is None else assets[source]
+        src = span(offset, length, len(data), 'layout source')
+        dst = span(destination, length, size, 'layout destination')
+        require(not any(used[dst]), 'Overlapping layout destinations')
+        output[dst] = data[src]
+        used[dst] = b'\1' * length
+    patched = bytearray(size)
+    for offset, expected, replacement, reason in patches:
+        require(len(expected) == len(replacement) and expected, 'Patch lengths must match and be nonempty')
+        dst = span(offset, len(expected), size, 'patch')
+        require(not any(patched[dst]), 'Overlapping patch operations')
+        require(output[dst] == expected, f'Expected bytes differ at {offset:#x}: {reason}')
+        output[dst] = replacement
+        patched[dst] = b'\1' * len(expected)
+    return output, patched
+
+
 def build(original, profile, assets, overrides=None):
+    used = abis(profile)
     source = profile['source']
+    require(source is not None, 'This package has no ROM to build (netplay transport "none")')
     require(len(original) == source['size'] and digest(original) == source['sha256'],
             'Input ROM is not the supported original (size/SHA-256 mismatch). '
             'Already-patched ROMs are not accepted.')
+    if 'crc32' in source:
+        require(crc32(original) == source['crc32'], 'Input ROM CRC-32 does not match the profile')
     size = integer(profile['output']['size'], 1, MAX_ROM, 'output size')
     fill = integer(profile['output']['fill'], 0, 255, 'fill byte')
-    output = bytearray([fill]) * size
-    used = bytearray(size)
-    for item in profile['layout']:
-        data = original if item['source'] == 'input' else assets[item['source']]
-        src = span(item['offset'], item['size'], len(data), 'layout source')
-        dst = span(item['destination'], item['size'], size, 'layout destination')
-        require(not any(used[dst]), 'Overlapping layout destinations')
-        output[dst] = data[src]
-        used[dst] = b'\1' * item['size']
-    patched = bytearray(size)
-    for patch in profile['patches']:
-        expected, replacement = bytes.fromhex(patch['expected']), bytes.fromhex(patch['replace'])
-        require(len(expected) == len(replacement) and expected, 'Patch lengths must match and be nonempty')
-        dst = span(patch['offset'], len(expected), size, 'patch')
-        require(not any(patched[dst]), 'Overlapping patch operations')
-        require(output[dst] == expected, f'Expected bytes differ at {patch["offset"]:#x}: {patch["reason"]}')
-        output[dst] = replacement
-        patched[dst] = b'\1' * len(expected)
+    output, patched = apply_layout_and_patches(
+        original, assets, size, fill,
+        [(None if item['source'] == 'input' else item['source'], item['offset'], item['size'], item['destination'])
+         for item in profile['layout']],
+        [(patch['offset'], bytes.fromhex(patch['expected']), bytes.fromhex(patch['replace']), patch['reason'])
+         for patch in profile['patches']])
+    if ABI_MUSIC not in used:
+        require(overrides is None, 'This package has no music configuration')
+        manifest = {'format': 'msxpi-rom-build', 'version': 1, 'profile': profile['id'], 'abi': used,
+                    'profile_sha256': digest(json.dumps(profile, sort_keys=True).encode()),
+                    'source_sha256': digest(original), 'output_sha256': digest(output),
+                    'mapper': profile['output']['mapper'], 'size': len(output),
+                    'requirements': profile['requirements'], 'symbols': profile.get('symbols', {})}
+        return bytes(output), manifest
     effective, mapping, modes, names, records = music_config(profile, overrides)
     music = profile['music']
     span(music['names_offset'], music['names_capacity'], size, 'filename storage')
@@ -181,6 +249,256 @@ def build(original, profile, assets, overrides=None):
     return bytes(output), manifest
 
 
+# ---- netplay ABI ---------------------------------------------------------------------------
+# One set of rules for both forms of a netplay package: the JSON profile and the compiled GPF.
+# Both are first turned into the same flat dictionary, then check_netplay() applies the rules
+# of PLAYNET-PROTOCOLS.md 7.2 (the MSX loader applies them again, 8.3).
+
+def netplay_values(profile):
+    """The netplay section of a JSON profile as the flat dictionary check_netplay() takes."""
+    require(profile['version'] == 2, 'The netplay ABI needs package format version 2')
+    n = profile['netplay']
+    require(isinstance(n, dict) and n.get('abi') == ABI_NETPLAY, 'netplay.abi must be ' + ABI_NETPLAY)
+    names = list(profile['assets'])
+    v = {'game_id': n.get('game_id'), 'title': n.get('title'), 'roles': n.get('roles'),
+         'transport': n.get('transport'), 'command': n.get('command', ''),
+         'min_playnet': n.get('min_playnet', 1)}
+    if v['transport'] == 'none':
+        require(profile['source'] is None and not profile['layout'] and not profile['patches'] and not profile['assets'],
+                'A game with transport "none" has no ROM, layout, patches or assets')
+        return v
+    require(v['transport'] == 'lockstep', 'netplay.transport must be "lockstep" or "none"')
+    require(profile['output'].get('target') == 'ram-image', 'A lockstep package needs output.target "ram-image"')
+    source = profile['source']
+    require(isinstance(source, dict), 'A lockstep package needs its source ROM')
+    image, stub, area = n.get('image', {}), n.get('stub', {}), n.get('transport_area', {})
+    require(image.get('host') == 'plain', 'netplay.image.host must be "plain" in version 1')
+    require(stub.get('asset') in names, 'netplay.stub.asset must name an asset')
+    start = n.get('start')
+    v.update({
+        'input_bytes': n.get('input_bytes', 1), 'image_base': image.get('base'),
+        'output_size': profile['output']['size'], 'stub_asset': names.index(stub['asset']),
+        'stub_load': stub.get('load'), 'stub_max': stub.get('max'),
+        'transport_area': area.get('address'), 'transport_size': area.get('size'),
+        'irq_handler': n.get('irq_handler'), 'start': 0 if start == 'header-init' else start,
+        'game_ram': n.get('game_ram'),
+        'source_size': source['size'], 'source_crc32': source.get('crc32'), 'source_file': source.get('file')})
+    return v
+
+
+def _overlap(a_low, a_high, b_low, b_high):
+    return a_low <= b_high and b_low <= a_high
+
+
+def check_netplay(v, asset_sizes):
+    """Structural rules of a netplay package. asset_sizes: {index: length}."""
+    require(isinstance(v['game_id'], str) and GAME_ID_RE.fullmatch(v['game_id']),
+            'netplay.game_id must be 1-8 characters a-z 0-9 -')
+    title = v['title']
+    require(isinstance(title, str) and 1 <= len(title) <= 24 and all(32 <= ord(ch) < 127 for ch in title),
+            'netplay.title must be 1-24 printable ASCII characters')
+    roles = v['roles']
+    require(isinstance(roles, list) and len(roles) == 2 and all(isinstance(r, str) and ROLE_RE.fullmatch(r) for r in roles),
+            'netplay.roles must be two words of 1-8 letters or digits')
+    integer(v['min_playnet'], 1, 255, 'netplay.min_playnet')
+    if v['transport'] == 'none':
+        command = v['command']
+        require(isinstance(command, str) and COMMAND_RE.fullmatch(command),
+                'netplay.command must be at most 37 characters of A-Z a-z 0-9 space . _ : / - and {role} {peer} {token}')
+        return
+    integer(v['input_bytes'], 1, 4, 'netplay.input_bytes')
+    require(v['image_base'] in (0x4000, 0x8000), 'netplay.image.base must be 16384 (4000h) or 32768 (8000h)')
+    require(v['output_size'] in (16384, 32768), 'A plain image is 16384 or 32768 bytes')
+    image_low, image_high = v['image_base'], v['image_base'] + v['output_size'] - 1
+    require(image_high <= 0xBFFF, 'The image must end at or below BFFFh')
+    integer(v['source_size'], 1, MAX_ROM, 'source.size')
+    integer(v['source_crc32'], 0, 0xFFFFFFFF, 'source.crc32')
+    require(isinstance(v['source_file'], str) and FILE83_RE.fullmatch(v['source_file']),
+            'source.file must be an upper-case 8.3 file name')
+    require(v['stub_asset'] in asset_sizes, 'netplay.stub.asset must name an asset')
+    stub_low = integer(v['stub_load'], PAGE3_LOW, PAGE3_HIGH, 'netplay.stub.load')
+    stub_high = stub_low + integer(v['stub_max'], 1, PAGE3_HIGH - PAGE3_LOW + 1, 'netplay.stub.max') - 1
+    require(stub_high <= PAGE3_HIGH, 'The stub area must lie in page 3 (C000h-F37Fh)')
+    area_low = integer(v['transport_area'], PAGE3_LOW, PAGE3_HIGH, 'netplay.transport_area.address')
+    area_high = area_low + integer(v['transport_size'], MIN_TRANSPORT, PAGE3_HIGH - PAGE3_LOW + 1,
+                                   'netplay.transport_area.size') - 1
+    require(area_high <= PAGE3_HIGH, 'The transport area must lie in page 3 (C000h-F37Fh)')
+    require(not _overlap(stub_low, stub_high, area_low, area_high), 'The stub and the transport area overlap')
+    ranges = v['game_ram']
+    require(isinstance(ranges, list) and 1 <= len(ranges) <= 16, 'netplay.game_ram must list 1-16 ranges')
+    for item in ranges:
+        require(isinstance(item, (list, tuple)) and len(item) == 2, 'A game_ram range is [low, high]')
+        low, high = integer(item[0], 0, 0xFFFF, 'game_ram low'), integer(item[1], 0, 0xFFFF, 'game_ram high')
+        require(low <= high, 'A game_ram range must have low <= high')
+        require(not _overlap(low, high, stub_low, stub_high), f'game_ram {low:04X}-{high:04X} overlaps the stub area')
+        require(not _overlap(low, high, area_low, area_high),
+                f'game_ram {low:04X}-{high:04X} overlaps the transport area')
+    irq = integer(v['irq_handler'], 0, 0xFFFF, 'netplay.irq_handler')
+    require(image_low <= irq <= image_high, 'netplay.irq_handler must be inside the image')
+    start = v['start']
+    require(start == 0 or (type(start) is int and image_low <= start <= image_high),
+            'netplay.start must be "header-init" or an address inside the image')
+
+
+def check_stub_size(v, asset_sizes):
+    """The built stub must fit the room its package reserves. Checked when a GPF is written or loaded."""
+    if v['transport'] == 'lockstep':
+        size = asset_sizes[v['stub_asset']]
+        require(size <= v['stub_max'],
+                f'The stub asset is {size} bytes but netplay.stub.max is {v["stub_max"]}: '
+                'rebuild the stub with the PLAYNET engine, or reserve more room')
+
+
+# ---- GPF writer and reader -----------------------------------------------------------------
+
+def _text(value, size):
+    data = value.encode('ascii')
+    require(len(data) <= size, f'"{value}" is longer than {size} bytes')
+    return data.ljust(size, b'\0')
+
+
+def _section(kind, payload):
+    require(len(payload) <= 0xFFFF, 'GPF section too large')
+    return struct.pack('<BH', kind, len(payload)) + payload
+
+
+def gpf_bytes(profile, assets):
+    """Compile a version 2 netplay package to a GPF file (PLAYNET-PROTOCOLS.md 8.2)."""
+    require(ABI_NETPLAY in abis(profile), 'Only packages with the netplay ABI compile to a GPF')
+    v = netplay_values(profile)
+    names, blobs = list(assets), list(assets.values())
+    sizes = {i: len(data) for i, data in enumerate(blobs)}
+    check_netplay(v, sizes)
+    check_stub_size(v, sizes)
+    lockstep = v['transport'] == 'lockstep'
+    body = b''
+    if lockstep:
+        source = profile['source']
+        body += _section(SEC_SOURCE, struct.pack('<II', source['size'], source['crc32']) + _text(source['file'], 12))
+        ranges = v['game_ram']
+        body += _section(SEC_NETPLAY, struct.pack(
+            '<HBBHHHHHHB', v['image_base'], v['input_bytes'], v['stub_asset'], v['stub_load'], v['stub_max'],
+            v['transport_area'], v['transport_size'], v['irq_handler'], v['start'], len(ranges))
+            + b''.join(struct.pack('<HH', low, high) for low, high in ranges))
+        layout = profile['layout']
+        require(len(layout) <= 255, 'At most 255 layout entries')
+        body += _section(SEC_LAYOUT, struct.pack('<IBB', profile['output']['size'], profile['output']['fill'], len(layout))
+                         + b''.join(struct.pack('<BIII', INPUT_ROM if item['source'] == 'input' else names.index(item['source']),
+                                                item['offset'], item['size'], item['destination']) for item in layout))
+        patches = b''
+        for patch in profile['patches']:
+            expected, replacement = bytes.fromhex(patch['expected']), bytes.fromhex(patch['replace'])
+            require(len(expected) == len(replacement) and 1 <= len(expected) <= 255, 'A patch is 1-255 bytes')
+            patches += struct.pack('<IB', patch['offset'], len(expected)) + expected + replacement
+        body += _section(SEC_PATCH, struct.pack('<H', len(profile['patches'])) + patches)
+        for data in blobs:
+            body += _section(SEC_ASSET, data)
+    body += _section(SEC_END, b'')
+    flags = (1 if lockstep else 0)            # image host bits 1-2: 0 = plain
+    header = bytearray(GPF_HEADER)
+    header[0:4] = GPF_MAGIC
+    header[4] = GPF_FORMAT
+    header[5] = flags
+    require(len(body) <= 0xFFFF and GPF_HEADER + len(body) <= GPF_MAX, f'A GPF file is at most {GPF_MAX} bytes')
+    header[6:8] = struct.pack('<H', len(body))
+    header[12:20] = _text(v['game_id'], 8)
+    header[20:44] = _text(v['title'], 24)
+    header[44:52] = _text(v['roles'][0], 8)
+    header[52:60] = _text(v['roles'][1], 8)
+    header[60:98] = _text(v['command'] if not lockstep else '', 38)
+    header[98] = v['min_playnet']
+    data = bytearray(header + body)
+    data[8:12] = struct.pack('<I', crc32(data))
+    return bytes(data)
+
+
+def _unpad(raw):
+    return raw.split(b'\0', 1)[0].decode('ascii')
+
+
+def read_gpf(data):
+    """Parse and check a GPF file the way PLAYNET does (PLAYNET-PROTOCOLS.md 8.3, step 1).
+    Returns the flat netplay dictionary plus 'hash', 'layout', 'patches', 'assets'."""
+    require(len(data) >= GPF_HEADER and data[:4] == GPF_MAGIC, 'Not a GPF file')
+    require(data[4] == GPF_FORMAT, f'GPF format {data[4]} is newer than this PLAYNET understands: update PLAYNET')
+    require(len(data) <= GPF_MAX, f'A GPF file is at most {GPF_MAX} bytes')
+    body_length = struct.unpack_from('<H', data, 6)[0]
+    require(GPF_HEADER + body_length == len(data), 'GPF length does not match its header')
+    stored = struct.unpack_from('<I', data, 8)[0]
+    require(crc32(data[:8] + b'\0\0\0\0' + data[12:]) == stored, 'GPF checksum mismatch: the file is damaged')
+    require(data[98] <= PLAYNET_VERSION, 'This game package needs a newer PLAYNET: update PLAYNET')
+    lockstep = bool(data[5] & 1)
+    require((data[5] >> 1) & 3 == 0, 'This game package needs an image host this PLAYNET does not have')
+    v = {'hash': stored, 'game_id': _unpad(data[12:20]), 'title': _unpad(data[20:44]),
+         'roles': [_unpad(data[44:52]), _unpad(data[52:60])], 'command': _unpad(data[60:98]),
+         'min_playnet': data[98], 'transport': 'lockstep' if lockstep else 'none',
+         'layout': [], 'patches': [], 'assets': []}
+    sections, pos = {}, GPF_HEADER
+    while True:
+        require(pos + 3 <= len(data), 'GPF ends inside a section header')
+        kind, length = struct.unpack_from('<BH', data, pos)
+        payload = data[pos + 3:pos + 3 + length]
+        require(len(payload) == length, 'GPF section runs past the end of the file')
+        pos += 3 + length
+        if kind == SEC_END:
+            break
+        if kind == SEC_ASSET:
+            v['assets'].append(bytes(payload))
+        elif kind in (SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH):
+            require(kind not in sections, 'GPF section repeated')
+            sections[kind] = payload
+        # unknown section types are skipped
+    require(pos == len(data), 'Data after the GPF end marker')
+    if lockstep:
+        require(all(k in sections for k in (SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH)),
+                'GPF lacks a required section')
+        p = sections[SEC_SOURCE]
+        require(len(p) == 20, 'Bad GPF SOURCE section')
+        v['source_size'], v['source_crc32'] = struct.unpack_from('<II', p)
+        v['source_file'] = _unpad(p[8:20])
+        p = sections[SEC_NETPLAY]
+        fixed = struct.calcsize('<HBBHHHHHHB')                   # 17 bytes, then the RAM ranges
+        require(len(p) >= fixed, 'Bad GPF NETPLAY section')
+        (v['image_base'], v['input_bytes'], v['stub_asset'], v['stub_load'], v['stub_max'], v['transport_area'],
+         v['transport_size'], v['irq_handler'], v['start'], count) = struct.unpack_from('<HBBHHHHHHB', p)
+        require(len(p) == fixed + 4 * count, 'Bad GPF NETPLAY section')
+        v['game_ram'] = [list(struct.unpack_from('<HH', p, fixed + 4 * i)) for i in range(count)]
+        p = sections[SEC_LAYOUT]
+        require(len(p) >= 6, 'Bad GPF LAYOUT section')
+        v['output_size'], v['fill'], count = struct.unpack_from('<IBB', p)
+        require(len(p) == 6 + 13 * count, 'Bad GPF LAYOUT section')
+        for i in range(count):
+            source, offset, size, destination = struct.unpack_from('<BIII', p, 6 + 13 * i)
+            require(source == INPUT_ROM or source < len(v['assets']), 'GPF layout names a missing asset')
+            v['layout'].append((None if source == INPUT_ROM else source, offset, size, destination))
+        p = sections[SEC_PATCH]
+        require(len(p) >= 2, 'Bad GPF PATCH section')
+        count, at = struct.unpack_from('<H', p)[0], 2
+        for _ in range(count):
+            require(at + 5 <= len(p), 'Bad GPF PATCH section')
+            offset, length = struct.unpack_from('<IB', p, at)
+            at += 5
+            require(length and at + 2 * length <= len(p), 'Bad GPF PATCH section')
+            v['patches'].append((offset, bytes(p[at:at + length]), bytes(p[at + length:at + 2 * length]),
+                                 f'GPF patch at {offset:#x}'))
+            at += 2 * length
+        require(at == len(p), 'Bad GPF PATCH section')
+    sizes = {i: len(asset) for i, asset in enumerate(v['assets'])}
+    check_netplay(v, sizes)
+    check_stub_size(v, sizes)
+    return v
+
+
+def gpf_image(gpf, rom):
+    """What PLAYNET does with a checked GPF and the player's ROM (8.3 steps 2-3): the RAM image and the stub."""
+    require(gpf['transport'] == 'lockstep', 'This game is its own program: there is no image to build')
+    require(len(rom) == gpf['source_size'] and crc32(rom) == gpf['source_crc32'],
+            f'{gpf["source_file"]} is not the dump this game package was made for')
+    image, _ = apply_layout_and_patches(rom, gpf['assets'], gpf['output_size'], gpf['fill'],
+                                        gpf['layout'], gpf['patches'])
+    return bytes(image), gpf['assets'][gpf['stub_asset']]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('rom', nargs='?', type=Path, help='supported ORIGINAL ROM')
@@ -188,15 +506,35 @@ def main(argv=None):
     parser.add_argument('--music', type=Path, help='JSON configuration overrides')
     parser.add_argument('--output', '-o', type=Path, help='new ROM path (must not exist)')
     parser.add_argument('--write-config', type=Path, help='write editable defaults and exit')
+    parser.add_argument('--gpf', type=Path, help='compile a netplay package to this GPF file (must not exist); '
+                                                  'with a ROM, check the package against it first')
     args = parser.parse_args(argv)
     try:
         profile, assets = load_profile(args.profile)
+        if args.gpf:
+            require(args.output is None and args.music is None, '--gpf takes no --output or --music')
+            require(not args.gpf.exists(), 'Output GPF already exists')
+            data = gpf_bytes(profile, assets)
+            if args.rom:
+                image, _ = build(args.rom.read_bytes(), profile, assets)
+                require(gpf_image(read_gpf(data), args.rom.read_bytes())[0] == image,
+                        'Internal error: the GPF does not rebuild the same image')
+            else:
+                read_gpf(data)
+            with args.gpf.open('xb') as stream:
+                stream.write(data)
+            print(f'Created {args.gpf} ({len(data)} bytes, profile hash {struct.unpack_from("<I", data, 8)[0]:08x})'
+                  + ('' if args.rom else '; not checked against a ROM'))
+            return 0
         if args.write_config:
+            require(ABI_MUSIC in abis(profile), 'This package has no music configuration')
             with args.write_config.open('x', encoding='utf-8') as stream:
                 json.dump(profile['defaults'], stream, indent=2)
                 stream.write('\n')
             print(f'Configuration: {args.write_config}')
             return 0
+        require(profile['output'].get('target', 'rom-file') == 'rom-file',
+                'This package builds a RAM image for PLAYNET and never a ROM file: use --gpf')
         require(args.rom is not None and args.output is not None, 'ROM and --output are required')
         require(args.rom.resolve() != args.output.resolve(), 'Output must differ from the original ROM')
         # Kept with the profile, not beside the ROM: a ROM folder served to
@@ -221,7 +559,7 @@ def main(argv=None):
         print(f'SHA-256: {manifest["output_sha256"]}')
         print(f'Manifest: {manifest_path}')
         return 0
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, struct.error) as exc:
         print(f'Patch error: {exc}', file=sys.stderr)
         return 2
 

@@ -339,7 +339,7 @@ packages with the music ABI.
 | `roles` | Two words of 1-8 characters `A-Z a-z 0-9`, for seat 0 (the inviter) and seat 1 |
 | `transport` | `"lockstep"`: PLAYNET runs the game (everything below applies). `"none"`: the game is its own program and makes its own connection; only `command` applies. |
 | `input_bytes` | 1-4: bytes of input per player per frame (the input width, 4.4). Default 1. |
-| `command` | Only for `"none"`: the MSX-DOS command line, at most 37 characters of `A-Z a-z 0-9 space . _ : -`, with `{role}`, `{peer}` and `{token}` replaced |
+| `command` | Only for `"none"`: the MSX-DOS command line: a template of at most 37 characters of `A-Z a-z 0-9 space . _ : / -` and the placeholders `{role}`, `{peer}`, `{token}`. The chat checks the line again after replacing them, because it must still fit the keyboard buffer. |
 | `image.host` | `"plain"` in version 1. `"mapper-ram"` is reserved for MegaROMs. |
 | `image.base` | CPU address of output offset 0: `16384` (4000h) or `32768` (8000h, for a 16 KB ROM that lives there). The output must end at or below BFFFh. |
 | `stub.asset` | Name of the asset holding the built stub (engine + glue, Part II, 9) |
