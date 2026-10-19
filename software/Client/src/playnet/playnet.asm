@@ -41,8 +41,8 @@ GPFMAX:         EQU     $1400
 BOUNCE:         EQU     $3000
 CHUNK:          EQU     $1000
 TRAMP:          EQU     $C000
-SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', HIMEM, length, then HIMEM-FFFEh
-SV_MAX:         EQU     $4000                   ; at most 16 KB (HIMEM >= C000h)
+SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', start, length, then start-FFFEh
+SV_MAX:         EQU     $4000                   ; at most 16 KB (start >= C000h)
 RBUF:           EQU     $4000                   ; the restore buffer: the game image's RAM, dead by then
 BKSTACK:        EQU     $C000                   ; pnBack's stack, at the top of that RAM
         ASSERT  RBUF+SV_HDR+SV_MAX <= BKSTACK-256
@@ -1243,16 +1243,37 @@ vRam1:          defb    0
 trampEnd:
 
 ; ---- the return to MSX-DOS (PROTOCOLS 14) ---------------------------------------------------------
-; Before the game: HIMEM-FFFEh goes to the MSXPi ("playnet save"); the slot registers stay here and in the
+; Before the game: MSX-DOS's area up to FFFEh goes to the MSXPi ("playnet save"); the slot registers stay here and in the
 ; transport. The game never maps page 0's RAM, so this program is still there when XEND comes back to pnBack.
 saveDos:
-        ld      hl,(HIMEM)
-        ld      (svHimem),hl
+        ld      hl,(HIMEM)                      ; the area starts at HIMEM, or lower where the game's RAM
+        ld      (svStart),hl                    ; reaches below it: MSX-DOS 2 keeps code and data between
+        ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh), and Soccer
+        ld      b,a                             ; uses E000h-F37Fh. A range below the TPA top is TPA.
+        ld      hl,(pRanges)
+.rng:   ld      e,(hl)
+        inc     hl
+        ld      d,(hl)                          ; DE = low
+        inc     hl
+        inc     hl
+        inc     hl
+        push    hl
+        ld      hl,($0006)
+        ex      de,hl                           ; HL = low, DE = the TPA top
+        call    cpHLDE
+        jr      c,.next                         ; in the TPA
+        ld      de,(svStart)
+        call    cpHLDE
+        jr      nc,.next
+        ld      (svStart),hl                    ; below the start so far
+.next:  pop     hl
+        djnz    .rng
+        ld      hl,(svStart)
         ld      de,$10000-SV_MAX
         call    cpHLDE
-        jr      c,.no                           ; HIMEM below C000h: more than the MSXPi keeps
+        jr      c,.no                           ; below C000h: more than the MSXPi keeps
         ex      de,hl
-        ld      hl,$FFFF                        ; HIMEM-FFFEh: FFFFh - HIMEM bytes
+        ld      hl,$FFFF                        ; start-FFFEh: FFFFh - start bytes
         or      a
         sbc     hl,de
         ld      (svLen),hl
@@ -1291,7 +1312,7 @@ saveDos:
         call    PRINT
         jp      PRINTNLINE
 
-; "playnet save", after the command: the header and HIMEM-FFFEh as one transfer that the MSXPi's recvdata2
+; "playnet save", after the command: the header and the area as one transfer that the MSXPi's recvdata2
 ; takes (one handshake, blocks of at most MAXBUFSIZE, RC_READY on all but the last). CF on a link error.
 sendSave:
 .hs:    ld      a,READY
@@ -1314,7 +1335,7 @@ sendSave:
         ld      a,RC_READY
         call    sendBlk
         ret     c
-        ld      hl,(svHimem)
+        ld      hl,(svStart)
         ld      (sbSrc),hl
         ld      hl,(svLen)
         ld      (sbLeft),hl
@@ -1444,7 +1465,7 @@ pnBack:
         inc     hl
         inc     de
         djnz    .chk
-        ld      de,(svHimem)                    ; HL = RBUF + SV_HDR
+        ld      de,(svStart)                    ; HL = RBUF + SV_HDR
         ld      bc,(svLen)
         ldir
         ld      a,(svFFFF)
@@ -1853,8 +1874,8 @@ tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until
         ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
 pcUp:           defb    0                       ; 1: piCommand uploads the saved area (sendSave)
 svHdr:          defb    "PNSV"                  ; the saved area's header (SV_HDR bytes)
-svHimem:        defw    0
-svLen:          defw    0                       ; bytes from HIMEM to FFFEh
+svStart:        defw    0                       ; where the area starts: HIMEM, or lower (saveDos)
+svLen:          defw    0                       ; bytes from the start to FFFEh
 svFFFF:         defb    0                       ; what to write back at FFFFh
 bkSlots:        defw    0                       ; the game's slot registers, for the fallback reset
 sbIdx:          defb    0

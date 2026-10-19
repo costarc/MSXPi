@@ -657,8 +657,10 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 
 `XEND` brings the machine back to the MSX-DOS prompt with `MCHAT` typed, whenever the loader managed to save the DOS area:
 
-1. **Saved by the loader**, just before the game starts: `HIMEM` to `FFFEh` (at most 16 KB, so `HIMEM` >= C000h), with an 8-byte header
-   (`'PNSV'`, `HIMEM`, length). The loader keeps the primary slot register and what is at `FFFFh` (the sub-slot register of page 3's slot,
+1. **Saved by the loader**, just before the game starts: from a start address to `FFFEh` (at most 16 KB, so the start is C000h or
+   above), with an 8-byte header (`'PNSV'`, start, length). The start is `HIMEM`, or the lowest `game_ram` address at or above the TPA
+   top (the word at 0006h) when that is lower: MSX-DOS 2 keeps code and data between the TPA top and `HIMEM`, and the game may use
+   part of it (Soccer's E000h-F37Fh against Nextor's `HIMEM` E6FEh). A `game_ram` range below the TPA top is TPA, so nothing is kept. The loader keeps the primary slot register and what is at `FFFFh` (the sub-slot register of page 3's slot,
    complemented, or the RAM byte when that slot is not expanded) in the transport and in its own memory. On the MSXPi path the area goes
    to the Pi (`playnet save`), with or without a mapper; on the TCP/IP path it goes to a mapper segment.
 2. **Restore**. The game never maps page 0's RAM, so `PLAYNET.COM` is still there. `XEND` sends BYE, puts back MSX-DOS's slot registers
@@ -685,7 +687,7 @@ payload below. On failure it has `RC_FAILED` (E7h) and carries a message startin
 |---|---|
 | `playnet session` | the first 40 bytes of the session record (13). Fails if no game was handed to the MSX. Fetching it marks the game as started. |
 | `playnet profile <game_id>` | the GPF file. Works with or without a chat session. Fails for a game that is not installed, or whose transport is `none`. |
-| `playnet save` | After the command, the MSX sends the saved area (14) as one block transfer that the Pi's `recvdata2` takes: one handshake, then blocks of at most 8 KB (`RC_READY` on all but the last, `RC_SUCCESS` on the last). At most 16640 bytes; PLAYNET sends the 8-byte header in the first block, then `HIMEM-FFFEh`. Reply `OK`. Fails when no game is in progress. |
+| `playnet save` | After the command, the MSX sends the saved area (14) as one block transfer that the Pi's `recvdata2` takes: one handshake, then blocks of at most 8 KB (`RC_READY` on all but the last, `RC_SUCCESS` on the last). At most 16640 bytes; PLAYNET sends the 8-byte header in the first block, then the area (14). Reply `OK`. Fails when no game is in progress. |
 | `playnet restore` | the saved area. The Pi then forgets it, so a second restore fails. |
 | `playnet result <code>` | `OK`. The chat shows the result (13.2) when the player is back in `MCHAT`. |
 

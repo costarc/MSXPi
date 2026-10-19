@@ -169,8 +169,16 @@ harness::init "chat_$roleArg"
 # Two players meet in the chat and start a game; nothing here is specific to a game except the nick/command.
 #   NICK  the player's chat nick       INVITE  1 on the node that sends the invitation (role H)
 #   PLAY_AT / ACCEPT_AT  emulated seconds after the chat started
-harness::at_dos_prompt {
-    harness::run_cmd "B:" 30 {
+#   BOOT=nextor: Nextor (MSX-DOS 2) from the MegaFlashROM's hard disk, the tools in C:\PLAYNET
+proc toTools {body} {
+    if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
+        harness::run_cmd "C:" 10 [list harness::run_cmd "CD PLAYNET" 10 $body]
+    } else {
+        harness::run_cmd "B:" 30 $body
+    }
+}
+set ::chatStart {
+    toTools {
         type "MCHAT /1 $::env(NICK)\r"
         after time 3 arm
         if {$::env(INVITE) eq "1"} {
@@ -184,5 +192,10 @@ harness::at_dos_prompt {
             after time $::env(ACCEPT_AT) { type "/accept\r" }
         }
     }
-} 200
+}
+if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
+    harness::at_nextor_prompt $::chatStart
+} else {
+    harness::at_dos_prompt $::chatStart 200
+}
 after time $::env(TMAX) { puts $tf "# codeDiff=[codeDiff]"; puts $tf "# timeout  nfNow=[peek $::s_nf] rxSeen=[peek $::s_rxSeen] tags=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3}]]}] ,] vals=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3 + 1}]]}] ,] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] ""] PC=[format %04X [reg PC]]"; close $tf; exit }

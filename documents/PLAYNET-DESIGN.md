@@ -479,6 +479,8 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    bob's machine at frame 600 ends the game on both; both are back in `MCHAT` with nick and room, showing "Game with alice ended (you
    ended it)" and "Game with bob ended (the opponent ended it)". Measured: 8 KB saved (HIMEM = DF6Eh), restored in under a second.
 6. **Measurements** (section 8). They decide the details of steps 7 and 8.
+   **Done 2026-10-20**: results in 8a. Two changes came out of them: the save start rule (8.2/8.3, for MSX-DOS 2), and netcore must
+   not run INL's timer every frame (8.4).
 7. **netcore** (portable C) plus the conformance test against `Netplay` on the PC; then `PLAYNET.OVL`, the shim and the IRQ trampoline.
    *Proof:* `SCENARIO=mixed` (Pi node against INL node), then two INL nodes.
 8. **`MCHAT /t` agent** (`games_local.c`), after the memory measurement; resident IRC connection and re-attach. *Proof:* the conformance
@@ -504,6 +506,21 @@ Each step ends with something that can be shown to work. Mixed play is part of t
 6. **Whether a resident TCP connection survives** from `MCHAT /t` through `PLAYNET` and back, on INL and on GR8NET.
 7. **`mchat.com` memory**: the real end of the image and the TPA top with INL loaded and with GR8NET.
 8. ~~The Soccer hook-install site~~: found while writing the specification: H.KEYI is installed at 4090h (`ld hl,402Eh`, operand at 4096h).
+
+### 8a. Results (step 6, 2026-10-20, openMSX: Canon V-25)
+
+Tools: `Client/tests/soccernet/measure.sh` (one machine: the prompt, then each install command; `BOOT=nextor` for Nextor 2.10 on a
+MegaFlashROM SCC+ SD), and `run_native.sh` with `EXTRA_TCL` for the game (watch scripts). The numbers are emulated.
+
+| | Result | What it decides |
+|---|---|---|
+| 8.1 Game RAM in C000h-DFFFh | The original cartridge writes **nothing** there in 5 minutes of title and demo. Under PLAYNET, a full 3000-frame match writes there only at INIT: 16 pushes at D55Eh-D5xxh, which are the loader's own stack (SP-relative, so always in the TPA). | C000h-DFFFh is free during the game: a stack's page-3 code there survives. Soccer's `game_ram` D500h-D5FFh range is the loader stack, not game data. |
+| 8.2 Where the stacks live, and the save size | **MSX-DOS 1** (MSXPi): HIMEM DF6Eh, TPA top D606h; `MSR I` lowers the TPA top to D406h and keeps HIMEM; `INL I` hooks H.TIMI and EXTBIO to `call DDCFh` (in MSR's area). **Nextor 2.10**: HIMEM E6FEh, TPA top DC06h; `RAMHELPR I` lowers it to DB06h; `INL I` hooks H.TIMI/EXTBIO to `call E675h` (RAMHELPR's area). Between the TPA top and HIMEM: the resident code, and on DOS 2 the system's own page-3 code and data. | The save is HIMEM-FFFEh, **or lower where the game's RAM reaches below HIMEM** (Nextor: Soccer's E000h-F37Fh is below E6FEh). Saved: 8337 bytes on DOS 1, 8191 on Nextor (from E000h). The stacks' code below that start is never written by the game (8.1). |
+| 8.3 Restoring the DOS area | Step 5's rig scenario passes on **MSX-DOS 1** (disk on the MSXPi) and on **Nextor 2.10** (hard disk on the MegaFlashROM SD): Ctrl+Shift+F5 on one machine, both back in `MCHAT` with the result line. The first Nextor run hung in DOS 2's page-3 code until the save start rule above. Not covered: a real floppy (FDC) and DOS 2 on other interfaces. | The rule above (PROTOCOLS 14). |
+| 8.4 INL's timer per frame | Over the MSXPi Ethernet driver INL's H.TIMI takes a **mean of 6-7 ms per interrupt (38-44 % of a 60 Hz frame), up to 120 ms**, on both DOS 1 and Nextor (without INL, Nextor's own H.TIMI: 0.8 ms). Emulated, with the MSXPi device waiting for a real-time server, so the absolute numbers are pessimistic; the driver's polling is the cost either way. | netcore must **not** chain INL's timer every frame during a game. It calls the UNAPI itself, at its own rate, from `XCHG`. Measure again on GR8NET (step 9). |
+| 8.5 Interrupts inside UNAPI calls | **Yes.** During `INL S`, 121-179 of 300-500 interrupts came while INL's own mapper segments were in pages 1-2. | The IRQ trampoline guard is needed, not only a precaution: `XIRQ` must return at once while a call is in progress (PROTOCOLS 10). |
+| 8.6 A resident TCP connection | Not measured yet: it needs `MCHAT /t` with the agent (step 8). | Step 8. |
+| 8.7 `mchat.com` memory | The image (data included) ends at C01Ah (48922 bytes). TPA tops with INL: D406h (DOS 1 + MSR, this rig: 5100 bytes for the stack), DB06h (Nextor + RAMHELPR: 6892 bytes), C806h (Canon V-25 with the TCP/IP driver, `pchess_memory_test.py`: **2028 bytes**). | The agent (step 8) must fit in about 2 KB on the smallest of these, or the chat must shrink: a measured constraint for step 8. |
 
 ---
 

@@ -14,6 +14,8 @@
 #   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements)
 #   RECORD=file.wav  node H records its sound (openMSX record -audioonly) and node C is muted
 #   EXITKEY=n     (chat) node C presses Ctrl+Shift+F5 at frame n; both must return to MCHAT
+#   BOOT=nextor   (chat) Nextor (MSX-DOS 2) on a MegaFlashROM SCC+ SD instead of MSX-DOS 1 from the MSXPi. NEXTORHD =
+#                 a hard-disk image (UNAPI/harness/mknextorhd.sh) with C:\PLAYNET holding PLAYNET.COM, MCHAT.COM, SOCCER.ROM
 #   SCENARIO=chat the players meet in MCHAT (against a local IRC server), alice invites bob to play, and the
 #                 chat starts the game itself. Needs software/target/mchat.com. PLAY_AT / ACCEPT_AT: emulated seconds.
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
@@ -86,9 +88,14 @@ NODE_TCL=native_node.tcl; [ "$SCENARIO" != chat ] || NODE_TCL=chat_node.tcl
 node() {  # role port
   snd=""; [ -n "$RECORD" ] && { [ "$1" = H ] && snd="record start -audioonly $RECORD" || snd="set mute on"; }
   xs=""; [ "$1" = H ] && xs="$EXTRA_TCL"
+  hw="-ext ram2mb"; hd="set renderer none"
+  if [ "$BOOT" = nextor ]; then          # each node gets its own copy: openMSX writes to the image
+    cp "$NEXTORHD" "$WORK/nextor_$1.dsk"
+    hw="-ext MegaFlashROM_SCC+_SD"; hd="hdb {$WORKW/nextor_$1.dsk}"
+  fi
   NICK=$( [ "$1" = H ] && echo alice || echo bob ) OPPONENT=$( [ "$1" = H ] && echo bob || echo alice ) INVITE=$( [ "$1" = H ] && echo 1 || echo 0 )   PLAY_AT=${PLAY_AT:-75} ACCEPT_AT=${ACCEPT_AT:-95}   PLAYNET_SYMS="$WORKW/stub_syms.tcl" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF \
   MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
-  timeout ${NODETMO:-1500} "$OMX" -machine Canon_V-25 -ext ram2mb -ext MSXPi \
+  BOOT=$BOOT timeout ${NODETMO:-1500} "$OMX" -machine Canon_V-25 $hw -ext MSXPi -command "$hd" \
     -command "set msxpiserver_port $2" -command "set msxpirom_bank BANK2" \
     -command "set msxpirom_sltsl ON" -command "reset" -command "set renderer ${RENDERER:-none}" ${snd:+-command "$snd"} \
     -script "$HARNESS" -script "$RW/software/Client/tests/soccernet/$NODE_TCL" ${xs:+-script "$xs"} > "$WORK/np/$1.log" 2>&1
