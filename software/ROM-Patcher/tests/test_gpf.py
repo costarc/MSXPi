@@ -57,9 +57,23 @@ def value(text, symbols):
     return symbols[text]
 
 
+XIRQ_PATCH = (0x4096, struct.pack('<H', 0xC500 + 6))   # PLAYNET's addition: H.KEYI -> the transport's XIRQ
+CLEARS = (0x40A5, 0x45A9)      # SOCCERNET's shortened RAM clears, not needed with the stub at C100h
+
+
+def irq_patches(symbols):
+    """PLAYNET's other change: the two per-interrupt sound calls count interrupts (PN_IRQ) instead of
+    being removed."""
+    irq = struct.pack('<H', symbols['PN_IRQ'])
+    return [(0x4032, b'\xcd' + irq), (0x404E, b'\xfc' + irq)]
+
+
 def old_image(rom, symbols):
+    """SOCCERNET.COM's RAM image (its own patch table, today's stub entry addresses) without the shortened
+    RAM clears, plus the XIRQ hook and the PN_IRQ calls."""
     image = bytearray(rom)
-    for address, data in soccernet_patches(symbols):
+    for address, data in ([p for p in soccernet_patches(symbols) if p[0] not in CLEARS] + [XIRQ_PATCH]
+                          + irq_patches(symbols)):
         image[address - 0x4000:address - 0x4000 + len(data)] = data
     return bytes(image)
 
@@ -123,17 +137,23 @@ class SoccerPackageTests(unittest.TestCase):
         for patch in self.profile['patches']:
             patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
         changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
-        self.assertTrue(changed and changed <= patched)                    # nothing outside the 13 patches
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the 12 patches
         self.assertEqual(manifest['abi'], ['msxpi-netplay-v1'])
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
 
-    @unittest.skipUnless((SOCCERNET / 'build/prod/stub_nat.bin').exists(), 'SOCCERNET not built')
-    def test_stub_is_the_soccernet_release_stub(self):
-        self.assertEqual(self.assets['stub'], (SOCCERNET / 'build/prod/stub_nat.bin').read_bytes())
-
-    def test_gpf_waits_for_the_playnet_stub(self):
-        # Step 2 status: today's stub (729 bytes) does not fit the 576 bytes the PLAYNET layout reserves.
-        with self.assertRaisesRegex(patcher.PatchError, 'stub asset is 729 bytes.*576'):
-            patcher.gpf_bytes(self.profile, self.assets)
+    def test_the_gpf_compiles_and_the_stub_fits(self):
+        data = patcher.gpf_bytes(self.profile, self.assets)
+        gpf = patcher.read_gpf(data)
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        self.assertEqual(self.assets['stub'][0], 1)                         # stub ABI 1
+        self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
+        self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC600)
+        rom = synthetic_rom(self.profile)
+        profile = copy.deepcopy(self.profile)
+        retarget(profile, rom)
+        self.assertEqual(patcher.gpf_image(patcher.read_gpf(patcher.gpf_bytes(profile, self.assets)), rom)[0],
+                         patcher.build(rom, profile, self.assets)[0])
 
     def test_no_rom_file_from_a_ram_image_package(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -166,7 +186,7 @@ class GpfTests(unittest.TestCase):
         self.assertEqual(patcher.gpf_image(gpf, self.rom), (image, self.stub))
         self.assertEqual((gpf['game_id'], gpf['title'], gpf['roles']), ('soccer', "Konami's Soccer", ['H', 'C']))
         self.assertEqual((gpf['stub_load'], gpf['transport_area'], gpf['game_ram']),
-                         (0xF000, 0xF240, [[0xE000, 0xEFFF], [0xF30C, 0xF37F]]))
+                         (0xC100, 0xC500, [[0xD500, 0xD5FF], [0xE000, 0xF37F]]))
 
     def test_header_layout_and_hash(self):
         data = self.data
@@ -288,9 +308,9 @@ class NetplayValidationTests(unittest.TestCase):
             (lambda p, n: n['image'].update(host='mapper-ram'), 'image.host'),
             (lambda p, n: n['stub'].update(load=0xF300, max=256), 'page 3'),
             (lambda p, n: n['transport_area'].update(size=100), 'transport_area.size'),
-            (lambda p, n: n['transport_area'].update(address=0xF100), 'overlap'),
-            (lambda p, n: n.update(game_ram=[[0xE000, 0xF000]]), 'overlaps the stub'),
-            (lambda p, n: n.update(game_ram=[[0xF2F0, 0xF2F0]]), 'overlaps the transport'),
+            (lambda p, n: n['transport_area'].update(address=0xC200), 'overlap'),
+            (lambda p, n: n.update(game_ram=[[0xC000, 0xC200]]), 'overlaps the stub'),
+            (lambda p, n: n.update(game_ram=[[0xC5F0, 0xC5F0]]), 'overlaps the transport'),
             (lambda p, n: n.update(irq_handler=0xC000), 'irq_handler'),
             (lambda p, n: n.update(start=0x2000), 'start'),
             (lambda p, n: n.update(transport='relay'), 'transport'),

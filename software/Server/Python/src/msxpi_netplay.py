@@ -6,7 +6,7 @@ One opcode on the MSXPi byte transport (the same place the Ethernet UNAPI opcode
 see msxpi_ethglue.eth_handle_opcode):
 
     MSX -> [C9][FLAGS][L][L packet bytes][SUM]      SUM = sum of the L bytes mod 256; L = 0 when nothing is sent
-    Pi  -> [L][L bytes][SUM]                        a game packet (L = 14..38)
+    Pi  -> [L][L bytes][SUM]                        a game packet (L = 22..46)
            [00][00]                                 nothing
            [FF][00]                                 the opponent is gone (no news, or never started)
            [FE][REASON]                             the opponent left (BYE with its result code)
@@ -17,7 +17,8 @@ FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered p
 status instead.  STATE: 0 connecting, 1 ready, 2 incompatible, 3 failed, 4 the opponent left.
 
 Peer datagrams start with a kind byte: 1-6 = 14-byte control datagram (type, version, nonce, a, b),
-10h = game packet of 6 + 8W bytes (W = input bytes per frame, 1-4, in its byte 3).  The game packet is only
+10h = game packet of 14 + 8W bytes (W = input bytes per frame, 1-4, in its byte 3; each of its 8 frame records
+is W input bytes and an interrupt count).  The game packet is only
 relayed; sequence numbers, redundancy, resends and the desync check stay in the MSX stub.  Everything else
 is here: the handshake (protocol version and profile hash), the round-trip measurement that fixes the input
 delay, the start and dead timeouts, BYE, and the delay/loss injection used by the tests.
@@ -46,7 +47,7 @@ import time
 OP_NETPLAY = 0xC9
 KIND_GAME = 0x10
 MIN_WIDTH, MAX_WIDTH = 1, 4             # input bytes per player per frame
-MAX_PKT = 6 + 8 * MAX_WIDTH             # 38
+MAX_PKT = 14 + 8 * MAX_WIDTH            # 46
 CTL = struct.Struct("<BBIII")           # type, version, nonce, a, b  = 14 bytes
 VERSION = 1                             # MSXNP
 
@@ -77,7 +78,7 @@ STUN_COOKIE = struct.pack(">I", 0x2112A442)
 def game_packet_ok(data):
     """True for a well-formed MSXNP game packet (kind, width, length)."""
     return (len(data) >= 4 and data[0] == KIND_GAME and MIN_WIDTH <= data[3] <= MAX_WIDTH
-            and len(data) == 6 + 8 * data[3])
+            and len(data) == 14 + 8 * data[3])
 
 
 def lan_address():

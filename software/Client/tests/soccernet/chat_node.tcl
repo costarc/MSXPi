@@ -3,17 +3,17 @@
 # optional delay (emulated seconds) and loss (percent) on the way IN.
 #   ROLEARG=H|C  START=<s>  OUT=<file> IN=<file> TRACE=<file>
 #   LAG=<s> DROP=<pct> STOPF=<frame>
-# One player: starts MCHAT, invites / accepts, then the chat launches the game (SOCCERNET) by itself.
+# One player: starts MCHAT, invites / accepts, then the chat launches the game (PLAYNET) by itself.
 # The machine is started by the caller with -ext MSXPi; the harness (-script harness.tcl)
 # boots DOS from the MSXPi server. Network = the two servers (msxpi_server_np.py).
 #   ROLEARG=H|C  TRACE=<file>  STOPF=<frame>  TMAX=<emulated s>
-# SOCCERNET_BUILD = software/Client/src/soccernet/build/test (stub_nat.bin, stub_syms_nat.tcl)
-set srcerr [catch {source $::env(SOCCERNET_BUILD)/stub_syms_nat.tcl} srcmsg]
+# PLAYNET_SYMS = the test stub's symbols (stub_syms.tcl, the stub itself beside it as stub_syms.bin)
+set srcerr [catch {source $::env(PLAYNET_SYMS)} srcmsg]
 set roleArg $::env(ROLEARG)
 set stopf   $::env(STOPF)
 set lag 0; set drop 0; set start 0
 if {![info exists ::env(TMAX)]} { set ::env(TMAX) 900 }
-foreach n {stubEnd desync desyncF delay stState dead nf txbuf rxbuf cur1 cur2 recv haveRem remTag remVal ownVal rxSeen tickDone pad1c} { set ::s_$n $sym($n) }
+foreach n {stubEnd desync desyncF pnDelay nf txbuf rxbuf remRing ownVal rxSeen tickDone pad1c started PN_TICK} { set ::s_$n $sym($n) }
 set tx $::s_txbuf
 set rx $::s_rxbuf
 set ::poked 0
@@ -33,12 +33,12 @@ set polls 0
 set sent 0; set dropped 0; set got 0
 
 proc codeDiff {} {
-    set f [open $::env(SOCCERNET_BUILD)/stub_nat.bin rb]; set img [read $f]; close $f
+    set f [open [file rootname $::env(PLAYNET_SYMS)].bin rb]; set img [read $f]; close $f
     binary scan $img c* bytes
-    set n [expr {$::s_nf - $::s_pad1c}]
     set d {}
-    for {set i 0} {$i < $n} {incr i} {
-        if {[peek [expr {$::s_pad1c + $i}]] != ([lindex $bytes $i] & 255)} { lappend d [format %X $i] }
+    # the engine's code, from PN_TICK to its variables (the header's seat and delay are the loader's)
+    for {set a $::s_PN_TICK} {$a < $::s_started} {incr a} {
+        if {[peek $a] != ([lindex $bytes [expr {$a - 0xF000}]] & 255)} { lappend d [format %X $a] }
     }
     return $d
 }
@@ -57,7 +57,7 @@ proc line {} {
     if {[info exists ::env(EXITF)] && $::roleArg eq "C" && $f >= $::env(EXITF)} { exit }
     if {$f >= $stopf} {
         global sent dropped got
-        puts $tf "# desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_delay] state=[peek $::s_stState] lowest_write_above_stub=[format %04X $::minw]"
+        puts $tf "# desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
         close $tf
         exit
     }
@@ -68,7 +68,7 @@ proc tlog {} {
     global tlf tickN
     set nf [peek $::s_nf]
     set f $nf
-    puts $tlf "$tickN [format %02X $nf] rem=[format %02X [peek [expr {$::s_remVal + ($nf & 15)}]]] own=[format %02X [peek [expr {$::s_ownVal + ($nf & 15)}]]] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] {}]"
+    puts $tlf "$tickN [format %02X $nf] rem=[format %02X [peek [expr {$::s_remRing + ($nf & 15) * 3 + 1}]]] own=[format %02X [peek [expr {$::s_ownVal + ($nf & 15) * 2}]]] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] {}]"
     if {($nf & 31) == 0} {
         set h ""
         for {set i 0} {$i < 512} {incr i} { append h [format %02X [peek [expr {0xE100 + $i}]]] }
@@ -77,13 +77,26 @@ proc tlog {} {
     incr tickN
     if {$tickN % 50 == 0} { flush $tlf }
 }
-# diagnostic: how deep does the stack go? Lowest address written above the stub.
+# diagnostic: how deep does the stack go? Lowest address written in F200-F37F.
 set ::minw 0xFFFF
 proc minw {} {
     if {[catch {set a $::wp_last_address} e]} { return }
     if {$a < $::minw} { set ::minw $a }
 }
-# does game code (PC 4000-BFFF) ever write into ED30-F174, where the stub lives?
+# does anything but the stub and the transport write into C100-C5FF, where they live?
+# is C000-DFFF ever written once the game runs (anyone: game, BIOS, interrupts)? Counts, and the first 10
+set ::c0 0
+set ::c0lo 0xFFFF
+set ::c0hi 0
+proc c0log {} {
+    global tf
+    set a 0
+    catch {set a $::wp_last_address}
+    incr ::c0
+    if {$a < $::c0lo} { set ::c0lo $a }
+    if {$a > $::c0hi} { set ::c0hi $a }
+    if {$::c0 <= 10} { puts $tf [format "# C000WRITE pc=%04X addr=%04X" [reg PC] $a]; flush $tf }
+}
 set ::gw 0
 proc gwlog {} {
     global tf
@@ -102,11 +115,11 @@ proc arm_ {} {
     incr armCount
     if {$armCount % 1000 == 1} { puts $tf "# arm pad1c=[format %02X [peek $::s_pad1c]] nf=[format %02X [peek $::s_nf]] PC=[format %04X [reg PC]]"; flush $tf }
     # the stub is in place and no tick has run yet: nf is still FF
-    if {[peek $::s_pad1c] == 0x3A && [peek $::s_nf] == 0xFF && [peek $::s_txbuf] == 0 && [peek [expr {$::s_txbuf + 1}]] == 0 && [peek $::s_rxbuf] == 0} {
+    if {[peek $::s_pad1c] == 0x3A && [peek $::s_nf] == 0xFF && [peek $::s_started] == 0 && [peek $::s_txbuf] == 0x10} {
         set started 1
         debug set_bp $::s_tickDone {} { tlog }
-        debug set_watchpoint write_mem [list $::s_stubEnd 0xF37F] {} { minw }
-        debug set_watchpoint write_mem {0xED30 0xF174} {[reg PC] >= 0x4000 && [reg PC] < 0xC000} { gwlog }
+        debug set_watchpoint write_mem {0xF200 0xF37F} {} { minw }
+        debug set_watchpoint write_mem {0xC100 0xC5FF} {([reg PC] < 0xC000 || [reg PC] >= 0xC100) && ([reg PC] < 0xC100 || [reg PC] >= 0xC600)} { gwlog }
         debug set_watchpoint write_mem 0xE003 {[reg PC] == 0x40CC || [reg PC] == 0x40CB} { line }   ;# only the frame increment
         return
     }
@@ -116,7 +129,7 @@ proc arm_ {} {
 proc dumpscreen {} {
     after time 20 dumpscreen
     set fh [open "$::env(TRACE).screen" a]
-    puts $fh "---- t=[expr {int([machine_info time])}] PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] nf=[format %02X [peek $::s_nf]] f000=[format %02X [peek 0xF000]] scene=[peek 0xE000] ie=[debug read {CPU regs} 0x10] st=[peek $::s_stState] dl=[peek $::s_delay] dead=[peek $::s_dead]"
+    puts $fh "---- t=[expr {int([machine_info time])}] PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] nf=[format %02X [peek $::s_nf]] f000=[format %02X [peek 0xF000]] scene=[peek 0xE000] ie=[debug read {CPU regs} 0x10] dl=[peek $::s_pnDelay] started=[peek $::s_started]"
     catch { foreach l [harness::screen_lines] { if {[string trim $l] ne ""} { puts $fh "|$l" } } }
     close $fh
 }
@@ -142,4 +155,4 @@ harness::at_dos_prompt {
         }
     }
 } 200
-after time $::env(TMAX) { puts $tf "# codeDiff=[codeDiff]"; puts $tf "# timeout  nfNow=[peek $::s_nf] rxSeen=[peek $::s_rxSeen] tags=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remTag + $i}]]}] ,] vals=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remVal + $i}]]}] ,] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] ""] PC=[format %04X [reg PC]]"; close $tf; exit }
+after time $::env(TMAX) { puts $tf "# codeDiff=[codeDiff]"; puts $tf "# timeout  nfNow=[peek $::s_nf] rxSeen=[peek $::s_rxSeen] tags=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3}]]}] ,] vals=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3 + 1}]]}] ,] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] ""] PC=[format %04X [reg PC]]"; close $tf; exit }

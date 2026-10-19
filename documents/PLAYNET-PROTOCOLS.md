@@ -137,7 +137,7 @@ Go through this checklist. Each item found becomes a patch or a piece of glue.
 | Source of drift | What to look for | Usual fix |
 |---|---|---|
 | The R register | `ld a,r` (`ED 5F`) | Call a glue entry that derives the value from the game's frame counter or from `PN_FRAME` |
-| Sound ticked per interrupt | The sound driver called from the handler, and called again when an interrupt is pending after the frame (`call m,...`) | NOP both calls. Your glue ticks the driver once per frame (`G_SOUND_TICK`). Music then follows game frames, not wall time. |
+| Sound ticked per interrupt | The sound driver called from the handler, and called again when an interrupt is pending after the frame (`call m,...`) | Patch both calls to `PN_IRQ` (keep the `call m,`), which only counts interrupts, and name the driver in `G_SOUND_TICK`. The engine ticks the driver after the exchange as many times as player 1's machine counted interrupts in its last frame (9.2), so the music keeps the original's tempo and both machines tick it the same number of times. Do not tick it per interrupt: games read the driver's state (Soccer waits for a jingle to end), so that would desync. |
 | Interrupt counters | Reads of `JIFFY` (`FC9Eh`), `INTCNT`, or the game's own interrupt counter used for anything but timing the display | Use the frame counter instead |
 | VDP status timing | Loops that poll the VDP status and count iterations, or sprite collision/5th-sprite flags used in game logic | Usually deterministic (same VRAM, same frame), but check them in the two-node test |
 | Uninitialised RAM | Reads of RAM the game never clears | Clear it in a patch or in the glue's init |
@@ -165,7 +165,7 @@ entry points your patches call:
 ```
 G_INPUT_BYTES:  EQU  1          ; = netplay.input_bytes
 G_READ_LOCAL:   EQU  48B9h      ; routine: A = the local player's input byte (1-byte games, see 9.3)
-G_SOUND_TICK:   EQU  4F25h      ; called once per frame by the engine (0 = none)
+G_SOUND_TICK:   EQU  4F25h      ; the sound driver: the engine ticks it T times a frame (0 = none)
 G_CHECK_ADDR:   EQU  0E100h     ; desync checksum region
 G_CHECK_LEN:    EQU  0200h
         INCLUDE "playnet_engine.asm"   ; ORG = netplay.stub.load, TRANSPORT = netplay.transport_area.address
@@ -225,21 +225,19 @@ into a game that would drift.
 | Frame | INIT 4070h installs H.KEYI at 4090h: `ld hl,402Eh` (operand at 4096h). Handler 402Eh. Busy flag E005h bit 0. |
 | Inputs | `lee_los_mandos` 4896h calls player 1 (48B9h) and player 2 (48F2h) readers once per frame; held/new bytes at E006h-E009h. Two more reads at 4564h/4569h. |
 | Frame counter | E003h (incremented once per frame) |
-| Game RAM | E000h-F37Fh cleared at INIT and from E0E0h at each match; stack from F380h down to F30Ch |
-| Stub | F000h-F2FFh, after shortening both clears to end at EFFFh |
+| Game RAM | E000h-F37Fh cleared at INIT and from E0E0h at each match; stack from F380h down to F200h (measured over a full match). D500h-D5FFh is written at start-up. |
+| Stub and transport | C100h-C5FFh, which the game never writes (measured across title, demo, set-up and a full match; the area C000h-D50Ah stays untouched): stub from C100h (at most 1024 bytes), MSXPi transport at C500h (256 bytes). PLAYNET's trampoline lives at C000h. No game RAM is cleared or shortened. |
 | Checksum region | E100h-E2FFh (players and ball) |
 
-Patch table (file offset = CPU - 4000h; `T` = address of the transport vector, `S.x` = glue entry `x`):
+Patch table (file offset = CPU - 4000h; `T` = address of the transport vector, C500h; `S.x` = glue entry `x`):
 
 | CPU | Offset | Expected | Replacement | Reason |
 |---|---|---|---|---|
 | 4028h | 0028h | `22 0A 41` | `00 00 00` | anti-copy write `ld (410Ah),hl` |
 | 4056h | 0056h | `22 16 41` | `00 00 00` | anti-copy write `ld (4116h),hl` |
 | 40C3h | 00C3h | `CB B6` | `00 00` | `res 6,(hl)` on the VDP R1 template (black screen in RAM) |
-| 4032h | 0032h | `CD 25 4F` | `00 00 00` | sound tick per interrupt |
-| 404Eh | 004Eh | `FC 25 4F` | `00 00 00` | catch-up sound tick |
-| 40A5h | 00A5h | `7F 13` | `FF 0F` | INIT clear stops at EFFFh (stub at F000h) |
-| 45A9h | 05A9h | `9F 11` | `1F 0F` | match clear stops at EFFFh |
+| 4032h | 0032h | `CD 25 4F` | `CD S.PN_IRQ` | sound tick per interrupt -> count the interrupt |
+| 404Eh | 004Eh | `FC 25 4F` | `FC S.PN_IRQ` | catch-up sound tick -> count it |
 | 4096h | 0096h | `2E 40` | `T+6` | H.KEYI -> PLAYNET's interrupt entry (`XIRQ`), which jumps to 402Eh |
 | 4565h | 0565h | `B9 48` | `S.pad1c` | cached player 1 |
 | 456Ah | 056Ah | `F2 48` | `S.pad2c` | cached player 2 |
@@ -272,12 +270,11 @@ Package sketch:
 | CPU | Offset | Expected | Replacement | Reason |
 |---|---|---|---|---|
 | 4019h | 0019h | `43 40` | `T+6` | H.KEYI -> `XIRQ`, which jumps to 4043h |
-| 4047h | 0047h | `CD 5C 7C` | `00 00 00` | sound tick per interrupt |
-| 4062h | 0062h | `FC 5C 7C` | `00 00 00` | catch-up sound tick |
+| 4047h | 0047h | `CD 5C 7C` | `CD S.PN_IRQ` | sound tick per interrupt -> count the interrupt |
+| 4062h | 0062h | `FC 5C 7C` | `FC S.PN_IRQ` | catch-up sound tick -> count it |
 | 4054h | 0054h | `22 45` | `S.tick` | **TICK site** (the `call 4522h` at 4053h) |
 
-Glue: `G_READ_LOCAL = 4522h`, `G_SOUND_TICK = 7C5Ch`, `G_CHECK_ADDR = E000h`, `G_CHECK_LEN = 400h`. The stub goes above the stack, for
-example at F000h (**to verify**).
+Glue: `G_READ_LOCAL = 4522h`, `G_SOUND_TICK = 7C5Ch`, `G_CHECK_ADDR = E000h`, `G_CHECK_LEN = 400h`. The stub goes at C100h and the transport at C500h (measured, see the table above).
 
 What the sketch shows about the format:
 - **No new field was needed.** The 16 KB image, a different hook address, a different sound driver and a single input reader are all ordinary
@@ -322,8 +319,8 @@ packages with the music ABI.
   "transport": "lockstep",
   "input_bytes": 1,
   "image": {"host": "plain", "base": 16384},
-  "stub": {"asset": "stub", "load": 61440, "max": 576},
-  "transport_area": {"address": 62016, "size": 192},
+  "stub": {"asset": "stub", "load": 61440, "max": 564},
+  "transport_area": {"address": 62004, "size": 204},
   "game_ram": [[57344, 61439], [62220, 62335]],
   "irq_handler": 16430,
   "start": "header-init",
@@ -421,7 +418,7 @@ The stub is the shared lockstep engine assembled with the game's glue, one binar
 | 0 | stub ABI version = 1 | the build |
 | 1 | seat (0 or 1) | the loader |
 | 2 | input delay in frames (2-6) | the loader, from the handshake |
-| 3 | flags: bit 0 = end the game on a desync (1 in release builds, 0 in test builds; see Appendix B, point 2) | the loader |
+| 3 | flags: bit 0 = end the game on a desync (1 in release builds, 0 in test builds; see Appendix B, point 2) | the build |
 
 ### 9.2 Rules for the engine and the glue
 
@@ -429,8 +426,13 @@ The stub is the shared lockstep engine assembled with the game's glue, one binar
 - `PN_TICK` may wait for the opponent's input. It enables interrupts while it waits.
 - The stub calls the network only through the transport vector (10). It never touches I/O ports or slots itself.
 - The stub's stack use, plus the transport's (at most 16 bytes), must stay inside what the `game_ram` measurement allowed for the stack.
-- The input width costs stub RAM: the input rings take 32 x W bytes and the two packet buffers 2 x (6 + 8W). That is 60 bytes for
-  W = 1 and 204 bytes for W = 4. Plan `stub.max` accordingly.
+- Sound: `PN_IRQ` counts interrupts. Each frame record carries, after its W input bytes, the number of interrupts its sender counted
+  between its last two `PN_TICK`s. Frame F ticks `G_SOUND_TICK` T times, T = the count in player 1's record for F, limited to 1-8.
+  Both machines use the same T, so the driver's state stays in lockstep; T follows player 1's real frame length, so the music keeps
+  the original's tempo (measured on Soccer: 60 ticks a second, as the original, against 20-39 with one tick a frame). A network stall
+  pauses the music instead of fast-forwarding it.
+- The input width costs stub RAM: a frame record is W + 1 bytes. The rings take 16 x (2W + 3) bytes and the two packet buffers
+  2 x (14 + 8W). That is 124 bytes for W = 1 and 268 bytes for W = 4. Plan `stub.max` accordingly.
 - `PN_FRAME` counts game frames from 0 (8-bit, wrapping). Code that depends on "the first frame" must keep its own state, because the
   counter wraps every 256 frames.
 
@@ -442,7 +444,7 @@ Symbols the glue defines:
 |---|---|
 | `G_INPUT_BYTES` | The input width W, 1-4. Must equal `netplay.input_bytes`. |
 | `G_READ_LOCAL` | Reads the local player's input once per frame. W = 1: returns the byte in A. W > 1: is called with HL = a W-byte buffer and fills it. It may clobber AF, BC, DE, HL. |
-| `G_SOUND_TICK` | Address the engine calls once per frame, with interrupts disabled, after the exchange. `0` = none. |
+| `G_SOUND_TICK` | The sound driver. The engine calls it T times a frame (9.2), with interrupts disabled, after the exchange. `0` = none. |
 | `G_CHECK_ADDR`, `G_CHECK_LEN` | Region checksummed every 32 frames (`G_CHECK_LEN` even, at most 512) |
 | `ORG` | `stub.load` (the build sets it) |
 | `TRANSPORT` | `transport_area.address` (the build sets it) |
@@ -452,10 +454,9 @@ Symbols the engine provides:
 | Symbol | Meaning |
 |---|---|
 | `PN_TICK` | Runs one frame of the exchange. On return, `PN_P1` and `PN_P2` hold this frame's inputs. Preserves BC, DE, HL, IX, IY. |
-| `PN_P1`, `PN_P2` | W bytes each: the inputs of player 1 (seat 0) and player 2 (seat 1) for the current frame |
-| `PN_LOCAL`, `PN_REMOTE` | The same arrays, as seen from this machine |
+| `PN_P1`, `PN_P2` | W bytes each, one after the other: the inputs of player 1 (seat 0) and player 2 (seat 1) for the current frame |
 | `PN_FRAME` | Frame counter |
-| `PN_END` | Ends the game: A = result code (13.2). Does not return. |
+| `PN_END` | Ends the game: A = result code (13.2). Does not return. (An alias of the transport's `XEND`.) |
 
 Built in to the engine: the exit key, **Ctrl+Shift+F5 for every game** (the same key as the ROM-Patcher games). The engine reads it
 once per frame from the keyboard matrix (rows 6 and 7), calls `PN_END` with code 1, and makes the opponent end with code 2. There is
@@ -463,17 +464,22 @@ no per-game override: a game that needs this combination for itself is not a PLA
 
 ## 10. The transport vector
 
-PLAYNET installs a transport at `transport_area`. It starts with four jumps:
+PLAYNET installs a transport at `transport_area`, relocated to that address. It starts with four entries:
 
 | Offset | Entry | Contract |
 |---|---|---|
-| +0 | `XCHG` | In: HL = game packet to send (L = 6 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason). Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
+| +0 | `XCHG` | In: HL = game packet to send (L = 14 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason). Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
 | +3 | `XEND` | In: A = result code. Tells the opponent (BYE), records the result, then restores MSX-DOS (14) or resets. Does not return. |
 | +6 | `XIRQ` | Target of the game's H.KEYI hook. Ends by jumping to `irq_handler`. |
 | +9 | reserved | `RET` |
 
+What follows the vector is private to each transport and the loader that installs it (the generated include
+`transport_msxpi.inc` gives the MSXPi transport's field offsets).
+
 Two implementations exist:
 - **MSXPi (native).** Each `XCHG` is one opcode-C9 transaction with the Pi (10.1). `XIRQ` is a plain `JP irq_handler`.
+  It is 204 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
+  for PLAYNET to run it over the MSXPi.
 - **UNAPI.** `XCHG` maps the network engine's mapper segment into page 2, switches to a private stack, calls it, and restores the game's
   segment. `XIRQ` returns at once while that call is in progress (after reading the VDP status). Otherwise it runs the game's handler and
   then the TCP/IP stack's saved timer hook (InterNestor Lite needs it). It keeps its own tick counter and never writes `JIFFY`, so games
@@ -483,7 +489,7 @@ Two implementations exist:
 
 ```
 MSX -> Pi   C9, FLAGS, L, P[L], SUM              SUM = sum of P mod 256; L = 0 when no packet is sent
-Pi  -> MSX  L, P[L], SUM                         a game packet (L = 14..38)
+Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46)
             00, 00                               nothing
             FF, 00                               the opponent is gone
             FE, REASON                           the opponent left (BYE)
@@ -511,7 +517,7 @@ Every datagram starts with a **kind** byte: 1-6 = a control datagram, 10h = a ga
 does not match its kind, is dropped. STUN replies on the same socket are recognised first, by the magic cookie `2112A442h` at bytes 4-7
 (and a length of 20 or more).
 
-**Game packet, L = 6 + 8W bytes** (W = the game's input width, 1-4, so L = 14 to 38). It is built by the stub and relayed unchanged by
+**Game packet, L = 14 + 8W bytes** (W = the game's input width, 1-4, so L = 22 to 46). It is built by the stub and relayed unchanged by
 the transport:
 
 | Byte | Field |
@@ -520,12 +526,12 @@ the transport:
 | 1 | sequence number, incremented for every new packet (8-bit). A receiver drops a packet whose number equals the last one it accepted. |
 | 2 | F, the sender's current frame |
 | 3 | W, the input width. A packet with another W than the package's is dropped. |
-| 4 ... 3+8W | the sender's inputs for frames F+D-7 ... F+D (D = the input delay), oldest first, W bytes per frame |
-| 4+8W | check tag: a frame number with the low 5 bits zero, or FFh = no check |
-| 5+8W | check value: the sender's checksum for that frame. Compared for equality only. |
+| 4 ... 11+8W | the sender's records for frames F+D-7 ... F+D (D = the input delay), oldest first, W + 1 bytes each: the W input bytes, then the interrupt count (9.2) |
+| 12+8W | check tag: a frame number with the low 5 bits zero, or FFh = no check |
+| 13+8W | check value: the sender's checksum for that frame. Compared for equality only. |
 
-Each packet repeats the last 8 frames of input, so up to 7 consecutive lost packets are repaired by the next one. A machine waiting for
-an input resends its last packet every 16 polls. With W = 4 a packet is 38 bytes: the per-frame cost on the MSXPi link (one C9
+Each packet repeats the last 8 frame records, so up to 7 consecutive lost packets are repaired by the next one. A machine waiting for
+an input resends its last packet every 16 polls. With W = 4 a packet is 46 bytes: the per-frame cost on the MSXPi link (one C9
 transaction of L + 4 bytes each way) has to be measured on real hardware before such a package is accepted.
 
 **Control datagram, 14 bytes**: type (1, the kind byte), version (1), nonce (4), a (4), b (4).

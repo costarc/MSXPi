@@ -53,8 +53,8 @@ def txn(np, flags, pkt=b''):
 
 
 def packet(seq, width=1):
-    """A well-formed game packet: kind, seq, F, W, 8 frames of W input bytes, check tag, check value."""
-    return bytes([n.KIND_GAME, seq, 0, width]) + bytes((seq + i) & 0xFF for i in range(8 * width)) + b'\xff\x00'
+    """A well-formed game packet: kind, seq, F, W, 8 records (W input bytes and a count), check tag, check value."""
+    return bytes([n.KIND_GAME, seq, 0, width]) + bytes((seq + i) & 0xFF for i in range(8 * (width + 1))) + b'\xff\x00'
 
 
 class Delay(unittest.TestCase):
@@ -189,7 +189,7 @@ class Relay(unittest.TestCase):
 
     def test_packet_travels_and_is_checksummed(self):
         pkt = packet(7)
-        self.assertEqual(len(pkt), 14)
+        self.assertEqual(len(pkt), 22)
         self.assertEqual(txn(self.a, 1, pkt), b'\x00\x00')              # send only: nothing back
         wait_for(lambda: bool(self.b.ready))
         got = txn(self.b, 2)
@@ -205,12 +205,12 @@ class Relay(unittest.TestCase):
     def test_malformed_packets_are_not_relayed(self):
         bad = [packet(1)[:-1],                                           # length does not match W
                bytes([0x11]) + packet(1)[1:],                            # unknown kind
-               bytes([n.KIND_GAME, 1, 0, 5]) + bytes(42)]                # W = 5
+               bytes([n.KIND_GAME, 1, 0, 5]) + bytes(50)]                # W = 5
         for pkt in bad:
             txn(self.a, 1, pkt)
         time.sleep(0.2)
         self.assertFalse(self.b.ready)
-        self.assertEqual(self.a.stats['malformed'], 2)                   # the 46-byte one is over MAX_PKT
+        self.assertEqual(self.a.stats['malformed'], 2)                   # the 54-byte one is over MAX_PKT
         self.assertEqual(self.a.stats['badsum'], 1)
         junk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)          # straight from the opponent's address
         try:

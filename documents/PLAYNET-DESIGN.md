@@ -214,16 +214,15 @@ replaces `soccernet.asm`'s patch table and `rom_check.py`. The patch list is the
   "roles": ["H", "C"],
   "transport": "lockstep",                 // or "none": the game brings its own connection; then "command" is used
   "image_host": "plain",                   // plain (16/32 KB in pages 1-2) | mapper-ram (future, 5.9)
-  "stub":      {"asset": "stub", "load": 61440, "entry_init": 61440, "irq": 61443},     // F000h
-  "transport_area": {"address": 62016, "size": 192},                                 // F240h-F2FFh
-  "game_ram": [[57344, 61439], [62220, 62335]],   // E000h-EFFFh and the stack F30Ch-F37Fh, measured
+  "stub":      {"asset": "stub", "load": 49408, "entry_init": 49408, "irq": 49411},     // C100h
+  "transport_area": {"address": 50432, "size": 256},                                 // C500h-C5FFh
+  "game_ram": [[54528, 54783], [57344, 62335]],   // D500h-D5FFh and E000h-F37Fh (stack included), measured
   "irq_handler": 16430,                    // 402Eh: where the game's H.KEYI hook points (installed at 4090h)
   "start": "header-init"                   // start like a cartridge: jump to INIT from the image header
 }
 ```
 The `//` comments and the numbers are illustration only: real package files are plain JSON with decimal numbers, and the Soccer values
-come from the measurements in section 8. For Soccer, the stub and the transport together must fit F000h-F2FFh (768 bytes). Today's
-production stub is 752 bytes; it loses `connect`, and the native `xchg` moves into the transport area.
+come from the measurements in section 8. For Soccer, the stub and the transport together must fit C100h-C5FFh (stub at most 1024 bytes, transport 256).
 
 Most per-game addresses (frame counter, sound tick, pad readers, check region) are **compiled into the game's stub asset** by its
 `rebuild.py`, as the music runtimes do. The stub engine sources are shared: `software/Client/src/playnet/engine/`, copied into each build.
@@ -467,6 +466,12 @@ Each step ends with something that can be shown to work. Mixed play is part of t
      replaces it.
 4. **`PLAYNET.COM`, Pi path**: generic loader, connect phase out of the stub, Soccer stub built from the package. *Proof:* the rig with
    `SCENARIO=chat`, frame-identical traces as today.
+   **Done 2026-10-19**: rig (stub at C100h, transport at C500h): plain, chat (`/play` in MCHAT starts the game), and 50 ms lag +
+   8 % loss + 20 ms jitter each give 3001 identical frames, no desync, no foreign writes into C100h-C5FFh; a poked ball is
+   caught on both nodes; a node that leaves at frame 600 ends the game on both. Sound fixed on the way: ticking the driver once a
+   frame played Soccer's music at 20-39 ticks a second instead of 60. The game waits on the driver's state, so ticking it per
+   interrupt would desync; the frame record now carries player 1's interrupt count and both machines tick that many times
+   (PROTOCOLS 9.2, game packet L = 14 + 8W). Measured: 60 ticks a second, as the original.
 5. **Return without a reset, Pi path** (save to a segment, and to the Pi without a mapper). *Proof:* a rig scenario where Ctrl+Shift+F5
    on one node brings both back to `MCHAT`, with the result line.
 6. **Measurements** (section 8). They decide the details of steps 7 and 8.
