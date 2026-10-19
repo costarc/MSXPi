@@ -5,7 +5,7 @@ and INL I, starts PCHESS, switches LINK to TCPIP in the ESC menu and then:
 
   1. plays a LOCAL game (rules checked on the MSX),
   2. joins ROOM club7 over IRC, where "Alice" waits - Alice is the same
-     msxpi_pchess_irc.IRC client an MSXPi server runs, so this is cross-play,
+     msxpi_game_irc.IRC client an MSXPi server runs, so this is cross-play,
   3. goes ONLINE: seeks in #msxpi, accepts "Bob"'s invitation, plays, and
      accepts Bob's draw offer from the ESC menu,
   4. chats: Alice greets the MSX in the room and Bob in the lobby (first in
@@ -36,7 +36,7 @@ SOFTWARE = HERE.parents[1]
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/src'))
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
-from msxpi_pchess_irc import IRC  # noqa: E402
+from msxpi_game_irc import IRC  # noqa: E402
 
 OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
 PCHESS = Path(os.environ.get('PCHESS_COM', SOFTWARE / 'target/pchess.com'))

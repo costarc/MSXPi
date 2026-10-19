@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / 'src'))
 sys.path.insert(0, str(HERE))
 import msxpi_pchess as p
-from msxpi_pchess_irc import IRC
+from msxpi_game_irc import IRC
 from msxpi_pcheckers_irc import CheckersPeer
 from pchess_irc_fixture import Server
 

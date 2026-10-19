@@ -1,4 +1,4 @@
-"""PCH1 CK IRC protocol for PCheckers: the checkers twin of msxpi_pchess_irc.Peer.
+"""PCH1 CK IRC protocol for PCheckers: the checkers twin of msxpi_game_irc.Peer.
 
 It runs on the same IRC class (connection, lobby/room channels, chat queue),
 so PCheckers on the MSXPi link gets IRC rooms, the lobby and chat exactly as
@@ -30,7 +30,7 @@ import re
 import textwrap
 import time
 
-from msxpi_pchess_irc import CHAT_QUEUE, PLAYER_TTL, chat_rows, chat_text, fold
+from msxpi_game_irc import CHAT_QUEUE, PLAYER_TTL, chat_rows, chat_text, fold
 
 PATH = re.compile(r'(?:[a-h][1-8]){2,13}')
 NICK = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,15}')

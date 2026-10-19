@@ -1,5 +1,9 @@
 """PCH1 IRC protocol: discovery in #msxpi, all game traffic private.
 
+The IRC class (connection, redial, lobby/room channels, chat) is shared by
+the games: PChess plays on it with Peer below, PCheckers with CheckersPeer
+(msxpi_pcheckers_irc.py).
+
 A room is the channel #pchess-<room> instead of #msxpi. Joining sends
 PCH1 ROOM HELLO there; a free player answers PCH1 ROOM HERE (a busy one
 answers PCH1 ROOM BUSY privately). On HELLO or HERE the player whose

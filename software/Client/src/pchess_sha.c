@@ -1,6 +1,6 @@
 /*
  * SHA-256 of a short string, for the PCH1 IRC protocol's position digest:
- * the first 16 hex digits of sha256(FEN), as msxpi_pchess_irc.digest().
+ * the first 16 hex digits of sha256(FEN), as msxpi_game_irc.digest().
  * Included by pchess.c and by the host test.
  */
 

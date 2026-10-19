@@ -7,8 +7,8 @@ import threading
 from unittest.mock import patch
 from pchess_irc_fixture import Server
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'src'))
-import msxpi_pchess_irc as irc
-from msxpi_pchess_irc import Peer, IRC, PLAYER_TTL, chat_text, chat_rows
+import msxpi_game_irc as irc
+from msxpi_game_irc import Peer, IRC, PLAYER_TTL, chat_text, chat_rows
 
 class Transport(unittest.TestCase):
     def setUp(self):
