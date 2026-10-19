@@ -10,7 +10,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / 'src'))
 sys.path.insert(0, str(HERE))
 import msxpi_pchess as p
-from msxpi_pchess_irc import IRC
+from msxpi_game_irc import IRC
 from msxpi_pcheckers_irc import CheckersPeer
 from pchess_irc_fixture import Server
 
@@ -231,6 +231,23 @@ class Reconnect(Base):
         b.peer.moves.append('b6a5')    # as if Bob's move had gone into the dead socket
         self.pump(a, b, until=lambda: b.ready and not b.reconnecting, seconds=15)
         self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5'])
+
+    def test_both_links_drop_and_the_resent_move_arrives_twice(self):
+        self.server.ghost_delay = 3
+        a, b = self.start()
+        b.peer.cmove(1, 'b6a5')
+        self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5'])
+        self.drop('Alice')
+        self.drop('Bob')
+        self.pump(a, b, until=lambda: a.reconnecting and b.reconnecting)
+        a.peer.moves.append('d4e5')    # as if Alice's move had gone into her dead socket
+        self.pump(a, b, until=lambda: not a.reconnecting and not b.reconnecting, seconds=20)
+        self.pump(a, b, until=lambda: sum(text == 'PCH1 CK MOVE 2 d4e5'
+                                          for _, _, text in self.server.transcript) == 2)
+        self.pump(a, b, until=lambda: b.peer.moves == ['c3d4', 'b6a5', 'd4e5'])
+        b.peer.cmove(3, 'a5b4')
+        self.pump(a, b, until=lambda: a.peer.moves == ['c3d4', 'b6a5', 'd4e5', 'a5b4'])
+        self.assertNotIn('OUT OF SYNC', b.peer.status)
 
 
 if __name__ == '__main__':

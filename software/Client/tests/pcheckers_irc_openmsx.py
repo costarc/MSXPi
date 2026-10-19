@@ -29,7 +29,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/src'))
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
-from msxpi_pchess_irc import IRC  # noqa: E402
+from msxpi_game_irc import IRC  # noqa: E402
 from msxpi_pcheckers_irc import CheckersPeer  # noqa: E402
 from pchess_chat_openmsx import chat_lines  # noqa: E402
 from pchess_tcpip_openmsx import text_at  # noqa: E402

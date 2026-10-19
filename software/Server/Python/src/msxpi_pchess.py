@@ -6,7 +6,7 @@ PCHESSRELAY names the relay both players share: empty means this server's
 own relay, otherwise http://HOST:PORT of the MSXPi hosting the room. The
 module can still run standalone with --listen to host a dedicated relay.
 PCHESSROOMS=irc makes ROOM a #pchess-<room> IRC channel instead (see
-msxpi_pchess_irc.py), which MSX machines on TCP/IP UNAPI can join too.
+msxpi_game_irc.py), which MSX machines on TCP/IP UNAPI can join too.
 
 The AI opponent is Stockfish when it is installed (PCHESSENGINE, PCHESSELO,
 PCHESSMOVETIME in msxpi.ini); otherwise a small built-in search plays.
@@ -26,7 +26,7 @@ from urllib.request import Request, urlopen
 import chess
 import chess.engine
 
-from msxpi_pchess_irc import CHAT_QUEUE, CHAT_ROW, chat_rows, chat_text
+from msxpi_game_irc import CHAT_QUEUE, CHAT_ROW, chat_rows, chat_text
 from msxpi_pcheckers_irc import CheckersPeer
 
 
@@ -490,7 +490,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
                 if channel: _irc.peer.announce_room()
                 _irc.poll()
                 return checkers_packet(_irc.peer.snapshot())
-            from msxpi_pchess_irc import IRC
+            from msxpi_game_irc import IRC
             if _irc: _irc.close()
             _irc = IRC(irc_config, channel, CheckersPeer)
             _use_irc = True
@@ -535,13 +535,13 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
                 _irc.poll()
                 _irc.peer.announce_room()
                 return packet(_irc.poll())
-            from msxpi_pchess_irc import IRC
+            from msxpi_game_irc import IRC
             if _irc: _irc.close()
             _irc = IRC(irc_config, channel)
             _use_irc = True
             return packet(_irc.poll())
         if args[0]=='irc':
-            from msxpi_pchess_irc import IRC
+            from msxpi_game_irc import IRC
             if _irc: _irc.close()
             _irc=IRC(irc_config)
             _use_irc=True

@@ -227,6 +227,9 @@ static struct {
     char status[48];
     /* Moves received and not yet handed to the client, as "c3e5g7". */
     char inbox[INBOX][PATH_MAX_TEXT+1]; uint8_t inbox_n;
+    /* The newest move of the game, mine or received, for SYNC. Moves
+     * alternate, so two ends never hold more than one move apart. */
+    char last[PATH_MAX_TEXT+1];
     uint16_t ply;
     uint16_t rx_len;
 } irc;
@@ -284,7 +287,7 @@ static void chat_say(char *text) {
 }
 
 static void new_game_state(void) {
-    irc.ply=0; irc.draw_offer=0; irc.result=0; irc.inbox_n=0;
+    irc.ply=0; irc.draw_offer=0; irc.result=0; irc.inbox_n=0; irc.last[0]=0;
 }
 
 static void pair(const char *nick,uint8_t side) {
@@ -387,14 +390,36 @@ static void peer_receive(const char *sender,const char *target,char *text) {
             uint16_t n=0;
             char *path=arg;
             while(*path>='0' && *path<='9') n=n*10+(*path++-'0');
+            /* A resent move we hold already (the peer answers every SYNC). */
+            if(*path==' ' && n+1==irc.ply && !strcmp(path+1,irc.last)) return;
             if(*path++!=' ' || n!=irc.ply || !valid_path(path) || irc.inbox_n>=INBOX
                || (irc.ply&1)==irc.side) {
                 set_status("OUT OF SYNC - REJOIN THE ROOM");
                 return;
             }
             strcpy(irc.inbox[irc.inbox_n++],path);
+            strcpy(irc.last,path);
             irc.ply++;
             if(irc.draw_offer==1) irc.draw_offer=0;
+        } else if(!strcmp(op,"SYNC") && arg) {
+            /* The peer's IRC link came back holding n moves: resend ours,
+             * or tell it how many we hold so it resends its own. */
+            static char line[48];
+            uint16_t n=0;
+            char *end=arg;
+            while(*end>='0' && *end<='9') n=n*10+(*end++-'0');
+            if(end==arg || *end) return;
+            if(n+1==irc.ply && irc.last[0]) {
+                strcpy(line,"PCH1 CK MOVE ");
+                put_dec(line+13,n);
+                strcat(line," ");
+                strcat(line,irc.last);
+                irc_line("PRIVMSG ",irc.peer," :",line);  /* not say(): no fail here */
+            } else if(n>irc.ply) {
+                strcpy(line,"PCH1 CK SYNC ");
+                put_dec(line+13,irc.ply);
+                irc_line("PRIVMSG ",irc.peer," :",line);
+            } else if(n<irc.ply) set_status("OUT OF SYNC - REJOIN THE ROOM");
         } else if(!strcmp(op,"DRAW") && !irc.result) {
             if(irc.draw_offer==1) irc.result=3; else irc.draw_offer=2;
         } else if(!strcmp(op,"RESIGN") && !irc.result) {
@@ -421,6 +446,7 @@ static void peer_cmove(const char *arg) {
     strcat(line," ");
     strcat(line,path);
     if(!say(irc.peer,line)) return;
+    strcpy(irc.last,path);
     irc.ply++;
     if(irc.draw_offer==2) irc.draw_offer=0;
 }

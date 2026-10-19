@@ -5,7 +5,7 @@
  * packet, so the rest of pchess.c does not know which link is in use.
  *
  * LOCAL games use pchess_rules.c. ROOM and ONLINE speak the PCH1 IRC
- * protocol of msxpi_pchess_irc.py (a C port of its Peer class), so an MSX
+ * protocol of msxpi_game_irc.py (a C port of its Peer class), so an MSX
  * here plays MSXPi players on the same IRC network. IRC over plain TCP:
  * no TLS on a Z80, so the server must accept port 6667 (Libera does).
  * AI games need the MSXPi server's engine.
