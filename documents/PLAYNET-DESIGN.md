@@ -70,7 +70,8 @@ Plain 16/32 KB ROMs come first. Nothing in the format, loader or runtime assumes
 - **The chat contract.** The packet header flags (byte 22), `mchat launch`, and stuffing the keyboard buffer. Both links share the same
   256-byte packets, so `mchat.c` does not care which link is in use. That pattern is what makes the no-host path cheap.
 - **The invitation protocol shape**: tokens, timeouts, one game at a time, candidate exchange in ACCEPT/GO, no relay.
-- **The peer UDP protocol** (13-byte game packet, 14-byte control datagram). It is small enough to implement in Z80/C.
+- **The peer UDP protocol** (13-byte game packet, 14-byte control datagram). It is small enough to implement in Z80/C. The
+  specification generalises the game packet to 1-4 input bytes per frame, and adds a kind byte to every datagram.
 - **The test assets.** `test_netplay.py`, `test_games.py`, the two-emulator rig, and `cmp_pair.py`.
 - **ROM-Patcher conventions** (from the music work): file offsets instead of CPU addresses, expected bytes checked under every patch,
   code shipped as hashed assets built from sources in the package, a per-game `rebuild.py`, and Ctrl+Shift+F5 as the exit key.
@@ -144,7 +145,10 @@ GAME END    restore DOS area (segment or Pi)         restore DOS area (segment),
 The game stub (the lockstep engine plus the game's glue, one asset per game), the loader's ROM/profile/patch code and the end-of-game
 restore are **the same** in both columns. Only the transport behind the stub's vector, and where the saved DOS area is kept, differ.
 
-### 5.2 Four specifications (new document `documents/PLAYNET-PROTOCOLS.md`)
+### 5.2 Four specifications (now written: `documents/PLAYNET-PROTOCOLS.md`)
+
+The specification, with the integration guide for game authors, is in its own document. Where it differs from this section in a detail,
+the specification wins. This section keeps the reasoning.
 
 **(a) MSXG, invitations over IRC.** This is the current `MSXG1`, with the version replaced by the profile hash. Nothing has shipped
 yet, so it changes in place:
@@ -212,8 +216,8 @@ replaces `soccernet.asm`'s patch table and `rom_check.py`. The patch list is the
   "image_host": "plain",                   // plain (16/32 KB in pages 1-2) | mapper-ram (future, 5.9)
   "stub":      {"asset": "stub", "load": 61440, "entry_init": 61440, "irq": 61443},     // F000h
   "transport_area": {"address": 62016, "size": 192},                                 // F240h-F2FFh
-  "game_ram": [[57344, 61439], [62208, 62255]],   // E000h-EFFFh and the stack F300h-F32Fh, measured
-  "irq_handler": 16496,                    // where the game's H.KEYI hook points (for the trampoline)
+  "game_ram": [[57344, 61439], [62220, 62335]],   // E000h-EFFFh and the stack F30Ch-F37Fh, measured
+  "irq_handler": 16430,                    // 402Eh: where the game's H.KEYI hook points (installed at 4090h)
   "start": "header-init"                   // start like a cartridge: jump to INIT from the image header
 }
 ```
@@ -292,9 +296,10 @@ within about a second of READY. The lockstep stall absorbs the difference.
 ### 5.5 In-game runtime
 
 **Game stub (both paths).** Built per game from the shared engine and the game glue: the current lockstep engine, minus `connect`
-(moved to the loader), plus a Ctrl+Shift+F5 check (two keyboard-matrix reads per frame). It reaches the network only through a 3-entry
-**transport vector** at `transport_area`: `XSEND(pkt)`, `XRECV() -> pkt|none|dead|bye`, `XEND(reason)`. `XEND` replaces `fatal` and
-starts the return (5.8).
+(moved to the loader), plus a Ctrl+Shift+F5 check (two keyboard-matrix reads per frame). It reaches the network only through the
+**transport vector** at `transport_area`: `XCHG` (send and/or receive in one call, so the native path keeps one C9 transaction per poll),
+`XEND(reason)`, and `XIRQ` (the target of the game's patched H.KEYI hook). `XEND` replaces `fatal` and starts the return (5.8). The exact
+contract is in `PLAYNET-PROTOCOLS.md` section 10.
 
 **Native transport (Pi path).** Today's `xchg` over opcode C9, about 150 bytes. It is assembled position-independent, or with a
 relocation table, so it can be placed at `transport_area`. The Pi changes only for the HELLO fields, P3, BYE, and serving the session,
@@ -310,7 +315,7 @@ page 3 (transport_area, ~120 bytes)                  mapper segment N (PLAYNET.O
          netBusy=0; EI                                  peer lock, keep-alive, dead timer (frames), BYE
   irq:   H.KEYI -> here (patched hook site)             IRC keep-alive: answers PING on the resident
          if netBusy: read VDP status, missed++, RET       IRC connection, discards everything else
-         JIFFY++ ; call game handler (irq_handler)      the same code runs the connect phase in DOS
+         ticks++ ; call game handler (irq_handler)      the same code runs the connect phase in DOS
          netBusy=1; call saved H.TIMI (INL); netBusy=0
 ```
 
@@ -319,9 +324,11 @@ page 3 (transport_area, ~120 bytes)                  mapper segment N (PLAYNET.O
 - **Private stack** in the segment (G6: the game's stack is a few bytes from the stub).
 - `curSeg2` is a variable, not a constant. With a plain ROM it never changes. With a MegaROM (5.9) the bank handlers update it, so the shim
   puts back the bank the game has selected at that moment.
-- The **IRQ trampoline** fixes three things at once: an interrupt while a page is switched away, INL's timer never being called, and
-  `JIFFY` not advancing. It needs one patch per game at the place where the game installs its H.KEYI hook (a call to the stub's `irq`
-  entry) and the handler address in the ABI.
+- The **IRQ trampoline** (`XIRQ`) fixes three things at once: an interrupt while a page is switched away, INL's timer never being called,
+  and netcore having no clock. It keeps its own tick counter and **never writes `JIFFY`**, because a game that reads `JIFFY` must see what
+  it would see on a cartridge, or the two machines drift. It needs one patch per game: the `ld hl,HANDLER` operand where the game installs its
+  H.KEYI hook points to `XIRQ`, and the handler address goes in the ABI. For a Konami cartridge, that is the standard
+  `ld a,C3h / ld (FD9Ah),a / ld hl,HANDLER / ld (FD9Bh),hl` sequence (Soccer: 4090h, handler 402Eh).
 - A ROM-based implementation (GR8NET) is called with CALSLT and needs no timer chaining. The trampoline still protects page 1.
 - This retires `unapi.tmpl.inc`. `udptest.asm` remains the reference for the dispatch.
 
@@ -354,7 +361,7 @@ specification also states:
 ### 5.8 Ending a game without a reset (both paths)
 
 **What ends a game.** Ctrl+Shift+F5 on either machine (the ROM-Patcher exit key), a BYE from the opponent, the dead-peer timeout, or a
-desync when `DESYNC_ABORT` is built in. Each ends in `XEND(reason)` on both machines. The Pi or netcore records the reason in the session.
+desync (always in release builds, where the stub's desync flag is set; test builds only record the frame). Each ends in `XEND(reason)` on both machines. The Pi or netcore records the reason in the session.
 
 **What the game destroys, and what it does not.**
 - The game runs with the BIOS ROM in page 0, so DOS's page-0 RAM is not touched.
@@ -430,7 +437,9 @@ Decision 3: plain 16/32 KB ROMs first, but nothing should block MegaROMs, since 
 
 Each step ends with something that can be shown to work. Mixed play is part of the acceptance from the first protocol step.
 
-1. **Specifications** (`PLAYNET-PROTOCOLS.md`, `FORMAT.md` v2) and the package of a second game on paper. *Proof:* user review.
+1. **Specifications** (`PLAYNET-PROTOCOLS.md`, which also specifies `msxpi-rom-patch` v2; `FORMAT.md` itself is updated in step 2
+   together with `patch_rom.py`) and the package of a second game on paper (`PLAYNET-PROTOCOLS.md` section 6: Yie Ar Kung-Fu, from a static
+   scan). *Proof:* user review. **Draft written 2026-10-19, awaiting review.**
 2. **ROM-Patcher v2 + Soccer package + `--gpf`**, with the equivalence test against today's patched image. Music packages must still
    build bit-identical ROMs. *Proof:* `test_gpf.py` and the existing patcher tests.
 3. **Server side**: `msxpi_games` from GPFs, profhash in MSXG, HELLO fields, P3, BYE, the session/profile/save/restore commands.
@@ -464,7 +473,7 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    kept in any case).
 6. **Whether a resident TCP connection survives** from `MCHAT /t` through `PLAYNET` and back, on INL and on GR8NET.
 7. **`mchat.com` memory**: the real end of the image and the TPA top with INL loaded and with GR8NET.
-8. **The Soccer hook-install site** (where it writes H.KEYI), for the IRQ patch.
+8. ~~The Soccer hook-install site~~: found while writing the specification: H.KEYI is installed at 4090h (`ld hl,402Eh`, operand at 4096h).
 
 ---
 
@@ -479,10 +488,12 @@ Each step ends with something that can be shown to work. Mixed play is part of t
 | 5 | `MCHAT /t` scrollback | 24 rows a room is acceptable if needed | 5.6 |
 | 6 | Mixed matches | A requirement from the start | 5.7, section 7: conformance and `SCENARIO=mixed` are acceptance criteria |
 | 7 | Return to the chat without a reset | Desirable on all paths (UNAPI and MSXPi) | 5.8: save/restore of the DOS area (segment, or the Pi), resident IRC connection on UNAPI; reset only as the fallback |
+| 8 | Exit key | Ctrl+Shift+F5 for every game, no per-game override | Spec 9.3 and requirement R10 |
+| 9 | Inputs wider than one byte | Must be supported | Spec 4.4, 7.2, 11.1: input width 1-4 per game; kind byte on every datagram; length-prefixed C9 packets |
+| 10 | Connect timeout | 120 s | Spec 11.3 |
+| 11 | Desync in release builds | End the game on both machines and show the frame number; test builds only record it | Spec 9.1 (stub flag bit 0) and Appendix B |
 
-Still open (new, for the next review):
+Still open (for the next review):
 
-- The exit key: Ctrl+Shift+F5, as in the ROM-Patcher games? It must not clash with a key the game itself uses.
-- Should a desync end the game (`DESYNC_ABORT`) in the release build, or only show a warning?
 - Where should the Soccer package live: `software/ROM-Patcher/profiles/soccer/` (next to the music packages, as proposed) or a separate
   `profiles` tree for netplay games?
