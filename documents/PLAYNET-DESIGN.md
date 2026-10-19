@@ -451,6 +451,20 @@ Each step ends with something that can be shown to work. Mixed play is part of t
      reserves. Step 4 also adds the 4096h hook patch.
 3. **Server side**: `msxpi_games` from GPFs, profhash in MSXG, HELLO fields, P3, BYE, the session/profile/save/restore commands.
    *Proof:* the existing 98 tests plus new ones.
+   **Done 2026-10-19**:
+   - The games are the GPF files in `MSXPIHOME/games`; `DEFAULT_GAMES` and `MSXGAME_*` are gone.
+   - Invitations carry the profile hash and are declined on a mismatch.
+   - `msxpi_netplay` speaks the specified MSXNP: a kind byte on every datagram, 1-4-byte inputs, the profile hash in HELLO,
+     120 s connect / 60 s start / 15 s dead timeouts, and BYE.
+   - The C9 transaction is length-prefixed.
+   - The new MSXPi command `playnet` handles session, profile, save, restore and result.
+   - The chat types `PLAYNET` and reports the result when the player is back.
+   - 112 server tests pass.
+   - Deployment fixed on the way: `msxpi_netplay.py`, `msxpi_chat.py` and `msxpi_games.py` were missing from the server file
+     lists (`update.sh`, `msxpi-setup.sh`, `msxpi-windows-setup.ps1`, `SERVER_MODULES`), so a real Pi would never have
+     received them.
+   - The two-emulator rig (`run_native.sh`) still runs the old `SOCCERNET` stub, so it no longer matches the Pi until step 4
+     replaces it.
 4. **`PLAYNET.COM`, Pi path**: generic loader, connect phase out of the stub, Soccer stub built from the package. *Proof:* the rig with
    `SCENARIO=chat`, frame-identical traces as today.
 5. **Return without a reset, Pi path** (save to a segment, and to the Pi without a mapper). *Proof:* a rig scenario where Ctrl+Shift+F5

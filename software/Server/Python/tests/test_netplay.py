@@ -1,4 +1,4 @@
-"""msxpi_netplay: handshake, delay negotiation, relay, checksums, dead-peer detection.
+"""msxpi_netplay: handshake, delay negotiation, relay, checksums, start and dead timeouts, BYE.
 
 Two Netplay sessions talk over loopback UDP; the MSX side is simulated by feeding the bytes of
 a transaction to handle() and reading back what it writes.  No emulator needed.
@@ -41,9 +41,9 @@ def wait_for(cond, seconds=10.0):
     return False
 
 
-def txn(np, flags, pkt=b'\x00' * n.PKT):
-    """One MSX transaction: returns the bytes the Pi wrote back."""
-    sent = bytearray([flags]) + pkt + bytes([sum(pkt) & 0xFF])
+def txn(np, flags, pkt=b''):
+    """One MSX transaction (C9, FLAGS, L, P[L], SUM): returns the bytes the Pi wrote back."""
+    sent = bytearray([flags, len(pkt)]) + pkt + bytes([sum(pkt) & 0xFF])
     it = iter(sent)
     out = []
     np.read = lambda: next(it, None)
@@ -52,8 +52,9 @@ def txn(np, flags, pkt=b'\x00' * n.PKT):
     return bytes(out[0]) if out else b''
 
 
-def packet(first):
-    return bytes([first]) + bytes(range(1, n.PKT))
+def packet(seq, width=1):
+    """A well-formed game packet: kind, seq, F, W, 8 frames of W input bytes, check tag, check value."""
+    return bytes([n.KIND_GAME, seq, 0, width]) + bytes((seq + i) & 0xFF for i in range(8 * width)) + b'\xff\x00'
 
 
 class Delay(unittest.TestCase):
@@ -143,6 +144,27 @@ class Session(unittest.TestCase):
         b.restart()
         self.assertTrue(wait_for(lambda: b.state == n.S_VERSION and a.state == n.S_VERSION))
 
+    def test_different_profiles_stop_both(self):
+        pa, pb = free_ports(2)
+        quiet = lambda *a: None
+        a = n.Netplay(None, None, {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pa, pb), 'MSXPI_NETPLAY_PROFILE': '1234abcd'}, quiet)
+        b = n.Netplay(None, None, {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pb, pa), 'MSXPI_NETPLAY_PROFILE': '1234abce'}, quiet)
+        self.pair = (a, b)
+        a.restart()
+        b.restart()
+        self.assertTrue(wait_for(lambda: a.state == n.S_INCOMPATIBLE and b.state == n.S_INCOMPATIBLE))
+        self.assertEqual(txn(a, 0x80)[0], 0xA0 + n.ST_INCOMPATIBLE)
+
+    def test_same_profile_connects(self):
+        pa, pb = free_ports(2)
+        quiet = lambda *a: None
+        env = lambda l, p: {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (l, p), 'MSXPI_NETPLAY_PROFILE': '1234abcd'}
+        a, b = n.Netplay(None, None, env(pa, pb), quiet), n.Netplay(None, None, env(pb, pa), quiet)
+        self.pair = (a, b)
+        a.restart()
+        b.restart()
+        self.assertTrue(wait_for(lambda: a.state == n.S_READY and b.state == n.S_READY))
+
     def test_status_before_ready(self):
         self.start()
         first = txn(self.a, 0x80)
@@ -167,13 +189,38 @@ class Relay(unittest.TestCase):
 
     def test_packet_travels_and_is_checksummed(self):
         pkt = packet(7)
+        self.assertEqual(len(pkt), 14)
         self.assertEqual(txn(self.a, 1, pkt), b'\x00\x00')              # send only: nothing back
-        got = b''
         wait_for(lambda: bool(self.b.ready))
         got = txn(self.b, 2)
-        self.assertEqual(got[0], n.PKT)
-        self.assertEqual(got[1:1 + n.PKT], pkt)
-        self.assertEqual(got[-1], sum(pkt) & 0xFF)
+        self.assertEqual(got, bytes([len(pkt)]) + pkt + bytes([sum(pkt) & 0xFF]))
+
+    def test_four_input_bytes_per_frame(self):
+        pkt = packet(5, width=4)
+        self.assertEqual(len(pkt), n.MAX_PKT)
+        txn(self.a, 1, pkt)
+        wait_for(lambda: bool(self.b.ready))
+        self.assertEqual(txn(self.b, 2)[1:-1], pkt)
+
+    def test_malformed_packets_are_not_relayed(self):
+        bad = [packet(1)[:-1],                                           # length does not match W
+               bytes([0x11]) + packet(1)[1:],                            # unknown kind
+               bytes([n.KIND_GAME, 1, 0, 5]) + bytes(42)]                # W = 5
+        for pkt in bad:
+            txn(self.a, 1, pkt)
+        time.sleep(0.2)
+        self.assertFalse(self.b.ready)
+        self.assertEqual(self.a.stats['malformed'], 2)                   # the 46-byte one is over MAX_PKT
+        self.assertEqual(self.a.stats['badsum'], 1)
+        junk = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)          # straight from the opponent's address
+        try:
+            junk.bind(('127.0.0.1', 0))
+            self.b.peer = None
+            self.b.peer_ips = {'127.0.0.1'}
+            junk.sendto(bytes([0x42]) + bytes(13), ('127.0.0.1', self.b.sock.getsockname()[1]))
+            self.assertTrue(wait_for(lambda: self.b.stats['malformed'] == 1, 2))
+        finally:
+            junk.close()
 
     def test_poll_with_nothing_waiting(self):
         self.assertEqual(txn(self.b, 2), b'\x00\x00')
@@ -182,12 +229,12 @@ class Relay(unittest.TestCase):
         for i in range(1, 6):
             txn(self.a, 1, packet(i))
         wait_for(lambda: len(self.b.ready) == 5)
-        firsts = [txn(self.b, 2)[1] for _ in range(5)]
-        self.assertEqual(firsts, [1, 2, 3, 4, 5])
+        seqs = [txn(self.b, 2)[2] for _ in range(5)]                    # reply: L, kind, seq, ...
+        self.assertEqual(seqs, [1, 2, 3, 4, 5])
 
     def test_corrupt_transaction_is_dropped(self):
         pkt = packet(9)
-        sent = bytearray([1]) + pkt + bytes([(sum(pkt) + 1) & 0xFF])   # wrong sum
+        sent = bytearray([1, len(pkt)]) + pkt + bytes([(sum(pkt) + 1) & 0xFF])   # wrong sum
         it = iter(sent)
         self.a.read = lambda: next(it, None)
         self.a.write = lambda d: None
@@ -196,14 +243,39 @@ class Relay(unittest.TestCase):
         self.assertEqual(self.a.stats['badsum'], 1)
         self.assertFalse(self.b.ready)
 
-    def test_dead_peer(self):
+    def test_dead_peer_once_playing(self):
         old = n.DEAD_AFTER
         n.DEAD_AFTER = 0.3
         try:
+            time.sleep(0.5)
+            self.assertEqual(self.a.state, n.S_READY)                    # not playing yet: the start timeout applies
+            txn(self.b, 1, packet(1))
+            self.assertTrue(wait_for(lambda: self.a.playing))
             self.assertTrue(wait_for(lambda: self.a.state == n.S_DEAD))
             self.assertEqual(txn(self.a, 2), b'\xff\x00')
+            self.assertEqual(self.a.describe(), 'connection lost')
         finally:
             n.DEAD_AFTER = old
+
+    def test_opponent_never_starts(self):
+        old = n.START_TIMEOUT
+        n.START_TIMEOUT = 0.3
+        try:
+            self.assertTrue(wait_for(lambda: self.a.state == n.S_DEAD))
+            self.assertEqual(txn(self.a, 0x80)[0], 0xA0 + n.ST_FAILED)
+        finally:
+            n.START_TIMEOUT = old
+
+    def test_bye_ends_the_game_on_both_sides(self):
+        self.assertEqual(txn(self.a, 0x20, bytes([1])), b'\x00\x00')    # this player pressed the exit key
+        self.assertEqual(self.a.state, n.S_ENDED)
+        self.assertEqual(self.a.local_result, 1)
+        self.assertTrue(wait_for(lambda: self.b.state == n.S_LEFT))
+        self.assertEqual(self.b.bye_reason, 1)
+        self.assertEqual(txn(self.b, 2), b'\xfe\x01')
+        self.assertEqual(txn(self.b, 0x80)[0], 0xA0 + n.ST_LEFT)
+        self.assertEqual(self.b.describe(), 'the opponent ended it')
+        self.assertTrue(wait_for(lambda: self.a.bye_left == 0, 2))      # sent BYE_REPEAT times
 
     def test_restart_flushes_old_packets(self):
         txn(self.a, 1, packet(3))

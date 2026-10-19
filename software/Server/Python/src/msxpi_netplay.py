@@ -1,32 +1,37 @@
-"""MSXPi-native transport for the Konami's Soccer lockstep stub.
+"""PLAYNET's MSXPi transport: the Pi side of a lockstep game's network session.
+
+Specification: documents/PLAYNET-PROTOCOLS.md (the C9 transaction in 10.1, MSXNP in 11).
 
 One opcode on the MSXPi byte transport (the same place the Ethernet UNAPI opcodes live,
 see msxpi_ethglue.eth_handle_opcode):
 
-    MSX -> [C9][FLAGS][13 packet bytes][SUM]       SUM = sum of the 13 bytes mod 256
-    Pi  -> [N][N bytes][SUM]                       N = 0 (nothing) or 13 (a game packet)
-           [FF][00]                                the session is dead (no news from the peer)
-           [A0+STATE][DELAY][DELAY]                status, when FLAGS bit 7 is set
+    MSX -> [C9][FLAGS][L][L packet bytes][SUM]      SUM = sum of the L bytes mod 256; L = 0 when nothing is sent
+    Pi  -> [L][L bytes][SUM]                        a game packet (L = 14..38)
+           [00][00]                                 nothing
+           [FF][00]                                 the opponent is gone (no news, or never started)
+           [FE][REASON]                             the opponent left (BYE with its result code)
+           [A0+STATE][DELAY][DELAY]                 status, when FLAGS bit 7 is set
 
-FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet,
-bit 6 (re)start the session (handshake), bit 7 return the status instead.
+FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet, bit 5 send BYE
+(L = 1, the packet byte is the result code), bit 6 (re)start the session (handshake), bit 7 return the
+status instead.  STATE: 0 connecting, 1 ready, 2 incompatible, 3 failed, 4 the opponent left.
 
-The game packet (seq, len, F, 8 inputs, check tag, check value) is only relayed; sequence
-numbers, redundancy, resends and the desync check stay in the MSX stub.  Everything else is
-here: the handshake (version check), the round-trip measurement that fixes the input delay
-for the match, keep-alive/dead detection, and the delay/loss injection used by the tests.
+Peer datagrams start with a kind byte: 1-6 = 14-byte control datagram (type, version, nonce, a, b),
+10h = game packet of 6 + 8W bytes (W = input bytes per frame, 1-4, in its byte 3).  The game packet is only
+relayed; sequence numbers, redundancy, resends and the desync check stay in the MSX stub.  Everything else
+is here: the handshake (protocol version and profile hash), the round-trip measurement that fixes the input
+delay, the start and dead timeouts, BYE, and the delay/loss injection used by the tests.
 
-Peer datagrams: 13 bytes = game packet, 14 bytes = control (type, version, nonce, a, b).
-
-Session: normally set by the chat (msxpi_chat.py) once both players agreed to a game:
-    open(), candidates(), set_peers() - then the MSX side starts it (flags 0x40).  For the test rigs it
-    can also come from the environment:
+Session: normally set by the chat (msxpi_games via msxpi_chat) once both players agreed to a game:
+    open(), candidates(), set_peers(), profile_hash - then the MSX side starts it (flags 0x40).  For the test
+    rigs it can also come from the environment:
     MSXPI_NETPLAY            local_port:peer_host:peer_port
+    MSXPI_NETPLAY_PROFILE    profile hash announced in HELLO, hex (default 0)
     MSXPI_NETPLAY_LAG_MS     one-way delay added to incoming datagrams (default 0)
     MSXPI_NETPLAY_JITTER_MS  extra random 0..N ms per datagram (default 0)
     MSXPI_NETPLAY_LOSS_PCT   incoming datagrams dropped, percent (default 0)
     MSXPI_NETPLAY_SEED       random seed for the above
-    MSXPI_NETPLAY_VERSION    protocol version announced (default 1; tests use it to force a mismatch)
+    MSXPI_NETPLAY_VERSION    MSXNP version announced (default 1; tests use it to force a mismatch)
 """
 import collections
 import heapq
@@ -39,28 +44,40 @@ import threading
 import time
 
 OP_NETPLAY = 0xC9
-PKT = 13
+KIND_GAME = 0x10
+MIN_WIDTH, MAX_WIDTH = 1, 4             # input bytes per player per frame
+MAX_PKT = 6 + 8 * MAX_WIDTH             # 38
 CTL = struct.Struct("<BBIII")           # type, version, nonce, a, b  = 14 bytes
-VERSION = 1
+VERSION = 1                             # MSXNP
 
-T_HELLO, T_PING, T_PONG, T_SETUP, T_ACK = 1, 2, 3, 4, 5
+T_HELLO, T_PING, T_PONG, T_SETUP, T_ACK, T_BYE = 1, 2, 3, 4, 5, 6
 
 # MSX-visible status codes
-ST_CONNECTING, ST_READY, ST_VERSION, ST_FAILED = 0, 1, 2, 3
+ST_CONNECTING, ST_READY, ST_INCOMPATIBLE, ST_FAILED, ST_LEFT = 0, 1, 2, 3, 4
+ST_VERSION = ST_INCOMPATIBLE
 # internal states
-S_IDLE, S_CONNECT, S_SETUP, S_READY, S_VERSION, S_FAILED, S_DEAD = range(7)
+S_IDLE, S_CONNECT, S_SETUP, S_READY, S_INCOMPATIBLE, S_FAILED, S_DEAD, S_LEFT, S_ENDED = range(9)
+S_VERSION = S_INCOMPATIBLE
 
 FRAME_MS = 20.0                        # 50 Hz: the longest frame
 PINGS = 8
 MIN_SAMPLES = 4
 MAX_PINGS = 64
-CONNECT_TIMEOUT = 300.0
-DEAD_AFTER = 15.0
+CONNECT_TIMEOUT = 120.0                # no READY after this: failed
+START_TIMEOUT = 60.0                   # READY but no game packet after this: gone
+DEAD_AFTER = 15.0                      # playing, and nothing from the opponent for this long: gone
+BYE_REPEAT, BYE_GAP = 3, 0.1
 MIN_DELAY, MAX_DELAY = 2, 6
 
 
 STUN_SERVER = ("stun.l.google.com", 19302)
 STUN_COOKIE = struct.pack(">I", 0x2112A442)
+
+
+def game_packet_ok(data):
+    """True for a well-formed MSXNP game packet (kind, width, length)."""
+    return (len(data) >= 4 and data[0] == KIND_GAME and MIN_WIDTH <= data[3] <= MAX_WIDTH
+            and len(data) == 6 + 8 * data[3])
 
 
 def lan_address():
@@ -156,6 +173,7 @@ class Netplay:
         self.jitter = float(env.get("MSXPI_NETPLAY_JITTER_MS", "0")) / 1000.0
         self.loss = float(env.get("MSXPI_NETPLAY_LOSS_PCT", "0"))
         self.version = int(env.get("MSXPI_NETPLAY_VERSION", str(VERSION)))
+        self.profile_hash = int(env.get("MSXPI_NETPLAY_PROFILE", "0"), 16)
         self.rng = random.Random(int(env.get("MSXPI_NETPLAY_SEED", "1985")))
         self.lock = threading.RLock()
         self.heap = []                    # (release_time, n, datagram)
@@ -168,15 +186,15 @@ class Netplay:
         self.peer = None                  # the address that answered: locked once known
         self.state = S_IDLE
         self.delay = 0
-        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0)
+        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0)
         self.last_log = 0.0
         self._reset_session()
         if spec:
             lport, host, pport = spec.split(":")
             self.open(int(lport))
             self.set_peers([(host, int(pport))])
-            log("netplay: local %s peer %s lag=%.0fms jitter=%.0fms loss=%.1f%% version=%d"
-                % (lport, self.peers, self.lag * 1000, self.jitter * 1000, self.loss, self.version))
+            log("netplay: local %s peer %s lag=%.0fms jitter=%.0fms loss=%.1f%% version=%d profile=%08x"
+                % (lport, self.peers, self.lag * 1000, self.jitter * 1000, self.loss, self.version, self.profile_hash))
 
     # ---- session set-up (chat or environment) ---------------------------------------
     def open(self, local_port=0):
@@ -235,7 +253,8 @@ class Netplay:
 
     def describe(self):
         names = {S_IDLE: "idle", S_CONNECT: "connecting", S_SETUP: "connecting", S_READY: "playing",
-                 S_VERSION: "version mismatch", S_FAILED: "failed", S_DEAD: "lost"}
+                 S_INCOMPATIBLE: "different game versions", S_FAILED: "could not connect", S_DEAD: "connection lost",
+                 S_LEFT: "the opponent ended it", S_ENDED: "ended"}
         return names.get(self.state, "?")
 
     # ---- session state -------------------------------------------------------------
@@ -250,8 +269,14 @@ class Netplay:
         self.next_hello = 0.0
         self.next_setup = 0.0
         self.t_start = time.monotonic()
+        self.t_ready = None
         self.last_rx = self.t_start
+        self.playing = False              # a game packet came from the opponent
         self.delay = 0
+        self.bye_reason = None            # the opponent's result code, from its BYE
+        self.local_result = None          # ours, when we sent BYE
+        self.bye_left = 0
+        self.next_bye = 0.0
         self.ready.clear()
 
     def restart(self):
@@ -260,6 +285,16 @@ class Netplay:
             self.peer = None
             self.state = S_CONNECT if self.configured else S_FAILED
             self.log("netplay: session restart nonce=%08x%s" % (self.nonce, "" if self.configured else " (not configured)"))
+
+    def bye(self, code):
+        """End the game on this side and tell the opponent (BYE, sent BYE_REPEAT times)."""
+        with self.lock:
+            if self.state in (S_IDLE, S_ENDED):
+                return
+            self.local_result = code
+            self.state = S_ENDED
+            self.bye_left, self.next_bye = BYE_REPEAT, 0.0
+            self.log("netplay: game ended here (result %d), telling the opponent" % code)
 
     def _targets(self):
         return [self.peer] if self.peer else self.peers
@@ -277,6 +312,11 @@ class Netplay:
     def _send_ctl(self, typ, a=0, b=0):
         self._send(CTL.pack(typ, self.version, self.nonce, a, b))
 
+    def _set_ready(self, now, how):
+        self.state = S_READY
+        self.t_ready = now
+        self.log("netplay: ready, delay %d%s" % (self.delay, how))
+
     # ---- network threads -----------------------------------------------------------
     def _rx_loop(self, sock):
         while True:
@@ -290,7 +330,9 @@ class Netplay:
             if len(data) >= 20 and data[4:8] == STUN_COOKIE:
                 self.stun_inbox.put(data)         # a STUN reply, not the opponent
                 continue
-            if len(data) not in (PKT, CTL.size):
+            control = len(data) == CTL.size and T_HELLO <= data[0] <= T_BYE
+            if not (control or game_packet_ok(data)):
+                self.stats["malformed"] += 1
                 continue
             with self.lock:
                 if self.peer:
@@ -319,10 +361,14 @@ class Netplay:
             if self.peer is None and self.state in (S_CONNECT, S_SETUP):
                 self.peer = addr          # first answer: keep talking to this address only
                 self.log("netplay: opponent at %s:%d" % addr)
-            if len(data) == CTL.size:
-                self._on_ctl(now, *CTL.unpack(data))
-            else:
+            if data[0] == KIND_GAME:
                 self._on_game(now, data)
+            else:
+                self._on_ctl(now, *CTL.unpack(data))
+        if self.bye_left and now >= self.next_bye:
+            self.bye_left -= 1
+            self.next_bye = now + BYE_GAP
+            self._send_ctl(T_BYE, self.local_result or 0)
         st = self.state
         if st in (S_CONNECT, S_SETUP):
             if now - self.t_start > CONNECT_TIMEOUT:
@@ -331,7 +377,7 @@ class Netplay:
                 return
             if now >= self.next_hello and st == S_CONNECT:
                 self.next_hello = now + 0.2
-                self._send_ctl(T_HELLO)
+                self._send_ctl(T_HELLO, self.profile_hash)
             if self.leader and st == S_CONNECT and now >= self.next_ping and (
                     self.pings_sent < PINGS or (len(self.rtts) < MIN_SAMPLES and self.pings_sent < MAX_PINGS)):
                 self.next_ping = now + 0.1      # keep pinging while too few answers came back
@@ -347,24 +393,35 @@ class Netplay:
             if self.state == S_SETUP and now >= self.next_setup:
                 self.next_setup = now + 0.2
                 self._send_ctl(T_SETUP, self.delay)
-        elif st == S_READY and now - self.last_rx > DEAD_AFTER:
-            self.state = S_DEAD
-            self.log("netplay: no news from the opponent for %.0f s - session dead" % DEAD_AFTER)
+        elif st == S_READY:
+            if not self.playing and now - self.t_ready > START_TIMEOUT:
+                self.state = S_DEAD
+                self.log("netplay: the opponent did not start the game within %.0f s" % START_TIMEOUT)
+            elif self.playing and now - self.last_rx > DEAD_AFTER:
+                self.state = S_DEAD
+                self.log("netplay: no news from the opponent for %.0f s - session dead" % DEAD_AFTER)
 
     def _on_ctl(self, now, typ, ver, nonce, a, b):
         if self.state == S_IDLE:
             if typ == T_PING:             # still answer pings: the peer may be ahead of us
                 self._send_ctl(T_PONG, a)
             return
-        if ver != self.version:
+        incompatible = ver != self.version or (typ == T_HELLO and a != self.profile_hash)
+        if incompatible:
             if self.state in (S_CONNECT, S_SETUP):
-                self.state = S_VERSION
-                self.log("netplay: version mismatch (peer %d, ours %d)" % (ver, self.version))
-            if self.state == S_VERSION and typ == T_HELLO:
-                self._send_ctl(T_HELLO)   # let a peer that started later see the mismatch too
+                self.state = S_INCOMPATIBLE
+                self.log("netplay: incompatible opponent (MSXNP %d, profile %08x; ours %d, %08x)"
+                         % (ver, a if typ == T_HELLO else 0, self.version, self.profile_hash))
+            if self.state == S_INCOMPATIBLE and typ == T_HELLO:
+                self._send_ctl(T_HELLO, self.profile_hash)   # let a peer that started later see it too
             return
         self.last_rx = now
-        if typ == T_HELLO:
+        if typ == T_BYE:
+            if self.state in (S_CONNECT, S_SETUP, S_READY):
+                self.state = S_LEFT
+                self.bye_reason = a & 0xFF
+                self.log("netplay: the opponent ended the game (result %d)" % self.bye_reason)
+        elif typ == T_HELLO:
             if self.state == S_CONNECT and self.peer_nonce is None:
                 self.peer_nonce = nonce
                 if nonce == self.nonce:
@@ -379,21 +436,20 @@ class Netplay:
             if t0 is not None and self.state == S_CONNECT:
                 self.rtts.append(now - t0)
         elif typ == T_SETUP:
-            if self.state in (S_CONNECT, S_READY):
+            if self.state == S_CONNECT:
                 self.delay = a
-                self.state = S_READY
+                self._set_ready(now, " (from the leader)")
             self._send_ctl(T_ACK, a)
         elif typ == T_ACK:
             if self.state == S_SETUP and a == self.delay:
-                self.state = S_READY
-                self.log("netplay: ready, delay %d" % self.delay)
+                self._set_ready(now, "")
 
     def _on_game(self, now, data):
         if self.state == S_SETUP:         # the follower started playing: that is the ACK
-            self.state = S_READY
-            self.log("netplay: ready, delay %d (implicit ack)" % self.delay)
+            self._set_ready(now, " (implicit ack)")
         if self.state == S_READY:
             self.last_rx = now
+            self.playing = True
             self.ready.append(data)
 
     # ---- one MSX transaction -------------------------------------------------------
@@ -401,10 +457,11 @@ class Netplay:
         read = read or self.read
         write = write or self.write
         flags = read()
-        if flags is None:
+        length = read() if flags is not None else None
+        if length is None:
             return True
         pkt = bytearray()
-        for _ in range(PKT):
+        for _ in range(length):
             b = read()
             if b is None:
                 return True
@@ -412,18 +469,20 @@ class Netplay:
         s = read()
         if s is None:
             return True
-        if (sum(pkt) & 0xFF) != s:
+        if (sum(pkt) & 0xFF) != s or length > MAX_PKT:
             self.stats["badsum"] += 1
             flags &= 0x80                 # corrupted: treat the packet part as lost
         if flags & 0x40:
             self.restart()
+        if flags & 0x20:
+            self.bye(pkt[0] if pkt else 0)
         with self.lock:
             now = time.monotonic()
             if self.sock:
                 self._pump(now)
             if flags & 0x80:
-                code = {S_READY: ST_READY, S_VERSION: ST_VERSION,
-                        S_FAILED: ST_FAILED, S_DEAD: ST_FAILED}.get(self.state, ST_CONNECTING)
+                code = {S_READY: ST_READY, S_INCOMPATIBLE: ST_INCOMPATIBLE, S_FAILED: ST_FAILED,
+                        S_DEAD: ST_FAILED, S_LEFT: ST_LEFT, S_ENDED: ST_LEFT}.get(self.state, ST_CONNECTING)
                 d = self.delay if code == ST_READY else 0
                 if code != getattr(self, '_last_code', None):
                     self._last_code = code
@@ -431,15 +490,21 @@ class Netplay:
                 write(bytes([0xA0 + code, d, d]))
                 return True
             if flags & 1 and self.state == S_READY:
-                self._send(bytes(pkt))
-                self.stats["tx"] += 1
+                if game_packet_ok(pkt):
+                    self._send(bytes(pkt))
+                    self.stats["tx"] += 1
+                else:
+                    self.stats["malformed"] += 1
             if flags & 2 and self.state in (S_DEAD, S_FAILED):
                 write(b"\xff\x00")
+                return True
+            if flags & 2 and self.state == S_LEFT:
+                write(bytes([0xFE, self.bye_reason or 0]))
                 return True
             out = self.ready.popleft() if (flags & 2 and self.ready) else b""
         if out:
             self.stats["delivered"] += 1
-            write(bytes([PKT]) + out + bytes([sum(out) & 0xFF]))
+            write(bytes([len(out)]) + out + bytes([sum(out) & 0xFF]))
         else:
             write(b"\x00\x00")
         now = time.monotonic()

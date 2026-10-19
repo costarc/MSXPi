@@ -30,6 +30,7 @@ from typing import Optional
 
 # Standard library imports
 import logging
+import os
 import socket
 
 # Third-party imports
@@ -44,7 +45,7 @@ from msxpi_const import (
     RC_SUCCESS,
     RC_SUCCNOSTD,
 )
-from msxpi_blocks import sendmultiblock
+from msxpi_blocks import recvdata2, sendmultiblock
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 
 # irc
@@ -220,7 +221,31 @@ def mchat(parms: Optional[str] = None) -> CommandResult:
             "MCHATROOM",
         )
     }
+    irc_config["GAMESDIR"] = _games_dir()
     return sendmultiblock(handle_command(parms or "", irc_config))
+
+
+def _games_dir() -> str:
+    import msxpi_settings
+
+    return os.path.join(msxpi_settings.MSXPIHOME, "games")
+
+
+def playnet(parms: Optional[str] = None) -> CommandResult:
+    """PLAYNET's commands (documents/PLAYNET-PROTOCOLS.md 15): the reply is the payload with RC_SUCCESS,
+    or a message with RC_FAILED.  "save" first receives the saved area from the MSX."""
+    from msxpi_chat import SAVE_MAX, playnet_command
+
+    command = (parms or "").strip()
+    upload = None
+    if command.split()[:1] == ["save"]:
+        rc, upload = recvdata2(SAVE_MAX)
+        if rc != RC_SUCCESS:
+            return rc
+    ok, payload = playnet_command(command, upload, _games_dir())
+    if ok:
+        return sendmultiblock(payload)
+    return sendmultiblock(("Pi:Er:" + payload).encode("ascii", "replace"), RC_FAILED)
 
 
 def irc(parms: str) -> CommandResult:

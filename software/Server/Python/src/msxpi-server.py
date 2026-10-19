@@ -40,6 +40,8 @@ SERVER_MODULES = (
     "msxpi_transport.py",
     "msxpi_ethglue.py",
     "msxpi_netplay.py",
+    "msxpi_chat.py",
+    "msxpi_games.py",
     "msxpi_blocks.py",
     "msxpi_cmd_disk.py",
     "msxpi_cmd_files.py",
@@ -129,7 +131,7 @@ from msxpi_cmd_system import (
     wifi,
     wlanreset,
 )
-from msxpi_cmd_web import chatgpt, irc, mchat, pchess, renderpage, showpage, template
+from msxpi_cmd_web import chatgpt, irc, mchat, pchess, playnet, renderpage, showpage, template
 from msxpi_nitros import nitros
 from msxpi_ssh import ssh
 from msxpi_const import BUILD_ID, RC_CONNERR, RC_SUCCESS, VERSION
@@ -177,6 +179,7 @@ COMMANDS = {
         netreset,
         pcopy,
         play,
+        playnet,
         ploadr,
         pset,
         q,

@@ -665,15 +665,20 @@ On the TCP/IP path the IRC connection survives the game: `MCHAT /t` leaves it op
 
 ## 15. MSXPi commands used by PLAYNET
 
-Sent over the MSXPi command channel, like `mchat`. Data blocks use the MSXPi block transfer that other MSXPi clients use.
+Sent over the MSXPi command channel, like `mchat`. Data blocks use the MSXPi block transfer that other MSXPi clients use
+(`SENDDATA2` / `RECVDATA` on the MSX). On success the reply block has the header code `RC_SUCCESS` (E0h) and carries the
+payload below. On failure it has `RC_FAILED` (E7h) and carries a message starting with `Pi:Er:`, which PLAYNET shows to the player.
 
-| Command | Reply |
+| Command | Reply on success |
 |---|---|
-| `playnet session` | the first 40 bytes of the session record (13), or an error if no game is waiting |
-| `playnet profile <game_id>` | the GPF file |
-| `playnet save` | then the MSX sends the saved area (14), at most 16 KB |
-| `playnet restore` | the saved area, then the Pi forgets it |
-| `playnet result <code>` | the Pi records the result for the chat |
+| `playnet session` | the first 40 bytes of the session record (13). Fails if no game was handed to the MSX. Fetching it marks the game as started. |
+| `playnet profile <game_id>` | the GPF file. Works with or without a chat session. Fails for a game that is not installed, or whose transport is `none`. |
+| `playnet save` | After the command, the MSX sends the saved area (14) with `SENDDATA2`: at most 16640 bytes (16 KB of `HIMEM-FFFFh` plus a 256-byte header of registers). Reply `OK`. Fails when no game is in progress. |
+| `playnet restore` | the saved area. The Pi then forgets it, so a second restore fails. |
+| `playnet result <code>` | `OK`. The chat shows the result (13.2) when the player is back in `MCHAT`. |
+
+On the Pi, the games are the GPF files in `MSXPIHOME/games/` (`/home/pi/msxpi/games/`). The file name must be the game id in upper
+case. A file with a bad header or checksum, or the wrong name, is skipped and logged.
 
 ## 16. Versions and compatibility
 

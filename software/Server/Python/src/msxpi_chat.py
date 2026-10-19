@@ -29,8 +29,11 @@ Row kinds: 0 text, 1 private in, 2 system, 3 own, 4 action, 5 private out.
 Games (msxpi_games.py): /play NICK [GAME], /accept, /decline, /cancel, /games.  Header byte 22 of the
 'M' reply carries flags: bit 0 a game is ready to start, bit 1 an invitation is waiting.  The command
 "launch" answers with an 'L' packet: 4 state, 5 'L', 6 flag (1 = a command follows), 24.. the MSX-DOS
-command line, zero-terminated.  The client puts it in the keyboard buffer and returns to MSX-DOS; running
-"mchat" again resumes the same chat session.
+command line, zero-terminated (PLAYNET for a lockstep game).  The client puts it in the keyboard buffer and
+returns to MSX-DOS; running "mchat" again resumes the same chat session and says how the game ended.
+
+PLAYNET's own commands ("playnet ...", documents/PLAYNET-PROTOCOLS.md 15) are answered by playnet_command():
+session, profile <id>, save, restore, result <code>.
 """
 import collections
 import os
@@ -42,7 +45,7 @@ import threading
 import time
 
 from msxpi_pchess_irc import IRC, fold
-from msxpi_games import Invites, load_registry
+from msxpi_games import Invites, load_registry, RESULTS
 
 DEFAULT_ROOM = '#msxpi'
 MAX_ROOMS = 4
@@ -109,7 +112,7 @@ class ChatIRC(IRC):
     """The IRC transport of PChess, with a chat reader instead of the game's."""
 
     def __init__(self, config, room, width, netplay=None):
-        self.invites = Invites(load_registry(config), self.send_game, self.say_system, netplay)
+        self.invites = Invites(load_registry(config.get('GAMESDIR')), self.send_game, self.say_system, netplay)
         self.width = max(MIN_WIDTH, min(MAX_WIDTH, width))
         self.rooms = [Room(room)]
         self.cur = 0
@@ -426,6 +429,53 @@ def launch_packet(chat):
         data[6] = 1
         data[HEADER:HEADER + len(line)] = line.encode('ascii')
     return bytes(data)
+
+
+SAVE_MAX = 16384 + 256      # the saved DOS area (HIMEM-FFFFh, at most 16 KB) plus PLAYNET's own header
+_saved = None               # (token, bytes) kept by "playnet save" for "playnet restore"
+
+
+def playnet_command(command, upload=None, games_dir=None):
+    """One "playnet ..." command from PLAYNET (PLAYNET-PROTOCOLS.md 15).  Returns (ok, payload): payload is
+    the reply on success, or the message to show on failure.  upload: the bytes the MSX sent ("save")."""
+    global _saved
+    args = command.split()
+    op = args[0] if args else ''
+    invites = _chat.invites if _chat else None
+    token = invites.token if invites and invites.phase == 'launched' else None
+    if op == 'session':
+        record = invites.session_record() if invites else None
+        if not record:
+            return False, 'No game is waiting: start it from MCHAT'
+        return True, record
+    if op == 'profile' and len(args) == 2:
+        games = invites.games if invites else load_registry(games_dir)
+        game = games.get(args[1].lower())
+        if not game or game.transport != 'lockstep':
+            return False, 'Game %s is not installed on the MSXPi' % args[1]
+        return True, game.gpf
+    if op == 'save':
+        if not token:
+            return False, 'No game in progress'
+        if not upload or len(upload) > SAVE_MAX:
+            return False, 'Nothing to save, or more than %d bytes' % SAVE_MAX
+        _saved = (token, bytes(upload))
+        return True, b'OK'
+    if op == 'restore':
+        if not _saved:
+            return False, 'Nothing saved'
+        data, _saved = _saved[1], None
+        return True, data
+    if op == 'result' and len(args) == 2:
+        try:
+            code = int(args[1])
+            if not invites:
+                raise ValueError('No game in progress')
+            invites.report(code)
+        except ValueError as exc:
+            return False, str(exc)
+        return True, b'OK'
+    return False, 'Use playnet session|profile ID|save|restore|result CODE'
 
 
 def error_packet(message):
