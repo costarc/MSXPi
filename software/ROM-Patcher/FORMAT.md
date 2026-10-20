@@ -1,6 +1,9 @@
-# MSXPi ROM patch package, version 1
+# MSXPi ROM patch package, versions 1 and 2
 
 This is the handoff contract between game analysis and the patching application.
+Version 1 describes music packages. Version 2 (section "Version 2" below) makes
+the music part one optional ABI and adds the netplay ABI used by PLAYNET.
+`patch_rom.py` reads both versions.
 The producer supplies a directory containing `profile.json` and referenced
 binary assets. Assembly sources and evidence/tests should accompany it.
 JSON numbers are decimal integers; binary strings are hexadecimal without `0x`.
@@ -13,9 +16,13 @@ identified as runtime symbols. Duplicate JSON keys are invalid.
 2. Allocate `output.size` bytes initialized to `output.fill`.
 3. Copy the non-overlapping `layout` ranges into the output.
 4. Apply non-overlapping `patches`, verifying every expected byte.
-5. Merge music overrides into defaults, validate IDs/names/modes/capacity,
-   and populate the declared zero-filled music configuration regions.
+5. Music ABI only: merge music overrides into defaults, validate
+   IDs/names/modes/capacity, and populate the declared zero-filled music
+   configuration regions.
 6. Write a new ROM and deterministic build manifest. Never modify the input.
+   A package whose `output.target` is `ram-image` (netplay) never produces a
+   ROM file: it is compiled to a GPF file instead (`--gpf`), and PLAYNET
+   repeats steps 2-4 in RAM on the MSX.
 
 File size limit: 16 MiB. Asset paths resolve inside the profile directory;
 paths escaping it are rejected, including symlinks resolving outside it.
@@ -47,6 +54,52 @@ shift accidentally. Put insertions and bank rearrangements in the layout.
 
 Original ROM version differences are expressed as separate profiles in v1.
 Do not use fuzzy matching or silently apply a nearby game's patch locations.
+
+## Version 2
+
+Everything above applies, with these changes:
+
+| Field | Version 2 rule |
+|---|---|
+| `version` | Integer `2` |
+| `abi` | Required. Nonempty array of the ABIs the package uses, no duplicates: `msxpi-music-v1`, `msxpi-netplay-v1`. A version 1 package is read as `["msxpi-music-v1"]`. |
+| `music`, `sounds`, `defaults` | Required only with `msxpi-music-v1` (described below, unchanged) |
+| `netplay` | Required with `msxpi-netplay-v1` |
+| `source.crc32` | Required with the netplay ABI: CRC-32 (zlib) of the original ROM, as an integer. The MSX identifies the dump with it. `patch_rom.py` checks it whenever it is present. |
+| `source.file` | Required with the netplay ABI: the upper-case 8.3 name PLAYNET opens by default, e.g. `SOCCER.ROM` |
+| `output.target` | Optional. `rom-file` (default) writes a new ROM as in version 1. `ram-image` never writes a ROM: the package compiles to GPF. A netplay `lockstep` package must use `ram-image`. |
+| `source` | May be `null` for a netplay game with transport `none` (the game is its own program); then `layout`, `patches` and `assets` are empty |
+
+The `netplay` section, its validation rules, the GPF binary layout and what
+PLAYNET checks when it loads one are specified in
+`documents/PLAYNET-PROTOCOLS.md`, sections 7 and 8. In short:
+
+```json
+"netplay": {
+  "abi": "msxpi-netplay-v1", "game_id": "soccer", "title": "Konami's Soccer",
+  "roles": ["H", "C"], "transport": "lockstep", "input_bytes": 1,
+  "image": {"host": "plain", "base": 16384},
+  "stub": {"asset": "stub", "load": 61440, "max": 576},
+  "transport_area": {"address": 62016, "size": 192},
+  "game_ram": [[57344, 61439], [62220, 62335]],
+  "irq_handler": 16430, "start": "header-init", "min_playnet": 1
+}
+```
+
+Commands:
+
+```console
+python patch_rom.py --profile profiles/soccer/profile.json --gpf SOCCER.GPF [SOCCER.ROM]
+```
+
+With the ROM, the package is first built and checked against it (hash,
+CRC-32, every expected byte), and the GPF is read back and must rebuild the
+same image. The GPF is written only if it does not exist. The netplay rules
+are checked twice, once on the JSON and again on the GPF, so a damaged or
+hand-edited GPF is refused the same way the MSX refuses it.
+
+The trust boundary is unchanged: patches and assets are Z80 code. Validation
+catches corrupt or mismatched packages, not malicious ones.
 
 ## Music ABI `msxpi-music-v1`
 

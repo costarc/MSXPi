@@ -232,7 +232,9 @@ proc harness::at_idle_prompt {} {
         # being edited by tools that mangle escapes.
         set bs [format %c 92]
         set d [string index $l 0]
-        return [expr {$l eq "${d}:" || $l eq "${d}:${bs}>"}]
+        # ...and in a directory: "C:\TCPIP>" (string first: no glob or regexp escapes needed)
+        return [expr {$l eq "${d}:" || ([string first "${d}:${bs}" $l] == 0 && [string index $l end] eq ">"
+                      && [string first " " $l] < 0)}]
     }
     return 0
 }

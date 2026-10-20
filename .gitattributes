@@ -32,6 +32,8 @@
 # these got broken once already.
 *.sh        text eol=lf
 software/build text eol=lf
+software/target/games/index.txt text eol=lf
+*.GPF       binary
 
 # Batch files run by cmd need CRLF on checkout.
 *.bat       text eol=crlf

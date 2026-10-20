@@ -1,0 +1,162 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "soccer-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 32768,
+    "sha256": "b9536809a1784afb2e49a43d80ba9c6c8c15cd31ecbd6c284e9bf62c6927dcd4",
+    "crc32": 1958511253,
+    "file": "SOCCER.ROM"
+  },
+  "output": {
+    "size": 32768,
+    "fill": 0,
+    "mapper": "plain",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own SOCCER.ROM: Konami's Soccer (RC-732), 32 KB, the dump identified above",
+    "PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)",
+    "Any MSX with 64 KB RAM on the MSXPi path"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "c1873d37f9f10db716c2c7ee9c2b088e9d46ec3c6ef0125f1469e99988615900"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 32768,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 40,
+      "expected": "220a41",
+      "replace": "000000",
+      "reason": "Anti-copy write ld (410Ah),hl: a no-op on a cartridge, harmful in RAM"
+    },
+    {
+      "offset": 86,
+      "expected": "221641",
+      "replace": "000000",
+      "reason": "Anti-copy write ld (4116h),hl"
+    },
+    {
+      "offset": 195,
+      "expected": "cbb6",
+      "replace": "0000",
+      "reason": "res 6,(hl) on the VDP R1 template: black screen when run from RAM"
+    },
+    {
+      "offset": 1381,
+      "expected": "b948",
+      "replace": "6dc3",
+      "reason": "Player 1 read: cached value of this frame"
+    },
+    {
+      "offset": 1386,
+      "expected": "f248",
+      "replace": "71c3",
+      "reason": "Player 2 read: cached value of this frame"
+    },
+    {
+      "offset": 2199,
+      "expected": "b948",
+      "replace": "66c3",
+      "reason": "TICK site: lee_los_mandos, once per frame - exchange, then player 1"
+    },
+    {
+      "offset": 2221,
+      "expected": "f248",
+      "replace": "71c3",
+      "reason": "Player 2 read: cached value of this frame"
+    },
+    {
+      "offset": 50,
+      "expected": "cd254f",
+      "replace": "cd2ec1",
+      "reason": "Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
+    },
+    {
+      "offset": 78,
+      "expected": "fc254f",
+      "replace": "fc2ec1",
+      "reason": "Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
+    },
+    {
+      "offset": 28678,
+      "expected": "ed5f1f",
+      "replace": "cd75c3",
+      "reason": "ld a,r : rra -> derived from the frame counter"
+    },
+    {
+      "offset": 28712,
+      "expected": "ed5fe606",
+      "replace": "cd7ac300",
+      "reason": "ld a,r : and 6 -> derived from the frame counter"
+    },
+    {
+      "offset": 150,
+      "expected": "2e40",
+      "replace": "06c5",
+      "reason": "H.KEYI hook (ld hl,402Eh at 4095h) -> the transport's XIRQ, which jumps to 402Eh"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "soccer",
+    "title": "Konami's Soccer",
+    "roles": [
+      "H",
+      "C"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "plain",
+      "base": 16384
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 49408,
+      "max": 1024
+    },
+    "transport_area": {
+      "address": 50432,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        54528,
+        54783
+      ],
+      [
+        57344,
+        62335
+      ]
+    ],
+    "irq_handler": 16430,
+    "start": "header-init",
+    "min_playnet": 1
+  },
+  "symbols": {
+    "PN_TICK": 49412,
+    "PN_IRQ": 49454,
+    "PN_P1": 49896,
+    "PN_P2": 49897,
+    "pad1t": 50022,
+    "pad1c": 50029,
+    "pad2c": 50033,
+    "rng1": 50037,
+    "rng2": 50042,
+    "stubEnd": 50048
+  }
+}

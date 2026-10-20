@@ -76,6 +76,7 @@ OP_IN_STATUS   = 0xC5   # the hot path - INL calls this 50/60 times a second
 OP_GET_FRAME   = 0xC6   # bulk
 OP_SEND_FRAME  = 0xC7   # bulk
 OP_RESET       = 0xC8
+# 0xC9 is taken by msxpi_netplay.py (served in msxpi_ethglue, not by the shuttle).
 
 # frozenset, not a tuple: this is tested against EVERY byte the server reads
 # while waiting for READY, so a linear scan is paid on all ordinary traffic too,
@@ -799,6 +800,11 @@ def make_link(prefer_tap=True, ifname="msxpi0", log=None):
     networking is exercised entirely through MockLink.
     """
     log = log or (lambda *a: None)
+    if os.environ.get("MSXPI_ETH_LINK") == "udpnat":
+        # test rigs: a user-mode UDP network inside this process (msxpi_ethnat.py)
+        from msxpi_ethnat import UdpNatLink
+        log("eth: user-mode UDP link (10.0.2.0/24, host 10.0.2.2)")
+        return UdpNatLink(log=log)
     if prefer_tap and os.path.exists("/dev/net/tun"):
         try:
             link = TapLink(ifname=ifname)

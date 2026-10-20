@@ -330,7 +330,8 @@ foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxp
                  "msxpi_cmd_stock.py", "msxpi_cmd_system.py", "msxpi_cmd_web.py",
                  "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py",
                  "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_game_irc.py",
-                 "msxpi_pcheckers_irc.py", "msxpi_ssh.py")) {
+                 "msxpi_pcheckers_irc.py", "msxpi_ssh.py",
+                 "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" | Out-Null
 }
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
@@ -343,6 +344,18 @@ if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {
     Ok "msxpi.ini created"
 } else {
     Ok "msxpi.ini kept"
+}
+
+# The online games: the GPFs software/target/games/index.txt lists ("<sha256>  <ID>.GPF"), as update.sh
+# fetches them on a Pi. Other files in games\ (a player's own) are left alone.
+New-Item -ItemType Directory -Force "$MsxPiHome\games" | Out-Null
+if (Get-File "$Raw/target/games/index.txt" "$MsxPiHome\games\index.txt" -Optional) {
+    foreach ($line in Get-Content "$MsxPiHome\games\index.txt") {
+        $parts = -split $line
+        if ($parts.Count -ge 2 -and $parts[1] -cmatch '^[A-Z0-9_-]{1,8}\.GPF$') {
+            Get-File "$Raw/target/games/$($parts[1])" "$MsxPiHome\games\$($parts[1])" -Optional | Out-Null
+        }
+    }
 }
 
 foreach ($f in @("msxpiboot.dsk", "tools.dsk")) {
