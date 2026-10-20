@@ -22,12 +22,15 @@ Usage on the MSX:
 ```
 PLAYNET                  the game MCHAT prepared (MCHAT types this itself)
 PLAYNET <game> <role>    without the chat, when the MSXPi's netplay session is set up by other means (test rigs)
+PLAYNET /T               the game MCHAT /T prepared (PLAYNET.SES; MCHAT /T types this itself, and PLAYNET types
+                         MCHAT /T when the game ends)
 PLAYNET /T <game> <role> <port> <ip:port>[,<ip:port>]
-                         over TCP/IP UNAPI (InterNestor Lite...): needs a memory mapper, PLAYNET.OVL and GAME.GPF in the
-                         current directory; the chat's session file is implementation step 8
+                         over TCP/IP UNAPI (InterNestor Lite...) without the chat. Both /T forms need a memory mapper,
+                         PLAYNET.OVL and GAME.GPF in the current directory
 ```
 
-Status: the MSXPi path, and TCP/IP UNAPI with a manual start (tested with InterNestor Lite on MSX-DOS 1 + MSR).
+Status: the MSXPi path, and TCP/IP UNAPI from MCHAT /T or started by hand. Both are tested with InterNestor Lite on MSX-DOS 1
+with MSR, in openMSX.
 The engine supports 1-4 input bytes per frame; only 1 (Konami's Soccer) has run.
 
 Test: `software/Client/tests/soccernet/run_native.sh` (two openMSX, two MSXPi servers; `SCENARIO=chat` through MCHAT;

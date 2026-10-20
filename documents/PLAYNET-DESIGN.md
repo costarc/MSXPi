@@ -496,6 +496,20 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    GR8NET and real hardware (step 9).
 8. **`MCHAT /t` agent** (`games_local.c`), after the memory measurement; resident IRC connection and re-attach. *Proof:* the conformance
    test against `Invites`, then `SCENARIO=tcp` from chat to game and back to the chat.
+   **Done 2026-10-20**: `games_local.c` (the C twin of `Invites`) passes the conformance test (`test_games_local.py`, gcc under WSL,
+   9 cases). `MCHAT /t` answers `/play`, `/accept`, `/decline`, `/cancel` and `/games` (the games are the `*.GPF` in the current
+   directory). It sends its LAN address and `GAMEADDR` from `MCHAT.INI` as candidates, writes `PLAYNET.SES`, and leaves with
+   `PLAYNET /T` typed. `PLAYNET /T` with no arguments reads the file, writes the result back and types `MCHAT /T`. `MCHAT /T` then
+   takes the IRC connection back and says how the game ended (PROTOCOLS 13.1, 14). The memory fix is in 8.7: the scrollback text
+   is kept in a mapper segment. `SCENARIO=tcp` (two InterNestor Lite nodes, `MCHAT /1 /T`, the IRC fixture reached through
+   `msxpi_ethnat.py` TCP) passes:
+   - INVITE, ACCEPT and GO over IRC;
+   - the game started from the chat on both machines;
+   - 601 identical frames, no desync;
+   - Ctrl+Shift+F5 on one node ends it on both, with results 1 and 2;
+   - both machines are back in `MCHAT /T` on the IRC connection they had before the game.
+
+   Not done: answering IRC `PING` during a game; the Canon V-25's C806h TPA top (8.7). Both are for step 9.
 9. `update.sh` + index, "how to add a game", and the real-hardware run (GR8NET or ObsoNET, a real Pi).
 10. Later: the `mapper-ram` image host and a first MegaROM package (5.9).
 
@@ -530,8 +544,8 @@ MegaFlashROM SCC+ SD), and `run_native.sh` with `EXTRA_TCL` for the game (watch 
 | 8.3 Restoring the DOS area | Step 5's rig scenario passes on **MSX-DOS 1** (disk on the MSXPi) and on **Nextor 2.10** (hard disk on the MegaFlashROM SD): Ctrl+Shift+F5 on one machine, both back in `MCHAT` with the result line. The first Nextor run hung in DOS 2's page-3 code until the save start rule above. Not covered: a real floppy (FDC) and DOS 2 on other interfaces. | The rule above (PROTOCOLS 14). |
 | 8.4 INL's timer per frame | Over the MSXPi Ethernet driver INL's H.TIMI takes a **mean of 6-7 ms per interrupt (38-44 % of a 60 Hz frame), up to 120 ms**, on both DOS 1 and Nextor (without INL, Nextor's own H.TIMI: 0.8 ms). Emulated, with the MSXPi device waiting for a real-time server, so the absolute numbers are pessimistic; the driver's polling is the cost either way. | netcore must **not** chain INL's timer every frame during a game. Step 7: the timer runs only while `XCHG` is in MSX-DOS's page 3 with interrupts on. Measure again on GR8NET (step 9). |
 | 8.5 Interrupts inside UNAPI calls | **Yes.** During `INL S`, 121-179 of 300-500 interrupts came while INL's own mapper segments were in pages 1-2. | The IRQ trampoline guard is needed, not only a precaution: `XIRQ` must return at once while a call is in progress (PROTOCOLS 10). |
-| 8.6 A resident TCP connection | Not measured yet: it needs `MCHAT /t` with the agent (step 8). | Step 8. |
-| 8.7 `mchat.com` memory | The image (data included) ends at C01Ah (48922 bytes). TPA tops with INL: D406h (DOS 1 + MSR, this rig: 5100 bytes for the stack), DB06h (Nextor + RAMHELPR: 6892 bytes), C806h (Canon V-25 with the TCP/IP driver, `pchess_memory_test.py`: **2028 bytes**). | The agent (step 8) must fit in about 2 KB on the smallest of these, or the chat must shrink: a measured constraint for step 8. |
+| 8.6 A resident TCP connection | (step 8) InterNestor Lite keeps a connection opened with the resident flag through `PLAYNET /T` and a whole game: `SCENARIO=tcp` shows both players' `NAMES` after the game on the IRC connection they opened before it (2 connections in all). | Not tested: a server that pings during a longer game (PROTOCOLS 14). |
+| 8.7 `mchat.com` memory | The image (data included) ends at C01Ah (48922 bytes). TPA tops with INL: D406h (DOS 1 + MSR, this rig: 5100 bytes for the stack), DB06h (Nextor + RAMHELPR: 6892 bytes), C806h (Canon V-25 with the TCP/IP driver, `pchess_memory_test.py`: **2028 bytes**). | The agent (step 8) must fit in about 2 KB on the smallest of these, or the chat must shrink: a measured constraint for step 8. Step 8: the agent and its glue cost about 8 KB (C code by SDCC), so `MCHAT /t` keeps the scrollback text (7 KB) in a mapper segment of its own (TCP/IP needs a mapper anyway): the image ends at C8F0h, which fits D406h and DB06h. **Still about 1 KB too big for C806h** (step 9). |
 
 ---
 

@@ -153,6 +153,10 @@ proc backShot {} {
     global tf
     catch { screenshot $::env(TRACE).back.png }
     puts $tf "# back: PC=[format %04X [reg PC]] t=[expr {int([machine_info time])}]"
+    # MCHAT /T (games_local.c) keeps its last line in its data: "Game with X ended (reason)"
+    set ram [debug read_block memory 0x8000 0x6000]
+    set i [string first "Game with " $ram]
+    if {$i >= 0} { puts $tf "# result line: [lindex [split [string range $ram $i [expr {$i + 95}]] \0] 0]" }
     close $tf
     after time 1 exit
 }
@@ -177,9 +181,18 @@ proc toTools {body} {
         harness::run_cmd "B:" 30 $body
     }
 }
+# CHAT_TCP=1: PRE_<role> first (MSR I;INL I), then MCHAT over TCP/IP
+proc runPre {cmds body} {
+    if {![llength $cmds]} { uplevel #0 $body; return }
+    harness::run_cmd [string trim [lindex $cmds 0]] 90 [list runPre [lrange $cmds 1 end] $body]
+}
+set ::pre {}
+if {[info exists ::env(PRE_$::roleArg)]} { set ::pre [split $::env(PRE_$::roleArg) ";"] }
+set ::chatOpt ""
+if {[info exists ::env(CHAT_TCP)]} { set ::chatOpt "/T " }
 set ::chatStart {
-    toTools {
-        type "MCHAT /1 $::env(NICK)\r"
+    toTools { runPre $::pre {
+        type "MCHAT /1 $::chatOpt$::env(NICK)\r"
         after time 3 arm
         if {$::env(INVITE) eq "1"} {
             if {[info exists ::env(PICK)] && $::env(PICK) eq "1"} {
@@ -191,7 +204,7 @@ set ::chatStart {
         } else {
             after time $::env(ACCEPT_AT) { type "/accept\r" }
         }
-    }
+    } }
 }
 if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
     harness::at_nextor_prompt $::chatStart

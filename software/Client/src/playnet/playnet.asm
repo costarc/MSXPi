@@ -26,6 +26,8 @@ F_TERM0:        EQU     $00
 F_DIRIN:        EQU     $08                     ; console input, no echo
 F_CONST:        EQU     $0B
 F_OPEN:         EQU     $0F
+F_CLOSE:        EQU     $10
+F_WRRND:        EQU     $26
 F_SETDTA:       EQU     $1A
 F_RDRND:        EQU     $27
 INIT32:         EQU     $006F
@@ -145,6 +147,9 @@ lower:  cp      'A'
 
 ; ---- session (13.1) ---------------------------------------------------------------------------
 getSession:
+        ld      a,(tcp)
+        or      a
+        jp      nz,tcpSession                   ; PLAYNET /T: from MCHAT /T's file
         ld      de,cmdSession
         ld      hl,sesBuf
         ld      bc,64
@@ -157,6 +162,7 @@ getSession:
         call    cmp4
         ld      hl,msgBadSession
         jp      nz,exitQuiet
+sesFields:
         ld      a,(sesBuf+8)
         ld      (seat),a
         ld      hl,sesBuf+16                    ; game id, upper case, padded with spaces
@@ -1494,6 +1500,7 @@ pnBack:
         ld      sp,($0006)                      ; under MSX-DOS's TPA top (page 0 is its RAM again): not page 0
                                                 ; (CALSLT), 1 (MSR's routines map it), 2 (RBUF, segments)
         ld      (bkSlots),bc
+        ld      (bkCode),a
         ld      a,8                             ; the PSG's three channels silent
         ld      b,3
 .psg:   out     ($A0),a
@@ -1545,19 +1552,10 @@ pnBack:
         ld      ix,INIT32
 .scr:   ld      iy,(EXPTBL-1)
         call    CALSLT
+        ld      a,(bkCode)
+        call    tcpResult                       ; MCHAT /T's game: the result into PLAYNET.SES
         di
-        ld      hl,keysMchat                    ; MCHAT and Enter, typed for MSX-DOS
-        ld      bc,6
-        ld      a,(tcp)
-        or      a
-        jr      z,.keys
-        ld      hl,keysMchatT                   ; the TCP/IP chat after a TCP/IP game
-        ld      bc,9
-.keys:  ld      de,KEYBUF
-        ldir
-        ld      (PUTPNT),de
-        ld      hl,KEYBUF
-        ld      (GETPNT),hl
+        call    typeMchat
 .dos:   jp      0                               ; MSX-DOS warm start
 .fail:  ld      hl,(npTArea)
         ld      de,TR_BOOT
@@ -1807,7 +1805,14 @@ exitResult:
         ld      a,(manual)
         or      a
         jr      nz,toDos
+        ld      a,(tcp)
+        or      a
+        jr      z,.pi
         ld      a,b
+        call    tcpResult
+        call    typeMchat                       ; and back to the chat, which says why
+        jr      toDos
+.pi:    ld      a,b
         add     a,'0'
         ld      (cmdResultN),a
         ld      de,cmdResult
@@ -1823,6 +1828,34 @@ toDos:  ld      a,(tcp)
         call    nz,tcpCleanup
         ld      c,F_TERM0
         jp      BDOS
+
+; A = result code: into PLAYNET.SES when this is MCHAT /T's game (PLAYNET /T alone)
+tcpResult:
+        ld      b,a
+        ld      a,(manual)
+        or      a
+        ret     nz
+        ld      a,(tcp)
+        or      a
+        ret     z
+        ld      a,b
+        jp      sesResult
+
+; MCHAT and Enter in the keyboard buffer, for MSX-DOS: MCHAT /T after a TCP/IP game
+typeMchat:
+        ld      hl,keysMchat
+        ld      bc,6
+        ld      a,(tcp)
+        or      a
+        jr      z,.keys
+        ld      hl,keysMchatT
+        ld      bc,9
+.keys:  ld      de,KEYBUF
+        ldir
+        ld      (PUTPNT),de
+        ld      hl,KEYBUF
+        ld      (GETPNT),hl
+        ret
 
 printHex:
         push    af
@@ -1841,8 +1874,13 @@ printHex:
 
 ; ---- text ----------------------------------------------------------------------------------------
 msgBanner:      defb    "PLAYNET 1 - online games for MSX",13,10,0
-msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role, or",13,10
+msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role,",13,10
+                defb    "       PLAYNET /T (started by MCHAT /T), or",13,10
                 defb    "       PLAYNET /T game role port ip:port[,ip:port]",0
+msgNoSes:       defb    "No game waiting in PLAYNET.SES (start it from MCHAT /T)",0
+nameSes:        defb    "PLAYNET SES"
+sesEnd:         defb    2,0                     ; state ended, result code
+bkCode:         defb    0
 msgNoMapper:    defb    "TCP/IP needs a memory mapper and its routines (MSX-DOS 2, or MSR I on MSX-DOS 1)",0
 msgNoSeg:       defb    "No free memory mapper segment",0
 msgNoOvl:       defb    "Cannot load PLAYNET.OVL (it must be in the current directory)",0

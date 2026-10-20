@@ -1,7 +1,8 @@
 ; PLAYNET /T: the TCP/IP UNAPI path (documents/PLAYNET-DESIGN.md 5.4, 5.5; PROTOCOLS 10).
-; Included by playnet.asm. Manual start (the chat's session file is step 8):
+; Included by playnet.asm.
 ;
-;   PLAYNET /T game role lport ip:port[,ip:port[,ip:port]]
+;   PLAYNET /T                                          the game MCHAT /T launched (PLAYNET.SES, PROTOCOLS 13)
+;   PLAYNET /T game role lport ip:port[,ip:port[,ip:port]]      a manual start
 ;
 ; A memory mapper is required: one segment holds PLAYNET.OVL (netcore, from the current directory), one is
 ; the game's page 3 (G3): the trampoline copies MSX-DOS's page 3 into it and switches to it, so the game
@@ -47,8 +48,12 @@ tcpArgs:
         inc     hl
         ld      a,1
         ld      (tcp),a
-        ld      (manual),a
         call    skipSp
+        ld      a,(hl)
+        or      a
+        ret     z                               ; /T alone: the session in PLAYNET.SES (tcpSession)
+        ld      a,1
+        ld      (manual),a
         ld      de,gameId
         call    word
         call    skipSp
@@ -308,6 +313,67 @@ readFile:
         ld      bc,(rfLen)
         or      a                               ; CF clear: read
         ret
+
+; ---- the session MCHAT /T wrote (PROTOCOLS 13.1): PLAYNET.SES, 256 bytes; the first 64 are PLAYNET's ----
+tcpSession:
+        ld      hl,nameSes
+        ld      de,BOUNCE
+        ld      bc,257
+        call    readFile
+        jr      c,.bad
+        ld      hl,BOUNCE
+        ld      de,sesBuf
+        ld      bc,64
+        ldir
+        ld      hl,sesBuf
+        ld      de,magicPNS
+        call    cmp4
+        jr      nz,.bad
+        ld      a,(sesBuf+9)                    ; link: TCP/IP
+        dec     a
+        jr      nz,.bad
+        ld      a,(sesBuf+32)                   ; state: launched, not ended yet
+        or      a
+        jr      nz,.bad
+        ld      a,(sesBuf+40)                   ; 1 to 3 addresses
+        or      a
+        jr      z,.bad
+        cp      4
+        jr      nc,.bad
+        ld      (ncand),a
+        ld      hl,(sesBuf+10)
+        ld      (lport),hl
+        ld      hl,sesBuf+41
+        ld      de,cands
+        ld      bc,18
+        ldir
+        jp      sesFields                       ; seat, game id, peer: as from the MSXPi
+.bad:   ld      hl,msgNoSes
+        jp      exitQuiet
+
+; A = the result code: PLAYNET.SES gets state 2 (ended) and the code (13.1, bytes 32-33), for MCHAT /T.
+; Failures do not matter here (MCHAT then says the game finished).
+sesResult:
+        ld      (sesEnd+1),a
+        ld      hl,nameSes
+        ld      de,BOUNCE
+        ld      bc,257
+        call    readFile                        ; opens it (fcb, records of 1 byte)
+        ret     c
+        ld      de,sesEnd
+        ld      c,F_SETDTA
+        call    BDOS
+        ld      hl,32
+        ld      (fcb+33),hl
+        ld      hl,0
+        ld      (fcb+35),hl
+        ld      de,fcb
+        ld      hl,2
+        ld      c,F_WRRND
+        call    BDOS
+        ld      de,fcb
+        ld      c,F_CLOSE
+        jp      BDOS
 
 ; ---- the game package from the disk: "<ID>.GPF" ------------------------------------------------------
 tcpGpf:

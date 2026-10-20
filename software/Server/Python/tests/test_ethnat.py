@@ -69,6 +69,52 @@ class UdpNat(unittest.TestCase):
         self.assertEqual(nat.checksum(pseudo + u), 0)                # and a valid UDP checksum
         peer.close()
 
+    def tcp(self, sport, dport, seq, ack, flags, data=b''):
+        seg = struct.pack('!HHIIBBHHH', sport, dport, seq, ack, 5 << 4, flags, 4096, 0, 0) + data
+        pseudo = MSX_IP + nat.HOST_IP + struct.pack('!BBH', 0, 6, len(seg))
+        seg = seg[:16] + struct.pack('!H', nat.checksum(pseudo + seg)) + seg[18:]
+        self.link.transmit(ip_frame(6, nat.HOST_IP, seg))
+
+    def tcp_out(self):
+        """The segments the link sent the MSX: (seq, ack, flags, data)."""
+        out = []
+        for f in self.frames():
+            ip = f[14:]
+            if ip[9] != 6:
+                continue
+            seg = ip[20:struct.unpack('!H', ip[2:4])[0]]
+            pseudo = ip[12:16] + ip[16:20] + struct.pack('!BBH', 0, 6, len(seg))
+            self.assertEqual(nat.checksum(pseudo + seg), 0)
+            _, _, seq, ack, off, flags = struct.unpack('!HHIIBB', seg[:14])
+            out.append((seq, ack, flags, seg[(off >> 4) * 4:]))
+        return out
+
+    def test_tcp_connection(self):
+        srv = socket.socket()
+        srv.bind(('127.0.0.1', 0))
+        srv.listen(1)
+        port = srv.getsockname()[1]
+        self.tcp(4000, port, 100, 0, 0x02)                           # SYN
+        conn, _ = srv.accept()
+        conn.settimeout(2)
+        self.assertTrue(wait_for(lambda: self.link.pending() > 0, 2))
+        (seq, ack, flags, _), = self.tcp_out()
+        self.assertEqual((ack, flags), (101, 0x12))                  # SYN + ACK
+        self.tcp(4000, port, 101, seq + 1, 0x10)                     # ACK
+        self.tcp(4000, port, 101, seq + 1, 0x18, b'NICK bob\r\n')    # data from the MSX
+        self.assertEqual(conn.recv(100), b'NICK bob\r\n')
+        conn.sendall(b':irc 001 bob :hi\r\n')                        # data to the MSX
+        self.assertTrue(wait_for(lambda: self.link.pending() > 1, 2))
+        segs = self.tcp_out()
+        self.assertTrue(any(f == 0x10 and a == 111 for _, a, f, _ in segs))      # our data acknowledged
+        data = [s for s in segs if s[3]]
+        self.assertEqual(data[0][3], b':irc 001 bob :hi\r\n')
+        self.tcp(4000, port, 111, data[0][0] + len(data[0][3]), 0x10)            # acknowledged
+        conn.close()                                                 # the host closes: FIN
+        self.assertTrue(wait_for(lambda: self.link.pending() > 0, 2))
+        self.assertTrue(any(f & 0x01 for _, _, f, _ in self.tcp_out()))
+        srv.close()
+
     def test_ping_the_host(self):
         echo = b'\x08\x00\x00\x00\x12\x34\x00\x01abcd'
         echo = echo[:2] + struct.pack('!H', nat.checksum(echo)) + echo[4:]

@@ -624,7 +624,10 @@ Flow:
 
 How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 - on the Pi, `PLAYNET` reads the first 40 bytes with the MSXPi command `playnet session`,
-- on TCP/IP, `MCHAT /t` writes `PLAYNET.SES` (256 bytes) in the current directory.
+- on TCP/IP, `MCHAT /t` writes `PLAYNET.SES` (256 bytes) in the current directory and leaves with `PLAYNET /T` typed. `PLAYNET /T`
+  with no arguments reads it (it refuses a record whose link is not 1, whose state is not 0 or that has no candidate). When the game
+  ends, or cannot start, `PLAYNET` writes state 2 and the result code (bytes 32-33) back into the file and types `MCHAT /T`, which
+  reads them, reports the result, takes the IRC connection back and empties the file.
 
 | Offset | Size | Field |
 |---|---|---|
@@ -684,9 +687,11 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
    wipe the `AB` header of the RAM image and reset. A game started without the chat (`PLAYNET <game> <role>`) has no session on the Pi,
    so its save is refused and it always ends this way.
 
-On the TCP/IP path the IRC connection survives the game: `MCHAT /t` leaves it open, `PLAYNET`'s network engine answers the IRC server's
-`PING` during the game and discards everything else, and `MCHAT /t` takes it back with the connection number, nick and rooms from
-`PLAYNET.SES`.
+On the TCP/IP path the IRC connection survives the game: `MCHAT /t` opens it as resident (`TCP_OPEN` flag), leaves it open, and
+`MCHAT /T` takes it back with the connection number, nick and rooms from `PLAYNET.SES` (it asks for `NAMES` again; the scrollback
+from before the game is not kept). If the connection is gone, `MCHAT /T` connects again. Not done yet: answering the IRC server's
+`PING` during the game. Until then a game longer than the server's ping timeout (often 2 to 4 minutes) loses the connection, and
+`MCHAT /T` reconnects.
 
 ## 15. MSXPi commands used by PLAYNET
 

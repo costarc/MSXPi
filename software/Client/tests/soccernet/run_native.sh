@@ -21,6 +21,10 @@
 #   SCENARIO=mixed  node H over the MSXPi, node C over the TCP/IP UNAPI: MSR I, INL I (on its server's
 #                 user-mode UDP link, msxpi_ethnat.py, as 10.0.2.15), then PLAYNET /T soccer C 5102 10.0.2.2:5101.
 #                 Both=1: both nodes over TCP/IP (H: PLAYNET /T soccer H 5101 10.0.2.2:5102).
+#   SCENARIO=tcp  the chat scenario over TCP/IP on both nodes: MSR I, INL I, MCHAT /1 /T (this checkout's,
+#                 built with build_client.py) against the IRC fixture at 10.0.2.2; /play and /accept, MCHAT
+#                 writes PLAYNET.SES and types PLAYNET /T, which goes back to MCHAT /T on the same IRC
+#                 connection (with EXITKEY: the IRC log must show each nick's NAMES after the game).
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -34,8 +38,12 @@ OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 [ -f "$SOCCER_ROM" ] || { echo "set SOCCER_ROM to your own SOCCER.ROM"; exit 1; }
 [ "$SCENARIO" != chat ] || [ -f "$ROOT/software/target/mchat.com" ] || { echo "no software/target/mchat.com"; exit 1; }
+CHAT=; case "$SCENARIO" in chat|tcp) CHAT=1;; esac
+TCPN=; case "$SCENARIO" in mixed|tcp) TCPN=1;; esac
+[ "$SCENARIO" != tcp ] || BOTH=1
 WORK=${WORK:-${TMP:-/tmp}/soccernet-work}
 mkdir -p "$WORK"; WORKW=$(cd "$WORK" && pwd -W 2>/dev/null || echo "$WORK")
+[ "$SCENARIO" != tcp ] || python "$HERE/build_client.py" mchat "$WORK/mchat" || exit 1
 python "$SRC/build.py" --assembler "$ASM" || exit 1
 python "$ROOT/software/ROM-Patcher/profiles/soccer/rebuild.py" --assembler "$ASM" \
   --test-gpf "$WORK/SOCCER.GPF" --test-syms "$WORK/stub_syms.tcl" || exit 1
@@ -63,33 +71,40 @@ INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SOCCER_ROM" SOCCER.ROM > /dev/null
   [ "$SCENARIO" != chat ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null
-  if [ "$SCENARIO" = mixed ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
+  if [ -n "$TCPN" ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
     for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/SOCCER.GPF" SOCCER.GPF > /dev/null
   fi
+  if [ "$SCENARIO" = tcp ]; then        # the chat over TCP/IP: its INI (the IRC fixture is the host, 10.0.2.2)
+    nick=$( [ $n = 1 ] && echo alice || echo bob )
+    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n\032' \
+      "${IRC_PORT:-6671}" $nick $n > "$WORK/MCHAT$n.INI"
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/MCHAT$n.INI" MCHAT.INI > /dev/null
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/mchat/MCHAT.COM" MCHAT.COM > /dev/null
+  fi
 done
 # the profile hash a TCP/IP node announces (the GPF's): an MSXPi node's server must announce the same
 PROFHASH=$(python -c "import struct,sys; print('%08x' % struct.unpack('<I', open(sys.argv[1],'rb').read()[8:12])[0])" "$WORK/SOCCER.GPF")
 rm -f "$WORK/stop_servers"
 IRC_PORT=${IRC_PORT:-6671}
-if [ "$SCENARIO" = chat ]; then
+if [ -n "$CHAT" ]; then
   netenv="PCHESS_IRC_HOST=127.0.0.1 PCHESS_IRC_PORT=$IRC_PORT PCHESS_IRC_TLS=0 MSXPI_NETPLAY_LAN=127.0.0.1 MSXPI_NETPLAY_NOSTUN=1"
 else
   netenv=""
 fi
 start() {  # n port local_udp peer_udp version
-  nat=""; [ "$SCENARIO" = mixed ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
+  nat=""; [ -n "$TCPN" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
-      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ "$SCENARIO" = chat ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ -n "$CHAT" ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
 }
 : > "$WORK/server1.log"; : > "$WORK/server2.log"
-if [ "$SCENARIO" = chat ]; then
+if [ -n "$CHAT" ]; then
   ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT > "$WORK/irc.log" 2>&1 ) &
   IRC_PID=$!
 fi
@@ -97,7 +112,8 @@ start 1 8115 5101 5102
 start 2 8116 5102 5101 ${VER2:-1}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
-NODE_TCL=native_node.tcl; [ "$SCENARIO" != chat ] || NODE_TCL=chat_node.tcl
+NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
+[ "$SCENARIO" != tcp ] || export PRE_H="MSR I;INL I" PRE_C="MSR I;INL I" CHAT_TCP=1
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
   export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T soccer C 5102 10.0.2.2:5101"
   [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T soccer H 5101 10.0.2.2:5102"
@@ -126,6 +142,13 @@ wait $NPIDS
 python "$HERE/cmp_pair.py" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "desync=" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -12
+if [ -n "$EXITKEY" ] && [ "$SCENARIO" = tcp ]; then   # back in MCHAT /T on the same connection: NAMES after GO
+  for nick in alice bob; do
+    if awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } c != "" && $1 == c && /NAMES #/ { ok = 1 } END { exit !ok }' "$WORK/irc.log"
+    then echo "$nick: back in MCHAT /T on the same IRC connection"; else echo "$nick: NOT back in MCHAT /T"; fi
+  done
+  grep -c "^conn" "$WORK/irc.log" | sed 's/^/IRC connections opened: /'
+fi
 if [ -n "$EXITKEY" ] && [ "$SCENARIO" = chat ]; then   # both must be back in MCHAT: restore, then "mchat start"
   for n in 1 2; do
     if awk '/-> playnet restore/ { r = 1 } r && /-> mchat start/ { ok = 1 } END { exit !ok }' "$WORK/server$n.log"
