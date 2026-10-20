@@ -60,6 +60,49 @@ get() {
     esac && [ -s "$2.new" ]
 }
 
+# The online games (documents/PLAYNET-DESIGN.md 5.3): software/target/games/index.txt lists each GPF
+# as "<sha256>  <ID>.GPF". Only the listed files whose SHA-256 changed are fetched; each is checked
+# (its SHA-256 and the GPF1 magic) and moved into place whole. Files not in the index, such as a
+# player's own games, are never touched. MSXPI_UPDATE_GAMES_BASE overrides where they come from,
+# MSXPI_GAMES_DIR where they go (default: games/ beside the server, as msxpi_games.py reads them).
+case "$BASE" in
+    */Server/Python/src) GAMES_BASE="${MSXPI_UPDATE_GAMES_BASE:-${BASE%/Server/Python/src}/target/games}" ;;
+    *)                   GAMES_BASE="${MSXPI_UPDATE_GAMES_BASE:-$BASE/../../../target/games}" ;;
+esac
+GAMES_DIR="${MSXPI_GAMES_DIR:-$DIR/games}"
+sha() { sha256sum "$1" 2>/dev/null | cut -d' ' -f1; }
+update_games() {
+    mkdir -p "$GAMES_DIR" || { echo "FAIL games folder"; return 1; }
+    if ! get "$GAMES_BASE" index.txt; then
+        rm -f index.txt.new
+        echo "FAIL games index (games kept)"
+        return 1
+    fi
+    grc=0
+    while read -r sum name _; do
+        case "$sum" in ''|\#*) continue ;; esac
+        if [ "$(expr "x$name" : 'x[A-Z0-9_-]\{1,8\}\.GPF$')" = 0 ] || [ "${#sum}" != 64 ]; then
+            echo "skip bad index line: $name"
+            continue
+        fi
+        [ "$(sha "$GAMES_DIR/$name")" = "$sum" ] && continue
+        if get "$GAMES_BASE" "$name" && [ "$(sha "$name.new")" = "$sum" ] &&
+           [ "$(head -c 4 "$name.new")" = GPF1 ] && mv -f "$name.new" "$GAMES_DIR/$name"; then
+            echo "ok   games/$name"
+        else
+            rm -f "$name.new"
+            echo "FAIL games/$name (old kept)"
+            grc=1
+        fi
+    done < index.txt.new
+    mv -f index.txt.new "$GAMES_DIR/index.txt"
+    return $grc
+}
+if [ "${MSXPI_UPDATE_ONLY:-}" = games ]; then
+    update_games
+    exit $?
+fi
+
 rc=0
 for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_renderpage.py msxpi_nitros.py \
          msxpi_pchess.py msxpi_pchess_irc.py requirements-pchess.txt \
@@ -87,6 +130,7 @@ else
     rc=1
 fi
 chmod 755 msxpi-server.py msxpi-tcpip-setup.sh 2>/dev/null
+update_games || rc=1
 
 # The server works without the native engine (it falls back to Python GPIO),
 # so a missing compiler is a warning, not a failure.
@@ -149,6 +193,7 @@ if [ "$(id -u)" = 0 ]; then
         mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         msxpi-tcpip-setup.sh 2>/dev/null
     chown -R "$owner" native 2>/dev/null
+    chown -R "$owner" "$GAMES_DIR" 2>/dev/null
 fi
 
 # "p update" (sent by msxpirfh.bat right after this script) skips its own

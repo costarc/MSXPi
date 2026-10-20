@@ -361,5 +361,22 @@ class MusicVersion2Tests(unittest.TestCase):
             patcher.gpf_bytes(v2, assets)
 
 
+class PublishedGamesTests(unittest.TestCase):
+    """software/target/games is what the packages compile to (build_games.py), and its index lists each file."""
+
+    def test_games_folder_is_current(self):
+        done = subprocess.run([sys.executable, str(ROOT / 'build_games.py'), '--check'], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr + 'run build_games.py')
+
+    def test_index_matches_files(self):
+        games = ROOT.parent / 'target/games'
+        for line in (games / 'index.txt').read_text().splitlines():
+            digest, name = line.split()
+            self.assertRegex(name, r'^[A-Z0-9_-]{1,8}\.GPF$')
+            data = (games / name).read_bytes()
+            self.assertEqual(hashlib.sha256(data).hexdigest(), digest)
+            self.assertEqual(patcher.read_gpf(data)['game_id'].upper() + '.GPF', name)
+
+
 if __name__ == '__main__':
     unittest.main()

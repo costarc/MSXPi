@@ -345,6 +345,18 @@ if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {
     Ok "msxpi.ini kept"
 }
 
+# The online games: the GPFs software/target/games/index.txt lists ("<sha256>  <ID>.GPF"), as update.sh
+# fetches them on a Pi. Other files in games\ (a player's own) are left alone.
+New-Item -ItemType Directory -Force "$MsxPiHome\games" | Out-Null
+if (Get-File "$Raw/target/games/index.txt" "$MsxPiHome\games\index.txt" -Optional) {
+    foreach ($line in Get-Content "$MsxPiHome\games\index.txt") {
+        $parts = -split $line
+        if ($parts.Count -ge 2 -and $parts[1] -cmatch '^[A-Z0-9_-]{1,8}\.GPF$') {
+            Get-File "$Raw/target/games/$($parts[1])" "$MsxPiHome\games\$($parts[1])" -Optional | Out-Null
+        }
+    }
+}
+
 foreach ($f in @("msxpiboot.dsk", "tools.dsk")) {
     if (-not (Test-Path "$MsxPiHome\disks\$f")) {
         Get-File "$Raw/target/disks/$f" "$MsxPiHome\disks\$f" -Optional | Out-Null

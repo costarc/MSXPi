@@ -210,7 +210,10 @@ jitter and 8 % loss, and no desync is reported.
 ### 4.10 Publish
 
 Open a pull request that adds `profiles/<id>/` (no ROM data in it), the compiled GPF under `software/target/games/`, and its line in
-`index.txt`. Any change to the package changes its CRC. Players on the old version are then told to update instead of being allowed
+`index.txt`. `python software/ROM-Patcher/build_games.py` writes both, and `--check` (run by `tests/test_gpf.py`) fails when the
+folder is out of date. On a Pi, `update.sh` fetches `index.txt` and then only the listed GPFs whose SHA-256 changed. It checks each
+file and replaces it whole, and never touches unlisted files, so a player's own `<ID>.GPF` in `games/` survives. The player-facing
+instructions are in `software/target/games/README.md`. Any change to the package changes its CRC. Players on the old version are then told to update instead of being allowed
 into a game that would drift.
 
 ---

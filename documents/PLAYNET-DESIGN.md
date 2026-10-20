@@ -511,6 +511,17 @@ Each step ends with something that can be shown to work. Mixed play is part of t
 
    Not done: answering IRC `PING` during a game; the Canon V-25's C806h TPA top (8.7). Both are for step 9.
 9. `update.sh` + index, "how to add a game", and the real-hardware run (GR8NET or ObsoNET, a real Pi).
+   **Done 2026-10-20, except the real-hardware run.** `software/ROM-Patcher/build_games.py` compiles every netplay package into
+   `software/target/games/<ID>.GPF` and writes `index.txt` (`<sha256>  <ID>.GPF`). `--check` runs in `test_gpf.py`, and the
+   published `SOCCER.GPF` rebuilds the same image as the package from the real dump. `update.sh` fetches the index, then only the
+   listed GPFs whose SHA-256 changed. It checks each one (SHA-256, `GPF1`), moves it into place whole, and leaves unlisted files
+   alone (`test_update_games.py`, 7 cases, the real script under `sh`). `msxpi-windows-setup.ps1` fetches the listed games as well.
+   "How to add a game" for players and package writers is in `software/target/games/README.md`.
+
+   Still open, and needs the user's hardware:
+   - a real Pi and a real MSX with GR8NET or ObsoNET;
+   - `MCHAT /T` on the Canon V-25's C806h TPA top, about 1 KB short (8.7);
+   - IRC `PING` during a game (PROTOCOLS 14).
 10. Later: the `mapper-ram` image host and a first MegaROM package (5.9).
 
 ---
