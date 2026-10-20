@@ -135,11 +135,12 @@ typedef struct {
 
 static LRoom lr[LMAXR];
 static uint8_t lcount, lcur, lmeta, lw;
-static uint8_t lkind[LMAXR][LROWS], lnick[LMAXR][LROWS];
 /* The rows' text lives in a mapper segment of its own (7 KB that MCHAT.COM's TPA does not have once INL is
    loaded), at 4000h when it is mapped into page 1. lt_copy maps it, copies and maps the TPA back, with
    interrupts off; it runs from a copy in seg_code (page 2 or 3), and its buffers are never in page 1. */
-#define LT(r, s) ((char *)0x4000 + ((uint16_t)(r) * LROWS + (s)) * (TW_MAX + 1))
+#define RW (TW_MAX + 3)          /* a row: its kind, the nick's length, the text and its terminator */
+#define LT(r, s) ((char *)0x4000 + ((uint16_t)(r) * LROWS + (s)) * RW)
+#define LU(r, i) ((char *)0x4000 + LMAXR * LROWS * RW + ((uint16_t)(r) * LUSERS + (i)) * 12)   /* the user lists */
 uint8_t lt_seg, lt_tpa;
 static uint16_t map_tab;
 static uint8_t seg_code[32];
@@ -175,6 +176,13 @@ extern uint8_t lt_copy_end[];
 #define lt_copy(dst, src, n) ((void (*)(void *, const void *, uint16_t))seg_code)(dst, src, n)
 
 /* A = routine (offset in the mapper support table) with A, B */
+/* user i of room r, copied out of the segment */
+static char ub[12];
+static char *uget(uint8_t r, uint8_t i) {
+    lt_copy(ub, LU(r, i), 12);
+    return ub;
+}
+
 static void mapper(uint8_t fn, uint8_t a, uint8_t b) {
     jp_to(map_tab + fn);
     ur_a = a; ur_bc = (uint16_t)b << 8;
@@ -204,7 +212,6 @@ static void lt_close(void) {
     if (lt_seg) mapper(M_FRE_SEG, lt_seg, 0);
     lt_seg = 0;
 }
-static char lusers[LMAXR][LUSERS][12];
 
 static struct {
     uint8_t net, conn, ready, active, lost;
@@ -273,12 +280,12 @@ static uint8_t find_room(const char *name) {
 static void push_row(uint8_t r, uint8_t kind, uint8_t nicklen, const char *text, uint8_t len) {
     uint8_t slot = lr[r].next % LROWS;
     if (len > lw) len = lw;
-    char row[TW_MAX + 1];
-    lkind[r][slot] = kind;
-    lnick[r][slot] = nicklen;
-    memcpy(row, text, len);
-    row[len] = 0;
-    lt_copy(LT(r, slot), row, len + 1);
+    char row[RW];
+    row[0] = kind;
+    row[1] = nicklen;
+    memcpy(row + 2, text, len);
+    row[2 + len] = 0;
+    lt_copy(LT(r, slot), row, len + 3);
     lr[r].next++;
 }
 
@@ -319,14 +326,14 @@ static const char *user_name(const char *u) { return (*u == '@' || *u == '%' || 
 
 static int8_t user_find(uint8_t r, const char *nick) {
     uint8_t i;
-    for (i = 0; i < lr[r].nusers; i++) if (same(user_name(lusers[r][i]), nick)) return i;
+    for (i = 0; i < lr[r].nusers; i++) if (same(user_name(uget(r, i)), nick)) return i;
     return -1;
 }
 
 static void user_del(uint8_t r, const char *nick) {
     int8_t i = user_find(r, nick);
     if (i < 0) return;
-    memmove(lusers[r][i], lusers[r][i + 1], (lr[r].nusers - i - 1) * 12);
+    for (; i + 1 < lr[r].nusers; i++) lt_copy(LU(r, i), LU(r, i + 1), 12);
     lr[r].nusers--;
     lmeta++;
 }
@@ -342,11 +349,11 @@ static void user_add(uint8_t r, const char *nick, char prefix) {
     entry[n] = 0;
     rank = user_rank(entry);
     for (i = 0; i < lr[r].nusers; i++) {
-        uint8_t other = user_rank(lusers[r][i]);
-        if (other > rank || (other == rank && fold_cmp(user_name(lusers[r][i]), user_name(entry)) > 0)) break;
+        uint8_t other = user_rank(uget(r, i));
+        if (other > rank || (other == rank && fold_cmp(user_name(ub), user_name(entry)) > 0)) break;
     }
-    memmove(lusers[r][i + 1], lusers[r][i], (lr[r].nusers - i) * 12);
-    memcpy(lusers[r][i], entry, 12);
+    for (n = lr[r].nusers; n > i; n--) lt_copy(LU(r, n), LU(r, n - 1), 12);
+    lt_copy(LU(r, i), entry, 12);
     lr[r].nusers++;
     lmeta++;
 }
@@ -436,7 +443,7 @@ static void irc_input(char *line) {
         for (r = 0; r < lcount; r++) {
             u = user_find(r, prefix);
             if (u >= 0) {
-                char pre = lusers[r][u][0];
+                char pre = uget(r, u)[0];
                 pre = (pre == '@' || pre == '%' || pre == '+') ? pre : 0;
                 user_add(r, rest, pre);
                 strcpy(np, prefix); strcat(np, " is now ");
@@ -804,7 +811,7 @@ static void packet_header(char type) {
 
 static void rows_packet(uint8_t r, uint16_t start) {
     uint8_t i, count, slot_size = 2 + lw, per = (256 - 24) / (2 + lw), s;
-    char row[TW_MAX + 1];
+    char row[RW];
     uint16_t first, n;
     packet_header('M');
     if (!ln.active || r >= lcount) {reply[4] = 4; return;}
@@ -819,10 +826,10 @@ static void rows_packet(uint8_t r, uint16_t start) {
     reply[20] = lmeta; reply[21] = lcur;
     for (i = 0; i < count; i++) {
         s = (start + i) % LROWS;
-        reply[24 + i * slot_size] = lkind[r][s];
-        reply[25 + i * slot_size] = lnick[r][s];
-        lt_copy(row, LT(r, s), TW_MAX + 1);
-        memcpy(reply + 26 + i * slot_size, row, strlen(row));
+        lt_copy(row, LT(r, s), RW);
+        reply[24 + i * slot_size] = row[0];
+        reply[25 + i * slot_size] = row[1];
+        memcpy(reply + 26 + i * slot_size, row + 2, strlen(row + 2));
     }
 }
 
@@ -834,7 +841,7 @@ static void meta_packet(uint8_t first) {
     reply[8] = lr[lcur].nusers; reply[9] = 0;
     memcpy(reply + 12, ln.nick, strlen(ln.nick) > 11 ? 11 : strlen(ln.nick));
     for (i = 0; i < lcount; i++) memcpy(reply + 24 + i * 12, lr[i].name, strlen(lr[i].name) > 11 ? 11 : strlen(lr[i].name));
-    for (i = first; i < lr[lcur].nusers && n < 15; i++, n++) memcpy(reply + 72 + n * 12, lusers[lcur][i], strlen(lusers[lcur][i]));
+    for (i = first; i < lr[lcur].nusers && n < 15; i++, n++) {uget(lcur, i); memcpy(reply + 72 + n * 12, ub, strlen(ub));}
     reply[10] = n;
 }
 
@@ -899,8 +906,7 @@ static void user_say(char *text) {
         irc_line("PART ", lr[lcur].name, 0, 0);
         for (r = lcur; r + 1 < lcount; r++) {
             lr[r] = lr[r + 1];
-            memcpy(lkind[r], lkind[r + 1], LROWS); memcpy(lnick[r], lnick[r + 1], LROWS);
-            lt_copy(LT(r, 0), LT(r + 1, 0), LROWS * (TW_MAX + 1)); memcpy(lusers[r], lusers[r + 1], sizeof(lusers[0]));
+            lt_copy(LT(r, 0), LT(r + 1, 0), LROWS * RW); lt_copy(LU(r, 0), LU(r + 1, 0), LUSERS * 12);
         }
         lcount--;
         if (lcur) lcur--;
@@ -908,7 +914,7 @@ static void user_say(char *text) {
     } else if (!strcmp(text, "who")) {
         char list[LTEXT]; uint8_t i;
         list[0] = 0;
-        for (i = 0; i < lr[lcur].nusers && strlen(list) < LTEXT - 14; i++) {strcat(list, lusers[lcur][i]); strcat(list, " ");}
+        for (i = 0; i < lr[lcur].nusers && strlen(list) < LTEXT - 14; i++) {strcat(list, uget(lcur, i)); strcat(list, " ");}
         add_row(lcur, K_SYSTEM_L, "", list);
     } else if (!strcmp(text, "play")) {
         char *gid = strchr(arg, ' ');

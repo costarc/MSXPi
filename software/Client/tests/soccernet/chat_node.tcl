@@ -153,10 +153,23 @@ proc backShot {} {
     global tf
     catch { screenshot $::env(TRACE).back.png }
     puts $tf "# back: PC=[format %04X [reg PC]] t=[expr {int([machine_info time])}]"
-    # MCHAT /T (games_local.c) keeps its last line in its data: "Game with X ended (reason)"
-    set ram [debug read_block memory 0x8000 0x6000]
-    set i [string first "Game with " $ram]
-    if {$i >= 0} { puts $tf "# result line: [lindex [split [string range $ram $i [expr {$i + 95}]] \0] 0]" }
+    flush $tf
+    resultLine 12
+}
+# MCHAT /T (games_local.c) keeps its last line in its data: "Game with X ended (reason)". Looked for in
+# the whole of the CPU's view every 5 s (n more times), then the node ends.
+proc resultLine {n} {
+    global tf
+    set ram [debug read_block memory 0x0100 0xFE00]
+    # the whole line, not the string literals it is made of (NUL-separated in the code)
+    if {[regexp {Game with [^\x00]{1,16} ended \([^\x00]+\)} $ram line]} {
+        puts $tf "# result line: $line"
+    } elseif {$n > 0} {
+        after time 5 [list resultLine [expr {$n - 1}]]
+        return
+    } else {
+        puts $tf "# result line: none found"
+    }
     close $tf
     after time 1 exit
 }
