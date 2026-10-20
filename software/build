@@ -19,7 +19,7 @@ set -o pipefail
 python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
-buildClientCommands="${buildClientCommands:-no}"
+buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
 # Built with make.bat (SDCC 4.0) on Windows: the games sit at the MSX-DOS memory limit and
