@@ -61,13 +61,13 @@ R_MACHINE:      EQU     9
 start:  ld      hl,msgBanner
         call    PRINT
         call    resetMSXPI
-        call    crcInit
         call    getSlot1
         ld      (dosSlot1),a
         call    parseArgs
         ld      a,(tcp)
         or      a
         call    nz,tcpSetup
+        call    crcInit                         ; after tcpSetup: PLAYNET.OVL passes through the table's room
         ld      a,(manual)
         or      a
         call    z,getSession

@@ -18,8 +18,8 @@ OVL_BYE:        EQU     $800C
 OVL_CLOSE:      EQU     $800F
 OVL_VERSION:    EQU     $8012
 OVL_IOPTR:      EQU     $8013
-OVLTMP:         EQU     GPFBUF                  ; the overlay passes through here before the GPF is read
-OVLMAX:         EQU     $4000-GPFBUF            ; GPFBUF and BOUNCE
+OVLTMP:         EQU     CRCT                    ; the overlay passes through here before the CRC table is
+OVLMAX:         EQU     $4000-CRCT              ; built and the GPF read: CRCT, GPFBUF and BOUNCE (7 KB)
 M_ALL_SEG:      EQU     $00                     ; mapper support routines (MSX-DOS 2 / Nextor / MSR)
 M_FRE_SEG:      EQU     $03
 M_PUT_P2:       EQU     $24
@@ -37,6 +37,7 @@ IO_CAND:        EQU     14
 IO_STATUS:      EQU     37
 IO_DELAY:       EQU     38
 IO_REASON:      EQU     39
+IO_IRC:         EQU     133
 
 ; ---- the command line (HL at the '/') -----------------------------------------------------------------
 tcpArgs:
@@ -451,6 +452,16 @@ tcpConnect:
         ldir
         ld      (ix+IO_VERSION),1
         ld      (ix+IO_FORCE),0
+        ld      a,(manual)                      ; MCHAT /T's IRC connection, answered during the game (14)
+        or      a
+        ld      a,$FF
+        jr      nz,.irc
+        ld      a,(sesBuf+59)
+.irc:   push    ix                              ; (beyond IX's reach)
+        pop     hl
+        ld      de,IO_IRC
+        add     hl,de
+        ld      (hl),a
         ld      hl,(lport)
         ld      (ix+IO_LPORT),l
         ld      (ix+IO_LPORT+1),h

@@ -127,7 +127,7 @@ def overlay(sdcc):
             symbols[parts[1]] = int(parts[0], 16)
     end = symbols['s__DATA'] + symbols['l__DATA']
     assert end <= 0xBF00, 'overlay data reaches %04Xh' % end
-    assert top - OVL_BASE <= 0x1800, 'PLAYNET.OVL is above the 6 KB PLAYNET.COM loads it through'
+    assert top - OVL_BASE < 0x1C00, 'PLAYNET.OVL (%d bytes) is above the 7 KB PLAYNET.COM loads it through' % (top - OVL_BASE)
     (BUILD / 'PLAYNET.OVL').write_bytes(bytes(image[:top - OVL_BASE]))
     return top - OVL_BASE, end
 

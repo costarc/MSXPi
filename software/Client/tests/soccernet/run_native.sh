@@ -24,7 +24,9 @@
 #   SCENARIO=tcp  the chat scenario over TCP/IP on both nodes: MSR I, INL I, MCHAT /1 /T (this checkout's,
 #                 built with build_client.py) against the IRC fixture at 10.0.2.2; /play and /accept, MCHAT
 #                 writes PLAYNET.SES and types PLAYNET /T, which goes back to MCHAT /T on the same IRC
-#                 connection (with EXITKEY: the IRC log must show each nick's NAMES after the game).
+#                 connection (with EXITKEY: the IRC log must show each nick's NAMES after the game). The IRC
+#                 server pings every IRC_PING s (3) and drops a client silent for IRC_TIMEOUT s (60, wall clock), so the
+#                 connection survives only if PLAYNET answers during the game.
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -52,7 +54,7 @@ sh "$HERE/kill_nodes.sh"
 touch "$WORK/stop_servers"
 for port in 8115 8116 ${IRC_PORT:-6671}; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
-  [ -n "$pid" ] && taskkill //F //PID $pid > /dev/null 2>&1
+  if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done
 sleep 3
 # fresh server homes with their own copies of the boot and tools disks (written while the servers are stopped)
@@ -105,7 +107,8 @@ start() {  # n port local_udp peer_udp version
 }
 : > "$WORK/server1.log"; : > "$WORK/server2.log"
 if [ -n "$CHAT" ]; then
-  ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT > "$WORK/irc.log" 2>&1 ) &
+  pings=""; [ "$SCENARIO" != tcp ] || pings="${IRC_PING:-3} ${IRC_TIMEOUT:-60}"   # PING every 3 s, drop after 60 s of silence (wall clock)
+  ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) &
   IRC_PID=$!
 fi
 start 1 8115 5101 5102
@@ -148,6 +151,11 @@ if [ -n "$EXITKEY" ] && [ "$SCENARIO" = tcp ]; then   # back in MCHAT /T on the 
     then echo "$nick: back in MCHAT /T on the same IRC connection"; else echo "$nick: NOT back in MCHAT /T"; fi
   done
   grep -c "^conn" "$WORK/irc.log" | sed 's/^/IRC connections opened: /'
+  for nick in alice bob; do                # PLAYNET's overlay answered the server during the game
+    awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } c != "" && $1 == c && /NAMES #/ { exit }
+      c != "" && $1 == c && / PONG / { p++ } END { print n ": " p + 0 " PONG between the launch and the return" }' "$WORK/irc.log"
+  done
+  grep "^drop" "$WORK/irc.log" || echo "no IRC client dropped for silence"
 fi
 if [ -n "$EXITKEY" ] && [ "$SCENARIO" = chat ]; then   # both must be back in MCHAT: restore, then "mchat start"
   for n in 1 2; do
@@ -159,5 +167,5 @@ fi
 touch "$WORK/stop_servers"
 for port in 8115 8116 $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
-  [ -n "$pid" ] && taskkill //F //PID $pid > /dev/null 2>&1
+  if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done

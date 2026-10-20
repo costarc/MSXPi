@@ -33,6 +33,7 @@ typedef struct {
     uint8_t leader;         /* 40  poll: 1 when this side leads */
     uint8_t txbuf[NC_MAX_PKT];  /* 41  the game's packets cross a page-3 switch here (transport_unapi.asm) */
     uint8_t rxbuf[NC_MAX_PKT];  /* 87 */
+    uint8_t irc;            /* 133 MCHAT /T's IRC TCP connection, kept alive through the game; FFh: none */
 } ovl_io_t;
 
 ovl_io_t ovl_io;
@@ -44,7 +45,11 @@ ovl_io_t ovl_io;
 #define TCPIP_UDP_CLOSE 9
 #define TCPIP_UDP_SEND 11
 #define TCPIP_UDP_RCV 12
+#define TCPIP_TCP_SEND 17
+#define TCPIP_TCP_RCV 18
 #define ERR_OK 0
+#define ERR_NO_DATA 3
+#define since(a, b) ((int16_t)(uint16_t)((uint16_t)(a) - (uint16_t)(b)))   /* as in netcore.c */
 
 uint8_t ur_a;
 uint16_t ur_bc, ur_de, ur_hl, ur_ix;
@@ -183,6 +188,48 @@ uint32_t nc_rand32(void)
     return x ^ ((uint32_t)r_reg() << 16);
 }
 
+/* ---- the IRC connection MCHAT /T left open (PROTOCOLS 14) -----------------------------------------
+ * Twice a second: read what arrived (at most 4 x 56 bytes), drop it, and answer each "PING x" with
+ * "PONG x", so the server keeps the connection through a long game. io.buf: 0-55 what is read, 64-127
+ * the answer (the UDP calls use it only inside nc_send / nc_recv). */
+#define IRC_LINE 62
+static char irc_line[IRC_LINE];
+static uint8_t irc_len;                     /* FFh: in a line too long to be a PING: skipped to its end */
+static uint16_t irc_due;
+
+static void irc_keep(void)
+{
+    uint8_t *b = ovl_io.buf, i, n, reads = 4;
+    uint16_t now = nc_now();
+    if (ovl_io.irc == 0xFF || since(now, irc_due) < 0)
+        return;
+    irc_due = now + 50;
+    do {
+        ur_bc = (uint16_t)ovl_io.irc << 8; ur_de = (uint16_t)b; ur_hl = 56;
+        i = unapi(TCPIP_TCP_RCV);
+        if (i != ERR_OK) {
+            if (i != ERR_NO_DATA)
+                ovl_io.irc = 0xFF;          /* closed or gone: MCHAT /T connects again */
+            return;
+        }
+        n = (uint8_t)ur_bc;
+        for (i = 0; i < n; i++) {
+            char c = b[i];
+            if (c == '\n') {
+                if (irc_len != 0xFF && irc_len >= 5 && !memcmp(irc_line, "PING ", 5)) {
+                    memcpy(b + 64, irc_line, irc_len);
+                    b[65] = 'O';            /* PONG */
+                    b[64 + irc_len] = '\r'; b[65 + irc_len] = '\n';
+                    ur_bc = ((uint16_t)ovl_io.irc << 8) | 1; ur_de = (uint16_t)(b + 64); ur_hl = irc_len + 2;
+                    unapi(TCPIP_TCP_SEND);
+                }
+                irc_len = 0;
+            } else if (c != '\r' && irc_len != 0xFF)
+                irc_line[irc_len] = c, irc_len = irc_len < IRC_LINE - 1 ? irc_len + 1 : 0xFF;
+        }
+    } while (n == 56 && --reads);
+}
+
 /* ---- the entries --------------------------------------------------------------------------- */
 void ovl_open(void)
 {
@@ -205,6 +252,7 @@ void ovl_open(void)
 
 void ovl_poll(void)
 {
+    irc_keep();
     nc_poll();
     ovl_io.status = nc_status(&ovl_io.delay);
     ovl_io.leader = nc_is_leader();
@@ -212,6 +260,7 @@ void ovl_poll(void)
 
 void ovl_xchg(void)
 {
+    irc_keep();
     ovl_io.status = nc_xchg(ovl_io.pkt, ovl_io.len, ovl_io.rx, &ovl_io.reason);
 }
 

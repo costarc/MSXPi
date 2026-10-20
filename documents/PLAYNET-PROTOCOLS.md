@@ -692,9 +692,13 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 
 On the TCP/IP path the IRC connection survives the game: `MCHAT /t` opens it as resident (`TCP_OPEN` flag), leaves it open, and
 `MCHAT /T` takes it back with the connection number, nick and rooms from `PLAYNET.SES` (it asks for `NAMES` again; the scrollback
-from before the game is not kept). If the connection is gone, `MCHAT /T` connects again. Not done yet: answering the IRC server's
-`PING` during the game. Until then a game longer than the server's ping timeout (often 2 to 4 minutes) loses the connection, and
-`MCHAT /T` reconnects.
+from before the game is not kept). If the connection is gone, `MCHAT /T` connects again.
+
+In between, `PLAYNET` keeps the connection alive. `PLAYNET.SES` byte 59 goes into the engine's I/O block (byte 133; FFh for a manual
+start). Twice a second, during the connect phase and the game, the engine reads what arrived on it (at most 4 x 56 bytes) and
+throws it away, answering each `PING x` line with `PONG x`. It stops if the connection reports an error. The only silent
+stretches are the program changes: `MCHAT` leaving and `PLAYNET` loading, and the way back to `MCHAT /T`. Each takes seconds, well
+under a server's ping timeout (often 2 to 4 minutes).
 
 ## 15. MSXPi commands used by PLAYNET
 
