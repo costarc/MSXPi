@@ -42,5 +42,5 @@ pcopy m:skmsx.com
 pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
-pcopy m:games/SOCCER.GPF
+pcopy m:games/SOCCER.GPF SOCCER.GPF
 p ver

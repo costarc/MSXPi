@@ -184,9 +184,9 @@ EOF
             echo "pcopy m:$f"
         done
         # The online games (PLAYNET): target/games/*.GPF, copied to the MSX disk
-        # next to MCHAT.COM and PLAYNET.COM (pcopy names the file after the last "/").
+        # next to MCHAT.COM and PLAYNET.COM (flat: MSX-DOS 1 has no directories, so the target is given).
         for f in $(cd target/games 2>/dev/null && LC_ALL=C ls *.GPF 2>/dev/null); do
-            echo "pcopy m:games/$f"
+            echo "pcopy m:games/$f $f"
         done
         echo "p ver"
     } | to_crlf target/msxpirfh.bat
