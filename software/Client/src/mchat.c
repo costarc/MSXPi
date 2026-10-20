@@ -372,7 +372,7 @@ static void pick_key(uint8_t key) {
 
 /* A game is ready: fetch its command line. 1 = launch_cmd is set. */
 static uint8_t fetch_launch(void) {
-    if (!(gflags & GF_LAUNCH)) return 0;
+    if (!(gflags & GF_LAUNCH) || link_tcp) return 0;
     gflags &= ~GF_LAUNCH;
     if (!xchg("mchat launch") || reply[5] != 'L' || !reply[6]) return 0;
     memcpy(launch_cmd, reply + HDR, 39);
