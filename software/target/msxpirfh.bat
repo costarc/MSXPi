@@ -21,6 +21,8 @@ pcopy m:Telnet.com
 pcopy m:Telnetf.com
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
+pcopy m:mchat.com
+pcopy m:memtop.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
 pcopy m:msxpi32k.rom
