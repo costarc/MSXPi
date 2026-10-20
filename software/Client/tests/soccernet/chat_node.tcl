@@ -133,7 +133,7 @@ proc arm_ {} {
         debug set_bp $::s_tickDone {} { tlog }
         debug set_bp 0xC503 {!$::ended} { xendHit }
         debug set_watchpoint write_mem {0xF200 0xF37F} {} { minw }
-        debug set_watchpoint write_mem {0xC100 0xC5FF} {([reg PC] < 0xC000 || [reg PC] >= 0xC100) && ([reg PC] < 0xC100 || [reg PC] >= 0xC600)} { gwlog }
+        debug set_watchpoint write_mem {0xC100 0xC5FF} {[reg PC] < 0xC000 || [reg PC] >= 0xC700} { gwlog }
         debug set_watchpoint write_mem 0xE003 {[reg PC] == 0x40CC || [reg PC] == 0x40CB} { line }   ;# only the frame increment
         return
     }

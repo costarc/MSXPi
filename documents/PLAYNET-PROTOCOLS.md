@@ -480,10 +480,19 @@ Two implementations exist:
 - **MSXPi (native).** Each `XCHG` is one opcode-C9 transaction with the Pi (10.1). `XIRQ` is a plain `JP irq_handler`.
   It is 204 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
   for PLAYNET to run it over the MSXPi.
-- **UNAPI.** `XCHG` maps the network engine's mapper segment into page 2, switches to a private stack, calls it, and restores the game's
-  segment. `XIRQ` returns at once while that call is in progress (after reading the VDP status). Otherwise it runs the game's handler and
-  then the TCP/IP stack's saved timer hook (InterNestor Lite needs it). It keeps its own tick counter and never writes `JIFFY`, so games
-  that read `JIFFY` see what they would see on a cartridge.
+- **UNAPI** (`software/Client/src/playnet/transport_unapi.asm`, `PLAYNET /T`). The game gets a **page-3 segment of its own**: the
+  trampoline copies MSX-DOS's page 3 into a new segment and switches to it, so the game's RAM, its stack and the hooks it is given never
+  touch MSX-DOS's. That matters because the TCP/IP stack keeps its state in MSX-DOS's work area inside a typical game's RAM (`RAMAD1-3`
+  at F341h-F344h, F1A2h-F1C6h, F336h-F37Fh with InterNestor Lite on MSX-DOS 1: measured, PLAYNET-DESIGN.md 8a).
+  `XCHG` switches page 3 back to MSX-DOS's segment (the transport is installed at the same address in both), maps the network
+  engine's segment (`PLAYNET.OVL`) into page 2 and records it with `PUT_P2` (a RAM implementation's helper puts back the page-2
+  segment `PUT_P2` recorded), runs it with interrupts on (so the stack's timer runs from MSX-DOS's own hooks), and switches back. Only
+  registers cross a page-3 switch: packets go through the engine's I/O block in page 2. The engine's buffers for the UNAPI calls
+  are the last 128 bytes of `transport_area` in MSX-DOS's page 3, and its stack is under MSX-DOS's TPA top: a RAM implementation maps
+  its own segments into pages 1 and 2 while it runs. `XIRQ` (in the game's page 3 only) counts ticks, the engine's clock, and jumps
+  to the game's handler; it never writes `JIFFY`, so games that read it see what they would see on a cartridge. It needs a
+  `transport_area` of 512 bytes, inside the TPA (it is written into MSX-DOS's page 3 too), and two mapper segments: the engine's
+  and the game's page 3.
 
 ### 10.1 MSXPi opcode C9 transaction
 
@@ -662,13 +671,15 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
    top (the word at 0006h) when that is lower: MSX-DOS 2 keeps code and data between the TPA top and `HIMEM`, and the game may use
    part of it (Soccer's E000h-F37Fh against Nextor's `HIMEM` E6FEh). A `game_ram` range below the TPA top is TPA, so nothing is kept. The loader keeps the primary slot register and what is at `FFFFh` (the sub-slot register of page 3's slot,
    complemented, or the RAM byte when that slot is not expanded) in the transport and in its own memory. On the MSXPi path the area goes
-   to the Pi (`playnet save`), with or without a mapper; on the TCP/IP path it goes to a mapper segment.
+   to the Pi (`playnet save`), with or without a mapper. On the TCP/IP path nothing is saved: the game has a page 3 of its own (10),
+   and MSX-DOS's is never touched.
 2. **Restore**. The game never maps page 0's RAM, so `PLAYNET.COM` is still there. `XEND` sends BYE, puts back MSX-DOS's slot registers
-   (page 0 is RAM again) and jumps to `PLAYNET.COM`'s return routine with the result code. That routine uses a stack in page 2 (the dead
-   game image; never page 0, which `CALSLT` turns into the BIOS), silences the PSG, fetches the area (`playnet restore`) into page 1,
-   checks its header and length, copies it back, writes `FFFFh`, enables interrupts (MSX-DOS's hooks are back, and the MSX2 BIOS waits
-   for interrupts while it sets the screen up), calls `INITXT` or `INIT32` through `CALSLT` as `SCRMOD` says, puts `MCHAT` and Enter
-   in the keyboard buffer and jumps to `0000h` (the MSX-DOS warm start). Back in the chat, the Pi says "Game with X ended (reason)".
+   (page 0 is RAM again) and jumps to `PLAYNET.COM`'s return routine with the result code. That routine uses a stack under MSX-DOS's TPA
+   top (never page 0, which `CALSLT` turns into the BIOS; never page 1, which the mapper routines map; never page 2, the restore buffer),
+   silences the PSG, fetches the area (`playnet restore`) into page 2, checks its header and length, copies it back, writes `FFFFh`
+   (TCP/IP: `XEND` has already switched back to MSX-DOS's page 3; the routine gives the two segments back), enables interrupts (MSX-DOS's hooks are back, and the MSX2 BIOS waits
+   for interrupts while it sets the screen up), calls `INITXT` or `INIT32` through `CALSLT` as `SCRMOD` says, puts `MCHAT` (`MCHAT /T` after a
+   TCP/IP game) and Enter in the keyboard buffer and jumps to `0000h` (the MSX-DOS warm start). Back in the chat, the Pi says "Game with X ended (reason)".
 3. **Fallback**: if nothing was saved, or the restore fails (link error, wrong header or length), back to the game's slots (BIOS in page 0),
    wipe the `AB` header of the RAM image and reset. A game started without the chat (`PLAYNET <game> <role>`) has no session on the Pi,
    so its save is refused and it always ends this way.

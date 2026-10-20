@@ -131,7 +131,7 @@
     },
     "transport_area": {
       "address": 50432,
-      "size": 256
+      "size": 512
     },
     "game_ram": [
       [

@@ -89,6 +89,7 @@ proc measure {} {
         debug set_bp 0x0038 {} irqSeg
         harness::run_cmd $::env(PROBE) 40 {
             say "8.5 segments at interrupts during '$::env(PROBE)': [dict get $::segs]"
+            set f [open $::out.screen a]; foreach l [harness::screen_lines] { if {[string trim $l] ne ""} { puts $f "|$l" } }; close $f
             harness::done
         }
     }

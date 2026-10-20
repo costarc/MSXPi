@@ -4,6 +4,7 @@
 #
 #   sh measure.sh                                      MSR I; INL I, then "INL S" as the UNAPI probe
 #   INSTALL="MSR I;INL I" PROBE="INL S" sh measure.sh
+#   NET=nat PROBE="PING 10.0.2.2" sh measure.sh       INL on the server's user-mode UDP link (INL.CFG 10.0.2.15)
 #   BOOT=nextor sh measure.sh                         Nextor (MSX-DOS 2) from a copy of NEXTORHD: "CD TCPIP", "INL I"
 #
 # Puts MSR.COM, RAMHELPR.COM and INL.COM (software/UNAPI/bin) and MCHAT.COM on the tools disk (B:).
@@ -21,6 +22,13 @@ for f in MSR.COM RAMHELPR.COM INL.COM; do
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null
 done
 [ -f "$ROOT/software/target/mchat.com" ] && python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null
+NETENV=""
+if [ "$NET" = nat ]; then               # the server's user-mode UDP link (msxpi_ethnat.py): INL at 10.0.2.15
+  printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
+  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
+  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/ping.com" PING.COM > /dev/null
+  NETENV="MSXPI_ETH_LINK=udpnat"
+fi
 cat > "$H/msxpi.ini" <<INI
 var DriveA=$WORKW/msxhome/disks/msxpiboot.dsk
 var DriveB=$WORKW/msxhome/disks/tools.dsk
@@ -29,7 +37,7 @@ var SPI_HW=False
 INI
 pid=$(netstat -ano | grep -E ":$PORT .*LISTENING" | awk '{print $5}' | head -1)
 [ -n "$pid" ] && taskkill //F //PID $pid > /dev/null 2>&1
-( cd "$ROOT/software/Server/Python/src" && env MSXPI_PORT=$PORT MSXPI_HOME="$WORKW/msxhome" MSXPI_INI="$WORKW/msxhome/msxpi.ini" \
+( cd "$ROOT/software/Server/Python/src" && env $NETENV MSXPI_PORT=$PORT MSXPI_HOME="$WORKW/msxhome" MSXPI_INI="$WORKW/msxhome/msxpi.ini" \
     MSXPI_TMP="$WORKW/msxhome/tmp" python -u msxpi-server.py > "$WORK/server.log" 2>&1 ) &
 sleep 8
 : > "$WORK/measure.txt"; : > "$WORK/measure.txt.screen"

@@ -11,13 +11,16 @@
 #   ONLY=H        run one node.    FORCE_DELAY=n  fix the delay.      VER2=n  version announced by node C
 #   POKEF=n       corrupt the ball on node H at frame n (desync check)    EXITF=n  node C exits at frame n
 #   TMAX/NODETMO  emulated / wall seconds before a node is stopped.   RENDERER=SDLGL-PP to watch it
-#   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements)
+#   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements); EXTRA_TCL_C for node C
 #   RECORD=file.wav  node H records its sound (openMSX record -audioonly) and node C is muted
 #   EXITKEY=n     (chat) node C presses Ctrl+Shift+F5 at frame n; both must return to MCHAT
 #   BOOT=nextor   (chat) Nextor (MSX-DOS 2) on a MegaFlashROM SCC+ SD instead of MSX-DOS 1 from the MSXPi. NEXTORHD =
 #                 a hard-disk image (UNAPI/harness/mknextorhd.sh) with C:\PLAYNET holding PLAYNET.COM, MCHAT.COM, SOCCER.ROM
 #   SCENARIO=chat the players meet in MCHAT (against a local IRC server), alice invites bob to play, and the
 #                 chat starts the game itself. Needs software/target/mchat.com. PLAY_AT / ACCEPT_AT: emulated seconds.
+#   SCENARIO=mixed  node H over the MSXPi, node C over the TCP/IP UNAPI: MSR I, INL I (on its server's
+#                 user-mode UDP link, msxpi_ethnat.py, as 10.0.2.15), then PLAYNET /T soccer C 5102 10.0.2.2:5101.
+#                 Both=1: both nodes over TCP/IP (H: PLAYNET /T soccer H 5101 10.0.2.2:5102).
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -60,7 +63,16 @@ INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SOCCER_ROM" SOCCER.ROM > /dev/null
   [ "$SCENARIO" != chat ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null
+  if [ "$SCENARIO" = mixed ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
+    printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
+    for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/SOCCER.GPF" SOCCER.GPF > /dev/null
+  fi
 done
+# the profile hash a TCP/IP node announces (the GPF's): an MSXPi node's server must announce the same
+PROFHASH=$(python -c "import struct,sys; print('%08x' % struct.unpack('<I', open(sys.argv[1],'rb').read()[8:12])[0])" "$WORK/SOCCER.GPF")
 rm -f "$WORK/stop_servers"
 IRC_PORT=${IRC_PORT:-6671}
 if [ "$SCENARIO" = chat ]; then
@@ -69,8 +81,9 @@ else
   netenv=""
 fi
 start() {  # n port local_udp peer_udp version
+  nat=""; [ "$SCENARIO" = mixed ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
-      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $( [ "$SCENARIO" = chat ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ "$SCENARIO" = chat ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
@@ -85,9 +98,13 @@ start 2 8116 5102 5101 ${VER2:-1}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ "$SCENARIO" != chat ] || NODE_TCL=chat_node.tcl
+if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
+  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T soccer C 5102 10.0.2.2:5101"
+  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T soccer H 5101 10.0.2.2:5102"
+fi
 node() {  # role port
   snd=""; [ -n "$RECORD" ] && { [ "$1" = H ] && snd="record start -audioonly $RECORD" || snd="set mute on"; }
-  xs=""; [ "$1" = H ] && xs="$EXTRA_TCL"
+  xs=""; [ "$1" = H ] && xs="$EXTRA_TCL"; [ "$1" = C ] && xs="$EXTRA_TCL_C"
   hw="-ext ram2mb"; hd="set renderer none"
   if [ "$BOOT" = nextor ]; then          # each node gets its own copy: openMSX writes to the image
     cp "$NEXTORHD" "$WORK/nextor_$1.dsk"
@@ -109,13 +126,13 @@ wait $NPIDS
 python "$HERE/cmp_pair.py" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "desync=" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -12
-if [ -n "$EXITKEY" ]; then              # both machines must be back in MCHAT: restore, then "mchat start"
+if [ -n "$EXITKEY" ] && [ "$SCENARIO" = chat ]; then   # both must be back in MCHAT: restore, then "mchat start"
   for n in 1 2; do
     if awk '/-> playnet restore/ { r = 1 } r && /-> mchat start/ { ok = 1 } END { exit !ok }' "$WORK/server$n.log"
     then echo "server $n: back in MCHAT after the game"; else echo "server $n: NOT back in MCHAT"; fi
   done
-  grep -h "^# back" "$WORK/np/H.trace" "$WORK/np/C.trace"
 fi
+[ -z "$EXITKEY" ] || grep -h -E "^# (xend|back)" "$WORK/np/H.trace" "$WORK/np/C.trace"
 touch "$WORK/stop_servers"
 for port in 8115 8116 $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)

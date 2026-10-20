@@ -262,7 +262,7 @@ ASSETS  n x (length, bytes)
 ```
 PLAYNET            session from the Pi (MSXPi link)
 PLAYNET /T         session from PLAYNET.SES (UNAPI; a mapper is required, checked first)
-PLAYNET /T id role ip:port[,ip:port]   manual start (LAN, VPN, forwarded port, tests) - no chat needed
+PLAYNET /T id role lport ip:port[,ip:port]   manual start (LAN, VPN, forwarded port, tests) - no chat needed
 ```
 
 **One program** (decision 2). The UNAPI session engine (netcore) is a separate overlay, `PLAYNET.OVL`, loaded into a mapper segment
@@ -483,6 +483,17 @@ Each step ends with something that can be shown to work. Mixed play is part of t
    not run INL's timer every frame (8.4).
 7. **netcore** (portable C) plus the conformance test against `Netplay` on the PC; then `PLAYNET.OVL`, the shim and the IRQ trampoline.
    *Proof:* `SCENARIO=mixed` (Pi node against INL node), then two INL nodes.
+   **Done 2026-10-20**: `netcore/netcore.c` passes the conformance test (`test_netcore.py`, gcc under WSL: leadership either way,
+   the same delay, packets with W 1 and 4, incompatible profile and version, BYE both ways). On the MSX it is `PLAYNET.OVL` (SDCC,
+   a mapper segment at 8000h), and `PLAYNET /T id role lport ip:port[,...]` loads it. The rig gives INL a network without TAP: the
+   server's user-mode UDP link (`msxpi_ethnat.py`, `MSXPI_ETH_LINK=udpnat`, INL at 10.0.2.15, the host at 10.0.2.2). Results:
+   `SCENARIO=mixed` (MSXPi node against InterNestor Lite node) and `BOTH=1` (two InterNestor Lite nodes): 1501 identical frames,
+   no desync; Ctrl+Shift+F5 on one TCP/IP node brings both back to the MSX-DOS prompt without a reset. What changed from 5.5 on the
+   way: the TCP/IP stack keeps state in MSX-DOS's work area inside the game's RAM, so the game gets a page-3 segment of its own and
+   every call switches back to MSX-DOS's (PROTOCOLS 10); that also removes the save for the return. The stack's timer runs during
+   those calls from MSX-DOS's own hooks, not from XIRQ (8.4). SDCC 4.0.0 miscompiles `return a - b` of two `uint16_t` arguments
+   (it overwrites L while HL still points at b); netcore avoids the pattern. Not done: the session file and the chat (step 8),
+   GR8NET and real hardware (step 9).
 8. **`MCHAT /t` agent** (`games_local.c`), after the memory measurement; resident IRC connection and re-attach. *Proof:* the conformance
    test against `Invites`, then `SCENARIO=tcp` from chat to game and back to the chat.
 9. `update.sh` + index, "how to add a game", and the real-hardware run (GR8NET or ObsoNET, a real Pi).
@@ -517,7 +528,7 @@ MegaFlashROM SCC+ SD), and `run_native.sh` with `EXTRA_TCL` for the game (watch 
 | 8.1 Game RAM in C000h-DFFFh | The original cartridge writes **nothing** there in 5 minutes of title and demo. Under PLAYNET, a full 3000-frame match writes there only at INIT: 16 pushes at D55Eh-D5xxh, which are the loader's own stack (SP-relative, so always in the TPA). | C000h-DFFFh is free during the game: a stack's page-3 code there survives. Soccer's `game_ram` D500h-D5FFh range is the loader stack, not game data. |
 | 8.2 Where the stacks live, and the save size | **MSX-DOS 1** (MSXPi): HIMEM DF6Eh, TPA top D606h; `MSR I` lowers the TPA top to D406h and keeps HIMEM; `INL I` hooks H.TIMI and EXTBIO to `call DDCFh` (in MSR's area). **Nextor 2.10**: HIMEM E6FEh, TPA top DC06h; `RAMHELPR I` lowers it to DB06h; `INL I` hooks H.TIMI/EXTBIO to `call E675h` (RAMHELPR's area). Between the TPA top and HIMEM: the resident code, and on DOS 2 the system's own page-3 code and data. | The save is HIMEM-FFFEh, **or lower where the game's RAM reaches below HIMEM** (Nextor: Soccer's E000h-F37Fh is below E6FEh). Saved: 8337 bytes on DOS 1, 8191 on Nextor (from E000h). The stacks' code below that start is never written by the game (8.1). |
 | 8.3 Restoring the DOS area | Step 5's rig scenario passes on **MSX-DOS 1** (disk on the MSXPi) and on **Nextor 2.10** (hard disk on the MegaFlashROM SD): Ctrl+Shift+F5 on one machine, both back in `MCHAT` with the result line. The first Nextor run hung in DOS 2's page-3 code until the save start rule above. Not covered: a real floppy (FDC) and DOS 2 on other interfaces. | The rule above (PROTOCOLS 14). |
-| 8.4 INL's timer per frame | Over the MSXPi Ethernet driver INL's H.TIMI takes a **mean of 6-7 ms per interrupt (38-44 % of a 60 Hz frame), up to 120 ms**, on both DOS 1 and Nextor (without INL, Nextor's own H.TIMI: 0.8 ms). Emulated, with the MSXPi device waiting for a real-time server, so the absolute numbers are pessimistic; the driver's polling is the cost either way. | netcore must **not** chain INL's timer every frame during a game. It calls the UNAPI itself, at its own rate, from `XCHG`. Measure again on GR8NET (step 9). |
+| 8.4 INL's timer per frame | Over the MSXPi Ethernet driver INL's H.TIMI takes a **mean of 6-7 ms per interrupt (38-44 % of a 60 Hz frame), up to 120 ms**, on both DOS 1 and Nextor (without INL, Nextor's own H.TIMI: 0.8 ms). Emulated, with the MSXPi device waiting for a real-time server, so the absolute numbers are pessimistic; the driver's polling is the cost either way. | netcore must **not** chain INL's timer every frame during a game. Step 7: the timer runs only while `XCHG` is in MSX-DOS's page 3 with interrupts on. Measure again on GR8NET (step 9). |
 | 8.5 Interrupts inside UNAPI calls | **Yes.** During `INL S`, 121-179 of 300-500 interrupts came while INL's own mapper segments were in pages 1-2. | The IRQ trampoline guard is needed, not only a precaution: `XIRQ` must return at once while a call is in progress (PROTOCOLS 10). |
 | 8.6 A resident TCP connection | Not measured yet: it needs `MCHAT /t` with the agent (step 8). | Step 8. |
 | 8.7 `mchat.com` memory | The image (data included) ends at C01Ah (48922 bytes). TPA tops with INL: D406h (DOS 1 + MSR, this rig: 5100 bytes for the stack), DB06h (Nextor + RAMHELPR: 6892 bytes), C806h (Canon V-25 with the TCP/IP driver, `pchess_memory_test.py`: **2028 bytes**). | The agent (step 8) must fit in about 2 KB on the smallest of these, or the chat must shrink: a measured constraint for step 8. |

@@ -20,6 +20,8 @@ set ::poked 0
 set lastTx 0
 set inPos 0
 set started 0
+set ::ended 0
+set ::pressed 0
 set frames 0
 set prevNf -1
 set tf [open $::env(TRACE) w]
@@ -44,6 +46,7 @@ proc codeDiff {} {
 }
 proc line {} {
     global tf sym started frames prevNf stopf
+    if {$::ended} { return }
     set nf [peek $::s_nf]
     if {!$started} { return }
     if {$nf == 255 && $prevNf < 0} { return }   ;# INIT's RAM clear, before the first tick
@@ -55,6 +58,12 @@ proc line {} {
     puts $tf "$f [peek 0xE000] [peek 0xE001] $b [format %02X [peek 0xE52B]] [format %02X [peek 0xE007]] [format %02X [peek 0xE009]]"
     if {[info exists ::env(POKEF)] && $::roleArg eq "H" && $f >= $::env(POKEF) && !$::poked} { set ::poked 1; poke 0xE2A0 [expr {[peek 0xE2A0] ^ 0x10}]; puts $tf "# poked ball at frame $f" }
     if {[info exists ::env(EXITF)] && $::roleArg eq "C" && $f >= $::env(EXITF)} { exit }
+    if {[info exists ::env(EXITKEY)] && $::roleArg eq "C" && $f >= $::env(EXITKEY) && !$::pressed} {
+        set ::pressed 1
+        puts $tf "# exit key pressed at frame $f"
+        keymatrixdown 6 0x03; keymatrixdown 7 0x02           ;# SHIFT + CTRL, F5
+        after time 1 { keymatrixup 6 0x03; keymatrixup 7 0x02 }
+    }
     if {$f >= $stopf} {
         global sent dropped got
         puts $tf "# desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
@@ -80,6 +89,7 @@ proc tlog {} {
 # diagnostic: how deep does the stack go? Lowest address written in F200-F37F.
 set ::minw 0xFFFF
 proc minw {} {
+    if {$::ended} { return }
     if {[catch {set a $::wp_last_address} e]} { return }
     if {$a < $::minw} { set ::minw $a }
 }
@@ -100,6 +110,7 @@ proc c0log {} {
 set ::gw 0
 proc gwlog {} {
     global tf
+    if {$::ended} { return }
     if {$::gw >= 20} { return }
     incr ::gw
     set a ?
@@ -118,14 +129,31 @@ proc arm_ {} {
     if {[peek $::s_pad1c] == 0x3A && [peek $::s_nf] == 0xFF && [peek $::s_started] == 0 && [peek $::s_txbuf] == 0x10} {
         set started 1
         debug set_bp $::s_tickDone {} { tlog }
+        debug set_bp 0xC503 {!$::ended} { xendHit }
         debug set_watchpoint write_mem {0xF200 0xF37F} {} { minw }
-        debug set_watchpoint write_mem {0xC100 0xC5FF} {([reg PC] < 0xC000 || [reg PC] >= 0xC100) && ([reg PC] < 0xC100 || [reg PC] >= 0xC600)} { gwlog }
+        debug set_watchpoint write_mem {0xC100 0xC5FF} {[reg PC] < 0xC000 || [reg PC] >= 0xC700} { gwlog }
         debug set_watchpoint write_mem 0xE003 {[reg PC] == 0x40CC || [reg PC] == 0x40CB} { line }   ;# only the frame increment
         return
     }
     after time 0.002 arm
 }
 
+proc xendHit {} {
+    global tf
+    set ::ended 1
+    puts $tf "# xend result=[reg A] frame=[expr {$::frames + [peek $::s_nf]}] desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
+    flush $tf
+    after time 40 backCheck
+}
+# back at the MSX-DOS prompt (the loader typed MCHAT, which this disk may not have): the last lines
+proc backCheck {} {
+    global tf
+    set lines {}
+    foreach l [harness::screen_lines] { if {[string trim $l] ne ""} { lappend lines [string trim $l] } }
+    puts $tf "# back: [join [lrange $lines end-3 end] { | }] (t=[expr {int([machine_info time])}])"
+    close $tf
+    after time 1 exit
+}
 proc dumpscreen {} {
     after time 20 dumpscreen
     set fh [open "$::env(TRACE).screen" a]
@@ -136,10 +164,20 @@ proc dumpscreen {} {
 after time 20 dumpscreen
 after time 60 { catch { screenshot $::env(TRACE).png } }
 harness::init "np_$roleArg"
+# PRE_<role>: commands run first, ";"-separated, each to the prompt (MSR I;INL I for a TCP/IP node);
+# CMD_<role>: the start line instead of "$PROG <role>" (PLAYNET /T ... for a TCP/IP node)
+proc runPre {cmds body} {
+    if {![llength $cmds]} { uplevel #0 $body; return }
+    harness::run_cmd [string trim [lindex $cmds 0]] 90 [list runPre [lrange $cmds 1 end] $body]
+}
 harness::at_dos_prompt {
     harness::run_cmd "B:" 30 {
-        type "$::env(PROG) $::roleArg\r"
-        after time 3 arm
+        set pre {}
+        if {[info exists ::env(PRE_$::roleArg)]} { set pre [split $::env(PRE_$::roleArg) ";"] }
+        runPre $pre {
+            if {[info exists ::env(CMD_$::roleArg)]} { type "$::env(CMD_$::roleArg)\r" } else { type "$::env(PROG) $::roleArg\r" }
+            after time 3 arm
+        }
     }
 } 200
 after time $::env(TMAX) { puts $tf "# codeDiff=[codeDiff]"; puts $tf "# timeout  nfNow=[peek $::s_nf] rxSeen=[peek $::s_rxSeen] tags=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3}]]}] ,] vals=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3 + 1}]]}] ,] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] ""] PC=[format %04X [reg PC]]"; close $tf; exit }

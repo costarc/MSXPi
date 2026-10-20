@@ -148,7 +148,7 @@ class SoccerPackageTests(unittest.TestCase):
         self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
         self.assertEqual(self.assets['stub'][0], 1)                         # stub ABI 1
         self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
-        self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC600)
+        self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC700)   # 512: the TCP/IP transport
         rom = synthetic_rom(self.profile)
         profile = copy.deepcopy(self.profile)
         retarget(profile, rom)

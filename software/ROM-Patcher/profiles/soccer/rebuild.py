@@ -27,9 +27,9 @@ ROM_SIZE = 32768
 ROM_SHA256 = 'b9536809a1784afb2e49a43d80ba9c6c8c15cd31ecbd6c284e9bf62c6927dcd4'
 ROM_CRC32 = 0x74BC8295
 BASE = 0x4000
-# C100h-C5FFh: TPA under every MSX-DOS set-up and never written by the game (measured over a full match)
+# C100h-C6FFh: TPA under every MSX-DOS set-up and never written by the game (measured over a full match)
 STUB_LOAD, STUB_MAX = 0xC100, 1024
-TRANSPORT, TRANSPORT_SIZE = 0xC500, 256
+TRANSPORT, TRANSPORT_SIZE = 0xC500, 512           # 512: the TCP/IP UNAPI transport (its buffers and stack)
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'pad1t', 'pad1c', 'pad2c', 'rng1', 'rng2', 'stubEnd')
 

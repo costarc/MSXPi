@@ -66,8 +66,9 @@ static uint8_t qhead, qcount;
 static uint8_t rbuf[64];
 static uint8_t cbuf[CTL_LEN];
 
-/* signed difference a - b of two centisecond times */
-static int16_t since(uint16_t a, uint16_t b) { return (int16_t)(a - b); }
+/* signed difference a - b of two centisecond times. A macro, not a function: SDCC 4.0.0 compiles
+ * "return a - b" of two uint16_t arguments into code that overwrites L while HL still points at b. */
+#define since(a, b) ((int16_t)(uint16_t)((uint16_t)(a) - (uint16_t)(b)))
 
 static uint32_t get32(const uint8_t *p)
 {

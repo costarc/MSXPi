@@ -12,9 +12,10 @@
 ; in page 3 and start the game the way the BIOS starts a cartridge.
 ;
 ; Memory (any MSX with 64 KB RAM and MSX-DOS):
-;   0100h-17FFh  this program          1800h-1BFFh  CRC-32 tables (4 x 256)
-;   1C00h-2FFFh  the GPF (5 KB)        3000h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
-;                                                   then the relocated transport at 3800h
+;   0100h-23FFh  this program          2400h-27FFh  CRC-32 tables (4 x 256)
+;   2800h-33FFh  the GPF (3 KB)        3400h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
+;                                                   then the relocated transport at 3C00h
+;   (PLAYNET /T: PLAYNET.OVL passes through 2800h-3FFFh on its way to its segment)
 ;   4000h-BFFFh  the game image        C000h-       the start-up trampoline, copied there at the end
 ; The game never maps page 0's RAM: this program is still here when the game ends, and pnBack brings
 ; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
@@ -35,17 +36,16 @@ KEYBUF:         EQU     $FBF0
 PUTPNT:         EQU     $F3F8
 GETPNT:         EQU     $F3FA
 
-CRCT:           EQU     $1800
-GPFBUF:         EQU     $1C00
-GPFMAX:         EQU     $1400
-BOUNCE:         EQU     $3000
-CHUNK:          EQU     $1000
+CRCT:           EQU     $2400
+GPFBUF:         EQU     $2800
+GPFMAX:         EQU     $0C00
+BOUNCE:         EQU     $3400
+CHUNK:          EQU     $0C00
 TRAMP:          EQU     $C000
 SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', start, length, then start-FFFEh
-SV_MAX:         EQU     $4000                   ; at most 16 KB (start >= C000h)
-RBUF:           EQU     $4000                   ; the restore buffer: the game image's RAM, dead by then
-BKSTACK:        EQU     $C000                   ; pnBack's stack, at the top of that RAM
-        ASSERT  RBUF+SV_HDR+SV_MAX <= BKSTACK-256
+SV_MAX:         EQU     $4000-8                 ; under 16 KB (start >= C008h): a segment, or RBUF to C000h
+RBUF:           EQU     $8000                   ; the MSXPi restore buffer: page 2, the game image's RAM
+        ASSERT  RBUF+SV_HDR+SV_MAX <= $C000
 
 R_LEFT:         EQU     2                       ; result codes (13.2)
 R_CONNECT:      EQU     5
@@ -63,6 +63,9 @@ start:  ld      hl,msgBanner
         call    getSlot1
         ld      (dosSlot1),a
         call    parseArgs
+        ld      a,(tcp)
+        or      a
+        call    nz,tcpSetup
         ld      a,(manual)
         or      a
         call    z,getSession
@@ -84,8 +87,8 @@ parseArgs:
         inc     hl
         ld      de,argBuf
         ld      a,c
-        cp      40
-        jr      nc,.usage
+        cp      127
+        jr      nc,usage
         or      a
         jr      z,.end
         ldir
@@ -97,7 +100,7 @@ parseArgs:
         or      a
         ret     z                               ; no arguments: the session comes from the MSXPi
         cp      '/'
-        jr      z,.tcp
+        jp      z,tcpArgs                       ; PLAYNET /T (playnet_tcp.asm)
         ld      a,1
         ld      (manual),a
         ld      de,gameId
@@ -108,9 +111,7 @@ parseArgs:
         ld      a,(roleArg)
         or      a
         ret     nz
-.usage: ld      hl,msgUsage
-        jp      exitQuiet
-.tcp:   ld      hl,msgNoTcp
+usage:  ld      hl,msgUsage
         jp      exitQuiet
 
 skipSp: ld      a,(hl)
@@ -169,6 +170,9 @@ getSession:
 
 ; ---- game package (8) -------------------------------------------------------------------------
 getProfile:
+        ld      a,(tcp)
+        or      a
+        jp      nz,tcpGpf
         ld      hl,cmdProfileId                 ; "playnet profile " + id
         ld      de,gameId
 .cat:   ld      a,(de)
@@ -184,6 +188,7 @@ getProfile:
         jp      c,linkErr
         cp      RC_SUCCESS
         jp      nz,piRefused
+gpfCheck:                                       ; BC = the GPF's length, at GPFBUF
         ld      (gpfLen),bc
         ld      hl,-128
         add     hl,bc
@@ -965,6 +970,9 @@ patchImage:
 
 ; ---- connect (MSXPi: the Pi does the network; status polls with opcode C9) -------------------
 connect:
+        ld      a,(tcp)
+        or      a
+        jp      nz,tcpConnect
         ld      hl,msgConnect
         call    PRINT
         ld      a,(manual)
@@ -1111,39 +1119,20 @@ install:
         inc     hl
         ld      a,(delay)
         ld      (hl),a
-        ld      hl,trImage                      ; the transport, relocated to its area
+        ld      a,(tcp)                         ; the transport, relocated to its area
+        or      a
+        jr      z,.pi
+        call    tcpTransport                    ; TCP/IP UNAPI (playnet_tcp.asm)
+        jr      .len
+.pi:    ld      hl,trImage                      ; the MSXPi's
         ld      de,tBuf
         ld      bc,TR_SIZE
         ldir
         ld      hl,trRelocs
-.rel:   ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        inc     hl
-        ld      a,d
-        and     e
-        inc     a
-        jr      z,.relDone                      ; FFFFh ends the list
-        push    hl
-        ld      hl,tBuf
-        add     hl,de
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        push    hl
-        ld      hl,(npTArea)
-        add     hl,de
-        ex      de,hl
-        pop     hl
-        ld      (hl),d
-        dec     hl
-        ld      (hl),e
-        pop     hl
-        jr      .rel
-.relDone:
+        call    relocate
         ld      hl,(npIrq)
         ld      (tBuf+TR_IRQ),hl
-        ld      a,(npW)                         ; L = 14 + 8W: 8 records of W inputs and a count
+.len:   ld      a,(npW)                         ; L = 14 + 8W: 8 records of W inputs and a count
         add     a,a
         add     a,a
         add     a,a
@@ -1168,9 +1157,57 @@ install:
         ld      (vStart),hl
         ld      a,(RAMAD1)
         ld      (vRam1),a
+        ld      hl,TR_SIZE
+        ld      a,(tcp)
+        or      a
+        jr      z,.tl
+        ld      hl,TU_SIZE
+        ld      a,(g3Seg)                       ; and the game's own page 3
+        ld      (vG3),a
+        ld      a,(gameSeg2)
+        ld      (vGame2),a
+        push    hl
+        ld      hl,(mapTab)
+        ld      de,M_PUT_P2
+        add     hl,de
+        ld      (vPut),hl
+        pop     hl
+.tl:    ld      (vTLen),hl
         call    saveDos
-        di
+        ld      a,(tcp)
+        or      a
+        jr      z,.go
+        ld      hl,(JIFFY)                      ; netcore's clock goes on from JIFFY's value
+        ld      (tBuf+TU_TICKS),hl
+.go:    di
         jp      TRAMP
+
+; HL = a relocation list (offsets in tBuf of the words to move by npTArea), FFFFh at the end
+relocate:
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        inc     hl
+        ld      a,d
+        and     e
+        inc     a
+        ret     z
+        push    hl
+        ld      hl,tBuf
+        add     hl,de
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        push    hl
+        ld      hl,(npTArea)
+        add     hl,de
+        ex      de,hl
+        pop     hl
+        ld      (hl),d
+        dec     hl
+        ld      (hl),e
+        pop     hl
+        jr      relocate
 
 ; Runs from C000h. Copies the stub and the transport into page 3 (MSX-DOS is gone from here on),
 ; then starts the game with page 0 = main BIOS and page 1 = the RAM holding it.
@@ -1182,9 +1219,21 @@ trampSrc:
         ldir
         ld      hl,tBuf
         ld      de,(vTDst)
-        ld      bc,TR_SIZE
+        ld      bc,(vTLen)
         ldir
-        ld      a,$C9                           ; no MSX-DOS timer hook
+        ld      a,(vG3)                         ; TCP/IP: the game gets a page 3 of its own, a copy of
+        or      a                               ; MSX-DOS's (this code and the transport are in it)
+        jr      z,.p3
+        call    .put
+        ld      hl,$C000
+        ld      de,$8000
+        ld      bc,$3FFF                        ; not FFFFh: the sub-slot register
+        ldir
+        ld      a,(vGame2)
+        call    .put
+        ld      a,(vG3)
+        out     ($FF),a
+.p3:    ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
         ld      ($FD9F),a
         ld      a,(EXPTBL)                      ; main BIOS slot into page 0
         and     3
@@ -1232,6 +1281,8 @@ trampSrc:
         ld      h,(hl)
         ld      l,a
 .go:    jp      (hl)
+.put:   ld      hl,(vPut)                       ; A = segment: MSX-DOS's PUT_P2
+        jp      (hl)
 vStubSrc:       defw    0
 vStubDst:       defw    0
 vStubLen:       defw    0
@@ -1239,6 +1290,10 @@ vTDst:          defw    0
 vStart:         defw    0
 vBase:          defw    0
 vRam1:          defb    0
+vTLen:          defw    0                       ; the transport's length
+vG3:            defb    0                       ; TCP/IP: the game's page-3 segment, else 0
+vGame2:         defb    0                       ; TCP/IP: the TPA's page-2 segment
+vPut:           defw    0                       ; TCP/IP: MSX-DOS's PUT_P2
         DEPHASE
 trampEnd:
 
@@ -1293,7 +1348,12 @@ saveDos:
         cpl                                     ; yes: the sub-slot register
 .flat:  ld      (svFFFF),a
         ld      (tBuf+TR_DOSSUB),a
-        ld      a,1
+        ld      a,(tcp)
+        or      a
+        jr      z,.pi
+        call    tcpSave                         ; TCP/IP: into the save segment
+        jr      .saved
+.pi:    ld      a,1
         ld      (pcUp),a
         ld      de,cmdSave
         ld      hl,BOUNCE
@@ -1304,7 +1364,7 @@ saveDos:
         jr      c,.lost
         cp      RC_SUCCESS
         jr      nz,.no
-        ld      hl,pnBack
+.saved: ld      hl,pnBack
         ld      (tBuf+TR_RET),hl
         ret
 .lost:  call    resetMSXPI
@@ -1431,7 +1491,8 @@ sendBlk:
 ; B, C = the game's slot registers. Fetch the saved area, put it back, set up the screen MSX-DOS had and
 ; leave to it with MCHAT typed. If any of that fails: the transport's reset (xBoot, with B and C).
 pnBack:
-        ld      sp,BKSTACK                      ; not in page 0: CALSLT puts the BIOS there
+        ld      sp,($0006)                      ; under MSX-DOS's TPA top (page 0 is its RAM again): not page 0
+                                                ; (CALSLT), 1 (MSR's routines map it), 2 (RBUF, segments)
         ld      (bkSlots),bc
         ld      a,8                             ; the PSG's three channels silent
         ld      b,3
@@ -1442,7 +1503,12 @@ pnBack:
         ld      a,c
         inc     a
         djnz    .psg
-        call    resetMSXPI
+        ld      a,(svMode)
+        or      a
+        jr      z,.pi
+        call    freeSegs                        ; TCP/IP: MSX-DOS's page 3 is as it was: nothing to restore
+        jr      .screen
+.pi:    call    resetMSXPI
         ld      de,cmdRestore
         ld      hl,RBUF
         ld      bc,SV_HDR+SV_MAX+1
@@ -1468,8 +1534,9 @@ pnBack:
         ld      de,(svStart)                    ; HL = RBUF + SV_HDR
         ld      bc,(svLen)
         ldir
-        ld      a,(svFFFF)
+.back:  ld      a,(svFFFF)
         ld      ($FFFF),a                       ; MSX-DOS's sub-slot register, or its RAM byte
+.screen:
         ei                                      ; MSX-DOS's page 3 and hooks are back; the MSX2 BIOS
         ld      ix,INITXT                       ; waits for interrupts while it sets the screen up
         ld      a,(SCRMOD)
@@ -1480,8 +1547,13 @@ pnBack:
         call    CALSLT
         di
         ld      hl,keysMchat                    ; MCHAT and Enter, typed for MSX-DOS
-        ld      de,KEYBUF
         ld      bc,6
+        ld      a,(tcp)
+        or      a
+        jr      z,.keys
+        ld      hl,keysMchatT                   ; the TCP/IP chat after a TCP/IP game
+        ld      bc,9
+.keys:  ld      de,KEYBUF
         ldir
         ld      (PUTPNT),de
         ld      hl,KEYBUF
@@ -1746,7 +1818,10 @@ exitResult:
 exitQuiet:
         call    PRINT
         call    PRINTNLINE
-toDos:  ld      c,F_TERM0
+toDos:  ld      a,(tcp)
+        or      a
+        call    nz,tcpCleanup
+        ld      c,F_TERM0
         jp      BDOS
 
 printHex:
@@ -1766,8 +1841,16 @@ printHex:
 
 ; ---- text ----------------------------------------------------------------------------------------
 msgBanner:      defb    "PLAYNET 1 - online games for MSX",13,10,0
-msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), or PLAYNET game role",0
-msgNoTcp:       defb    "This PLAYNET works over the MSXPi only; TCP/IP is not built yet",0
+msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role, or",13,10
+                defb    "       PLAYNET /T game role port ip:port[,ip:port]",0
+msgNoMapper:    defb    "TCP/IP needs a memory mapper and its routines (MSX-DOS 2, or MSR I on MSX-DOS 1)",0
+msgNoSeg:       defb    "No free memory mapper segment",0
+msgNoOvl:       defb    "Cannot load PLAYNET.OVL (it must be in the current directory)",0
+msgNoGpf:       defb    "Cannot read the game package (ID.GPF in the current directory)",0
+msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites: it cannot run here",0
+msgNoTcpip:     defb    "No TCP/IP UNAPI found: run INL I first",0
+msgNoPort:      defb    "Cannot open the UDP port",0
+nameOvl:        defb    "PLAYNET OVL"
 msgLink:        defb    "Cannot talk to the MSXPi",0
 msgTooBig:      defb    "The MSXPi sent more than PLAYNET can hold",0
 msgBadSession:  defb    "The MSXPi sent no valid game session",0
@@ -1796,6 +1879,7 @@ cmdSession:     defb    "playnet session",0
 cmdSave:        defb    "playnet save",0
 cmdRestore:     defb    "playnet restore",0
 keysMchat:      defb    "MCHAT",13
+keysMchatT:     defb    "MCHAT /T",13
 msgNoSave:      defb    "MSX-DOS could not be saved: the game will end with a reset",0
 cmdResult:      defb    "playnet result "
 cmdResultN:     defb    "0",0
@@ -1806,6 +1890,8 @@ cmdProfileId:   defs    10
         INCLUDE "putchar_clients.asm"
         INCLUDE "msxpi_bios.asm"
         INCLUDE "transport_msxpi.inc"
+        INCLUDE "transport_unapi.inc"
+        INCLUDE "playnet_tcp.asm"
 
 ; ---- variables ------------------------------------------------------------------------------------
 manual:         defb    0
@@ -1817,7 +1903,7 @@ gameId:         defs    9
 roleArg:        defs    9
 peer:           defs    9                       ; 8 bytes + a terminator
 title:          defs    25
-argBuf:         defs    41
+argBuf:         defs    128
 sesBuf:         defs    64
 fcb:            defs    37
 gpfLen:         defw    0
@@ -1872,6 +1958,24 @@ pcBsz:          defw    0
 pcCmd:          defw    0
 tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until the trampoline copies it
         ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
+tcp:            defb    0                       ; 1: PLAYNET /T (playnet_tcp.asm)
+lport:          defw    0
+ncand:          defb    0
+cands:          defs    18                      ; 3 x (ip 4, port 2)
+mapTab:         defw    0                       ; the mapper support routines
+ovlSeg:         defb    0
+g3Seg:          defb    0                       ; the game's page 3 (TCP/IP)
+gameSeg2:       defb    0
+dosSeg3:        defb    0
+segsHeld:       defb    0
+hz:             defb    60
+ovlLen:         defw    0
+ovlIo:          defw    0
+ovlOpen:        defb    0
+svMode:         defb    0                       ; 2: nothing saved (TCP/IP: the game has its own page 3)
+rfLen:          defw    0
+nameGpf:        defs    8
+                defb    "GPF"
 pcUp:           defb    0                       ; 1: piCommand uploads the saved area (sendSave)
 svHdr:          defb    "PNSV"                  ; the saved area's header (SV_HDR bytes)
 svStart:        defw    0                       ; where the area starts: HIMEM, or lower (saveDos)

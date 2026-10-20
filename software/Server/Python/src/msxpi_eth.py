@@ -800,6 +800,11 @@ def make_link(prefer_tap=True, ifname="msxpi0", log=None):
     networking is exercised entirely through MockLink.
     """
     log = log or (lambda *a: None)
+    if os.environ.get("MSXPI_ETH_LINK") == "udpnat":
+        # test rigs: a user-mode UDP network inside this process (msxpi_ethnat.py)
+        from msxpi_ethnat import UdpNatLink
+        log("eth: user-mode UDP link (10.0.2.0/24, host 10.0.2.2)")
+        return UdpNatLink(log=log)
     if prefer_tap and os.path.exists("/dev/net/tun"):
         try:
             link = TapLink(ifname=ifname)
