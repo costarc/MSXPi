@@ -19,12 +19,12 @@ set -o pipefail
 python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
-buildClientCommands="${buildClientCommands:-no}"
+buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
-buildBIOS="${buildBIOS:-yes}"
+buildBIOS="${buildBIOS:-no}"
 buildLoadrom="${buildLoadrom:-no}"
-buildOpenMSXConfig="${buildOpenMSXConfig:-yes}"
+buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
 buildMSXdiskImage="${buildMSXdiskImage:-yes}"
 
 # Bump the BuildId in the server before compiling? Off while iterating, so a
@@ -202,6 +202,13 @@ if [ "$buildClientCommands" = "yes" ]; then
     "$SJASM_DIR/sjasmplus" --inc=./asm-common/include \
         --raw=./target/ping.com ./Client/src/ping.asm ||
         die "ping.com did not assemble"
+
+    # PLAYNET.COM + PLAYNET.OVL (online games, MCHAT launches them): sjasmplus
+    # for the transports and loader, SDCC for the overlay; build.py does both.
+    python3 ./Client/src/playnet/build.py --assembler "$SJASM_DIR/sjasmplus" ||
+        die "playnet did not build"
+    cp ./Client/src/playnet/build/PLAYNET.COM ./target/playnet.com
+    cp ./Client/src/playnet/build/PLAYNET.OVL ./target/playnet.ovl
 
     # C clients (SDCC + Fusion-C), through make.sh - one per program.
     # make.sh is written for Linux: SDCC 4.2 with --sdcccall 0, objcopy, and
@@ -397,11 +404,12 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
     # that order is the order the files land in the image's directory. A glob
     # expands pattern by pattern, which reorders the directory and changes the
     # image byte-for-byte for no reason.
+    # *.ovl carries playnet.ovl, the overlay PLAYNET /T loads.
     # *.bat carries msxpiupd.bat and msxpirfh.bat, the MSX-side updater.
     # *.bin picks up msxpiext.bin, the BASIC extension. The BASIC programs
     # BLOAD it as their fallback when CALL MSXPIVER fails, and it was not
     # being shipped at all - so that fallback died with "File not found".
-    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini target/*.bat 2>/dev/null); do
+    for file in $(ls target/*.com target/*.COM target/*.BAS target/*.bin target/*.ini target/*.bat target/*.ovl 2>/dev/null); do
         fname="${file##*/}"
         [ -f "$file" ] || continue
         # Skip empty files. dsktool.py dies with "list index out of range" on a

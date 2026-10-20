@@ -500,7 +500,7 @@ if (-not $python) { $python = "python" }
 rem MSXPi launcher: MSX network check (if installed), msxpi-server, then openMSX.
 rem Set MSXPI_PORT to run msxpi-server on that TCP port and point openMSX's MSXPi at it.
 rem Leave it empty to use the defaults.
-set "MSXPI_PORT="
+set "MSXPI_PORT=5000"
 
 cd /d "$MsxPiHome"
 if exist "$MsxPiHome\msxpi-netcheck.ps1" powershell -NoProfile -ExecutionPolicy Bypass -File "$MsxPiHome\msxpi-netcheck.ps1"

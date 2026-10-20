@@ -9,6 +9,7 @@ game's netplay.transport_area. The game stubs themselves are built by their ROM-
 (software/ROM-Patcher/profiles/<game>/rebuild.py), from engine/playnet_engine.asm.
 """
 import argparse
+import os
 from pathlib import Path
 import re
 import shutil
@@ -132,11 +133,19 @@ def overlay(sdcc):
     return top - OVL_BASE, end
 
 
+def find_sdcc():
+    """sdcc from $SDCC, PATH, or the usual Windows install (a build shell such as MSYS may not have it on PATH)."""
+    found = os.environ.get('SDCC') or shutil.which('sdcc') or shutil.which('sdcc', path='C:/Apps/SDCC/bin')
+    return found or 'sdcc'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--assembler', default='sjasmplus')
-    parser.add_argument('--sdcc', default=shutil.which('sdcc') or 'sdcc')
+    parser.add_argument('--sdcc', default=find_sdcc())
     args = parser.parse_args()
+    if not Path(args.sdcc).is_file() or not shutil.which('sdasz80', path=str(Path(args.sdcc).parent)):
+        raise SystemExit(f'SDCC not found ({args.sdcc}): put it on PATH, set SDCC, or pass --sdcc')
     BUILD.mkdir(exist_ok=True)
     osize, oend = overlay(args.sdcc)
     print(f'PLAYNET.OVL {osize} bytes, data up to {oend - 1:04X}h')
