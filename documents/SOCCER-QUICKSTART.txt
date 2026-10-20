@@ -1,0 +1,66 @@
+          KONAMI'S SOCCER ONLINE - QUICK START (MCHAT + PLAYNET)
+          ======================================================
+
+Two MSX computers play Konami's Soccer against each other over the Internet.
+You can meet in the MCHAT chat (part 1), or start the game by hand from the
+command line over TCP/IP, without the chat (part 2).
+
+WHAT YOU NEED (each player)
+  - An MSX with MSX-DOS and 64 KB RAM, and an MSXPi or a TCP/IP UNAPI card
+    (GR8NET, ObsoNET, InterNestor Lite, ...).
+  - Your own dump of the game: SOCCER.ROM, Konami's Soccer (RC-732),
+    32768 bytes, CRC-32 74BC8295. The ROM is not supplied.
+  - Both players must have the same SOCCER.GPF (software/target/games).
+
+INSTALL
+  MSXPi: run the MSXPi update ("msxpiupd"); it copies MCHAT.COM, PLAYNET.COM,
+         PLAYNET.OVL and SOCCER.GPF to the disk. Put SOCCER.ROM there too.
+  Others: copy those files, on a PC, into ONE folder or disk (MSX-DOS 1 has no
+         folders). TCP/IP needs a memory mapper: MSX-DOS 2/Nextor, or MSR on
+         MSX-DOS 1. Run "MSR I" and "INL I" (or your card's driver) first.
+
+PART 1 - WITH THE CHAT                         (in the folder with SOCCER.ROM)
+  1. MCHAT NICK             MSXPi link         (MCHAT /T NICK: TCP/IP, no MSXPi)
+  2. /WHO lists the room, /GAMES lists the games, CTRL-U picks a player.
+  3. Player 1:  /PLAY NICK SOCCER        Player 2:  /ACCEPT  (or /DECLINE)
+     /CANCEL withdraws an invitation.
+  4. MCHAT closes by itself and the game starts on both machines. Type MCHAT
+     again afterwards to return to the chat.
+
+PART 2 - WITHOUT THE CHAT, OVER TCP/IP (CLI)
+  Each player needs: the other's address as IP:PORT, and a free UDP PORT of
+  their own. Agree on them first (phone, mail, ...). Example:
+
+      Player 1 (192.168.1.50, port 5000)    Player 2 (192.168.1.60, port 5000)
+      PLAYNET /T SOCCER H 5000 192.168.1.60:5000
+                                            PLAYNET /T SOCCER C 5000 192.168.1.50:5000
+
+  Syntax:  PLAYNET /T <game> <role> <port> <ip:port>[,<ip:port>[,<ip:port>]]
+    <game>   SOCCER (the name of SOCCER.GPF)
+    <role>   H = player 1, C = player 2: one of each. Exactly as written.
+    <port>   the UDP port this MSX uses
+    <ip:port> where the opponent can be reached; up to 3, separated by commas
+              (for example a LAN and a public address). No spaces.
+  Start both within a few seconds of each other: the two sides send to each
+  other at the same moment to open the connection.
+  Addresses: same LAN = the LAN addresses (the INL/UNAPI address of each MSX).
+  Over the Internet there is no automatic address discovery on this path: the
+  player who is behind a router forwards the UDP port to the MSX and tells the
+  other the router's public IP and that port. A VPN works too. An emulated MSX
+  (openMSX) behind the PC's user-mode link must give the PC's LAN address.
+  When the game ends the MSX resets (there is no chat to return to).
+
+CONTROLS   Player 1 is the first team.
+  Cursor keys or joystick 1: move / aim.  SPACE or joystick button: pass / shoot.
+
+IF SOMETHING GOES WRONG
+  "ROM not found / wrong CRC"  - SOCCER.ROM must be in the current folder and be
+                                 the exact dump above.
+  Invitation declined at once  - different GPF versions; update both.
+  Does not connect             - wrong IP:PORT, a router blocking UDP, or only one
+                                 side started (or started too late).
+  "Usage: PLAYNET ..." printed - a missing or misspelled argument.
+
+More: documents/MSXCHAT-GAMES.md, software/target/games/README.md,
+      documents/PLAYNET-DESIGN.md
+Online gaming is in ALPHA testing: it is not ready for end users yet.
