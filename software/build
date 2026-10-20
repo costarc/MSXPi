@@ -183,6 +183,11 @@ EOF
             esac
             echo "pcopy m:$f"
         done
+        # The online games (PLAYNET): target/games/*.GPF, copied to the MSX disk
+        # next to MCHAT.COM and PLAYNET.COM (pcopy names the file after the last "/").
+        for f in $(cd target/games 2>/dev/null && LC_ALL=C ls *.GPF 2>/dev/null); do
+            echo "pcopy m:games/$f"
+        done
         echo "p ver"
     } | to_crlf target/msxpirfh.bat
 }
