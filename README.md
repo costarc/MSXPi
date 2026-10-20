@@ -16,6 +16,11 @@ Version 1.6 is the current release. What changed is in
 [Release_Notes](Release_Notes); how to use everything is in the
 [documents](documents) folder.
 
+> **Notice: online gaming is in alpha testing.** The online games (PLAYNET and MCHAT game invitations,
+> for example Konami's Soccer over the Internet) are experimental and **not ready for end users yet**.
+> They have only been tested between emulators, expect bugs and missing pieces, and the files, commands and
+> protocols may still change. Try them if you want to help test, but do not rely on them.
+
 **Version 1.6 breaks software compatibility with previous ROMs and servers.**
 Upgrade the whole set together: ROM, msxpi-server, the client commands (`.COM`
 files) and, on real hardware, the CPLD firmware. A v1.6 ROM on older CPLD
