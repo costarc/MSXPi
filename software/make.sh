@@ -49,6 +49,10 @@ trap 'rm -rf "$scratch"' EXIT
 sdcc -mz80 --sdcccall 0 -c "$here/C-common/lib/msxpi-bios.c" \
     -o "$scratch/msxpi-bios.rel"
 sdar -rc "$scratch/msxpi-bios.lib" "$scratch/msxpi-bios.rel"
+# PChess is near the MSX-DOS memory limit: make.bat gives it the larger register
+# allocation search (about 2.4 KB smaller, a build of about 3 minutes).
+optx=()
+[[ "$prog" == pchess ]] && optx=(--max-allocs-per-node 100000)
 sdcc -mz80 --sdcccall 0 --code-loc 0x106 --data-loc 0x0 \
     --disable-warning 196 --no-std-crt0 --nostdlib --opt-code-size \
     fusion.lib msxpi-bios.lib "$legacy" -L "$fusion/lib" -L "$scratch" \

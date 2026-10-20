@@ -19,9 +19,13 @@ set -o pipefail
 python3 asm-common/transport/generate.py --check || exit 1
 
 # --- what to build -----------------------------------------------------------
-buildClientCommands="${buildClientCommands:-yes}"
+buildClientCommands="${buildClientCommands:-no}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-nitros}"
+# Built with make.bat (SDCC 4.0) on Windows: the games sit at the MSX-DOS memory limit and
+# SDCC 4.2 (make.sh) makes pchess about 1 KB bigger, too big for a Canon V-25 with TCP/IP.
+# Elsewhere they go through make.sh like the others.
+winClientCommands="${winClientCommands:-mchat pchess pchess1 pcheckers}"
 buildBIOS="${buildBIOS:-no}"
 buildLoadrom="${buildLoadrom:-no}"
 buildOpenMSXConfig="${buildOpenMSXConfig:-no}"
@@ -224,6 +228,18 @@ if [ "$buildClientCommands" = "yes" ]; then
             wsl.exe -e bash -c "cd \"\$(wslpath -a '$(cygpath -w "$PWD")')\" &&
                 FUSION_C='$FUSION_C_DIR' ./make.sh '$prog'"
         fi || die "$prog.com did not build"
+    done
+
+    for prog in $winClientCommands; do
+        echo "Compiling $prog.com"
+        stamp="$(mktemp)"
+        if [ "$(uname -s)" = "Linux" ]; then
+            FUSION_C="$FUSION_C_DIR" ./make.sh "$prog"
+        else
+            cmd.exe //c "pushd $(cygpath -w "$PWD") && $(cygpath -w "$PWD")\make.bat $prog" >/dev/null
+            [ -s "target/$prog.com" ] && [ "target/$prog.com" -nt "$stamp" ]
+        fi || die "$prog.com did not build"
+        rm -f "$stamp"
     done
 fi
 
