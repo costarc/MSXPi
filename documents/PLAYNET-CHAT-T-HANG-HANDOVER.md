@@ -3,6 +3,25 @@
 Written 2026-10-22 on `feature/tcpip-games`. This is a bug to find, not a feature to build. Nothing in this document was reproduced by the
 writer: it collects what is recorded, says what is not known, and proposes how to look. Facts are marked **known**, guesses **guess**.
 
+## 0. Resolved (branch `fix/mchat-t-hang`)
+
+None of the guesses in section 4. The cause was uninitialised globals. `crt0_msxdos` zeroes nothing, and `make.bat`'s `hex2bin` fills
+the `.COM`'s `_DATA` gap (9000h-C2A6h, 12956 bytes) with **FFh**. `build_client.py` filled it with 00h, which is why the rig passed.
+The agent's new globals were never set: `cfg_gport`, `cfg_gaddr` (set only when `MCHAT.INI` has `GAMEPORT`/`GAMEADDR`, which the
+rig's INI always has and a user's usually lacks), `phase`, `peer`, `token`, `gsec`/`gjif`/`grem`, `lt_seg`. With no `GAMEADDR`,
+`gl_open` (run on `/accept`, and on the inviter when the ACCEPT arrives) `strcpy`s an FFh string with no end into `mine[64]` and
+overwrites the globals after it: the hang after the invitation.
+
+- Reproduced on the rig with `SCENARIO=tcp PLAININI=1` (new: a user's INI without `GAMEPORT`/`GAMEADDR`) and the FFh-padded build.
+  A memory dump of the invited node after `/accept` shows `10.0.2.15:65535,` followed by FFh bytes, 124 bytes with no terminator.
+  With the fix the candidates are terminated (`10.0.2.15:5109`) and ACCEPT/GO go through.
+- Fix: `gl_init()` in `games_local.c`, plus the chat's own new globals set in `tcp_link_start()`; `gl_on_message` terminates its copy.
+- `build_client.py` now fills gaps with FFh, so the rig builds the same bytes as `make.bat` (checked: identical to the shipped
+  49757-byte agent build), and the rig can no longer hide this kind of bug.
+- `SCENARIO=tcp EXITKEY=1` passes with the fixed build: identical frames, both back in `MCHAT /T` on the same IRC connection,
+  6 PONG during the game. `target/mchat.com` is the agent build again (49819 bytes, image ends at C39Ah).
+- Not yet run on the real Canon V-25.
+
 ## 1. What it blocks
 
 - `MCHAT /T` (the chat over TCP/IP) with its game agent: `/play`, `/accept`, the hand-over to `PLAYNET /T` through `PLAYNET.SES`, and the way back.
