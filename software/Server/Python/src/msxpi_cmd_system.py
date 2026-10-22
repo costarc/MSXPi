@@ -355,6 +355,7 @@ def setbranch(parm: Optional[str] = None) -> CommandResult:
     that does not exist changes nothing: the update goes on from master.
     """
     global _update_branch
+    print(f"setbranch: received {parm!r}", flush=True)
     branch = _branch_name(parm)
     if branch is None:
         return sendmultiblock(b"Pi:Error - bad branch name")
