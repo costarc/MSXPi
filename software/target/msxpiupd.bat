@@ -1,6 +1,10 @@
 echo Preparing to update...
 p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target
 p date
+p cd /home/pi/msxpi
+p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh
+p run sh update.sh
+p restart
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
 p setbranch %1

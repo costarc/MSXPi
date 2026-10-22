@@ -143,6 +143,8 @@ to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 #   - "msxpiupd branch" updates from that git branch (master when none): "p
 #     setbranch %1" points DriveM and the later "p update" at it. A batch file
 #     cannot test for an empty %1, so the server supplies the default.
+#     "p setbranch" exists only in a new server, so msxpiupd.bat first brings
+#     the server up to date from master (and restarts it), whatever it was.
 #   - msxpirfh.bat keeps pcopy.old, fetches pcopy.com first, updates and
 #     restarts the server, then copies everything else with the new pcopy
 #     against the new server.
@@ -151,6 +153,10 @@ gen_update_batch() {
 echo Preparing to update...
 p set DriveM ${GITPATH}/target
 p date
+p cd /home/pi/msxpi
+p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh
+p run sh update.sh
+p restart
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
 p setbranch %1
