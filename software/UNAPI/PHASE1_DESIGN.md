@@ -235,6 +235,38 @@ Phase 3 must add a burst-aware transfer function that raises RDY once, clocks N
 bytes, then drops it. Without this, `INIR` cannot be used at all — this is a
 hard dependency, not an optimisation.
 
+### 3.5 Protocol 2 (2026-10, `feature/eth-tx-otir`)
+
+The probe (`OP_PROBE` -> `[RC]'E''T''H'[version]`) now reports version **2**, and
+the ROM refuses any other version: `ETH_VERIFY` sets `MODE_REFUSED` (2), every
+transaction is then refused, and ETHTEST / ETHMODE / ETHBENCH say why.
+`ETH_RESET` probes again, so updating the Pi needs no MSX reboot. There is no
+fallback to version 1: the ROM and the server are updated together. (An old
+ROM does not check the version at all, so an old ROM against a new server is
+not refused - it desynchronises on the first inline frame.)
+
+What changed on the wire:
+
+- **`ETH_IN_STATUS` carries small frames.** Reply `[FLAG][LEN:2][ET:2]`; FLAG 0
+  none, 1 waiting (fetch with `ETH_GET_FRAME`), 2 the frame and its checksum
+  follow. The Pi inlines frames of at most `RX_INLINE_MAX` = 128 bytes and
+  dequeues them as it sends; the driver holds the frame in its work area
+  (`o_RXC`, 5 + 129 bytes) until `ETH_GET_FRAME` copies it out with no link
+  traffic. A received game packet, ARP or ACK costs one transaction, not two.
+  This replaces the "more pending" caching idea of 3.3: with inlining, the
+  round trip that caching would save already delivers the next frame.
+- **`ETH_GET_FRAME` maxlen 0 discards.** The Pi drops the frame and sends only
+  `[LEN:2][FLAGS]`, so `HL=0` no longer pulls the whole frame across the link.
+- **`ETH_SEND_FRAME`'s payload and checksum are one burst.** The opcode and
+  length still go byte by byte; the frame and checksum are received with
+  `SPI_BurstIn` (READY held), so the driver sends them with `OTIR` in wait mode
+  (`ETH_TX_BLOCK`). Polled mode sends the same bytes one at a time.
+
+The work area grew from 39 to 173 bytes (`MYSIZE` 47 -> 181), allocated below
+HIMEM. The ROM image got smaller (1329 -> 1314 bytes) by keeping `ETH_OP`'s
+parameters in registers, one helper for the one-byte fast ops, and dropping
+`ETH_WAIT_DATA` and `ETH_RX_SINK`.
+
 ---
 
 ## 4. Driver structure

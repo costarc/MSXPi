@@ -189,13 +189,17 @@ CALL_UNAPI:
             ret
 
 ; --- PRINT_MODE: A = a MODE_* value as the driver reports it (0 polled,
-; 1 /WAIT, FFh never probed).
+; 1 /WAIT, 2 refused - the Pi speaks another protocol version, FFh never
+; probed).
 PRINT_MODE:
             ld      de,M_POLLED_S
             or      a
             jr      z,.emit
             dec     a
             ld      de,M_WAIT_S
+            jr      z,.emit
+            dec     a
+            ld      de,M_REFUSED_S
             jr      z,.emit
             ld      de,M_UNKNOWN_S
 .emit:
@@ -225,6 +229,10 @@ NOW_S:      db      "Now: $"
 M_POLLED_S: db      "polled",13,10,"$"
 M_WAIT_S:   db      "hardware /WAIT",13,10,"$"
 M_UNKNOWN_S: db     "not probed yet",13,10,"$"
+M_REFUSED_S: db     "refused - Pi protocol mismatch",13,10
+            db      "*** The Pi's msxpi-server speaks another Ethernet",13,10
+            db      "    protocol version than this ROM. Update the Pi",13,10
+            db      "    and the ROM together, then run ETHTEST again.",13,10,"$"
 NONE_S:     db      "*** No ETHERNET implementation found.",13,10,"$"
 NOHELPER_S: db      "*** Implementation is in a RAM segment and no UNAPI RAM",13,10
             db      "    helper is installed. Run RAMHELPR I first.",13,10,"$"

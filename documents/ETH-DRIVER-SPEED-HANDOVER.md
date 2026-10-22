@@ -3,6 +3,10 @@
 Handover, written 2026-10-22 on `feature/eth-tx-otir` (a worktree cut from `master` at `0c4ac631`). Nothing is implemented on this branch yet:
 a draft of the OTIR send was tried and does not fit in the ROM (section 4). The branch holds this document only.
 
+> **Update, later the same day:** implemented on this branch as protocol 2 - see `ETH-DRIVER-SPEED-TEST-HANDOVER.md` (what changed,
+> how to build and test) and `ETH-DRIVER-SPEED-TESTPLAN.md`. Two corrections to this document: the OTIR send *does* need a Pi change
+> (the payload must be received with `SPI_BurstIn`), and `ETHBENCH` had no send pass (`ETHBENCH S` now has one).
+
 | | |
 |---|---|
 | Why | PLAYNET over TCP/IP (InterNestor Lite on the MSXPi Ethernet driver) is slower than over the MSXPi link. The link and the driver are a large part of it. Context: `documents/PLAYNET-TCPIP-PERFORMANCE.md` on `feature/tcpip-games`, step 4 (5.4) |

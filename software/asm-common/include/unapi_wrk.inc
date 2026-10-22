@@ -54,14 +54,14 @@ o_ETH_DEAD	EQU	UNAPI_WRK+7
 o_ETH_FAILCNT	EQU	UNAPI_WRK+8
 o_ETH_LASTSEND	EQU	UNAPI_WRK+9
 o_ETH_OPC	EQU	UNAPI_WRK+10
-o_ETH_ARG	EQU	UNAPI_WRK+11
-o_ETH_HASARG	EQU	UNAPI_WRK+12
-o_ETH_RLEN	EQU	UNAPI_WRK+13
-o_ETH_CHKRC	EQU	UNAPI_WRK+14
+o_ETH_ARG	EQU	UNAPI_WRK+11	; free: ETH_OP keeps it in a register
+o_ETH_HASARG	EQU	UNAPI_WRK+12	; free: ETH_OP keeps it in a register
+o_ETH_RLEN	EQU	UNAPI_WRK+13	; free: ETH_OP keeps it in a register
+o_ETH_CHKRC	EQU	UNAPI_WRK+14	; free: ETH_OP keeps it in a register
 o_ETH_SUM	EQU	UNAPI_WRK+15
 o_ETH_TMO	EQU	UNAPI_WRK+16	; per-byte spin budget, in units of 256
 o_ETH_DEST	EQU	UNAPI_WRK+17	; 2
-o_ETH_SRC	EQU	UNAPI_WRK+19	; 2
+o_ETH_SRC	EQU	UNAPI_WRK+19	; 2 - free: ETH_SEND_FRAME keeps it in HL
 o_ETH_FLEN	EQU	UNAPI_WRK+21	; 2
 o_MACADDR	EQU	UNAPI_WRK+23	; 6
 o_ETH_BUF	EQU	UNAPI_WRK+29	; 7 - see below
@@ -87,7 +87,27 @@ o_LINK_SAVE	EQU	UNAPI_WRK+37	; DSKIO's saved copy of o_LINK_BUSY - see
 				; DSKIO is not reentrant.
 o_SEND_P1	EQU	UNAPI_WRK+38	; reserved former page-1 source flag.
                                 ; DSKIO stages page-1 sectors in the kernel's $SECBUF.
-UNAPI_WRKEND	EQU	UNAPI_WRK+39	; UNAPI size; also the ROM's MYSIZE
+
+; A received frame that ETH_IN_STATUS already brought in (protocol 2).
+;
+; When a frame of at most RX_INLINE_MAX bytes is waiting, the Pi appends it to
+; the ETH_IN_STATUS reply, so receiving it costs one transaction instead of
+; two, and ETH_GET_FRAME then copies it from here with no link traffic.
+; o_RXC holds the reply header exactly as it came off the wire - flag, length
+; lo/hi, ethertype hi/lo - and flag 2 means "the frame is held here".  The
+; frame follows it, then its checksum byte, hence the +1.
+;
+; RX_INLINE_MAX is part of the wire protocol: msxpi_eth.py has the same number,
+; and the probe's protocol version guards it.  128 covers ARP, TCP ACKs, telnet
+; keystrokes and PLAYNET's game packets (64-70 bytes).  Every byte of it is
+; work area, which MSX-DOS allocates below HIMEM - twice for a disk ROM - so
+; do not raise it casually.  Everything up to o_RXC+4 must stay below 128 for
+; the (ix+d) loads; the frame itself is reached through WRKPTR, which allows
+; up to 255.
+RX_INLINE_MAX	EQU	128
+o_RXC		EQU	UNAPI_WRK+39	; 5 - flag, len lo/hi, ethertype hi/lo
+o_RXC_FRAME	EQU	UNAPI_WRK+44	; RX_INLINE_MAX+1 - the frame, its checksum
+UNAPI_WRKEND	EQU	o_RXC_FRAME+RX_INLINE_MAX+1	; UNAPI size; also the ROM's MYSIZE
 
 ; Where the assembled driver is placed inside the MSX-DOS driver ROM.
 ;
@@ -109,8 +129,10 @@ KERNEL_GETWRK	EQU	06027H	; kernel GETWRK (msx-dos.mac)
 
 UNAPI_ORG	EQU	07AC9H	; Boundary between the DOS driver below and the UNAPI
 				; image above.  Moved up from 07AB8H for the /WAIT disk
-				; bursts and the PerformHandshake fix; the UNAPI image
-				; has 1 spare byte below 8000H, the driver none.  Tight;
+				; bursts and the PerformHandshake fix.  The UNAPI image
+				; is 1314 bytes, 21 spare below 8000H (protocol 2: the
+				; OTIR send and the inline receive paid for themselves
+				; by folding duplicated code); the driver has none.  Tight;
 				; the ASSERTs around UNAPI_ROM_IMAGE in msxpi-driver.mac
 				; catch an overrun on either side, so move this only in
 				; response to one of them, and re-measure afterwards.

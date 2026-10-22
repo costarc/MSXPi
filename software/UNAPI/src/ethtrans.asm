@@ -113,6 +113,14 @@ MODE_WAIT:      equ   1     ; hardware /WAIT, INIR/OTIR
 ; the rest of the session; detection is deferred to the first UNAPI call.
 MODE_UNKNOWN:   equ   0FFh
 
+; MODE_REFUSED: the Pi answered the probe with a different protocol version.
+; ETH_VERIFY sets it, and ETH_LOCK then refuses every transaction, so a ROM and
+; a server that disagree on the wire format fail loudly - no network, and
+; ETHTEST says why - instead of desynchronising on the first received frame.
+; There is no fallback to the older protocol, by design: the ROM and the Pi are
+; updated together.  ETH_RESET probes again, so updating the Pi needs no reboot.
+MODE_REFUSED:   equ   2
+
 ; How many consecutive failures before declaring the link dead.
 ;
 ; Latching on the FIRST failure was wrong.  On real hardware a transaction
@@ -168,6 +176,10 @@ ETH_DRAINMAX: equ   1600
 ; `ld (ETH_BUSY),a` is a single instruction, so there is no torn write. That is
 ; the whole argument.
 ETH_LOCK:
+            ; The Pi speaks another protocol version: never touch the link.
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_REFUSED
+            jr      z,.refuse
             ; The disk owns the link right now - back off.  Reporting "nothing
             ; to do" is the right answer for the ISR: it simply tries again on
             ; the next tick, and the frame is still waiting in the Pi's queue.
@@ -321,9 +333,7 @@ ETH_RESYNC:
             ld      (ix+o_ETH_TMO),ETH_DRAINTMO
             ld      bc,ETH_DRAINMAX
 .drain:
-            push    bc
-            call    ETH_RX
-            pop     bc
+            call    ETH_RX              ; preserves BC
             jr      c,.drained          ; nothing came - both ends in step
             dec     bc
             ld      a,b
@@ -397,7 +407,7 @@ ETH_RX:
             jr      z,.get
             xor     a
             out     (CTRL1),a               ; request a byte
-            call    ETH_WAIT_DATA
+            call    ETH_WAIT_READY          ; 0 again = the byte has arrived
             jr      c,.timeout
 .get:
             in      a,(DATA1)
@@ -411,7 +421,10 @@ ETH_RX:
 
 ; --- ETH_WAIT_READY: spin until $56 reads 0, bounded.
 ; Out: CF=1 on timeout.  Corrupts AF, BC.
-; $56 = 0: no transfer running and the Pi is holding READY.
+; $56 = 0: no transfer running and the Pi is holding READY.  After a polled
+; read request it means the same thing - the transfer has completed and the
+; byte is in the shift register - so ETH_RX waits for its data here too.  (It
+; used to call an ETH_WAIT_DATA that was this loop, byte for byte.)
 ETH_WAIT_READY:
             ld      c,0
             ld      b,(ix+o_ETH_TMO)
@@ -426,24 +439,6 @@ ETH_WAIT_READY:
             scf
             ret
 
-; --- ETH_WAIT_DATA: spin until the requested byte is actually available.
-; Out: CF=1 on timeout.  Corrupts AF, BC.
-; After the request, $56 = 0 means the transfer has completed and the byte is
-; in the shift register.
-ETH_WAIT_DATA:
-            ld      c,0
-            ld      b,(ix+o_ETH_TMO)
-.loop:
-            in      a,(CTRL1)
-            or      a
-            ret     z                       ; byte available, CF=0
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,.loop
-            scf
-            ret
-
 ; =============================================================================
 ; Block transfers
 ; =============================================================================
@@ -451,10 +446,12 @@ ETH_WAIT_DATA:
 ; inner loop is a plain INIR/OTIR at 21 T-states per byte, which is the entire
 ; point of the CPLD /WAIT work.
 ;
-; The 256-byte chunking below is deliberately written so that a length which is
-; an exact multiple of 256 does NOT transfer an extra block - the obvious
-; formulation (test the high byte, else send C bytes) sends 256 spurious bytes
-; when C is zero.
+; Both directions send the odd C bytes first and then B whole 256-byte runs:
+; after the first INIR/OTIR, or after skipping it, B is 0, which those
+; instructions read as 256, so the rest of the loop needs no counting of its
+; own.  A length that is an exact multiple of 256 therefore transfers no extra
+; block - the trap the obvious "test the high byte, else C bytes" formulation
+; falls into when C is zero.
 
 ; WHY THE READY WAIT BEFORE A BURST
 ;
@@ -473,12 +470,61 @@ ETH_WAIT_DATA:
 ; run: SPI_BurstOut holds RDY high for the whole reply, so only the boundary
 ; needs guarding.
 
-; There is no ETH_TX_BLOCK.  One existed and was never called: every send
-; goes through ETH_TX_SUM, which has to see each byte to accumulate the
-; checksum the Pi verifies.  Sending a frame therefore costs a CALL per byte
-; instead of OTIR's 21 T-states - the obvious fix is to sum the buffer in one
-; pass and then OTIR it in a second, but that is a change to a path that has
-; never carried a real frame, so it is left for when one does.
+;
+; The same holds for OTIR in the other direction: the CPLD stalls the OUT only
+; while RDY is high, so a write landing in a gap is lost, not delayed.  That is
+; why msxpi_eth.py receives ETH_SEND_FRAME's payload with SPI_BurstIn, which
+; holds RDY for the whole run, and never byte by byte.
+
+; --- ETH_TX_BLOCK: send BC bytes (1 or more) from HL, then their 8-bit sum.
+; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
+;
+; The sum is taken in a pass of its own before anything is sent, so that the
+; send itself can be a plain OTIR.  CPI is there for its side effects alone:
+; HL+1, BC-1 and P/V=0 once BC reaches zero, while A - the running sum - is
+; only compared, never changed.  33 T-states a byte, against the ~110 the old
+; per-byte ETH_TX_SUM spent on waiting and sending each byte.
+ETH_TX_BLOCK:
+            push    hl
+            push    bc
+            xor     a
+.sum:       add     a,(hl)
+            cpi
+            jp      pe,.sum
+            ld      (ix+o_ETH_SUM),a
+            pop     bc
+            pop     hl
+
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_WAIT
+            jr      nz,.polled
+
+            push    bc                      ; ETH_WAIT_READY corrupts BC
+            call    ETH_WAIT_READY
+            pop     bc
+            ret     c
+            ld      d,b                     ; D = whole 256-byte runs
+            ld      b,c                     ; the odd bytes first, if any
+            ld      c,DATA1
+            inc     b
+            dec     b
+            jr      z,.wrun
+            otir
+.wrun:      ld      a,d                     ; B is 0 here: OTIR sends 256
+            or      a
+            jr      z,.sumout
+            otir
+            dec     d
+            jr      .wrun
+
+; Polled: one byte at a time through ETH_TX, which waits for each.
+.polled:    ld      a,(hl)
+            call    ETH_TX
+            ret     c
+            cpi
+            jp      pe,.polled
+.sumout:    ld      a,(ix+o_ETH_SUM)
+            jp      ETH_TX
 
 ; --- ETH_RX_BLOCK: receive BC bytes into HL.
 ; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
@@ -492,43 +538,26 @@ ETH_RX_BLOCK:
             jr      nz,.polled
 
             push    bc                      ; ETH_WAIT_READY corrupts BC
-            push    hl
             call    ETH_WAIT_READY
-            pop     hl
             pop     bc
             ret     c
-
-.wloop:
-            ld      a,b
-            or      a
-            jr      z,.wlast
-            push    bc
-            ld      b,0
-            ld      c,DATA1
-            inir
-            pop     bc
-            dec     b
-            jr      .wloop
-.wlast:
-            ld      a,c
-            or      a
-            ret     z
+            ld      d,b                     ; as in ETH_TX_BLOCK
             ld      b,c
             ld      c,DATA1
+            inc     b
+            dec     b
+            jr      z,.wrun
             inir
+.wrun:      ld      a,d
             or      a
-            ret
+            ret     z
+            inir
+            dec     d
+            jr      .wrun
 
-.polled:
-            push    bc
-            call    ETH_RX
-            pop     bc
+.polled:    call    ETH_RX
             ret     c
             ld      (hl),a
-            inc     hl
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,.polled
-            or      a
+            cpi                             ; HL+1, BC-1; CF untouched
+            jp      pe,.polled
             ret
