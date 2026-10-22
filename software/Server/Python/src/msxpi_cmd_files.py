@@ -217,6 +217,9 @@ def run(cmd: str = "") -> CommandResult:
             args = shlex.split(cmd)
         except ValueError:
             args = []
+        # "VAR=value sh script" (msxpirfb.bat): the variables are the Pi's business.
+        while args and re.match(r"[A-Za-z_]\w*=", args[0]):
+            args = args[1:]
         if args and args[0] == "wget" and not shutil.which("wget"):
             try:
                 reply = _wget(args[1:])
