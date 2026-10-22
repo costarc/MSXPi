@@ -47,12 +47,13 @@ TIMELINE = [
 ]
 if MACHINE == 'msx2':
     # DOS from FloppyA; no /1, so the MSX2 build starts in SCREEN 6 and /screen goes to SCREEN 2.
-    # Slower than the MSX1 script: a whole screen takes a second to repaint.
+    # Slower than the MSX1 script (written when a whole screen took ~7 s to repaint).
     TIMELINE = [(27, 'dump:font'), (22, 'c:\r'), (25, 'dir mchat.com\r'), (30, 'mchat alice\r'),
                 (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (80, 'dump:second'),
                 (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (108, UP + UP), (122, 'dump:scrolled'),
                 (126, '/screen\r'), (140, 'dump:switched'), (141, 'shot:switched'), (144, ESC), (152, 'quit')]
 
+TIMING = os.environ.get('MCHAT_TIMING')            # 1: report VRAM write bursts per action; check: also fail if slow
 LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or tcp (TCP/IP UNAPI, INL)
 if LINK == 'tcp':
     # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
@@ -117,6 +118,15 @@ def write_script(path, dumps):
              '    fconfigure $f -translation binary',
              '    puts -nonewline $f [debug read_block VRAM 0 ' + ('32768' if MACHINE == 'msx2' else '16384') + ']',
              '    close $f', '}']
+    if TIMING:
+        nbytes = '32768' if MACHINE == 'msx2' else '16384'
+        lines += ['set lastv ""', f'set plog [open "{dumps.as_posix()}/poll.log" w]',
+                  'proc poll {} {', '  global lastv plog',
+                  f'  set v [debug read_block VRAM 0 {nbytes}]',
+                  '  if {$v ne $lastv} {', '    set n 0',
+                  '    if {$lastv ne ""} { binary scan $v c* a; binary scan $lastv c* b; foreach x $a y $b { if {$x != $y} {incr n} } }',
+                  '    puts $plog "[format %.3f [machine_info time]] $n"; flush $plog', '    set lastv $v }',
+                  '  after time 0.04 poll }', 'after time 20 poll']
     for when, action in TIMELINE:
         if action == 'quit':
             lines.append(f'after time {when} {{exit}}')
@@ -161,6 +171,46 @@ class Bob(threading.Thread):
             time.sleep(.05)
         while not self.done:
             time.sleep(.2)
+
+
+def bursts(path):
+    """(start, duration, changed bytes) of the VRAM changes in poll.log; changes <= 0.25 s apart are one burst."""
+    out = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        t, n = line.split()
+        t, n = float(t), int(n)
+        if out and t - out[-1][3] <= 0.25:
+            out[-1][3] = t
+            out[-1][2] += n
+        else:
+            out.append([t, t, n, t])
+    return [(b[0], b[3] - b[0], b[2]) for b in out]
+
+
+def timing_report(dumps, failures):
+    """Per action of TIMELINE: the bursts that follow it. Time resolution is +-0.1 s (the poll period)."""
+    log = dumps / 'poll.log'
+    if not log.exists():
+        return
+    bs = bursts(log)
+    typing = [t for t, a in TIMELINE if a == 'hello bob\r']
+    print('--- VRAM write bursts (emulated seconds: start, duration, changed bytes) ---')
+    marks = [(t, a) for t, a in TIMELINE if not a.startswith(('shot:', 'dump:')) and a != 'quit']
+    for i, (t, a) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else t + 10
+        mine = [b for b in bs if t <= b[0] < end and b[2] > 3]
+        print(f'{t:5.0f}s {a!r}: ' + ', '.join(f'{s:.1f}s/{d:.2f}s/{n}B' for s, d, n in mine[:8]))
+    if TIMING == 'check' and typing:
+        # Echo of the typed word: no single burst of VRAM writes may last long.
+        mine = [b for b in bs if typing[0] <= b[0] < typing[0] + 8]
+        worst = max((d for _, d, _ in mine), default=0)
+        limit = 0.6 if MACHINE == 'msx2' else 0.3
+        ok = worst < limit
+        print(('PASS: ' if ok else 'FAIL: ') + f'longest VRAM burst while typing {worst:.2f}s (limit {limit}s)', flush=True)
+        if not ok:
+            failures.append('typing burst too long')
 
 
 def main():
@@ -244,6 +294,8 @@ def main():
         switched = chr(10).join(screens.get('switched', []))
         check('#msxpi' in switched and 'bob: filler line' in switched, '/screen switched to SCREEN 2 and kept the chat')
         check(any(line.find('bob: filler line') == 16 for line in screens.get('back', [])), 'SCREEN 6 uses the 85 column layout (chat from column 16)')
+    if TIMING:
+        timing_report(dumps, failures)
     print('Test artifacts:', work, flush=True)
     fixture.shutdown()
     fixture.server_close()
