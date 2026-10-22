@@ -393,6 +393,18 @@ Step 4 (Ethernet driver protocol 2, `feature/eth-tx-otir`: OTIR send, inline rec
 | protocol 2 | H / C | **21.26 / 21.23** | 17.1 / 19.2 | 73 / 74 |
 | protocol 2 + LDIR `memcpy` in the overlay | H / C | **21.79 / 21.87** | 13.9 / 13.7 | 72 / 71 |
 
+Q4, K and S sweep (protocol 2 ROM, LDIR `memcpy`, same rig; `PNOPTS` in `run_native.sh` adds options to the `PLAYNET /T` line):
+
+| Options | input delay D | fps (H / C) | ms in XCHG/frame | link bytes/frame |
+|---|---|---|---|---|
+| `/K1` | 5 | 16.55 / 16.50 | 27.2 / 27.5 | 142 / 142 |
+| default (K = 2, S = 1) | 6 | 21.79 / 21.87 | 13.9 / 13.7 | 72 / 71 |
+| `/L0` (K = 2, S = 0) | 5 | 21.77 / 21.78 | 13.7 / 13.9 | 71 / 71 |
+| `/K3` | 7 | **24.08 / 24.18** | 9.7 / 9.4 | 48 / 48 |
+
+All identical, no desync. K = 3 reaches 86 % of the native pair's 27.9 fps but at the longest input delay (7 frames); K = 2 stays the
+default. S only moves the delay, not the speed.
+
 Frames identical, no desync. About +9 % fps; real hardware (OTIR in wait mode) is still to be tested.
 
 Found on the way: the old 8-frame resend window could not repair a lost record once a node was more than 7-D frames ahead (D > 3); the

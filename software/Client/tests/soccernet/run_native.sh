@@ -118,8 +118,8 @@ mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
 [ "$SCENARIO" != tcp ] || export PRE_H="MSR I;INL I" PRE_C="MSR I;INL I" CHAT_TCP=1
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
-  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T soccer C 5102 10.0.2.2:5101"
-  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T soccer H 5101 10.0.2.2:5102"
+  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C 5102 10.0.2.2:5101"
+  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H 5101 10.0.2.2:5102"
 fi
 node() {  # role port
   snd=""; [ -n "$RECORD" ] && { [ "$1" = H ] && snd="record start -audioonly $RECORD" || snd="set mute on"; }
