@@ -22,6 +22,8 @@ static char token[9];
 static uint16_t deadline;
 static char mine[64];                   /* this machine's candidates */
 static uint16_t lport;
+uint8_t gl_link;                        /* 1 TCP/IP, 2 the MSXPi carries the game's packets (gl_open sets it) */
+const char *gl_cur_game;
 static uint8_t ncand;
 static uint8_t cand[3][6];              /* the opponent's: ip 4, port 2 (little endian) */
 static char msg[96], *mp;
@@ -99,6 +101,7 @@ static void clear(void)
     peer[0] = token[0] = 0;
     seat = 0;
     ncand = 0;
+    gl_link = 1;
 }
 
 void gl_init(void)
@@ -192,6 +195,8 @@ void gl_play(const char *nick, const char *game_id)
 
 static uint8_t open_port(void)
 {
+    gl_link = 1;
+    gl_cur_game = gl_games[game].id;
     lport = gl_open(mine);
     if (lport) return 1;
     abort_game(1);
@@ -256,6 +261,11 @@ static void ready_with(const char *candidates)
     if (!ncand) {
         abort_game(1);
         gl_say("Game failed: The other side sent no address");
+        return;
+    }
+    if (gl_link == 2 && !gl_peers(token, seat, candidates)) {
+        abort_game(1);
+        gl_say("Game failed: the MSXPi did not take the address");
         return;
     }
     phase = P_READY;
@@ -373,8 +383,8 @@ void gl_session(uint8_t *rec)
     for (i = 0; i < 4; i++)
         rec[4 + i] = (uint8_t)(hexval(token[2 * i]) << 4 | hexval(token[2 * i + 1]));
     rec[8] = seat;
-    rec[9] = 1;                                         /* link: TCP/IP UNAPI */
-    rec[10] = (uint8_t)lport; rec[11] = (uint8_t)(lport >> 8);
+    rec[9] = gl_link == 2 ? 2 : 1;                      /* link: TCP/IP UNAPI, or TCP/IP chat with the game through the MSXPi */
+    if (gl_link != 2) { rec[10] = (uint8_t)lport; rec[11] = (uint8_t)(lport >> 8); }
     memcpy(rec + 12, g->hash, 4);
     memset(rec + 16, ' ', 8);
     for (i = 0; i < 8 && (c = g->id[i]); i++)

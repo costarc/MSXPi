@@ -112,6 +112,21 @@ class Conformance(unittest.TestCase):
         self.bob.cmd('session')
         return bytes.fromhex(self.bob.out.pop().split()[1])
 
+    def test_link2_hands_the_opponent_to_the_msxpi_and_marks_the_session(self):
+        self.bob.cmd('link2')                                               # bob's game port is his MSXPi's
+        self.alice.play('bob', 'soccer')
+        self.bob.cmd('accept')
+        self.assertEqual(self.alice.phase, 'ready')
+        peers = [line for line in self.bob.out if line.startswith('PEERS ')]
+        self.assertEqual(len(peers), 1)
+        _, token, seat, game, cands = peers[0].split()
+        self.assertEqual((token, seat, game), (self.alice.token, '1', 'soccer'))
+        self.assertTrue(cands)                                              # alice's candidates
+        self.bob.cmd('launch')
+        rec = self.session()
+        self.assertEqual((rec[8], rec[9]), (1, 2))                          # seat 1, link 2
+        self.assertEqual(int.from_bytes(rec[10:12], 'little'), 0)           # no UDP port of the MSX's
+
     def test_alice_invites_bob(self):
         self.alice.play('bob', 'soccer')
         self.assertEqual(self.flags(), 2)                                   # invited

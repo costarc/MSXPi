@@ -32,6 +32,13 @@ uint8_t gl_random(void);                               /* a random byte */
 /* open this machine's game port; write its candidates ("a.b.c.d:port,...", LAN first) to out (64 bytes);
    return the local port, 0 on failure */
 uint16_t gl_open(char *out);
+/* Link 2 (PLAYNET-TCPIP-PERFORMANCE.md 5.5): a host with an MSXPi may open the game port there instead (the Pi's
+   candidates in out, any non-zero return) and set gl_link to 2; the session record then says link 2. gl_cur_game
+   is the game id gl_open and gl_peers are for. */
+extern uint8_t gl_link;
+extern const char *gl_cur_game;
+/* link 2 only: give the MSXPi the token, the seat and the opponent's candidates; 1 on success */
+uint8_t gl_peers(const char *token, uint8_t seat, const char *candidates);
 
 /* ---- start-up ---------------------------------------------------------------------------- */
 /* Before anything else: MCHAT.COM's start-up zeroes no globals (they come in as FFh from the .COM). */

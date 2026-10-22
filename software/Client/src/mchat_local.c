@@ -614,6 +614,7 @@ static uint8_t net_begin(const char *nick, const char *room) {
 
 static uint16_t gsec, gjif, grem;
 static uint16_t cfg_gport;
+static uint8_t cfg_glink;               /* MCHAT.INI GAMELINK=1: the game's packets over TCP/IP even with an MSXPi */
 static char cfg_gaddr[16];
 static uint8_t ses[GL_SESSION];
 
@@ -637,12 +638,45 @@ static char *put_dec(char *p, uint16_t v) {
     return p;
 }
 
+/* An MSXPi command "playnet ..." (PLAYNET-PROTOCOLS.md 15): the reply text into pr. 1 on success. With no
+   interface the control port floats to FFh and the exchange would wait for ever, so it is not tried. */
+static char pcmd[112], pr[80];
+static uint8_t pi_playnet(void) {
+    uint8_t rc;
+    uint16_t size = 0, maxbuf = sizeof(pr) - 1;
+    if (InPort(CONTROL_PORT1) > 1) return 0;
+    msxpi_link_claim();
+    rc = SendCommandToMSXPi(pcmd, false);
+    if (rc == RC_SUCCESS) rc = RECVDATA((uint8_t *)pr, &size, &maxbuf);
+    msxpi_link_release();
+    if (rc != RC_SUCCESS) return 0;
+    pr[size < sizeof(pr) ? size : sizeof(pr) - 1] = 0;
+    return 1;
+}
+
+/* "playnet open ID": the Pi opens its game socket and answers "<profile hash> <candidates>" (the candidates go to out,
+   64 bytes). 0 when there is no MSXPi, or it does not have the game or does not know the command. */
+static uint8_t pi_game_port(char *out) {
+    char *c;
+    strcpy(pcmd, "playnet open "); strcat(pcmd, gl_cur_game);
+    if (!pi_playnet() || !(c = strchr(pr, ' ')) || strlen(c + 1) > 63) return 0;
+    strcpy(out, c + 1);
+    return 1;
+}
+
+uint8_t gl_peers(const char *token, uint8_t seat, const char *candidates) {
+    strcpy(pcmd, "playnet peers "); strcat(pcmd, token);
+    strcat(pcmd, seat ? " 1 " : " 0 "); strcat(pcmd, gl_cur_game); strcat(pcmd, " "); strcat(pcmd, candidates);
+    return pi_playnet() && pr[0] == 'O';
+}
+
 /* the game's UDP port and where it can be reached: the LAN address first, then GAMEADDR (MCHAT.INI: a
    forwarded or public address) when set */
 uint16_t gl_open(char *out) {
     uint16_t port = cfg_gport ? cfg_gport : (uint16_t)(5000 + (rnd() & 0x3FF));
     char *p = out;
     uint8_t i;
+    if (cfg_glink != 1 && pi_game_port(out)) {gl_link = 2; return 1;}   /* an MSXPi: it carries the game's packets (link 2) */
     ur_bc = 1 << 8;                                          /* B = 1: the local address */
     if (unapi(TCPIP_GET_IPINFO)) return 0;
     for (i = 0; i < 4; i++) {
@@ -716,7 +750,7 @@ static uint8_t resume_session(void) {
     f.record_size = 1;
     i = (uint8_t)fcb_read(&f, ses, 128) == 128;
     fcb_close(&f);
-    if (!i || memcmp(ses, "PNS1", 4) || ses[9] != 1) return 0;
+    if (!i || memcmp(ses, "PNS1", 4) || (ses[9] != 1 && ses[9] != 2)) return 0;
     ses_name(&f);                                             /* used: empty it */
     if (!fcb_create(&f)) fcb_close(&f);
     ur_bc = (uint16_t)ses[59] << 8; ur_hl = 0;
@@ -773,6 +807,7 @@ static void load_config(void) {
         else if (!strcmp(line, "MCHATROOM") && *eq == '#' && strlen(eq) < 24) strcpy(cfg_room, eq);
         else if (!strcmp(line, "GAMEPORT")) {cfg_gport = 0; while (*eq >= '0' && *eq <= '9') cfg_gport = cfg_gport * 10 + (*eq++ - '0');}
         else if (!strcmp(line, "GAMEADDR") && strlen(eq) < 16) strcpy(cfg_gaddr, eq);
+        else if (!strcmp(line, "GAMELINK")) cfg_glink = (uint8_t)(*eq == '1');
     }
     memset(reply, 0, 256);
 }
@@ -785,7 +820,7 @@ static const char *tcp_link_start(void) {
     memset(lr, 0, sizeof(lr));
     lcount = 0; lcur = 0; lmeta = 0; lw = 40;
     /* the start-up zeroes nothing: these come in as FFh, and an FFh GAMEADDR is a string without an end */
-    lt_seg = 0; cfg_gport = 0; cfg_gaddr[0] = 0;
+    lt_seg = 0; cfg_gport = 0; cfg_gaddr[0] = 0; cfg_glink = 0;
     gsec = 0; grem = 0; gjif = JIFFY;
     gl_init();
     if (!tcp_find()) return "No TCP/IP UNAPI: run INL I first";
