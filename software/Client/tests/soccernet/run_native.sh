@@ -28,6 +28,8 @@
 #                 connection (with EXITKEY: the IRC log must show each nick's NAMES after the game). The IRC
 #                 server pings every IRC_PING s (3) and drops a client silent for IRC_TIMEOUT s (60, wall clock), so the
 #                 connection survives only if PLAYNET answers during the game.
+#   PLAININI=1    (tcp) MCHAT.INI without GAMEPORT/GAMEADDR, as a user writes it: the game cannot connect through the
+#                 rig's NAT, but the chat must survive /play and /accept (the FFh globals of make.bat's build)
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -83,8 +85,12 @@ INI
   fi
   if [ "$SCENARIO" = tcp ]; then        # the chat over TCP/IP: its INI (the IRC fixture is the host, 10.0.2.2)
     nick=$( [ $n = 1 ] && echo alice || echo bob )
-    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n\032' \
-      "${IRC_PORT:-6671}" $nick $n > "$WORK/MCHAT$n.INI"
+    if [ -n "$PLAININI" ]; then
+      printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\n\032' "${IRC_PORT:-6671}" $nick > "$WORK/MCHAT$n.INI"
+    else
+      printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n\032' \
+        "${IRC_PORT:-6671}" $nick $n > "$WORK/MCHAT$n.INI"
+    fi
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/MCHAT$n.INI" MCHAT.INI > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/mchat/MCHAT.COM" MCHAT.COM > /dev/null
   fi
