@@ -381,8 +381,14 @@ Frames identical and no desync in every run. The target (95 % of the native pair
 Mixed was the worst case before: the MSXPi node polled about 300 times a frame waiting for the TCP/IP one.
 Steps 1-2 alone helped little (+6 % mixed, +14 % both); K = 2 and the timed resend (step 3) did most of it. What is left is mostly the cost
 of one stack exchange (about 20-30 ms in XCHG), so steps 4 (driver) and 5 (C9 for game packets) are the next levers.
-Not measured yet: Q2 (does INL send in `UDP_SEND`), Q3 (frames per timer run), and the values of K and S (Q4): the run used the defaults
-K = 2, S = 1 for a stack in RAM. `/L0` and `/K1`..`/K3` are there to try others.
+Q4 (the values of K and S) is answered by the sweep below. Q2 and Q3 are answered in the next paragraph.
+
+Q2 and Q3, measured with `q23_node.tcl` and `q23_analyze.py` (both TCP/IP, defaults, 150 frames, 75 `XCHG` calls, events logged inside `XCHG` only):
+**Q2: INL sends inside `UDP_SEND`.** `ETH_SEND_FRAME` came right after the overlay's `nc_send` in 74 of 75 calls (once after a timer run), about
+4.5 ms later, so 5.2's order (send, service, receive) does not need to change and the service does not drive sending.
+**Q3: one frame per timer run.** 109 timer runs made 109 `ETH_IN_STATUS` calls and 78 `ETH_GET_FRAME` calls: a run polls the driver once and
+takes at most one frame; after taking one it does not poll again. A backlog would drain at one frame per service. In this traffic there is
+never more than one frame waiting, so no backlog was seen, and the timer ran 1.45 times per `XCHG` call.
 
 Step 4 (Ethernet driver protocol 2, `feature/eth-tx-otir`: OTIR send, inline receive, `ETH_BEGIN` waits for READY), same rig, both TCP/IP,
 1200 frames, `PERF_PROF=1`, ROM rebuilt from the tree before/after (700-frame window of the traces):
@@ -434,8 +440,8 @@ lockstep model deadlocks with K >= 2 under loss. Stall resends now alternate bet
 | # | Risk or question | How to settle it |
 |---|---|---|
 | Q1 | Is it safe to call InterNestor Lite's H.TIMI routine outside an interrupt, with interrupts off and with `A = 80h`? (INL's source is not in this repository: only `inl-2.3-ram-implementation.patch` is.) | Step 2 on the rig, then on real hardware. Fallback: a `TCPIP_WAIT`-like call made with the game's page 3 mapped out, which is the current behaviour but forced once per interrupt period. |
-| Q2 | Does INL send a UDP datagram during `UDP_SEND`, or queue it for its timer? If it queues, 5.2's service also drives sending, and the order in `ovl_xchg` becomes send, service, receive. | A breakpoint on `ETH_SEND_FRAME` in step 0. |
-| Q3 | Does INL process more than one received frame per timer run? If not, a backlog drains at one frame per service. | Step 0: count `ETH_GET_FRAME` per H.TIMI. |
+| Q2 | Does INL send a UDP datagram during `UDP_SEND`, or queue it for its timer? If it queues, 5.2's service also drives sending, and the order in `ovl_xchg` becomes send, service, receive. | **Answered: it sends inside `UDP_SEND`** (5.7a, `q23_node.tcl`). |
+| Q3 | Does INL process more than one received frame per timer run? If not, a backlog drains at one frame per service. | **Answered: one frame per run** (5.7a): one `ETH_IN_STATUS` per run, at most one `ETH_GET_FRAME`. |
 | Q4 | The values of K and S for INL (5.3 table) | Step 0 and step 3 measurements. |
 | Q5 | GR8NET and other ROM stacks: `unapi()` in `ovl_main.c` uses `CALSLT` for a ROM implementation. If its entry were in page 2, `CALSLT` would map it over the running overlay at 8000h. | **Settled for GR8NET** by its manual (12.4): its UNAPI is in bank 1 (4000h-7FFFh), and data passed to it must not be in bank 1. The overlay at 8000h and `io.buf` in page 3 both satisfy that. Other ROM stacks: check when available. |
 | Q9 | GR8NET's manual (12.4) forbids UNAPI calls "within the interrupt service routines" and any concurrent calls. In Soccer, `PN_TICK`, and so `XCHG`, runs inside the game's H.KEYI handler, with interrupts on. No other UNAPI caller exists during the game, so nothing is concurrent, but whether the firmware minds the interrupt context is not stated. | First GR8NET run (step 6). If it fails, the glue can move the exchange out of the handler: the handler sets a flag, and the game's main loop calls `PN_TICK`, which is what the manual recommends. That is a per-game patch, not an engine change. |
