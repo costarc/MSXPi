@@ -384,6 +384,16 @@ of one stack exchange (about 20-30 ms in XCHG), so steps 4 (driver) and 5 (C9 fo
 Not measured yet: Q2 (does INL send in `UDP_SEND`), Q3 (frames per timer run), and the values of K and S (Q4): the run used the defaults
 K = 2, S = 1 for a stack in RAM. `/L0` and `/K1`..`/K3` are there to try others.
 
+Step 4 (Ethernet driver protocol 2, `feature/eth-tx-otir`: OTIR send, inline receive, `ETH_BEGIN` waits for READY), same rig, both TCP/IP,
+1200 frames, `PERF_PROF=1`, ROM rebuilt from the tree before/after (700-frame window of the traces):
+
+| ROM | node | fps | ms in XCHG/frame | link bytes/frame |
+|---|---|---|---|---|
+| unchanged (protocol 1) | H / C | 19.44 / 19.46 | 20.1 / 19.9 | 91 / 78 |
+| protocol 2 | H / C | **21.26 / 21.23** | 17.1 / 19.2 | 73 / 74 |
+
+Frames identical, no desync. About +9 % fps; real hardware (OTIR in wait mode) is still to be tested.
+
 Found on the way: the old 8-frame resend window could not repair a lost record once a node was more than 7-D frames ahead (D > 3); the
 lockstep model deadlocks with K >= 2 under loss. Stall resends now alternate between the usual window and one shifted back 2D-6 frames
 (PROTOCOLS 9, `lockstep_model.py` passes D 3-7, K 1-3, loss up to 20 %).
