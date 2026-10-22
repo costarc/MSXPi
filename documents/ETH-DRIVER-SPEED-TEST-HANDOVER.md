@@ -18,7 +18,7 @@ implementation is on this branch; **nothing has been run yet** beyond assembling
 | Discard (`FN_GET_FRAME` with HL=0) | Sends maxlen 0; the Pi drops the frame and replies with the 3-byte header only (was: the whole frame pulled over and thrown away, `ETH_RX_SINK`, now gone) |
 | Version | Probe reports 2 (`PROTO_VERSION` / `ETH_PROTO`). A mismatch sets `MODE_REFUSED` (2): `ETH_LOCK` refuses every transaction, `ETH_RESET` probes again. ETHTEST, ETHMODE and ETHBENCH print the reason. No fallback (user's decision) |
 | Work area (`unapi_wrk.inc`) | `o_RXC` (5) + `o_RXC_FRAME` (129). `UNAPI_WRKEND` = `MYSIZE` 47 -> 181. Allocated twice below HIMEM by a disk ROM: about 268 bytes less free memory |
-| ROM size | `ethrom.bin` 1329 -> **1314** bytes, 21 free below 8000h (was 6). `UNAPI_ORG` did not move, the DOS driver is untouched apart from MYSIZE. Paid for by keeping `ETH_OP`'s parameters in registers, `ETH_OP1` for the four one-byte fast ops, `ETH_TX3` for opcode+word, merging `ETH_WAIT_DATA` into `ETH_WAIT_READY`, dropping `ETH_RX_SINK` |
+| ROM size | `ethrom.bin` 1329 -> **1316** bytes, 19 free below 8000h (was 6). `UNAPI_ORG` did not move, the DOS driver is untouched apart from MYSIZE. Paid for by keeping `ETH_OP`'s parameters in registers, `ETH_OP1` for the four one-byte fast ops, `ETH_TX3` for opcode+word, merging `ETH_WAIT_DATA` into `ETH_WAIT_READY`, dropping `ETH_RX_SINK` |
 | Tools | `ETHBENCH S`: new send pass, 32 x `ETH_SEND_FRAME` at 16, 64, 255, 256, 257, 512, 513, 1514 bytes, wait then polled, `ok=0020` per line. ETHTEST/ETHBENCH `CALL_UNAPI` no longer clobbers HL for a RAM implementation (the send address). ETHMODE knows mode 2 |
 | Tests | `software/Server/Python/tests/test_ethshuttle.py` (new, **not run**) |
 | Docs | `software/UNAPI/PHASE1_DESIGN.md` 3.5 |
@@ -59,7 +59,7 @@ Tools: `C:/Users/roniv/Dev/bin` (`sjasm.exe`, `sjasmplus`, `hex2bin.exe`), zmac 
 ```
 cd software/UNAPI && sh build.sh --no-copy
 ```
-Expect 6 x `Errors: 0`, `ethrom.bin 1314 bytes`, `21 bytes free below 8000h`.
+Expect 6 x `Errors: 0`, `ethrom.bin 1316 bytes`, `19 bytes free below 8000h`.
 
 **The 32 KB ROM pair**, in a scratch copy (MYSIZE changed, so the DOS half must be rebuilt too, not only the BIOS-only half). This is
 what was run to check the asserts; it does not bump BuildIds:
@@ -108,9 +108,26 @@ Keep master's ROM image at hand to flash back.
 
 | Symptom | Look at |
 |---|---|
-| `ETHBENCH S` W lines short, P lines fine | risk 1: Pi log for `SPI_BurstIn` lines; try `MSXPI_GPIO_CS_SETUP_NS`; consider a short settle before OTIR in `ETH_TX_BLOCK` (21 bytes of ROM free) |
+| `ETHBENCH S` W lines short, P lines fine | risk 1: Pi log for `SPI_BurstIn` lines; try `MSXPI_GPIO_CS_SETUP_NS`; consider a short settle before OTIR in `ETH_TX_BLOCK` (19 bytes of ROM free) |
 | Both W and P short at one length only | the run split in `ETH_TX_BLOCK` (odd bytes first, then `D` runs of 256) |
 | `Mode: 02` with the right server | the probe's 5th byte: `PROTO_VERSION` in the server actually running, and `ETH_PROTO` in `ethops.asm` |
 | Received frames lost or garbled after the change, sends fine | `FN_IN_STATUS` / `ETH_OPX .inline` / `FN_GET_FRAME .held`; the Pi's `_op_in_status`; check `RX_INLINE_MAX` is 128 on both sides |
 | Disk errors with INL resident | unchanged locking (`ETH_LOCK`, `o_LINK_BUSY`), but check `ETH_RESYNC`'s drain (it no longer saves BC around `ETH_RX`, which preserves it) |
 | Build: `ASSERT $ <= $8000` | the image grew past 1335 bytes: something was added; see the size notes in `unapi_wrk.inc` |
+
+## 6. First test run: wait-mode sends lost, fixed
+
+`ETHBENCH S` in the WSL harness lost 1-4 of 32 frames per length in wait mode and none in polled mode, on master's driver too. Breakpoints
+on the ROM driver's failure exits (openMSX Tcl) put every loss at one place: `ETH_BEGIN` found port 56h = 01 and gave up, before the
+opcode was sent. It looked at READY **once**. After answering a transaction the Pi drops READY and only raises it again once Python is
+back in `recvdata2`; a caller that starts the next transaction at once lands in that gap. Polled mode has no such check, which is why it
+never lost anything. (Why the NETSTAT bench does not show it was not investigated.)
+
+The fix: `ETH_BEGIN` waits with the bounded `ETH_WAIT_READY` (the same polled spin every byte uses, before wait mode is switched on, so
+it can time out but never hang). +2 bytes: `ethrom.bin` 1316, 19 free. After it, `ETHBENCH S` gave `ok=0020` on all 16 lines and no
+failure exit was hit. The same gap should exist on the board (the Pi's Python turnaround against the next `ETH_BEGIN`), so this most
+likely fixes a pre-existing loss there too, each one costing INL a retransmission - to confirm with `ETHBENCH S` on the board (P3).
+
+The earlier experiment "a bounded wait in ETH_BEGIN did not help" was made on the RAM driver. The WSL openMSX was loading an older ROM
+at the time (its own ROM driver resident too), so `ETHBENCH` was most likely talking to that ROM driver, not the patched one - not
+verified, but the patched ROM driver shows the fix working.

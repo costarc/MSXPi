@@ -235,18 +235,29 @@ ETH_UNLOCK:
 ; Out: CF=0 ready, CF=1 not ready.  Corrupts AF.
 ;
 ; $56 bit 0 is `SPI_en_s or (not SPI_RDY)`, so a non-zero read means either a
-; transfer is in flight or the Pi is not asserting RDY.  Checking it once here
-; is what stops a wait-mode burst from silently reading stale bytes: with
+; transfer is in flight or the Pi is not asserting RDY.  Checking it here is
+; what stops a wait-mode burst from silently reading stale bytes: with
 ; SPI_RDY low the CPLD does not start a transfer and does not stall, so an
 ; INIR would run at full speed and return garbage.
+;
+; WAIT for it, bounded - do not just look once.  After answering the previous
+; transaction the Pi drops RDY, returns through the Python dispatch to
+; recvdata2 and only then raises it again for the next opcode.  A caller that
+; starts its next transaction straight away - ETHBENCH S sending frame after
+; frame, INL replying to what it just received - gets here inside that gap, and
+; a single look failed the whole transaction: 1-4 of every 32 sends in wait
+; mode, never in polled mode, which has no such check.  The wait is the same
+; polled spin every byte uses, done BEFORE wait mode is switched on, so it can
+; time out but never hang.
 ETH_BEGIN:
             ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled_ok           ; polled modes check per byte
 
-            in      a,(CTRL1)
-            or      a
-            jr      nz,.notready
+            push    bc                      ; callers keep arguments in BC
+            call    ETH_WAIT_READY
+            pop     bc
+            jr      c,.notready
             ld      a,WAITMODE_ON
             out     (CTRL2),a
 .polled_ok:

@@ -130,7 +130,7 @@ KERNEL_GETWRK	EQU	06027H	; kernel GETWRK (msx-dos.mac)
 UNAPI_ORG	EQU	07AC9H	; Boundary between the DOS driver below and the UNAPI
 				; image above.  Moved up from 07AB8H for the /WAIT disk
 				; bursts and the PerformHandshake fix.  The UNAPI image
-				; is 1314 bytes, 21 spare below 8000H (protocol 2: the
+				; is 1316 bytes, 19 spare below 8000H (protocol 2: the
 				; OTIR send and the inline receive paid for themselves
 				; by folding duplicated code); the driver has none.  Tight;
 				; the ASSERTs around UNAPI_ROM_IMAGE in msxpi-driver.mac

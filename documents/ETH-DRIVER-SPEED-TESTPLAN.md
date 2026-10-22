@@ -15,9 +15,9 @@ Every level runs in **both transport modes** where it can: wait (`Mode: 01`, the
 
 | # | Check | Pass |
 |---|---|---|
-| B1 | `UNAPI/build.sh --no-copy` | 6 x `Errors: 0`; `ethrom.bin 1314 bytes`, `21 bytes free below 8000h` |
+| B1 | `UNAPI/build.sh --no-copy` | 6 x `Errors: 0`; `ethrom.bin 1316 bytes`, `19 bytes free below 8000h` |
 | B2 | DOS ROM half (zmac `msx-dos.mac`) | zmac exit 0; listing shows `ld hl,MYSIZE` = `21 B5 00` (181) |
-| B3 | BIOS-only half (sjasmplus `msxpibios.asm`) | `Errors: 0`, `include data: name=ethrom.bin (1314 bytes)`; no `ASSERT` failure |
+| B3 | BIOS-only half (sjasmplus `msxpibios.asm`) | `Errors: 0`, `include data: name=ethrom.bin (1316 bytes)`; no `ASSERT` failure |
 | B4 | Both halves | the bytes from offset 3AC9h to the end are identical in the DOS half and the BIOS-only half; below 7AC9h only MYSIZE differs from `target/*.rom` on master (DOS 57FA-57FBh and 586Eh, BIOS-only 402Ah) plus any BuildId bump |
 
 ## Level 1: Pi side unit tests (no MSX)

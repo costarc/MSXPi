@@ -263,7 +263,7 @@ What changed on the wire:
   (`ETH_TX_BLOCK`). Polled mode sends the same bytes one at a time.
 
 The work area grew from 39 to 173 bytes (`MYSIZE` 47 -> 181), allocated below
-HIMEM. The ROM image got smaller (1329 -> 1314 bytes) by keeping `ETH_OP`'s
+HIMEM. The ROM image got smaller (1329 -> 1316 bytes) by keeping `ETH_OP`'s
 parameters in registers, one helper for the one-byte fast ops, and dropping
 `ETH_WAIT_DATA` and `ETH_RX_SINK`.
 
