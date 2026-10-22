@@ -30,6 +30,7 @@ from typing import List, Optional, Tuple
 
 # Standard library imports
 import re
+import sys
 import time
 import subprocess
 import logging
@@ -258,9 +259,47 @@ def restart(parm: Optional[str] = None) -> CommandResult:
         print("Restarting MSXPi Server")
         sendmultiblock(b"Pi:Ok")
         exitDueToSyncError()
+    elif transport.hostType == "Windows":
+        print("Restarting MSXPi Server")
+        sendmultiblock(b"Pi:Ok")
+        _restart_windows()
     else:
         print("Command not supported by this platform")
         sendmultiblock(b"Command not supported by this platform")
+
+
+def _restart_windows() -> None:
+    """Start this server again, in a new console, once this process is gone.
+
+    Windows has no msxpi-monitor to bring the server back, so a detached
+    PowerShell does it: it waits for this process to end, puts a staged
+    update in place (msxpi-apply-staged.ps1, see update()) and starts the
+    same Python with the same arguments in the same folder. The environment
+    (MSXPI_PORT, MSXPI_INI, ...) is inherited. Then this process exits.
+    """
+    home = os.path.abspath(settings.MSXPIHOME)
+    apply = os.path.join(home, "msxpi-apply-staged.ps1")
+
+    def q(x: str) -> str:
+        return "'" + x.replace("'", "''") + "'"
+
+    ps = f"Wait-Process -Id {os.getpid()} -Timeout 30 -ErrorAction SilentlyContinue; "
+    if os.path.isfile(apply):
+        ps += f"& {q(apply)} -MsxPiHome {q(home)}; "
+    args = ", ".join(q(a) for a in [os.path.abspath(sys.argv[0]), *sys.argv[1:]])
+    ps += (f"Start-Process -FilePath {q(sys.executable)} -ArgumentList @({args}) "
+           f"-WorkingDirectory {q(os.getcwd())}")
+    # Not DETACHED_PROCESS: PowerShell without a console does nothing at all.
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                     creationflags=flags, close_fds=True)
+    for image in (getattr(disk, "drive0Data", None), getattr(disk, "drive1Data", None)):
+        try:
+            disk.unmount_drive(image)
+        except Exception:
+            pass
+    sys.stdout.flush()
+    os._exit(0)
 
 
 UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup"
@@ -380,8 +419,13 @@ def update(parm: Optional[str] = None) -> CommandResult:
     It updates from the branch chosen with "p setbranch" (or the one given as
     the parameter), master by default.
 
-    The server is not restarted here: a Pi's msxpi-monitor restarts it on
-    "p restart"; anywhere else the user restarts it.
+    On Windows the setup only stages the server files (the running server's
+    files are not replaced under it); "p restart" or the next start-openmsx.bat
+    puts them in place.
+
+    The server is not restarted here: msxpiupd.bat / msxpirfh.bat send
+    "p restart" next (a Pi's msxpi-monitor, or _restart_windows(), brings it
+    back); anywhere else the user restarts it.
     """
     branch = _branch_name(parm) if (parm or "").strip() else _update_branch
     if branch is None:
@@ -417,7 +461,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
 
     if windows:
         cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
-               "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause"]
+               "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause", "-Stage"]
         if branch != "master":
             cmd += ["-Branch", branch]
     else:
@@ -445,7 +489,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
     bad = [l[:78] for l in lines if l.lower().startswith(("warn", "fail", "msxpi-windows-setup:"))]
     status = "Pi:Ok" if done.returncode == 0 else f"Pi:Error - exit {done.returncode}"
     return "\n".join([f"{status} - {ok} items up to date", *bad,
-                      "Restart msxpi-server to use the update."])
+                      "p restart (or the next start) applies it."])
 
 
 def netreset(parm: Optional[str] = None) -> CommandResult:
