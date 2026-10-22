@@ -22,13 +22,16 @@ def pcopies(name):
     return {l for l in lines(name) if l.startswith('pcopy m:')}
 
 
+SETBRANCH = 'p setbranch %1%2%3%4%5%6%7%8%9'
+
+
 class BatchFilesTests(unittest.TestCase):
     def test_msxpiupd_takes_the_branch_after_fetching_stage2_from_master(self):
         up = lines('msxpiupd.bat')
         self.assertEqual(up[1], 'p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target')
-        self.assertLess(up.index('pcopy m:msxpirfh.bat'), up.index('p setbranch %1'))
+        self.assertLess(up.index('pcopy m:msxpirfh.bat'), up.index(SETBRANCH))
         # a server without "p setbranch" is brought up to date from master first
-        for before, after in (('p run sh update.sh', 'p restart'), ('p restart', 'p setbranch %1')):
+        for before, after in (('p run sh update.sh', 'p restart'), ('p restart', SETBRANCH)):
             self.assertLess(up.index(before), up.index(after))
         self.assertIn('p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh', up)
         self.assertEqual(up[-1], 'msxpirfh')
@@ -42,7 +45,7 @@ class BatchFilesTests(unittest.TestCase):
 
 class ServerUpdateTests(unittest.TestCase):
     def test_bad_branch_names_are_refused(self):
-        for bad in ('x;reboot', '../x', '-rf', 'a b', '$(id)', 'x' * 200):
+        for bad in ('x;reboot', '../x', '-rf', 'a|b', '$(id)', 'x' * 200):
             self.assertEqual(system.update(bad), 'Pi:Error - bad branch name', bad)
 
     def run_update(self, parm, host='RaspberryPi'):
@@ -51,7 +54,7 @@ class ServerUpdateTests(unittest.TestCase):
         with patch.object(system.transport, 'hostType', host), \
              patch.object(system.os.path, 'getmtime', side_effect=OSError), \
              patch.object(system.os, 'replace'), patch('builtins.open', MagicMock()), \
-             patch('requests.get', return_value=resp) as get, \
+             patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch('requests.get', return_value=resp) as get, \
              patch.object(system.subprocess, 'run', return_value=done) as run:
             system.update(parm)
         return get, run
@@ -70,7 +73,9 @@ class ServerUpdateTests(unittest.TestCase):
 
     def test_setbranch_is_remembered_by_update(self):
         sent = []
-        with patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
+        with patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')), \
+             patch.object(system, 'sendmultiblock', side_effect=sent.append), \
+             patch.object(system, 'setMSXPiVar') as setvar:
             system.setbranch('feature/x')
             setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/feature/x/software/target')
             get, _ = self.run_update(None)
@@ -82,30 +87,50 @@ class ServerUpdateTests(unittest.TestCase):
             self.assertEqual(sent[-1], b'Pi:Error - bad branch name')
             self.assertEqual(system._update_branch, 'master')   # a bad name changes nothing
 
-    def test_dot_or_comma_stand_in_for_the_slash(self):
-        real = {'feature/eth-tx-otir', 'release.1.6', 'a/b/c'}
-        sent = []
-        with patch.object(system, '_branch_exists', side_effect=lambda b: b in real),              patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
-            for typed, want in (('feature.eth-tx-otir', 'feature/eth-tx-otir'),
-                                ('feature,eth-tx-otir', 'feature/eth-tx-otir'),
-                                ('a,b,c', 'a/b/c'),
-                                ('release.1.6', 'release.1.6'),          # exists as typed
-                                ('feature/eth-tx-otir', 'feature/eth-tx-otir')):
-                system.setbranch(typed)
-                setvar.assert_called_with('DriveM', f'https://github.com/costarc/MSXPi/raw/{want}/software/target')
-                self.assertEqual(sent[-1], f'Pi:Ok - updating from {want}'.encode())
-            system.setbranch('no.such')
-            self.assertTrue(sent[-1].startswith(b'Pi:Error - no branch no.such'))
-            self.assertEqual(system._update_branch, 'feature/eth-tx-otir')  # a miss changes nothing
-
-    def test_unreachable_github_keeps_the_name(self):
-        with patch.object(system, '_branch_exists', return_value=None):
-            self.assertEqual(system._resolve_branch('feature.x'), 'feature.x')
-
     def test_windows_gets_the_branch_switch(self):
         _, run = self.run_update('dev/x', host='Windows')
         cmd = run.call_args[0][0]
         self.assertEqual(cmd[-2:], ['-Branch', 'dev/x'])
+
+
+class BranchResolveTests(unittest.TestCase):
+    def test_dos2_pieces_are_glued_back(self):
+        # MSX-DOS 2: "msxpiupd feature/x" -> %1=feature %2=/x; unused %n are empty
+        self.assertEqual(system._branch_name('feature/x'), 'feature/x')
+        self.assertEqual(system._branch_name('feature /x'), 'feature/x')
+        self.assertEqual(system._branch_name('a/b/c'), 'a/b/c')
+        for empty in (None, '', ' ', '%1', '%1%2%3'):
+            self.assertEqual(system._branch_name(empty), 'master')
+
+    def resolve(self, name, status=404, branches=()):
+        head = MagicMock(status_code=status)
+        with patch('requests.head', return_value=head),              patch.object(system, '_remote_branches', return_value=list(branches)):
+            return system._resolve_branch(name)
+
+    def test_existing_branch_is_taken_as_is(self):
+        self.assertEqual(self.resolve('feature/x', 200), ('feature/x', ''))
+
+    def test_case_is_fixed_from_github(self):
+        self.assertEqual(self.resolve('FEATURE/UPD', branches=['master', 'feature/Upd']),
+                         ('feature/Upd', ''))
+
+    def test_cut_name_from_an_old_updater_suggests_branches(self):
+        branch, why = self.resolve('feature', branches=['master', 'feature/a', 'feature/b'])
+        self.assertIsNone(branch)
+        self.assertIn('feature/a feature/b', why)
+
+    def test_setbranch_to_a_missing_branch_keeps_master(self):
+        system._update_branch = 'master'
+        sent = []
+        with patch.object(system, '_resolve_branch', return_value=(None, 'no branch x')),              patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
+            system.setbranch('x')
+        setvar.assert_not_called()
+        self.assertTrue(sent[-1].startswith(b'Pi:Error - no branch x'))
+        self.assertEqual(system._update_branch, 'master')
+
+    def test_github_unreachable_uses_the_name_as_given(self):
+        with patch('requests.head', side_effect=OSError('offline')):
+            self.assertEqual(system._resolve_branch('feature/x'), ('feature/x', ''))
 
 
 if __name__ == '__main__':
