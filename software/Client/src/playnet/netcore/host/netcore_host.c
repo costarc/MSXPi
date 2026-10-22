@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     inet_pton(AF_INET, argv[2], cand.ip);
     cand.port = (uint16_t)atoi(argv[3]);
 
-    nc_init((uint32_t)strtoul(argv[4], 0, 16), ver, 0);
+    nc_init((uint32_t)strtoul(argv[4], 0, 16), ver, 0, 100);   /* nc_now() is in centiseconds */
     nc_set_peers(&cand, 1);
     nc_restart();
     for (;;) {

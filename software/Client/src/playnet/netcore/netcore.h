@@ -5,8 +5,8 @@
  * host/netcore_host, which the conformance test (Server/Python/tests/test_netcore.py) plays against Netplay
  * over localhost UDP. No allocation, no floating point, no library calls beyond memcpy/memcmp.
  *
- * The host provides the four functions below. Time is in centiseconds, 16 bits, wrapping (differences
- * are taken modulo 65536, and no timeout here is longer than 120 s).
+ * The host provides the four functions below. Time is the host's tick (nc_init gets its rate), 16 bits, wrapping
+ * (differences are taken modulo 65536: the rate must be 250 Hz at most, the longest timeout is 120 s).
  */
 #ifndef NETCORE_H
 #define NETCORE_H
@@ -21,7 +21,7 @@ typedef struct {
 /* ---- provided by the host -------------------------------------------------------------- */
 void nc_send(const nc_addr *to, const uint8_t *data, uint8_t len);
 uint8_t nc_recv(nc_addr *from, uint8_t *buf, uint8_t max);     /* 0 = nothing waiting */
-uint16_t nc_now(void);                                          /* centiseconds */
+uint16_t nc_now(void);                                          /* ticks: cheap, no division */
 uint32_t nc_rand32(void);                                       /* not seeded alike on both sides */
 
 /* ---- MSX-visible status (as the Pi's opcode C9 status, 10.1) --------------------------- */
@@ -41,7 +41,7 @@ uint32_t nc_rand32(void);                                       /* not seeded al
 #define NC_MAX_PKT 46                   /* 14 + 8W, W = 1..4 */
 
 /* version: MSXNP version (1); force_delay: 0, or an input delay the leader uses instead of measuring */
-void nc_init(uint32_t profile_hash, uint8_t version, uint8_t force_delay);
+void nc_init(uint32_t profile_hash, uint8_t version, uint8_t force_delay, uint16_t hz);   /* hz: nc_now()'s rate, at most 250 */
 void nc_set_peers(const nc_addr *candidates, uint8_t count);
 void nc_restart(void);                  /* start connecting (HELLO to every candidate) */
 void nc_poll(void);                     /* take what arrived, run the timers */

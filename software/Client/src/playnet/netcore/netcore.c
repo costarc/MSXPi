@@ -26,7 +26,8 @@
 #define PINGS 8
 #define MIN_SAMPLES 4
 #define MAX_PINGS 64
-#define CONNECT_TIMEOUT 12000           /* centiseconds */
+/* timeouts in centiseconds; nc_init converts them to the host's ticks once (see t_*) */
+#define CONNECT_TIMEOUT 12000
 #define START_TIMEOUT 6000
 #define DEAD_AFTER 1500
 #define HELLO_GAP 20
@@ -42,6 +43,8 @@
 
 static uint8_t state;
 static uint8_t version;
+static uint16_t hz;                     /* ticks per second of nc_now() */
+static uint16_t t_connect, t_start_to, t_dead, t_hello, t_ping, t_setup, t_bye, t_quiet;
 static uint32_t profile;
 static uint8_t forced_delay;
 static nc_addr peers[NC_MAX_CANDIDATES];
@@ -66,7 +69,7 @@ static uint8_t qhead, qcount;
 static uint8_t rbuf[64];
 static uint8_t cbuf[CTL_LEN];
 
-/* signed difference a - b of two centisecond times. A macro, not a function: SDCC 4.0.0 compiles
+/* signed difference a - b of two tick times. A macro, not a function: SDCC 4.0.0 compiles
  * "return a - b" of two uint16_t arguments into code that overwrites L while HL still points at b. */
 #define since(a, b) ((int16_t)(uint16_t)((uint16_t)(a) - (uint16_t)(b)))
 
@@ -123,11 +126,18 @@ static void set_ready(uint16_t now)
     t_ready = now;
 }
 
+/* centiseconds to ticks, rounded; run at init only */
+static uint16_t cs_to_ticks(uint16_t cs)
+{
+    return (uint16_t)(((uint32_t)cs * hz + 50) / 100);
+}
+
 /* the leader's input delay: the 90th percentile round trip, one way, in frames, plus 2 */
 static uint8_t choose_delay(void)
 {
     uint8_t i, j;
-    uint16_t v, ms;
+    uint16_t v;
+    uint32_t ms;
     uint8_t d;
     for (i = 1; i < nrtts; i++) {           /* insertion sort, at most 64 values */
         v = rtts[i];
@@ -135,7 +145,7 @@ static uint8_t choose_delay(void)
             rtts[j] = rtts[j - 1];
         rtts[j] = v;
     }
-    ms = rtts[(uint16_t)(9 * (nrtts - 1)) / 10] * 10;
+    ms = (uint32_t)rtts[(uint16_t)(9 * (nrtts - 1)) / 10] * 1000 / hz;    /* the only division per session */
     d = (uint8_t)((ms + 2 * FRAME_MS - 1) / (2 * FRAME_MS)) + 2;
     if (d < MIN_DELAY) d = MIN_DELAY;
     if (d > MAX_DELAY) d = MAX_DELAY;
@@ -159,8 +169,17 @@ static void reset_session(void)
     qhead = qcount = 0;
 }
 
-void nc_init(uint32_t profile_hash, uint8_t ver, uint8_t force_delay)
+void nc_init(uint32_t profile_hash, uint8_t ver, uint8_t force_delay, uint16_t tick_hz)
 {
+    hz = tick_hz;
+    t_connect = cs_to_ticks(CONNECT_TIMEOUT);
+    t_start_to = cs_to_ticks(START_TIMEOUT);
+    t_dead = cs_to_ticks(DEAD_AFTER);
+    t_hello = cs_to_ticks(HELLO_GAP);
+    t_ping = cs_to_ticks(PING_GAP);
+    t_setup = cs_to_ticks(SETUP_GAP);
+    t_bye = cs_to_ticks(BYE_GAP);
+    t_quiet = cs_to_ticks(PING_QUIET);
     profile = profile_hash;
     version = ver;
     forced_delay = force_delay;
@@ -312,39 +331,39 @@ void nc_poll(void)
     receive(now);
     if (bye_left && since(now, next_bye) >= 0) {
         bye_left--;
-        next_bye = now + BYE_GAP;
+        next_bye = now + t_bye;
         send_ctl(T_BYE, local_result);
     }
     if (state == S_CONNECT || state == S_SETUP) {
-        if (since(now, t_start) > CONNECT_TIMEOUT) {
+        if (since(now, t_start) > t_connect) {
             state = S_FAILED;
             return;
         }
         if (state == S_CONNECT && since(now, next_hello) >= 0) {
-            next_hello = now + HELLO_GAP;
+            next_hello = now + t_hello;
             send_ctl(T_HELLO, profile);
         }
         if (leader && state == S_CONNECT && since(now, next_ping) >= 0
                 && (pings_sent < PINGS || (nrtts < MIN_SAMPLES && pings_sent < MAX_PINGS))) {
-            next_ping = now + PING_GAP;     /* keep pinging while too few answers came back */
+            next_ping = now + t_ping;     /* keep pinging while too few answers came back */
             ping_t[pings_sent] = now;
             ping_open[pings_sent >> 3] |= (uint8_t)(1 << (pings_sent & 7));
             send_ctl(T_PING, pings_sent);
             pings_sent++;
         }
         if (leader && state == S_CONNECT && nrtts >= MIN_SAMPLES
-                && (nrtts >= PINGS || since(now, next_ping) > PING_QUIET)) {
+                && (nrtts >= PINGS || since(now, next_ping) > t_quiet)) {
             delay = forced_delay ? forced_delay : choose_delay();
             state = S_SETUP;
         }
         if (state == S_SETUP && since(now, next_setup) >= 0) {
-            next_setup = now + SETUP_GAP;
+            next_setup = now + t_setup;
             send_ctl(T_SETUP, delay);
         }
     } else if (state == S_READY) {
-        if (!playing && since(now, t_ready) > START_TIMEOUT)
+        if (!playing && since(now, t_ready) > t_start_to)
             state = S_DEAD;
-        else if (playing && since(now, last_rx) > DEAD_AFTER)
+        else if (playing && since(now, last_rx) > t_dead)
             state = S_DEAD;
     }
 }

@@ -160,16 +160,10 @@ uint8_t nc_recv(nc_addr *from, uint8_t *buf, uint8_t max)
     return (uint8_t)ur_bc;
 }
 
-static uint16_t last_ticks, cs, rem;
-
+/* netcore's time is the host's tick itself: a 16-bit read, no arithmetic (the rate goes to nc_init) */
 uint16_t nc_now(void)
 {
-    uint16_t t = *(volatile uint16_t *)ovl_io.ticks;
-    uint32_t x = (uint32_t)(uint16_t)(t - last_ticks) * 100 + rem;
-    last_ticks = t;
-    cs += (uint16_t)(x / ovl_io.hz);
-    rem = (uint16_t)(x % ovl_io.hz);
-    return cs;
+    return *(volatile uint16_t *)ovl_io.ticks;
 }
 
 static uint8_t r_reg(void) __naked
@@ -197,13 +191,12 @@ static char irc_line[IRC_LINE];
 static uint8_t irc_len;                     /* FFh: in a line too long to be a PING: skipped to its end */
 static uint16_t irc_due;
 
-static void irc_keep(void)
+static void irc_keep(uint16_t now)
 {
     uint8_t *b = ovl_io.buf, i, n, reads = 4;
-    uint16_t now = nc_now();
     if (ovl_io.irc == 0xFF || since(now, irc_due) < 0)
         return;
-    irc_due = now + 50;
+    irc_due = now + (ovl_io.hz >> 1);
     do {
         ur_bc = (uint16_t)ovl_io.irc << 8; ur_de = (uint16_t)b; ur_hl = 56;
         i = unapi(TCPIP_TCP_RCV);
@@ -233,7 +226,6 @@ static void irc_keep(void)
 /* ---- the entries --------------------------------------------------------------------------- */
 void ovl_open(void)
 {
-    last_ticks = *(volatile uint16_t *)ovl_io.ticks;
     if (!tcp_find()) {
         ovl_io.status = 1;
         return;
@@ -244,7 +236,7 @@ void ovl_open(void)
         return;
     }
     conn = (uint8_t)(ur_bc >> 8);
-    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay);
+    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz);
     nc_set_peers(ovl_io.cand, ovl_io.ncand);
     nc_restart();
     ovl_io.status = 0;
@@ -252,7 +244,7 @@ void ovl_open(void)
 
 void ovl_poll(void)
 {
-    irc_keep();
+    irc_keep(nc_now());
     nc_poll();
     ovl_io.status = nc_status(&ovl_io.delay);
     ovl_io.leader = nc_is_leader();
@@ -260,7 +252,7 @@ void ovl_poll(void)
 
 void ovl_xchg(void)
 {
-    irc_keep();
+    irc_keep(nc_now());
     ovl_io.status = nc_xchg(ovl_io.pkt, ovl_io.len, ovl_io.rx, &ovl_io.reason);
 }
 
@@ -269,7 +261,7 @@ void ovl_bye(void)
 {
     uint16_t t0 = nc_now();
     nc_bye(ovl_io.reason);
-    while (nc_bye_pending() && (uint16_t)(nc_now() - t0) < 100)
+    while (nc_bye_pending() && (uint16_t)(nc_now() - t0) < ovl_io.hz)
         nc_poll();
 }
 
