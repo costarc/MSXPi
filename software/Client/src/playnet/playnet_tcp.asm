@@ -83,8 +83,12 @@ tcpArgs:
         ld      (kMode),a
         jr      .optEnd
 .nl:    cp      'l'                             ; /L0../L9: the service latency to announce, in frames
+        jr      z,.isl
+        cp      'h'                             ; /H: link 2, the game's packets through this machine's MSXPi
         jp      nz,usage
-        ld      a,b
+        ld      (hyb),a                         ; (A = 'h': not zero)
+        jr      .optEnd
+.isl:   ld      a,b
         cp      10
         jp      nc,usage
         ld      (lMode),a
@@ -102,7 +106,14 @@ tcpArgs:
         ld      de,roleArg
         call    word
         call    skipSp
-        call    number
+        ld      a,(hyb)
+        or      a
+        jr      z,.lp
+        ld      a,(roleArg)                     ; /H game role: the Pi has the opponent (MSXPI_NETPLAY or "playnet peers")
+        or      a
+        jp      z,usage
+        ret
+.lp:    call    number
         jp      c,usage
         ld      (lport),de
         call    skipSp
@@ -371,12 +382,19 @@ tcpSession:
         ld      de,magicPNS
         call    cmp4
         jr      nz,.bad
-        ld      a,(sesBuf+9)                    ; link: TCP/IP
-        dec     a
+        ld      a,(sesBuf+9)                    ; link: 1 TCP/IP, 2 TCP/IP chat with the game through the MSXPi
+        cp      2
+        jr      nz,.l1
+        ld      (hyb),a
+        jr      .l2
+.l1:    dec     a
         jr      nz,.bad
-        ld      a,(sesBuf+32)                   ; state: launched, not ended yet
+.l2:    ld      a,(sesBuf+32)                   ; state: launched, not ended yet
         or      a
         jr      nz,.bad
+        ld      a,(hyb)
+        or      a
+        jp      nz,sesFields                    ; link 2: no addresses, the Pi has them
         ld      a,(sesBuf+40)                   ; 1 to 3 addresses
         or      a
         jr      z,.bad
@@ -518,8 +536,12 @@ tcpConnect:
         ld      hl,(lport)
         ld      (ix+IO_LPORT),l
         ld      (ix+IO_LPORT+1),h
+        ld      a,(hyb)                         ; link 2: no UDP port here (the overlay: ncand = FFh)
+        or      a
         ld      a,(ncand)
-        ld      (ix+IO_NCAND),a
+        jr      z,.nc
+        ld      a,$FF
+.nc:    ld      (ix+IO_NCAND),a
         push    ix
         pop     hl
         ld      de,IO_CAND
@@ -540,7 +562,10 @@ tcpConnect:
         ld      hl,msgNoPort
 .err:   ld      a,R_MACHINE
         jp      exitResult
-.open:  ld      a,1
+.open:  ld      a,(hyb)
+        or      a
+        jp      nz,mpConnect                    ; link 2: the Pi connects (playnet.asm), the overlay only keeps the chat alive
+        ld      a,1
         ld      (ovlOpen),a
         ld      hl,(JIFFY)
         ld      (t0),hl
@@ -663,10 +688,18 @@ tcpSave:
 ; ---- the transport (install): the UNAPI one, relocated into tBuf ----------------------------------
 tcpTransport:
         ld      hl,tuImage
-        ld      de,tBuf
         ld      bc,TU_SIZE
+        ld      de,tuRelocs
+        ld      a,(hyb)
+        or      a
+        jr      z,.sel
+        ld      hl,thImage                      ; link 2: the C9 transaction, in the game's page 3
+        ld      bc,TH_SIZE
+        ld      de,thRelocs
+.sel:   push    de
+        ld      de,tBuf
         ldir
-        ld      hl,tuRelocs
+        pop     hl
         call    relocate
         ld      hl,(npIrq)
         ld      (tBuf+TU_HANDLER),hl

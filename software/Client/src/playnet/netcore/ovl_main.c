@@ -266,26 +266,40 @@ static void irc_keep(uint16_t now)
 /* ---- the entries --------------------------------------------------------------------------- */
 void ovl_open(void)
 {
+    uint8_t hybrid = ovl_io.ncand == 0xFF;  /* link 2: the game's packets go through the Pi; only the IRC and the stack here */
     if (!tcp_find()) {
         ovl_io.status = 1;
         return;
     }
-    ur_hl = ovl_io.lport; ur_bc = 0;        /* transient */
-    if (unapi(TCPIP_UDP_OPEN) != ERR_OK) {
-        ovl_io.status = 2;
-        return;
+    if (!hybrid) {
+        ur_hl = ovl_io.lport; ur_bc = 0;    /* transient */
+        if (unapi(TCPIP_UDP_OPEN) != ERR_OK) {
+            ovl_io.status = 2;
+            return;
+        }
+        conn = (uint8_t)(ur_bc >> 8);
     }
-    conn = (uint8_t)(ur_bc >> 8);
     if (ovl_io.service == 2)                /* a stack in RAM has a timer to run; a ROM one (GR8NET) does not */
         ovl_io.service = un_seg != 0xFF || un_addr >= 0xC000;
     svc_jiffy = *(volatile uint16_t *)JIFFY;
     svc_ticks = ovl_io.service ? nc_now() : 0;
-    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz,
-            ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 2 : 1),
-            ovl_io.s_want != 0xFF ? ovl_io.s_want : (ovl_io.service ? 1 : 0));
-    nc_set_peers(ovl_io.cand, ovl_io.ncand);
-    nc_restart();
+    if (!hybrid) {
+        nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz,
+                ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 2 : 1),
+                ovl_io.s_want != 0xFF ? ovl_io.s_want : (ovl_io.service ? 1 : 0));
+        nc_set_peers(ovl_io.cand, ovl_io.ncand);
+        nc_restart();
+    }
     ovl_io.status = 0;
+}
+
+/* the hybrid transport's share of the game (link 2): the stack's timer and the IRC connection, nothing else */
+void ovl_keep(void)
+{
+    uint16_t now = nc_now();
+    if (ovl_io.service)
+        service(now);
+    irc_keep(now);
 }
 
 void ovl_poll(void)

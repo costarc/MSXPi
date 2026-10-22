@@ -10,8 +10,9 @@
 ;   +15 CLOSE  close the UDP port
 ;   +18 version of this vector (1)
 ;   +19 address of the I/O block
+;   +21 KEEP  one service of the stack and the IRC connection (the hybrid transport, transport_hybrid.asm)
         .module ovl_crt0
-        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io
+        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io, _ovl_keep
         .globl  l__DATA, s__DATA, l__INITIALIZER, s__INITIALIZER, s__INITIALIZED
 
         .area   _HEADER (ABS)
@@ -24,6 +25,7 @@
         jp      _ovl_close
         .db     1
         .dw     _ovl_io
+        jp      _ovl_keep
 
 init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ld      bc,#l__DATA

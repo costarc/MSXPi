@@ -643,7 +643,7 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 | 0 | 4 | `'PNS1'` |
 | 4 | 4 | token (the 8 hex digits as 4 bytes) |
 | 8 | 1 | seat: 0 = inviter, 1 = invitee |
-| 9 | 1 | link: 0 = MSXPi, 1 = TCP/IP UNAPI |
+| 9 | 1 | link: 0 = MSXPi, 1 = TCP/IP UNAPI, 2 = TCP/IP chat with the game's packets through the MSXPi (`transport_hybrid.asm`; no candidates, the Pi has the opponent from `playnet peers`) |
 | 10 | 2 | local UDP port (TCP/IP only; 0 on MSXPi) |
 | 12 | 4 | profile hash |
 | 16 | 8 | game id, upper case, padded with spaces (= the GPF file name) |
@@ -719,6 +719,8 @@ payload below. On failure it has `RC_FAILED` (E7h) and carries a message startin
 | `playnet save` | After the command, the MSX sends the saved area (14) as one block transfer that the Pi's `recvdata2` takes: one handshake, then blocks of at most 8 KB (`RC_READY` on all but the last, `RC_SUCCESS` on the last). At most 16640 bytes; PLAYNET sends the 8-byte header in the first block, then the area (14). Reply `OK`. Fails when no game is in progress. |
 | `playnet restore` | the saved area. The Pi then forgets it, so a second restore fails. |
 | `playnet result <code>` | `OK`. The chat shows the result (13.2) when the player is back in `MCHAT`. |
+| `playnet open <game_id>` | link 2: the Pi opens its game socket. Reply text `<profhash> <candidates>` (8 hex digits, then `ip:port,...` or `-`). Fails for a game that is not installed. |
+| `playnet peers <token> <seat> <game_id> <candidates>` | link 2: the Pi takes the opponent's candidates and the game's profile hash; the C9 connect (10.1) then runs the session. Reply `OK`. |
 
 On the Pi, the games are the GPF files in `MSXPIHOME/games/` (`/home/pi/msxpi/games/`). The file name must be the game id in upper
 case. A file with a bad header or checksum, or the wrong name, is skipped and logged.

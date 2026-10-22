@@ -38,11 +38,11 @@ KEYBUF:         EQU     $FBF0
 PUTPNT:         EQU     $F3F8
 GETPNT:         EQU     $F3FA
 
-CRCT:           EQU     $2400
-GPFBUF:         EQU     $2800
+CRCT:           EQU     $2500
+GPFBUF:         EQU     $2900
 GPFMAX:         EQU     $0C00
-BOUNCE:         EQU     $3400
-CHUNK:          EQU     $0C00
+BOUNCE:         EQU     $3500
+CHUNK:          EQU     $0B00
 TRAMP:          EQU     $C000
 SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', start, length, then start-FFFEh
 SV_MAX:         EQU     $4000-8                 ; under 16 KB (start >= C008h): a segment, or RBUF to C000h
@@ -981,6 +981,7 @@ connect:
         jp      nz,tcpConnect
         ld      hl,msgConnect
         call    PRINT
+mpConnect:                                      ; (link 2 joins here: tcpConnect has printed it)
         ld      a,(manual)
         or      a
         jr      nz,.go
@@ -1182,7 +1183,11 @@ install:
         or      a
         jr      z,.tl
         ld      hl,TU_SIZE
-        ld      a,(g3Seg)                       ; and the game's own page 3
+        ld      a,(hyb)
+        or      a
+        jr      z,.hs
+        ld      hl,TH_SIZE
+.hs:    ld      a,(g3Seg)                       ; and the game's own page 3
         ld      (vG3),a
         ld      a,(gameSeg2)
         ld      (vGame2),a
@@ -1943,6 +1948,7 @@ cmdProfileId:   defs    10
         INCLUDE "msxpi_bios.asm"
         INCLUDE "transport_msxpi.inc"
         INCLUDE "transport_unapi.inc"
+        INCLUDE "transport_hybrid.inc"
         INCLUDE "playnet_tcp.asm"
 
 ; ---- variables ------------------------------------------------------------------------------------
@@ -2013,6 +2019,8 @@ pcBsz:          defw    0
 pcCmd:          defw    0
 tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until the trampoline copies it
         ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
+        ASSERT  tBuf+TU_SIZE <= BOUNCE+CHUNK
+        ASSERT  tBuf+TH_SIZE <= BOUNCE+CHUNK
 tcp:            defb    0                       ; 1: PLAYNET /T (playnet_tcp.asm)
 lport:          defw    0
 ncand:          defb    0
@@ -2027,6 +2035,7 @@ hz:             defb    60
 kMode:          defb    0                       ; PLAYNET /T /K1../K3: the send interval to announce (0: by the stack)
 lMode:          defb    $FF                     ; /L0../L9: the service latency to announce, in frames ($FF: by the stack)
 svcMode:        defb    2                       ; PLAYNET /T /S0, /S1: the TCP/IP stack's service (2: by the stack found)
+hyb:            defb    0                       ; link 2 (/H, or the session's): the game's packets through the MSXPi
 ovlLen:         defw    0
 ovlIo:          defw    0
 ovlOpen:        defb    0

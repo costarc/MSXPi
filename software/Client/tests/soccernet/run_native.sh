@@ -11,6 +11,7 @@
 #   ONLY=H        run one node.    FORCE_DELAY=n  fix the delay.      VER2=n  version announced by node C
 #   POKEF=n       corrupt the ball on node H at frame n (desync check)    EXITF=n  node C exits at frame n
 #   TMAX/NODETMO  emulated / wall seconds before a node is stopped.   RENDERER=SDLGL-PP to watch it
+#   HYBRID=1      (with SCENARIO=mixed) the TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2)
 #   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements); EXTRA_TCL_C for node C
 #   RECORD=file.wav  node H records its sound (openMSX record -audioonly) and node C is muted
 #   EXITKEY=n     (chat) node C presses Ctrl+Shift+F5 at frame n; both must return to MCHAT
@@ -99,8 +100,12 @@ else
 fi
 start() {  # n port local_udp peer_udp version
   nat=""; [ -n "$TCPN" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
+  np=""      # the Pi's own session: an MSXPi node always; a TCP/IP node only for HYBRID=1 (its game packets go through the MSXPi)
+  if [ -z "$CHAT" ]; then
+    if [ -z "$nat" ] || [ -n "$HYBRID" ]; then np="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; fi
+  fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
-      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ -n "$CHAT" ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-2}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $np MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-2}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
@@ -120,6 +125,10 @@ NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
   export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C 5102 10.0.2.2:5101"
   [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H 5101 10.0.2.2:5102"
+  if [ -n "$HYBRID" ]; then              # link 2: the game's packets through the node's MSXPi, the stack kept for the chat
+    export CMD_C="PLAYNET /T /H soccer C"
+    [ -z "$BOTH" ] || export CMD_H="PLAYNET /T /H soccer H"
+  fi
 fi
 node() {  # role port
   snd=""; [ -n "$RECORD" ] && { [ "$1" = H ] && snd="record start -audioonly $RECORD" || snd="set mute on"; }

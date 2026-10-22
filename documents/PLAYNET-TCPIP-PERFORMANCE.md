@@ -405,6 +405,11 @@ Q4, K and S sweep (protocol 2 ROM, LDIR `memcpy`, same rig; `PNOPTS` in `run_nat
 All identical, no desync. K = 3 reaches 86 % of the native pair's 27.9 fps but at the longest input delay (7 frames); K = 2 stays the
 default. S only moves the delay, not the speed.
 
+Step 5 (link 2, `PLAYNET /T /H`, `transport_hybrid.asm`; `HYBRID=1 SCENARIO=mixed BOTH=1`): both nodes **27.49 fps**, 4.3 ms in `XCHG`, 51 link
+bytes per frame, frames identical, no desync: 98.5 % of the native pair (27.9). Not covered by that run: the IRC keep-alive during the game and
+a session file with link 2 (both need the chat, still blocked by Q6). The manual start has no `playnet peers`: the Pi's opponent comes from
+`MSXPI_NETPLAY` as on the MSXPi path.
+
 Frames identical, no desync. About +9 % fps; real hardware (OTIR in wait mode) is still to be tested.
 
 Found on the way: the old 8-frame resend window could not repair a lost record once a node was more than 7-D frames ahead (D > 3); the
