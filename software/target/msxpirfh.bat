@@ -29,6 +29,8 @@ pcopy m:msxpi32k.rom
 pcopy m:msxpibas.rom
 pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
+pcopy m:msxpirfb.bat
+pcopy m:msxpiupb.bat
 pcopy m:msxpiupd.bat
 pcopy m:nitros.com
 pcopy m:p.com

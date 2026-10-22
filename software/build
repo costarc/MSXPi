@@ -74,6 +74,7 @@ OPENMSXSRC=../../openMSX/openMSX                  # the openMSX fork
 OPENMSXSHARE=$TOOLS/Documents/openMSX/share       # what the Windows openMSX reads
 SERVEDDISKS=/c/home/pi/msxpi/disks                # what msxpi-server.py serves
 GITPATH=https://github.com/costarc/MSXPi/raw/master/software
+GITPATH_BRANCH=https://github.com/costarc/MSXPi/raw/%1/software   # %1: batch parameter of msxpiupb.bat
 
 die()  { echo "ERROR: $*" >&2; exit 1; }
 warn() { echo "WARNING: $*" >&2; }
@@ -155,7 +156,35 @@ echo Starting update
 msxpirfh
 EOF
 
+    gen_refresh_batch target/msxpirfh.bat "$GITPATH" master
+    gen_refresh_batch target/msxpirfb.bat "$GITPATH_BRANCH" branch
+
+    # msxpiupb.bat <branch>: the same update from another branch, to test that
+    # branch on a real MSX. Stage 2 (msxpirfb.bat) is fetched from master,
+    # since the branch being tested may predate it, and gets the branch name.
+    to_crlf target/msxpiupb.bat <<EOF
+echo Preparing to update from branch %1
+p set DriveM ${GITPATH}/target
+p date
+echo Getting lastest updater...
+pcopy m:msxpirfb.bat
+echo
+echo Starting update from branch %1
+msxpirfb %1
+EOF
+}
+
+# gen_refresh_batch <file> <github path> <master|branch>: stage 2 of the MSX
+# update. "branch" is msxpirfb.bat, which takes the branch name as %1 (the path
+# holds it); it differs from msxpirfh.bat only in where it reads from, and that
+# it leaves the .bat files alone so the updaters on the disk stay master's.
+gen_refresh_batch() {
+    local out=$1 path=$2 mode=$3 raw
     {
+        if [ "$mode" = branch ]; then
+            raw=https://raw.githubusercontent.com/costarc/MSXPi/%1/software/Server/Python/src
+            echo "p set DriveM ${path}/target"
+        fi
         echo "copy pcopy.com pcopy.old"
         echo "pcopy m:pcopy.com"
         echo "echo"
@@ -163,13 +192,17 @@ EOF
         # The server alone is not enough: it imports mapper_detect, msxpi_eth
         # and msxpi_gpio_native, and the native GPIO engine is compiled on the
         # Pi. update.sh fetches all of them and rebuilds the engine.
-        echo "p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
-        echo "p run sh update.sh"
+        echo "p run wget -q -O update.sh ${path}/Server/Setup/update.sh"
+        if [ "$mode" = branch ]; then
+            echo "p run MSXPI_UPDATE_BASE=${raw} sh update.sh"
+        else
+            echo "p run sh update.sh"
+        fi
         # Windows has no sh: there the server skips the line above and does
         # the work on "p update" instead. On the Pi "p update" finds update.sh
         # has just run and returns; servers older than "p update" answer
         # "Unknown command" and were already updated by update.sh.
-        echo "p update"
+        if [ "$mode" = branch ]; then echo "p update %1"; else echo "p update"; fi
         echo "echo"
         echo "echo Restarting msxpi-server.py"
         echo "p restart"
@@ -181,6 +214,9 @@ EOF
             case "$(echo "$f" | tr 'A-Z' 'a-z')" in
                 pcopy.com|msxpirfh.bat) continue ;;
             esac
+            if [ "$mode" = branch ]; then
+                case "$f" in *.bat) continue ;; esac
+            fi
             echo "pcopy m:$f"
         done
         # The online games (PLAYNET): target/games/*.GPF, copied to the MSX disk
@@ -188,8 +224,10 @@ EOF
         for f in $(cd target/games 2>/dev/null && LC_ALL=C ls *.GPF 2>/dev/null); do
             echo "pcopy m:games/$f $f"
         done
+        # The next plain update starts from master again.
+        if [ "$mode" = branch ]; then echo "p set DriveM ${GITPATH}/target"; fi
         echo "p ver"
-    } | to_crlf target/msxpirfh.bat
+    } | to_crlf "$out"
 }
 
 # =============================================================================

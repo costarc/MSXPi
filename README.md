@@ -271,6 +271,8 @@ Pi's WiFi. Details: `software/UNAPI/README.md`.
 ### Updating
 
 * MSX disk (the `.COM` files): run `msxpiupd.bat` (network required).
+* To try a branch (client files, ROMs and server, in one go): `msxpiupb.bat feature/name`. The next
+  `msxpiupd.bat` goes back to master. Files that exist only in the branch are not copied.
 * Server: run the setup script again, from the Pi or from the MSX:
 
         p run wget https://tinyurl.com/MSXPi-Setup
@@ -546,6 +548,7 @@ server), `r1:` and `r2:` (MSX1 and MSX2 ROMs on msxarchive.nl).
 | `LOADROM name /N` | load a plain ROM or MegaROM from the network |
 | `at28c256` | write the interface EEPROM |
 | `msxpiupd.bat` | update the MSX-side files |
+| `msxpiupb.bat branch` | update the MSX and the server from a git branch |
 
 From BASIC use `CALL MSXPI("1,C000,dir /home/pi/msxpi")` (see `target/API.BAS`).
 The full reference, with examples, is in `documents/MSXPi Users and Developers Guide.odt`.
