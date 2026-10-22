@@ -42,17 +42,23 @@ TIMELINE = [
     (15, 'shot:boot'), (22, 'mchat /1 alice\r'), (30, 'shot:early'), (40, 'dump:start'), (41, 'shot:start'),
     (42, 'hello bob\r'), (50, '/join #second\r'), (60, 'dump:second'),
     (62, 'only here\r'), (68, TAB), (76, 'dump:back'),
-    (78, UP + UP), (86, 'dump:scrolled'),
-    (90, ESC), (100, 'quit'),
+    (77, 'ping\r'), (84, 'dump:pong'),
+    (85, UP + UP), (93, 'dump:scrolled'),
+    (97, ESC), (107, 'quit'),
 ]
 if MACHINE == 'msx2':
     # DOS from FloppyA; no /1, so the MSX2 build starts in SCREEN 6 and /screen goes to SCREEN 2.
-    # Slower than the MSX1 script: a whole screen takes a second to repaint.
+    # Slower than the MSX1 script (written when a whole screen took ~7 s to repaint).
     TIMELINE = [(27, 'dump:font'), (22, 'c:\r'), (25, 'dir mchat.com\r'), (30, 'mchat alice\r'),
                 (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (80, 'dump:second'),
-                (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (108, UP + UP), (122, 'dump:scrolled'),
-                (126, '/screen\r'), (140, 'dump:switched'), (141, 'shot:switched'), (144, ESC), (152, 'quit')]
+                (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (107, 'ping\r'), (115, 'dump:pong'),
+                (116, UP + UP), (130, 'dump:scrolled'),
+                (134, '/screen\r'), (148, 'dump:switched'), (149, 'shot:switched'), (152, ESC), (160, 'quit')]
 
+TIMING = os.environ.get('MCHAT_TIMING')            # 1: report VRAM write bursts per action; check: also fail if slow
+WATCH = [int(a) for a in os.environ.get('MCHAT_WATCH', '').split(',') if a]   # VRAM addresses to log in poll.log when VRAM changes
+TRACE = os.environ.get('MCHAT_TRACE')               # VRAM address: log each change of that byte with PC and stack (vram/trace.log)
+TRACE_BP = os.environ.get('MCHAT_TRACE_BP')         # addr,lo,hi: log calls of the routine at addr whose 2nd argument is in lo..hi (vram/trace.log)
 LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or tcp (TCP/IP UNAPI, INL)
 if LINK == 'tcp':
     # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
@@ -117,6 +123,26 @@ def write_script(path, dumps):
              '    fconfigure $f -translation binary',
              '    puts -nonewline $f [debug read_block VRAM 0 ' + ('32768' if MACHINE == 'msx2' else '16384') + ']',
              '    close $f', '}']
+    if TIMING:
+        nbytes = '32768' if MACHINE == 'msx2' else '16384'
+        lines += ['set lastv ""', f'set plog [open "{dumps.as_posix()}/poll.log" w]',
+                  'proc poll {} {', '  global lastv plog',
+                  f'  set v [debug read_block VRAM 0 {nbytes}]',
+                  '  if {$v ne $lastv} {', '    set n 0',
+                  '    if {$lastv ne ""} { binary scan $v c* a; binary scan $lastv c* b; foreach x $a y $b { if {$x != $y} {incr n} } }',
+                  '    puts $plog "[format %.3f [machine_info time]] $n"; flush $plog',
+                  *[f'    set w [binary scan [string index $v {a}] c wv{i}]; puts $plog "  watch {a} [expr {{$wv{i} & 255}}]"' for i, a in enumerate(WATCH)],
+                  '    set lastv $v }',
+                  '  after time 0.04 poll }', 'after time 20 poll']
+    if TRACE_BP:
+        addr, lo, hi = TRACE_BP.split(',')
+        lines += [f'set tlog [open "{dumps.as_posix()}/trace.log" w]',
+                  f'debug set_bp {addr} {{}} {{set sp [reg SP]; set dst [peek16 [expr $sp+4]]; if {{$dst >= {lo} && $dst < {hi}}} {{ set src [peek16 [expr $sp+2]]; set b {{}}; for {{set i 0}} {{$i < 6}} {{incr i}} {{ append b [format %02X [peek [expr $src+$i]]] " " }}; puts $tlog "CALL [format %.4f [machine_info time]] dst=$dst len=[peek16 [expr $sp+6]] ret=[format %04X [peek16 $sp]] src=$b"; flush $tlog }} }}']
+    if TRACE:
+        lines += [f'set tb [debug read VRAM {TRACE}]', f'set tlog [open "{dumps.as_posix()}/trace.log" w]', 'proc trace {} {', '  global tb tlog',
+                  f'  set b [debug read VRAM {TRACE}]',
+                  '  if {$b != $tb} { puts $tlog "TRACE [format %.4f [machine_info time]] $tb -> $b PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] stack=[debug read_block memory [reg SP] 24]"; flush $tlog; set tb $b }',
+                  '  after time 0.0003 trace }', 'after time 20 trace']
     for when, action in TIMELINE:
         if action == 'quit':
             lines.append(f'after time {when} {{exit}}')
@@ -137,6 +163,7 @@ class Bob(threading.Thread):
         self.fixture = fixture
         self.sock = socket.create_connection(('127.0.0.1', IRC_PORT))
         self.done = False
+        self.ponged = False
 
     def send(self, line):
         self.sock.sendall((line + '\r\n').encode())
@@ -160,7 +187,61 @@ class Bob(threading.Thread):
             self.send(f'PRIVMSG #msxpi :filler line {i}')
             time.sleep(.05)
         while not self.done:
-            time.sleep(.2)
+            if ('alice', '#msxpi', 'ping') in self.fixture.transcript and not self.ponged:
+                self.ponged = True
+                self.send('PRIVMSG #msxpi :pong')      # one new line while alice follows the chat live
+            time.sleep(.05)
+
+
+def bursts(path):
+    """(start, duration, changed bytes) of the VRAM changes in poll.log; changes <= 0.25 s apart are one burst."""
+    out = []
+    for line in path.read_text().splitlines():
+        if not line.strip() or line.startswith(" "):
+            continue
+        t, n = line.split()
+        t, n = float(t), int(n)
+        if out and t - out[-1][3] <= 0.25:
+            out[-1][3] = t
+            out[-1][2] += n
+        else:
+            out.append([t, t, n, t])
+    return [(b[0], b[3] - b[0], b[2]) for b in out]
+
+
+def timing_report(dumps, failures):
+    """Per action of TIMELINE: the bursts that follow it. Time resolution is +-0.1 s (the poll period)."""
+    log = dumps / 'poll.log'
+    if not log.exists():
+        return
+    bs = bursts(log)
+    typing = [t for t, a in TIMELINE if a == 'hello bob\r']
+    print('--- VRAM write bursts (emulated seconds: start, duration, changed bytes) ---')
+    marks = [(t, a) for t, a in TIMELINE if not a.startswith(('shot:', 'dump:')) and a != 'quit']
+    for i, (t, a) in enumerate(marks):
+        end = marks[i + 1][0] if i + 1 < len(marks) else t + 10
+        mine = [b for b in bs if t <= b[0] < end and b[2] > 3]
+        print(f'{t:5.0f}s {a!r}: ' + ', '.join(f'{s:.1f}s/{d:.2f}s/{n}B' for s, d, n in mine[:8]))
+    if TIMING == 'check' and typing:
+        # The typed word must be on screen about as fast as it is typed (10 keys, injected ~60 ms apart).
+        first = [b for b in bs if b[0] >= typing[0]][:1]
+        elapsed = max((s + d for s, d, _ in first), default=typing[0] + 99) - typing[0]
+        limit = 1.0
+        ok = elapsed < limit
+        print(('PASS: ' if ok else 'FAIL: ') + f'typed word fully echoed {elapsed:.2f}s after the first key (limit {limit}s)', flush=True)
+        if not ok:
+            failures.append('typing echo too slow')
+    ping = [t for t, a in TIMELINE if a == 'ping\r']
+    if TIMING == 'check' and ping:
+        # "ping" typed, sent, bob's one-line answer fetched and scrolled in: everything has stopped moving
+        # this long after the first key (typing ~0.3 s + two server round trips ~1 s are in it).
+        mine = [b for b in bs if ping[0] <= b[0] < ping[0] + 8 and b[2] > 3]
+        total = max((s + d for s, d, _ in mine), default=ping[0] + 99) - ping[0]
+        limit = 2.0
+        ok = total < limit
+        print(('PASS: ' if ok else 'FAIL: ') + f'ping typed and pong painted within {total:.2f}s (limit {limit}s)', flush=True)
+        if not ok:
+            failures.append('new line too slow')
 
 
 def main():
@@ -219,7 +300,7 @@ def main():
 
     screens = {}
     font = (dumps / 'font.vram').read_bytes() if (dumps / 'font.vram').exists() else None
-    for name in ('start', 'second', 'back', 'scrolled', 'switched'):
+    for name in ('start', 'second', 'back', 'pong', 'scrolled', 'switched'):
         path = dumps / f'{name}.vram'
         if path.exists():
             screens[name] = (screen_text6(path.read_bytes(), font) if MACHINE == 'msx2' and name != 'switched'
@@ -238,12 +319,15 @@ def main():
     check(('alice', '#second', 'only here') in fixture.transcript, 'line went to the second room')
     back = '\n'.join(screens.get('back', []))
     check('#msxpi' in back and 'filler line 30' in back, 'TAB returns to #msxpi at the latest line')
+    check('bob: pong' in '\n'.join(screens.get('pong', [])), 'a single new line shows up while following the chat')
     scrolled = '\n'.join(screens.get('scrolled', []))
     check('SCROLLED' in scrolled and 'filler line 30' not in scrolled, 'UP scrolls back through history')
     if MACHINE == 'msx2':
         switched = chr(10).join(screens.get('switched', []))
         check('#msxpi' in switched and 'bob: filler line' in switched, '/screen switched to SCREEN 2 and kept the chat')
         check(any(line.find('bob: filler line') == 16 for line in screens.get('back', [])), 'SCREEN 6 uses the 85 column layout (chat from column 16)')
+    if TIMING:
+        timing_report(dumps, failures)
     print('Test artifacts:', work, flush=True)
     fixture.shutdown()
     fixture.server_close()

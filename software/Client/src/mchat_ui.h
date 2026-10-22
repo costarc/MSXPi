@@ -45,8 +45,12 @@ void ui_close(void);               /* leave it (text mode, cursor hidden) */
 
 /* Write exactly 'width' cells at (col,row): s padded with blanks, or cut. */
 void ui_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint8_t style);
-/* Paint everything queued by ui_text. */
-void ui_flush(void);
+/* Move the cells of a rectangle up (delta > 0: row r+delta becomes row r) or down (delta < 0) by |delta|
+ * rows. The vacated rows read as blanks in UI_TEXT style and need no ui_text() to be correct. */
+void ui_scroll(uint8_t col, uint8_t row, uint8_t width, uint8_t height, int8_t delta);
+/* Paint everything queued by ui_text and ui_scroll. Returns 0 if it stopped early because a key is
+ * waiting (what is left stays queued and the next ui_flush() continues), 1 when everything is painted. */
+uint8_t ui_flush(void);
 /* Text cursor at (col,row), or hidden. */
 void ui_cursor(uint8_t col, uint8_t row, uint8_t visible);
 

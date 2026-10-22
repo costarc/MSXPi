@@ -63,6 +63,7 @@ echo off
 copy %sourcename%.com %TARGETDIR%\%sourcename%.com /y
 copy %sourcename%.com %FLOPPYA%\%sourcename%.com /y
 copy target\*.BAS %FLOPPYA%%\ /y
+IF DEFINED KEEPMAP copy %sourcename%.map %TARGETDIR%\%sourcename%.map /y
 del %TARGETDIR%\..\%sourcename%.com
 del %TARGETDIR%\..\%sourcename%.asm
 del %TARGETDIR%\..\%sourcename%.ihx

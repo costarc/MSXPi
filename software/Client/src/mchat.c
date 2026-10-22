@@ -23,6 +23,35 @@
 #include "../../C-common/header/msxpi.h"
 #include "mchat_ui.h"
 
+/* A key is in the BIOS buffer (PUTPNT != GETPNT): painting stops early to serve it. */
+#define KEY_WAITING (*(volatile uint16_t *)0xF3F8 != *(volatile uint16_t *)0xF3FA)
+
+/* Shift rows row..row+height-1 of a grid of 'stride' bytes a row, in columns col..col+width-1, up (delta > 0:
+ * row r+delta becomes row r) or down by |delta| rows; the vacated rows get 'fill'. Shared by the backends'
+ * ui_scroll() for their shadow grids. */
+static void grid_move(uint8_t *g, uint8_t stride, uint8_t col, uint8_t row, uint8_t width, uint8_t height, int8_t delta, uint8_t fill) {
+    uint8_t d = delta < 0 ? -delta : delta, n, i;
+    uint8_t *dst, *src;
+    if (d > height) d = height;
+    n = height - d;
+    g += col;
+    for (i = 0; i < row; i++) g += stride;
+    if (delta > 0) {
+        dst = g;
+        src = g;
+        for (i = 0; i < d; i++) src += stride;
+        for (i = 0; i < n; i++, dst += stride, src += stride) memmove(dst, src, width);
+        for (i = 0; i < d; i++, dst += stride) memset(dst, fill, width);
+    } else {
+        dst = g;
+        for (i = 1; i < height; i++) dst += stride;
+        src = dst;
+        for (i = 0; i < d; i++) src -= stride;
+        for (i = 0; i < n; i++, dst -= stride, src -= stride) memmove(dst, src, width);
+        for (i = 0; i < d; i++, dst -= stride) memset(dst, fill, width);
+    }
+}
+
 /* Fills VRAM with block copies (FillVram() is not used: see mchat_ui_s6.c). */
 static void vram_fill(uint16_t addr, uint8_t value, uint16_t len) {
     uint8_t block[256];
@@ -41,8 +70,12 @@ void ui_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint8_t sty
     if (ui_mode == UI_MSX2) s6_text(col, row, s, width, style);
     else s2_text(col, row, s, width, style);
 }
-void ui_flush(void) {
-    if (ui_mode == UI_MSX2) s6_flush(); else s2_flush();
+void ui_scroll(uint8_t col, uint8_t row, uint8_t width, uint8_t height, int8_t delta) {
+    if (ui_mode == UI_MSX2) s6_scroll(col, row, width, height, delta);
+    else s2_scroll(col, row, width, height, delta);
+}
+uint8_t ui_flush(void) {
+    return ui_mode == UI_MSX2 ? s6_flush() : s2_flush();
 }
 void ui_cursor(uint8_t col, uint8_t row, uint8_t visible) {
     if (ui_mode == UI_MSX2) s6_cursor(col, row, visible); else s2_cursor(col, row, visible);
@@ -95,6 +128,19 @@ static uint16_t rabs[VR_MAX];
 static uint8_t rkind[VR_MAX], rnick[VR_MAX];
 static char rtext[VR_MAX][TW_MAX + 1];
 static uint16_t top, first_abs, next_abs;
+
+/* What the screen shows, so only what changed is composed (see draw_all). The log window is tracked by
+ * row identity: drawn_abs[i] is the absolute row painted on screen row i (LOG_BLANK: blank, LOG_UNKNOWN:
+ * not known), and rstale[slot] says the ring slot was stored or changed since it was drawn. */
+#define LOG_BLANK 0xFFFD
+#define LOG_UNKNOWN 0xFFFC
+static uint16_t drawn_abs[VR_MAX], drawn_top;
+static uint8_t rstale[VR_MAX];
+static uint8_t log_full = 1;            /* repaint the whole log window */
+static uint8_t side_dirty = 1;          /* user list changed */
+static uint8_t in_from;                 /* first input character that changed, 0xFF: none */
+static uint8_t drawn_ilen, drawn_skip;  /* what the input line shows */
+static uint8_t flush_pending;           /* ui_flush() stopped early for a key */
 static uint8_t live = 1;
 static uint8_t ask_room;
 static uint16_t ask_start;
@@ -153,6 +199,7 @@ static uint16_t u16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 
 static void ring_clear(void) {
     uint8_t i;
+    log_full = 1;
     for (i = 0; i < VR_MAX; i++) rabs[i] = 0xFFFF;
 }
 
@@ -193,6 +240,8 @@ static uint8_t parse_m(void) {
     for (i = 0; i < n; i++, a++) {
         if (a < top || a >= top + vr) continue;
         slot = a % vr;
+        if (rabs[slot] != a || rkind[slot] != reply[HDR + i * slotsize]
+            || memcmp(rtext[slot], reply + HDR + i * slotsize + 2, cw)) rstale[slot] = 1;
         rabs[slot] = a;
         rkind[slot] = reply[HDR + i * slotsize];
         rnick[slot] = reply[HDR + i * slotsize + 1];
@@ -251,6 +300,7 @@ static void fetch_meta(void) {
         from += got;
     } while (got == 15 && from < utotal && shown < UMAX);
     ushown = shown;
+    side_dirty = 1;
     if (usel != 0xFF && usel >= ushown) usel = ushown ? ushown - 1 : 0xFF;
     meta_stale = 0;
 }
@@ -280,17 +330,40 @@ static void draw_side(void) {
         ui_text(0, 2 + i, i < ushown ? ulist[i] : "", ui_side, i == usel ? UI_TAB_ON : UI_SIDE);
 }
 
+/* The log window: rows whose identity is already on screen are not composed again, and when 'top'
+ * moved by less than a window the screen is scrolled and only the vacated rows are painted. */
 static void draw_log(void) {
-    uint8_t i, slot;
+    uint8_t i, slot, d;
     uint16_t a;
+    int16_t delta = (int16_t)(top - drawn_top);
+    if (log_full || delta >= vr || delta <= -(int16_t)vr) {
+        for (i = 0; i < VR_MAX; i++) drawn_abs[i] = LOG_UNKNOWN;
+        log_full = 0;
+    } else if (delta) {
+        d = delta < 0 ? -delta : delta;
+        ui_scroll(ui_side, 1, cw, vr, (int8_t)delta);
+        if (delta > 0) {
+            memmove(drawn_abs, drawn_abs + d, (vr - d) * 2);
+            for (i = vr - d; i < vr; i++) drawn_abs[i] = LOG_BLANK;
+        } else {
+            memmove(drawn_abs + d, drawn_abs, (vr - d) * 2);
+            for (i = 0; i < d; i++) drawn_abs[i] = LOG_BLANK;
+        }
+    }
+    drawn_top = top;
     for (i = 0; i < vr; i++) {
         a = top + i;
         slot = a % vr;
-        if (a < next_abs && rabs[slot] == a)
+        if (a < next_abs && rabs[slot] == a) {
+            if (drawn_abs[i] == a && !rstale[slot]) continue;
             ui_text(ui_side, 1 + i, rtext[slot], cw, rkind[slot] < UI_STATUS ? rkind[slot] : UI_TEXT);
-        else
+            drawn_abs[i] = a;
+        } else if (drawn_abs[i] != LOG_BLANK) {
             ui_text(ui_side, 1 + i, "", cw, UI_TEXT);
+            drawn_abs[i] = LOG_BLANK;
+        }
     }
+    memset(rstale, 0, sizeof(rstale));
 }
 
 static void draw_status(void) {
@@ -309,20 +382,44 @@ static void draw_status(void) {
     ui_text(0, vr + 1, line, ui_cols, UI_STATUS);
 }
 
+static void touch_in(uint8_t i) {
+    if (i < in_from) in_from = i;
+}
+
+/* The input line from the first character that changed; all of it once it scrolls sideways. */
 static void draw_input(void) {
-    uint8_t shown = ui_cols - 3, skip = ilen > shown ? ilen - shown : 0;
+    uint8_t shown = ui_cols - 3, skip = ilen > shown ? ilen - shown : 0, from = in_from, end;
     ui_text(0, vr + 2, ">", 1, UI_INPUT);
-    ui_text(1, vr + 2, input + skip, ui_cols - 1, UI_INPUT);
+    if (skip || drawn_skip) {
+        ui_text(1, vr + 2, input + skip, ui_cols - 1, UI_INPUT);
+    } else {
+        end = ilen > drawn_ilen ? ilen : drawn_ilen;
+        if (from < end) ui_text(1 + from, vr + 2, input + from, end - from, UI_INPUT);
+    }
+    drawn_ilen = ilen;
+    drawn_skip = skip;
+    in_from = 0xFF;
     ui_cursor(1 + ilen - skip, vr + 2, 1);
 }
 
+/* Compose what may have changed and paint it. The tab and status rows are a few cells; the user list,
+ * the log window and the input line are redrawn only when they changed. If a key is waiting, the
+ * painting stops and goes on the next time (flush_pending). */
 static void draw_all(void) {
     draw_tabs();
-    draw_side();
+    if (side_dirty) {side_dirty = 0; draw_side();}
     draw_log();
     draw_status();
-    draw_input();
-    ui_flush();
+    if (in_from != 0xFF) draw_input();
+    flush_pending = !ui_flush();
+}
+
+/* The screen is blank (new display mode): everything must be composed again. */
+static void dirty_all(void) {
+    log_full = 1;
+    side_dirty = 1;
+    in_from = 0;
+    drawn_ilen = drawn_skip = 0;
 }
 
 /* ------------------------------------------------------------- actions */
@@ -349,11 +446,13 @@ static void poll(void) {
 static void pick_start(void) {
     if (!ushown) {strcpy(note, "NOBODY TO INVITE"); return;}
     usel = 0;
+    side_dirty = 1;
 }
 
 static void pick_key(uint8_t key) {
     const char *n;
     char *p;
+    side_dirty = 1;
     if (key == 0x1E) {if (usel) usel--;}
     else if (key == 0x1F) {if (usel + 1 < ushown && usel + 2 < vr) usel++;}
     else if (key == 13) {
@@ -365,6 +464,7 @@ static void pick_key(uint8_t key) {
         *p++ = ' ';
         *p = 0;
         ilen = p - input;
+        touch_in(0);
         usel = 0xFF;
     }
     else usel = 0xFF;                   /* ESC, Ctrl-U again, anything else: back to typing */
@@ -442,6 +542,7 @@ static void switch_screen(void) {
     ui_open();
     layout();
     ring_clear();
+    dirty_all();
     start_session("");
     for (i = 0; i < MAXR; i++) rseen[i] = rnext[i];
 }
@@ -453,6 +554,7 @@ static void send_input(void) {
     if (!strcmp(input, "/screen")) {
         ilen = 0;
         input[0] = 0;
+        touch_in(0);
         if (machine) switch_screen();
         else strcpy(note, "THIS IS AN MSX1: SCREEN 2 ONLY");
         return;
@@ -461,6 +563,7 @@ static void send_input(void) {
     put_str(p, input);
     ilen = 0;
     input[0] = 0;
+    touch_in(0);
     if (!xchg(cmd)) return;
     note[0] = 0;
     ask_room = reply[21];
@@ -539,6 +642,9 @@ int main(void) {
     memset(rkind, 0, sizeof(rkind));
     memset(rnick, 0, sizeof(rnick));
     memset(rtext, 0, sizeof(rtext));
+    memset(rstale, 0, sizeof(rstale));
+    drawn_top = 0;
+    flush_pending = 0;
     memset(input, 0, sizeof(input));
     memset(note, 0, sizeof(note));
     gflags = launching = 0;
@@ -554,6 +660,7 @@ int main(void) {
     strcpy(rname[0], "#MSXPI");
     strcpy(mynick, "...");
     strcpy(note, "CONNECTING...");
+    dirty_all();
     draw_all();
     note[0] = 0;
     start_session(nick);
@@ -567,13 +674,13 @@ int main(void) {
             if (key == 0x15) {pick_start(); draw_all(); continue;}
             if (key == 27) break;
             else if (key == 13) {send_input(); if (ilen == 0xFF) break;}
-            else if (key == 8 || key == 127) {if (ilen) input[--ilen] = 0;}
+            else if (key == 8 || key == 127) {if (ilen) {input[--ilen] = 0; touch_in(ilen);}}
             else if (key == 9 || key == 0x1C) switch_room((cur + 1) % nrooms);
             else if (key == 0x1D) switch_room((cur + nrooms - 1) % nrooms);
             else if (key == 0x1E) scroll_log(-1);
             else if (key == 0x1F) scroll_log(1);
             else if (key == 0x0B) {live = 1; follow(); cache_fill();}
-            else if (key >= 32 && key <= 126 && ilen < MAX_INPUT) {input[ilen++] = key; input[ilen] = 0;}
+            else if (key >= 32 && key <= 126 && ilen < MAX_INPUT) {touch_in(ilen); input[ilen++] = key; input[ilen] = 0;}
             draw_all();
             continue;
         }
@@ -584,7 +691,7 @@ int main(void) {
             else poll();
             draw_all();
             if (fetch_launch()) {launching = 1; break;}
-        }
+        } else if (flush_pending) flush_pending = !ui_flush();
     }
     if (!launching) xchg("mchat quit");   /* a game start leaves the chat running on the server */
     tcp_link_stop();
