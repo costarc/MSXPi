@@ -38,6 +38,7 @@ IO_STATUS:      EQU     37
 IO_DELAY:       EQU     38
 IO_REASON:      EQU     39
 IO_IRC:         EQU     133
+IO_SERVICE:     EQU     134
 
 ; ---- the command line (HL at the '/') -----------------------------------------------------------------
 tcpArgs:
@@ -50,8 +51,24 @@ tcpArgs:
         ld      a,1
         ld      (tcp),a
         call    skipSp
+.opt:   ld      a,(hl)
+        cp      '/'
+        jr      nz,.noopt
+        inc     hl                              ; /S0, /S1: force the stack service off or on (default: by the stack)
         ld      a,(hl)
-        or      a
+        call    lower
+        cp      's'
+        jp      nz,usage
+        inc     hl
+        ld      a,(hl)
+        sub     '0'
+        cp      2
+        jp      nc,usage
+        ld      (svcMode),a
+        inc     hl
+        call    skipSp
+        jr      .opt
+.noopt: or      a
         ret     z                               ; /T alone: the session in PLAYNET.SES (tcpSession)
         ld      a,1
         ld      (manual),a
@@ -461,6 +478,12 @@ tcpConnect:
         pop     hl
         ld      de,IO_IRC
         add     hl,de
+        ld      (hl),a
+        push    ix                              ; (beyond IX's reach)
+        pop     hl
+        ld      de,IO_SERVICE
+        add     hl,de
+        ld      a,(svcMode)
         ld      (hl),a
         ld      hl,(lport)
         ld      (ix+IO_LPORT),l

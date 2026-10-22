@@ -471,7 +471,7 @@ PLAYNET installs a transport at `transport_area`, relocated to that address. It 
 
 | Offset | Entry | Contract |
 |---|---|---|
-| +0 | `XCHG` | In: HL = game packet to send (L = 14 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason). Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
+| +0 | `XCHG` | In: HL = game packet to send (L = 14 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason); E = the interrupts that were taken away from the game during the call (MSX-DOS's handler took them; always 0 on the MSXPi path), which the engine adds to its interrupt count. Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
 | +3 | `XEND` | In: A = result code. Tells the opponent (BYE), records the result, then restores MSX-DOS (14) or resets. Does not return. |
 | +6 | `XIRQ` | Target of the game's H.KEYI hook. Ends by jumping to `irq_handler`. |
 | +9 | reserved | `RET` |
@@ -489,7 +489,7 @@ Two implementations exist:
   at F341h-F344h, F1A2h-F1C6h, F336h-F37Fh with InterNestor Lite on MSX-DOS 1: measured, PLAYNET-DESIGN.md 8a).
   `XCHG` switches page 3 back to MSX-DOS's segment (the transport is installed at the same address in both), maps the network
   engine's segment (`PLAYNET.OVL`) into page 2 and records it with `PUT_P2` (a RAM implementation's helper puts back the page-2
-  segment `PUT_P2` recorded), runs it with interrupts on (so the stack's timer runs from MSX-DOS's own hooks), and switches back. Only
+  segment `PUT_P2` recorded), runs it with interrupts on, and switches back. For a stack that runs from a timer routine (InterNestor Lite; any implementation in RAM, `/S1` forces it, `/S0` turns it off), the engine also calls MSX-DOS's H.TIMI hook itself with interrupts off and A = 80h, once per interrupt period of the game and not when an interrupt has already run it during a call (PLAYNET-TCPIP-PERFORMANCE.md 5.2). The transport reads MSX-DOS's `JIFFY` before and after the call; the difference is added to the game's tick counter and returned in E. Only
   registers cross a page-3 switch: packets go through the engine's I/O block in page 2. The engine's buffers for the UNAPI calls
   are the last 128 bytes of `transport_area` in MSX-DOS's page 3, and its stack is under MSX-DOS's TPA top: a RAM implementation maps
   its own segments into pages 1 and 2 while it runs. `XIRQ` (in the game's page 3 only) counts ticks, the engine's clock, and jumps

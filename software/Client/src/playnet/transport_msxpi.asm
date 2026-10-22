@@ -66,7 +66,8 @@ xchg:   di
         jr      xDone
 .none:  call    c9rxb
 xZero:  xor     a
-xDone:  ei
+xDone:  ld      e,0                     ; E = interrupts lost to the call: none (transport_unapi.asm)
+        ei
         ret
 
 ; a link timeout inside a transaction: unwind to the stack pointer saved at its start

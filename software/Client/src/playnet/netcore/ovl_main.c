@@ -34,6 +34,7 @@ typedef struct {
     uint8_t txbuf[NC_MAX_PKT];  /* 41  the game's packets cross a page-3 switch here (transport_unapi.asm) */
     uint8_t rxbuf[NC_MAX_PKT];  /* 87 */
     uint8_t irc;            /* 133 MCHAT /T's IRC TCP connection, kept alive through the game; FFh: none */
+    uint8_t service;        /* 134 run the stack's timer in xchg: 0 no, 1 yes, 2 by the stack found (open sets 0 or 1) */
 } ovl_io_t;
 
 ovl_io_t ovl_io;
@@ -182,6 +183,42 @@ uint32_t nc_rand32(void)
     return x ^ ((uint32_t)r_reg() << 16);
 }
 
+/* ---- the stack's service (PLAYNET-TCPIP-PERFORMANCE.md 5.2) ----------------------------------------
+ * A software stack such as InterNestor Lite receives from its timer routine, which the BIOS calls through
+ * H.TIMI (in MSX-DOS's page 3, mapped during a call) on every interrupt. During a game the interrupts go
+ * to the game, so the stack would run only when one happens to fall inside a call. Instead, xchg runs the
+ * hook itself, as the BIOS would (A = 80h: the VDP status with the frame flag), at most once per interrupt
+ * period, and not when a real interrupt ran it since the last service. Interrupts are off, as in the BIOS. */
+#define JIFFY 0xFC9E
+static uint16_t svc_ticks, svc_jiffy;
+
+static void run_timi(void) __naked
+{
+__asm
+    push ix
+    push iy
+    ld a,#0x80
+    call 0xFD9F
+    pop iy
+    pop ix
+    ret
+__endasm;
+}
+
+static void service(uint16_t now)
+{
+    uint16_t j = *(volatile uint16_t *)JIFFY;
+    if (j != svc_jiffy) {                   /* an interrupt ran the stack inside a call: that was its service */
+        svc_jiffy = j;
+        svc_ticks = now;
+        return;
+    }
+    if (now == svc_ticks)                   /* less than one interrupt period since the last */
+        return;
+    svc_ticks = now;
+    run_timi();
+}
+
 /* ---- the IRC connection MCHAT /T left open (PROTOCOLS 14) -----------------------------------------
  * Twice a second: read what arrived (at most 4 x 56 bytes), drop it, and answer each "PING x" with
  * "PONG x", so the server keeps the connection through a long game. io.buf: 0-55 what is read, 64-127
@@ -236,6 +273,10 @@ void ovl_open(void)
         return;
     }
     conn = (uint8_t)(ur_bc >> 8);
+    if (ovl_io.service == 2)                /* a stack in RAM has a timer to run; a ROM one (GR8NET) does not */
+        ovl_io.service = un_seg != 0xFF || un_addr >= 0xC000;
+    svc_jiffy = *(volatile uint16_t *)JIFFY;
+    svc_ticks = ovl_io.service ? nc_now() : 0;
     nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz);
     nc_set_peers(ovl_io.cand, ovl_io.ncand);
     nc_restart();
@@ -252,7 +293,10 @@ void ovl_poll(void)
 
 void ovl_xchg(void)
 {
-    irc_keep(nc_now());
+    uint16_t now = nc_now();
+    if (ovl_io.service)
+        service(now);
+    irc_keep(now);
     ovl_io.status = nc_xchg(ovl_io.pkt, ovl_io.len, ovl_io.rx, &ovl_io.reason);
 }
 

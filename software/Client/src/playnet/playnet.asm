@@ -1875,8 +1875,8 @@ printHex:
 ; ---- text ----------------------------------------------------------------------------------------
 msgBanner:      defb    "PLAYNET 1 - online games for MSX",13,10,0
 msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role,",13,10
-                defb    "       PLAYNET /T (started by MCHAT /T), or",13,10
-                defb    "       PLAYNET /T game role port ip:port[,ip:port]",0
+                defb    "       PLAYNET /T [/S0|/S1] (started by MCHAT /T), or",13,10
+                defb    "       PLAYNET /T [/S0|/S1] game role port ip:port[,ip:port]",0
 msgNoSes:       defb    "No game waiting in PLAYNET.SES (start it from MCHAT /T)",0
 nameSes:        defb    "PLAYNET SES"
 sesEnd:         defb    2,0                     ; state ended, result code
@@ -2007,6 +2007,7 @@ gameSeg2:       defb    0
 dosSeg3:        defb    0
 segsHeld:       defb    0
 hz:             defb    60
+svcMode:        defb    2                       ; PLAYNET /T /S0, /S1: the TCP/IP stack's service (2: by the stack found)
 ovlLen:         defw    0
 ovlIo:          defw    0
 ovlOpen:        defb    0

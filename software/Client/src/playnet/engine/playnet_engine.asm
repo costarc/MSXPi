@@ -142,6 +142,14 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         ld      hl,txbuf
 .xchg:  ld      de,rxbuf
         call    XCHG                            ; send and/or take a packet, one transaction
+        ld      c,a
+        ld      hl,irqCnt                       ; E = interrupts the call took away from the game: count them
+        di
+        ld      a,(hl)
+        add     a,e
+        ld      (hl),a
+        ei
+        ld      a,c
         call    onStatus
         ld      a,(nf)                          ; has the remote input for F arrived?
         call    remSlot

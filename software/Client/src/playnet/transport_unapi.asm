@@ -59,11 +59,13 @@ tTicks: defw    0                       ; interrupts since the game started (G3)
 tSp:    defw    0
 tRx:    defw    0
 tCode:  defb    0
+tLost:  defb    0                       ; interrupts MSX-DOS took during the last XCHG (G3)
 tStack: defw    0                       ; the private stack's top in D3: MSX-DOS's TPA top (the loader)
 tBuf:   EQU     tBase+384               ; 128 bytes for the UNAPI calls (the overlay's io.buf), in D3
 
 ; XCHG. In: HL = packet to send, or 0; DE = receive buffer (L bytes). Out: A = 0 nothing received,
-; 1 a packet is at DE, 2 the opponent is gone, 3 the opponent left (B = its result code).
+; 1 a packet is at DE, 2 the opponent is gone, 3 the opponent left (B = its result code); E = the
+; interrupts that MSX-DOS's handler took during the call (the game's did not see them; 0 on the MSXPi path).
 xchg:   di
         push    ix
         push    iy
@@ -104,12 +106,29 @@ xchg:   di
         ld      (tTicks),hl
         ld      a,(tOvlSeg)
         call    tPutP2
+        ld      hl,(JIFFY)              ; MSX-DOS's interrupt count, to see the interrupts taken in the call
+        push    hl
         ei                              ; the TCP/IP stack's timer runs from MSX-DOS's hooks
         call    OVL_XCHG
         di
+        pop     de                      ; JIFFY before
+        ld      hl,(JIFFY)
+        or      a
+        sbc     hl,de                   ; HL = interrupts the game did not see (MSX-DOS's handler took them)
         ld      a,(tGameSeg3)
         out     (MAPPER_P3),a           ; the game's page 3 again
         ld      sp,(tSp)
+        ld      a,h
+        or      a
+        ld      a,l
+        jr      z,.lost
+        ld      a,255
+.lost:  ld      (tLost),a
+        ld      e,a
+        ld      d,0
+        ld      hl,(tTicks)             ; the game's clock catches up with them
+        add     hl,de
+        ld      (tTicks),hl
         ld      ix,(tIo)
         ld      c,(ix+IO_STATUS)
         ld      b,(ix+IO_REASON)
@@ -129,6 +148,8 @@ xchg:   di
         pop     bc
 .out:   ld      a,(tGameSeg2)
         out     (MAPPER_P2),a
+        ld      a,(tLost)
+        ld      e,a                     ; E = the interrupts counted above, for the engine's irqCnt
         ld      a,c
         pop     iy
         pop     ix
