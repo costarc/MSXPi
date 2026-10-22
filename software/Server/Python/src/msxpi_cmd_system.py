@@ -266,7 +266,7 @@ def restart(parm: Optional[str] = None) -> CommandResult:
 UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup"
 # A git branch name as the MSX may send it ("feature/x"); keeps URLs and the
 # command line safe.
-_BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
+_BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._,/-]{0,99}$")
 # update.sh touches this when it finishes; see update().
 UPDATE_STAMP = ".last-update"
 
@@ -288,6 +288,43 @@ def _branch_name(parm: Optional[str]) -> Optional[str]:
     return None
 
 
+def _branch_exists(branch: str) -> Optional[bool]:
+    """Whether the branch has the updater script; None when GitHub cannot be reached."""
+    import requests
+
+    try:
+        r = requests.head(
+            f"https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup/update.sh",
+            timeout=10, allow_redirects=True)
+    except requests.RequestException:
+        return None
+    return r.status_code == 200
+
+
+def _resolve_branch(branch: str) -> Optional[str]:
+    """The branch as GitHub knows it.
+
+    The MSX cannot always type the "/" of "feature/x": MSX-DOS gives a batch
+    file's parameter to COMMAND.COM first. So "feature.x" or "feature,x" are
+    accepted for it: a name with no "/" that does not exist is tried with its
+    "." and "," turned into "/" (one at a time from the left, then every
+    comma), and the first that exists wins. A name that exists is left alone
+    (release.1.6 stays), and so is any name when GitHub cannot be reached.
+    """
+    if "/" in branch or branch == "master" or not re.search(r"[.,]", branch):
+        return branch
+    exists = _branch_exists(branch)
+    if exists is not False:
+        return branch
+    seps = [m.start() for m in re.finditer(r"[.,]", branch)]
+    tries = [branch[:i] + "/" + branch[i + 1:] for i in seps]
+    tries.append(branch.replace(",", "/"))
+    for t in tries:
+        if _BRANCH_RE.match(t) and _branch_exists(t):
+            return t
+    return None
+
+
 def setbranch(parm: Optional[str] = None) -> CommandResult:
     """Choose the git branch the MSX updates from; no name means master.
 
@@ -297,9 +334,14 @@ def setbranch(parm: Optional[str] = None) -> CommandResult:
     cannot test for an empty parameter, so the default lives here.
     """
     global _update_branch
+    print(f"setbranch: received {parm!r}", flush=True)
     branch = _branch_name(parm)
     if branch is None:
         return sendmultiblock(b"Pi:Error - bad branch name")
+    resolved = _resolve_branch(branch)
+    if resolved is None:
+        return sendmultiblock(f"Pi:Error - no branch {branch}"[:78].encode())
+    branch = resolved
     _update_branch = branch
     setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
     return sendmultiblock(f"Pi:Ok - updating from {branch}".encode())

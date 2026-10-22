@@ -82,6 +82,26 @@ class ServerUpdateTests(unittest.TestCase):
             self.assertEqual(sent[-1], b'Pi:Error - bad branch name')
             self.assertEqual(system._update_branch, 'master')   # a bad name changes nothing
 
+    def test_dot_or_comma_stand_in_for_the_slash(self):
+        real = {'feature/eth-tx-otir', 'release.1.6', 'a/b/c'}
+        sent = []
+        with patch.object(system, '_branch_exists', side_effect=lambda b: b in real),              patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
+            for typed, want in (('feature.eth-tx-otir', 'feature/eth-tx-otir'),
+                                ('feature,eth-tx-otir', 'feature/eth-tx-otir'),
+                                ('a,b,c', 'a/b/c'),
+                                ('release.1.6', 'release.1.6'),          # exists as typed
+                                ('feature/eth-tx-otir', 'feature/eth-tx-otir')):
+                system.setbranch(typed)
+                setvar.assert_called_with('DriveM', f'https://github.com/costarc/MSXPi/raw/{want}/software/target')
+                self.assertEqual(sent[-1], f'Pi:Ok - updating from {want}'.encode())
+            system.setbranch('no.such')
+            self.assertTrue(sent[-1].startswith(b'Pi:Error - no branch no.such'))
+            self.assertEqual(system._update_branch, 'feature/eth-tx-otir')  # a miss changes nothing
+
+    def test_unreachable_github_keeps_the_name(self):
+        with patch.object(system, '_branch_exists', return_value=None):
+            self.assertEqual(system._resolve_branch('feature.x'), 'feature.x')
+
     def test_windows_gets_the_branch_switch(self):
         _, run = self.run_update('dev/x', host='Windows')
         cmd = run.call_args[0][0]
