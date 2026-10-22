@@ -26,8 +26,8 @@
 #define SPRPAT 0x3800
 
 /* The backends never run together, so they share the memory of their shadow grids: here the 51x24 cells and
- * the style of each tile, in mchat_ui_s6.c the 85x26 cells and their colours (2 x 85 x 26 bytes). */
-static uint8_t ui_mem[4420];
+ * the style of each tile, in mchat_ui_s6.c the 85x26 cells and their colours (a nibble each). */
+static uint8_t ui_mem[85 * 26 + 26 * 43];
 #define cell(r) ((char *)ui_mem + (r) * GRID_COLS)
 #define tile_style (ui_mem + GRID_ROWS * GRID_COLS)
 static uint8_t dirty[GRID_ROWS * 4];        /* one bit a tile: pattern to repaint */
@@ -88,38 +88,42 @@ static void s2_text(uint8_t col, uint8_t row, const char *s, uint8_t width, uint
         }
 }
 
-/* Move the cells of a rectangle (and the style of the tiles under it); the tiles are repainted, and
- * recoloured only where the style that arrives differs. */
+static uint8_t flush_all2(void);
+
+/* Move the cells of a rectangle, and their tiles in VRAM (patterns and colours, a few hundred bytes a
+ * text row, VRAM to RAM to VRAM); only the vacated rows are queued for painting. */
 static void s2_scroll(uint8_t col, uint8_t row, uint8_t width, uint8_t height, int8_t delta) {
-    uint8_t d = delta < 0 ? -delta : delta, i, r, t, t0, t1, from, st;
-    uint8_t *ts;
+    uint8_t d = delta < 0 ? -delta : delta, i, r, t0, t1, from, n;
+    uint8_t buf[256];
+    uint16_t at;
     if (row >= GRID_ROWS || col >= GRID_COLS || !width || !height || !delta) return;
     if (row + height > GRID_ROWS) height = GRID_ROWS - row;
     if (col + width > GRID_COLS) width = GRID_COLS - col;
+    flush_all2();                                       /* what is queued must be in VRAM before it moves */
     t0 = ((uint16_t)col * PITCH) >> 3;
     t1 = ((uint16_t)(col + width) * PITCH - 1) >> 3;
+    n = t1 - t0 + 1;
+    grid_move(cell(0), GRID_COLS, col, row, width, height, delta, ' ');
+    grid_move(tile_style, 32, t0, row, n, height, delta, UI_TEXT);
     for (i = 0; i < height; i++) {
         r = delta > 0 ? i : height - 1 - i;             /* destination, in an order that reads before it writes */
-        from = delta > 0 ? r + d : r - d;               /* source, as an offset in the rectangle; may be outside */
-        if (delta < 0 && r < d) from = 0xFF;
-        if (delta > 0 && from >= height) from = 0xFF;
-        ts = tile_style + (row + r) * 32;
-        if (from == 0xFF) memset((cell(row + r) + col), ' ', width);
-        else memmove((cell(row + r) + col), (cell(row + from) + col), width);
-        for (t = t0; t <= t1; t++) {
-            st = from == 0xFF ? UI_TEXT : tile_style[(row + from) * 32 + t];
-            if (ts[t] != st) {
-                ts[t] = st;
-                mark_tiles(cdirty, row + r, t, t);
-            }
+        from = delta > 0 ? r + d : r - d;               /* source: an offset in the rectangle, may be outside */
+        if (from >= height) {
+            mark_tiles(dirty, row + r, t0, t1);
+            mark_tiles(cdirty, row + r, t0, t1);
+            continue;
         }
-        mark_tiles(dirty, row + r, t0, t1);
+        at = (uint16_t)((row + from) * 32 + t0) * 8;
+        CopyVramToRam(PATTBL + at, buf, n * 8);
+        CopyRamToVram(buf, PATTBL + (uint16_t)((row + r) * 32 + t0) * 8, n * 8);
+        CopyVramToRam(COLTBL + at, buf, n * 8);
+        CopyRamToVram(buf, COLTBL + (uint16_t)((row + r) * 32 + t0) * 8, n * 8);
     }
 }
 
 /* Paint one tile: pixel columns tile*8 .. tile*8+7 of text row 'row'; the colours only if asked. */
 static void paint(uint8_t row, uint8_t tile, uint8_t with_pattern, uint8_t with_colour) {
-    uint8_t pat[8], colr[8], c, c0, c1, ch;
+    uint8_t pat[8], colr[8], c, c0, c1, ch, k;
     uint16_t px0 = (uint16_t)tile * 8;
     const uint8_t *g, *tp;
     uint16_t at = (uint16_t)row * 32 + tile;
@@ -132,10 +136,10 @@ static void paint(uint8_t row, uint8_t tile, uint8_t with_pattern, uint8_t with_
             if (ch == ' ') continue;
             g = mchat_font + (ch - 32) * 4;
             tp = sh_tab[(int16_t)((uint16_t)c * PITCH - px0) + 4];
-            pat[0] |= tp[g[0] >> 4]; pat[1] |= tp[g[0] & 15];
-            pat[2] |= tp[g[1] >> 4]; pat[3] |= tp[g[1] & 15];
-            pat[4] |= tp[g[2] >> 4]; pat[5] |= tp[g[2] & 15];
-            pat[6] |= tp[g[3] >> 4]; pat[7] |= tp[g[3] & 15];
+            for (k = 0; k < 4; k++) {
+                pat[k * 2] |= tp[g[k] >> 4];
+                pat[k * 2 + 1] |= tp[g[k] & 15];
+            }
         }
         CopyRamToVram(pat, PATTBL + at * 8, 8);
     }
@@ -145,7 +149,7 @@ static void paint(uint8_t row, uint8_t tile, uint8_t with_pattern, uint8_t with_
     }
 }
 
-static uint8_t s2_flush(void) {
+static uint8_t flush_rows2(uint8_t abortable) {
     uint8_t row, byte, bit, p, c, v, *dp, *cp;
     for (row = 0; row < GRID_ROWS; row++) {
         dp = dirty + row * 4;
@@ -160,12 +164,15 @@ static uint8_t s2_flush(void) {
                 dp[byte] &= ~bit_of[bit];
                 cp[byte] &= ~bit_of[bit];
                 paint(row, byte * 8 + bit, p, c);
-                if (KEY_WAITING) return 0;
+                if (abortable && KEY_WAITING) return 0;
             }
         }
     }
     return 1;
 }
+
+static uint8_t flush_all2(void) {return flush_rows2(0);}
+static uint8_t s2_flush(void) {return flush_rows2(1);}
 
 static void s2_cursor(uint8_t col, uint8_t row, uint8_t visible) {
     cursor_attr[0] = visible ? row * 8 - 1 : 0xD0;       /* 0xD0 ends the list */

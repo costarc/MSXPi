@@ -26,6 +26,32 @@
 /* A key is in the BIOS buffer (PUTPNT != GETPNT): painting stops early to serve it. */
 #define KEY_WAITING (*(volatile uint16_t *)0xF3F8 != *(volatile uint16_t *)0xF3FA)
 
+/* Shift rows row..row+height-1 of a grid of 'stride' bytes a row, in columns col..col+width-1, up (delta > 0:
+ * row r+delta becomes row r) or down by |delta| rows; the vacated rows get 'fill'. Shared by the backends'
+ * ui_scroll() for their shadow grids. */
+static void grid_move(uint8_t *g, uint8_t stride, uint8_t col, uint8_t row, uint8_t width, uint8_t height, int8_t delta, uint8_t fill) {
+    uint8_t d = delta < 0 ? -delta : delta, n, i;
+    uint8_t *dst, *src;
+    if (d > height) d = height;
+    n = height - d;
+    g += col;
+    for (i = 0; i < row; i++) g += stride;
+    if (delta > 0) {
+        dst = g;
+        src = g;
+        for (i = 0; i < d; i++) src += stride;
+        for (i = 0; i < n; i++, dst += stride, src += stride) memmove(dst, src, width);
+        for (i = 0; i < d; i++, dst += stride) memset(dst, fill, width);
+    } else {
+        dst = g;
+        for (i = 1; i < height; i++) dst += stride;
+        src = dst;
+        for (i = 0; i < d; i++) src -= stride;
+        for (i = 0; i < n; i++, dst -= stride, src -= stride) memmove(dst, src, width);
+        for (i = 0; i < d; i++, dst -= stride) memset(dst, fill, width);
+    }
+}
+
 /* Fills VRAM with block copies (FillVram() is not used: see mchat_ui_s6.c). */
 static void vram_fill(uint16_t addr, uint8_t value, uint16_t len) {
     uint8_t block[256];

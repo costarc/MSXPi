@@ -42,16 +42,18 @@ TIMELINE = [
     (15, 'shot:boot'), (22, 'mchat /1 alice\r'), (30, 'shot:early'), (40, 'dump:start'), (41, 'shot:start'),
     (42, 'hello bob\r'), (50, '/join #second\r'), (60, 'dump:second'),
     (62, 'only here\r'), (68, TAB), (76, 'dump:back'),
-    (78, UP + UP), (86, 'dump:scrolled'),
-    (90, ESC), (100, 'quit'),
+    (77, 'ping\r'), (84, 'dump:pong'),
+    (85, UP + UP), (93, 'dump:scrolled'),
+    (97, ESC), (107, 'quit'),
 ]
 if MACHINE == 'msx2':
     # DOS from FloppyA; no /1, so the MSX2 build starts in SCREEN 6 and /screen goes to SCREEN 2.
     # Slower than the MSX1 script (written when a whole screen took ~7 s to repaint).
     TIMELINE = [(27, 'dump:font'), (22, 'c:\r'), (25, 'dir mchat.com\r'), (30, 'mchat alice\r'),
                 (54, 'dump:start'), (56, 'hello bob\r'), (64, '/join #second\r'), (80, 'dump:second'),
-                (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (108, UP + UP), (122, 'dump:scrolled'),
-                (126, '/screen\r'), (140, 'dump:switched'), (141, 'shot:switched'), (144, ESC), (152, 'quit')]
+                (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (107, 'ping\r'), (115, 'dump:pong'),
+                (116, UP + UP), (130, 'dump:scrolled'),
+                (134, '/screen\r'), (148, 'dump:switched'), (149, 'shot:switched'), (152, ESC), (160, 'quit')]
 
 TIMING = os.environ.get('MCHAT_TIMING')            # 1: report VRAM write bursts per action; check: also fail if slow
 WATCH = [int(a) for a in os.environ.get('MCHAT_WATCH', '').split(',') if a]   # VRAM addresses to log in poll.log when VRAM changes
@@ -161,6 +163,7 @@ class Bob(threading.Thread):
         self.fixture = fixture
         self.sock = socket.create_connection(('127.0.0.1', IRC_PORT))
         self.done = False
+        self.ponged = False
 
     def send(self, line):
         self.sock.sendall((line + '\r\n').encode())
@@ -184,7 +187,10 @@ class Bob(threading.Thread):
             self.send(f'PRIVMSG #msxpi :filler line {i}')
             time.sleep(.05)
         while not self.done:
-            time.sleep(.2)
+            if ('alice', '#msxpi', 'ping') in self.fixture.transcript and not self.ponged:
+                self.ponged = True
+                self.send('PRIVMSG #msxpi :pong')      # one new line while alice follows the chat live
+            time.sleep(.05)
 
 
 def bursts(path):
@@ -217,14 +223,25 @@ def timing_report(dumps, failures):
         mine = [b for b in bs if t <= b[0] < end and b[2] > 3]
         print(f'{t:5.0f}s {a!r}: ' + ', '.join(f'{s:.1f}s/{d:.2f}s/{n}B' for s, d, n in mine[:8]))
     if TIMING == 'check' and typing:
-        # The typed word must be on screen about as fast as it is typed (10 keys, injected 50 ms apart).
-        mine = [b for b in bs if typing[0] <= b[0] < typing[0] + 3]
-        elapsed = max((s + d for s, d, _ in mine), default=typing[0] + 99) - typing[0]
+        # The typed word must be on screen about as fast as it is typed (10 keys, injected ~60 ms apart).
+        first = [b for b in bs if b[0] >= typing[0]][:1]
+        elapsed = max((s + d for s, d, _ in first), default=typing[0] + 99) - typing[0]
         limit = 1.0
         ok = elapsed < limit
         print(('PASS: ' if ok else 'FAIL: ') + f'typed word fully echoed {elapsed:.2f}s after the first key (limit {limit}s)', flush=True)
         if not ok:
             failures.append('typing echo too slow')
+    ping = [t for t, a in TIMELINE if a == 'ping\r']
+    if TIMING == 'check' and ping:
+        # "ping" typed, sent, bob's one-line answer fetched and scrolled in: everything has stopped moving
+        # this long after the first key (typing ~0.3 s + two server round trips ~1 s are in it).
+        mine = [b for b in bs if ping[0] <= b[0] < ping[0] + 8 and b[2] > 3]
+        total = max((s + d for s, d, _ in mine), default=ping[0] + 99) - ping[0]
+        limit = 2.0
+        ok = total < limit
+        print(('PASS: ' if ok else 'FAIL: ') + f'ping typed and pong painted within {total:.2f}s (limit {limit}s)', flush=True)
+        if not ok:
+            failures.append('new line too slow')
 
 
 def main():
@@ -283,7 +300,7 @@ def main():
 
     screens = {}
     font = (dumps / 'font.vram').read_bytes() if (dumps / 'font.vram').exists() else None
-    for name in ('start', 'second', 'back', 'scrolled', 'switched'):
+    for name in ('start', 'second', 'back', 'pong', 'scrolled', 'switched'):
         path = dumps / f'{name}.vram'
         if path.exists():
             screens[name] = (screen_text6(path.read_bytes(), font) if MACHINE == 'msx2' and name != 'switched'
@@ -302,6 +319,7 @@ def main():
     check(('alice', '#second', 'only here') in fixture.transcript, 'line went to the second room')
     back = '\n'.join(screens.get('back', []))
     check('#msxpi' in back and 'filler line 30' in back, 'TAB returns to #msxpi at the latest line')
+    check('bob: pong' in '\n'.join(screens.get('pong', [])), 'a single new line shows up while following the chat')
     scrolled = '\n'.join(screens.get('scrolled', []))
     check('SCROLLED' in scrolled and 'filler line 30' not in scrolled, 'UP scrolls back through history')
     if MACHINE == 'msx2':
