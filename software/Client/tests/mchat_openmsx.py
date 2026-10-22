@@ -54,6 +54,9 @@ if MACHINE == 'msx2':
                 (126, '/screen\r'), (140, 'dump:switched'), (141, 'shot:switched'), (144, ESC), (152, 'quit')]
 
 TIMING = os.environ.get('MCHAT_TIMING')            # 1: report VRAM write bursts per action; check: also fail if slow
+WATCH = [int(a) for a in os.environ.get('MCHAT_WATCH', '').split(',') if a]   # VRAM addresses to log in poll.log when VRAM changes
+TRACE = os.environ.get('MCHAT_TRACE')               # VRAM address: log each change of that byte with PC and stack (vram/trace.log)
+TRACE_BP = os.environ.get('MCHAT_TRACE_BP')         # addr,lo,hi: log calls of the routine at addr whose 2nd argument is in lo..hi (vram/trace.log)
 LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or tcp (TCP/IP UNAPI, INL)
 if LINK == 'tcp':
     # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
@@ -125,8 +128,19 @@ def write_script(path, dumps):
                   f'  set v [debug read_block VRAM 0 {nbytes}]',
                   '  if {$v ne $lastv} {', '    set n 0',
                   '    if {$lastv ne ""} { binary scan $v c* a; binary scan $lastv c* b; foreach x $a y $b { if {$x != $y} {incr n} } }',
-                  '    puts $plog "[format %.3f [machine_info time]] $n"; flush $plog', '    set lastv $v }',
+                  '    puts $plog "[format %.3f [machine_info time]] $n"; flush $plog',
+                  *[f'    set w [binary scan [string index $v {a}] c wv{i}]; puts $plog "  watch {a} [expr {{$wv{i} & 255}}]"' for i, a in enumerate(WATCH)],
+                  '    set lastv $v }',
                   '  after time 0.04 poll }', 'after time 20 poll']
+    if TRACE_BP:
+        addr, lo, hi = TRACE_BP.split(',')
+        lines += [f'set tlog [open "{dumps.as_posix()}/trace.log" w]',
+                  f'debug set_bp {addr} {{}} {{set sp [reg SP]; set dst [peek16 [expr $sp+4]]; if {{$dst >= {lo} && $dst < {hi}}} {{ set src [peek16 [expr $sp+2]]; set b {{}}; for {{set i 0}} {{$i < 6}} {{incr i}} {{ append b [format %02X [peek [expr $src+$i]]] " " }}; puts $tlog "CALL [format %.4f [machine_info time]] dst=$dst len=[peek16 [expr $sp+6]] ret=[format %04X [peek16 $sp]] src=$b"; flush $tlog }} }}']
+    if TRACE:
+        lines += [f'set tb [debug read VRAM {TRACE}]', f'set tlog [open "{dumps.as_posix()}/trace.log" w]', 'proc trace {} {', '  global tb tlog',
+                  f'  set b [debug read VRAM {TRACE}]',
+                  '  if {$b != $tb} { puts $tlog "TRACE [format %.4f [machine_info time]] $tb -> $b PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] stack=[debug read_block memory [reg SP] 24]"; flush $tlog; set tb $b }',
+                  '  after time 0.0003 trace }', 'after time 20 trace']
     for when, action in TIMELINE:
         if action == 'quit':
             lines.append(f'after time {when} {{exit}}')
@@ -177,7 +191,7 @@ def bursts(path):
     """(start, duration, changed bytes) of the VRAM changes in poll.log; changes <= 0.25 s apart are one burst."""
     out = []
     for line in path.read_text().splitlines():
-        if not line.strip():
+        if not line.strip() or line.startswith(" "):
             continue
         t, n = line.split()
         t, n = float(t), int(n)
@@ -203,14 +217,14 @@ def timing_report(dumps, failures):
         mine = [b for b in bs if t <= b[0] < end and b[2] > 3]
         print(f'{t:5.0f}s {a!r}: ' + ', '.join(f'{s:.1f}s/{d:.2f}s/{n}B' for s, d, n in mine[:8]))
     if TIMING == 'check' and typing:
-        # Echo of the typed word: no single burst of VRAM writes may last long.
-        mine = [b for b in bs if typing[0] <= b[0] < typing[0] + 8]
-        worst = max((d for _, d, _ in mine), default=0)
-        limit = 0.6 if MACHINE == 'msx2' else 0.3
-        ok = worst < limit
-        print(('PASS: ' if ok else 'FAIL: ') + f'longest VRAM burst while typing {worst:.2f}s (limit {limit}s)', flush=True)
+        # The typed word must be on screen about as fast as it is typed (10 keys, injected 50 ms apart).
+        mine = [b for b in bs if typing[0] <= b[0] < typing[0] + 3]
+        elapsed = max((s + d for s, d, _ in mine), default=typing[0] + 99) - typing[0]
+        limit = 1.0
+        ok = elapsed < limit
+        print(('PASS: ' if ok else 'FAIL: ') + f'typed word fully echoed {elapsed:.2f}s after the first key (limit {limit}s)', flush=True)
         if not ok:
-            failures.append('typing burst too long')
+            failures.append('typing echo too slow')
 
 
 def main():
