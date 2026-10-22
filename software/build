@@ -147,6 +147,9 @@ to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 #     %2=/x), so the parameters are glued back together: %1%2%3...
 #     "p setbranch" exists only in a new server, so msxpiupd.bat first brings
 #     the server up to date from master (and restarts it), whatever it was.
+#     Windows has no sh and cannot restart itself: there "p update" fetches
+#     the server files, and the user restarts msxpi-server once if this run
+#     still answers "Unknown command setbranch".
 #   - msxpirfh.bat keeps pcopy.old, fetches pcopy.com first, updates and
 #     restarts the server, then copies everything else with the new pcopy
 #     against the new server.
@@ -158,6 +161,7 @@ p date
 p cd /home/pi/msxpi
 p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh
 p run sh update.sh
+p update
 p restart
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat

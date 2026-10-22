@@ -31,7 +31,7 @@ class BatchFilesTests(unittest.TestCase):
         self.assertEqual(up[1], 'p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target')
         self.assertLess(up.index('pcopy m:msxpirfh.bat'), up.index(SETBRANCH))
         # a server without "p setbranch" is brought up to date from master first
-        for before, after in (('p run sh update.sh', 'p restart'), ('p restart', SETBRANCH)):
+        for before, after in (('p run sh update.sh', 'p update'), ('p update', 'p restart'), ('p restart', SETBRANCH)):
             self.assertLess(up.index(before), up.index(after))
         self.assertIn('p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh', up)
         self.assertEqual(up[-1], 'msxpirfh')

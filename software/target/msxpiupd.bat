@@ -4,6 +4,7 @@ p date
 p cd /home/pi/msxpi
 p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh
 p run sh update.sh
+p update
 p restart
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
