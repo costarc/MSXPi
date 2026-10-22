@@ -322,12 +322,21 @@ static void chat_clean(char *s) {
 /* 0: commands go to the MSXPi server; 1: to local_exchange() over TCP/IP. */
 static uint8_t link_tcp;
 
+/* The MSXPi CPLD drives port $56 as 0 or 1 (its ready bit). With no
+ * interface the bus floats to $FF, and CHKPIRDY() would wait on it for ever
+ * (only CTRL+ESC breaks out), so no exchange starts without this. */
+static uint8_t msxpi_present(void) { return InPort(CONTROL_PORT1)<=1; }
+
 static uint8_t exchange(const char *cmd) {
     uint8_t rc,tries=0,i,j,was_over=game_over; uint16_t size=0;
     if(link_tcp) {
         local_exchange(cmd);
         size=256; rc=RC_SUCCESS;
         goto parse;
+    }
+    if(!msxpi_present()) {
+        strcpy(status,"NO MSXPI - ESC MENU LINK TCPIP");
+        return 0;
     }
     msxpi_link_claim();
     rc=SendCommandToMSXPi(cmd,false);
@@ -553,7 +562,7 @@ static void credits(void) {
     field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
-    credits_line(82,"PCHESS V1.1 (C) RCC 2026");
+    credits_line(82,"PCHESS V1.1.1 (C) RCC 2026");
     credits_line(98,"DESIGN: RCC (ARCHITECT)");
     credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
     while(!Inkey());
@@ -601,7 +610,8 @@ static uint8_t menu(void) {
     uint8_t key,row=0,level=2,rooms_irc=0,tcp=link_tcp,i,quit=0;
     char line[20];
     if(link_tcp) rooms_irc=1;
-    else if(exchange("pchess level") || !memcmp(reply,"PCH1",4)) {
+    else if(msxpi_present() &&
+            (exchange("pchess level") || !memcmp(reply,"PCH1",4))) {
         if(reply[242]>=1 && reply[242]<=8) level=reply[242];
         rooms_irc=reply[243]==1;
     }

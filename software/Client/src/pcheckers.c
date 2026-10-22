@@ -558,6 +558,11 @@ static uint8_t exchange(const char *cmd) {
         local_exchange(cmd);
         size=256; rc=RC_SUCCESS;
     } else {
+        /* No interface: port $56 floats to $FF and CHKPIRDY() never returns. */
+        if(InPort(CONTROL_PORT1)>1) {
+            strcpy(status,"NO MSXPI - ESC MENU LINK TCPIP");
+            return 0;
+        }
         msxpi_link_claim();
         rc=SendCommandToMSXPi(cmd,false);
         if(rc==RC_SUCCESS) rc=PerformHandshake(256);
@@ -684,7 +689,7 @@ static void credits(void) {
     field_count=0;
     solid(CREDITS_X,72,CREDITS_W,57,C_BLACK);
     frame(CREDITS_X,72,CREDITS_W,57,C_YELLOW);
-    credits_line(82,"PCHECKERS V1.0 (C) RCC 2026");
+    credits_line(82,"PCHECKERS V1.1.1 (C) RCC 2026");
     credits_line(98,"DESIGN: RCC (ARCHITECT)");
     credits_line(110,"PROGRAMMING: CLAUDE (INTERN)");
     while(!Inkey());
@@ -895,7 +900,7 @@ static uint8_t menu(void) {
     int16_t v;
     /* The server tells which rooms it uses (the reply is a level packet). */
     if(link_tcp) rooms_irc=1;
-    else {
+    else if(InPort(CONTROL_PORT1)<=1) {
         strcpy(command,status);
         exchange("pchess level");
         if(!memcmp(reply,"PCH1",4)) rooms_irc=reply[243]==1;

@@ -53,7 +53,10 @@ default 2 on a 3.58 MHz Z80, minutes at 5-6), `ROOMS` (RELAY or IRC, saved in
 msxpi.ini by `pchess rooms`; always IRC on the TCP/IP link), `LINK`
 (MSXPI or TCPIP, applied with Return or ESC), `OFFER DRAW`, `RESIGN` (both ask
 Y/N), `ROTATE BOARD`, `CHAT`, `REMATCH` (online, after a game), `CREDITS`,
-`EXIT`. The AI accepts a draw when it is not ahead. Online, the opponent sees
+`EXIT`. With no MSXPi interface the status line reads
+`NO MSXPI - ESC MENU LINK TCPIP` and MSXPi-only actions fail at once instead
+of waiting; the ESC menu still opens.
+The AI accepts a draw when it is not ahead. Online, the opponent sees
 `OPPONENT OFFERS DRAW - ESC MENU` and accepts by offering too, or declines by
 moving.
 
