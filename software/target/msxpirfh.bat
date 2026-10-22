@@ -29,9 +29,6 @@ pcopy m:msxpi32k.rom
 pcopy m:msxpibas.rom
 pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
-pcopy m:msxpirfb.bat
-pcopy m:msxpiupb.bat
-pcopy m:msxpiupd.bat
 pcopy m:nitros.com
 pcopy m:p.com
 pcopy m:pcheckers.com
@@ -45,4 +42,6 @@ pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:games/SOCCER.GPF SOCCER.GPF
+p setbranch
+pcopy m:msxpiupd.bat
 p ver

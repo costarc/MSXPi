@@ -271,6 +271,40 @@ _BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
 UPDATE_STAMP = ".last-update"
 
 
+# The branch the MSX asked for with "p setbranch"; the next "p update" uses it.
+# Not persisted: a restarted server is back on master.
+_update_branch = "master"
+MASTER_DRIVE_M = "https://github.com/costarc/MSXPi/raw/master/software/target"
+
+
+def _branch_name(parm: Optional[str]) -> Optional[str]:
+    """The branch in a command parameter: master when none was given (an
+    unexpanded batch %1 counts as none), None when it is not a plain name."""
+    branch = (parm or "").strip()
+    if branch in ("", "%1"):
+        return "master"
+    if _BRANCH_RE.match(branch) and ".." not in branch:
+        return branch
+    return None
+
+
+def setbranch(parm: Optional[str] = None) -> CommandResult:
+    """Choose the git branch the MSX updates from; no name means master.
+
+    Sent by msxpiupd.bat ("msxpiupd feature/x") and again, with no name, at the
+    end of msxpirfh.bat. Points DriveM (where pcopy m: reads) at the branch's
+    target folder and remembers the branch for "p update". MSX-DOS batch files
+    cannot test for an empty parameter, so the default lives here.
+    """
+    global _update_branch
+    branch = _branch_name(parm)
+    if branch is None:
+        return sendmultiblock(b"Pi:Error - bad branch name")
+    _update_branch = branch
+    setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
+    return sendmultiblock(f"Pi:Ok - updating from {branch}".encode())
+
+
 def update(parm: Optional[str] = None) -> CommandResult:
     """Bring the server files up to date, on any host. Sent by msxpirfh.bat.
 
@@ -281,21 +315,21 @@ def update(parm: Optional[str] = None) -> CommandResult:
     the server files and Python packages, leaving openMSX alone (it is the
     program the MSX is running in) and asking for no administrator rights.
 
-    "p update <branch>" (msxpirfb.bat, from msxpiupb.bat) updates from that git
-    branch instead of master.
+    It updates from the branch chosen with "p setbranch" (or the one given as
+    the parameter), master by default.
 
     The server is not restarted here: a Pi's msxpi-monitor restarts it on
     "p restart"; anywhere else the user restarts it.
     """
-    branch = (parm or "").strip() or "master"
-    if not _BRANCH_RE.match(branch) or ".." in branch:
+    branch = _branch_name(parm) if (parm or "").strip() else _update_branch
+    if branch is None:
         return "Pi:Error - bad branch name"
     windows = transport.hostType == "Windows"
     home = os.path.abspath(settings.MSXPIHOME)
     stamp = os.path.join(home, UPDATE_STAMP)
-    # update.sh (which touches the stamp) has just run from the same branch;
-    # Windows never ran it, so a stamp there says nothing about this branch.
-    if not (windows and branch != "master"):
+    # Master: update.sh (which touches the stamp) has just run. A branch: it
+    # was master's update.sh that ran, so this one still has work to do.
+    if branch == "master":
         try:
             if time.time() - os.path.getmtime(stamp) < 600:
                 return "Pi:Ok - server already updated"

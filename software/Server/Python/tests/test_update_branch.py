@@ -23,31 +23,17 @@ def pcopies(name):
 
 
 class BatchFilesTests(unittest.TestCase):
-    def test_master_updaters_stay_on_master(self):
-        for name in ('msxpiupd.bat', 'msxpirfh.bat'):
-            text = '\n'.join(lines(name))
-            self.assertNotIn('%1', text, name)
-            self.assertIn('raw/master/', text, name)
+    def test_msxpiupd_takes_the_branch_after_fetching_stage2_from_master(self):
+        up = lines('msxpiupd.bat')
+        self.assertEqual(up[1], 'p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target')
+        self.assertLess(up.index('pcopy m:msxpirfh.bat'), up.index('p setbranch %1'))
+        self.assertEqual(up[-1], 'msxpirfh')
 
-    def test_branch_stage2_copies_what_master_copies(self):
-        master = {l for l in pcopies('msxpirfh.bat') if not l.split()[1].lower().endswith('.bat')}
-        self.assertEqual(pcopies('msxpirfb.bat') - {'pcopy m:pcopy.com'}, master - {'pcopy m:pcopy.com'})
-
-    def test_branch_stage2_reads_the_branch_and_leaves_updaters_alone(self):
-        text = '\n'.join(lines('msxpirfb.bat'))
-        self.assertIn('raw/%1/software/target', text)
-        self.assertIn('MSXPI_UPDATE_BASE=https://raw.githubusercontent.com/costarc/MSXPi/%1/', text)
-        self.assertIn('p update %1', lines('msxpirfb.bat'))
-        self.assertFalse([l for l in pcopies('msxpirfb.bat') if l.lower().endswith('.bat')])
-        self.assertTrue(lines('msxpirfb.bat')[-2].endswith('raw/master/software/target'))  # back to master
-
-    def test_first_stage_fetches_stage2_from_master(self):
-        up = lines('msxpiupb.bat')
-        self.assertIn('p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target', up)
-        self.assertEqual(up[-1], 'msxpirfb %1')
-
-    def test_master_updater_ships_the_new_files(self):
-        self.assertTrue({'pcopy m:msxpiupb.bat', 'pcopy m:msxpirfb.bat'} <= pcopies('msxpirfh.bat'))
+    def test_stage2_has_no_parameter_and_ends_on_master(self):
+        rfh = lines('msxpirfh.bat')
+        self.assertNotIn('%1', ' '.join(rfh))
+        self.assertEqual(rfh[-3:], ['p setbranch', 'pcopy m:msxpiupd.bat', 'p ver'])
+        self.assertEqual(rfh.count('pcopy m:msxpiupd.bat'), 1)
 
 
 class ServerUpdateTests(unittest.TestCase):
@@ -73,9 +59,24 @@ class ServerUpdateTests(unittest.TestCase):
                       run.call_args[1]['env']['MSXPI_UPDATE_BASE'])
 
     def test_no_parameter_is_master(self):
+        system._update_branch = 'master'
         get, run = self.run_update(None)
         self.assertIn('MSXPi/master/software/Server/Setup/update.sh', get.call_args[0][0])
         self.assertNotIn('feature', run.call_args[1]['env'].get('MSXPI_UPDATE_BASE', ''))
+
+    def test_setbranch_is_remembered_by_update(self):
+        sent = []
+        with patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
+            system.setbranch('feature/x')
+            setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/feature/x/software/target')
+            get, _ = self.run_update(None)
+            self.assertIn('MSXPi/feature/x/software/Server/Setup', get.call_args[0][0])
+            for empty in (None, '', '%1'):               # no name (or an unexpanded %1) = master
+                system.setbranch(empty)
+                setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/master/software/target')
+            system.setbranch('x;reboot')
+            self.assertEqual(sent[-1], b'Pi:Error - bad branch name')
+            self.assertEqual(system._update_branch, 'master')   # a bad name changes nothing
 
     def test_windows_gets_the_branch_switch(self):
         _, run = self.run_update('dev/x', host='Windows')
