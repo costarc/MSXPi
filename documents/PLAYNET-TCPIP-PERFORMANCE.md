@@ -391,6 +391,7 @@ Step 4 (Ethernet driver protocol 2, `feature/eth-tx-otir`: OTIR send, inline rec
 |---|---|---|---|---|
 | unchanged (protocol 1) | H / C | 19.44 / 19.46 | 20.1 / 19.9 | 91 / 78 |
 | protocol 2 | H / C | **21.26 / 21.23** | 17.1 / 19.2 | 73 / 74 |
+| protocol 2 + LDIR `memcpy` in the overlay | H / C | **21.79 / 21.87** | 13.9 / 13.7 | 72 / 71 |
 
 Frames identical, no desync. About +9 % fps; real hardware (OTIR in wait mode) is still to be tested.
 

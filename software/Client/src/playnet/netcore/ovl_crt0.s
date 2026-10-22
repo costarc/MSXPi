@@ -48,6 +48,37 @@ init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ldir
 2$:     jp      gsinit
 
+        .area   _CODE
+; memcpy(dst, src, n) with LDIR, in place of the library's byte loop (SDCC z80 calling convention: arguments on
+; the stack, the caller pops them; returns dst in DE). The arguments are read in place, not popped, so an
+; interrupt cannot overwrite them.
+___memcpy::
+        ld      hl,#2
+        add     hl,sp
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)                      ; DE = dst
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)                      ; BC = src
+        inc     hl
+        ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a                         ; HL = n
+        push    de
+        ld      a,h
+        or      l
+        jr      z,3$
+        push    bc
+        ld      b,h
+        ld      c,l                         ; BC = n
+        pop     hl                          ; HL = src
+        ldir
+3$:     pop     de
+        ret
+
         .area   _HOME
         .area   _CODE
         .area   _INITIALIZER
