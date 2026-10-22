@@ -37,7 +37,9 @@
 #define BYE_REPEAT 3
 #define PING_QUIET 100                  /* no PING for this long after the last one: decide with what came back */
 #define MIN_DELAY 2
-#define MAX_DELAY 6
+#define MAX_DELAY 7
+#define MIN_K 1
+#define MAX_K 3
 #define FRAME_MS 20                     /* 50 Hz: the longest frame */
 #define RXQ 8                           /* game packets received and not yet taken */
 
@@ -62,6 +64,9 @@ static uint8_t nrtts;
 static uint16_t next_ping, next_hello, next_setup, t_start, t_ready, last_rx, next_bye;
 static uint8_t playing;
 static uint8_t delay;
+static uint8_t want_k, want_s;          /* what this side's transport costs: K frames apart, S frames to deliver */
+static uint8_t peer_k, peer_s;          /* the same, announced by the opponent in HELLO */
+static uint8_t k;                       /* the agreed send interval */
 static uint8_t bye_reason, local_result, bye_left;
 static uint8_t q[RXQ][NC_MAX_PKT];
 static uint8_t qlen[RXQ];
@@ -104,13 +109,13 @@ static void send_all(const uint8_t *d, uint8_t len)
         nc_send(&peers[i], d, len);
 }
 
-static void send_ctl(uint8_t type, uint32_t a)
+static void send_ctl(uint8_t type, uint32_t a, uint32_t b)
 {
     cbuf[0] = type;
     cbuf[1] = version;
     put32(cbuf + 2, nonce);
     put32(cbuf + 6, a);
-    put32(cbuf + 10, 0);
+    put32(cbuf + 10, b);
     send_all(cbuf, CTL_LEN);
 }
 
@@ -118,6 +123,17 @@ static uint32_t new_nonce(void)
 {
     uint32_t n = nc_rand32();
     return n ? n : 1;
+}
+
+static uint8_t clamp_k(uint32_t v)
+{
+    v &= 0xFF;
+    return v < MIN_K ? MIN_K : v > MAX_K ? MAX_K : (uint8_t)v;
+}
+
+static uint32_t hello_b(void)
+{
+    return (uint32_t)want_k | ((uint32_t)want_s << 8);
 }
 
 static void set_ready(uint16_t now)
@@ -132,7 +148,8 @@ static uint16_t cs_to_ticks(uint16_t cs)
     return (uint16_t)(((uint32_t)cs * hz + 50) / 100);
 }
 
-/* the leader's input delay: the 90th percentile round trip, one way, in frames, plus 2 */
+/* the leader's input delay: the 90th percentile round trip, one way, in frames, plus 2, plus K - 1 for the
+ * send interval and the larger service latency S of the two sides */
 static uint8_t choose_delay(void)
 {
     uint8_t i, j;
@@ -146,7 +163,7 @@ static uint8_t choose_delay(void)
         rtts[j] = v;
     }
     ms = (uint32_t)rtts[(uint16_t)(9 * (nrtts - 1)) / 10] * 1000 / hz;    /* the only division per session */
-    d = (uint8_t)((ms + 2 * FRAME_MS - 1) / (2 * FRAME_MS)) + 2;
+    d = (uint8_t)((ms + 2 * FRAME_MS - 1) / (2 * FRAME_MS)) + 2 + (k - 1) + (want_s > peer_s ? want_s : peer_s);
     if (d < MIN_DELAY) d = MIN_DELAY;
     if (d > MAX_DELAY) d = MAX_DELAY;
     return d;
@@ -165,12 +182,17 @@ static void reset_session(void)
     t_start = last_rx = now;
     playing = 0;
     delay = 0;
+    k = 1;
+    peer_k = 1;
+    peer_s = 0;
     bye_reason = local_result = bye_left = 0;
     qhead = qcount = 0;
 }
 
-void nc_init(uint32_t profile_hash, uint8_t ver, uint8_t force_delay, uint16_t tick_hz)
+void nc_init(uint32_t profile_hash, uint8_t ver, uint8_t force_delay, uint16_t tick_hz, uint8_t send_k, uint8_t service_s)
 {
+    want_k = clamp_k(send_k);
+    want_s = service_s;
     hz = tick_hz;
     t_connect = cs_to_ticks(CONNECT_TIMEOUT);
     t_start_to = cs_to_ticks(START_TIMEOUT);
@@ -226,14 +248,14 @@ static void on_ctl(uint16_t now, const uint8_t *d)
     uint8_t i;
     if (state == S_IDLE) {
         if (type == T_PING)                 /* still answer pings: the peer may be ahead of us */
-            send_ctl(T_PONG, a);
+            send_ctl(T_PONG, a, 0);
         return;
     }
     if (d[1] != version || (type == T_HELLO && a != profile)) {
         if (state == S_CONNECT || state == S_SETUP)
             state = S_INCOMPATIBLE;
         if (state == S_INCOMPATIBLE && type == T_HELLO)
-            send_ctl(T_HELLO, profile);     /* let a peer that started later see it too */
+            send_ctl(T_HELLO, profile, hello_b());     /* let a peer that started later see it too */
         return;
     }
     last_rx = now;
@@ -245,6 +267,10 @@ static void on_ctl(uint16_t now, const uint8_t *d)
         }
         break;
     case T_HELLO:
+        if (state == S_CONNECT) {
+            peer_k = clamp_k(get32(d + 10));
+            peer_s = (uint8_t)(get32(d + 10) >> 8);
+        }
         if (state == S_CONNECT && !have_peer_nonce) {
             if (n == nonce) {
                 nonce = new_nonce();
@@ -255,7 +281,7 @@ static void on_ctl(uint16_t now, const uint8_t *d)
         }
         break;
     case T_PING:
-        send_ctl(T_PONG, a);
+        send_ctl(T_PONG, a, 0);
         break;
     case T_PONG:
         i = (uint8_t)a;
@@ -268,9 +294,10 @@ static void on_ctl(uint16_t now, const uint8_t *d)
     case T_SETUP:
         if (state == S_CONNECT) {
             delay = (uint8_t)a;
+            k = clamp_k(get32(d + 10));
             set_ready(now);
         }
-        send_ctl(T_ACK, a);
+        send_ctl(T_ACK, a, get32(d + 10));
         break;
     case T_ACK:
         if (state == S_SETUP && a == delay)
@@ -332,7 +359,7 @@ void nc_poll(void)
     if (bye_left && since(now, next_bye) >= 0) {
         bye_left--;
         next_bye = now + t_bye;
-        send_ctl(T_BYE, local_result);
+        send_ctl(T_BYE, local_result, 0);
     }
     if (state == S_CONNECT || state == S_SETUP) {
         if (since(now, t_start) > t_connect) {
@@ -341,24 +368,25 @@ void nc_poll(void)
         }
         if (state == S_CONNECT && since(now, next_hello) >= 0) {
             next_hello = now + t_hello;
-            send_ctl(T_HELLO, profile);
+            send_ctl(T_HELLO, profile, hello_b());
         }
         if (leader && state == S_CONNECT && since(now, next_ping) >= 0
                 && (pings_sent < PINGS || (nrtts < MIN_SAMPLES && pings_sent < MAX_PINGS))) {
             next_ping = now + t_ping;     /* keep pinging while too few answers came back */
             ping_t[pings_sent] = now;
             ping_open[pings_sent >> 3] |= (uint8_t)(1 << (pings_sent & 7));
-            send_ctl(T_PING, pings_sent);
+            send_ctl(T_PING, pings_sent, 0);
             pings_sent++;
         }
         if (leader && state == S_CONNECT && nrtts >= MIN_SAMPLES
                 && (nrtts >= PINGS || since(now, next_ping) > t_quiet)) {
+            k = want_k > peer_k ? want_k : peer_k;
             delay = forced_delay ? forced_delay : choose_delay();
             state = S_SETUP;
         }
         if (state == S_SETUP && since(now, next_setup) >= 0) {
             next_setup = now + t_setup;
-            send_ctl(T_SETUP, delay);
+            send_ctl(T_SETUP, delay, k);
         }
     } else if (state == S_READY) {
         if (!playing && since(now, t_ready) > t_start_to)
@@ -367,6 +395,8 @@ void nc_poll(void)
             state = S_DEAD;
     }
 }
+
+uint8_t nc_k(void) { return k; }
 
 uint8_t nc_status(uint8_t *d)
 {

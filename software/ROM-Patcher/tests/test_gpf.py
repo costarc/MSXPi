@@ -146,7 +146,7 @@ class SoccerPackageTests(unittest.TestCase):
         data = patcher.gpf_bytes(self.profile, self.assets)
         gpf = patcher.read_gpf(data)
         self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
-        self.assertEqual(self.assets['stub'][0], 1)                         # stub ABI 1
+        self.assertEqual(self.assets['stub'][0], 2)                         # stub ABI 2
         self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
         self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC700)   # 512: the TCP/IP transport
         rom = synthetic_rom(self.profile)
@@ -190,7 +190,7 @@ class GpfTests(unittest.TestCase):
 
     def test_header_layout_and_hash(self):
         data = self.data
-        self.assertEqual((data[:4], data[4], data[5], data[98]), (b'GPF1', 1, 1, 1))
+        self.assertEqual((data[:4], data[4], data[5], data[98]), (b'GPF1', 1, 1, 2))
         self.assertEqual(struct.unpack_from('<H', data, 6)[0], len(data) - 128)
         self.assertEqual(data[12:20], b'soccer\0\0')
         stored = struct.unpack_from('<I', data, 8)[0]

@@ -100,7 +100,7 @@ fi
 start() {  # n port local_udp peer_udp version
   nat=""; [ -n "$TCPN" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
-      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ -n "$CHAT" ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ -n "$CHAT" ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-2}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
@@ -112,7 +112,7 @@ if [ -n "$CHAT" ]; then
   IRC_PID=$!
 fi
 start 1 8115 5101 5102
-start 2 8116 5102 5101 ${VER2:-1}
+start 2 8116 5102 5101 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl

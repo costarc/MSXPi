@@ -39,6 +39,9 @@ IO_DELAY:       EQU     38
 IO_REASON:      EQU     39
 IO_IRC:         EQU     133
 IO_SERVICE:     EQU     134
+IO_KWANT:       EQU     135
+IO_SWANT:       EQU     136
+IO_K:           EQU     137
 
 ; ---- the command line (HL at the '/') -----------------------------------------------------------------
 tcpArgs:
@@ -57,14 +60,35 @@ tcpArgs:
         inc     hl                              ; /S0, /S1: force the stack service off or on (default: by the stack)
         ld      a,(hl)
         call    lower
-        cp      's'
-        jp      nz,usage
+        ld      c,a
         inc     hl
         ld      a,(hl)
         sub     '0'
+        ld      b,a                             ; B = the digit
+        ld      a,c
+        cp      's'                             ; /S0, /S1: the stack's service
+        jr      nz,.nk
+        ld      a,b
         cp      2
         jp      nc,usage
         ld      (svcMode),a
+        jr      .optEnd
+.nk:    cp      'k'                             ; /K1../K3: the send interval to announce
+        jr      nz,.nl
+        ld      a,b
+        dec     a
+        cp      3
+        jp      nc,usage
+        inc     a
+        ld      (kMode),a
+        jr      .optEnd
+.nl:    cp      'l'                             ; /L0../L9: the service latency to announce, in frames
+        jp      nz,usage
+        ld      a,b
+        cp      10
+        jp      nc,usage
+        ld      (lMode),a
+.optEnd:
         inc     hl
         call    skipSp
         jr      .opt
@@ -467,7 +491,7 @@ tcpConnect:
         ld      hl,GPFBUF+8                     ; the profile hash
         ld      bc,4
         ldir
-        ld      (ix+IO_VERSION),1
+        ld      (ix+IO_VERSION),2
         ld      (ix+IO_FORCE),0
         ld      a,(manual)                      ; MCHAT /T's IRC connection, answered during the game (14)
         or      a
@@ -485,6 +509,12 @@ tcpConnect:
         add     hl,de
         ld      a,(svcMode)
         ld      (hl),a
+        inc     hl
+        ld      a,(kMode)
+        ld      (hl),a                          ; IO_KWANT
+        inc     hl
+        ld      a,(lMode)
+        ld      (hl),a                          ; IO_SWANT
         ld      hl,(lport)
         ld      (ix+IO_LPORT),l
         ld      (ix+IO_LPORT+1),h
@@ -520,6 +550,12 @@ tcpConnect:
         ld      ix,(ovlIo)
         ld      a,(ix+IO_DELAY)
         ld      (delay),a
+        push    ix                              ; the agreed K (beyond IX's reach)
+        pop     hl
+        ld      de,IO_K
+        add     hl,de
+        ld      a,(hl)
+        ld      (kAgreed),a
         ld      b,(ix+IO_STATUS)
         call    unmapOvl
         ld      a,b

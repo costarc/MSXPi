@@ -1,6 +1,6 @@
 # PLAYNET over TCP/IP: why it is slow, and how to make it as fast as the MSXPi link
 
-Handover, written 2026-10-22 on `feature/tcpip-games` (HEAD `894fac7e`). Nothing in this document is implemented yet.
+Handover, written 2026-10-22 on `feature/tcpip-games` (HEAD `894fac7e`). Steps 0-3 are implemented (see 5.7a for the numbers); steps 4-6 are not.
 
 | | |
 |---|---|
@@ -361,6 +361,32 @@ Estimates per game frame, network work only, to be replaced by step 0's measurem
 | + 5.4 burst | about 2-3 ms | no change |
 | 5.5 C9 for game packets | about 3.5 ms (the MSXPi path's cost) | does not apply |
 | MSXPi path, for reference | about 3.5 ms | |
+
+### 5.7a Measured (step 0 rig, 1500 frames, frames 500-1500, emulated time, `0 0` lag and loss)
+
+`perf_node.tcl` and `cmp_perf.py`. Emulated MSXPi link time depends on the host (Q7): compare rows of the same table only. Soccer runs at
+about 28 frames/s here.
+
+| Run | fps | polls/frame | ms in XCHG/frame | stack timer runs/frame | link bytes/frame |
+|---|---|---|---|---|---|
+| native pair (MSXPi both) | 27.9 | 1.0 | 4.0 | 0 | 50 |
+| mixed, `894fac7e` (before steps 1-3) | 4.5 (TCP/IP node) | 1.9 | 187 | 10.1 | 888 |
+| mixed, steps 1-2 | 4.75 | 3.3 | 177 | 9.5 | 868 |
+| mixed, steps 1-3 | **16.4** | 0.8 | 30 | 1.5 | 136 |
+| both TCP/IP, `894fac7e` | 11.8 | 1.0 | 52 | 2.5 | 163 |
+| both TCP/IP, steps 1-2 | 13.5 | 1.2 | 41 | 1.8 | 193 |
+| both TCP/IP, steps 1-3 | **19.9** | 1.1 | 21 | 1.0 | 83 |
+
+Frames identical and no desync in every run. The target (95 % of the native pair, 26.5 fps) is not reached: steps 1-3 give 59-71 %.
+Mixed was the worst case before: the MSXPi node polled about 300 times a frame waiting for the TCP/IP one.
+Steps 1-2 alone helped little (+6 % mixed, +14 % both); K = 2 and the timed resend (step 3) did most of it. What is left is mostly the cost
+of one stack exchange (about 20-30 ms in XCHG), so steps 4 (driver) and 5 (C9 for game packets) are the next levers.
+Not measured yet: Q2 (does INL send in `UDP_SEND`), Q3 (frames per timer run), and the values of K and S (Q4): the run used the defaults
+K = 2, S = 1 for a stack in RAM. `/L0` and `/K1`..`/K3` are there to try others.
+
+Found on the way: the old 8-frame resend window could not repair a lost record once a node was more than 7-D frames ahead (D > 3); the
+lockstep model deadlocks with K >= 2 under loss. Stall resends now alternate between the usual window and one shifted back 2D-6 frames
+(PROTOCOLS 9, `lockstep_model.py` passes D 3-7, K 1-3, loss up to 20 %).
 
 ### 5.8 Alternatives considered and rejected
 

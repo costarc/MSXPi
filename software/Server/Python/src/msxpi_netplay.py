@@ -49,7 +49,7 @@ KIND_GAME = 0x10
 MIN_WIDTH, MAX_WIDTH = 1, 4             # input bytes per player per frame
 MAX_PKT = 14 + 8 * MAX_WIDTH            # 46
 CTL = struct.Struct("<BBIII")           # type, version, nonce, a, b  = 14 bytes
-VERSION = 1                             # MSXNP
+VERSION = 2                             # MSXNP (2: K and S in HELLO, K in SETUP; PLAYNET-TCPIP-PERFORMANCE.md 5.3)
 
 T_HELLO, T_PING, T_PONG, T_SETUP, T_ACK, T_BYE = 1, 2, 3, 4, 5, 6
 
@@ -68,7 +68,8 @@ CONNECT_TIMEOUT = 120.0                # no READY after this: failed
 START_TIMEOUT = 60.0                   # READY but no game packet after this: gone
 DEAD_AFTER = 15.0                      # playing, and nothing from the opponent for this long: gone
 BYE_REPEAT, BYE_GAP = 3, 0.1
-MIN_DELAY, MAX_DELAY = 2, 6
+MIN_DELAY, MAX_DELAY = 2, 7
+MIN_K, MAX_K = 1, 3                    # send interval, in frames
 
 
 STUN_SERVER = ("stun.l.google.com", 19302)
@@ -157,11 +158,12 @@ def instance():
     return _instance
 
 
-def choose_delay(rtts):
-    """Input delay in frames from measured round trips (seconds)."""
+def choose_delay(rtts, k=1, service=0):
+    """Input delay in frames from measured round trips (seconds), the send interval k (frames) and the
+    larger of the two sides' service latency (frames): ceil(rtt90 / 2 / 20 ms) + 2 + (k - 1) + service."""
     s = sorted(rtts)
     rtt = s[int(0.9 * (len(s) - 1))]
-    d = int(-(-(rtt * 1000.0 / 2) // FRAME_MS)) + 2   # ceil(one-way / frame) + 2
+    d = int(-(-(rtt * 1000.0 / 2) // FRAME_MS)) + 2 + (k - 1) + service
     return max(MIN_DELAY, min(MAX_DELAY, d))
 
 
@@ -175,6 +177,8 @@ class Netplay:
         self.loss = float(env.get("MSXPI_NETPLAY_LOSS_PCT", "0"))
         self.version = int(env.get("MSXPI_NETPLAY_VERSION", str(VERSION)))
         self.profile_hash = int(env.get("MSXPI_NETPLAY_PROFILE", "0"), 16)
+        self.want_k = max(MIN_K, min(MAX_K, int(env.get("MSXPI_NETPLAY_K", "1"))))    # what this side's transport costs:
+        self.want_s = max(0, min(255, int(env.get("MSXPI_NETPLAY_S", "0"))))          # K frames apart, S frames to deliver
         self.rng = random.Random(int(env.get("MSXPI_NETPLAY_SEED", "1985")))
         self.lock = threading.RLock()
         self.heap = []                    # (release_time, n, datagram)
@@ -187,6 +191,7 @@ class Netplay:
         self.peer = None                  # the address that answered: locked once known
         self.state = S_IDLE
         self.delay = 0
+        self.k = 1                        # the agreed send interval
         self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0)
         self.last_log = 0.0
         self._reset_session()
@@ -274,6 +279,8 @@ class Netplay:
         self.last_rx = self.t_start
         self.playing = False              # a game packet came from the opponent
         self.delay = 0
+        self.k = 1
+        self.peer_k, self.peer_s = 1, 0   # what the opponent announced in HELLO
         self.bye_reason = None            # the opponent's result code, from its BYE
         self.local_result = None          # ours, when we sent BYE
         self.bye_left = 0
@@ -316,7 +323,7 @@ class Netplay:
     def _set_ready(self, now, how):
         self.state = S_READY
         self.t_ready = now
-        self.log("netplay: ready, delay %d%s" % (self.delay, how))
+        self.log("netplay: ready, delay %d, K %d%s" % (self.delay, self.k, how))
 
     # ---- network threads -----------------------------------------------------------
     def _rx_loop(self, sock):
@@ -378,7 +385,7 @@ class Netplay:
                 return
             if now >= self.next_hello and st == S_CONNECT:
                 self.next_hello = now + 0.2
-                self._send_ctl(T_HELLO, self.profile_hash)
+                self._send_ctl(T_HELLO, self.profile_hash, self.want_k | (self.want_s << 8))
             if self.leader and st == S_CONNECT and now >= self.next_ping and (
                     self.pings_sent < PINGS or (len(self.rtts) < MIN_SAMPLES and self.pings_sent < MAX_PINGS)):
                 self.next_ping = now + 0.1      # keep pinging while too few answers came back
@@ -387,13 +394,15 @@ class Netplay:
                 self.pings_sent += 1
             if self.leader and st == S_CONNECT and len(self.rtts) >= MIN_SAMPLES and (
                     len(self.rtts) >= PINGS or now - self.next_ping > 1.0):
-                self.delay = int(os.environ.get('MSXPI_NETPLAY_DELAY', '0')) or choose_delay(self.rtts)
+                self.k = max(self.want_k, self.peer_k)
+                self.delay = int(os.environ.get('MSXPI_NETPLAY_DELAY', '0')) or choose_delay(
+                    self.rtts, self.k, max(self.want_s, self.peer_s))
                 self.state = S_SETUP
-                self.log("netplay: leader, rtt samples %s -> delay %d"
-                         % (["%.0f" % (r * 1000) for r in self.rtts], self.delay))
+                self.log("netplay: leader, rtt samples %s, K %d, S %d -> delay %d"
+                         % (["%.0f" % (r * 1000) for r in self.rtts], self.k, max(self.want_s, self.peer_s), self.delay))
             if self.state == S_SETUP and now >= self.next_setup:
                 self.next_setup = now + 0.2
-                self._send_ctl(T_SETUP, self.delay)
+                self._send_ctl(T_SETUP, self.delay, self.k)
         elif st == S_READY:
             if not self.playing and now - self.t_ready > START_TIMEOUT:
                 self.state = S_DEAD
@@ -414,7 +423,7 @@ class Netplay:
                 self.log("netplay: incompatible opponent (MSXNP %d, profile %08x; ours %d, %08x)"
                          % (ver, a if typ == T_HELLO else 0, self.version, self.profile_hash))
             if self.state == S_INCOMPATIBLE and typ == T_HELLO:
-                self._send_ctl(T_HELLO, self.profile_hash)   # let a peer that started later see it too
+                self._send_ctl(T_HELLO, self.profile_hash, self.want_k | (self.want_s << 8))   # let a peer that started later see it too
             return
         self.last_rx = now
         if typ == T_BYE:
@@ -423,6 +432,9 @@ class Netplay:
                 self.bye_reason = a & 0xFF
                 self.log("netplay: the opponent ended the game (result %d)" % self.bye_reason)
         elif typ == T_HELLO:
+            if self.state == S_CONNECT:
+                self.peer_k = max(MIN_K, min(MAX_K, b & 0xFF))
+                self.peer_s = (b >> 8) & 0xFF
             if self.state == S_CONNECT and self.peer_nonce is None:
                 self.peer_nonce = nonce
                 if nonce == self.nonce:
@@ -439,8 +451,9 @@ class Netplay:
         elif typ == T_SETUP:
             if self.state == S_CONNECT:
                 self.delay = a
+                self.k = max(MIN_K, min(MAX_K, b))
                 self._set_ready(now, " (from the leader)")
-            self._send_ctl(T_ACK, a)
+            self._send_ctl(T_ACK, a, b)
         elif typ == T_ACK:
             if self.state == S_SETUP and a == self.delay:
                 self._set_ready(now, "")
@@ -488,7 +501,7 @@ class Netplay:
                 if code != getattr(self, '_last_code', None):
                     self._last_code = code
                     self.log('netplay: status -> %d delay %d (state %d)' % (code, d, self.state))
-                write(bytes([0xA0 + code, d, d]))
+                write(bytes([0xA0 + code, d, self.k if code == ST_READY else 1]))   # state, delay, K
                 return True
             if flags & 1 and self.state == S_READY:
                 if game_packet_ok(pkt):

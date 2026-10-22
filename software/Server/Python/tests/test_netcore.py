@@ -27,9 +27,9 @@ LEADER, FOLLOWER = 'FFFFFFFF', '00000001'      # forced first nonce of the C sid
 class Host:
     """netcore_host as a subprocess; its output lines are collected as they come."""
 
-    def __init__(self, exe, lport, pport, frames, bye_at=0, width=1, version=1, nonce='0', profile=PROFILE):
+    def __init__(self, exe, lport, pport, frames, bye_at=0, width=1, version=2, nonce='0', profile=PROFILE, k=1, s=0):
         args = [exe, str(lport), '127.0.0.1', str(pport), '%08x' % profile, str(frames), str(bye_at), str(width),
-                str(version), nonce]
+                str(version), nonce, str(k), str(s)]
         self.proc = subprocess.Popen(args, stdout=subprocess.PIPE, text=True)
         self.lines = []
         threading.Thread(target=self._read, daemon=True).start()
@@ -68,9 +68,10 @@ class Conformance(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def start(self, py_nonce=0x80000000, profile=PROFILE, **host):
+    def start(self, py_nonce=0x80000000, profile=PROFILE, py_k=1, py_s=0, **host):
         self.cport, self.pport = free_ports(2)
-        env = {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (self.pport, self.cport), 'MSXPI_NETPLAY_PROFILE': '%08x' % profile}
+        env = {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (self.pport, self.cport), 'MSXPI_NETPLAY_PROFILE': '%08x' % profile,
+               'MSXPI_NETPLAY_K': str(py_k), 'MSXPI_NETPLAY_S': str(py_s)}
         self.py = n.Netplay(None, None, env, lambda *a: None)
         with self.py.lock:                      # no HELLO goes out with the random nonce in between
             self.py.restart()
@@ -123,6 +124,19 @@ class Conformance(unittest.TestCase):
         self.ready_pair(LEADER)
         self.exchange()
 
+    def test_k_and_s_are_agreed_with_the_leader_on_either_side(self):
+        for nonce in (LEADER, FOLLOWER):                # netcore announces K 2, S 1; Netplay K 1, S 0
+            self.start(nonce=nonce, frames=100, k=2, s=1)
+            self.assertTrue(wait_for(lambda: self.py.state == n.S_READY and self.host.has('STATUS 1'), 15),
+                            self.host.lines)
+            ready = self.host.first('STATUS 1').split()
+            self.assertEqual(self.py.k, 2)
+            self.assertEqual(int(ready[7]), 2)                       # netcore's K
+            self.assertEqual(int(ready[3]), self.py.delay)           # the delay includes K - 1 and S
+            self.assertIn(self.py.delay, (4, 5))                     # 2 or 3 (netcore's clock has 10 ms steps) + (K - 1) + S
+            self.host.finish(1)
+            self.py.sock.close()
+
     def test_four_input_bytes_per_frame(self):
         self.start(nonce=LEADER, frames=100, width=4)
         self.assertTrue(wait_for(lambda: self.py.state == n.S_READY and self.host.has('STATUS 1'), 15))
@@ -135,7 +149,7 @@ class Conformance(unittest.TestCase):
         self.assertEqual(txn(self.py, 0x80)[0], 0xA0 + n.ST_INCOMPATIBLE)
 
     def test_different_version_is_incompatible_on_both_sides(self):
-        self.start(nonce=FOLLOWER, frames=10, version=2)
+        self.start(nonce=FOLLOWER, frames=10, version=3)
         self.assertTrue(wait_for(lambda: self.py.state == n.S_INCOMPATIBLE and self.host.has('STATUS 2'), 15))
 
     def test_bye_from_netcore(self):

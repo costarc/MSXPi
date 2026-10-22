@@ -414,14 +414,15 @@ Because the stub is an asset inside the file, the hash covers the engine and the
 
 The stub is the shared lockstep engine assembled with the game's glue, one binary per game. It lives at `stub.load` while the game runs.
 
-### 9.1 Header (first 4 bytes of the stub asset)
+### 9.1 Header (first 5 bytes of the stub asset)
 
 | Offset | Field | Written by |
 |---|---|---|
-| 0 | stub ABI version = 1 | the build |
+| 0 | stub ABI version = 2 | the build |
 | 1 | seat (0 or 1) | the loader |
-| 2 | input delay in frames (2-6) | the loader, from the handshake |
+| 2 | input delay in frames (2-7) | the loader, from the handshake |
 | 3 | flags: bit 0 = end the game on a desync (1 in release builds, 0 in test builds; see Appendix B, point 2) | the build |
+| 4 | K: a packet every K frames (1-3) | the loader, from the handshake (stub ABI 2) |
 
 ### 9.2 Rules for the engine and the glue
 
@@ -505,7 +506,7 @@ Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46)
             00, 00                               nothing
             FF, 00                               the opponent is gone
             FE, REASON                           the opponent left (BYE)
-            A0+STATE, DELAY, DELAY               when FLAGS bit 7 is set
+            A0+STATE, DELAY, K                   when FLAGS bit 7 is set (K = 1 until ready)
 ```
 
 | FLAGS bit | Meaning |
@@ -542,22 +543,23 @@ the transport:
 | 12+8W | check tag: a frame number with the low 5 bits zero, or FFh = no check |
 | 13+8W | check value: the sender's checksum for that frame. Compared for equality only. |
 
-Each packet repeats the last 8 frame records, so up to 7 consecutive lost packets are repaired by the next one. A machine waiting for
-an input resends its last packet every 16 polls. With W = 4 a packet is 46 bytes: the per-frame cost on the MSXPi link (one C9
+Each packet repeats the last 8 frame records, so up to 7 consecutive lost packets are repaired by the next one. A packet goes out every K-th frame (K = 1..3, agreed in the handshake, 11.3);
+the frames between call `XCHG` only while the remote input is missing. A machine waiting for
+an input resends its last packet when 3 interrupts (about 50 ms) have passed since the last send. With W = 4 a packet is 46 bytes: the per-frame cost on the MSXPi link (one C9
 transaction of L + 4 bytes each way) has to be measured on real hardware before such a package is accepted.
 
 **Control datagram, 14 bytes**: type (1, the kind byte), version (1), nonce (4), a (4), b (4).
 
 | Type | Name | a | b | Sent |
 |---|---|---|---|---|
-| 1 | HELLO | profile hash | 0 | every 200 ms while connecting |
+| 1 | HELLO | profile hash | K (bits 0-7), S (bits 8-15) of the sender's transport | every 200 ms while connecting |
 | 2 | PING | ping number | 0 | by the leader, every 100 ms |
 | 3 | PONG | the ping number | 0 | answer to a PING, in any state |
-| 4 | SETUP | input delay | 0 | by the leader, every 200 ms until ACK |
-| 5 | ACK | input delay | 0 | answer to SETUP |
+| 4 | SETUP | input delay | K, the agreed send interval | by the leader, every 200 ms until ACK |
+| 5 | ACK | input delay | K, as received | answer to SETUP |
 | 6 | BYE | result code (13.2) | 0 | 3 times, 100 ms apart, when a game ends |
 
-`version` is the MSXNP protocol version, 1. `nonce` is a random 32-bit value chosen at each session start. It must differ between the two
+`version` is the MSXNP protocol version, 2. `nonce` is a random 32-bit value chosen at each session start. It must differ between the two
 machines, and must not come from a generator seeded identically on both. On the MSX, mix the R register, `JIFFY` and the local address.
 
 ### 11.2 Finding the opponent (NAT traversal)
@@ -585,8 +587,12 @@ READY --first game packet--> PLAYING --15 s with nothing from the opponent--> GO
 
 - **Leader**: the side with the higher nonce. Equal nonces: both choose new ones and continue.
 - **Input delay**, decided by the leader: take the round trips of the PINGs answered (at least 4, up to 64 PINGs), sort them, take element
-  `int(0.9 x (n-1))` (milliseconds), and compute `ceil(rtt / 2 / 20) + 2`, clamped to 2..6. An MSX measuring in jiffies converts with its
+  `int(0.9 x (n-1))` (milliseconds), and compute `ceil(rtt / 2 / 20) + 2 + (K - 1) + S`, clamped to 2..7 (the rings hold 16 frames and the records run up to 2D frames ahead, so D <= 7). An MSX measuring in jiffies converts with its
   own rate (50 or 60 Hz). The follower uses the leader's value.
+- **K and S** (MSXNP 2): each side announces in HELLO the send interval K (1-3 frames) its transport wants and its service latency S (frames between
+  a packet's arrival and the game seeing it): the MSXPi link 1 and 0, a software TCP/IP stack 2 and 1, a hardware one 1 and 0. The leader takes
+  K = the larger K and S = the larger S, and sends K in SETUP (ACK echoes it). Both sides use the same K. With K = 2 each record is in 4 packets, so 3
+  consecutive losses are repaired instead of 7.
 - **SETUP/ACK**: the follower answers each SETUP with ACK and is READY. The leader is READY at the ACK, or at the first game packet from
   the follower.
 - **Times**: connect 120 s; start (READY to the first game packet) 60 s; gone after 15 s with no datagram while playing.
@@ -724,8 +730,8 @@ case. A file with a bad header or checksum, or the wrong name, is skipped and lo
 | Package format | `msxpi-rom-patch` 2 | `version` |
 | Netplay ABI | `msxpi-netplay-v1` | `netplay.abi` |
 | GPF | 1 | header byte 4 |
-| Stub ABI | 1 | stub header byte 0 |
-| Peer protocol | MSXNP 1 | control datagram `version` |
+| Stub ABI | 2 | stub header byte 0 |
+| Peer protocol | MSXNP 2 | control datagram `version` |
 | Invitations | MSXG1 | message prefix |
 | Session record | PNS1 | magic |
 

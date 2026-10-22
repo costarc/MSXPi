@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "c1873d37f9f10db716c2c7ee9c2b088e9d46ec3c6ef0125f1469e99988615900"
+      "sha256": "abcf3d4ea1ed82ba1c4e0d0b07a41034d88c5b562825395881f2de580e1364bf"
     }
   },
   "layout": [
@@ -58,49 +58,49 @@
     {
       "offset": 1381,
       "expected": "b948",
-      "replace": "6dc3",
+      "replace": "d7c3",
       "reason": "Player 1 read: cached value of this frame"
     },
     {
       "offset": 1386,
       "expected": "f248",
-      "replace": "71c3",
+      "replace": "dbc3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
       "offset": 2199,
       "expected": "b948",
-      "replace": "66c3",
+      "replace": "d0c3",
       "reason": "TICK site: lee_los_mandos, once per frame - exchange, then player 1"
     },
     {
       "offset": 2221,
       "expected": "f248",
-      "replace": "71c3",
+      "replace": "dbc3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
       "offset": 50,
       "expected": "cd254f",
-      "replace": "cd2ec1",
+      "replace": "cd2fc1",
       "reason": "Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
     },
     {
       "offset": 78,
       "expected": "fc254f",
-      "replace": "fc2ec1",
+      "replace": "fc2fc1",
       "reason": "Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
     },
     {
       "offset": 28678,
       "expected": "ed5f1f",
-      "replace": "cd75c3",
+      "replace": "cddfc3",
       "reason": "ld a,r : rra -> derived from the frame counter"
     },
     {
       "offset": 28712,
       "expected": "ed5fe606",
-      "replace": "cd7ac300",
+      "replace": "cde4c300",
       "reason": "ld a,r : and 6 -> derived from the frame counter"
     },
     {
@@ -145,18 +145,18 @@
     ],
     "irq_handler": 16430,
     "start": "header-init",
-    "min_playnet": 1
+    "min_playnet": 2
   },
   "symbols": {
-    "PN_TICK": 49412,
-    "PN_IRQ": 49454,
-    "PN_P1": 49896,
-    "PN_P2": 49897,
-    "pad1t": 50022,
-    "pad1c": 50029,
-    "pad2c": 50033,
-    "rng1": 50037,
-    "rng2": 50042,
-    "stubEnd": 50048
+    "PN_TICK": 49413,
+    "PN_IRQ": 49455,
+    "PN_P1": 50002,
+    "PN_P2": 50003,
+    "pad1t": 50128,
+    "pad1c": 50135,
+    "pad2c": 50139,
+    "rng1": 50143,
+    "rng2": 50148,
+    "stubEnd": 50154
   }
 }

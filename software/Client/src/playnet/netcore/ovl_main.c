@@ -35,6 +35,9 @@ typedef struct {
     uint8_t rxbuf[NC_MAX_PKT];  /* 87 */
     uint8_t irc;            /* 133 MCHAT /T's IRC TCP connection, kept alive through the game; FFh: none */
     uint8_t service;        /* 134 run the stack's timer in xchg: 0 no, 1 yes, 2 by the stack found (open sets 0 or 1) */
+    uint8_t k_want;         /* 135 open: the send interval to announce, 1-3; 0 = by the stack (2 with the service, else 1) */
+    uint8_t s_want;         /* 136 open: the service latency to announce in frames; FFh = by the stack (1 with the service, else 0) */
+    uint8_t k;              /* 137 poll: the agreed send interval once ready */
 } ovl_io_t;
 
 ovl_io_t ovl_io;
@@ -277,7 +280,9 @@ void ovl_open(void)
         ovl_io.service = un_seg != 0xFF || un_addr >= 0xC000;
     svc_jiffy = *(volatile uint16_t *)JIFFY;
     svc_ticks = ovl_io.service ? nc_now() : 0;
-    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz);
+    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz,
+            ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 2 : 1),
+            ovl_io.s_want != 0xFF ? ovl_io.s_want : (ovl_io.service ? 1 : 0));
     nc_set_peers(ovl_io.cand, ovl_io.ncand);
     nc_restart();
     ovl_io.status = 0;
@@ -289,6 +294,7 @@ void ovl_poll(void)
     nc_poll();
     ovl_io.status = nc_status(&ovl_io.delay);
     ovl_io.leader = nc_is_leader();
+    ovl_io.k = nc_k();
 }
 
 void ovl_xchg(void)

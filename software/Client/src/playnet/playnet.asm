@@ -20,7 +20,7 @@
 ; The game never maps page 0's RAM: this program is still here when the game ends, and pnBack brings
 ; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
 
-PLAYNET_VERSION: EQU    1
+PLAYNET_VERSION: EQU    2
 
 F_TERM0:        EQU     $00
 F_DIRIN:        EQU     $08                     ; console input, no echo
@@ -1050,6 +1050,8 @@ connect:
         jp      exitResult
 .ready: ld      a,(stDelay)
         ld      (delay),a
+        ld      a,(stK)
+        ld      (kAgreed),a
         ld      hl,msgReady
         call    PRINT
         ld      a,(delay)
@@ -1057,8 +1059,8 @@ connect:
         call    PUTCHAR
         jp      PRINTNLINE
 
-; A = FLAGS (bit 7 set). C9, FLAGS, L = 0, SUM = 0 -> A0+state, delay, delay. Out: A = state,
-; (stDelay); CF when the link failed.
+; A = FLAGS (bit 7 set). C9, FLAGS, L = 0, SUM = 0 -> A0+state, delay, K. Out: A = state,
+; (stDelay), (stK); CF when the link failed.
 c9status:
         di
         ld      (c9sp),sp
@@ -1071,6 +1073,7 @@ c9status:
         call    c9rxb
         ld      (stDelay),a
         call    c9rxb
+        ld      (stK),a
         ei
         ld      a,b
         and     $0F
@@ -1119,12 +1122,23 @@ install:
         call    PRINT
         call    PRINTNLINE
         ld      hl,(stubSrc)                    ; the stub's header: seat and delay
+        ld      a,(hl)
+        ld      (stubAbi),a
         inc     hl
         ld      a,(seat)
         ld      (hl),a
         inc     hl
         ld      a,(delay)
         ld      (hl),a
+        inc     hl                              ; pnFlags: the build's
+        inc     hl                              ; pnK
+        ld      a,(kAgreed)
+        ld      b,a
+        ld      a,(stubAbi)
+        cp      2
+        jr      c,.noK                          ; an ABI 1 stub has no pnK (that byte is PN_TICK's code)
+        ld      (hl),b                          ; pnK
+.noK:
         ld      a,(tcp)                         ; the transport, relocated to its area
         or      a
         jr      z,.pi
@@ -1873,10 +1887,10 @@ printHex:
 .p:     jp      PUTCHAR
 
 ; ---- text ----------------------------------------------------------------------------------------
-msgBanner:      defb    "PLAYNET 1 - online games for MSX",13,10,0
+msgBanner:      defb    "PLAYNET 2 - online games for MSX",13,10,0
 msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role,",13,10
-                defb    "       PLAYNET /T [/S0|/S1] (started by MCHAT /T), or",13,10
-                defb    "       PLAYNET /T [/S0|/S1] game role port ip:port[,ip:port]",0
+                defb    "       PLAYNET /T [/S0|/S1] [/K1..3] [/L0..9] (started by MCHAT /T), or",13,10
+                defb    "       PLAYNET /T [options] game role port ip:port[,ip:port]",0
 msgNoSes:       defb    "No game waiting in PLAYNET.SES (start it from MCHAT /T)",0
 nameSes:        defb    "PLAYNET SES"
 sesEnd:         defb    2,0                     ; state ended, result code
@@ -1936,6 +1950,9 @@ manual:         defb    0
 seat:           defb    0
 delay:          defb    0
 stDelay:        defb    0
+stK:            defb    1                       ; the Pi's send interval K (status reply)
+stubAbi:        defb    0                       ; the stub's ABI version (its header byte 0)
+kAgreed:        defb    1                       ; the agreed K, for the stub's header
 dosSlot1:       defb    0
 gameId:         defs    9
 roleArg:        defs    9
@@ -2007,6 +2024,8 @@ gameSeg2:       defb    0
 dosSeg3:        defb    0
 segsHeld:       defb    0
 hz:             defb    60
+kMode:          defb    0                       ; PLAYNET /T /K1../K3: the send interval to announce (0: by the stack)
+lMode:          defb    $FF                     ; /L0../L9: the service latency to announce, in frames ($FF: by the stack)
 svcMode:        defb    2                       ; PLAYNET /T /S0, /S1: the TCP/IP stack's service (2: by the stack found)
 ovlLen:         defw    0
 ovlIo:          defw    0
