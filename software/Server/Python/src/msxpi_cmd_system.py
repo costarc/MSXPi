@@ -442,7 +442,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
     if branch == "master":
         try:
             if time.time() - os.path.getmtime(stamp) < 600:
-                return "Pi:Ok - server already updated"
+                return "Pi:Ok - server already updated from master"
         except OSError:
             pass
 
@@ -481,14 +481,14 @@ def update(parm: Optional[str] = None) -> CommandResult:
 
     if not windows:
         # update.sh keeps its lines short for the MSX screen.
-        return out.strip() or f"Pi:update exit {done.returncode}"
+        return f"Server from {branch}\n" + (out.strip() or f"Pi:update exit {done.returncode}")
     # The Windows setup is chatty: send the count of what went well and every
     # line that did not.
     lines = [l.strip() for l in out.splitlines() if l.strip()]
     ok = sum(1 for l in lines if l.startswith("ok "))
     bad = [l[:78] for l in lines if l.lower().startswith(("warn", "fail", "msxpi-windows-setup:"))]
     status = "Pi:Ok" if done.returncode == 0 else f"Pi:Error - exit {done.returncode}"
-    return "\n".join([f"{status} - {ok} items up to date", *bad,
+    return "\n".join([f"{status} - server from {branch}, {ok} items", *bad,
                       "p restart (or the next start) applies it."])
 
 
