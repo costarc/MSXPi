@@ -26,13 +26,15 @@ HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parents[2] / 'Client/src/playnet/engine/playnet_engine.asm'
 
 ROM_SIZE = 16384
+OUT_SIZE = 32768                                # the ROM at 4000h-7FFFh, the extension at A000h
+EXT_AT = 0x6000                                 # its offset in the output
 ROM_SHA256 = '644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848'
 ROM_CRC32 = 0x8A12EC4F
 BASE = 0x4000
 STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
-EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd')
+EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu')
 
 
 def assemble(assembler, engine, scripted, out_dir):
@@ -51,7 +53,38 @@ def assemble(assembler, engine, scripted, out_dir):
     return (out_dir / 'stub.bin').read_bytes(), symbols
 
 
-def make_profile(stub, symbols):
+# the game's text encoding: A-Z = 21h-3Ah, digits = 10h-19h, space = 00h; a string is the VRAM address (name table
+# 3800h + row * 32 + column), the characters and FFh
+def text(row, column, string):
+    codes = bytes(0 if c == ' ' else 0x21 + ord(c) - 65 if c.isalpha() else 0x10 + ord(c) - 48 for c in string)
+    return struct.pack('<H', 0x3800 + row * 32 + column) + codes + bytes([0xFF])
+
+
+MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line (559Bh), erased
+        ('STR_TITLE', 13, 10, 'SELECT MODE'),
+        ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'))
+
+
+def assemble_ext(assembler, symbols, out_dir):
+    """The extension, assembled after the stub (it needs PN_P1): returns its bytes."""
+    src = HERE / 'src'
+    (src / 'stub_syms.inc').write_text('PN_P1: EQU 0x%04X\n' % symbols['PN_P1'])
+    lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
+    for name, row, column, string in MENU:
+        data = ', '.join('0x%02X' % b for b in text(row, column, string))
+        lines.append(f'{name}: defb {data}   ; {string}\n')
+    (src / 'strings.inc').write_text(''.join(lines))
+    out = Path(out_dir) / 'ext.bin'
+    subprocess.run([assembler, '--raw=' + str(out), '--sym=' + str(Path(out_dir) / 'ext.sym'), 'ext.asm'], cwd=src, check=True)
+    ext_symbols = {}
+    for line in (Path(out_dir) / 'ext.sym').read_text().splitlines():
+        match = re.match(r'([\w.]+):\s*EQU\s*0x([0-9A-Fa-f]+)', line)
+        if match:
+            ext_symbols[match[1]] = int(match[2], 16)
+    return out.read_bytes(), ext_symbols
+
+
+def make_profile(stub, symbols, ext):
     patches = []
 
     def patch(cpu, expected, replacement, reason):
@@ -66,18 +99,23 @@ def make_profile(stub, symbols):
     patch(0x4053, 'cd2245', b'\xcd' + word('tickSite'),
           "TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte")
     patch(0x4062, 'fc5c7c', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
+    patch(0x409C, 'cd7140', b'\xcd' + word('dispatch'), 'State dispatch -> the extension: state 9, the play-mode screen')
+    patch(0x45AD, '03', b'\x09','The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)')
     patch(0x4583, 'cd104557cd3f45b2', b'\xcd' + word('key1') + bytes(5),
           "Second reader (title, demo, game over): player 1's byte of this frame")
+    patches.sort(key=lambda p: p['offset'])
     return {
         'format': 'msxpi-rom-patch', 'version': 2, 'id': 'yiear-msxpi-netplay-v1',
         'abi': ['msxpi-netplay-v1'],
         'source': {'size': ROM_SIZE, 'sha256': ROM_SHA256, 'crc32': ROM_CRC32, 'file': 'KUNG-FU.ROM'},
-        'output': {'size': ROM_SIZE, 'fill': 0, 'mapper': 'plain', 'target': 'ram-image'},
+        'output': {'size': OUT_SIZE, 'fill': 0, 'mapper': 'plain', 'target': 'ram-image'},
         'requirements': ["The player's own KUNG-FU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
                          'PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)',
                          'Any MSX with 64 KB RAM on the MSXPi path'],
-        'assets': {'stub': {'file': 'assets/stub.bin', 'sha256': hashlib.sha256(stub).hexdigest()}},
-        'layout': [{'source': 'input', 'offset': 0, 'size': ROM_SIZE, 'destination': 0}],
+        'assets': {'stub': {'file': 'assets/stub.bin', 'sha256': hashlib.sha256(stub).hexdigest()},
+                   'ext': {'file': 'assets/ext.bin', 'sha256': hashlib.sha256(ext).hexdigest()}},
+        'layout': [{'source': 'input', 'offset': 0, 'size': ROM_SIZE, 'destination': 0},
+                   {'source': 'ext', 'offset': 0, 'size': len(ext), 'destination': EXT_AT}],
         'patches': patches,
         'netplay': {
             'abi': 'msxpi-netplay-v1', 'game_id': 'yiear', 'title': 'Yie Ar Kung-Fu', 'roles': ['P1', 'P2'],
@@ -121,24 +159,27 @@ def write_syms(path, symbols, stub):
 def test_build(assembler, engine, gpf_path, syms_path):
     with tempfile.TemporaryDirectory() as out:
         stub, symbols = assemble(assembler, engine, True, out)
-    profile = make_profile(stub, symbols)
+        ext, ext_symbols = assemble_ext(assembler, symbols, out)
+    profile = make_profile(stub, {**symbols, **ext_symbols}, ext)
     profile['id'] = 'yiear-msxpi-netplay-test'
-    data = patcher().gpf_bytes(profile, {'stub': stub})
+    data = patcher().gpf_bytes(profile, {'stub': stub, 'ext': ext})
     Path(gpf_path).write_bytes(data)
     if syms_path:
-        write_syms(syms_path, symbols, stub)
+        write_syms(syms_path, {**symbols, **ext_symbols}, stub)
     print(f'Test GPF {gpf_path}: {len(data)} bytes, stub {len(stub)} bytes, '
           f'profile hash {struct.unpack_from("<I", data, 8)[0]:08x}')
 
 
 def publish(assembler, engine, rom, syms):
     stub, symbols = assemble(assembler, engine, False, HERE / 'assets')
+    ext, ext_symbols = assemble_ext(assembler, symbols, HERE / 'assets')
     (HERE / 'assets/stub.sym').unlink()
-    profile = make_profile(stub, symbols)
+    (HERE / 'assets/ext.sym').unlink()
+    profile = make_profile(stub, {**symbols, **ext_symbols}, ext)
     (HERE / 'profile.json').write_text(json.dumps(profile, indent=2) + '\n', encoding='utf-8')
-    gpf = patcher().gpf_bytes(profile, {'stub': stub})            # it must compile
+    gpf = patcher().gpf_bytes(profile, {'stub': stub, 'ext': ext})  # it must compile
     if syms:
-        write_syms(syms, symbols, stub)
+        write_syms(syms, {**symbols, **ext_symbols}, stub)
     print(f'Published profile; stub {len(stub)} of {STUB_MAX} bytes ({STUB_LOAD:04X}h-{symbols["stubEnd"] - 1:04X}h), '
           f'{len(profile["patches"])} patches, GPF {len(gpf)} bytes')
     if rom:

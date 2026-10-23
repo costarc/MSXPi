@@ -126,3 +126,9 @@ run was black, so look at the title in a real-time run before planning the scree
 - Not done in step 3: chat/TCP/link-2 scenarios in the rig, speed against the cartridge, sound check, the profile published
   (`build_games.py`, `YIEAR.GPF`), real-hardware. The ROM is read through `YIEAR_ROM` only.
 - Steps 2 and 4-10 are untouched.
+
+- **Step 4 (menu, Single only)**: `src/ext.asm` (219 bytes at A000h; state 9 "SELECT MODE": SINGLE / TURN / VERSUS, blinking choice,
+  player 1's input only), patches 409Ch (dispatch) and 45ADh (title start -> state 9), layout output 32768 with asset `ext` at 6000h,
+  GPF 1271 bytes, `min_playnet` 2. Rig: 3001 identical frames, scenes 0,1,3,4,5,9 (state 9 lasts frames 84-115 in the scripted
+  run). VRAM dump (`yiear_debug/menushot.tcl`) shows the menu below the logo, "PUSH SPACE KEY" erased. All three entries play
+  Single; the mode is stored at E480h. Not yet seen on a real screenshot, nor with "PLAYER 1 SELECTS".
