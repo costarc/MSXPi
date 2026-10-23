@@ -19,16 +19,44 @@ OLD_DISPATCH:   EQU     $4071                   ; the game's state dispatcher (t
 PRINT:          EQU     $449E                   ; DE = string: draw
 ERASE:          EQU     $44B5                   ; DE = string: erase
 
-; extension RAM (E480h-E4FFh: inside game_ram, never touched by the game)
-MODE:           EQU     $E480                   ; 0 Single, 1 Turn, 2 Versus
+; extension RAM (E480h-E4FFh: inside game_ram, never touched by the game). Only what is initialised before it is read:
+; the menu's own, and the mode, the current player and Turn's blocks live in the stub (tMode, tCur, tOut, tBlk).
+MODE:           EQU     tMode                   ; 0 Single, 1 Turn, 2 Versus
 CURSOR:         EQU     $E481
 PREV:           EQU     $E482                   ; player 1's input of the last frame
 MODES:          EQU     3
+TURN_N:         EQU     23                      ; the per-player block, E049h-E05Fh (as the stub's)
+BLOCK:          EQU     $E049
+REST:           EQU     $E050
 
 ; 409Ch: call 4071h -> call dispatch. A = the state. States 0-8 go on to the game's dispatcher with the stack untouched.
 dispatch:
         cp      9
+        jr      z,.menu
+        cp      5                               ; a fight in Turn: whose turn it is, once in a while
         jp      nz,OLD_DISPATCH
+        push    af
+        ld      a,(MODE)
+        cp      1
+        jr      nz,.old
+        ld      a,(FRAME)
+        and     15
+        jr      nz,.old
+        push    bc
+        push    de
+        push    hl
+        ld      de,STR_HUD1
+        ld      a,(tCur)
+        or      a
+        jr      z,.p1
+        ld      de,STR_HUD2
+.p1:    call    PRINT
+        pop     hl
+        pop     de
+        pop     bc
+.old:   pop     af
+        jp      OLD_DISPATCH
+.menu:
         pop     hl                              ; the table address the call pushed
 menu:   ld      a,(SUBSTATE)
         or      a
@@ -80,6 +108,8 @@ menu:   ld      a,(SUBSTATE)
         jr      item
 .go:    ld      a,(CURSOR)
         ld      (MODE),a
+        xor     a
+        ld      (tCur),a
         ld      de,STR_TITLE                    ; the menu goes; "PLAY START" follows as after the title's start (45A7h)
         call    ERASE
         ld      de,STR_SINGLE
@@ -88,7 +118,12 @@ menu:   ld      a,(SUBSTATE)
         call    ERASE
         ld      de,STR_VERSUS
         call    ERASE
-        ld      hl,3
+        ld      a,(MODE)
+        cp      1
+        jr      nz,.st3
+        ld      de,STR_PS1                      ; Turn: whose game it is, above "PLAY START"
+        call    PRINT
+.st3:   ld      hl,3
         ld      (STATE),hl                      ; state 3, sub-state 0
         ret
 
@@ -100,5 +135,83 @@ item:   ld      a,(CURSOR)
         and     8
         jp      z,ERASE
 .draw:  jp      PRINT
+
+; 4132h: call 42A3h -> call newGame. The new game as the game sets it up; in Turn both players start from that block.
+newGame:
+        call    $42A3
+        ld      a,(MODE)
+        cp      1
+        ret     nz
+        xor     a
+        ld      (tCur),a
+        ld      (tOut),a
+        ld      (tOut+1),a
+        ld      hl,BLOCK
+        ld      de,tBlk
+        ld      bc,TURN_N
+        ldir
+        ld      hl,BLOCK
+        ld      bc,TURN_N
+        ldir                                    ; DE went on to the second player's copy
+        ret
+
+; 41DCh: ld a,(E050h) -> call lifeLost. The game then ends if A = 0, else sets the stage up again (state 4).
+; In Turn the dying player's block is saved; a player with no REST left is out; the other player, when not out,
+; takes the turn (their block is loaded and state 4 sets up their stage). A = 0 only when both are out.
+lifeLost:
+        ld      a,(MODE)
+        cp      1
+        jr      z,.turn
+        ld      a,(REST)
+        ret
+.turn:  ld      a,(tCur)
+        call    blockOf
+        ex      de,hl
+        ld      hl,BLOCK
+        ld      bc,TURN_N
+        ldir                                    ; save
+        ld      a,(REST)
+        or      a
+        jr      nz,.next
+        ld      hl,tOut                         ; no REST left: out
+        ld      a,(tCur)
+        ld      e,a
+        ld      d,0
+        add     hl,de
+        ld      (hl),1
+.next:  ld      a,(tCur)
+        xor     1
+        ld      e,a
+        ld      d,0
+        ld      hl,tOut
+        add     hl,de
+        ld      a,(hl)
+        or      a
+        jr      nz,.stay                        ; the other is out: this player goes on, or it is over
+        ld      a,e
+        ld      (tCur),a
+        call    blockOf
+        ld      de,BLOCK
+        ld      bc,TURN_N
+        ldir                                    ; load the other player's block
+        ld      a,1
+        ret
+.stay:  ld      a,(tCur)                        ; still this player's turn: out (A = 0, game over) or not (A = 1)
+        ld      e,a
+        ld      d,0
+        ld      hl,tOut
+        add     hl,de
+        ld      a,(hl)
+        xor     1
+        ret
+
+; HL = player A's saved block
+blockOf:
+        ld      hl,tBlk
+        or      a
+        ret     z
+        ld      de,TURN_N
+        add     hl,de
+        ret
 extEnd:
         ASSERT  extEnd <= $C000

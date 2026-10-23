@@ -132,3 +132,11 @@ run was black, so look at the title in a real-time run before planning the scree
   GPF 1271 bytes, `min_playnet` 2. Rig: 3001 identical frames, scenes 0,1,3,4,5,9 (state 9 lasts frames 84-115 in the scripted
   run). VRAM dump (`yiear_debug/menushot.tcl`) shows the menu below the logo, "PUSH SPACE KEY" erased. All three entries play
   Single; the mode is stored at E480h. Not yet seen on a real screenshot, nor with "PLAYER 1 SELECTS".
+
+- **Step 5 (Turn)**: per-player block = E049h-E05Fh (23 bytes: score, E050 REST, E051 stage, E052 extra-life threshold, E054 opponent,
+  E056 level, E057-E059 counters); the hi-score E043h-E045h is global (write watch, `vars.tcl` idea: new-game clear 42A3h, 4324/432A
+  score, 4367 hi-score). Hooks: 4132h `newGame`, 41DCh `lifeLost` (state 6 repeats it each frame at game over: it is idempotent).
+  Mode, current player, out flags and the two saved blocks live in the stub (`tMode`, `tCur`, `tOut`, `tBlk`: loader-initialised),
+  not in E480h (uninitialised RAM differs between machines and `tickSite` reads `tCur`). "PLAYER n" above PLAY START and on row 2 in
+  fights. Rig: `yiear_debug/turn_deaths.tcl` kills Oolong every 300 ticks; 4001 identical frames, REST/stage per player right, the turn
+  alternates, both out -> game over -> title -> menu -> new game. Not done: "PLAYER n GAME OVER" text, T8 against a Single game.
