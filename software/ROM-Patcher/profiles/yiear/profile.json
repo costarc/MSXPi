@@ -12,7 +12,7 @@
     "file": "KUNG-FU.ROM"
   },
   "output": {
-    "size": 16384,
+    "size": 32768,
     "fill": 0,
     "mapper": "plain",
     "target": "ram-image"
@@ -26,6 +26,10 @@
     "stub": {
       "file": "assets/stub.bin",
       "sha256": "e39197d1e22a32d4a5f6af5bfb1c1ea09e3c9359aff84c8f508fbdff4f67c268"
+    },
+    "ext": {
+      "file": "assets/ext.bin",
+      "sha256": "62b83a6232a18a18a798a6e2c596b4b46fa9d1972fe322f8bb5813f37bc6ce01"
     }
   },
   "layout": [
@@ -34,6 +38,12 @@
       "offset": 0,
       "size": 16384,
       "destination": 0
+    },
+    {
+      "source": "ext",
+      "offset": 0,
+      "size": 219,
+      "destination": 24576
     }
   ],
   "patches": [
@@ -62,10 +72,22 @@
       "reason": "4062h: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
     },
     {
+      "offset": 156,
+      "expected": "cd7140",
+      "replace": "cd38a0",
+      "reason": "409Ch: State dispatch -> the extension: state 9, the play-mode screen"
+    },
+    {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
       "replace": "cde3c30000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
+    },
+    {
+      "offset": 1453,
+      "expected": "03",
+      "replace": "09",
+      "reason": "45ADh: The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)"
     }
   ],
   "netplay": {
@@ -113,6 +135,8 @@
     "tickSite": 50138,
     "key1": 50147,
     "rdLocal": 50128,
-    "stubEnd": 50151
+    "stubEnd": 50151,
+    "dispatch": 41016,
+    "menu": 41022
   }
 }
