@@ -49,6 +49,11 @@
 
     Re-running is safe: every step checks what is already there. openMSX is
     replaced when it is not the build this script pins.
+
+    -Stage (used by "p update" while msxpi-server runs): the server files go
+    to <home>\staged instead, with staged\READY written last. They are put in
+    place by msxpi-apply-staged.ps1, which "p restart" and start-openmsx.bat
+    run while no server is running.
 #>
 
 [CmdletBinding()]
@@ -63,6 +68,7 @@ param(
     [switch]$SkipPython,
     [switch]$SkipMpv,
     [switch]$SkipOpenMsx,
+    [switch]$Stage,
     [switch]$NoPause
 )
 
@@ -324,6 +330,13 @@ foreach ($d in @($MsxPiHome, "$MsxPiHome\disks", "$MsxPiHome\native")) {
 }
 
 $srv = "$Raw/Server/Python/src"
+# Staged: the running server's files are left alone until it restarts.
+$ServerDir = $MsxPiHome
+if ($Stage) {
+    $ServerDir = "$MsxPiHome\staged"
+    Remove-Item -Recurse -Force $ServerDir -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $ServerDir | Out-Null
+}
 # Every module msxpi-server.py imports (directly or lazily). Keep in sync with Python/src.
 foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxpi_transport.py", "msxpi_blocks.py",
                  "msxpi_cmd_disk.py", "msxpi_cmd_files.py", "msxpi_cmd_media.py", "msxpi_cmd_rom.py",
@@ -332,8 +345,14 @@ foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxp
                  "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_game_irc.py",
                  "msxpi_pcheckers_irc.py", "msxpi_ssh.py",
                  "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py")) {
-    Get-File "$srv/$f" "$MsxPiHome\$f" | Out-Null
+    Get-File "$srv/$f" "$ServerDir\$f" | Out-Null
 }
+if ($Stage) {
+    # Only now is the set complete: msxpi-apply-staged.ps1 needs READY.
+    Set-Content -Encoding ASCII "$ServerDir\READY" $Branch
+    Ok "server files staged - applied on p restart or next start"
+}
+Get-File "$Raw/Server/Setup/msxpi-apply-staged.ps1" "$MsxPiHome\msxpi-apply-staged.ps1" | Out-Null
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }
@@ -512,6 +531,8 @@ if defined MSXPI_PORT (
     powershell -NoProfile -Command "if (Get-CimInstance Win32_Process -Filter \"Name like 'python%%'\" | Where-Object { `$_.CommandLine -like '*msxpi-server.py*' }) { exit 1 }"
 )
 if not errorlevel 1 (
+    rem A server update staged by "p update" (msxpiupd) is put in place first.
+    if exist "$MsxPiHome\staged\READY" powershell -NoProfile -ExecutionPolicy Bypass -File "$MsxPiHome\msxpi-apply-staged.ps1" -MsxPiHome "$MsxPiHome"
     rem msxpi-server reads MSXPI_PORT from the environment inherited by start
     start "msxpi-server" /D "$MsxPiHome" "$python" "$MsxPiHome\msxpi-server.py"
     ping -n 3 127.0.0.1 >nul
