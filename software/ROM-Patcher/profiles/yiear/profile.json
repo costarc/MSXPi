@@ -25,11 +25,11 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "38ed111b1fa6801a25b57694aef8ee1e7a4349912dafe3e9b39bdb4b8bbf8dd9"
+      "sha256": "71f93e15bd77d251cd10a93e41f1c3b3259fa5f760b4d5340194fec480b792a3"
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "251af11e81ed930ac95f42a78abac0cb482b29bd16794cd17c2df3779957520d"
+      "sha256": "128be64373657624d4aa653d0cf5308da13dc37c712e7e7c39f73eaaf054aaab"
     }
   },
   "layout": [
@@ -42,7 +42,7 @@
     {
       "source": "ext",
       "offset": 0,
-      "size": 465,
+      "size": 662,
       "destination": 24576
     }
   ],
@@ -74,25 +74,37 @@
     {
       "offset": 156,
       "expected": "cd7140",
-      "replace": "cd64a0",
+      "replace": "cd84a0",
       "reason": "409Ch: State dispatch -> the extension: state 9, the play-mode screen"
     },
     {
       "offset": 306,
       "expected": "cda342",
-      "replace": "cd44a1",
+      "replace": "cd82a1",
       "reason": "4132h: New game: Turn copies the fresh block to both players"
     },
     {
       "offset": 476,
       "expected": "3a50e0",
-      "replace": "cd6ba1",
+      "replace": "cda9a1",
       "reason": "41DCh: A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)"
+    },
+    {
+      "offset": 584,
+      "expected": "3a54e0",
+      "replace": "cd5fa2",
+      "reason": "4248h: Opponent beaten: Versus has no bonus stage"
+    },
+    {
+      "offset": 644,
+      "expected": "3a56e0",
+      "replace": "c36aa2",
+      "reason": "4284h: Fifth opponent beaten: in Versus player 1 wins and the match ends"
     },
     {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
-      "replace": "cd1fc40000000000",
+      "replace": "cd20c40000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
     },
     {
@@ -100,6 +112,12 @@
       "expected": "03",
       "replace": "09",
       "reason": "45ADh: The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)"
+    },
+    {
+      "offset": 13112,
+      "expected": "3a81e1",
+      "replace": "c31aa2",
+      "reason": "7338h: The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides"
     }
   ],
   "netplay": {
@@ -145,14 +163,14 @@
     "PN_P1": 50002,
     "PN_P2": 50003,
     "tickSite": 50138,
-    "key1": 50207,
+    "key1": 50208,
     "rdLocal": 50128,
-    "stubEnd": 50211,
-    "dispatch": 41060,
-    "menu": 41110,
+    "stubEnd": 50212,
+    "dispatch": 41092,
+    "menu": 41169,
     "tMode": 50157,
     "tCur": 50158,
     "tOut": 50159,
-    "tBlk": 50161
+    "tBlk": 50162
   }
 }

@@ -140,3 +140,14 @@ run was black, so look at the title in a real-time run before planning the scree
   not in E480h (uninitialised RAM differs between machines and `tickSite` reads `tCur`). "PLAYER n" above PLAY START and on row 2 in
   fights. Rig: `yiear_debug/turn_deaths.tcl` kills Oolong every 300 ticks; 4001 identical frames, REST/stage per player right, the turn
   alternates, both out -> game over -> title -> menu -> new game. Not done: "PLAYER n GAME OVER" text, T8 against a Single game.
+
+- **Steps 6-7 (Versus)**: all five AI routines (6C90h, 6E79h, 7012h, 7320h, 7758h) run the current action while E16Bh is not zero
+  (their own animation scripts, 54D5h) and jump to the one shared decision point 7335h when it is. Skipping the AI altogether leaves
+  the opponent frozen (the executors are inside the routines), so the single patch is at 7338h (`ld a,(E181h)` -> `jp vsDecide`,
+  after 5476h has set the facing). Player 2 (`PN_P2`): trigger = attack, +up 7458h (action 5), +down 7450h (6), else 7454h (4);
+  left/right = 74E7h (C = 1 / 0) every 8 frames (a step is 8 pixels; Oolong walks 1 px/frame); nothing = stand (E184h = 2 or 3,
+  5522h). 4248h `bonus` (no bonus stage), 4284h `vsWin` (fifth opponent beaten: `tWin` = 1, REST = 0, state 6: the game's own
+  game-over path), `lifeLost` sets `tWin` = 2 when REST is 0; "PLAYER n WINS" over state 7. Rig: `yiear_debug/versus_test.tcl`,
+  4501 identical frames; the opponent walks and attacks on P2's scripted input, both match ends seen (win=1, win=2).
+  **Open**: which of actions 4/5/6 is high/middle/low (the up/down mapping is a guess), opponent 2's automatic throw (4638h) and
+  opponents 3/4 special states (E1C0h, E1D0h) in Versus, play balance (a human test), a P2 jump, the move table per opponent.

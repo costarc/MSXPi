@@ -65,13 +65,14 @@ MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line 
         ('STR_TITLE', 13, 10, 'SELECT MODE'),
         ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'),
         ('STR_HUD1', 2, 12, 'PLAYER 1'), ('STR_HUD2', 2, 12, 'PLAYER 2'),       # in the fight, on the blank row under the HUD
-        ('STR_PS1', 14, 12, 'PLAYER 1'), ('STR_PS2', 14, 12, 'PLAYER 2'))   # above "PLAY START"
+        ('STR_PS1', 14, 12, 'PLAYER 1'), ('STR_PS2', 14, 12, 'PLAYER 2'),
+        ('STR_WIN1', 13, 9, 'PLAYER 1 WINS'), ('STR_WIN2', 13, 9, 'PLAYER 2 WINS'))   # Versus: over the game-over screen
 
 
 def assemble_ext(assembler, symbols, out_dir):
     """The extension, assembled after the stub (it needs PN_P1): returns its bytes."""
     src = HERE / 'src'
-    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tBlk')
+    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tBlk')
     (src / 'stub_syms.inc').write_text(''.join('%s: EQU 0x%04X\n' % (n, symbols[n]) for n in names))
     lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
     for name, row, column, string in MENU:
@@ -105,6 +106,10 @@ def make_profile(stub, symbols, ext):
     patch(0x4062, 'fc5c7c', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
     patch(0x409C, 'cd7140', b'\xcd' + word('dispatch'), 'State dispatch -> the extension: state 9, the play-mode screen')
     patch(0x45AD, '03', b'\x09','The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)')
+    patch(0x4248, '3a54e0', b'\xcd' + word('bonus'), 'Opponent beaten: Versus has no bonus stage')
+    patch(0x4284, '3a56e0', b'\xc3' + word('vsWin'), 'Fifth opponent beaten: in Versus player 1 wins and the match ends')
+    patch(0x7338, '3a81e1', b'\xc3' + word('vsDecide'),
+          'The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides')
     patch(0x4132, 'cda342', b'\xcd' + word('newGame'), 'New game: Turn copies the fresh block to both players')
     patch(0x41DC, '3a50e0', b'\xcd' + word('lifeLost'), 'A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)')
     patch(0x4583, 'cd104557cd3f45b2', b'\xcd' + word('key1') + bytes(5),
