@@ -25,11 +25,11 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "e39197d1e22a32d4a5f6af5bfb1c1ea09e3c9359aff84c8f508fbdff4f67c268"
+      "sha256": "38ed111b1fa6801a25b57694aef8ee1e7a4349912dafe3e9b39bdb4b8bbf8dd9"
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "62b83a6232a18a18a798a6e2c596b4b46fa9d1972fe322f8bb5813f37bc6ce01"
+      "sha256": "251af11e81ed930ac95f42a78abac0cb482b29bd16794cd17c2df3779957520d"
     }
   },
   "layout": [
@@ -42,7 +42,7 @@
     {
       "source": "ext",
       "offset": 0,
-      "size": 219,
+      "size": 465,
       "destination": 24576
     }
   ],
@@ -74,13 +74,25 @@
     {
       "offset": 156,
       "expected": "cd7140",
-      "replace": "cd38a0",
+      "replace": "cd64a0",
       "reason": "409Ch: State dispatch -> the extension: state 9, the play-mode screen"
+    },
+    {
+      "offset": 306,
+      "expected": "cda342",
+      "replace": "cd44a1",
+      "reason": "4132h: New game: Turn copies the fresh block to both players"
+    },
+    {
+      "offset": 476,
+      "expected": "3a50e0",
+      "replace": "cd6ba1",
+      "reason": "41DCh: A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)"
     },
     {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
-      "replace": "cde3c30000000000",
+      "replace": "cd1fc40000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
     },
     {
@@ -133,10 +145,14 @@
     "PN_P1": 50002,
     "PN_P2": 50003,
     "tickSite": 50138,
-    "key1": 50147,
+    "key1": 50207,
     "rdLocal": 50128,
-    "stubEnd": 50151,
-    "dispatch": 41016,
-    "menu": 41022
+    "stubEnd": 50211,
+    "dispatch": 41060,
+    "menu": 41110,
+    "tMode": 50157,
+    "tCur": 50158,
+    "tOut": 50159,
+    "tBlk": 50161
   }
 }

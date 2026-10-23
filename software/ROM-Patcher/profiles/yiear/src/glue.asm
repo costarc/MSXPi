@@ -35,10 +35,24 @@ rdLocal:
         ret
 
 ; TICK site: call 4522h at 4053h, once per frame, in the interrupt handler under the busy flag.
-; The exchange, then the main reader's second half on player 1's byte.
-tickSite: call   PN_TICK
+; The exchange, then the main reader's second half on the byte of the player who plays now: player 1's, except
+; in Turn mode while player 2 has the turn (tCur = 1).
+tickSite: call  PN_TICK
+        ld      a,(tCur)
+        or      a
         ld      a,(PN_P1)
+        jp      z,DEMO_EDGE
+        ld      a,(PN_P2)
         jp      DEMO_EDGE
+
+; ---- the extension's state (documents/YIEAR-DESIGN.md 5.2) ------------------------------------------------
+; Here and not in the game's RAM because the loader copies these initialised bytes: INIT clears only E000h-E3FFh, so
+; a RAM byte of the extension would start with whatever each machine had there, and the tick above reads tCur.
+TURN_N:         EQU     23                      ; E049h-E05Fh: score, REST, stage, opponent, level, counters
+tMode:          defb    0                       ; 0 Single, 1 Turn, 2 Versus
+tCur:           defb    0                       ; the player who plays now (Turn)
+tOut:           defb    0, 0                    ; Turn: the player has no REST left
+tBlk:           defs    TURN_N * 2              ; Turn: each player's saved block
 
 ; the second reader (4583h: title, demo and game-over screens) in place of its two hardware reads
 key1:   ld      a,(PN_P1)

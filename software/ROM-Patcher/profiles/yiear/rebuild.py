@@ -34,7 +34,8 @@ BASE = 0x4000
 STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
-EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu')
+EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu',
+            'tMode', 'tCur', 'tOut', 'tBlk')
 
 
 def assemble(assembler, engine, scripted, out_dir):
@@ -62,13 +63,16 @@ def text(row, column, string):
 
 MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line (559Bh), erased
         ('STR_TITLE', 13, 10, 'SELECT MODE'),
-        ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'))
+        ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'),
+        ('STR_HUD1', 2, 12, 'PLAYER 1'), ('STR_HUD2', 2, 12, 'PLAYER 2'),       # in the fight, on the blank row under the HUD
+        ('STR_PS1', 14, 12, 'PLAYER 1'), ('STR_PS2', 14, 12, 'PLAYER 2'))   # above "PLAY START"
 
 
 def assemble_ext(assembler, symbols, out_dir):
     """The extension, assembled after the stub (it needs PN_P1): returns its bytes."""
     src = HERE / 'src'
-    (src / 'stub_syms.inc').write_text('PN_P1: EQU 0x%04X\n' % symbols['PN_P1'])
+    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tBlk')
+    (src / 'stub_syms.inc').write_text(''.join('%s: EQU 0x%04X\n' % (n, symbols[n]) for n in names))
     lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
     for name, row, column, string in MENU:
         data = ', '.join('0x%02X' % b for b in text(row, column, string))
@@ -101,6 +105,8 @@ def make_profile(stub, symbols, ext):
     patch(0x4062, 'fc5c7c', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
     patch(0x409C, 'cd7140', b'\xcd' + word('dispatch'), 'State dispatch -> the extension: state 9, the play-mode screen')
     patch(0x45AD, '03', b'\x09','The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)')
+    patch(0x4132, 'cda342', b'\xcd' + word('newGame'), 'New game: Turn copies the fresh block to both players')
+    patch(0x41DC, '3a50e0', b'\xcd' + word('lifeLost'), 'A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)')
     patch(0x4583, 'cd104557cd3f45b2', b'\xcd' + word('key1') + bytes(5),
           "Second reader (title, demo, game over): player 1's byte of this frame")
     patches.sort(key=lambda p: p['offset'])

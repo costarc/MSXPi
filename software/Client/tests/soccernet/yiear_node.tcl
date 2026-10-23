@@ -136,7 +136,9 @@ proc arm_ {} {
         debug set_bp $::s_tickDone {} { tlog }
         debug set_bp 0xC503 {!$::ended} { xendHit }
         debug set_watchpoint write_mem {0xE200 0xE3FF} {} { minw }
-        debug set_watchpoint write_mem {0xC100 0xC5FF} {[reg PC] < 0xC000 || [reg PC] >= 0xC700} { gwlog }
+        # the extension's own state (tMode .. tBlk, 2 * 23 + 6 bytes) is written by the extension (PC in page 2) on purpose
+        debug set_watchpoint write_mem [list 0xC100 [expr {$::sym(tMode) - 1}]] {[reg PC] < 0xC000 || [reg PC] >= 0xC700} { gwlog }
+        debug set_watchpoint write_mem [list [expr {$::sym(tBlk) + 46}] 0xC5FF] {[reg PC] < 0xC000 || [reg PC] >= 0xC700} { gwlog }
         debug set_bp $::s_tickDone {} { line }
         return
     }
