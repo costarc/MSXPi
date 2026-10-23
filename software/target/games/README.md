@@ -7,6 +7,7 @@ data, only the patches that make the game networked. Every player needs their ow
 | File | Game | ROM needed |
 |---|---|---|
 | `SOCCER.GPF` | Konami's Soccer (two players) | `SOCCER.ROM`: Konami's Soccer (RC-732), 32768 bytes, CRC-32 `74BC8295` |
+| `SALAMAND.GPF` | Konami's Salamander (co-op, both ships at once; a memory mapper with 22 free segments, 512 KB or more) | `SALAMAND.ROM`: Konami's Salamander (RC-758), 131072 bytes, CRC-32 `C36F559D` |
 
 ## Installing a game
 

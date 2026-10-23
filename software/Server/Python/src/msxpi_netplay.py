@@ -12,9 +12,16 @@ see msxpi_ethglue.eth_handle_opcode):
            [FE][REASON]                             the opponent left (BYE with its result code)
            [A0+STATE][DELAY][DELAY]                 status, when FLAGS bit 7 is set
 
-FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet, bit 5 send BYE
-(L = 1, the packet byte is the result code), bit 6 (re)start the session (handshake), bit 7 return the
-status instead.  STATE: 0 connecting, 1 ready, 2 incompatible, 3 failed, 4 the opponent left.
+FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet, bit 2 the packet is a
+DELTA, bit 3 the reply may be a DELTA, bit 5 send BYE (L = 1, the packet byte is the result code), bit 6
+(re)start the session (handshake), bit 7 return the status instead.  STATE: 0 connecting, 1 ready,
+2 incompatible, 3 failed, 4 the opponent left.
+
+DELTA (PLAYNET-PROTOCOLS.md 10.1): consecutive game packets repeat 7 of their 8 frame records, so on the
+MSXPi link a packet that follows the previous one in that direction (same kind and W, F one more, its first 7
+records the previous one's last 7) travels as seq, F, the new record, check tag, check value: R + 4 bytes
+(R = W + 1), 5 to 9.  The Pi rebuilds it from the last packet the MSX sent, and sends one only when the MSX
+allows it (bit 3, it holds the last packet the Pi gave it); a reply of fewer than 16 bytes is a DELTA.
 
 Peer datagrams start with a kind byte: 1-6 = 14-byte control datagram (type, version, nonce, a, b),
 10h = game packet of 14 + 8W bytes (W = input bytes per frame, 1-4, in its byte 3; each of its 8 frame records
@@ -79,6 +86,27 @@ def game_packet_ok(data):
     """True for a well-formed MSXNP game packet (kind, width, length)."""
     return (len(data) >= 4 and data[0] == KIND_GAME and MIN_WIDTH <= data[3] <= MAX_WIDTH
             and len(data) == 14 + 8 * data[3])
+
+
+def delta_of(new, base):
+    """The DELTA of game packet `new` against `base` (seq, F, the new record, check tag and value), or None
+    when `new` does not follow `base`."""
+    if not base or len(new) != len(base) or new[0] != base[0] or new[3] != base[3]             or new[2] != (base[2] + 1) & 0xFF:
+        return None
+    r = (len(new) - 6) // 8
+    if new[4:4 + 7 * r] != base[4 + r:4 + 8 * r]:
+        return None
+    return bytes(new[1:3]) + bytes(new[4 + 7 * r:])
+
+
+def undelta(delta, base):
+    """The game packet a DELTA stands for, from `base` (the previous one), or None when it does not fit."""
+    if not base:
+        return None
+    r = (len(base) - 6) // 8
+    if len(delta) != r + 4 or delta[1] != (base[2] + 1) & 0xFF:
+        return None
+    return bytes([base[0], delta[0], delta[1], base[3]]) + bytes(base[4 + r:4 + 8 * r]) + bytes(delta[2:])
 
 
 def lan_address():
@@ -187,7 +215,7 @@ class Netplay:
         self.peer = None                  # the address that answered: locked once known
         self.state = S_IDLE
         self.delay = 0
-        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0)
+        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0, deltas_in=0, deltas_out=0)
         self.last_log = 0.0
         self._reset_session()
         if spec:
@@ -279,6 +307,8 @@ class Netplay:
         self.bye_left = 0
         self.next_bye = 0.0
         self.ready.clear()
+        self.msx_sent = None              # the last game packet the MSX sent (a DELTA's base)
+        self.msx_got = None               # the last one given to the MSX
 
     def restart(self):
         with self.lock:
@@ -473,6 +503,13 @@ class Netplay:
         if (sum(pkt) & 0xFF) != s or length > MAX_PKT:
             self.stats["badsum"] += 1
             flags &= 0x80                 # corrupted: treat the packet part as lost
+        if flags & 4 and flags & 1:       # a DELTA: the packet it stands for
+            pkt = undelta(pkt, self.msx_sent)
+            if pkt is None:               # not after the base we hold: lost (the MSX resends in full)
+                self.stats["malformed"] += 1
+                flags &= ~1
+            else:
+                self.stats["deltas_in"] += 1
         if flags & 0x40:
             self.restart()
         if flags & 0x20:
@@ -493,6 +530,7 @@ class Netplay:
             if flags & 1 and self.state == S_READY:
                 if game_packet_ok(pkt):
                     self._send(bytes(pkt))
+                    self.msx_sent = bytes(pkt)
                     self.stats["tx"] += 1
                 else:
                     self.stats["malformed"] += 1
@@ -503,8 +541,15 @@ class Netplay:
                 write(bytes([0xFE, self.bye_reason or 0]))
                 return True
             out = self.ready.popleft() if (flags & 2 and self.ready) else b""
+            base = self.msx_got if flags & 8 else None
+            if out:
+                self.msx_got = out
         if out:
             self.stats["delivered"] += 1
+            d = delta_of(out, base)
+            if d is not None:
+                self.stats["deltas_out"] += 1
+                out = d
             write(bytes([len(out)]) + out + bytes([sum(out) & 0xFF]))
         else:
             write(b"\x00\x00")

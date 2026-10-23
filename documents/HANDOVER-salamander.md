@@ -1,6 +1,9 @@
 # Handover: Salamander online co-op (PLAYNET 3, image host mapper-ram)
 
-2026-10-23. Session 2 fixed the intermittent start-up crash (section 4). Open: speed, Soccer regression, TCP/IP (section 2).
+2026-10-23. Session 2 fixed the intermittent start-up crash (section 4). Session 3 made mapper-ram work over TCP/IP up to the
+connection (section 4b); the connection itself is blocked by the rig's TCP/IP path, which fails for Soccer and master too.
+Session 4 (section 4c): the full MSXPi flow works, MCHAT to the game and back, at about 90% of the cartridge's speed (it was 55%).
+Open: the TCP/IP path (the rig's link), real hardware.
 
 | | |
 |---|---|
@@ -38,8 +41,7 @@ page-2 pairs, 0 builds) and a 512 KB node (23 pairs, 1 build); desync detection 
 2. **A desync at frame 3067** in one 6000-frame run (after game over, second game starting, state 04h), before the INIT-clear patch.
    Not reproduced since. Likely the same cause as 1: in every run before the fix `clrRam` was garbage, so the RAM it should clear
    was not cleared (or cleared differently on the two machines).
-3. **Speed**: play runs at ~17 frames/s against the cartridge's ~31 (measured: `salamander_debug/cartridge_fps.tcl`). Not profiled yet
-   (`salamander_debug/prof.tcl` is ready: time in the exchange, in the bank engine, number of switches).
+3. ~~Speed~~: **improved in session 4** (section 4c): about 28 frames/s in steady 1PLAYER play against the cartridge's 31.5.
 
 ## 3. Experimental state to undo or keep
 
@@ -68,6 +70,75 @@ page-2 pairs, 0 builds) and a 512 KB node (23 pairs, 1 build); desync detection 
   Salamander runs of 300 frames IDENTICAL, 0 stub diffs and 0 writes to D000h-D7FFh before `clrRam` on all 8 nodes.
 - **Not run yet:** the trampoline's TCP/IP path (the page-3 copy into G3 now happens on the new stack, which is in page 3 and
   copied with it): run Soccer's `SCENARIO=mixed` (and `tcp`) before merging.
+
+## 4b. Mapper-ram over TCP/IP (session 3)
+
+Target set-up (the user's): Canon V-25 + memory mapper + GR8NET (its own TCP/IP UNAPI in ROM), Nextor, no MSXPi; the other
+player on openMSX over the MSXPi. Changes:
+
+- `playnet.asm`: the "cannot be played over TCP/IP yet" refusal is gone. `tcpSetup` (`playnet_tcp.asm`) sets 2400h-27FFh (the
+  mapper-ram loader) aside at 4000h while PLAYNET.OVL passes through 2400h-3FFFh, and puts it back. The trampoline copies the stub
+  after the switch to G3 (MSX-DOS's page 3 keeps what it has above its TPA top); only the transport goes into both.
+- `transport_unapi.asm`: after each exchange XCHG puts back the game's pages 1 AND 2 from `tSegs` (new fields `tGameSeg1`,
+  `tSegs`; `build.py` exports `TU_GAMESEG1`, `TU_SEGS`): the TPA's for a plain game, MK_BLOCK+8 for mapper-ram. A RAM UNAPI
+  implementation (INL + RAMHELPR) puts back the segments PUT_P1/PUT_P2 recorded, not the bank pairs the engine set by OUT.
+- `mapper_host.asm`: `mAt` disables interrupts until `mUnmap` (then `ei` in `mLoad`/`mPatch`): INL's timer interrupt, through
+  RAMHELPR, put page 2 back to the TPA's segment in the middle of a copy into a home (seen as "not the dump this game was made
+  for" from `mPatch`). `mUnmap` itself still leaves interrupts alone (`pnBack` calls it with them off).
+- Salamander's layout: transport D000h-D1FFh, stub D200h-D797h (`glue.asm`, `rebuild.py`; new profile hash 79f8e231). The transport
+  must be in MSX-DOS's page 3 below the TPA top: D706h while a program runs under Nextor + RAMHELPR + INL (DB06h at the prompt),
+  D406h under MSX-DOS 1 + MSR. The old D600h-D7FFh failed `tcpFootprint`.
+- Rig: `run_salamander.sh TCP=1` (P2 on Nextor from a copy of NextorHD.dsk with C:\PLAYNET added by `nextor_folder.sh` through WSL's
+  openMSX; MegaFlashROM SCC+ SD + slot expander + ram2mb, since its own 512 KB mapper leaves fewer than 22 segments with Nextor,
+  RAMHELPR, INL and PLAYNET's two; RAMHELPR I, C:, INL I, PLAYNET /T salamand P2 5102 10.0.2.2:5101).
+
+Reached on P2: segments, ROM load (CRC right), patches, footprint, connecting. **Not reached: the connection.** Both nodes say
+"Could not connect"; the server's NAT link (`msxpi_ethnat.py`, logging added for a test and removed) receives **no frame at all**
+from INL after "Ethernet UNAPI shuttle ready". Soccer's `SCENARIO=mixed` fails the same way, also from a clean `master` worktree
+(`C:\tmp\msxpi-master`), so it is the rig, not this branch. Lead: openMSX loads the MSXPi BIOS from the user data folder,
+`Documents/openMSX/share/systemroms/extensions/msxpibios.rom`, changed 2026-10-22 17:36 (sha1 d3db91..., first in that folder's
+`MSXPi.xml`); a private copy of the user data with the 2 October ROM (163cd9..., `OPENMSX_USER_DATA=C:/tmp/omxuser`) still failed,
+but it was not checked that openMSX used it. Not run yet: Soccer's mixed regression with this branch once the link works.
+
+Regressions after these changes (MSXPi path): Salamander `run_salamander.sh 1500` (EXT2=ram512k) IDENTICAL, scenes 0-6, the 512 KB
+node 1 build; Soccer `run_native.sh 0 0 1500` IDENTICAL, foreign writes 0. Patcher tests: 40 run, only `test_games_folder_is_current`
+fails (GPF not published); `MapperRamTests.test_rules` now puts the block at D800h (D600h is inside the moved stub).
+Debug scripts added: `romread.tcl` (each ROM chunk against the file, gated on PLAYNET.COM's bytes; symbol addresses hard-coded),
+`p1watch.tcl`, `w2400.tcl` (write watches on the set-aside copy and on the loader), `dumpload.tcl`.
+
+## 4c. The MSXPi flow end to end, and speed (session 4)
+
+- **MCHAT to the game and back.** `run_salamander.sh CHAT=1` (MCHAT on both, a local IRC server, alice invites bob with
+  `/play bob salamand`, the chat starts PLAYNET) and `EXITKEY=n` (P2 presses Ctrl+Shift+F5; both must be back in MCHAT: each Pi
+  logs "playnet restore", then "mchat start"). Both pass. The way back used to crash P2's MSX-DOS 1: `saveDos` counted an area only
+  when it **started** above the TPA top, and Salamander's stub starts at D200h (TPA) but runs to D834h, over MSX-DOS 1's code
+  (TPA top D606h, HIMEM DEE8h in this rig), which was then never saved. `svLow` now takes each area's end and saves from the TPA
+  top when an area straddles it (Soccer's areas are all below it: unchanged).
+- **Speed**, measured with `salamander_debug/prof.tcl` (per 10 s: ticks, exchange, sound, bank calls, PC histogram) and
+  `busy.tcl` (per frame: interrupt in the idle loop 412Dh to the return there; also runs on the cartridge):
+  1. The bank engine took 28% of play: every switch scanned the 30-entry page table (~700 T-states, the cartridge's write is 13).
+     `mapper_k8.asm` now has a fast path per page: a 1 KB **pair map** (`MK_MAP`, DA00h-DDFFh for Salamander: per page 256
+     segment bytes by low bank * 16 + high bank, then 256 "referenced" bytes the clock reads) answers a switch in ~240 T-states;
+     the same bank again ~85. The first switch clears the map and patches the fast path in (`mkI1`/`mkI2`). `MK_W23` sets W2 and
+     W3 in one switch (the sound tick). Banks now ~6% of play. Engine limited to 16 banks (`ASSERT`).
+  2. One C9 transaction took 5.6 ms: every byte on the MSXPi link is a handshake with the Pi (~85 us in openMSX), and a frame
+     moved 66 bytes. **DELTA packets** (PLAYNET-PROTOCOLS 10.1, FLAGS bits 2 and 3): a packet that follows the previous one in its
+     direction goes as seq, F, the new record and the check (7 bytes for W = 2); the Pi rebuilds full packets for UDP, so the
+     peer protocol does not change. Both ends fall back to full packets (an older Pi never sends a DELTA, so a new MSX never
+     sends one to it). Now ~2 ms. `msxpi_netplay.py`: `delta_of`, `undelta`, stats `deltas_in`/`deltas_out`; tests in
+     `test_netplay.py` (`Deltas`, three `Relay` tests).
+  3. Room in PLAYNET.COM for the bigger transport (432 bytes, 56 relocations; was 246): relocation lists are 1-byte gaps
+     (`build.py` `reloc_list`, `relocate`), and `argBuf` shares GPFBUF (parsed before any GPF comes in). 22 bytes left.
+  Result: 1PLAYER steady play ~28 frames/s against the cartridge's 31.5 (same key script); lighter scenes as fast as the
+  cartridge. The cartridge itself takes 3 interrupts for ~40% of its game frames. What is left per frame: the exchange ~2 ms,
+  banks ~3 ms, `rdLocal` (five SNSMAT calls) ~1 ms, the sound tick's bank switches.
+- Stub limit 1792 (D200h-D8FFh), game RAM now also DA00h-DDFFh (the map), GPF 2762 bytes, published in `software/target/games`
+  (`build_games.py`; `test_games_folder_is_current` passes).
+- Verified: Salamander 3000 frames IDENTICAL (2 MB + 512 KB, one eviction), chat + exit both back in MCHAT; Soccer
+  `run_native.sh 0 0 1500` and `SCENARIO=chat EXITKEY=700` (both back in MCHAT) on this branch; server tests 68 OK, patcher 40
+  (2 skipped).
+- Not verified: the TCP/IP path after these changes (the UNAPI transport is unchanged; the relocation format and `saveDos` are
+  shared), real hardware.
 
 ## 5. How to run
 

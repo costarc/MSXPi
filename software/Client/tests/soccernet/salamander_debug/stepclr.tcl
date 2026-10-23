@@ -8,7 +8,7 @@ proc stLog {} {
     puts $::sto [format "%04X %-18s SP=%04X AF=%04X BC=%04X DE=%04X HL=%04X IFF=%s im=%s" $pc [lindex [debug disasm $pc] 0] [reg SP] [reg AF] [reg BC] [reg DE] [reg HL] [reg iff] [reg im]]
 }
 proc stArm {} {
-    if {$::stOn || [peek 0xD000] != 1 || [peek $::sym(MK_BLOCK)] != 1} return
+    if {$::stOn || [peek $::sym(PN_ORG)] != 1 || [peek $::sym(MK_BLOCK)] != 1} return
     set ::stOn 1
     set ::stCond [debug set_condition {} stLog]
 }

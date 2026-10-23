@@ -1,6 +1,6 @@
 set ::ino [open "C:/Users/roniv/AppData/Local/Temp/claude/C--Users-roniv-Dev-github-MSXPi/27a8e5c2-d333-40d0-97f1-3836cb720ed8/scratchpad/init_$::env(ROLEARG).txt" w]
 proc inLog {tag} {
-    if {[peek 0x4000] != 0x41 || [peek 0xD000] != 1 || [peek $::sym(MK_BLOCK)] != 1 || [peek [expr {$::sym(MK_BLOCK)+1}]] != 0x0F} return
+    if {[peek 0x4000] != 0x41 || [peek $::sym(PN_ORG)] != 1 || [peek $::sym(MK_BLOCK)] != 1 || [peek [expr {$::sym(MK_BLOCK)+1}]] != 0x0F} return
     incr ::inN
     if {$::inN > 3000} return
     puts $::ino [format "%s t=%.4f PC=%04X SP=%04X AF=%04X BC=%04X DE=%04X HL=%04X IFF=%s st=%02X%02X" $tag [machine_info time] [reg PC] [reg SP] [reg AF] [reg BC] [reg DE] [reg HL] [reg iff] [peek [expr {[reg SP]}]] [peek [expr {[reg SP]+1}]]]

@@ -12,7 +12,6 @@
 ; 1 and 2 must be that mapper. Direct OUTs to FDh/FEh are always undone before MSX-DOS runs again.
 
 RAMAD2:         EQU     $F343                   ; slot of the RAM in page 2
-M_GET_P1:       EQU     $21                     ; mapper support routines (M_ALL_SEG, M_GET_P2: playnet_tcp.asm)
 MCHUNK:         EQU     CHUNK                   ; the ROM is read 2 KB at a time: chunks never cross a bank
 MSEGMAX:        EQU     64
 MSEGL:          EQU     BOUNCE+CHUNK-MSEGMAX    ; the segments taken: only until the ROM's first chunk is read
@@ -565,6 +564,7 @@ mLoad:  call    mSetup
         ld      bc,MCHUNK
         ldir
         call    mUnmap
+        ei
         ld      hl,(mOff+1)
         ld      de,MCHUNK/256
         add     hl,de
@@ -578,8 +578,8 @@ mLoad:  call    mSetup
         jp      nz,romErr
         ret
 
-; the ROM offset at mOff (3 bytes) -> its home mapped in page 2, DE = its address there. CF if the bank is not in
-; the ROM; else HL = the offset inside the bank.
+; the ROM offset at mOff (3 bytes) -> its home mapped in page 2, DE = its address there, interrupts off (mUnmap,
+; then ei). CF if the bank is not in the ROM; else HL = the offset inside the bank.
 mAt:    ld      a,(mOff+1)                      ; bank = offset >> 13. Keeps B.
         rlca
         rlca
@@ -600,7 +600,8 @@ mAt:    ld      a,(mOff+1)                      ; bank = offset >> 13. Keeps B.
         ret     c
         call    mHomeOf
         ld      a,d
-        out     ($FE),a
+        di                                      ; until mUnmap: an interrupt handler may put back the page-2
+        out     ($FE),a                         ; segment the mapper routines recorded (INL, RAMHELPR)
         ld      a,(mOff+1)
         and     $1F
         ld      d,a
@@ -662,15 +663,18 @@ mPatch: ld      hl,(pPatch)
         inc     de
         djnz    .put
         call    mUnmap
+        ei
         pop     bc
         dec     bc
         jr      .next
 .differ:
         call    mUnmap
+        ei
         ld      hl,msgWrongRom
         jp      romErr
 .bad1:  pop     hl
 .bad:   call    mUnmap
+        ei
         ld      a,44
         jp      badPkg
 

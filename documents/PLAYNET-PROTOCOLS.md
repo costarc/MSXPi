@@ -517,7 +517,7 @@ What follows the vector is private to each transport and the loader that install
 
 Two implementations exist:
 - **MSXPi (native).** Each `XCHG` is one opcode-C9 transaction with the Pi (10.1). `XIRQ` is a plain `JP irq_handler`.
-  It is 204 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
+  It is 432 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
   for PLAYNET to run it over the MSXPi.
 - **UNAPI** (`software/Client/src/playnet/transport_unapi.asm`, `PLAYNET /T`). The game gets a **page-3 segment of its own**: the
   trampoline copies MSX-DOS's page 3 into a new segment and switches to it, so the game's RAM, its stack and the hooks it is given never
@@ -537,7 +537,7 @@ Two implementations exist:
 
 ```
 MSX -> Pi   C9, FLAGS, L, P[L], SUM              SUM = sum of P mod 256; L = 0 when no packet is sent
-Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46)
+Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46), or a DELTA (L = 6..9)
             00, 00                               nothing
             FF, 00                               the opponent is gone
             FE, REASON                           the opponent left (BYE)
@@ -548,6 +548,8 @@ Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46)
 |---|---|
 | 0 | send P to the opponent |
 | 1 | return the oldest received game packet |
+| 2 | P is a DELTA |
+| 3 | the reply may be a DELTA: the MSX holds the last packet the Pi gave it |
 | 5 | send BYE; L = 1 and P[0] = the result code |
 | 6 | (re)start the session handshake |
 | 7 | return the status instead |
@@ -556,6 +558,21 @@ STATE: 0 connecting, 1 ready (DELAY valid), 2 incompatible (different profile or
 opponent left. The Pi relays game packets without looking inside them, so it does not need to know the game's input width. A bad SUM
 means the packet part is lost; the transport tolerates loss. The MSX side bounds every wait (about 0.5 s) and
 resets the link with `FFh` to port 56h on a timeout. The connect phase uses bits 6 and 7 from `PLAYNET.COM`, before the game starts.
+
+**DELTA.** Every byte on the MSXPi link is a handshake with the Pi, and consecutive game packets repeat 7 of their 8 frame records.
+A packet that **follows** the previous one in the same direction (same kind and W, F one more, its first 7 records that packet's last
+7) may travel as a DELTA: seq, F, the new record (W + 1 bytes), check tag, check value: W + 5 bytes instead of 14 + 8W (7 instead of
+30 for W = 2). The receiver rebuilds the packet from the previous one and handles it as if it had come in full; the Pi relays only
+whole packets over UDP (11), so the peer protocol does not change.
+
+- Replies: the Pi sends a DELTA only when the MSX set bit 3 and the packet follows the last one it gave that MSX. A reply of fewer
+  than 16 bytes is a DELTA. The MSX transport sets bit 3 while its receive buffer still holds the last packet it received (in full or
+  rebuilt) and clears it after a bad SUM.
+- From the MSX: the transport sends DELTAs only after the Pi has sent one (bit 2 means nothing to an older Pi, which never sends
+  DELTAs either), and only for a packet whose F is one more than the last one it sent. The engine builds every packet from one ring
+  of frame records, so such a packet repeats the last one's records. The Pi drops a DELTA that does not follow the last packet it
+  got from that MSX; the stub's resend (a full packet: same F) puts the two back in step.
+- A link timeout clears both: the next packets go in full.
 
 ## 11. MSXNP: the peer protocol (UDP)
 

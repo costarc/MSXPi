@@ -1,9 +1,9 @@
 ; PLAYNET mapper-RAM host for 8 KB-bank MegaROMs (Konami SCC, Konami, ASCII8): the bank engine (host ABI 1).
 ; Design: documents/SALAMANDER-DESIGN.md, section 5. First user: Salamander (profiles/salamander).
 ;
-; A game's glue defines MK_BANKS (banks in the ROM, a power of two), MK_P1_MAX and MK_P2_MAX (table entries
-; for page 1 and page 2), then INCLUDEs this file after playnet_engine.asm. The package patches every
-; bank-register write of the game (ld (nn),a) into CALL MK_W0..MK_W3, one entry per 8 KB window:
+; A game's glue defines MK_BANKS (banks in the ROM, a power of two, at most 16), MK_P1_MAX and MK_P2_MAX (table
+; entries for page 1 and page 2), MK_MAP (1 KB, 256-aligned, that the game leaves alone: the pair map), then
+; INCLUDEs this file after playnet_engine.asm. The package patches every bank-register write of the game (ld (nn),a) into CALL MK_W0..MK_W3, one entry per 8 KB window:
 ; W0 4000h-5FFFh, W1 6000h-7FFFh, W2 8000h-9FFFh, W3 A000h-BFFFh.
 ;
 ; The MSX mapper switches 16 KB, the cartridge 8 KB. So each page is one mapper segment holding the PAIR of
@@ -26,6 +26,7 @@
 
         ASSERT  MK_BANKS >= 2 && MK_BANKS <= 64 && (MK_BANKS & (MK_BANKS-1)) == 0
         ASSERT  MK_P1_MAX >= 1 && MK_P2_MAX >= 1 && MK_P1_MAX + MK_P2_MAX <= 63
+        ASSERT  MK_BANKS <= 16 && (MK_MAP & $FF) == 0  ; the pair map: 1 KB at MK_MAP
 
 MK_BLOCK:
 mkVer:          defb    1
@@ -42,44 +43,98 @@ mkTab2:         defs    4*MK_P2_MAX
 MK_BLOCK_END:
 
 ; ---- MK_W0..MK_W3: the patched ld (nn),a. A = the value written. Preserves every register and the flags.
+; The map (MK_MAP, 1 KB) answers a switch without a scan: per page 256 bytes of segments, indexed by low bank * 16 +
+; high bank (0 = not known yet), then per page 256 "referenced" bytes for the clock. The same bank again costs about
+; 85 T-states, a switch to a pair the map knows about 240 (the cartridge: 13). The map is cleared on the first
+; switch (mkI1/mkI2 in the stub image, which then become the fast path), and forgets a pair the clock replaces.
 MK_W0:  push    hl
-        ld      l,0
-        jr      mkSw
-MK_W1:  push    hl
-        ld      l,1
-        jr      mkSw
-MK_W2:  push    hl
-        ld      l,2
-        jr      mkSw
-MK_W3:  push    hl
-        ld      l,3
-mkSw:   push    af
-        push    bc
-        push    de
-        ld      b,a
-        ld      a,(mkMask)                      ; the cartridge decodes only the bank lines: 3Fh on a
-        and     b                               ; 16-bank ROM selects bank 0Fh
-        ld      e,a
-        ld      c,l
-        ld      b,0
         ld      hl,mkCur
-        add     hl,bc
+        jr      mkS1
+MK_W1:  push    hl
+        ld      hl,mkCur+1
+mkS1:   push    af
+        and     MK_BANKS-1                      ; the cartridge decodes only the bank lines: 3Fh on a
+        cp      (hl)                            ; 16-bank ROM selects bank 0Fh
+        jp      z,mkSame                        ; the same bank again: nothing changes
+        ld      (hl),a
+mkF1:   jp      mkI1                            ; ld hl,(mkCur) once the map is clear: L = W0, H = W1
+        ld      a,l
+        add     a,a
+        add     a,a
+        add     a,a
+        add     a,a
+        or      h
+        ld      l,a
+        ld      h,MK_MAP >> 8
         ld      a,(hl)
-        cp      e
-        jr      z,mkOut                         ; the same bank again: nothing changes
-        ld      (hl),e
-        ld      a,i                             ; P/V = the caller's interrupt state
+        or      a
+        jr      z,mkSlow1                       ; a pair the map does not know yet
+        inc     h
+        inc     h
+        ld      (hl),1                          ; referenced
+        ld      (mkSeg),a
+        out     ($FD),a
+        pop     af
+        pop     hl
+        ret
+mkSlow1: push   bc
+        push    de
+        ld      c,0
+        jp      mkPage
+
+MK_W2:  push    hl
+        ld      hl,mkCur+2
+        jr      mkS2
+MK_W3:  push    hl
+        ld      hl,mkCur+3
+mkS2:   push    af
+        and     MK_BANKS-1
+        cp      (hl)
+        jr      z,mkSame
+        ld      (hl),a
+mkF2:   jp      mkI2                            ; ld hl,(mkCur+2) once the map is clear: L = W2, H = W3
+        ld      a,l
+        add     a,a
+        add     a,a
+        add     a,a
+        add     a,a
+        or      h
+        ld      l,a
+        ld      h,(MK_MAP >> 8) + 1
+        ld      a,(hl)
+        or      a
+        jr      z,mkSlow2
+        inc     h
+        inc     h
+        ld      (hl),1
+        ld      (MK_SEG2),a
+        out     ($FE),a
+        pop     af
+        pop     hl
+        ret
+mkSlow2: push   bc
+        push    de
+        ld      c,2
+
+; C = 0: page 1 (W0, W1), 2: page 2 (W2, W3), with HL, AF, BC, DE on the stack: the pair from the tables (built if
+; missing), then into the map.
+mkPage: ld      a,i                             ; P/V = the caller's interrupt state
         push    af
         di
-        ld      a,c
-        and     2
-        ld      c,a                             ; C = 0: page 1 (W0, W1), 2: page 2 (W2, W3)
+        ld      b,0
         ld      hl,mkCur
         add     hl,bc
         ld      d,(hl)                          ; D = the bank of the page's low window
         inc     hl
         ld      e,(hl)                          ; E = the bank of its high window
         call    mkFind                          ; A = the segment holding (D, E)
+        push    af
+        call    mkIdx
+        pop     af
+        ld      (hl),a                          ; known from now on
+        inc     h
+        inc     h
+        ld      (hl),1
         ld      hl,mkSeg
         bit     1,c
         jr      nz,.p2
@@ -94,8 +149,57 @@ mkSw:   push    af
         ei
 mkOut:  pop     de
         pop     bc
-        pop     af
+mkSame: pop     af
         pop     hl
+        ret
+
+; MK_W23: W2 := D, W3 := E in one switch of page 2, for a glue's own code that sets both (no pair of one new bank
+; and one old one in between). Preserves every register and the flags.
+MK_W23: push    hl
+        push    af
+        ld      a,d
+        and     MK_BANKS-1
+        ld      (mkCur+2),a
+        ld      a,e
+        and     MK_BANKS-1
+        ld      (mkCur+3),a
+        jr      mkF2
+
+; C = page (0/2), D, E = the pair -> HL = its segment byte in the map. Clobbers A.
+mkIdx:  ld      a,d
+        add     a,a
+        add     a,a
+        add     a,a
+        add     a,a
+        or      e
+        ld      l,a
+        ld      a,c
+        rrca
+        add     a,MK_MAP >> 8
+        ld      h,a
+        ret
+
+; the first switch: clear the map, then put the fast path's own first instructions in place
+mkI1:   call    mkClr
+        jp      mkF1
+mkI2:   call    mkClr
+        jp      mkF2
+mkClr:  push    bc
+        push    de
+        ld      hl,MK_MAP
+        ld      de,MK_MAP+1
+        ld      bc,1023
+        ld      (hl),0
+        ldir
+        ld      a,$2A                           ; ld hl,(nn)
+        ld      (mkF1),a
+        ld      (mkF2),a
+        ld      hl,mkCur
+        ld      (mkF1+1),hl
+        ld      hl,mkCur+2
+        ld      (mkF2+1),hl
+        pop     de
+        pop     bc
         ret
 
 ; C = page (0/2), D = low bank, E = high bank -> A = segment. Preserves C, D, E. Interrupts are off.
@@ -117,8 +221,6 @@ mkFind: push    ix
         jr      nz,.no1
         inc     hl
         ld      a,(hl)                          ; a hit: the segment
-        inc     hl
-        ld      (hl),1                          ; referenced
         pop     hl
         pop     ix
         ret
@@ -144,22 +246,33 @@ mkFind: push    ix
         jr      c,.c2
         ld      a,(ix+1)
 .c2:    ld      (ix+2),a
+        push    de                              ; the entry's pair: referenced (in the map) since the hand passed?
+        ld      d,(hl)
         inc     hl
-        inc     hl
-        inc     hl
+        ld      e,(hl)
+        dec     hl
+        push    hl
+        call    mkIdx
+        inc     h
+        inc     h
         ld      a,(hl)
         or      a
         jr      z,.take
-        ld      (hl),0                          ; referenced since the hand passed: a second chance
-        jr      .clock
-.take:  ld      (hl),1
-        dec     hl
-        ld      a,(hl)                          ; the victim's segment
-        dec     hl
-        ld      (hl),e
-        dec     hl
-        ld      (hl),d
+        ld      (hl),0                          ; yes: a second chance
         pop     hl
+        pop     de
+        jr      .clock
+.take:  dec     h                               ; no: the map forgets the victim's pair
+        dec     h
+        ld      (hl),0
+        pop     hl
+        pop     de
+        ld      (hl),d
+        inc     hl
+        ld      (hl),e
+        inc     hl
+        ld      a,(hl)                          ; the victim's segment
+        pop     hl                              ; the table's start
         pop     ix
         push    bc
         push    af

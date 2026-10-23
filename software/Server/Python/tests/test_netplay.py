@@ -57,6 +57,38 @@ def packet(seq, width=1):
     return bytes([n.KIND_GAME, seq, 0, width]) + bytes((seq + i) & 0xFF for i in range(8 * (width + 1))) + b'\xff\x00'
 
 
+def stream(count, width=2, first=0):
+    """Consecutive game packets as the stub sends them: F = seq = first..first+count-1, each carrying the records of
+    frames F-7..F (W input bytes and a count, from the frame number), so each repeats 7 records of the one before."""
+    rec = lambda f: bytes(((f * 7 + i) & 0xFF) for i in range(width)) + bytes([f % 3 + 1])
+    return [bytes([n.KIND_GAME, f & 0xFF, f & 0xFF, width]) + b''.join(rec(f - 7 + j) for j in range(8))
+            + bytes([f & 0xF0, (f * 5) & 0xFF]) for f in range(first, first + count)]
+
+
+class Deltas(unittest.TestCase):
+    def test_a_following_packet_shrinks_to_r_plus_4_bytes(self):
+        for width in (1, 2, 4):
+            p0, p1 = stream(2, width, first=20)
+            d = n.delta_of(p1, p0)
+            self.assertEqual(len(d), width + 5)
+            self.assertEqual(n.undelta(d, p0), p1)
+
+    def test_only_the_next_frame_is_a_delta(self):
+        p0, p1, p2 = stream(3)
+        self.assertIsNone(n.delta_of(p2, p0))                           # F two ahead
+        self.assertIsNone(n.delta_of(p0, p0))                           # a resend
+        self.assertIsNone(n.delta_of(p1, None))
+        changed = bytearray(p1)
+        changed[5] ^= 1                                                 # an old record that changed
+        self.assertIsNone(n.delta_of(bytes(changed), p0))
+        self.assertIsNone(n.undelta(n.delta_of(p2, p1), p0))            # applied to the wrong base
+        self.assertIsNone(n.undelta(n.delta_of(p1, p0), None))
+
+    def test_wraps_at_frame_255(self):
+        p0, p1 = stream(2, first=255)
+        self.assertEqual(n.undelta(n.delta_of(p1, p0), p0), p1)
+
+
 class Delay(unittest.TestCase):
     def test_choose_delay(self):
         self.assertEqual(n.choose_delay([0.001] * 8), 3)       # localhost
@@ -221,6 +253,41 @@ class Relay(unittest.TestCase):
             self.assertTrue(wait_for(lambda: self.b.stats['malformed'] == 1, 2))
         finally:
             junk.close()
+
+    def test_delta_from_the_msx_is_relayed_in_full(self):
+        p0, p1 = stream(2)
+        txn(self.a, 1, p0)
+        txn(self.a, 1 | 4, n.delta_of(p1, p0))
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 2))
+        self.assertEqual([txn(self.b, 2)[1:-1] for _ in range(2)], [p0, p1])
+        self.assertEqual(self.a.stats['deltas_in'], 1)
+
+    def test_delta_without_its_base_is_lost(self):
+        p0, p1, p2 = stream(3)
+        txn(self.a, 1 | 4, n.delta_of(p1, p0))                          # the Pi never had p0
+        txn(self.a, 1, p0)
+        txn(self.a, 1 | 4, n.delta_of(p2, p1))                          # its base p1 never arrived
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 1))
+        time.sleep(0.2)
+        self.assertEqual(len(self.b.ready), 1)
+        self.assertEqual(self.a.stats['malformed'], 2)
+
+    def test_replies_are_deltas_only_when_allowed(self):
+        packets = stream(4)
+        for pkt in packets:
+            txn(self.a, 1, pkt)
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 4))
+        r0 = txn(self.b, 2 | 8)                                         # no base yet: in full
+        r1 = txn(self.b, 2 | 8)
+        r2 = txn(self.b, 2)                                             # not allowed: in full
+        r3 = txn(self.b, 2 | 8)
+        self.assertEqual(r0[1:-1], packets[0])
+        self.assertEqual(r1[0], 7)
+        self.assertEqual(r1[-1], sum(r1[1:-1]) & 0xFF)
+        self.assertEqual(n.undelta(r1[1:-1], packets[0]), packets[1])
+        self.assertEqual(r2[1:-1], packets[2])
+        self.assertEqual(n.undelta(r3[1:-1], packets[2]), packets[3])
+        self.assertEqual(self.b.stats['deltas_out'], 2)
 
     def test_poll_with_nothing_waiting(self):
         self.assertEqual(txn(self.b, 2), b'\x00\x00')

@@ -7,18 +7,20 @@ is in `documents/SALAMANDER-DESIGN.md`.
 |---|---|
 | Input | `SALAMAND.ROM`, Konami's Salamander (RC-758), 131072 bytes, Konami SCC MegaROM, CRC-32 `C36F559D`, SHA-256 `edbbba820ac67d6a55b9dc5da9309e45979936d5620c07d09793efaf077e86b9` |
 | Output | a RAM image in mapper segments for PLAYNET (`output.target = "ram-image"`), never a ROM file |
-| Game id, roles | `salamander`; `P1` (seat 0, the inviter, Vic Viper), `P2` (seat 1, Lord British) |
+| Game id, roles | `salamand`; `P1` (seat 0, the inviter, Vic Viper), `P2` (seat 1, Lord British) |
 | Play | the game's DUALPLAY, both players at once; each uses joystick 1 or the cursor keys and space on their own machine |
-| Layout for PLAYNET | stub D000h-D5FFh (engine, 8 KB bank engine, glue), transport D600h-D7FFh, game RAM C000h-CFFFh and E000h-F0F8h, interrupt handler 4069h |
+| Layout for PLAYNET | transport D000h-D1FFh (first: on the TCP/IP path it is also in MSX-DOS's page 3), stub D200h-D8FFh (engine, 8 KB bank engine, glue), the bank engine's pair map DA00h-DDFFh, game RAM C000h-CFFFh and E000h-F0F8h, interrupt handler 4069h |
 | Machine | a memory mapper with at least 22 free segments (512 KB recommended) |
 
 No ROM data is included. The player supplies their own dump.
 
 ## Status
 
-- Analysis done in openMSX with the real cartridge. The stub assembles (1393 of 1536 bytes), and the 77 patches match the dump.
-- **Not runnable yet**: PLAYNET release 3 (the mapper-RAM host, design section 9) and `patch_rom.py` support for `mapper-ram` do not
-  exist. Until they do, `rebuild.py` writes `profile.json` and the stub but no GPF.
+- Playable over the MSXPi with PLAYNET 3, from MCHAT (`/play NICK salamand`) to the game and back: verified in openMSX (two Canon
+  V-25 with a memory mapper, MSX-DOS 1 from the MSXPi), the machines identical frame by frame (a 2 MB and a 512 KB mapper).
+  Published as `software/target/games/SALAMAND.GPF`. The stub is 1589 of 1792 bytes; 78 patches, all matching the dump.
+- Speed: about 28 frames/s in steady play against the cartridge's 31 (1PLAYER, same scenes); lighter scenes at the cartridge's.
+- Over TCP/IP (`PLAYNET /T`, MCHAT /T): loads and connects in openMSX up to the connection, not played to the end yet.
 
 ## Files
 

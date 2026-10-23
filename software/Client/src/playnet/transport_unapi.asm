@@ -34,6 +34,7 @@ IO_REASON:      EQU     39
 IO_TXBUF:       EQU     41
 IO_RXBUF:       EQU     87
 JIFFY:          EQU     $FC9E
+MAPPER_P1:      EQU     $FD
 MAPPER_P2:      EQU     $FE
 MAPPER_P3:      EQU     $FF
 
@@ -50,7 +51,10 @@ tDosSub: defb   0                       ; +16
 ; this transport's own (the loader; the same in D3 and G3)
 tHandler: defw  0                       ; the game's interrupt handler (netplay.irq_handler)
 tOvlSeg: defb   0                       ; PLAYNET.OVL's mapper segment
-tGameSeg2: defb 0                       ; the game's (the TPA's) segment in page 2
+tGameSeg1: defb 0                       ; the TPA's segments in pages 1 and 2
+tGameSeg2: defb 0
+tSegs:  defw    0                       ; the game's segments in pages 1 and 2 now: tGameSeg1, or the
+                                        ; mapper-ram bank engine's (MK_BLOCK+8), which changes them by OUT
 tDosSeg3: defb  0                       ; MSX-DOS's segment in page 3 (D3)
 tGameSeg3: defb 0                       ; the game's (G3)
 tIo:    defw    0                       ; the overlay's I/O block
@@ -127,7 +131,11 @@ xchg:   di
         ld      b,0
         ldir
         pop     bc
-.out:   ld      a,(tGameSeg2)
+.out:   ld      hl,(tSegs)              ; the game's pages 1 and 2: a RAM implementation of the UNAPI
+        ld      a,(hl)                  ; may have put back the segments PUT_P1/PUT_P2 recorded instead
+        out     (MAPPER_P1),a
+        inc     hl
+        ld      a,(hl)
         out     (MAPPER_P2),a
         ld      a,c
         pop     iy

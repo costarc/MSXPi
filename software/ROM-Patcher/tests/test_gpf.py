@@ -393,7 +393,7 @@ class MapperRamTests(unittest.TestCase):
             (lambda i: i.update(start_banks=[0, 1, 2, 9]), 'start pairs'),
             (lambda i: i.update(page2_pairs=i['page2_pairs'] + [[2, 3]]), 'twice'),
             (lambda i: i.update(min_segments=11), 'min_segments'),
-            (lambda i: i.update(block=0xD600), 'block'),
+            (lambda i: i.update(block=0xDA00), 'block'),           # past the stub (D200h-D8FFh)
         ]
         for change, message in cases:
             with self.subTest(message=message):

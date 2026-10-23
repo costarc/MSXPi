@@ -11,9 +11,11 @@
 
 ; D000h-DFFFh: never touched by the game (measured: only the BIOS RAM test writes it). The game owns
 ; C000h-CFFFh, E000h-F0F8h (SP = F0F0h at INIT, measured down to F0AAh) and F0F0h-F0F8h.
-PN_ORG:         EQU     $D000                   ; netplay.stub.load
-PN_TRANSPORT:   EQU     $D600                   ; netplay.transport_area.address
-STUB_MAX:       EQU     1536                    ; netplay.stub.max
+; The transport comes first: on the TCP/IP path it is in MSX-DOS's page 3 as well, below the TPA top (D706h under
+; Nextor with RAMHELPR and INL, D406h under MSX-DOS 1 with MSR); the stub is only ever in the game's.
+PN_TRANSPORT:   EQU     $D000                   ; netplay.transport_area.address
+PN_ORG:         EQU     $D200                   ; netplay.stub.load
+STUB_MAX:       EQU     1792                    ; netplay.stub.max
 
 G_INPUT_BYTES:  EQU     2                       ; byte 0: joystick, byte 1: function keys (see rdLocal)
 G_READ_LOCAL:   EQU     rdLocal
@@ -24,6 +26,7 @@ G_CHECK_LEN:    EQU     $0200
 MK_BANKS:       EQU     16                      ; 128 KB of 8 KB banks
 MK_P1_MAX:      EQU     6                       ; page 1 uses 4 pairs: (0,1) (0,4) (0,7) (0,13)
 MK_P2_MAX:      EQU     30                      ; page 2: 5 x 6 possible pairs, 24 seen in play
+MK_MAP:         EQU     $DA00                   ; the bank engine's pair map, DA00h-DDFFh (after the stub)
 
 SNSMAT_:        EQU     $0141
 JOY1:           EQU     $51BF                   ; the game's own port-1 reader: joystick 1, cursors, space, M/N
@@ -52,17 +55,16 @@ sndTick:
         call    TIMER
         ld      a,4                             ; the driver's banks, as at 4085h
         call    MK_W1
-        inc     a
-        call    MK_W2
-        inc     a
-        call    MK_W3
+        ld      de,$0506                        ; W2 and W3 in one switch
+        call    MK_W23
         call    SND_DRV
         ld      a,(BANKS)                       ; and the game's banks back, as at 4099h
         call    MK_W1
         ld      a,(BANKS+1)
-        call    MK_W2
+        ld      d,a
         ld      a,(BANKS+2)
-        jp      MK_W3
+        ld      e,a
+        jp      MK_W23
 
 ; ---- inputs ------------------------------------------------------------------------------------------
 ; Local input, 2 bytes at HL:
@@ -259,4 +261,4 @@ rAnd78: call    rnd                             ; 7274h: ld a,r / and 78h
 
 stubEnd:
         ASSERT  stubEnd <= PN_ORG + STUB_MAX
-        ASSERT  PN_ORG + STUB_MAX <= PN_TRANSPORT
+        ASSERT  PN_TRANSPORT + 512 <= PN_ORG && PN_ORG + STUB_MAX <= MK_MAP && MK_MAP + 1024 <= $E000

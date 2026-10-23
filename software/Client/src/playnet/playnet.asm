@@ -16,8 +16,8 @@
 ;   2800h-33FFh  the GPF (3 KB)        3400h-3BFFh  disk bounce buffer (DOS cannot read into page 1),
 ;                                                   then the relocated transport at 3500h
 ;                                      3C00h-3FFFh  CRC-32 tables (4 x 256)
-;   (PLAYNET /T: PLAYNET.OVL passes through 2400h-3FFFh on its way to its segment, over the mapper-ram
-;   loader, which a /T game never uses)
+;   (PLAYNET /T: PLAYNET.OVL passes through 2400h-3FFFh on its way to its segment; the mapper-ram loader
+;   waits at 4000h meanwhile)
 ;   4000h-BFFFh  the game image        C000h-       the start-up trampoline, copied there at the end
 ; The game never maps page 0's RAM: this program is still here when the game ends, and pnBack brings
 ; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
@@ -266,12 +266,6 @@ gpfCheck:                                       ; BC = the GPF's length, at GPFB
         ld      hl,msgNewer
         ld      a,R_INCOMPAT
         jp      nc,exitResult
-        ld      a,(mHost)
-        ld      hl,tcp
-        and     (hl)
-        ld      hl,msgTcpMapper
-        ld      a,R_MACHINE
-        jp      nz,exitResult
         ld      a,(manual)
         or      a
         ret     nz
@@ -1250,19 +1244,21 @@ install:
 .go:    di
         jp      TRAMP
 
-; HL = a relocation list (offsets in tBuf of the words to move by npTArea), FFFFh at the end
+; HL = a relocation list: the words in tBuf to move by npTArea, each as its distance from the last one (from
+; tBuf-1 at first), one byte each, 0 at the end (build.py)
 relocate:
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        inc     hl
-        ld      a,d
-        and     e
-        inc     a
+        ld      de,tBuf-1
+.next:  ld      a,(hl)
+        or      a
         ret     z
-        push    hl
-        ld      hl,tBuf
-        add     hl,de
+        inc     hl
+        add     a,e
+        ld      e,a
+        jr      nc,.w
+        inc     d
+.w:     push    hl
+        push    de
+        ex      de,hl
         ld      e,(hl)
         inc     hl
         ld      d,(hl)
@@ -1274,8 +1270,9 @@ relocate:
         ld      (hl),d
         dec     hl
         ld      (hl),e
+        pop     de
         pop     hl
-        jr      relocate
+        jr      .next
 
 ; Runs from C000h. Copies the stub and the transport into page 3 (MSX-DOS is gone from here on),
 ; then starts the game with page 0 = main BIOS and page 1 = the RAM holding it.
@@ -1330,10 +1327,6 @@ vBase:          defw    0
 vDosSp:         defw    0
 trLateEnd:
 trEarly:
-        ld      hl,(vStubSrc)
-        ld      de,(vStubDst)
-        ld      bc,(vStubLen)
-        ldir
         ld      hl,tBuf
         ld      de,(vTDst)
         ld      bc,(vTLen)
@@ -1350,7 +1343,11 @@ trEarly:
         call    .put
         ld      a,(vG3)
         out     ($FF),a
-.p3:    ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
+.p3:    ld      hl,(vStubSrc)                   ; the stub: TCP/IP, in G3 only (MSX-DOS's page 3 keeps what
+        ld      de,(vStubDst)                   ; it has there, above its TPA top)
+        ld      bc,(vStubLen)
+        ldir
+        ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
         ld      ($FD9F),a
         ld      a,(EXPTBL)                      ; main BIOS slot into page 0
         and     3
@@ -1394,23 +1391,28 @@ trampEnd:
 saveDos:
         ld      hl,(HIMEM)                      ; the area starts at HIMEM, or lower where the game's RAM
         ld      (svStart),hl                    ; reaches below it: MSX-DOS 2 keeps code and data between
-        ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh), and Soccer
-        ld      b,a                             ; uses E000h-F37Fh. A range below the TPA top is TPA.
+        ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh; MSX-DOS 1: its
+        ld      b,a                             ; code), and Soccer uses E000h-F37Fh. The TPA is not kept.
         ld      hl,(pRanges)
 .rng:   ld      e,(hl)
         inc     hl
         ld      d,(hl)                          ; DE = low
         inc     hl
-        inc     hl
+        ld      a,(hl)
         inc     hl
         push    hl
+        ld      h,(hl)
+        ld      l,a                             ; HL = high
         call    svLow
         pop     hl
+        inc     hl
         djnz    .rng
         ld      de,(npStubLoad)                 ; the stub and the transport are written there too
-        call    svLow
+        ld      hl,(npStubMax)
+        call    svArea
         ld      de,(npTArea)
-        call    svLow
+        ld      hl,(npTSize)
+        call    svArea
         ld      hl,(svStart)
         ld      de,$10000-SV_MAX
         call    cpHLDE
@@ -1460,13 +1462,21 @@ saveDos:
         call    PRINT
         jp      PRINTNLINE
 
-; DE = the low end of an area the game writes: the saved area starts there if that is above the TPA top and
-; below the start so far. Keeps B.
-svLow:  ld      hl,($0006)
-        ex      de,hl                           ; HL = low, DE = the TPA top
+; DE = the start of an area the game writes, HL = its size
+svArea: dec     hl
+        add     hl,de
+; DE = low, HL = high (inclusive) of an area the game writes: the saved area starts at its part above the TPA top
+; (all of it, or from the TPA top when it straddles it: a stub low in page 3 may run over MSX-DOS 1's code) when
+; that is below the start so far. Keeps B.
+svLow:  push    de
+        ld      de,($0006)
         call    cpHLDE
-        ret     c                               ; in the TPA
-        ld      de,(svStart)
+        pop     hl                              ; HL = low
+        ret     c                               ; all in the TPA
+        call    cpHLDE
+        jr      nc,.above
+        ex      de,hl                           ; from the TPA top
+.above: ld      de,(svStart)
         call    cpHLDE
         ret     nc
         ld      (svStart),hl                    ; below the start so far
@@ -2006,7 +2016,6 @@ msgIncompat:    defb    13,10,"The other player has a different version of the g
 msgNoAnswer:    defb    13,10,"Could not connect to the other player",0
 msgLeft:        defb    13,10,"The other player cancelled",0
 msgCancel:      defb    13,10,"Cancelled",0
-msgTcpMapper:   defb    "This game cannot be played over TCP/IP yet",0
 msgStart:       defb    "Starting ",0
 magicPNS:       defb    "PNS1"
 magicGPF:       defb    "GPF1"
@@ -2039,7 +2048,8 @@ gameId:         defs    9
 roleArg:        defs    9
 peer:           defs    9                       ; 8 bytes + a terminator
 title:          defs    25
-argBuf:         defs    128
+argBuf:         EQU     GPFBUF                  ; the command line, 128 bytes: parsed (and copied out) before
+                                                ; anything comes into GPFBUF
 sesBuf:         defs    64
 fcb:            defs    37
 gpfLen:         defw    0
@@ -2102,6 +2112,7 @@ cands:          defs    18                      ; 3 x (ip 4, port 2)
 mapTab:         defw    0                       ; the mapper support routines
 ovlSeg:         defb    0
 g3Seg:          defb    0                       ; the game's page 3 (TCP/IP)
+gameSeg1:       defb    0                       ; the TPA's pages 1 and 2 (TCP/IP; this order)
 gameSeg2:       defb    0
 dosSeg3:        defb    0
 segsHeld:       defb    0
@@ -2131,6 +2142,6 @@ crcVal:         defs    4
 mHost:          defb    0                       ; image host: 0 plain, 1 mapper-ram
 tcpSafeEnd:
         ASSERT  tcpSafeEnd <= OVLTMP            ; PLAYNET /T loads PLAYNET.OVL through OVLTMP-3FFFh
-        INCLUDE "mapper_host.asm"               ; never runs with /T, so it may lie above OVLTMP
+        INCLUDE "mapper_host.asm"               ; above OVLTMP: tcpSetup sets it aside meanwhile
 programEnd:
         ASSERT  programEnd <= GPFBUF

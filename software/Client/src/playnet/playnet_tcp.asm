@@ -20,8 +20,10 @@ OVL_VERSION:    EQU     $8012
 OVL_IOPTR:      EQU     $8013
 OVLTMP:         EQU     $2400                   ; the overlay passes through here before the CRC table is
 OVLMAX:         EQU     $4000-OVLTMP            ; built and the GPF read: GPFBUF, BOUNCE and CRCT (7 KB)
+OVLSAVE:        EQU     $4000                   ; meanwhile, what PLAYNET.COM has at OVLTMP-GPFBUF (page 1, TPA)
 M_ALL_SEG:      EQU     $00                     ; mapper support routines (MSX-DOS 2 / Nextor / MSR)
 M_FRE_SEG:      EQU     $03
+M_GET_P1:       EQU     $21
 M_PUT_P2:       EQU     $24
 M_GET_P2:       EQU     $27
 M_GET_P3:       EQU     $2D
@@ -173,7 +175,10 @@ tcpSetup:
         ld      (ovlSeg),a
         call    allSeg
         ld      (g3Seg),a
-        ld      a,M_GET_P2                      ; the game's page 2 is the TPA's
+        ld      a,M_GET_P1                      ; the game's pages 1 and 2 are the TPA's (mapper-ram:
+        call    mapper                          ; until the trampoline maps the start pairs)
+        ld      (gameSeg1),a
+        ld      a,M_GET_P2
         call    mapper
         ld      (gameSeg2),a
         ld      a,M_GET_P3                      ; and MSX-DOS's page 3
@@ -189,6 +194,10 @@ tcpSetup:
         ld      b,50
 .hz:    ld      a,b
         ld      (hz),a
+        ld      hl,OVLTMP                       ; the mapper-ram loader, there, aside in page 1 meanwhile
+        ld      de,OVLSAVE
+        ld      bc,GPFBUF-OVLTMP
+        ldir
         ld      hl,nameOvl                      ; PLAYNET.OVL, through OVLTMP into its segment
         ld      de,OVLTMP
         ld      bc,OVLMAX
@@ -209,6 +218,10 @@ tcpSetup:
         ld      (ovlIo),hl
         call    OVL_INIT
         call    unmapOvl
+        ld      hl,OVLSAVE                      ; the mapper-ram loader back
+        ld      de,OVLTMP
+        ld      bc,GPFBUF-OVLTMP
+        ldir
         ret
 .bad:   call    unmapOvl
         ld      hl,msgNoOvl
@@ -613,8 +626,18 @@ tcpTransport:
         ld      (tBuf+TU_HANDLER),hl
         ld      a,(ovlSeg)
         ld      (tBuf+TU_OVLSEG),a
-        ld      a,(gameSeg2)
-        ld      (tBuf+TU_GAMESEG2),a
+        ld      hl,(gameSeg1)                   ; and gameSeg2
+        ld      (tBuf+TU_GAMESEG1),hl
+        ld      hl,(npTArea)                    ; where the game's pages 1 and 2 are: those two, or the
+        ld      de,TU_GAMESEG1                  ; bank engine's record (MK_BLOCK+8)
+        add     hl,de
+        ld      a,(mHost)
+        or      a
+        jr      z,.segs
+        ld      hl,(mBlock)
+        ld      de,8
+        add     hl,de
+.segs:  ld      (tBuf+TU_SEGS),hl
         ld      hl,(ovlIo)
         ld      (tBuf+TU_IO),hl
         ld      hl,(mapTab)

@@ -39,17 +39,17 @@ proc wwAggDump {} {
     flush $::wwo
 }
 proc wwClr {} {
-    if {$::wwDone || [peek 0xD000] != 1 || [peek $::sym(MK_BLOCK)] != 1} return
+    if {$::wwDone || [peek $::sym(PN_ORG)] != 1 || [peek $::sym(MK_BLOCK)] != 1} return
     set ::wwDone 1
     wwAggDump
     set f [open $::env(STUB_BIN) rb]; set img [read $f]; close $f
     binary scan $img cu* bytes
     set diff {}
-    for {set a 0xD355} {$a < 0xD000 + [llength $bytes]} {incr a} {
-        set want [lindex $bytes [expr {$a - 0xD000}]]
+    for {set a [expr {$::sym(PN_ORG) + 0x355}]} {$a < $::sym(PN_ORG) + [llength $bytes]} {incr a} {
+        set want [lindex $bytes [expr {$a - $::sym(PN_ORG)}]]
         if {[peek $a] != $want} { lappend diff [format "%04X:%02X/%02X" $a [peek $a] $want] }
     }
-    puts $::wwo [format "clrRam t=%.5f PC=%04X SP=%04X iff=%s seg=%s diffs(have/want, D355-end)=%d" [machine_info time] [reg PC] [reg SP] [reg iff] [wwSeg] [llength $diff]]
+    puts $::wwo [format "clrRam t=%.5f PC=%04X SP=%04X iff=%s seg=%s diffs(have/want, stub+355h-end)=%d" [machine_info time] [reg PC] [reg SP] [reg iff] [wwSeg] [llength $diff]]
     puts $::wwo [lrange $diff 0 80]
     flush $::wwo
 }

@@ -34,8 +34,8 @@ ROM_SIZE = 131072
 ROM_SHA256 = 'edbbba820ac67d6a55b9dc5da9309e45979936d5620c07d09793efaf077e86b9'
 ROM_CRC32 = 0xC36F559D
 BANK = 0x2000
-STUB_LOAD, STUB_MAX = 0xD000, 1536
-TRANSPORT, TRANSPORT_SIZE = 0xD600, 512
+TRANSPORT, TRANSPORT_SIZE = 0xD000, 512        # first: on the TCP/IP path it is also in MSX-DOS's page 3 (TPA top D706h, Nextor)
+STUB_LOAD, STUB_MAX = 0xD200, 1792
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'MK_BLOCK', 'MK_SEG2', 'MK_W0', 'MK_W1', 'MK_W2', 'MK_W3',
             'sndTick', 'tickSite', 'p1', 'dual', 'fkeys', 'f5key', 'keyY', 'keyN', 'probeOff', 'clrRam', 'rnd', 'stubEnd')
@@ -175,7 +175,7 @@ def make_profile(stub, symbols):
             'stub': {'asset': 'stub', 'load': STUB_LOAD, 'max': STUB_MAX},
             'transport_area': {'address': TRANSPORT, 'size': TRANSPORT_SIZE},
             # C000h-CFFFh and E000h-F0F8h (the stack from F0F0h down): measured over ten minutes of play
-            'game_ram': [[0xC000, 0xCFFF], [0xE000, 0xF0F8]],
+            'game_ram': [[0xC000, 0xCFFF], [0xDA00, 0xDDFF], [0xE000, 0xF0F8]],   # DA00h-DDFFh: the bank engine's pair map
             'irq_handler': 0x4069,
             'start': 'header-init',
             'min_playnet': 3},
