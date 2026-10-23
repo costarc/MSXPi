@@ -110,3 +110,19 @@ run was black, so look at the title in a real-time run before planning the scree
 - `EXTBIO` handlers and MSX-DOS calls do not keep IX.
 - The Pi sends GPFs in 512-byte blocks: a receive buffer needs room for a whole block.
 - Killing a rig by command-line match also kills the shell that runs it; check for two loops before trusting a result.
+
+## Progress, 2026-10-23 (implementation session 1)
+
+- **Step 1 (partly)**: `software/Client/tests/soccernet/yiear_debug/footprint.tcl` ran the cartridge 15 emulated minutes (Canon V-25)
+  through all five opponents, four levels and the bonus stages (fights shortened by poking E00Bh every 25 s, REST kept at 9: **no
+  full unaided loop yet**). Written outside E000h-E3FFh: only E400h-E401h (53C6h). Nothing in 8000h-DFFFh, E402h-F37Fh or the ROM
+  area. Stack: lowest SP sampled E3B8h. Hook sites per frame: 4053h, 409Ch once; 4047h, 4062h, 7C5Ch once per interrupt; 6B42h
+  every second fight frame; 4583h only on title/demo/game-over frames. Still open: per-player block (Turn), self-writes with the
+  image in RAM, reads-before-writes.
+- **Step 3 (Single, SCRIPTED rig)**: `profiles/yiear/` (glue, `rebuild.py --rom/--syms/--test-gpf`, 5 patches, `min_playnet` 2,
+  stub 743 bytes, GPF 1018) and `run_yiear.sh` + `yiear_node.tcl` (from Soccer's `run_native.sh`/`native_node.tcl`, engine
+  SCRIPTED tables: bit 4 = trigger starts the game from the title). Results: 3001 identical frames (scenes 0,1,3,4,5), no desync,
+  0 foreign writes to C100h-C5FFh, with no lag (delay 3) and with 50 ms lag, 20 ms jitter, 8 % loss (delay 6).
+- Not done in step 3: chat/TCP/link-2 scenarios in the rig, speed against the cartridge, sound check, the profile published
+  (`build_games.py`, `YIEAR.GPF`), real-hardware. The ROM is read through `YIEAR_ROM` only.
+- Steps 2 and 4-10 are untouched.

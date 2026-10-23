@@ -1,0 +1,118 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "yiear-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 16384,
+    "sha256": "644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848",
+    "crc32": 2316495951,
+    "file": "KUNG-FU.ROM"
+  },
+  "output": {
+    "size": 16384,
+    "fill": 0,
+    "mapper": "plain",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own KUNG-FU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
+    "PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)",
+    "Any MSX with 64 KB RAM on the MSXPi path"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "e39197d1e22a32d4a5f6af5bfb1c1ea09e3c9359aff84c8f508fbdff4f67c268"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 16384,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 25,
+      "expected": "4340",
+      "replace": "06c5",
+      "reason": "4019h: H.KEYI hook (ld hl,4043h at 4018h) -> the transport's XIRQ, which jumps to 4043h"
+    },
+    {
+      "offset": 71,
+      "expected": "cd5c7c",
+      "replace": "cd2fc1",
+      "reason": "4047h: Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
+    },
+    {
+      "offset": 83,
+      "expected": "cd2245",
+      "replace": "cddac3",
+      "reason": "4053h: TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte"
+    },
+    {
+      "offset": 98,
+      "expected": "fc5c7c",
+      "replace": "fc2fc1",
+      "reason": "4062h: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
+    },
+    {
+      "offset": 1411,
+      "expected": "cd104557cd3f45b2",
+      "replace": "cde3c30000000000",
+      "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "yiear",
+    "title": "Yie Ar Kung-Fu",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "plain",
+      "base": 16384
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 49408,
+      "max": 1024
+    },
+    "transport_area": {
+      "address": 50432,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        54528,
+        54783
+      ],
+      [
+        57344,
+        58623
+      ]
+    ],
+    "irq_handler": 16451,
+    "start": "header-init",
+    "min_playnet": 2
+  },
+  "symbols": {
+    "PN_TICK": 49413,
+    "PN_IRQ": 49455,
+    "PN_P1": 50002,
+    "PN_P2": 50003,
+    "tickSite": 50138,
+    "key1": 50147,
+    "rdLocal": 50128,
+    "stubEnd": 50151
+  }
+}
