@@ -415,6 +415,40 @@ class MapperRamTests(unittest.TestCase):
             patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
 
 
+PINGPONG = ROOT / 'profiles/pingpong/profile.json'
+
+
+class PingPongPackageTests(unittest.TestCase):
+    """Konami's Ping Pong: a 16 KB plain image with 11 patches. The real dump when PINGPONG_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(PINGPONG)
+
+    def test_profile_is_valid_version_2_netplay(self):
+        self.assertEqual(patcher.abis(self.profile), ['msxpi-netplay-v1'])
+        values = patcher.netplay_values(self.profile)
+        self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('pingpong', ['P1', 'P2'], 0x4019))
+        self.assertEqual(len(self.profile['patches']), 11)
+
+    def test_the_gpf_compiles_and_the_stub_fits(self):
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        self.assertEqual(self.assets['stub'][0], 2)                         # stub ABI 2
+        self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
+
+    @unittest.skipUnless(os.environ.get('PINGPONG_ROM'), 'set PINGPONG_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['PINGPONG_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)            # also checks SHA-256, CRC-32, expected bytes
+        patched = set()
+        for patch in self.profile['patches']:
+            patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
+        changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the patches
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
+
+
 class MusicVersion2Tests(unittest.TestCase):
     def test_version_2_music_package_builds_the_same_rom(self):
         v1, assets = patcher.load_profile(ROOT / 'profiles/goonies/profile.json')

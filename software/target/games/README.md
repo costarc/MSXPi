@@ -8,6 +8,7 @@ data, only the patches that make the game networked. Every player needs their ow
 |---|---|---|
 | `SOCCER.GPF` | Konami's Soccer (two players) | `SOCCER.ROM`: Konami's Soccer (RC-732), 32768 bytes, CRC-32 `74BC8295` |
 | `SALAMAND.GPF` | Konami's Salamander (co-op, both ships at once; a memory mapper with 22 free segments, 512 KB or more) | `SALAMAND.ROM`: Konami's Salamander (RC-758), 131072 bytes, CRC-32 `C36F559D` |
+| `PINGPONG.GPF` | Konami's Ping Pong (two players, one on each machine; the inviter plays the first pad) | `PINGPONG.ROM`: Konami's Ping Pong (1985), 16384 bytes, CRC-32 `3F200491` |
 
 ## Installing a game
 
