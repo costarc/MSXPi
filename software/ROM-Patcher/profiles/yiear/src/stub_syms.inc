@@ -3,4 +3,5 @@ PN_P2: EQU 0xC367
 tMode: EQU 0xC411
 tCur: EQU 0xC412
 tOut: EQU 0xC413
-tBlk: EQU 0xC415
+tWin: EQU 0xC415
+tBlk: EQU 0xC416

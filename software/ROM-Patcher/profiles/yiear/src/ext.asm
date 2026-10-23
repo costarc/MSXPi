@@ -28,29 +28,42 @@ MODES:          EQU     3
 TURN_N:         EQU     23                      ; the per-player block, E049h-E05Fh (as the stub's)
 BLOCK:          EQU     $E049
 REST:           EQU     $E050
+OPPONENT:       EQU     $E054
 
 ; 409Ch: call 4071h -> call dispatch. A = the state. States 0-8 go on to the game's dispatcher with the stack untouched.
 dispatch:
         cp      9
         jr      z,.menu
         cp      5                               ; a fight in Turn: whose turn it is, once in a while
+        jr      z,.fight
+        cp      7                               ; the game-over screen of a Versus match: who won
         jp      nz,OLD_DISPATCH
         push    af
         ld      a,(MODE)
+        cp      2
+        jr      nz,.old
+        ld      de,STR_WIN1
+        ld      a,(tWin)
+        cp      2
+        jr      c,.say                          ; 1 (tWin is set before the game-over screen is reached)
+        ld      de,STR_WIN2
+        jr      .say
+.fight: push    af
+        ld      a,(MODE)
         cp      1
         jr      nz,.old
-        ld      a,(FRAME)
+        ld      de,STR_HUD1
+        ld      a,(tCur)
+        or      a
+        jr      z,.say
+        ld      de,STR_HUD2
+.say:   ld      a,(FRAME)
         and     15
         jr      nz,.old
         push    bc
         push    de
         push    hl
-        ld      de,STR_HUD1
-        ld      a,(tCur)
-        or      a
-        jr      z,.p1
-        ld      de,STR_HUD2
-.p1:    call    PRINT
+        call    PRINT
         pop     hl
         pop     de
         pop     bc
@@ -110,6 +123,7 @@ menu:   ld      a,(SUBSTATE)
         ld      (MODE),a
         xor     a
         ld      (tCur),a
+        ld      (tWin),a
         ld      de,STR_TITLE                    ; the menu goes; "PLAY START" follows as after the title's start (45A7h)
         call    ERASE
         ld      de,STR_SINGLE
@@ -163,6 +177,17 @@ lifeLost:
         cp      1
         jr      z,.turn
         ld      a,(REST)
+        or      a
+        ret     nz
+        ld      a,(MODE)                        ; no REST left: in Versus player 2 wins (unless player 1 won already)
+        cp      2
+        jr      nz,.zero
+        ld      a,(tWin)
+        or      a
+        jr      nz,.zero
+        ld      a,2
+        ld      (tWin),a
+.zero:  xor     a
         ret
 .turn:  ld      a,(tCur)
         call    blockOf
@@ -203,6 +228,75 @@ lifeLost:
         add     hl,de
         ld      a,(hl)
         xor     1
+        ret
+
+; ---- Versus (documents/YIEAR-DESIGN.md 5.3) -----------------------------------------------------------------------
+; All five AI routines share one decision point, 7335h: they run the opponent's current action while E16Bh is not zero
+; (each has its own animation script) and jump to 7335h when it is. 7335h calls 5476h (facing and so on) and then decides at
+; random. 7338h is patched to vsDecide, so the opponent's own executors, animations and hit boxes all stay the game's, and
+; only the choice is player 2's. The starters are the AI's own: 7454h / 7458h / 7450h start action 4 / 5 / 6 (E16Ah, and
+; E16Bh from the level's table), 74E7h walks one step (C = 0 right, 1 left) and draws.
+WALK_MASK:      EQU     7                       ; a step every 8 frames: the AI ticks on even frames, a step is 8 pixels,
+                                                ; Oolong walks one pixel per frame
+FACING:         EQU     $E185
+ANIM:           EQU     $E184
+
+; 7338h: ld a,(E181h) -> jp vsDecide
+vsDecide:
+        ld      a,(MODE)
+        cp      2
+        jr      z,.vs
+        ld      a,($E181)
+        jp      $733B
+.vs:    ld      a,(PN_P2)
+        ld      b,a
+        bit     4,b                             ; trigger / space: an attack, by the direction held
+        jr      z,.walk
+        bit     0,b
+        jp      nz,$7458                        ; up + trigger
+        bit     1,b
+        jp      nz,$7450                        ; down + trigger
+        jp      $7454
+.walk:  ld      a,(FRAME)
+        and     WALK_MASK
+        jr      nz,.stand
+        ld      c,0                             ; right
+        bit     3,b
+        jp      nz,$74E7
+        inc     c                               ; left
+        bit     2,b
+        jp      nz,$74E7
+.stand: ld      a,(FACING)                      ; stand still: animation 2 (facing left) or 3, as 74E7h picks it
+        and     a
+        ld      a,2
+        jr      nz,.s
+        inc     a
+.s:     ld      (ANIM),a
+        jp      $5522
+
+; 4248h: ld a,(E054h) -> call bonus. The bonus stages follow opponents 1 and 4; Versus has none.
+bonus:  ld      a,(MODE)
+        cp      2
+        ld      a,(OPPONENT)
+        ret     nz
+        xor     a
+        ret
+
+; 4284h: ld a,(E056h) -> jp vsWin. The fifth opponent is beaten (E054h has just wrapped to 0). In Versus the match ends:
+; player 1 wins, through the game's own game-over path (state 6 with no REST), which keeps the high score and the title.
+vsWin:  ld      a,(MODE)
+        cp      2
+        jr      z,.vs
+        ld      a,($E056)
+        jp      $4287
+.vs:    ld      a,1
+        ld      (tWin),a
+        xor     a
+        ld      (REST),a
+        ld      (SUBSTATE),a
+        ld      ($E00B),a
+        ld      a,6
+        ld      (STATE),a
         ret
 
 ; HL = player A's saved block
