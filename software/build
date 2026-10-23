@@ -176,15 +176,11 @@ EOF
         echo "pcopy m:pcopy.com"
         echo "echo"
         echo "p cd /home/pi/msxpi"
-        # The server alone is not enough: it imports mapper_detect, msxpi_eth
-        # and msxpi_gpio_native, and the native GPIO engine is compiled on the
-        # Pi. update.sh fetches all of them and rebuilds the engine.
-        echo "p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh"
-        echo "p run sh update.sh"
-        # Windows has no sh: there the server skips the line above and does
-        # the work on "p update" instead. On the Pi "p update" finds update.sh
-        # has just run and returns; servers older than "p update" answer
-        # "Unknown command" and were already updated by update.sh.
+        # The server, from the branch "p setbranch" chose (master when none):
+        # on the Pi update.sh, which also fetches mapper_detect, msxpi_eth and
+        # msxpi_gpio_native and rebuilds the native GPIO engine; on Windows
+        # the setup script, staged until the "p restart" below. msxpiupd.bat
+        # has already brought the server up to date, so "p update" exists.
         echo "p update"
         echo "echo"
         echo "echo Restarting msxpi-server.py"

@@ -38,6 +38,9 @@ class BatchFilesTests(unittest.TestCase):
 
     def test_stage2_has_no_parameter_and_ends_on_master(self):
         rfh = lines('msxpirfh.bat')
+        # the server comes only from "p update", i.e. from the chosen branch
+        self.assertNotIn('p run sh update.sh', rfh)
+        self.assertLess(rfh.index('p update'), rfh.index('p restart'))
         self.assertNotIn('%1', ' '.join(rfh))
         self.assertEqual(rfh[-3:], ['p setbranch', 'pcopy m:msxpiupd.bat', 'p ver'])
         self.assertEqual(rfh.count('pcopy m:msxpiupd.bat'), 1)
