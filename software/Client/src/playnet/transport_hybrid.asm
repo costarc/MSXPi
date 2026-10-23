@@ -19,6 +19,7 @@ TU_AREA:        EQU     512             ; transport_area.size it needs
 KEEP_EVERY:     EQU     8
 OVL_KEEP:       EQU     $8015           ; PLAYNET.OVL's keep entry (netcore/ovl_crt0.s)
 JIFFY:          EQU     $FC9E
+MAPPER_P1:      EQU     $FD
 MAPPER_P2:      EQU     $FE
 MAPPER_P3:      EQU     $FF
 
@@ -35,7 +36,10 @@ tDosSub: defb   0                       ; +16
 ; as transport_unapi.asm (the loader; the same in D3 and G3)
 tHandler: defw  0                       ; the game's interrupt handler (netplay.irq_handler)
 tOvlSeg: defb   0                       ; PLAYNET.OVL's mapper segment
-tGameSeg2: defb 0                       ; the game's (the TPA's) segment in page 2
+tGameSeg1: defb 0                       ; the TPA's segments in pages 1 and 2
+tGameSeg2: defb 0
+tSegs:  defw    0                       ; the game's segments in pages 1 and 2 now: tGameSeg1, or the
+                                        ; mapper-ram bank engine's (MK_BLOCK+8), which changes them by OUT
 tDosSeg3: defb  0                       ; MSX-DOS's segment in page 3 (D3)
 tGameSeg3: defb 0                       ; the game's (G3)
 tIo:    defw    0                       ; the overlay's I/O block
@@ -116,14 +120,13 @@ xback:  ld      hl,tCnt
 ; One service of the stack and the IRC connection, in MSX-DOS's page 3 with interrupts on (transport_unapi.asm's
 ; XCHG, with the overlay's keep entry). Out: E = the interrupts that MSX-DOS's handler took meanwhile.
 keep:   ld      (tSp),sp
-        ld      a,(tOvlSeg)             ; the overlay into page 2 (G3: a plain OUT)
-        out     (MAPPER_P2),a
         ld      hl,(tTicks)             ; the game's clock, through a register
         ld      a,(tDosSeg3)
         out     (MAPPER_P3),a           ; MSX-DOS's page 3 (this code is here too)
         ld      sp,(tStack)
         ld      (tTicks),hl
-        ld      a,(tOvlSeg)
+        ld      a,(tOvlSeg)             ; the overlay into page 2, recorded for MSX-DOS
+        out     (MAPPER_P2),a
         call    tPutP2
         ld      hl,(JIFFY)
         push    hl
@@ -141,7 +144,11 @@ keep:   ld      (tSp),sp
         ld      hl,(tTicks)             ; the game's clock catches up with them
         add     hl,de
         ld      (tTicks),hl
-        ld      a,(tGameSeg2)
+        ld      hl,(tSegs)              ; the game's pages 1 and 2: a RAM implementation of the UNAPI
+        ld      a,(hl)                  ; may have put back the segments PUT_P1/PUT_P2 recorded instead
+        out     (MAPPER_P1),a
+        inc     hl
+        ld      a,(hl)
         out     (MAPPER_P2),a
         ret
 
@@ -209,11 +216,8 @@ xBack:  di
 ; (no xBoot: the room is needed; nothing in this path asks for it)
 xBoot:
 xReset: di
-        xor     a                       ; wipe the AB header of the image, or the BIOS
-        ld      hl,(tImage)             ; would boot it as a cartridge after the reset
-        ld      (hl),a
-        inc     hl
-        ld      (hl),a
+        ld      hl,(tImage)             ; wipe the A of the image's AB header, or the BIOS would boot it
+        ld      (hl),0                  ; as a cartridge after the reset
         jp      0
 
 ; XIRQ: the game's H.KEYI hook points here (G3 only; the BIOS has saved the registers)

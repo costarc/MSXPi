@@ -146,6 +146,10 @@ MSX-DOS 1 with a memory mapper:   MSR I      then  INL I
 Nextor / MSX-DOS 2:               RAMHELPR I then  INL I
 ```
 
+With no MSXPi interface in the machine the status line reads
+`NO MSXPI - ESC MENU LINK TCPIP` and MSXPi-only actions fail at once instead
+of waiting; the ESC menu still opens, so pick `LINK: TCPIP` there.
+
 If none is found the status line reads `NO TCP/IP UNAPI - RUN INL I`. On this
 link:
 

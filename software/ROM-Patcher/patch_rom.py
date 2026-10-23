@@ -25,8 +25,13 @@ GPF_MAGIC = b'GPF1'
 GPF_FORMAT = 1
 GPF_HEADER = 128
 GPF_MAX = 16384
-PLAYNET_VERSION = 2                     # the newest min_playnet this tool understands
-SEC_END, SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_ASSET = range(6)
+PLAYNET_VERSION = 3                     # the newest min_playnet this tool understands
+SEC_END, SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_ASSET, SEC_MAPPER = range(7)
+HOST_PLAIN, HOST_MAPPER = 0, 1          # netplay.image.host, GPF flags bits 1-2
+MAPPER_TYPES = {'konami-scc': 1}        # mapper-ram: the cartridge mappers a stub's bank engine emulates
+MAPPER_BANK = 8192                      # 8 KB banks, two to a 16 KB mapper segment (PLAYNET-PROTOCOLS 7.3)
+MAPPER_MIN_PLAYNET = 3
+MAPPER_FIXED = '<BBBH4BBBBBB'           # the MAPPER section before its pairs (14 bytes)
 PAGE3_LOW, PAGE3_HIGH = 0xC000, 0xF37F  # RAM below the BIOS work area
 MIN_TRANSPORT = 192
 INPUT_ROM = 0xFF                        # layout source "input" in a GPF
@@ -272,11 +277,24 @@ def netplay_values(profile):
     source = profile['source']
     require(isinstance(source, dict), 'A lockstep package needs its source ROM')
     image, stub, area = n.get('image', {}), n.get('stub', {}), n.get('transport_area', {})
-    require(image.get('host') == 'plain', 'netplay.image.host must be "plain" in version 1')
+    require(image.get('host') in ('plain', 'mapper-ram'), 'netplay.image.host must be "plain" or "mapper-ram"')
     require(stub.get('asset') in names, 'netplay.stub.asset must name an asset')
     start = n.get('start')
+    if image['host'] == 'mapper-ram':
+        layout = profile['layout']
+        require(len(layout) == 1 and layout[0]['source'] == 'input' and layout[0]['offset'] == 0
+                and layout[0]['destination'] == 0 and layout[0]['size'] == source['size'] == profile['output']['size'],
+                'A mapper-ram image is the ROM itself: one layout entry, the whole input at 0')
+        require(image.get('mapper') in MAPPER_TYPES, 'netplay.image.mapper must be one of ' + ', '.join(MAPPER_TYPES))
+        require(image.get('bank_size') == MAPPER_BANK, f'netplay.image.bank_size must be {MAPPER_BANK}')
+        pinned = image.get('pinned')
+        require(isinstance(pinned, list) and len(pinned) == 2, 'netplay.image.pinned is [page 1, page 2]')
+        v['mapper'] = {'type': MAPPER_TYPES[image['mapper']], 'banks': image.get('banks'), 'block': image.get('block'),
+                       'start': image.get('start_banks'), 'pinned': pinned, 'min_segments': image.get('min_segments'),
+                       'pairs': [image.get('page1_pairs'), image.get('page2_pairs')]}
+        v['patch_spans'] = [(patch['offset'], len(patch['expected']) // 2) for patch in profile['patches']]
     v.update({
-        'input_bytes': n.get('input_bytes', 1), 'image_base': image.get('base'),
+        'input_bytes': n.get('input_bytes', 1), 'image_base': image.get('base', 0x4000),
         'output_size': profile['output']['size'], 'stub_asset': names.index(stub['asset']),
         'stub_load': stub.get('load'), 'stub_max': stub.get('max'),
         'transport_area': area.get('address'), 'transport_size': area.get('size'),
@@ -307,9 +325,13 @@ def check_netplay(v, asset_sizes):
                 'netplay.command must be at most 37 characters of A-Z a-z 0-9 space . _ : / - and {role} {peer} {token}')
         return
     integer(v['input_bytes'], 1, 4, 'netplay.input_bytes')
-    require(v['image_base'] in (0x4000, 0x8000), 'netplay.image.base must be 16384 (4000h) or 32768 (8000h)')
-    require(v['output_size'] in (16384, 32768), 'A plain image is 16384 or 32768 bytes')
-    image_low, image_high = v['image_base'], v['image_base'] + v['output_size'] - 1
+    if v.get('mapper'):
+        check_mapper(v)
+        image_low, image_high = 0x4000, 0xBFFF
+    else:
+        require(v['image_base'] in (0x4000, 0x8000), 'netplay.image.base must be 16384 (4000h) or 32768 (8000h)')
+        require(v['output_size'] in (16384, 32768), 'A plain image is 16384 or 32768 bytes')
+        image_low, image_high = v['image_base'], v['image_base'] + v['output_size'] - 1
     require(image_high <= 0xBFFF, 'The image must end at or below BFFFh')
     integer(v['source_size'], 1, MAX_ROM, 'source.size')
     integer(v['source_crc32'], 0, 0xFFFFFFFF, 'source.crc32')
@@ -333,11 +355,57 @@ def check_netplay(v, asset_sizes):
         require(not _overlap(low, high, stub_low, stub_high), f'game_ram {low:04X}-{high:04X} overlaps the stub area')
         require(not _overlap(low, high, area_low, area_high),
                 f'game_ram {low:04X}-{high:04X} overlaps the transport area')
+    if v.get('mapper'):
+        block = v['mapper']['block']
+        require(stub_low <= block and block + mapper_block_size(v['mapper']) - 1 <= stub_high,
+                'netplay.image.block must lie inside the stub area')
     irq = integer(v['irq_handler'], 0, 0xFFFF, 'netplay.irq_handler')
     require(image_low <= irq <= image_high, 'netplay.irq_handler must be inside the image')
     start = v['start']
     require(start == 0 or (type(start) is int and image_low <= start <= image_high),
             'netplay.start must be "header-init" or an address inside the image')
+
+
+def mapper_block_size(m):
+    """MK_BLOCK (mapper_k8.asm) up to its tables: 10 bytes, 2 a bank, 2 x 3 page records. The tables follow, as
+    many entries as the stub reserves (bytes 2 and 3 of the block); the loader checks them against the pairs."""
+    return 10 + 2 * m['banks'] + 6
+
+
+def mapper_homes(m):
+    """bank -> (page 0/1, entry, half): the first pinned entry holding each bank, page 1's first."""
+    homes = {}
+    for page in (0, 1):
+        for entry, pair in enumerate(m['pairs'][page][:m['pinned'][page]]):
+            for half, bank in enumerate(pair):
+                homes.setdefault(bank, (page, entry, half))
+    return homes
+
+
+def check_mapper(v):
+    """The mapper-ram rules (PLAYNET-PROTOCOLS 7.3)."""
+    m = v['mapper']
+    require(v['min_playnet'] >= MAPPER_MIN_PLAYNET, f'A mapper-ram package needs min_playnet {MAPPER_MIN_PLAYNET}')
+    banks = integer(m['banks'], 2, 64, 'netplay.image.banks')
+    require(banks & (banks - 1) == 0, 'netplay.image.banks must be a power of two')
+    require(v['output_size'] == banks * MAPPER_BANK, 'The ROM must be banks x bank_size bytes')
+    start = m['start']
+    require(isinstance(start, list) and len(start) == 4 and all(type(b) is int and 0 <= b < banks for b in start),
+            'netplay.image.start_banks lists the banks of the four windows')
+    for page in (0, 1):
+        pairs = m['pairs'][page]
+        require(isinstance(pairs, list) and 1 <= len(pairs) <= 60, 'A page lists 1 to 60 pairs')
+        require(all(isinstance(p, list) and len(p) == 2 and all(type(b) is int and 0 <= b < banks for b in p)
+                    for p in pairs), 'A pair is [low bank, high bank]')
+        require(len({tuple(p) for p in pairs}) == len(pairs), 'A pair is listed twice')
+        integer(m['pinned'][page], 1, len(pairs), 'netplay.image.pinned')
+    require(list(start[:2]) in m['pairs'][0][:m['pinned'][0]] and list(start[2:]) in m['pairs'][1][:m['pinned'][1]],
+            'The start pairs must be pinned')
+    require(set(mapper_homes(m)) == set(range(banks)), 'Every bank needs a home in a pinned pair')
+    integer(m['min_segments'], m['pinned'][0] + m['pinned'][1] + 2, 255, 'netplay.image.min_segments')
+    integer(m['block'], 0, 0xFFFF, 'netplay.image.block')
+    for offset, length in v.get('patch_spans', ()):
+        require(offset // MAPPER_BANK == (offset + length - 1) // MAPPER_BANK, f'The patch at {offset:#x} crosses a bank')
 
 
 def check_stub_size(v, asset_sizes):
@@ -393,8 +461,14 @@ def gpf_bytes(profile, assets):
         body += _section(SEC_PATCH, struct.pack('<H', len(profile['patches'])) + patches)
         for data in blobs:
             body += _section(SEC_ASSET, data)
+        m = v.get('mapper')
+        if m:
+            body += _section(SEC_MAPPER, struct.pack(MAPPER_FIXED, m['type'], MAPPER_BANK >> 10, m['banks'], m['block'],
+                                                     *m['start'], m['pinned'][0], m['pinned'][1], m['min_segments'],
+                                                     len(m['pairs'][0]), len(m['pairs'][1]))
+                             + bytes(b for page in m['pairs'] for pair in page for b in pair))
     body += _section(SEC_END, b'')
-    flags = (1 if lockstep else 0)            # image host bits 1-2: 0 = plain
+    flags = (1 if lockstep else 0) | ((HOST_MAPPER if v.get('mapper') else HOST_PLAIN) << 1)
     header = bytearray(GPF_HEADER)
     header[0:4] = GPF_MAGIC
     header[4] = GPF_FORMAT
@@ -428,7 +502,8 @@ def read_gpf(data):
     require(crc32(data[:8] + b'\0\0\0\0' + data[12:]) == stored, 'GPF checksum mismatch: the file is damaged')
     require(data[98] <= PLAYNET_VERSION, 'This game package needs a newer PLAYNET: update PLAYNET')
     lockstep = bool(data[5] & 1)
-    require((data[5] >> 1) & 3 == 0, 'This game package needs an image host this PLAYNET does not have')
+    host = (data[5] >> 1) & 3
+    require(host in (HOST_PLAIN, HOST_MAPPER), 'This game package needs an image host this PLAYNET does not have')
     v = {'hash': stored, 'game_id': _unpad(data[12:20]), 'title': _unpad(data[20:44]),
          'roles': [_unpad(data[44:52]), _unpad(data[52:60])], 'command': _unpad(data[60:98]),
          'min_playnet': data[98], 'transport': 'lockstep' if lockstep else 'none',
@@ -444,7 +519,7 @@ def read_gpf(data):
             break
         if kind == SEC_ASSET:
             v['assets'].append(bytes(payload))
-        elif kind in (SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH):
+        elif kind in (SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_MAPPER):
             require(kind not in sections, 'GPF section repeated')
             sections[kind] = payload
         # unknown section types are skipped
@@ -483,6 +558,19 @@ def read_gpf(data):
                                  f'GPF patch at {offset:#x}'))
             at += 2 * length
         require(at == len(p), 'Bad GPF PATCH section')
+        if host == HOST_MAPPER:
+            require(SEC_MAPPER in sections, 'GPF lacks its MAPPER section')
+            p = sections[SEC_MAPPER]
+            fixed = struct.calcsize(MAPPER_FIXED)
+            require(len(p) >= fixed, 'Bad GPF MAPPER section')
+            kind, kb, banks, block, s0, s1, s2, s3, pin1, pin2, min_seg, n1, n2 = struct.unpack_from(MAPPER_FIXED, p)
+            require(kind in MAPPER_TYPES.values() and kb << 10 == MAPPER_BANK, 'Bad GPF MAPPER section')
+            require(len(p) == fixed + 2 * (n1 + n2), 'Bad GPF MAPPER section')
+            flat = [list(p[fixed + 2 * i:fixed + 2 * i + 2]) for i in range(n1 + n2)]
+            v['mapper'] = {'type': kind, 'banks': banks, 'block': block, 'start': [s0, s1, s2, s3],
+                           'pinned': [pin1, pin2], 'min_segments': min_seg, 'pairs': [flat[:n1], flat[n1:]]}
+            v['patch_spans'] = [(o, len(e)) for o, e, _, _ in v['patches']]
+            require(v['layout'] == [(None, 0, v['output_size'], 0)], 'A mapper-ram image is the ROM itself')
     sizes = {i: len(asset) for i, asset in enumerate(v['assets'])}
     check_netplay(v, sizes)
     check_stub_size(v, sizes)

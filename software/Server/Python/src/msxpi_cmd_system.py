@@ -26,9 +26,10 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional, Tuple
 
 # Standard library imports
+import re
 import time
 import subprocess
 import logging
@@ -262,9 +263,108 @@ def restart(parm: Optional[str] = None) -> CommandResult:
         sendmultiblock(b"Command not supported by this platform")
 
 
-UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup"
+UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup"
+# A git branch name as the MSX may send it ("feature/x"); keeps URLs and the
+# command line safe.
+_BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
 # update.sh touches this when it finishes; see update().
 UPDATE_STAMP = ".last-update"
+
+
+# The branch the MSX asked for with "p setbranch"; the next "p update" uses it.
+# Not persisted: a restarted server is back on master.
+_update_branch = "master"
+MASTER_DRIVE_M = "https://github.com/costarc/MSXPi/raw/master/software/target"
+
+
+GITHUB_BRANCHES_API = "https://api.github.com/repos/costarc/MSXPi/branches"
+RAW_BRANCH_PROBE = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup/update.sh"
+
+
+def _branch_name(parm: Optional[str]) -> Optional[str]:
+    """The branch in a command parameter: master when none was given, None
+    when it is not a plain name.
+
+    MSX-DOS 2 splits a batch parameter at "/", so msxpiupd.bat sends
+    "%1%2%3..." to glue "feature" and "/x" back together; any blank left
+    between the pieces is dropped, and so is an unexpanded "%n".
+    """
+    branch = re.sub(r"%\d|\s+", "", parm or "")
+    if branch == "":
+        return "master"
+    if _BRANCH_RE.match(branch) and ".." not in branch:
+        return branch
+    return None
+
+
+def _remote_branches() -> List[str]:
+    """Every branch of the repository on GitHub (empty when it cannot tell)."""
+    import requests
+
+    names: List[str] = []
+    for page in range(1, 6):
+        resp = requests.get(GITHUB_BRANCHES_API, params={"per_page": 100, "page": page}, timeout=15)
+        resp.raise_for_status()
+        batch = [b["name"] for b in resp.json()]
+        names += batch
+        if len(batch) < 100:
+            break
+    return names
+
+
+def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
+    """(the branch as GitHub spells it, "") or (None, why not).
+
+    A branch that does not exist would point every "pcopy m:" and the server
+    update at 404s, so it is checked first. Branch names are case sensitive
+    and an MSX user may well type them in capitals, so a name that differs
+    only in case is taken too. When GitHub cannot be asked, the name is used
+    as given: the update itself then reports what failed.
+    """
+    if branch == "master":
+        return branch, ""
+    import requests
+
+    try:
+        if requests.head(RAW_BRANCH_PROBE.format(branch=branch), timeout=15).status_code == 200:
+            return branch, ""
+        names = _remote_branches()
+    except Exception as e:
+        print(f"setbranch: cannot check {branch}: {e}", flush=True)
+        return branch, ""
+    for name in names:
+        if name.lower() == branch.lower():
+            return name, ""
+    # An older msxpiupd.bat sends only %1, which MSX-DOS 2 cut at the "/".
+    near = [n for n in names if n.lower().startswith(branch.lower().rstrip("/") + "/")]
+    if not near:
+        near = [n for n in names if branch.lower() in n.lower()]
+    why = f"no branch {branch}"
+    if near:
+        why += "\nDid you mean: " + " ".join(near[:4])
+    return None, why
+
+
+def setbranch(parm: Optional[str] = None) -> CommandResult:
+    """Choose the git branch the MSX updates from; no name means master.
+
+    Sent by msxpiupd.bat ("msxpiupd feature/x") and again, with no name, at the
+    end of msxpirfh.bat. Points DriveM (where pcopy m: reads) at the branch's
+    target folder and remembers the branch for "p update". MSX-DOS batch files
+    cannot test for an empty parameter, so the default lives here. A branch
+    that does not exist changes nothing: the update goes on from master.
+    """
+    global _update_branch
+    print(f"setbranch: received {parm!r}", flush=True)
+    branch = _branch_name(parm)
+    if branch is None:
+        return sendmultiblock(b"Pi:Error - bad branch name")
+    branch, why = _resolve_branch(branch)
+    if branch is None:
+        return sendmultiblock(f"Pi:Error - {why}\nUpdating from {_update_branch}".encode())
+    _update_branch = branch
+    setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
+    return sendmultiblock(f"Pi:Ok - updating from {branch}".encode())
 
 
 def update(parm: Optional[str] = None) -> CommandResult:
@@ -277,24 +377,37 @@ def update(parm: Optional[str] = None) -> CommandResult:
     the server files and Python packages, leaving openMSX alone (it is the
     program the MSX is running in) and asking for no administrator rights.
 
+    It updates from the branch chosen with "p setbranch" (or the one given as
+    the parameter), master by default.
+
     The server is not restarted here: a Pi's msxpi-monitor restarts it on
     "p restart"; anywhere else the user restarts it.
     """
+    branch = _branch_name(parm) if (parm or "").strip() else _update_branch
+    if branch is None:
+        return "Pi:Error - bad branch name"
+    if branch != _update_branch:
+        branch, why = _resolve_branch(branch)
+        if branch is None:
+            return f"Pi:Error - {why}"
+    windows = transport.hostType == "Windows"
     home = os.path.abspath(settings.MSXPIHOME)
     stamp = os.path.join(home, UPDATE_STAMP)
-    try:
-        if time.time() - os.path.getmtime(stamp) < 600:
-            return "Pi:Ok - server already updated"
-    except OSError:
-        pass
+    # Master: update.sh (which touches the stamp) has just run. A branch: it
+    # was master's update.sh that ran, so this one still has work to do.
+    if branch == "master":
+        try:
+            if time.time() - os.path.getmtime(stamp) < 600:
+                return "Pi:Ok - server already updated"
+        except OSError:
+            pass
 
-    windows = transport.hostType == "Windows"
     name = "msxpi-windows-setup.ps1" if windows else "update.sh"
     script = os.path.join(home, name)
     try:
         import requests  # only needed here; the server imports it elsewhere anyway
 
-        resp = requests.get(f"{UPDATE_SETUP_URL}/{name}", timeout=30)
+        resp = requests.get(f"{UPDATE_SETUP_URL.format(branch=branch)}/{name}", timeout=30)
         resp.raise_for_status()
         with open(script + ".new", "wb") as f:
             f.write(resp.content)
@@ -305,11 +418,17 @@ def update(parm: Optional[str] = None) -> CommandResult:
     if windows:
         cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
                "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause"]
+        if branch != "master":
+            cmd += ["-Branch", branch]
     else:
         cmd = ["sh", script]
     print(f"update: running {' '.join(cmd)}", flush=True)
     try:
-        done = subprocess.run(cmd, cwd=home, stdout=PIPE, stderr=STDOUT,
+        env = dict(os.environ)
+        if branch != "master":
+            env["MSXPI_UPDATE_BASE"] = (
+                f"https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Python/src")
+        done = subprocess.run(cmd, cwd=home, stdout=PIPE, stderr=STDOUT, env=env,
                               stdin=subprocess.DEVNULL, timeout=1800)
     except Exception as e:
         return f"Pi:Error - update: {e}"

@@ -140,6 +140,13 @@ to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 #   - Neither file copies ITSELF: MSX-DOS reads a running batch file by offset,
 #     so a new version landing mid-run garbles the rest of it.  msxpiupd.bat
 #     fetches msxpirfh.bat; msxpirfh.bat fetches msxpiupd.bat with the rest.
+#   - "msxpiupd branch" updates from that git branch (master when none): "p
+#     setbranch" points DriveM and the later "p update" at it. A batch file
+#     cannot test for an empty %1, so the server supplies the default.
+#     MSX-DOS 2 splits a parameter at "/" ("feature/x" is %1=feature,
+#     %2=/x), so the parameters are glued back together: %1%2%3...
+#     "p setbranch" exists only in a new server, so msxpiupd.bat first brings
+#     the server up to date from master (and restarts it), whatever it was.
 #   - msxpirfh.bat keeps pcopy.old, fetches pcopy.com first, updates and
 #     restarts the server, then copies everything else with the new pcopy
 #     against the new server.
@@ -148,8 +155,13 @@ gen_update_batch() {
 echo Preparing to update...
 p set DriveM ${GITPATH}/target
 p date
+p cd /home/pi/msxpi
+p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh
+p run sh update.sh
+p restart
 echo Getting lastest updater...
 pcopy m:msxpirfh.bat
+p setbranch %1%2%3%4%5%6%7%8%9
 echo
 echo Starting update
 msxpirfh
@@ -179,7 +191,7 @@ EOF
         for f in $(cd target && LC_ALL=C ls); do
             [ -f "target/$f" ] || continue
             case "$(echo "$f" | tr 'A-Z' 'a-z')" in
-                pcopy.com|msxpirfh.bat) continue ;;
+                pcopy.com|msxpirfh.bat|msxpiupd.bat) continue ;;
             esac
             echo "pcopy m:$f"
         done
@@ -188,6 +200,10 @@ EOF
         for f in $(cd target/games 2>/dev/null && LC_ALL=C ls *.GPF 2>/dev/null); do
             echo "pcopy m:games/$f $f"
         done
+        # msxpiupd.bat last, from master: an old branch must not bring back an
+        # old updater. "p setbranch" with no name points DriveM at master again.
+        echo "p setbranch"
+        echo "pcopy m:msxpiupd.bat"
         echo "p ver"
     } | to_crlf target/msxpirfh.bat
 }
