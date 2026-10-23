@@ -177,8 +177,8 @@ keyYN:  push    hl
 ; INIT clears only E000h-EFFFh. C000h-CFFFh (PLAYNET's trampoline and MSX-DOS's leftovers), the stack area
 ; F000h-F0DFh and the interrupt counter F0F7h-F0F8h would otherwise start with whatever each machine had
 ; there. At 410Bh, in place of ld hl,E000h (SP = F0EEh here: F0E0h-F0EFh is left alone).
-clrRam: ld      hl,$C100                        ; (experiment: C000h-C0FFh left alone)
-        ld      bc,$0F00
+clrRam: ld      hl,$C000
+        ld      bc,$1000
         call    .z
         ld      hl,$F000
         ld      bc,$00E0

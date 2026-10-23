@@ -46,6 +46,9 @@ GPFMAX:         EQU     $0C00
 BOUNCE:         EQU     $3400
 CHUNK:          EQU     $0800
 TRAMP:          EQU     $C000
+TRAMP_SP:       EQU     TRAMP+$100              ; the trampoline's stack (Soccer's stub starts at C100h)
+        ASSERT  trLateEnd+128 <= TRAMP_SP        ; room under it: 86 bytes used with Soccer
+        ASSERT  TRAMP+trampEnd-trampSrc+32 <= TRAMP_SP  ; and ENASLT's 32 above the copy part's variables
 SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', start, length, then start-FFFEh
 SV_MAX:         EQU     $4000-8                 ; under 16 KB (start >= C008h): a segment, or RBUF to C000h
 RBUF:           EQU     $8000                   ; the MSXPi restore buffer: page 2, the game image's RAM
@@ -645,13 +648,13 @@ overlap:
         ccf
         ret
 
-; HL = low, DE = high: CF if [low, high] overlaps the trampoline (TRAMP .. TRAMP + its size - 1)
+; HL = low, DE = high: CF if [low, high] overlaps the trampoline and its stack (TRAMP .. TRAMP_SP - 1)
 overTramp:
         push    hl
         push    de
         ld      hl,TRAMP
         ld      (ovLo),hl
-        ld      hl,TRAMP+trampEnd-trampSrc-1
+        ld      hl,TRAMP_SP-1
         ld      (ovHi),hl
         pop     de
         pop     hl
@@ -1276,8 +1279,57 @@ relocate:
 
 ; Runs from C000h. Copies the stub and the transport into page 3 (MSX-DOS is gone from here on),
 ; then starts the game with page 0 = main BIOS and page 1 = the RAM holding it.
+; Its own stack ends at TRAMP_SP: MSX-DOS's can be in the stub's area (D53Fh under MSX-DOS 1 on the V-25), where
+; ENASLT, INIT32 and their interrupts would push. That stack goes down to about C0AAh (Soccer), over the copy part
+; (.early, run first and placed last); what runs after INIT32 is at the start. The game starts on MSX-DOS's stack, as before.
 trampSrc:
         PHASE   TRAMP
+        ld      (vDosSp),sp
+        ld      sp,TRAMP_SP
+        jp      trEarly
+trLate: ld      hl,$FD9A                        ; hooks left by DOS that point outside the BIOS become
+.hook:  ld      a,(hl)                          ; RET, as a bare cartridge would see them
+        cp      $F7
+        jr      nz,.next
+        inc     hl
+        ld      b,(hl)
+        dec     hl
+        ld      a,(EXPTBL)
+        cp      b
+        jr      z,.next
+        ld      a,(EXBRSA)
+        cp      b
+        jr      z,.next
+        ld      (hl),$C9
+.next:  ld      de,5
+        add     hl,de
+        ld      a,h
+        cp      $FF
+        jr      nz,.hook
+        ld      a,l
+        cp      $CF
+        jr      c,.hook
+        ld      hl,(vStart)
+        ld      a,h
+        or      l
+        jr      nz,.go
+        ld      hl,(vBase)                      ; INIT from the image's AB header
+        inc     hl
+        inc     hl
+        ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a
+.go:    push    hl
+        call    INIT32                          ; SCREEN 1, as before a cartridge INIT
+        pop     hl
+        ld      sp,(vDosSp)
+        jp      (hl)
+vStart:         defw    0
+vBase:          defw    0
+vDosSp:         defw    0
+trLateEnd:
+trEarly:
         ld      hl,(vStubSrc)
         ld      de,(vStubDst)
         ld      bc,(vStubLen)
@@ -1318,49 +1370,13 @@ trampSrc:
         ld      h,$40
         call    ENASLT
         di
-        ld      hl,$FD9A                        ; hooks left by DOS that point outside the BIOS become
-.hook:  ld      a,(hl)                          ; RET, as a bare cartridge would see them
-        cp      $F7
-        jr      nz,.next
-        inc     hl
-        ld      b,(hl)
-        dec     hl
-        ld      a,(EXPTBL)
-        cp      b
-        jr      z,.next
-        ld      a,(EXBRSA)
-        cp      b
-        jr      z,.next
-        ld      (hl),$C9
-.next:  ld      de,5
-        add     hl,de
-        ld      a,h
-        cp      $FF
-        jr      nz,.hook
-        ld      a,l
-        cp      $CF
-        jr      c,.hook
-        call    INIT32                          ; SCREEN 1, as before a cartridge INIT
-        ld      hl,(vStart)
-        ld      a,h
-        or      l
-        jr      nz,.go
-        ld      hl,(vBase)                      ; INIT from the image's AB header
-        inc     hl
-        inc     hl
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a
-.go:    jp      (hl)
+        jp      trLate
 .put:   ld      hl,(vPut)                       ; A = segment: MSX-DOS's PUT_P2
         jp      (hl)
 vStubSrc:       defw    0
 vStubDst:       defw    0
 vStubLen:       defw    0
 vTDst:          defw    0
-vStart:         defw    0
-vBase:          defw    0
 vRam1:          defb    0
 vTLen:          defw    0                       ; the transport's length
 vG3:            defb    0                       ; TCP/IP: the game's page-3 segment, else 0

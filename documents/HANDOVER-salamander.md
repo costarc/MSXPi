@@ -1,11 +1,10 @@
 # Handover: Salamander online co-op (PLAYNET 3, image host mapper-ram)
 
-2026-10-23. Paused mid-debugging, at a clean point: an intermittent start-up crash has been narrowed to one precise symptom
-(section 4), and nothing else is half-done.
+2026-10-23. Session 2 fixed the intermittent start-up crash (section 4). Open: speed, Soccer regression, TCP/IP (section 2).
 
 | | |
 |---|---|
-| Worktree / branch | `C:\Users\roniv\Dev\github\MSXPi-salamander`, `feature/salamander-netplay` (from `master` at `64049cf8`). **Nothing is committed.** The main checkout is shared with other sessions: do not switch branches there. |
+| Worktree / branch | `C:\Users\roniv\Dev\github\MSXPi-salamander`, `feature/salamander-netplay` (from `master` at `64049cf8`), not pushed. Keep `salamander_debug/step_hung_example.txt` out of git (disassembled game code). The main checkout is shared with other sessions: do not switch branches there. |
 | Design | `documents/SALAMANDER-DESIGN.md` (analysis, decisions D1-D8, plan). Spec: `documents/PLAYNET-PROTOCOLS.md` 7.3 (new), 8.2 (`MAPPER` section). |
 | ROM | `C:\Users\roniv\Dev\MSX\gameroms\SALAMAND.ROM`, CRC-32 `C36F559D`. Never commit it or anything derived from it. |
 | Tools | sjasmplus `C:\Users\roniv\Dev\bin\sjasmplus.exe`; openMSX `C:\Users\roniv\Dev\MSX\MSXPi\openmsx-MSXPi_v1.6.1\openmsx.exe` |
@@ -35,35 +34,40 @@ page-2 pairs, 0 builds) and a 512 KB node (23 pairs, 1 build); desync detection 
 
 ## 2. Open problems
 
-1. **Intermittent start-up crash (about 1 run in 3), section 4.** Must be fixed first.
+1. ~~Intermittent start-up crash (about 1 run in 3)~~: **fixed in session 2**, section 4.
 2. **A desync at frame 3067** in one 6000-frame run (after game over, second game starting, state 04h), before the INIT-clear patch.
-   Not reproduced since. May share the cause of 1 (corrupted stub/RAM), or come from uninitialised RAM (the reason for `clrRam`).
+   Not reproduced since. Likely the same cause as 1: in every run before the fix `clrRam` was garbage, so the RAM it should clear
+   was not cleared (or cleared differently on the two machines).
 3. **Speed**: play runs at ~17 frames/s against the cartridge's ~31 (measured: `salamander_debug/cartridge_fps.tcl`). Not profiled yet
    (`salamander_debug/prof.tcl` is ready: time in the exchange, in the bank engine, number of switches).
 
 ## 3. Experimental state to undo or keep
 
-- `src/glue.asm` `clrRam` currently clears **C100h**-CFFFh (experiment; the intent is C000h-CFFFh) plus F000h-F0DFh and F0F7h. It is
-  patched over `ld hl,E000h` at 410Bh (INIT). Decide after section 4 is understood.
+- None left. `clrRam` is back to C000h-CFFFh (the C100h experiment is undone; it was a symptom of section 4).
 
-## 4. The start-up crash: what is known
+## 4. The start-up crash: cause and fix (session 2)
 
-- Symptom: in INIT, right after `call clrRam` (410Bh), the CPU runs garbage: either a crash ending in a BIOS loop at 2900h (SP F0E6h,
-  `nf` = FFh, no frame ever), or game frames running during INIT, then a desync.
-- Decisive evidence (`salamander_debug/step_hung_example.txt`, single-stepped from the `clrRam` breakpoint on both nodes of a hung
-  run): the instruction after D520h is **`D521 jp nz,7C54h`**, but the assembled stub has `21 00 C1` (`ld hl,C100h`) at D520h. So **the
-  stub in RAM at D520h is not the built stub** in the failing runs: something overwrote the glue (at least D520h-D523h) before INIT
-  reached it. Interrupts were off (IFF=0); execution then wandered into the sound driver (7C54h...).
-- Same build and inputs pass in other runs, so the overwrite is timing-dependent.
-- Not the cause (checked): the clear itself (C000h-C0FFh excluded, still hangs); the game writing 4000h-BFFFh (none, `wr.tcl`); VDP
-  status/STATFL/NEWKEY reads (none in the ROM); keyboard paths (all SNSMAT reads handled).
-- **Next step:** watch writes to D000h-D5FFh (and D600h-D7FFh) from the moment the trampoline copied the stub
-  (`debug set_watchpoint write_mem {0xD000 0xD7FF}`, log PC, address, value, and the slot/segment state), excluding the stub's own
-  variable writes (engine rings, `MK_BLOCK`, `rndS`). Suspects, in order: the loader writing the block/tables past `MK_BLOCK`
-  (check `mFill` against the table room: tables end exactly at MK_W0 D355h, glue starts after the engine); the trampoline's stub copy
-  (`vStubLen`) racing an interrupt with H.KEYI already pointing at the transport; the transport/`XCHG` receive buffer length (L = 14 + 8W
-  = 30 for W = 2) against `rxbuf`; the bank engine's `mkCopy` with a wrong home pointing page 1/2 at page 3 segment 0. Compare the
-  stub image in GPFBUF before the trampoline with D000h after it.
+- Cause: **MSX-DOS's stack was inside the stub.** Under MSX-DOS 1 on the V-25 the TPA stack is at about D53Fh, and the stub
+  occupies D000h-D597h. The trampoline copied the stub there and then kept using that stack: `call ENASLT`, `call INIT32` and the
+  interrupts INIT32 lets through (BIOS at 0Cxxh, 2992h, 1036h...) pushed over D50Bh-D541h, which is the whole of `clrRam`. This
+  happened in **every** run: `salamander_debug/wwatch.tcl` (write watch on D000h-D7FFh + mapper ports, stub compared with
+  `stub.bin` at `clrRam`) found 84 bytes differing on both nodes of a run that "passed". Whether a run crashed only depended on what
+  the junk at D520h did; the `D521 jp nz,7C54h` of the old step trace was such pushed data.
+- Fix (`playnet.asm`): the trampoline saves MSX-DOS's SP (`vDosSp`) and runs on its own stack ending at `TRAMP_SP` = C100h
+  (it cannot be higher: Soccer's stub starts at C100h; `overTramp` covers C000h-C0FFh). That stack goes 88 bytes deep with Soccer
+  (C0A8h: ENASLT, INIT32 and an interrupt; `salamander_debug/trstack.tcl` measures it), more than the room after the trampoline, so
+  the trampoline is laid out in two parts: `trLate` (hook loop, INIT32, the jump; C00Ah-C050h, with `vStart`, `vBase`, `vDosSp`)
+  first, and `trEarly` (the copies and slots, run first) last, where the deep stack may overwrite it once done. The start address
+  is pushed before INIT32. The game then starts on MSX-DOS's stack, as before the fix (Salamander sets its own before any push:
+  no write to D000h-D7FFh between the jump and `clrRam`). Two `ASSERT`s keep 128 bytes under C100h above `trLateEnd` and 32 above
+  the copy part.
+  A first try with a 68-byte stack after the old layout broke Soccer: the stack ran over `vStart` and node H jumped to garbage.
+- Verified (first, 128-byte version): 8 runs of 300 frames (seeds 1-8, 2 MB + 512 KB nodes), all IDENTICAL, stub intact at
+  `clrRam` on all 16 nodes (0 diffs), and one 6000-frame run IDENTICAL (the 512 KB node did 1 build), so the frame-3067 desync
+  (2. above) did not recur. Final layout: Soccer `run_native.sh 0 0 1500` IDENTICAL (scenes 0-6, foreign writes 0) and 4
+  Salamander runs of 300 frames IDENTICAL, 0 stub diffs and 0 writes to D000h-D7FFh before `clrRam` on all 8 nodes.
+- **Not run yet:** the trampoline's TCP/IP path (the page-3 copy into G3 now happens on the new stack, which is in page 3 and
+  copied with it): run Soccer's `SCENARIO=mixed` (and `tcp`) before merging.
 
 ## 5. How to run
 
@@ -91,5 +95,7 @@ them.** Pass one with `EXTRA_TCL` (several: a file that `source`s each).
 - `EXTBIO` handlers and MSX-DOS calls do not keep IX: the loader reloads it (`mSetup`) and `mTab2` no longer uses it.
 - The Pi sends GPFs in 512-byte blocks; `piCommand` needs room for a whole block.
 - openMSX `screenshot` needs a renderer (`RENDERER=SDLGL-PP`).
-- Soccer must stay byte-identical (stub and GPF): not re-checked since the loader changes; run `run_native.sh` as a regression
-  (its GPF is unaffected, but PLAYNET.COM's memory map changed).
+- Soccer must stay byte-identical (stub and GPF; unchanged against master). Its `run_native.sh` regression passes with the
+  session-2 PLAYNET.COM (MSXPi path only). Anything placed after the trampoline must leave C100h-C5FFh to Soccer's stub.
+- A kill by command-line match (`Stop-Process` on `run_native`...) also kills the shell that runs it; and a stopped loop's
+  `sh` may survive TaskStop: check for two loops (two `run_salamander.sh` parents) before trusting results.
