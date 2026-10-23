@@ -54,7 +54,7 @@ A game is a good candidate if all of these hold. Section 4 shows how to check ea
 
 | # | Requirement | Why |
 |---|---|---|
-| R1 | A plain 16 KB or 32 KB cartridge ROM (format version 1). MegaROMs are planned for a later version. | The RAM copy sits in pages 1-2 |
+| R1 | A plain 16 KB or 32 KB cartridge ROM, or (PLAYNET 3) a MegaROM of 8 KB banks with a mapper the stub can emulate (7.3; Konami SCC today) | The RAM copy sits in pages 1-2, or in memory mapper segments |
 | R2 | It runs from RAM once its writes to its own ROM area are neutralised. | A cartridge ignores those writes; RAM does not |
 | R3 | Two players, playing at the same time or taking turns. Each player's input fits in **1 to 4 bytes a frame** (the game's input width: a joystick is 1, two paddles or a mouse with buttons 2-3). | Those bytes are all that crosses the network |
 | R4 | There is one point in each game frame, before the game uses the inputs, where you can call PLAYNET's `TICK`. | The lockstep exchange happens there |
@@ -340,7 +340,7 @@ packages with the music ABI.
 | `transport` | `"lockstep"`: PLAYNET runs the game (everything below applies). `"none"`: the game is its own program and makes its own connection; only `command` applies. |
 | `input_bytes` | 1-4: bytes of input per player per frame (the input width, 4.4). Default 1. |
 | `command` | Only for `"none"`: the MSX-DOS command line: a template of at most 37 characters of `A-Z a-z 0-9 space . _ : / -` and the placeholders `{role}`, `{peer}`, `{token}`. The chat checks the line again after replacing them, because it must still fit the keyboard buffer. |
-| `image.host` | `"plain"` in version 1. `"mapper-ram"` is reserved for MegaROMs. |
+| `image.host` | `"plain"`, or `"mapper-ram"` for a MegaROM (7.3, PLAYNET 3) |
 | `image.base` | CPU address of output offset 0: `16384` (4000h) or `32768` (8000h, for a 16 KB ROM that lives there). The output must end at or below BFFFh. |
 | `stub.asset` | Name of the asset holding the built stub (engine + glue, Part II, 9) |
 | `stub.load`, `stub.max` | Where it is copied, and the most bytes it may ever take. Must be in page 3 (`C000h-F37Fh`). |
@@ -353,6 +353,41 @@ packages with the music ABI.
 Validation (tools and the MSX loader): all addresses in range; output size 16384 or 32768 for `plain`; every layout and patch range
 inside its buffer; patches non-overlapping with equal expected/replacement lengths; stub and transport area disjoint from each other,
 from `game_ram`, from the image, and inside page 3; the stub asset no longer than `stub.max`.
+
+### 7.3 Image host `mapper-ram` (PLAYNET 3)
+
+A MegaROM of 8 KB banks runs from memory mapper segments. The MSX mapper switches 16 KB and the cartridge 8 KB, so a segment holds
+a **pair** of banks, the two windows of one page. The package patches every bank-register write of the game into a call to the
+stub's bank engine (`software/Client/src/playnet/engine/mapper_k8.asm`), which maps the segment holding the new pair, or builds it
+first. Design and measurements: `documents/SALAMANDER-DESIGN.md`, section 5. First package: `profiles/salamander`.
+
+```json
+"image": {"host": "mapper-ram", "mapper": "konami-scc", "bank_size": 8192, "banks": 16, "block": 53909,
+          "start_banks": [0, 1, 2, 3], "page1_pairs": [[0, 1], [0, 4]], "page2_pairs": [[2, 3], [5, 6], [2, 12]],
+          "pinned": [2, 2], "min_segments": 22}
+```
+
+| Field | Rule |
+|---|---|
+| `mapper` | `"konami-scc"` (the only one so far; the bank engine works for any 8 KB mapper, the patches decide which registers) |
+| `bank_size` | `8192` |
+| `banks` | 2-64, a power of two. The ROM (`source.size`, `output.size`) is `banks` x 8 KB, and the layout is the identity: one entry, the whole input at 0. |
+| `block` | Address of the bank engine's block (`MK_BLOCK`) inside the stub. The loader fills it. Its first 4 bytes are the engine's version (1), the bank mask, and the room of its two tables. |
+| `start_banks` | The banks of the four windows when the game starts (W0 4000h, W1 6000h, W2 8000h, W3 A000h) |
+| `page1_pairs`, `page2_pairs` | The pairs to build, `[low window's bank, high window's bank]`, most useful first. At most 60 per page. |
+| `pinned` | How many of each list are never replaced. Each bank's home is the first pinned pair holding it (page 1's list first, the low half first); every bank needs one. The start pairs must be pinned. |
+| `min_segments` | The fewest segments the loader accepts (at least the pinned pairs plus one spare per page). Below it the game would pause too often: PLAYNET refuses with "Not enough memory". |
+
+Patch offsets are ROM offsets (bank x 8 KB + offset in the bank), and a patch may not cross a bank. `netplay.irq_handler` and `start`
+lie in 4000h-BFFFh.
+
+The loader: takes up to every pair plus one spare per page in segments (the mapper support routines' user segments, or on MSX-DOS 1
+the segments above the TPA's four), fills table 1 with every page-1 pair and a spare, table 2 with as many page-2 pairs as memory
+allows (and a spare when all fit), reads each bank into its home, applies the patches there, copies the homes into the other pairs,
+and maps the start pairs just before INIT. Pages 1 and 2 must be RAM of the same mapper. On the way back (14) it maps MSX-DOS's own
+segments again first. The segments only ever hold ROM bytes, so how many a machine has changes the speed, never the game: two
+machines with different mappers stay in lockstep. PLAYNET 3 refuses a `mapper-ram` game over TCP/IP (the UNAPI transport puts page
+2 back from its own record, which the bank engine would make wrong).
 
 **Trust.** Patches and assets are Z80 code that runs with full control of the machine. Validation protects against a corrupt or
 mismatched package, not against a malicious one. Install packages only from the official index or from people you trust.
@@ -377,7 +412,7 @@ Header, 128 bytes:
 |---|---|---|
 | 0 | 4 | `'GPF1'` |
 | 4 | 1 | format = 1 |
-| 5 | 1 | flags: bit 0 = transport `lockstep` (0 = `none`); bits 1-2 = image host (0 `plain`, 1 `mapper-ram`) |
+| 5 | 1 | flags: bit 0 = transport `lockstep` (0 = `none`); bits 1-2 = image host (0 `plain`, 1 `mapper-ram`, which needs the `MAPPER` section) |
 | 6 | 2 | body length (bytes after the header) |
 | 8 | 4 | **profile hash**: CRC-32 of the whole file, computed with these 4 bytes set to 0 |
 | 12 | 8 | game id |
@@ -398,6 +433,7 @@ types. Sections appear in the order below; each appears at most once, except `AS
 | 3 | `LAYOUT` | output size (4), fill byte (1), count (1), then count x (source (1): `FFh` = the ROM, else asset index; source offset (4); size (4); destination offset (4)) |
 | 4 | `PATCH` | count (2), then count x (output offset (4), length (1), expected bytes, replacement bytes) |
 | 5 | `ASSET` | the bytes of one asset. Assets are numbered 0, 1, ... in file order. |
+| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
 
 The profile hash is what players compare: it appears in invitations (12), in the peer handshake (11.3) and in the session record (13).
 Because the stub is an asset inside the file, the hash covers the engine and the glue too.
@@ -725,6 +761,8 @@ case. A file with a bad header or checksum, or the wrong name, is skipped and lo
 | Netplay ABI | `msxpi-netplay-v1` | `netplay.abi` |
 | GPF | 1 | header byte 4 |
 | Stub ABI | 1 | stub header byte 0 |
+| Bank engine (image host `mapper-ram`) | 1 | `MK_BLOCK` byte 0 |
+| PLAYNET release | 3 (`mapper-ram`) | `min_playnet` |
 | Peer protocol | MSXNP 1 | control datagram `version` |
 | Invitations | MSXG1 | message prefix |
 | Session record | PNS1 | magic |

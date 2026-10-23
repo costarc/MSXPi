@@ -18,8 +18,8 @@ OVL_BYE:        EQU     $800C
 OVL_CLOSE:      EQU     $800F
 OVL_VERSION:    EQU     $8012
 OVL_IOPTR:      EQU     $8013
-OVLTMP:         EQU     CRCT                    ; the overlay passes through here before the CRC table is
-OVLMAX:         EQU     $4000-CRCT              ; built and the GPF read: CRCT, GPFBUF and BOUNCE (7 KB)
+OVLTMP:         EQU     $2400                   ; the overlay passes through here before the CRC table is
+OVLMAX:         EQU     $4000-OVLTMP            ; built and the GPF read: GPFBUF, BOUNCE and CRCT (7 KB)
 M_ALL_SEG:      EQU     $00                     ; mapper support routines (MSX-DOS 2 / Nextor / MSR)
 M_FRE_SEG:      EQU     $03
 M_PUT_P2:       EQU     $24
