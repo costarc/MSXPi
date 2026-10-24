@@ -522,3 +522,29 @@ differences. Where this section and the sections above disagree, this one is rig
 | Versus end | 4280h, 41F3h | **4284h** -> `vsWin` (player 1 wins: REST = 0, state 6, the game's own game over); `lifeLost` sets `tWin` = 2; "PLAYER n WINS" printed over state 7 by `dispatch` |
 | Rig input (D11) | Tcl key presses | the `--test-gpf` build with the engine's **SCRIPTED** tables (Soccer's table: bit 4 starts the game); Turn and Versus tests add Tcl pokes and inputs in `yiear_debug/` |
 | Test builds | must not touch committed files | fixed 2026-10-24: `--test-gpf` writes its generated includes in a temporary folder, and `test_gpf.py` checks that `src/stub_syms.inc` names the published stub's addresses |
+
+---
+
+## 15. Decisions of 2026-10-24 (user), and the choices left to the implementer
+
+| # | Point | Decision |
+|---|---|---|
+| U1 | A jump for player 2 (Versus) | **Yes** |
+| U2 | Player 2's lives (Versus) | **Lives of their own.** Replaces D8 (below). |
+| U3 | Where the menu cursor starts | **SINGLE** (as built) |
+| U4 | "PLAYER 1 SELECTS" on the menu | **No** |
+| U5 | "PLAYER n GAME OVER" in Turn | Shown when a player is out, but the game does not stop: **both machines stay in lockstep and keep showing the other player's game** until they are out too |
+| U6 | TCP/IP rig scenarios | **Skipped** (the rig's TCP/IP path is broken for every game, K9) |
+| U7 | A 50 Hz against 60 Hz run | **No** (not done for this game) |
+| U8 | How the rig drives the game (D11) | **Tcl key presses** instead of the engine's SCRIPTED tables |
+| U9 | Real hardware (plan step 10) | **Not part of this work** |
+
+Left to the implementer, "with criteria from similar games":
+
+| # | Point | Choice |
+|---|---|---|
+| I1 | Player 2's move set | Read from each opponent's own action table (6E5Bh, 6FFEh, 7302h, 772Ch, 79A3h: 4-pose animations per action) and the emulator (`yiear_debug/moves.tcl`). Mapped the way the one-button fighting games of the time do it, and the way Oolong is played: the button with a direction picks the attack (up = high, nothing = middle, down = low), up alone jumps where the opponent has a jump. |
+| I2 | Opponent 2's throw | **Player 2 throws**, with the second button (input bit 5: joystick button B, or the keyboard key the game reads there), instead of the throw firing by itself |
+| I3 | Lives in Versus (U2) | Each player has the game's starting lives: 3. P1's are the game's own REST (E050h: decremented at every stage start, 41B4h, and given back when P1 wins a fight, 423Eh, so a win costs P1 nothing). P2's are a counter in the stub: P2 loses one each time P1 beats the opponent. A lost fight costs the loser one life; the next fight is the next opponent (P1 won) or the same one again (P2 won), in the game's order, cycling after the fifth. **The match ends when either player has no lives left**: "PLAYER n WINS", then the game-over screen and the title. The "beat the fifth opponent" rule (4284h) is dropped; the level (E056h) stays 0 for the whole match so the opponents' timings do not change. P2's lives are shown during fights. |
+| I4 | Tests left open | Run on the MSXPi path: the three modes with lag and loss, the chat with the exit key, link 2, the sound tempo against the cartridge, the speed, desync detection |
+| I5 | `KUNG-FU.ROM` (D7), the extension at A000h (D5) | Kept |

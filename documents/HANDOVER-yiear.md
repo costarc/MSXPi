@@ -171,3 +171,17 @@ run was black, so look at the title in a real-time run before planning the scree
   4501 identical frames; the opponent walks and attacks on P2's scripted input, both match ends seen (win=1, win=2).
   **Open**: which of actions 4/5/6 is high/middle/low (the up/down mapping is a guess), opponent 2's automatic throw (4638h) and
   opponents 3/4 special states (E1C0h, E1D0h) in Versus, play balance (a human test), a P2 jump, the move table per opponent.
+
+## 2026-10-24, later: the user's answers and where this stopped
+
+Decisions are in design section 15 (U1-U9, I1-I5). In short: P2 jumps, throws with button B, and has **lives of their own** in Versus
+(the match ends when either player has none; D8 and the fifth-opponent rule are replaced); the menu cursor stays on SINGLE, no "PLAYER 1
+SELECTS"; the rig moves to Tcl key presses; TCP/IP scenarios, 50/60 Hz and real hardware are out of scope. In Turn, "PLAYER n GAME OVER"
+is shown when a player is out but **both machines keep running in lockstep and keep showing the other player's game** (the user's
+instruction): no screen is frozen.
+
+Not started in code: the key-press rig, the new Versus (move set, jump, throw, P2 lives, end of match), the Turn game-over text, and
+the rig runs. Started: `yiear_debug/moves.tcl` (starts each opponent's actions 0-8 at the shared decision point and logs the pose
+codes). Findings so far: the action tables are at 6E5Bh, 6FFEh, 7302h, 772Ch and 79A3h (one per opponent, entries point at short pose
+scripts; poses 04/06/08/0A/0C are the attack poses, 7740h-7754h are shared); `screenshot` gives black images in these headless runs,
+so read poses from RAM (E184h) or dump VRAM as `menushot.tcl` does. The first run reached opponent 1 only (action 8 needs checking).
