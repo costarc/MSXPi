@@ -352,7 +352,10 @@ if ($Stage) {
     Set-Content -Encoding ASCII "$ServerDir\READY" $Branch
     Ok "server files staged - applied on p restart or next start"
 }
-Get-File "$Raw/Server/Setup/msxpi-apply-staged.ps1" "$MsxPiHome\msxpi-apply-staged.ps1" | Out-Null
+# A branch older than this script has no applier: master's does the same job.
+if (-not (Get-File "$Raw/Server/Setup/msxpi-apply-staged.ps1" "$MsxPiHome\msxpi-apply-staged.ps1" -Optional)) {
+    Get-File "https://raw.githubusercontent.com/costarc/MSXPi/master/software/Server/Setup/msxpi-apply-staged.ps1" "$MsxPiHome\msxpi-apply-staged.ps1" -Optional | Out-Null
+}
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }

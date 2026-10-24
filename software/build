@@ -141,15 +141,20 @@ to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 #     so a new version landing mid-run garbles the rest of it.  msxpiupd.bat
 #     fetches msxpirfh.bat; msxpirfh.bat fetches msxpiupd.bat with the rest.
 #   - "msxpiupd branch" updates from that git branch (master when none): "p
-#     setbranch" points DriveM and the later "p update" at it. A batch file
-#     cannot test for an empty %1, so the server supplies the default.
+#     update <branch>" updates the server from it and points DriveM (where
+#     pcopy m: reads) at it; the later "p update" in msxpirfh.bat follows. A
+#     batch file cannot test for an empty %1, so an empty name means the
+#     branch in use, which the first line of msxpiupd.bat reset to master.
+#     msxpirfh.bat is fetched AFTER that, so it is the branch's own: its file
+#     list (target/*, games/*.GPF) is the branch's, not master's. It ends by
+#     pointing DriveM back at master, and fetching msxpiupd.bat from there.
 #     MSX-DOS 2 splits a parameter at "/" ("feature/x" is %1=feature,
 #     %2=/x), so the parameters are glued back together: %1%2%3...
-#     "p setbranch" exists only in a new server, so msxpiupd.bat first brings
-#     the server up to date from master (and restarts it), whatever it was.
-#     Windows has no sh and cannot restart itself: there "p update" fetches
-#     the server files, and the user restarts msxpi-server once if this run
-#     still answers "Unknown command setbranch".
+#     "p update <branch>" exists only in a new server, so msxpiupd.bat first
+#     brings the server up to date from master (and restarts it), whatever it
+#     was. Windows has no sh and cannot restart itself: there "p update"
+#     stages the server files, and the user restarts msxpi-server once if
+#     this run still finds an old server.
 #   - msxpirfh.bat keeps pcopy.old, fetches pcopy.com first, updates and
 #     restarts the server, then copies everything else with the new pcopy
 #     against the new server.
@@ -163,9 +168,9 @@ p run wget -q -O update.sh ${GITPATH}/Server/Setup/update.sh
 p run sh update.sh
 p update
 p restart
-echo Getting lastest updater...
+p update %1%2%3%4%5%6%7%8%9
+echo Getting latest updater...
 pcopy m:msxpirfh.bat
-p setbranch %1%2%3%4%5%6%7%8%9
 echo
 echo Starting update
 msxpirfh
@@ -176,7 +181,7 @@ EOF
         echo "pcopy m:pcopy.com"
         echo "echo"
         echo "p cd /home/pi/msxpi"
-        # The server, from the branch "p setbranch" chose (master when none):
+        # The server, from the branch "p update <branch>" chose (master when none):
         # on the Pi update.sh, which also fetches mapper_detect, msxpi_eth and
         # msxpi_gpio_native and rebuilds the native GPIO engine; on Windows
         # the setup script, staged until the "p restart" below. msxpiupd.bat
@@ -201,8 +206,8 @@ EOF
             echo "pcopy m:games/$f $f"
         done
         # msxpiupd.bat last, from master: an old branch must not bring back an
-        # old updater. "p setbranch" with no name points DriveM at master again.
-        echo "p setbranch"
+        # old updater. DriveM goes back to master for the next run.
+        echo "p set DriveM ${GITPATH}/target"
         echo "pcopy m:msxpiupd.bat"
         echo "p ver"
     } | to_crlf target/msxpirfh.bat
