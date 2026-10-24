@@ -30,6 +30,7 @@ from typing import List, Optional, Tuple
 
 # Standard library imports
 import re
+import sys
 import time
 import subprocess
 import logging
@@ -258,9 +259,47 @@ def restart(parm: Optional[str] = None) -> CommandResult:
         print("Restarting MSXPi Server")
         sendmultiblock(b"Pi:Ok")
         exitDueToSyncError()
+    elif transport.hostType == "Windows":
+        print("Restarting MSXPi Server")
+        sendmultiblock(b"Pi:Ok")
+        _restart_windows()
     else:
         print("Command not supported by this platform")
         sendmultiblock(b"Command not supported by this platform")
+
+
+def _restart_windows() -> None:
+    """Start this server again, in a new console, once this process is gone.
+
+    Windows has no msxpi-monitor to bring the server back, so a detached
+    PowerShell does it: it waits for this process to end, puts a staged
+    update in place (msxpi-apply-staged.ps1, see update()) and starts the
+    same Python with the same arguments in the same folder. The environment
+    (MSXPI_PORT, MSXPI_INI, ...) is inherited. Then this process exits.
+    """
+    home = os.path.abspath(settings.MSXPIHOME)
+    apply = os.path.join(home, "msxpi-apply-staged.ps1")
+
+    def q(x: str) -> str:
+        return "'" + x.replace("'", "''") + "'"
+
+    ps = f"Wait-Process -Id {os.getpid()} -Timeout 30 -ErrorAction SilentlyContinue; "
+    if os.path.isfile(apply):
+        ps += f"& {q(apply)} -MsxPiHome {q(home)}; "
+    args = ", ".join(q(a) for a in [os.path.abspath(sys.argv[0]), *sys.argv[1:]])
+    ps += (f"Start-Process -FilePath {q(sys.executable)} -ArgumentList @({args}) "
+           f"-WorkingDirectory {q(os.getcwd())}")
+    # Not DETACHED_PROCESS: PowerShell without a console does nothing at all.
+    flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
+                     creationflags=flags, close_fds=True)
+    for image in (getattr(disk, "drive0Data", None), getattr(disk, "drive1Data", None)):
+        try:
+            disk.unmount_drive(image)
+        except Exception:
+            pass
+    sys.stdout.flush()
+    os._exit(0)
 
 
 UPDATE_SETUP_URL = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Setup"
@@ -271,7 +310,7 @@ _BRANCH_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
 UPDATE_STAMP = ".last-update"
 
 
-# The branch the MSX asked for with "p setbranch"; the next "p update" uses it.
+# The branch the MSX asked for with "p update <branch>"; later "p update" use it.
 # Not persisted: a restarted server is back on master.
 _update_branch = "master"
 MASTER_DRIVE_M = "https://github.com/costarc/MSXPi/raw/master/software/target"
@@ -330,7 +369,7 @@ def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
             return branch, ""
         names = _remote_branches()
     except Exception as e:
-        print(f"setbranch: cannot check {branch}: {e}", flush=True)
+        print(f"update: cannot check {branch}: {e}", flush=True)
         return branch, ""
     for name in names:
         if name.lower() == branch.lower():
@@ -345,62 +384,77 @@ def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
     return None, why
 
 
-def setbranch(parm: Optional[str] = None) -> CommandResult:
-    """Choose the git branch the MSX updates from; no name means master.
+def _current_branch() -> str:
+    """The branch "p update" works on: the one "p update <branch>" chose.
 
-    Sent by msxpiupd.bat ("msxpiupd feature/x") and again, with no name, at the
-    end of msxpirfh.bat. Points DriveM (where pcopy m: reads) at the branch's
-    target folder and remembers the branch for "p update". MSX-DOS batch files
-    cannot test for an empty parameter, so the default lives here. A branch
-    that does not exist changes nothing: the update goes on from master.
+    That also saves DriveM (msxpi.ini) pointing at the branch, and DriveM
+    survives a server restart where the variable above does not: on a Pi
+    "p restart" is asynchronous, so a restart can land after the branch was
+    chosen and leave the MSX files coming from the branch and the server from
+    master.
     """
-    global _update_branch
-    print(f"setbranch: received {parm!r}", flush=True)
-    branch = _branch_name(parm)
-    if branch is None:
-        return sendmultiblock(b"Pi:Error - bad branch name")
-    branch, why = _resolve_branch(branch)
-    if branch is None:
-        return sendmultiblock(f"Pi:Error - {why}\nUpdating from {_update_branch}".encode())
-    _update_branch = branch
-    setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
-    return sendmultiblock(f"Pi:Ok - updating from {branch}".encode())
+    if _update_branch != "master":
+        return _update_branch
+    try:
+        m = re.match(r"https://github\.com/costarc/MSXPi/raw/(.+)/software/target$", getMSXPiVar("DriveM") or "")
+    except Exception:
+        m = None
+    return m.group(1) if m and _branch_name(m.group(1)) else "master"
 
 
 def update(parm: Optional[str] = None) -> CommandResult:
-    """Bring the server files up to date, on any host. Sent by msxpirfh.bat.
+    """Bring the server files up to date, on any host. Sent by msxpiupd.bat
+    and msxpirfh.bat.
 
-    Raspberry Pi and other Unix hosts run update.sh. msxpirfh.bat also runs
-    update.sh itself, the way it always did (servers older than this command
-    only know that way), so when update.sh finished a moment ago this has
-    nothing left to do. Windows has no sh: it runs msxpi-windows-setup.ps1 for
-    the server files and Python packages, leaving openMSX alone (it is the
-    program the MSX is running in) and asking for no administrator rights.
+    Raspberry Pi and other Unix hosts run update.sh. Windows has no sh: it
+    runs msxpi-windows-setup.ps1 for the server files and Python packages,
+    leaving openMSX alone (it is the program the MSX is running in) and asking
+    for no administrator rights.
 
-    It updates from the branch chosen with "p setbranch" (or the one given as
-    the parameter), master by default.
+    "p update <branch>" chooses the git branch (master for "master") for this
+    and the following updates: it points DriveM, where "pcopy m:" reads, at
+    the branch's target folder, so the MSX files come from the same branch.
+    Without a name the branch chosen before is used. A branch that does not
+    exist changes nothing. MSX-DOS batch files cannot test for an empty
+    parameter, so msxpiupd.bat always sends "p update %1%2..." and an empty
+    one means "the branch in use" (master, as msxpiupd.bat resets DriveM).
 
-    The server is not restarted here: a Pi's msxpi-monitor restarts it on
-    "p restart"; anywhere else the user restarts it.
+    An update of the same branch that finished in the last ten minutes is not
+    repeated: msxpiupd.bat and msxpirfh.bat both ask for one.
+
+    On Windows the setup only stages the server files (the running server's
+    files are not replaced under it); "p restart" or the next start-openmsx.bat
+    puts them in place.
+
+    The server is not restarted here: msxpiupd.bat / msxpirfh.bat send
+    "p restart" next (a Pi's msxpi-monitor, or _restart_windows(), brings it
+    back); anywhere else the user restarts it.
     """
-    branch = _branch_name(parm) if (parm or "").strip() else _update_branch
+    global _update_branch
+    current = _current_branch()
+    explicit = bool((parm or "").strip())
+    branch = _branch_name(parm) if explicit else current
     if branch is None:
         return "Pi:Error - bad branch name"
-    if branch != _update_branch:
+    if branch != current:
         branch, why = _resolve_branch(branch)
         if branch is None:
-            return f"Pi:Error - {why}"
+            return f"Pi:Error - {why}\nUpdating from {current}"
+    if explicit:
+        _update_branch = branch
+        setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
     windows = transport.hostType == "Windows"
     home = os.path.abspath(settings.MSXPIHOME)
     stamp = os.path.join(home, UPDATE_STAMP)
-    # Master: update.sh (which touches the stamp) has just run. A branch: it
-    # was master's update.sh that ran, so this one still has work to do.
-    if branch == "master":
-        try:
-            if time.time() - os.path.getmtime(stamp) < 600:
-                return "Pi:Ok - server already updated"
-        except OSError:
-            pass
+    # The stamp holds the branch of the last update (empty: master, as written
+    # by update.sh itself when msxpiupd.bat runs it first).
+    try:
+        if time.time() - os.path.getmtime(stamp) < 600:
+            with open(stamp) as f:
+                if (f.read().strip() or "master") == branch:
+                    return f"Pi:Ok - server already updated from {branch}"
+    except OSError:
+        pass
 
     name = "msxpi-windows-setup.ps1" if windows else "update.sh"
     script = os.path.join(home, name)
@@ -417,7 +471,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
 
     if windows:
         cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
-               "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause"]
+               "-MsxPiHome", home, "-SkipMpv", "-SkipOpenMsx", "-NoPause", "-Stage"]
         if branch != "master":
             cmd += ["-Branch", branch]
     else:
@@ -434,18 +488,24 @@ def update(parm: Optional[str] = None) -> CommandResult:
         return f"Pi:Error - update: {e}"
     out = done.stdout.decode("utf-8", "replace")
     print(out, flush=True)
+    if done.returncode == 0:
+        try:
+            with open(stamp, "w") as f:
+                f.write(branch)
+        except OSError:
+            pass
 
     if not windows:
         # update.sh keeps its lines short for the MSX screen.
-        return out.strip() or f"Pi:update exit {done.returncode}"
+        return f"Server from {branch}\n" + (out.strip() or f"Pi:update exit {done.returncode}")
     # The Windows setup is chatty: send the count of what went well and every
     # line that did not.
     lines = [l.strip() for l in out.splitlines() if l.strip()]
     ok = sum(1 for l in lines if l.startswith("ok "))
     bad = [l[:78] for l in lines if l.lower().startswith(("warn", "fail", "msxpi-windows-setup:"))]
     status = "Pi:Ok" if done.returncode == 0 else f"Pi:Error - exit {done.returncode}"
-    return "\n".join([f"{status} - {ok} items up to date", *bad,
-                      "Restart msxpi-server to use the update."])
+    return "\n".join([f"{status} - server from {branch}, {ok} items", *bad,
+                      "p restart (or the next start) applies it."])
 
 
 def netreset(parm: Optional[str] = None) -> CommandResult:
