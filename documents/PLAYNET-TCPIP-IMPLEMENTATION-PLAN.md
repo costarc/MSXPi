@@ -74,11 +74,12 @@ Sizes: S = up to half a day, M = one or two days, L = more.
 
 **A1. The rig runs this branch's ROM (S).**
 The rig loads `msxpibios.rom` from `Documents/openMSX/share/systemroms/extensions/` through `share/extensions/MSXPi.xml`: whatever
-any session installed last (today sha1 `50096592`, which is not this branch's `target/msxpibios.rom`, `f93dc9d5`). A ROM and server
+any session installed last. The image openMSX needs is the whole 32 KB EEPROM image `software/target/msxpi32k.rom` (sha1 `50096592`, the first one
+in `MSXPi.xml`), installed under the name `msxpibios.rom`; `target/msxpibios.rom` (`f93dc9d5`) is only its 16 KB lower half and fails on the rig. A ROM and server
 that disagree on the Ethernet protocol leave INL with no network; that cost the last sessions their TCP/IP testing.
 - Files: new `software/Client/tests/soccernet/rig_preflight.sh` (or `.py`), called first by `run_native.sh`, `run_salamander.sh`,
   `run_pingpong.sh`, `run_yiear.sh`, `measure.sh`.
-- Change: compare the ROM openMSX will load (the `sha1` in `MSXPi.xml`, then the file) with `software/target/msxpibios.rom`, and
+- Change: compare the ROM openMSX will load (the `sha1` in `MSXPi.xml`, then the file) with `software/target/msxpi32k.rom`, and
   check its Ethernet protocol byte (the `cp ETH_PROTO` after the probe's `cp "H"`, as the review's scan did) against `PROTO_VERSION`
   in `msxpi_eth.py`. On a mismatch, stop and print the command that installs the branch's ROM. Print the ROM's sha1 into the run log
   either way.
