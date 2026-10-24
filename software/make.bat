@@ -12,7 +12,7 @@ REM stdlib, no --sdcccall 0, the repo's fusion library. Space-separated, lower c
 REM Every other program is still built the old way (--sdcccall 0): SDCC 4.6's runtime uses
 REM the other convention, so the link warns "Conflicting sdcc options" and the build is
 REM refused (SDCC_ALLOW_ABI_MIX=1 lets it through, only for software	oolsbi_bytecmp.py).
-SET ABI1_PROGRAMS=templatc
+SET ABI1_PROGRAMS=templatc mchat
 SET ABI1=0
 FOR %%P IN (%ABI1_PROGRAMS%) DO IF /I "%%P"=="%1" SET ABI1=1
 
@@ -90,6 +90,13 @@ findstr /C:"Conflicting sdcc options" %LINKLOG% >nul
 IF NOT ERRORLEVEL 1 IF NOT DEFINED SDCC_ALLOW_ABI_MIX (
     echo ERROR: %sourcename% mixes calling conventions ^(linker: Conflicting sdcc options^).
     echo        Port it to sdcccall 1 and add it to ABI1_PROGRAMS, or set SDCC_ALLOW_ABI_MIX=1.
+    del %LINKLOG%
+    del %sourcename%.ihx 2>nul
+    EXIT /B 1
+)
+findstr /C:"Undefined Global" %LINKLOG% >nul
+IF NOT ERRORLEVEL 1 (
+    echo ERROR: %sourcename% has undefined symbols ^(linker: Undefined Global^).
     del %LINKLOG%
     del %sourcename%.ihx 2>nul
     EXIT /B 1

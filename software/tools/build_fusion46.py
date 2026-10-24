@@ -26,7 +26,7 @@ SOFTWARE = Path(__file__).resolve().parent.parent
 ASM = ['vram', 'fillvram', 'hideshowdisplay', 'inport', 'outport', 'inkey', 'inputchar', 'ctype',
        'joystickbios', 'locate', 'printchar', 'printhex', 'readmsxtype', 'readsp', 'screen', 'setdate',
        'strcompare', 'strcopy', 'fcb_open', 'fcb_read', 'fcb_find', 'vdpwrite', 'functionkeys',
-       'setcolors', 'waitkey']
+       'setcolors', 'waitkey', 'cls']
 
 
 def run(cmd, cwd):

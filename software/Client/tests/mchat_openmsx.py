@@ -68,7 +68,7 @@ LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or 
 if LINK == 'tcp':
     # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
     # at 192.168.99.1 through the Windows TAP (msxpi-tcpip-setup.ps1) and needs no MSXPi server for chat.
-    TIMELINE = [(20, 'MSR I\r'), (32, 'INL I\r'), (46, 'memtop\r'), (49, 'shot:memtop'), (50, os.environ.get('MCHAT_CMD', 'mchat /t alice') + '\r')] + [
+    TIMELINE = [(20, 'MSR I\r'), (32, 'INL I\r'), (46, 'memtop\r'), (49, 'shot:memtop'), (49, 'dump:font'), (50, os.environ.get('MCHAT_CMD', 'mchat /t alice') + '\r')] + [
         (int(58 + (t - 30) * 1.5), a) for t, a in TIMELINE if t >= 30]   # the TCP/IP link is slower
     if os.environ.get('MCHAT_FORCE1'):
         TIMELINE = [(t, a.replace('mchat /t', 'mchat /1 /t')) for t, a in TIMELINE]

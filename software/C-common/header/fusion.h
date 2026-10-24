@@ -107,6 +107,7 @@ void Width(char n);
 unsigned int ReadTPA(void);
 
 /* Assembler: stack arguments, result in L/HL */
+void Cls(void) __sdcccall(0);
 void PrintChar(char c) __sdcccall(0);
 void Locate(char x, char y) __sdcccall(0);
 void PutCharHex(char c) __sdcccall(0);

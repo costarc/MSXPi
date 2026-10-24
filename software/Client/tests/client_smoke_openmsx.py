@@ -39,6 +39,8 @@ def main():
     ap.add_argument('--name', help='8.3 name on the disk (default: the file name)')
     ap.add_argument('--at', type=int, default=22, help='emulated second to type the command')
     ap.add_argument('--wait', type=int, default=15, help='seconds to let it run before reading the screen')
+    ap.add_argument('--floppy', action='store_true', help='also put the files in a directory-as-disk on drive A: (machines with a drive)')
+    ap.add_argument('--ext', nargs='*', default=['ram4mb', 'MSXPi'], help='openMSX extensions')
     ap.add_argument('--extra', nargs='*', default=[], help='more files to put on the disk')
     a = ap.parse_args()
 
@@ -52,8 +54,13 @@ def main():
         shutil.copy(src, work / 'inject.bin')
         subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'inject.bin',
                         f'home/disks/msxpiboot.dsk:{name}'], cwd=work, check=True, stdout=subprocess.DEVNULL)
+    if a.floppy:
+        (work / 'floppy').mkdir()
+        shutil.copy(a.com, work / 'floppy' / (a.name or Path(a.com).name.upper()))
+        for e in a.extra:
+            shutil.copy(e, work / 'floppy' / Path(e).name.upper())
     screen = work / 'screen.txt'
-    t0, t1 = a.at, a.at + a.wait
+    t0, t1 = a.at, a.at + a.wait + 4 * a.command.count('|')
     script = work / 'smoke.tcl'
     script.write_text('\n'.join([
         'set save_settings_on_exit off', f'set msxpiserver_port {PORT}', 'set speed 100', 'set power on',
@@ -61,7 +68,7 @@ def main():
         '    set f [open "' + screen.as_posix() + '" w]',
         '    puts $f [get_screen]',
         '    close $f }',
-        f'after time {t0} {{type_via_keybuf "{tcl_string(a.command)}\\r"}}',
+        *[f'after time {t0 + 4 * i} {{type_via_keybuf "{tcl_string(c.strip() + chr(13))}"}}' for i, c in enumerate(a.command.split('|'))],
         f'after time {t1} dump', f'after time {t1 + 1} exit']) + '\n')
 
     env = dict(os.environ, MSXPI_HOME=str(work / 'home'), MSXPI_PORT=str(PORT))
@@ -71,7 +78,8 @@ def main():
     try:
         time.sleep(3)
         with (work / 'openmsx.log').open('w') as out:
-            subprocess.run([OPENMSX, '-machine', MACHINE, '-ext', 'ram4mb', '-ext', 'MSXPi',
+            subprocess.run([OPENMSX, '-machine', MACHINE] + [x for e in a.ext for x in ('-ext', e)] +
+                           (['-diska', str(work / 'floppy')] if a.floppy else []) + [
                             '-command', 'set renderer none', '-script', str(script)],
                            stdout=out, stderr=subprocess.STDOUT, timeout=300)
     finally:

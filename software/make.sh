@@ -34,7 +34,7 @@ prog="${1:?Usage: make.sh program [output-directory]}"
 # Programs already ported to SDCC 4.6's own calling convention (sdcccall 1); keep in step with
 # ABI1_PROGRAMS in make.bat. Any other program still mixes conventions and the link guard below
 # refuses it unless SDCC_ALLOW_ABI_MIX=1 (only for software/tools/abi_bytecmp.py).
-ABI1_PROGRAMS="templatc"
+ABI1_PROGRAMS="templatc mchat"
 abi1=0
 for p in $ABI1_PROGRAMS; do [[ "$p" == "$prog" ]] && abi1=1; done
 out="${2:-$here/target}"
@@ -77,6 +77,10 @@ sdcc -mz80 "${abiflags[@]}" --code-loc 0x106 --data-loc 0x0 \
 if grep -q 'Conflicting sdcc options' "$scratch/link.log" && [[ -z "${SDCC_ALLOW_ABI_MIX:-}" ]]; then
     echo "ERROR: $prog mixes calling conventions (linker: Conflicting sdcc options)." >&2
     echo "       Port it to sdcccall 1 and add it to ABI1_PROGRAMS, or set SDCC_ALLOW_ABI_MIX=1." >&2
+    exit 1
+fi
+if grep -q 'Undefined Global' "$scratch/link.log"; then
+    echo "ERROR: $prog has undefined symbols (linker: Undefined Global)." >&2
     exit 1
 fi
 objcopy -I ihex -O binary --gap-fill 0xff "$scratch/$prog.ihx" "$scratch/$prog.com"
