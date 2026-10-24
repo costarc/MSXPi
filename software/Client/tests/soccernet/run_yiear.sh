@@ -38,6 +38,7 @@ IRC_PORT=${IRC_PORT:-6637}
 [ -f "$YIEAR_ROM" ] || { echo "set YIEAR_ROM to your own kung-fu.rom"; exit 1; }
 WORK=${WORK:-${TMP:-/tmp}/yiear-work}
 mkdir -p "$WORK"; WORKW=$(cd "$WORK" && pwd -W 2>/dev/null || echo "$WORK")
+python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (a mismatch leaves INL without a network)
 python "$SRC/build.py" --assembler "$ASM" || exit 1
 [ "$SCENARIO" != tcp ] || python "$HERE/build_client.py" mchat "$WORK/mchat" || exit 1
 python "$ROOT/software/ROM-Patcher/profiles/yiear/rebuild.py" --assembler "$ASM" --rom "$YIEAR_ROM" \

@@ -239,15 +239,18 @@ and 2.7 % with the worst network tried, because a frame waits for the opponent's
 needs real time); another session's emulators were running on the host, which does not change emulated time. Not measured: the sound
 by ear or a recording (`RECORD=file.wav`), and a real machine's cost per frame.
 
-## 2026-10-24, the two-TCP/IP-node scenario: added, does not connect (rig problem, not Yie Ar)
+## 2026-10-24, the two-TCP/IP-node scenario (passes after the merge)
 
-`run_yiear.sh SCENARIO=both` starts both machines over TCP/IP without the chat (`MSR I`, `INL I`, `PLAYNET /T yiear P1 5137 10.0.2.2:5138`
-and the mirror on P2, over the server's user-mode UDP link). It builds and starts, PLAYNET prints "Loading the ROM... Connecting", the
-screen goes to the game, and the machine resets about 6 s later without a single frame (`nf` stays 0, no stub in the game's page 3,
-`foreign_writes` n/a). This is the failure already recorded in `HANDOVER-salamander.md` 4b for Soccer's `SCENARIO=mixed` and for a clean
-`master`: InterNestor sends no frame to the server's NAT link, so the TCP/IP game path cannot connect in this rig whatever the game.
-Not investigated further (the user had put the TCP/IP path out of scope; link 2, which uses the MSXPi for the game, works: see above).
-`yiear_debug/initwatch.tcl` traces INIT and the resets for whoever picks this up; `DUMP_EVERY=n` dumps the screen every n emulated s.
+`run_yiear.sh SCENARIO=both` starts both machines over TCP/IP without the chat (`MSR I`, `INL I`, `PLAYNET /T yiear P1 5137
+10.0.2.2:5138` and the mirror on P2, over the server's user-mode UDP link). **Before** `feature/tcpip-games` was merged (2026-10-24) it did
+not connect: PLAYNET printed "Connecting", the screen went to the game and the machine reset about 6 s later with no frame. Cause (from
+that branch's work, `PLAYNET-TCPIP-IMPLEMENTATION-PLAN.md` A1): the `msxpibios.rom` that openMSX loads from `Documents\openMSX\sharesystemroms\extensions\` (whatever a session installed last) disagreed with the server on the Ethernet protocol, so INL had no network.
+`rig_preflight.py` (now called by `run_yiear.sh` too) checks that the installed ROM is the branch's; it said "protocol 2, matches".
+**After the merge** (`MODE=2 EXITKEY=900`, no lag): **901 identical frames**, no desync, delay 7, Ctrl+Shift+F5 on P2 ended the game on
+both machines (results 1 and 2) and both were back at the MSX-DOS prompt with `MCHAT /T` typed. So the TCP/IP transport, the network
+engine in page 2 and the game's own page-3 segment all work with the Yie Ar extension at A000h. Not run: lag and loss over this link
+(the server's impairments only apply to the MSXPi path), a mixed pair (one MSXPi node, one TCP/IP node).
+`yiear_debug/initwatch.tcl` and `DUMP_EVERY=n` stay for debugging.
 
 ## 2026-10-24, desync detection and the screen check (done)
 
