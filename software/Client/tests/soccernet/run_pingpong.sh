@@ -11,7 +11,10 @@
 #   POKEPTS=n  both nodes set the points to 20 and 7 at frame n (a game ends at the next point)
 #   EXITKEY=n  P2 presses Ctrl+Shift+F5 at frame n.   TMAX/NODETMO  emulated / wall seconds before a node is stopped
 #   RENDERER=SDLGL-PP to watch it.   EXTRA_TCL / EXTRA_TCL_C  one more script for P1 / P2
-# Not here yet (run_native.sh has them): the chat, TCP/IP and link-2 scenarios (plan step 8).
+#   SCENARIO=mixed  P1 over the MSXPi, P2 over the TCP/IP UNAPI: MSR I, INL I (on its server's user-mode UDP link, msxpi_ethnat.py,
+#                 as 10.0.2.15), then PLAYNET /T pingpong P2 5102 10.0.2.2:5101. BOTH=1: both nodes over TCP/IP. HYBRID=1: the
+#                 TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2). PNOPTS = more PLAYNET /T options.
+# Not here yet (run_native.sh has them): the chat scenarios (plan B5/B6).
 # Results: $WORK/np/{P1,P2}.trace; the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -52,14 +55,24 @@ var SPI_HW=False
 INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$PINGPONG_ROM" PINGPONG.ROM > /dev/null
+  if [ "$SCENARIO" = mixed ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
+    printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
+    for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/PINGPONG.GPF" PINGPONG.GPF > /dev/null
+  fi
 done
 # the profile hash the servers announce: the GPF's
 PROFHASH=$(python -c "import struct,sys; print('%08x' % struct.unpack('<I', open(sys.argv[1],'rb').read()[8:12])[0])" "$WORK/PINGPONG.GPF")
 rm -f "$WORK/stop_servers"
 start() {  # n port local_udp peer_udp version
+  nat=""; [ "$SCENARIO" = mixed ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
+  np=""      # the Pi's own session: an MSXPi node always; a TCP/IP node only for HYBRID=1 (its game packets go through the MSXPi)
+  if [ -z "$nat" ] || [ -n "$HYBRID" ]; then np="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
-        MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH \
+        $nat $np \
         MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT \
         MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-2} \
         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
@@ -72,6 +85,14 @@ start 1 8115 5101 5102
 start 2 8116 5102 5101 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
+if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
+  export PRE_P2="MSR I;INL I" CMD_P2="PLAYNET /T $PNOPTS pingpong P2 5102 10.0.2.2:5101"
+  [ -z "$BOTH" ] || export PRE_P1="MSR I;INL I" CMD_P1="PLAYNET /T $PNOPTS pingpong P1 5101 10.0.2.2:5102"
+  if [ -n "$HYBRID" ]; then              # link 2: the game's packets through the node's MSXPi
+    export CMD_P2="PLAYNET /T /H pingpong P2"
+    [ -z "$BOTH" ] || export CMD_P1="PLAYNET /T /H pingpong P1"
+  fi
+fi
 node() {  # role port
   xs=""; [ "$1" = P1 ] && xs="$EXTRA_TCL"; [ "$1" = P2 ] && xs="$EXTRA_TCL_C"
   PLAYNET_SYMS="$WORKW/stub_syms.tcl" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF PROG="PLAYNET pingpong" \
