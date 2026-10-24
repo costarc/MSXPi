@@ -69,6 +69,7 @@ Also affected:
 up first). Do not restore the whole images: e59728e0 also updated other files on them. Check which images held
 which file before that commit.
 Test: `mchat_openmsx.py` on Canon_V-25 + RAM 4MB (see 0.5). It passed with this binary on 2026-10-24.
+Note (2026-10-24, PLAYNET TCP/IP plan A3): `playnet.ovl` in `software/target/` on `feature/tcpip-games` is the SDCC 4.6 stage-1 build, not the 4.0 one.
 
 0.2 **Guards in make.bat and make.sh:**
 - Fail when `sdcc --version` is not 4.6.0.

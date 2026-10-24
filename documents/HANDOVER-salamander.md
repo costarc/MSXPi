@@ -95,7 +95,10 @@ player on openMSX over the MSXPi. Changes:
 Reached on P2: segments, ROM load (CRC right), patches, footprint, connecting. **Not reached: the connection.** Both nodes say
 "Could not connect"; the server's NAT link (`msxpi_ethnat.py`, logging added for a test and removed) receives **no frame at all**
 from INL after "Ethernet UNAPI shuttle ready". Soccer's `SCENARIO=mixed` fails the same way, also from a clean `master` worktree
-(`C:\tmp\msxpi-master`), so it is the rig, not this branch. Lead: openMSX loads the MSXPi BIOS from the user data folder,
+(`C:\tmp\msxpi-master`), so it is the rig, not this branch.
+(Resolved 2026-10-24, PLAYNET TCP/IP plan A1/A2: the "rig failure" was two things. The ROM openMSX loaded and the server disagreed on the Ethernet
+protocol, so INL had no network (`rig_preflight.py` now checks it); and `run_salamander.sh` forced `MSXPI_NETPLAY_VERSION=1`, which made every
+`TCP=1` run fail with "incompatible opponent".) Lead: openMSX loads the MSXPi BIOS from the user data folder,
 `Documents/openMSX/share/systemroms/extensions/msxpibios.rom`, changed 2026-10-22 17:36 (sha1 d3db91..., first in that folder's
 `MSXPi.xml`); a private copy of the user data with the 2 October ROM (163cd9..., `OPENMSX_USER_DATA=C:/tmp/omxuser`) still failed,
 but it was not checked that openMSX used it. Not run yet: Soccer's mixed regression with this branch once the link works.
