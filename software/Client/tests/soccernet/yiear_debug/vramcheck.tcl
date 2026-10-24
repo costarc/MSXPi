@@ -17,7 +17,7 @@ proc vrow {r} {
 }
 debug set_bp $::sym(tickDone) {} {
     incr ::vtk
-    if {$::vtk % 15 != 0} return
+    if {$::vtk % [expr {[info exists ::env(VRAM_EVERY)] ? $::env(VRAM_EVERY) : 15}] != 0} return
     set st [peek 0xE000]
     foreach r {2 3 13 14 15 17 19} {
         set line [vrow $r]

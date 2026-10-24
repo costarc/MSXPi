@@ -101,22 +101,23 @@ dispatch:
         ld      a,(MODE)
         cp      2
         jr      z,.vsh
-        ld      de,STR_HUD1                     ; Turn: whose turn it is...
+        ld      a,(FRAME)                       ; Turn, row 2 (the playfield below it is redrawn every frame): whose turn it is, and
+        and     16                              ; every other 16 frames who is out (the game goes on for the other player)
+        jr      z,.hud
+        ld      de,STR_OUT1
+        ld      a,(tOut)
+        or      a
+        jr      nz,.t1
+        ld      de,STR_OUT2
+        ld      a,(tOut+1)
+        or      a
+        jr      nz,.t1
+.hud:   ld      de,STR_HUD1
         ld      a,(tCur)
         or      a
         jr      z,.t1
         ld      de,STR_HUD2
 .t1:    call    PRINT
-        ld      a,(tOut)                        ; ...and who is out (the game goes on for the other player)
-        or      a
-        jr      z,.t2
-        ld      de,STR_OUT1
-        call    PRINT
-.t2:    ld      a,(tOut+1)
-        or      a
-        jr      z,.fin
-        ld      de,STR_OUT2
-        call    PRINT
         jr      .fin
 .vsh:   ld      a,(tLives2)                     ; Versus: player 2's lives
         add     a,$10

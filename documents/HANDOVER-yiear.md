@@ -265,3 +265,17 @@ engine in page 2 and the game's own page-3 segment all work with the Yie Ar exte
   seen. The winner's screen is now held for 200 frames (`tHold` in the stub, `HOLD` in `ext.asm`; the game's state routine is not run
   meanwhile); the winner is cleared at the end so the game's last 5 frames of state 7 do not restart it (204 frames measured, twice).
 - GPF now 2036 bytes.
+
+## 2026-10-24, last results: TCP/IP speed, Turn screen (done)
+
+- **Speed over TCP/IP** (`SCENARIO=both MODE=0`, `tempo.tcl`, 3201 identical frames): the sound driver 59.95 / 59.75 calls a second (as the
+  cartridge), but the game runs at **32.5 frames a second** (54 % of the cartridge's 59.95), against 59.7 over the MSXPi link in the same
+  test. This agrees with the performance measurements of the other games: the MSXPi link is much faster than TCP/IP in this rig.
+  The lag, jitter and loss options of `run_yiear.sh` only act on the MSXPi path (they are the Pi's netplay code), so they are not used
+  over TCP/IP; that says nothing about the TCP/IP link's speed. The music keeps its tempo in both cases. `tempo.tcl` now tolerates the
+  fight leaving state 5 for up to 2 s (the first TCP/IP run measured 0.2 s windows).
+- **Turn on screen** (`vramcheck.tcl`, `turn_out.tcl`): "PLAYER 1" and "PLAYER 2" on row 2 during a fight, identical on both machines.
+  **A defect found and fixed**: "PLAYER n GAME OVER" was drawn on row 3, which is part of the scrolling playfield and was painted over
+  within a frame. The notices are now on row 2 (col 7) and alternate every 16 frames with the "PLAYER n" line (which is padded to the same
+  width). Seen: "PLAYER 1 GAME OVER" with player 1 forced out and the fight going on, the same on both machines.
+- GPF now 2057 bytes. Not done: a mixed pair (one MSXPi, one TCP/IP node: the launcher's TCP/IP switch is global), a human play test, real hardware.
