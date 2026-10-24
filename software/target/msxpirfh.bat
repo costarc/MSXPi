@@ -39,6 +39,8 @@ pcopy m:skmsx.com
 pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
+pcopy m:games/PINGPONG.GPF PINGPONG.GPF
+pcopy m:games/SALAMAND.GPF SALAMAND.GPF
 pcopy m:games/SOCCER.GPF SOCCER.GPF
 p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target
 pcopy m:msxpiupd.bat

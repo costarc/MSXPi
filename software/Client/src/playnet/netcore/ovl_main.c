@@ -34,6 +34,10 @@ typedef struct {
     uint8_t txbuf[NC_MAX_PKT];  /* 41  the game's packets cross a page-3 switch here (transport_unapi.asm) */
     uint8_t rxbuf[NC_MAX_PKT];  /* 87 */
     uint8_t irc;            /* 133 MCHAT /T's IRC TCP connection, kept alive through the game; FFh: none */
+    uint8_t service;        /* 134 run the stack's timer in xchg: 0 no, 1 yes, 2 by the stack found (open sets 0 or 1) */
+    uint8_t k_want;         /* 135 open: the send interval to announce, 1-3; 0 = by the stack (2 with the service, else 1) */
+    uint8_t s_want;         /* 136 open: the service latency to announce in frames; FFh = by the stack (1 with the service, else 0) */
+    uint8_t k;              /* 137 poll: the agreed send interval once ready */
 } ovl_io_t;
 
 ovl_io_t ovl_io;
@@ -160,16 +164,10 @@ uint8_t nc_recv(nc_addr *from, uint8_t *buf, uint8_t max)
     return (uint8_t)ur_bc;
 }
 
-static uint16_t last_ticks, cs, rem;
-
+/* netcore's time is the host's tick itself: a 16-bit read, no arithmetic (the rate goes to nc_init) */
 uint16_t nc_now(void)
 {
-    uint16_t t = *(volatile uint16_t *)ovl_io.ticks;
-    uint32_t x = (uint32_t)(uint16_t)(t - last_ticks) * 100 + rem;
-    last_ticks = t;
-    cs += (uint16_t)(x / ovl_io.hz);
-    rem = (uint16_t)(x % ovl_io.hz);
-    return cs;
+    return *(volatile uint16_t *)ovl_io.ticks;
 }
 
 static uint8_t r_reg(void) __naked
@@ -188,6 +186,42 @@ uint32_t nc_rand32(void)
     return x ^ ((uint32_t)r_reg() << 16);
 }
 
+/* ---- the stack's service (PLAYNET-TCPIP-PERFORMANCE.md 5.2) ----------------------------------------
+ * A software stack such as InterNestor Lite receives from its timer routine, which the BIOS calls through
+ * H.TIMI (in MSX-DOS's page 3, mapped during a call) on every interrupt. During a game the interrupts go
+ * to the game, so the stack would run only when one happens to fall inside a call. Instead, xchg runs the
+ * hook itself, as the BIOS would (A = 80h: the VDP status with the frame flag), at most once per interrupt
+ * period, and not when a real interrupt ran it since the last service. Interrupts are off, as in the BIOS. */
+#define JIFFY 0xFC9E
+static uint16_t svc_ticks, svc_jiffy;
+
+static void run_timi(void) __naked
+{
+__asm
+    push ix
+    push iy
+    ld a,#0x80
+    call 0xFD9F
+    pop iy
+    pop ix
+    ret
+__endasm;
+}
+
+static void service(uint16_t now)
+{
+    uint16_t j = *(volatile uint16_t *)JIFFY;
+    if (j != svc_jiffy) {                   /* an interrupt ran the stack inside a call: that was its service */
+        svc_jiffy = j;
+        svc_ticks = now;
+        return;
+    }
+    if (now == svc_ticks)                   /* less than one interrupt period since the last */
+        return;
+    svc_ticks = now;
+    run_timi();
+}
+
 /* ---- the IRC connection MCHAT /T left open (PROTOCOLS 14) -----------------------------------------
  * Twice a second: read what arrived (at most 4 x 56 bytes), drop it, and answer each "PING x" with
  * "PONG x", so the server keeps the connection through a long game. io.buf: 0-55 what is read, 64-127
@@ -197,13 +231,12 @@ static char irc_line[IRC_LINE];
 static uint8_t irc_len;                     /* FFh: in a line too long to be a PING: skipped to its end */
 static uint16_t irc_due;
 
-static void irc_keep(void)
+static void irc_keep(uint16_t now)
 {
     uint8_t *b = ovl_io.buf, i, n, reads = 4;
-    uint16_t now = nc_now();
     if (ovl_io.irc == 0xFF || since(now, irc_due) < 0)
         return;
-    irc_due = now + 50;
+    irc_due = now + (ovl_io.hz >> 1);
     do {
         ur_bc = (uint16_t)ovl_io.irc << 8; ur_de = (uint16_t)b; ur_hl = 56;
         i = unapi(TCPIP_TCP_RCV);
@@ -233,34 +266,57 @@ static void irc_keep(void)
 /* ---- the entries --------------------------------------------------------------------------- */
 void ovl_open(void)
 {
-    last_ticks = *(volatile uint16_t *)ovl_io.ticks;
+    uint8_t hybrid = ovl_io.ncand == 0xFF;  /* link 2: the game's packets go through the Pi; only the IRC and the stack here */
     if (!tcp_find()) {
         ovl_io.status = 1;
         return;
     }
-    ur_hl = ovl_io.lport; ur_bc = 0;        /* transient */
-    if (unapi(TCPIP_UDP_OPEN) != ERR_OK) {
-        ovl_io.status = 2;
-        return;
+    if (!hybrid) {
+        ur_hl = ovl_io.lport; ur_bc = 0;    /* transient */
+        if (unapi(TCPIP_UDP_OPEN) != ERR_OK) {
+            ovl_io.status = 2;
+            return;
+        }
+        conn = (uint8_t)(ur_bc >> 8);
     }
-    conn = (uint8_t)(ur_bc >> 8);
-    nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay);
-    nc_set_peers(ovl_io.cand, ovl_io.ncand);
-    nc_restart();
+    if (ovl_io.service == 2)                /* a stack in RAM has a timer to run; a ROM one (GR8NET) does not */
+        ovl_io.service = un_seg != 0xFF || un_addr >= 0xC000;
+    svc_jiffy = *(volatile uint16_t *)JIFFY;
+    svc_ticks = ovl_io.service ? nc_now() : 0;
+    if (!hybrid) {
+        nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz,
+                ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 2 : 1),
+                ovl_io.s_want != 0xFF ? ovl_io.s_want : (ovl_io.service ? 1 : 0));
+        nc_set_peers(ovl_io.cand, ovl_io.ncand);
+        nc_restart();
+    }
     ovl_io.status = 0;
+}
+
+/* the hybrid transport's share of the game (link 2): the stack's timer and the IRC connection, nothing else */
+void ovl_keep(void)
+{
+    uint16_t now = nc_now();
+    if (ovl_io.service)
+        service(now);
+    irc_keep(now);
 }
 
 void ovl_poll(void)
 {
-    irc_keep();
+    irc_keep(nc_now());
     nc_poll();
     ovl_io.status = nc_status(&ovl_io.delay);
     ovl_io.leader = nc_is_leader();
+    ovl_io.k = nc_k();
 }
 
 void ovl_xchg(void)
 {
-    irc_keep();
+    uint16_t now = nc_now();
+    if (ovl_io.service)
+        service(now);
+    irc_keep(now);
     ovl_io.status = nc_xchg(ovl_io.pkt, ovl_io.len, ovl_io.rx, &ovl_io.reason);
 }
 
@@ -269,7 +325,7 @@ void ovl_bye(void)
 {
     uint16_t t0 = nc_now();
     nc_bye(ovl_io.reason);
-    while (nc_bye_pending() && (uint16_t)(nc_now() - t0) < 100)
+    while (nc_bye_pending() && (uint16_t)(nc_now() - t0) < ovl_io.hz)
         nc_poll();
 }
 

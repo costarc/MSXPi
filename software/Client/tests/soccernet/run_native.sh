@@ -11,6 +11,7 @@
 #   ONLY=H        run one node.    FORCE_DELAY=n  fix the delay.      VER2=n  version announced by node C
 #   POKEF=n       corrupt the ball on node H at frame n (desync check)    EXITF=n  node C exits at frame n
 #   TMAX/NODETMO  emulated / wall seconds before a node is stopped.   RENDERER=SDLGL-PP to watch it
+#   HYBRID=1      (with SCENARIO=mixed) the TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2)
 #   EXTRA_TCL=file.tcl  one more openMSX script for node H (measurements); EXTRA_TCL_C for node C
 #   RECORD=file.wav  node H records its sound (openMSX record -audioonly) and node C is muted
 #   EXITKEY=n     (chat) node C presses Ctrl+Shift+F5 at frame n; both must return to MCHAT
@@ -27,6 +28,9 @@
 #                 connection (with EXITKEY: the IRC log must show each nick's NAMES after the game). The IRC
 #                 server pings every IRC_PING s (3) and drops a client silent for IRC_TIMEOUT s (60, wall clock), so the
 #                 connection survives only if PLAYNET answers during the game.
+#   GAMELINK1=1   (tcp) MCHAT.INI GAMELINK=1: the game over TCP/IP (link 1); without it MCHAT /T asks its MSXPi first (link 2)
+#   PLAININI=1    (tcp) MCHAT.INI without GAMEPORT/GAMEADDR, as a user writes it: the game cannot connect through the
+#                 rig's NAT, but the chat must survive /play and /accept (the FFh globals of make.bat's build)
 # Results: $WORK/np/{H,C}.trace (+.ticks, .screen); the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -82,8 +86,12 @@ INI
   fi
   if [ "$SCENARIO" = tcp ]; then        # the chat over TCP/IP: its INI (the IRC fixture is the host, 10.0.2.2)
     nick=$( [ $n = 1 ] && echo alice || echo bob )
-    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n\032' \
-      "${IRC_PORT:-6671}" $nick $n > "$WORK/MCHAT$n.INI"
+    if [ -n "$PLAININI" ]; then
+      printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\n\032' "${IRC_PORT:-6671}" $nick > "$WORK/MCHAT$n.INI"
+    else
+      printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n%b\032' \
+        "${IRC_PORT:-6671}" $nick $n "${GAMELINK1:+GAMELINK=1\r\n}" > "$WORK/MCHAT$n.INI"
+    fi
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/MCHAT$n.INI" MCHAT.INI > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/mchat/MCHAT.COM" MCHAT.COM > /dev/null
   fi
@@ -99,8 +107,12 @@ else
 fi
 start() {  # n port local_udp peer_udp version
   nat=""; [ -n "$TCPN" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && nat="MSXPI_ETH_LINK=udpnat"
+  np=""      # the Pi's own session: an MSXPi node always; a TCP/IP node only for HYBRID=1 (its game packets go through the MSXPi)
+  if [ -z "$CHAT" ]; then
+    if [ -z "$nat" ] || [ -n "$HYBRID" ]; then np="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; fi
+  fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
-      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $( [ -n "$CHAT" ] || [ -n "$nat" ] || echo "MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH" ) MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-1}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+      env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp"       $netenv $nat $np MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT       MSXPI_NETPLAY_DELAY=${FORCE_DELAY:-0} MSXPI_NETPLAY_VERSION=${5:-2}         python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
@@ -112,14 +124,18 @@ if [ -n "$CHAT" ]; then
   IRC_PID=$!
 fi
 start 1 8115 5101 5102
-start 2 8116 5102 5101 ${VER2:-1}
+start 2 8116 5102 5101 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
 [ "$SCENARIO" != tcp ] || export PRE_H="MSR I;INL I" PRE_C="MSR I;INL I" CHAT_TCP=1
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
-  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T soccer C 5102 10.0.2.2:5101"
-  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T soccer H 5101 10.0.2.2:5102"
+  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C 5102 10.0.2.2:5101"
+  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H 5101 10.0.2.2:5102"
+  if [ -n "$HYBRID" ]; then              # link 2: the game's packets through the node's MSXPi, the stack kept for the chat
+    export CMD_C="PLAYNET /T /H soccer C"
+    [ -z "$BOTH" ] || export CMD_H="PLAYNET /T /H soccer H"
+  fi
 fi
 node() {  # role port
   snd=""; [ -n "$RECORD" ] && { [ "$1" = H ] && snd="record start -audioonly $RECORD" || snd="set mute on"; }

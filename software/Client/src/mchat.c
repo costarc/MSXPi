@@ -472,7 +472,7 @@ static void pick_key(uint8_t key) {
 
 /* A game is ready: fetch its command line. 1 = launch_cmd is set. */
 static uint8_t fetch_launch(void) {
-    if (!(gflags & GF_LAUNCH) || link_tcp) return 0;
+    if (!(gflags & GF_LAUNCH)) return 0;
     gflags &= ~GF_LAUNCH;
     if (!xchg("mchat launch") || reply[5] != 'L' || !reply[6]) return 0;
     memcpy(launch_cmd, reply + HDR, 39);
@@ -628,6 +628,7 @@ int main(void) {
     uint16_t now, lastpoll;
     read_args(nick);
     net = 0;
+    lt_seg = 0;                 /* tcp_link_stop frees it on the way out, over the MSXPi as well */
     machine = msx_version();
     ui_mode = (machine && !force_msx1) ? UI_MSX2 : UI_MSX1;
     /* No C runtime start-up here: nothing is zeroed for us. */

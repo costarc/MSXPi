@@ -27,36 +27,141 @@ tDosSub: defb   0                       ; what MSX-DOS had at FFFFh: its sub-slo
 ; One C9 transaction:  MSX -> C9, FLAGS, L, P[L], SUM      Pi -> L, P[L], SUM | 00,00 | FF,00 | FE,reason
 ; A timeout resets the link and counts as a lost transaction, which the protocol tolerates.
 ; Interrupts are off during the transaction and on afterwards.
+; DELTAs (10.1): a packet that follows the last one in its direction (F d = 1-3 frames on: a packet every K
+; frames) travels as seq, F, its d new records and the check (d(W + 1) + 4 bytes) instead of L. Replies: when DE
+; still holds the last packet received (FLAGS bit 3), the Pi may send one, which is applied there. Ours: once the
+; Pi sent a DELTA (an older Pi never does), a packet 1-3 frames after the last one sent goes as a DELTA. The
+; engine builds every packet from one ring of frame records, so it repeats the last one's other records.
 xchg:   di
         ld      (tSp),sp
         push    de                      ; the receive buffer
-        ld      bc,2                    ; B = L = 0 (nothing to send), C = FLAGS: bit 1 return a packet
+        ld      (tPkt),hl
+        push    hl
+        ld      hl,(tRxAt)
+        or      a
+        sbc     hl,de
+        pop     hl
+        ld      a,(tRxOk)               ; C = FLAGS: bit 1 return a packet, bit 3 as a DELTA (DE holds its base)
+        jr      z,.base
+        xor     a
+.base:  or      2
+        ld      c,a
+        ld      b,0                     ; B = L = 0: nothing to send
         ld      a,h
         or      l
         jr      z,.hdr
+        inc     c                       ; bit 0 as well: send P
         ld      a,(tLen)
         ld      b,a
-        inc     c                       ; bit 0 as well: send P
+        ld      a,(tTxD)
+        or      a
+        jr      z,.hdr                  ; the Pi has not shown it takes DELTAs
+        inc     hl
+        inc     hl
+        ld      a,(tTxF)
+        cpl
+        add     a,(hl)                  ; d - 1 (d = F - the last F sent, the frames since: K)
+        inc     hl
+        ld      e,(hl)                  ; W
+        dec     hl
+        dec     hl                      ; HL = seq
+        cp      3
+        jr      nc,.full                ; not 1-3 frames on (a resend, or the first): in full
+        inc     a
+        ld      d,a
+        inc     e                       ; E = R
+        xor     a
+.mul:   add     a,e
+        dec     d
+        jr      nz,.mul
+        ld      d,a                     ; D = dR, the new records
+        add     a,4                     ; a DELTA: seq, F, then the d new records and the check
+        ld      b,a
+        set     2,c
+        call    c9head
+        ld      bc,$0200                ; seq, F (C = the sum)
+        call    txBody
+        ld      a,(tLen)                ; past W and the records the Pi has: 1 + 8R - dR
+        sub     5
+        sub     d
+        ld      e,a
+        ld      a,d
+        add     a,2
+        ld      b,a
+        ld      d,0
+        add     hl,de
+        call    txBody                  ; the new records and the check
+        ld      a,c
+        call    c9txb                   ; SUM
+        jr      .sent
+.full:  dec     hl
 .hdr:   call    c9send
-        pop     hl                      ; HL = the receive buffer
+.sent:  pop     hl                      ; HL = the receive buffer
         call    c9rxb
         or      a
         jr      z,.none                 ; 00, 00: nothing
         cp      $FE
         jr      nc,.ended               ; FE, reason: left / FF, 00: gone
         ld      b,a                     ; L
-        ld      c,0
-.recv:  call    c9rxb
-        ld      (hl),a
+        ld      c,0                     ; the sum
+        cp      22                      ; shorter than any full packet: a DELTA
+        jr      c,.delta
+        ld      (tRxAt),hl              ; in full: the base of the next DELTA reply
+        call    rxBody
+        jr      .sum
+.delta: push    bc                      ; B = L
         inc     hl
-        add     a,c
+        inc     hl
+        ld      a,(hl)                  ; the last packet's F
+        dec     hl
+        push    af
+        ld      bc,$0200                ; seq, F first (C = the sum)
+        call    rxBody                  ; HL = W
+        pop     af
+        dec     hl
+        sub     (hl)
+        neg                             ; A = d, the frames since the last packet
+        inc     hl
+        ld      d,a
+        ld      a,(hl)                  ; W
+        inc     hl
+        inc     a
+        ld      e,a                     ; E = R
+        xor     a
+.mulR:  add     a,e
+        dec     d
+        jr      nz,.mulR                ; A = dR
+        push    bc                      ; C = the sum
         ld      c,a
-        djnz    .recv
-        call    c9rxb                   ; the sum
+        ld      b,0
+        push    hl
+        add     hl,bc
+        pop     de                      ; its last 8 - d records move back to its first
+        ld      a,(tLen)
+        sub     6
         sub     c
-        jr      nz,xZero                ; corrupted: as if nothing came
-        inc     a                       ; 1: a packet
+        ld      c,a                     ; (8 - d)R
+        ldir
+        ex      de,hl                   ; where the new records go
+        pop     bc
+        pop     de                      ; D = L
+        ld      a,d
+        sub     2
+        ld      b,a                     ; the new records and the check
+        call    rxBody
+        ld      a,4
+        ld      (tTxD),a                ; the Pi knows DELTAs: ours may be sent as DELTAs as well
+.sum:   call    c9rxb                   ; the sum
+        sub     c
+        jr      nz,.bad                 ; corrupted: as if nothing came
+        ld      a,8
+        ld      (tRxOk),a
+        call    txDone
+        ld      a,1                     ; 1: a packet
         jr      xDone
+.bad:   xor     a                       ; the Pi took it as delivered: the next one in full
+        ld      (tRxOk),a
+        jr      .zero
 .ended: cpl                             ; FE -> 1, FF -> 0
         add     a,2                     ; FE -> 3 (left), FF -> 2 (gone)
         ld      c,a
@@ -65,32 +170,65 @@ xchg:   di
         ld      a,c
         jr      xDone
 .none:  call    c9rxb
+.zero:  call    txDone
 xZero:  xor     a
-xDone:  ei
+xDone:  ld      e,0                     ; E = interrupts lost to the call: none (transport_unapi.asm)
+        ei
         ret
 
-; a link timeout inside a transaction: unwind to the stack pointer saved at its start
+; a link timeout inside a transaction: unwind to the stack pointer saved at its start. Neither side's DELTA base
+; can be trusted now: the next packets go in full.
 c9fail: ld      a,$FF
         out     ($56),a                 ; reset the link: the next transaction starts clean
+        xor     a
+        ld      (tTxD),a
+        ld      (tRxOk),a
         ld      sp,(tSp)
         jr      xZero                   ; XCHG returns 0; XEND's saved stack returns into xReset
 
-; C = FLAGS, B = L, HL = payload: C9, FLAGS, L, P[L], SUM
-c9send: ld      a,$C9
-        call    c9txb
-        ld      a,c
-        call    c9txb
-        ld      a,b
-        call    c9txb
-        ld      c,0                     ; the sum
-        inc     b
-        jr      .next
-.send:  ld      a,(hl)
+; a transaction is complete: the packet it sent (if any) is the base of our next DELTA
+txDone: ld      hl,(tPkt)
+        ld      a,h
+        or      l
+        ret     z
+        inc     hl
+        inc     hl
+        ld      a,(hl)
+        ld      (tTxF),a
+        ret
+
+; B bytes (1-255) into HL, their sum added to C
+rxBody: call    c9rxb
+        ld      (hl),a
+        inc     hl
+        add     a,c
+        ld      c,a
+        djnz    rxBody
+        ret
+
+; B bytes (1-255) from HL, their sum added to C
+txBody: ld      a,(hl)
         inc     hl
         call    c9txb
         add     a,c
         ld      c,a
-.next:  djnz    .send
+        djnz    txBody
+        ret
+
+; C = FLAGS, B = L: C9, FLAGS, L
+c9head: ld      a,$C9
+        call    c9txb
+        ld      a,c
+        call    c9txb
+        ld      a,b
+        jp      c9txb
+
+; C = FLAGS, B = L, HL = payload: C9, FLAGS, L, P[L], SUM
+c9send: call    c9head
+        ld      c,0
+        ld      a,b
+        or      a
+        call    nz,txBody
         ld      a,c
         jp      c9txb                   ; SUM
 
@@ -139,4 +277,9 @@ xReset: di
 
 tSp:    defw    0
 tCode:  defb    0
+tPkt:   defw    0                       ; the packet this transaction sends, or 0
+tRxAt:  defw    0                       ; where the last packet received in full or rebuilt is
+tRxOk:  defb    0                       ; 8: it is there (a DELTA reply may follow)
+tTxD:   defb    0                       ; 4: the Pi sent a DELTA, so it takes ours
+tTxF:   defb    0                       ; the F of the last packet sent
 tEnd:

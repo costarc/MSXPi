@@ -10,8 +10,9 @@
 ;   +15 CLOSE  close the UDP port
 ;   +18 version of this vector (1)
 ;   +19 address of the I/O block
+;   +21 KEEP  one service of the stack and the IRC connection (the hybrid transport, transport_hybrid.asm)
         .module ovl_crt0
-        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io
+        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io, _ovl_keep
         .globl  l__DATA, s__DATA, l__INITIALIZER, s__INITIALIZER, s__INITIALIZED
 
         .area   _HEADER (ABS)
@@ -24,6 +25,7 @@
         jp      _ovl_close
         .db     1
         .dw     _ovl_io
+        jp      _ovl_keep
 
 init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ld      bc,#l__DATA
@@ -47,6 +49,37 @@ init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ld      hl,#s__INITIALIZER
         ldir
 2$:     jp      gsinit
+
+        .area   _CODE
+; memcpy(dst, src, n) with LDIR, in place of the library's byte loop (SDCC z80 calling convention: arguments on
+; the stack, the caller pops them; returns dst in DE). The arguments are read in place, not popped, so an
+; interrupt cannot overwrite them.
+___memcpy::
+        ld      hl,#2
+        add     hl,sp
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)                      ; DE = dst
+        inc     hl
+        ld      c,(hl)
+        inc     hl
+        ld      b,(hl)                      ; BC = src
+        inc     hl
+        ld      a,(hl)
+        inc     hl
+        ld      h,(hl)
+        ld      l,a                         ; HL = n
+        push    de
+        ld      a,h
+        or      l
+        jr      z,3$
+        push    bc
+        ld      b,h
+        ld      c,l                         ; BC = n
+        pop     hl                          ; HL = src
+        ldir
+3$:     pop     de
+        ret
 
         .area   _HOME
         .area   _CODE

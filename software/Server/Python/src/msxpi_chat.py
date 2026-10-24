@@ -45,7 +45,7 @@ import threading
 import time
 
 from msxpi_game_irc import IRC, fold
-from msxpi_games import Invites, load_registry, RESULTS
+from msxpi_games import Invites, load_registry, parse_endpoints, RESULTS
 
 DEFAULT_ROOM = '#msxpi'
 MAX_ROOMS = 4
@@ -454,6 +454,23 @@ def playnet_command(command, upload=None, games_dir=None):
         if not game or game.transport != 'lockstep':
             return False, 'Game %s is not installed on the MSXPi' % args[1]
         return True, game.gpf
+    if op in ('open', 'peers'):                  # a TCP/IP chat player's game packets through this MSXPi (link 2)
+        gid = args[1] if op == 'open' and len(args) == 2 else args[3] if op == 'peers' and len(args) == 5 else ''
+        games = invites.games if invites else load_registry(games_dir)
+        game = games.get(gid.lower())
+        if not game or game.transport != 'lockstep':
+            return False, 'Use playnet open ID | peers TOKEN SEAT ID ADDRESSES, for an installed game'
+        np = default_netplay()
+        if op == 'open':
+            np.open()
+            found = np.candidates()
+            return True, ('%s %s' % (game.hash_text, ','.join(found) or '-')).encode('ascii')
+        peers = parse_endpoints(args[4])
+        if not re.fullmatch(r'[0-9a-f]{8}', args[1]) or args[2] not in ('0', '1') or not peers:
+            return False, 'Bad token, seat or addresses'
+        np.profile_hash = game.profhash
+        np.set_peers(peers)
+        return True, b'OK'
     if op == 'save':
         if not token:
             return False, 'No game in progress'
@@ -475,7 +492,7 @@ def playnet_command(command, upload=None, games_dir=None):
         except ValueError as exc:
             return False, str(exc)
         return True, b'OK'
-    return False, 'Use playnet session|profile ID|save|restore|result CODE'
+    return False, 'Use playnet session|profile ID|open ID|peers TOKEN SEAT ID ADDRESSES|save|restore|result CODE'
 
 
 def error_packet(message):

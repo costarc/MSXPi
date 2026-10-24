@@ -54,7 +54,7 @@ A game is a good candidate if all of these hold. Section 4 shows how to check ea
 
 | # | Requirement | Why |
 |---|---|---|
-| R1 | A plain 16 KB or 32 KB cartridge ROM (format version 1). MegaROMs are planned for a later version. | The RAM copy sits in pages 1-2 |
+| R1 | A plain 16 KB or 32 KB cartridge ROM, or (PLAYNET 3) a MegaROM of 8 KB banks with a mapper the stub can emulate (7.3; Konami SCC today) | The RAM copy sits in pages 1-2, or in memory mapper segments |
 | R2 | It runs from RAM once its writes to its own ROM area are neutralised. | A cartridge ignores those writes; RAM does not |
 | R3 | Two players, playing at the same time or taking turns. Each player's input fits in **1 to 4 bytes a frame** (the game's input width: a joystick is 1, two paddles or a mouse with buttons 2-3). | Those bytes are all that crosses the network |
 | R4 | There is one point in each game frame, before the game uses the inputs, where you can call PLAYNET's `TICK`. | The lockstep exchange happens there |
@@ -340,7 +340,7 @@ packages with the music ABI.
 | `transport` | `"lockstep"`: PLAYNET runs the game (everything below applies). `"none"`: the game is its own program and makes its own connection; only `command` applies. |
 | `input_bytes` | 1-4: bytes of input per player per frame (the input width, 4.4). Default 1. |
 | `command` | Only for `"none"`: the MSX-DOS command line: a template of at most 37 characters of `A-Z a-z 0-9 space . _ : / -` and the placeholders `{role}`, `{peer}`, `{token}`. The chat checks the line again after replacing them, because it must still fit the keyboard buffer. |
-| `image.host` | `"plain"` in version 1. `"mapper-ram"` is reserved for MegaROMs. |
+| `image.host` | `"plain"`, or `"mapper-ram"` for a MegaROM (7.3, PLAYNET 3) |
 | `image.base` | CPU address of output offset 0: `16384` (4000h) or `32768` (8000h, for a 16 KB ROM that lives there). The output must end at or below BFFFh. |
 | `stub.asset` | Name of the asset holding the built stub (engine + glue, Part II, 9) |
 | `stub.load`, `stub.max` | Where it is copied, and the most bytes it may ever take. Must be in page 3 (`C000h-F37Fh`). |
@@ -353,6 +353,41 @@ packages with the music ABI.
 Validation (tools and the MSX loader): all addresses in range; output size 16384 or 32768 for `plain`; every layout and patch range
 inside its buffer; patches non-overlapping with equal expected/replacement lengths; stub and transport area disjoint from each other,
 from `game_ram`, from the image, and inside page 3; the stub asset no longer than `stub.max`.
+
+### 7.3 Image host `mapper-ram` (PLAYNET 3)
+
+A MegaROM of 8 KB banks runs from memory mapper segments. The MSX mapper switches 16 KB and the cartridge 8 KB, so a segment holds
+a **pair** of banks, the two windows of one page. The package patches every bank-register write of the game into a call to the
+stub's bank engine (`software/Client/src/playnet/engine/mapper_k8.asm`), which maps the segment holding the new pair, or builds it
+first. Design and measurements: `documents/SALAMANDER-DESIGN.md`, section 5. First package: `profiles/salamander`.
+
+```json
+"image": {"host": "mapper-ram", "mapper": "konami-scc", "bank_size": 8192, "banks": 16, "block": 53909,
+          "start_banks": [0, 1, 2, 3], "page1_pairs": [[0, 1], [0, 4]], "page2_pairs": [[2, 3], [5, 6], [2, 12]],
+          "pinned": [2, 2], "min_segments": 22}
+```
+
+| Field | Rule |
+|---|---|
+| `mapper` | `"konami-scc"` (the only one so far; the bank engine works for any 8 KB mapper, the patches decide which registers) |
+| `bank_size` | `8192` |
+| `banks` | 2-64, a power of two. The ROM (`source.size`, `output.size`) is `banks` x 8 KB, and the layout is the identity: one entry, the whole input at 0. |
+| `block` | Address of the bank engine's block (`MK_BLOCK`) inside the stub. The loader fills it. Its first 4 bytes are the engine's version (1), the bank mask, and the room of its two tables. |
+| `start_banks` | The banks of the four windows when the game starts (W0 4000h, W1 6000h, W2 8000h, W3 A000h) |
+| `page1_pairs`, `page2_pairs` | The pairs to build, `[low window's bank, high window's bank]`, most useful first. At most 60 per page. |
+| `pinned` | How many of each list are never replaced. Each bank's home is the first pinned pair holding it (page 1's list first, the low half first); every bank needs one. The start pairs must be pinned. |
+| `min_segments` | The fewest segments the loader accepts (at least the pinned pairs plus one spare per page). Below it the game would pause too often: PLAYNET refuses with "Not enough memory". |
+
+Patch offsets are ROM offsets (bank x 8 KB + offset in the bank), and a patch may not cross a bank. `netplay.irq_handler` and `start`
+lie in 4000h-BFFFh.
+
+The loader: takes up to every pair plus one spare per page in segments (the mapper support routines' user segments, or on MSX-DOS 1
+the segments above the TPA's four), fills table 1 with every page-1 pair and a spare, table 2 with as many page-2 pairs as memory
+allows (and a spare when all fit), reads each bank into its home, applies the patches there, copies the homes into the other pairs,
+and maps the start pairs just before INIT. Pages 1 and 2 must be RAM of the same mapper. On the way back (14) it maps MSX-DOS's own
+segments again first. The segments only ever hold ROM bytes, so how many a machine has changes the speed, never the game: two
+machines with different mappers stay in lockstep. PLAYNET 3 refuses a `mapper-ram` game over TCP/IP (the UNAPI transport puts page
+2 back from its own record, which the bank engine would make wrong).
 
 **Trust.** Patches and assets are Z80 code that runs with full control of the machine. Validation protects against a corrupt or
 mismatched package, not against a malicious one. Install packages only from the official index or from people you trust.
@@ -377,7 +412,7 @@ Header, 128 bytes:
 |---|---|---|
 | 0 | 4 | `'GPF1'` |
 | 4 | 1 | format = 1 |
-| 5 | 1 | flags: bit 0 = transport `lockstep` (0 = `none`); bits 1-2 = image host (0 `plain`, 1 `mapper-ram`) |
+| 5 | 1 | flags: bit 0 = transport `lockstep` (0 = `none`); bits 1-2 = image host (0 `plain`, 1 `mapper-ram`, which needs the `MAPPER` section) |
 | 6 | 2 | body length (bytes after the header) |
 | 8 | 4 | **profile hash**: CRC-32 of the whole file, computed with these 4 bytes set to 0 |
 | 12 | 8 | game id |
@@ -398,6 +433,7 @@ types. Sections appear in the order below; each appears at most once, except `AS
 | 3 | `LAYOUT` | output size (4), fill byte (1), count (1), then count x (source (1): `FFh` = the ROM, else asset index; source offset (4); size (4); destination offset (4)) |
 | 4 | `PATCH` | count (2), then count x (output offset (4), length (1), expected bytes, replacement bytes) |
 | 5 | `ASSET` | the bytes of one asset. Assets are numbered 0, 1, ... in file order. |
+| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
 
 The profile hash is what players compare: it appears in invitations (12), in the peer handshake (11.3) and in the session record (13).
 Because the stub is an asset inside the file, the hash covers the engine and the glue too.
@@ -414,14 +450,15 @@ Because the stub is an asset inside the file, the hash covers the engine and the
 
 The stub is the shared lockstep engine assembled with the game's glue, one binary per game. It lives at `stub.load` while the game runs.
 
-### 9.1 Header (first 4 bytes of the stub asset)
+### 9.1 Header (first 5 bytes of the stub asset)
 
 | Offset | Field | Written by |
 |---|---|---|
-| 0 | stub ABI version = 1 | the build |
+| 0 | stub ABI version = 2 | the build |
 | 1 | seat (0 or 1) | the loader |
-| 2 | input delay in frames (2-6) | the loader, from the handshake |
+| 2 | input delay in frames (2-7) | the loader, from the handshake |
 | 3 | flags: bit 0 = end the game on a desync (1 in release builds, 0 in test builds; see Appendix B, point 2) | the build |
+| 4 | K: a packet every K frames (1-3) | the loader, from the handshake (stub ABI 2) |
 
 ### 9.2 Rules for the engine and the glue
 
@@ -471,7 +508,7 @@ PLAYNET installs a transport at `transport_area`, relocated to that address. It 
 
 | Offset | Entry | Contract |
 |---|---|---|
-| +0 | `XCHG` | In: HL = game packet to send (L = 14 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason). Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
+| +0 | `XCHG` | In: HL = game packet to send (L = 14 + 8W bytes, 11.1), or 0; DE = an L-byte receive buffer. The loader tells the transport L when it installs it. Out: A = 0 nothing received, 1 a packet was stored at DE, 2 the opponent is gone (no news for 15 s), 3 the opponent left (B = their reason); E = the interrupts that were taken away from the game during the call (MSX-DOS's handler took them; always 0 on the MSXPi path), which the engine adds to its interrupt count. Bounded time. Returns with interrupts enabled. Clobbers AF, BC, DE, HL and the alternate set; preserves IX, IY. |
 | +3 | `XEND` | In: A = result code. Tells the opponent (BYE), records the result, then restores MSX-DOS (14) or resets. Does not return. |
 | +6 | `XIRQ` | Target of the game's H.KEYI hook. Ends by jumping to `irq_handler`. |
 | +9 | reserved | `RET` |
@@ -481,7 +518,7 @@ What follows the vector is private to each transport and the loader that install
 
 Two implementations exist:
 - **MSXPi (native).** Each `XCHG` is one opcode-C9 transaction with the Pi (10.1). `XIRQ` is a plain `JP irq_handler`.
-  It is 204 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
+  It is 432 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
   for PLAYNET to run it over the MSXPi.
 - **UNAPI** (`software/Client/src/playnet/transport_unapi.asm`, `PLAYNET /T`). The game gets a **page-3 segment of its own**: the
   trampoline copies MSX-DOS's page 3 into a new segment and switches to it, so the game's RAM, its stack and the hooks it is given never
@@ -489,7 +526,7 @@ Two implementations exist:
   at F341h-F344h, F1A2h-F1C6h, F336h-F37Fh with InterNestor Lite on MSX-DOS 1: measured, PLAYNET-DESIGN.md 8a).
   `XCHG` switches page 3 back to MSX-DOS's segment (the transport is installed at the same address in both), maps the network
   engine's segment (`PLAYNET.OVL`) into page 2 and records it with `PUT_P2` (a RAM implementation's helper puts back the page-2
-  segment `PUT_P2` recorded), runs it with interrupts on (so the stack's timer runs from MSX-DOS's own hooks), and switches back. Only
+  segment `PUT_P2` recorded), runs it with interrupts on, and switches back. For a stack that runs from a timer routine (InterNestor Lite; any implementation in RAM, `/S1` forces it, `/S0` turns it off), the engine also calls MSX-DOS's H.TIMI hook itself with interrupts off and A = 80h, once per interrupt period of the game and not when an interrupt has already run it during a call (PLAYNET-TCPIP-PERFORMANCE.md 5.2). The transport reads MSX-DOS's `JIFFY` before and after the call; the difference is added to the game's tick counter and returned in E. Only
   registers cross a page-3 switch: packets go through the engine's I/O block in page 2. The engine's buffers for the UNAPI calls
   are the last 128 bytes of `transport_area` in MSX-DOS's page 3, and its stack is under MSX-DOS's TPA top: a RAM implementation maps
   its own segments into pages 1 and 2 while it runs. `XIRQ` (in the game's page 3 only) counts ticks, the engine's clock, and jumps
@@ -501,17 +538,19 @@ Two implementations exist:
 
 ```
 MSX -> Pi   C9, FLAGS, L, P[L], SUM              SUM = sum of P mod 256; L = 0 when no packet is sent
-Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46)
+Pi  -> MSX  L, P[L], SUM                         a game packet (L = 22..46), or a DELTA (L = 6..19)
             00, 00                               nothing
             FF, 00                               the opponent is gone
             FE, REASON                           the opponent left (BYE)
-            A0+STATE, DELAY, DELAY               when FLAGS bit 7 is set
+            A0+STATE, DELAY, K                   when FLAGS bit 7 is set (K = 1 until ready)
 ```
 
 | FLAGS bit | Meaning |
 |---|---|
 | 0 | send P to the opponent |
 | 1 | return the oldest received game packet |
+| 2 | P is a DELTA |
+| 3 | the reply may be a DELTA: the MSX holds the last packet the Pi gave it |
 | 5 | send BYE; L = 1 and P[0] = the result code |
 | 6 | (re)start the session handshake |
 | 7 | return the status instead |
@@ -520,6 +559,21 @@ STATE: 0 connecting, 1 ready (DELAY valid), 2 incompatible (different profile or
 opponent left. The Pi relays game packets without looking inside them, so it does not need to know the game's input width. A bad SUM
 means the packet part is lost; the transport tolerates loss. The MSX side bounds every wait (about 0.5 s) and
 resets the link with `FFh` to port 56h on a timeout. The connect phase uses bits 6 and 7 from `PLAYNET.COM`, before the game starts.
+
+**DELTA.** Every byte on the MSXPi link is a handshake with the Pi, and consecutive game packets repeat most of their 8 frame records.
+A packet that **follows** the previous one in the same direction (same kind and W, F d = 1..3 frames later, d being the send interval
+K, and its first 8 - d records that packet's last 8 - d) may travel as a DELTA: seq, F, the d new records (W + 1 bytes each), check
+tag, check value: d(W + 1) + 4 bytes instead of 14 + 8W (7 instead of 30 for W = 2 and K = 1). The receiver rebuilds the packet from the previous one and handles it as if it had come in full; the Pi relays only
+whole packets over UDP (11), so the peer protocol does not change.
+
+- Replies: the Pi sends a DELTA only when the MSX set bit 3 and the packet follows the last one it gave that MSX. A reply of fewer
+  than 22 bytes (the shortest full packet) is a DELTA; the receiver takes d from the F it carries. The MSX transport sets bit 3 while its receive buffer still holds the last packet it received (in full or
+  rebuilt) and clears it after a bad SUM.
+- From the MSX: the transport sends DELTAs only after the Pi has sent one (bit 2 means nothing to an older Pi, which never sends
+  DELTAs either), and only for a packet 1-3 frames after the last one it sent. The engine builds every packet from one ring
+  of frame records, so such a packet repeats the last one's records. The Pi drops a DELTA that does not follow the last packet it
+  got from that MSX; the stub's resend (a full packet: same F) puts the two back in step.
+- A link timeout clears both: the next packets go in full.
 
 ## 11. MSXNP: the peer protocol (UDP)
 
@@ -542,22 +596,23 @@ the transport:
 | 12+8W | check tag: a frame number with the low 5 bits zero, or FFh = no check |
 | 13+8W | check value: the sender's checksum for that frame. Compared for equality only. |
 
-Each packet repeats the last 8 frame records, so up to 7 consecutive lost packets are repaired by the next one. A machine waiting for
-an input resends its last packet every 16 polls. With W = 4 a packet is 46 bytes: the per-frame cost on the MSXPi link (one C9
+Each packet repeats the last 8 frame records, so up to 7 consecutive lost packets are repaired by the next one. A packet goes out every K-th frame (K = 1..3, agreed in the handshake, 11.3);
+the frames between call `XCHG` only while the remote input is missing. A machine waiting for
+an input resends its last packet when 3 interrupts (about 50 ms) have passed since the last send. With W = 4 a packet is 46 bytes: the per-frame cost on the MSXPi link (one C9
 transaction of L + 4 bytes each way) has to be measured on real hardware before such a package is accepted.
 
 **Control datagram, 14 bytes**: type (1, the kind byte), version (1), nonce (4), a (4), b (4).
 
 | Type | Name | a | b | Sent |
 |---|---|---|---|---|
-| 1 | HELLO | profile hash | 0 | every 200 ms while connecting |
+| 1 | HELLO | profile hash | K (bits 0-7), S (bits 8-15) of the sender's transport | every 200 ms while connecting |
 | 2 | PING | ping number | 0 | by the leader, every 100 ms |
 | 3 | PONG | the ping number | 0 | answer to a PING, in any state |
-| 4 | SETUP | input delay | 0 | by the leader, every 200 ms until ACK |
-| 5 | ACK | input delay | 0 | answer to SETUP |
+| 4 | SETUP | input delay | K, the agreed send interval | by the leader, every 200 ms until ACK |
+| 5 | ACK | input delay | K, as received | answer to SETUP |
 | 6 | BYE | result code (13.2) | 0 | 3 times, 100 ms apart, when a game ends |
 
-`version` is the MSXNP protocol version, 1. `nonce` is a random 32-bit value chosen at each session start. It must differ between the two
+`version` is the MSXNP protocol version, 2. `nonce` is a random 32-bit value chosen at each session start. It must differ between the two
 machines, and must not come from a generator seeded identically on both. On the MSX, mix the R register, `JIFFY` and the local address.
 
 ### 11.2 Finding the opponent (NAT traversal)
@@ -585,8 +640,12 @@ READY --first game packet--> PLAYING --15 s with nothing from the opponent--> GO
 
 - **Leader**: the side with the higher nonce. Equal nonces: both choose new ones and continue.
 - **Input delay**, decided by the leader: take the round trips of the PINGs answered (at least 4, up to 64 PINGs), sort them, take element
-  `int(0.9 x (n-1))` (milliseconds), and compute `ceil(rtt / 2 / 20) + 2`, clamped to 2..6. An MSX measuring in jiffies converts with its
+  `int(0.9 x (n-1))` (milliseconds), and compute `ceil(rtt / 2 / 20) + 2 + (K - 1) + S`, clamped to 2..7 (the rings hold 16 frames and the records run up to 2D frames ahead, so D <= 7). An MSX measuring in jiffies converts with its
   own rate (50 or 60 Hz). The follower uses the leader's value.
+- **K and S** (MSXNP 2): each side announces in HELLO the send interval K (1-3 frames) its transport wants and its service latency S (frames between
+  a packet's arrival and the game seeing it): the MSXPi link 1 and 0, a software TCP/IP stack 2 and 1, a hardware one 1 and 0. The leader takes
+  K = the larger K and S = the larger S, and sends K in SETUP (ACK echoes it). Both sides use the same K. With K = 2 each record is in 4 packets, so 3
+  consecutive losses are repaired instead of 7.
 - **SETUP/ACK**: the follower answers each SETUP with ACK and is READY. The leader is READY at the ACK, or at the first game packet from
   the follower.
 - **Times**: connect 120 s; start (READY to the first game packet) 60 s; gone after 15 s with no datagram while playing.
@@ -637,7 +696,7 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
 | 0 | 4 | `'PNS1'` |
 | 4 | 4 | token (the 8 hex digits as 4 bytes) |
 | 8 | 1 | seat: 0 = inviter, 1 = invitee |
-| 9 | 1 | link: 0 = MSXPi, 1 = TCP/IP UNAPI |
+| 9 | 1 | link: 0 = MSXPi, 1 = TCP/IP UNAPI, 2 = TCP/IP chat with the game's packets through the MSXPi (`transport_hybrid.asm`; no candidates, the Pi has the opponent from `playnet peers`) |
 | 10 | 2 | local UDP port (TCP/IP only; 0 on MSXPi) |
 | 12 | 4 | profile hash |
 | 16 | 8 | game id, upper case, padded with spaces (= the GPF file name) |
@@ -713,6 +772,8 @@ payload below. On failure it has `RC_FAILED` (E7h) and carries a message startin
 | `playnet save` | After the command, the MSX sends the saved area (14) as one block transfer that the Pi's `recvdata2` takes: one handshake, then blocks of at most 8 KB (`RC_READY` on all but the last, `RC_SUCCESS` on the last). At most 16640 bytes; PLAYNET sends the 8-byte header in the first block, then the area (14). Reply `OK`. Fails when no game is in progress. |
 | `playnet restore` | the saved area. The Pi then forgets it, so a second restore fails. |
 | `playnet result <code>` | `OK`. The chat shows the result (13.2) when the player is back in `MCHAT`. |
+| `playnet open <game_id>` | link 2: the Pi opens its game socket. Reply text `<profhash> <candidates>` (8 hex digits, then `ip:port,...` or `-`). Fails for a game that is not installed. |
+| `playnet peers <token> <seat> <game_id> <candidates>` | link 2: the Pi takes the opponent's candidates and the game's profile hash; the C9 connect (10.1) then runs the session. Reply `OK`. |
 
 On the Pi, the games are the GPF files in `MSXPIHOME/games/` (`/home/pi/msxpi/games/`). The file name must be the game id in upper
 case. A file with a bad header or checksum, or the wrong name, is skipped and logged.
@@ -724,8 +785,10 @@ case. A file with a bad header or checksum, or the wrong name, is skipped and lo
 | Package format | `msxpi-rom-patch` 2 | `version` |
 | Netplay ABI | `msxpi-netplay-v1` | `netplay.abi` |
 | GPF | 1 | header byte 4 |
-| Stub ABI | 1 | stub header byte 0 |
-| Peer protocol | MSXNP 1 | control datagram `version` |
+| Stub ABI | 2 | stub header byte 0 |
+| Bank engine (image host `mapper-ram`) | 1 | `MK_BLOCK` byte 0 |
+| PLAYNET release | 3 (`mapper-ram`; stub ABI 2 from release 2) | `min_playnet` |
+| Peer protocol | MSXNP 2 | control datagram `version` |
 | Invitations | MSXG1 | message prefix |
 | Session record | PNS1 | magic |
 

@@ -22,6 +22,7 @@ OVLTMP:         EQU     CRCT                    ; the overlay passes through her
 OVLMAX:         EQU     $4000-CRCT              ; built and the GPF read: CRCT, GPFBUF and BOUNCE (7 KB)
 M_ALL_SEG:      EQU     $00                     ; mapper support routines (MSX-DOS 2 / Nextor / MSR)
 M_FRE_SEG:      EQU     $03
+M_GET_P1:       EQU     $21
 M_PUT_P2:       EQU     $24
 M_GET_P2:       EQU     $27
 M_GET_P3:       EQU     $2D
@@ -38,6 +39,10 @@ IO_STATUS:      EQU     37
 IO_DELAY:       EQU     38
 IO_REASON:      EQU     39
 IO_IRC:         EQU     133
+IO_SERVICE:     EQU     134
+IO_KWANT:       EQU     135
+IO_SWANT:       EQU     136
+IO_K:           EQU     137
 
 ; ---- the command line (HL at the '/') -----------------------------------------------------------------
 tcpArgs:
@@ -50,8 +55,49 @@ tcpArgs:
         ld      a,1
         ld      (tcp),a
         call    skipSp
+.opt:   ld      a,(hl)
+        cp      '/'
+        jr      nz,.noopt
+        inc     hl                              ; /S0, /S1: force the stack service off or on (default: by the stack)
         ld      a,(hl)
-        or      a
+        call    lower
+        ld      c,a
+        inc     hl
+        ld      a,(hl)
+        sub     '0'
+        ld      b,a                             ; B = the digit
+        ld      a,c
+        cp      's'                             ; /S0, /S1: the stack's service
+        jr      nz,.nk
+        ld      a,b
+        cp      2
+        jp      nc,usage
+        ld      (svcMode),a
+        jr      .optEnd
+.nk:    cp      'k'                             ; /K1../K3: the send interval to announce
+        jr      nz,.nl
+        ld      a,b
+        dec     a
+        cp      3
+        jp      nc,usage
+        inc     a
+        ld      (kMode),a
+        jr      .optEnd
+.nl:    cp      'l'                             ; /L0../L9: the service latency to announce, in frames
+        jr      z,.isl
+        cp      'h'                             ; /H: link 2, the game's packets through this machine's MSXPi
+        jp      nz,usage
+        ld      (hyb),a                         ; (A = 'h': not zero)
+        jr      .optEnd
+.isl:   ld      a,b
+        cp      10
+        jp      nc,usage
+        ld      (lMode),a
+.optEnd:
+        inc     hl
+        call    skipSp
+        jr      .opt
+.noopt: or      a
         ret     z                               ; /T alone: the session in PLAYNET.SES (tcpSession)
         ld      a,1
         ld      (manual),a
@@ -61,7 +107,14 @@ tcpArgs:
         ld      de,roleArg
         call    word
         call    skipSp
-        call    number
+        ld      a,(hyb)
+        or      a
+        jr      z,.lp
+        ld      a,(roleArg)                     ; /H game role: the Pi has the opponent (MSXPI_NETPLAY or "playnet peers")
+        or      a
+        jp      z,usage
+        ret
+.lp:    call    number
         jp      c,usage
         ld      (lport),de
         call    skipSp
@@ -173,7 +226,10 @@ tcpSetup:
         ld      (ovlSeg),a
         call    allSeg
         ld      (g3Seg),a
-        ld      a,M_GET_P2                      ; the game's page 2 is the TPA's
+        ld      a,M_GET_P1                      ; the game's pages 1 and 2 are the TPA's (mapper-ram:
+        call    mapper                          ; until the trampoline maps the start pairs)
+        ld      (gameSeg1),a
+        ld      a,M_GET_P2
         call    mapper
         ld      (gameSeg2),a
         ld      a,M_GET_P3                      ; and MSX-DOS's page 3
@@ -330,12 +386,19 @@ tcpSession:
         ld      de,magicPNS
         call    cmp4
         jr      nz,.bad
-        ld      a,(sesBuf+9)                    ; link: TCP/IP
-        dec     a
+        ld      a,(sesBuf+9)                    ; link: 1 TCP/IP, 2 TCP/IP chat with the game through the MSXPi
+        cp      2
+        jr      nz,.l1
+        ld      (hyb),a
+        jr      .l2
+.l1:    dec     a
         jr      nz,.bad
-        ld      a,(sesBuf+32)                   ; state: launched, not ended yet
+.l2:    ld      a,(sesBuf+32)                   ; state: launched, not ended yet
         or      a
         jr      nz,.bad
+        ld      a,(hyb)
+        or      a
+        jp      nz,sesFields                    ; link 2: no addresses, the Pi has them
         ld      a,(sesBuf+40)                   ; 1 to 3 addresses
         or      a
         jr      z,.bad
@@ -450,7 +513,7 @@ tcpConnect:
         ld      hl,GPFBUF+8                     ; the profile hash
         ld      bc,4
         ldir
-        ld      (ix+IO_VERSION),1
+        ld      (ix+IO_VERSION),2
         ld      (ix+IO_FORCE),0
         ld      a,(manual)                      ; MCHAT /T's IRC connection, answered during the game (14)
         or      a
@@ -462,11 +525,27 @@ tcpConnect:
         ld      de,IO_IRC
         add     hl,de
         ld      (hl),a
+        push    ix                              ; (beyond IX's reach)
+        pop     hl
+        ld      de,IO_SERVICE
+        add     hl,de
+        ld      a,(svcMode)
+        ld      (hl),a
+        inc     hl
+        ld      a,(kMode)
+        ld      (hl),a                          ; IO_KWANT
+        inc     hl
+        ld      a,(lMode)
+        ld      (hl),a                          ; IO_SWANT
         ld      hl,(lport)
         ld      (ix+IO_LPORT),l
         ld      (ix+IO_LPORT+1),h
+        ld      a,(hyb)                         ; link 2: no UDP port here (the overlay: ncand = FFh)
+        or      a
         ld      a,(ncand)
-        ld      (ix+IO_NCAND),a
+        jr      z,.nc
+        ld      a,$FF
+.nc:    ld      (ix+IO_NCAND),a
         push    ix
         pop     hl
         ld      de,IO_CAND
@@ -487,7 +566,10 @@ tcpConnect:
         ld      hl,msgNoPort
 .err:   ld      a,R_MACHINE
         jp      exitResult
-.open:  ld      a,1
+.open:  ld      a,(hyb)
+        or      a
+        jp      nz,mpConnect                    ; link 2: the Pi connects (playnet.asm), the overlay only keeps the chat alive
+        ld      a,1
         ld      (ovlOpen),a
         ld      hl,(JIFFY)
         ld      (t0),hl
@@ -497,6 +579,12 @@ tcpConnect:
         ld      ix,(ovlIo)
         ld      a,(ix+IO_DELAY)
         ld      (delay),a
+        push    ix                              ; the agreed K (beyond IX's reach)
+        pop     hl
+        ld      de,IO_K
+        add     hl,de
+        ld      a,(hl)
+        ld      (kAgreed),a
         ld      b,(ix+IO_STATUS)
         call    unmapOvl
         ld      a,b
@@ -604,17 +692,35 @@ tcpSave:
 ; ---- the transport (install): the UNAPI one, relocated into tBuf ----------------------------------
 tcpTransport:
         ld      hl,tuImage
-        ld      de,tBuf
         ld      bc,TU_SIZE
+        ld      de,tuRelocs
+        ld      a,(hyb)
+        or      a
+        jr      z,.sel
+        ld      hl,thImage                      ; link 2: the C9 transaction, in the game's page 3
+        ld      bc,TH_SIZE
+        ld      de,thRelocs
+.sel:   push    de
+        ld      de,tBuf
         ldir
-        ld      hl,tuRelocs
+        pop     hl
         call    relocate
         ld      hl,(npIrq)
         ld      (tBuf+TU_HANDLER),hl
         ld      a,(ovlSeg)
         ld      (tBuf+TU_OVLSEG),a
-        ld      a,(gameSeg2)
-        ld      (tBuf+TU_GAMESEG2),a
+        ld      hl,(gameSeg1)                   ; and gameSeg2
+        ld      (tBuf+TU_GAMESEG1),hl
+        ld      hl,(npTArea)                    ; where the game's pages 1 and 2 are: those two, or the
+        ld      de,TU_GAMESEG1                  ; bank engine's record (MK_BLOCK+8)
+        add     hl,de
+        ld      a,(mHost)
+        or      a
+        jr      z,.segs
+        ld      hl,(mBlock)
+        ld      de,8
+        add     hl,de
+.segs:  ld      (tBuf+TU_SEGS),hl
         ld      hl,(ovlIo)
         ld      (tBuf+TU_IO),hl
         ld      hl,(mapTab)

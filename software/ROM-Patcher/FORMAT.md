@@ -86,6 +86,10 @@ PLAYNET checks when it loads one are specified in
 }
 ```
 
+A MegaROM uses `"image": {"host": "mapper-ram", ...}` instead (PLAYNET 3): the image is the ROM itself in
+8 KB banks, held as pairs in memory mapper segments, and patch offsets are ROM offsets. Its fields and
+rules are in `documents/PLAYNET-PROTOCOLS.md`, section 7.3; `profiles/salamander` is the example.
+
 Commands:
 
 ```console

@@ -146,7 +146,7 @@ class SoccerPackageTests(unittest.TestCase):
         data = patcher.gpf_bytes(self.profile, self.assets)
         gpf = patcher.read_gpf(data)
         self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
-        self.assertEqual(self.assets['stub'][0], 1)                         # stub ABI 1
+        self.assertEqual(self.assets['stub'][0], 2)                         # stub ABI 2
         self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
         self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC700)   # 512: the TCP/IP transport
         rom = synthetic_rom(self.profile)
@@ -190,7 +190,7 @@ class GpfTests(unittest.TestCase):
 
     def test_header_layout_and_hash(self):
         data = self.data
-        self.assertEqual((data[:4], data[4], data[5], data[98]), (b'GPF1', 1, 1, 1))
+        self.assertEqual((data[:4], data[4], data[5], data[98]), (b'GPF1', 1, 1, 2))
         self.assertEqual(struct.unpack_from('<H', data, 6)[0], len(data) - 128)
         self.assertEqual(data[12:20], b'soccer\0\0')
         stored = struct.unpack_from('<I', data, 8)[0]
@@ -260,8 +260,12 @@ class GpfTests(unittest.TestCase):
         with self.assertRaisesRegex(patcher.PatchError, 'format 2'):
             patcher.read_gpf(reseal(data))
         data = bytearray(self.data)
-        data[5] |= 2                                                     # mapper-ram image host
+        data[5] |= 4                                                     # image host 2: not defined
         with self.assertRaisesRegex(patcher.PatchError, 'image host'):
+            patcher.read_gpf(reseal(data))
+        data = bytearray(self.data)
+        data[5] |= 2                                                     # mapper-ram, without its section
+        with self.assertRaisesRegex(patcher.PatchError, 'MAPPER section'):
             patcher.read_gpf(reseal(data))
 
     def test_unknown_sections_are_skipped(self):
@@ -305,7 +309,8 @@ class NetplayValidationTests(unittest.TestCase):
             (lambda p, n: n.update(title='x' * 25), 'title'),
             (lambda p, n: n.update(input_bytes=5), 'input_bytes'),
             (lambda p, n: n['image'].update(base=0), 'image.base'),
-            (lambda p, n: n['image'].update(host='mapper-ram'), 'image.host'),
+            (lambda p, n: n['image'].update(host='banked'), 'image.host'),
+            (lambda p, n: n['image'].update(host='mapper-ram'), 'image.mapper'),
             (lambda p, n: n['stub'].update(load=0xF300, max=256), 'page 3'),
             (lambda p, n: n['transport_area'].update(size=100), 'transport_area.size'),
             (lambda p, n: n['transport_area'].update(address=0xC200), 'overlap'),
@@ -341,6 +346,107 @@ class NetplayValidationTests(unittest.TestCase):
         profile['netplay']['command'] = 'PCHESS & RUN'
         with self.assertRaisesRegex(patcher.PatchError, 'command'):
             patcher.gpf_bytes(profile, {})
+
+
+SALAMANDER = ROOT / 'profiles/salamander/profile.json'
+
+
+class MapperRamTests(unittest.TestCase):
+    """Salamander's package: image host mapper-ram (PLAYNET-PROTOCOLS 7.3). The real dump when SALAMANDER_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(SALAMANDER)
+        self.data = patcher.gpf_bytes(self.profile, self.assets)
+
+    def test_round_trip(self):
+        gpf = patcher.read_gpf(self.data)
+        self.assertEqual(self.data[5], 3)                                # lockstep, image host 1
+        image = self.profile['netplay']['image']
+        self.assertEqual(gpf['mapper']['pairs'], [image['page1_pairs'], image['page2_pairs']])
+        self.assertEqual(gpf['mapper']['pinned'], image['pinned'])
+        self.assertEqual(gpf['mapper']['block'], image['block'])
+        self.assertEqual(gpf['assets'][0], self.assets['stub'])
+        self.assertLessEqual(len(self.data), 3072, "PLAYNET.COM's GPF buffer is 3 KB")
+
+    def test_image_is_the_patched_rom(self):
+        rom = synthetic_rom(self.profile)
+        profile = copy.deepcopy(self.profile)
+        retarget(profile, rom)
+        gpf = patcher.read_gpf(patcher.gpf_bytes(profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom)[0], patcher.build(rom, profile, self.assets)[0])
+
+    @unittest.skipUnless(os.environ.get('SALAMANDER_ROM'), 'set SALAMANDER_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['SALAMANDER_ROM']).read_bytes()
+        image, _ = patcher.gpf_image(patcher.read_gpf(self.data), rom)
+        self.assertEqual(len(image), 131072)
+        for patch in self.profile['patches']:
+            data = bytes.fromhex(patch['replace'])
+            self.assertEqual(image[patch['offset']:patch['offset'] + len(data)], data)
+
+    def test_rules(self):
+        cases = [
+            (lambda i: i.update(mapper='ascii16'), 'image.mapper'),
+            (lambda i: i.update(bank_size=16384), 'bank_size'),
+            (lambda i: i.update(banks=12), 'power of two'),
+            (lambda i: i.update(pinned=[4, 5]), 'home'),
+            (lambda i: i.update(start_banks=[0, 1, 2, 9]), 'start pairs'),
+            (lambda i: i.update(page2_pairs=i['page2_pairs'] + [[2, 3]]), 'twice'),
+            (lambda i: i.update(min_segments=11), 'min_segments'),
+            (lambda i: i.update(block=0xDA00), 'block'),           # past the stub (D200h-D8FFh)
+        ]
+        for change, message in cases:
+            with self.subTest(message=message):
+                profile = copy.deepcopy(self.profile)
+                change(profile['netplay']['image'])
+                with self.assertRaisesRegex(patcher.PatchError, message):
+                    patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
+
+    def test_needs_playnet_3(self):
+        profile = copy.deepcopy(self.profile)
+        profile['netplay']['min_playnet'] = 2
+        with self.assertRaisesRegex(patcher.PatchError, 'min_playnet 3'):
+            patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
+
+    def test_a_patch_may_not_cross_a_bank(self):
+        profile = copy.deepcopy(self.profile)
+        profile['patches'].append({'offset': 0x1FFF, 'expected': '0000', 'replace': '0000', 'reason': 'x'})
+        with self.assertRaisesRegex(patcher.PatchError, 'crosses a bank'):
+            patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
+
+
+PINGPONG = ROOT / 'profiles/pingpong/profile.json'
+
+
+class PingPongPackageTests(unittest.TestCase):
+    """Konami's Ping Pong: a 16 KB plain image with 11 patches. The real dump when PINGPONG_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(PINGPONG)
+
+    def test_profile_is_valid_version_2_netplay(self):
+        self.assertEqual(patcher.abis(self.profile), ['msxpi-netplay-v1'])
+        values = patcher.netplay_values(self.profile)
+        self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('pingpong', ['P1', 'P2'], 0x4019))
+        self.assertEqual(len(self.profile['patches']), 11)
+
+    def test_the_gpf_compiles_and_the_stub_fits(self):
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        self.assertEqual(self.assets['stub'][0], 2)                         # stub ABI 2
+        self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
+
+    @unittest.skipUnless(os.environ.get('PINGPONG_ROM'), 'set PINGPONG_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['PINGPONG_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)            # also checks SHA-256, CRC-32, expected bytes
+        patched = set()
+        for patch in self.profile['patches']:
+            patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
+        changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the patches
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
 
 
 class MusicVersion2Tests(unittest.TestCase):

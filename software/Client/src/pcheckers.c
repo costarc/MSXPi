@@ -473,6 +473,9 @@ static void new_game(uint8_t ai,uint8_t human_side) {
     new_turn();
 }
 
+/* SDCC 4.6 emits "ld hl, a" (invalid) for new_game(0,0) after the key test in the menu loop. */
+static void new_game_vs_human(void) {new_game(0,0);}
+
 /* A new game in the same online room, after a rematch or a reset by the
  * other player. */
 static void restart_online(void) {
@@ -1084,7 +1087,7 @@ int main(void) {
             entry_len=0; entry[0]=0;
         }
         else if(!entry_len && online && key>='1' && key<='5' && !confirm_leave()) {}
-        else if(!entry_len && key=='1') new_game(0,0);
+        else if(!entry_len && key=='1') new_game_vs_human();
         else if(!entry_len && key=='2') new_game(1,0);
         else if(!entry_len && key=='3') new_game(1,1);
         else if(!entry_len && key=='4') {room_entry=1; strcpy(status,"ENTER ROOM AND RETURN");}

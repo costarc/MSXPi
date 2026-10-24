@@ -98,7 +98,23 @@ FAST_REPLY_LEN = {
     OP_RESET:       1,   # 0 = ok
 }
 
-PROTO_VERSION = 1
+# The ROM driver compares this with its own ETH_PROTO (ethops.asm) and refuses
+# a mismatch - there is no fallback, the ROM and the server are updated
+# together.  2: ETH_IN_STATUS carries small frames inline, ETH_GET_FRAME's
+# maxlen 0 discards without sending the frame, and ETH_SEND_FRAME's payload is
+# received as one RDY-held burst, so that the MSX can send it with OTIR.
+PROTO_VERSION = 2
+
+# ETH_IN_STATUS reply flag: no frame / a frame is waiting / the frame follows.
+IN_NONE   = 0
+IN_WAIT   = 1
+IN_INLINE = 2
+
+# A frame this size or smaller is sent with the ETH_IN_STATUS reply instead of
+# waiting for ETH_GET_FRAME.  It is the size of the MSX's buffer for it
+# (RX_INLINE_MAX in asm-common/include/unapi_wrk.inc): change both together,
+# and bump PROTO_VERSION.
+RX_INLINE_MAX = 128
 
 ETH_RC_OK       = 0x00
 ETH_RC_ERR      = 0x01
@@ -581,6 +597,12 @@ class EthShuttle(object):
     module free of the server's RC_* namespace is what lets it be unit tested
     standalone; the mapping belongs in the caller.
 
+    read_burst(n) -> bytes or None, optional; the mirror image for OTIR.
+    ETH_SEND_FRAME's payload always arrives through it when it is given: the
+    driver sends it with OTIR in wait mode, and a byte that lands while READY
+    is down is lost, not delayed.  A polled driver works through it too - it
+    simply finds READY up for every byte.
+
     write_burst is what lets the MSX use INIR.  Hardware /WAIT is gated on
     SPI_RDY, and the per-byte SPI_ByteTransfer() raises and drops RPI_READY
     around every single byte - during that gap an INIR read would NOT stall and
@@ -590,11 +612,12 @@ class EthShuttle(object):
     """
 
     def __init__(self, link, read_byte, write_byte, write_burst=None,
-                 log=None):
+                 read_burst=None, log=None):
         self.link = link
         self._read = read_byte
         self._write = write_byte
         self._burst = write_burst
+        self._read_burst = read_burst
         self._log = log or (lambda *a: None)
 
         # Dict dispatch, built once, instead of an if/elif chain walked on every
@@ -642,6 +665,12 @@ class EthShuttle(object):
             if rc:
                 return rc
         return 0
+
+    def _read_block(self, n):
+        """n bytes the MSX sends as one block (OTIR), READY held throughout."""
+        if self._read_burst is not None:
+            return self._read_burst(n)
+        return self._read_n(n)
 
     def _read_n(self, n):
         out = bytearray()
@@ -705,16 +734,31 @@ class EthShuttle(object):
         self._fast(ETH_RC_OK, bytes([0]))
 
     def _op_in_status(self):
-        """ETH_IN_STATUS.  Reply: [RC][LEN_LO][LEN_HI][ET_HI][ET_LO].
+        """ETH_IN_STATUS.  Reply: [FLAG][LEN_LO][LEN_HI][ET_HI][ET_LO], and
+        when FLAG is IN_INLINE the frame and its checksum straight after.
 
-        RC is 1 when a frame is waiting, 0 when not - matching what the UNAPI
-        routine has to return in A.  LEN and the ether-type go straight into
-        BC and HL.
+        FLAG 0 means no frame, 1 a frame is waiting (fetch it with
+        ETH_GET_FRAME), 2 here it is.  LEN and the ether-type go straight into
+        the routine's BC and HL.
+
+        A small frame comes inline so that receiving it costs the MSX one
+        transaction instead of two; it is taken off the queue as it is sent,
+        and the driver holds it until ETH_GET_FRAME asks.  Only this thread
+        pops, so the frame peek() saw is the one pop() returns.
         """
         length, et = self.link.peek()
-        self._write_many(bytes([1 if length else 0,
-                                length & 0xFF, (length >> 8) & 0xFF,
-                                (et >> 8) & 0xFF, et & 0xFF]))
+        if not length:
+            self._write_many(bytes(5))
+            return
+        head = [IN_WAIT, length & 0xFF, (length >> 8) & 0xFF,
+                (et >> 8) & 0xFF, et & 0xFF]
+        if length > RX_INLINE_MAX:
+            self._write_many(bytes(head))
+            return
+        frame, _more = self.link.pop()
+        head[0] = IN_INLINE
+        self._write_many(bytes(head) + frame
+                         + bytes([sum(bytearray(frame)) & 0xFF]))
 
     def _op_get_frame(self):
         """ETH_GET_FRAME.
@@ -722,6 +766,10 @@ class EthShuttle(object):
         MSX -> [C6][MAXLEN_LO][MAXLEN_HI]
         Pi  -> [LEN_LO][LEN_HI][FLAGS]                      when LEN == 0
                [LEN_LO][LEN_HI][FLAGS][frame...][CHKSUM]    otherwise
+
+        MAXLEN 0 asks to discard the frame (ETH_GET_FRAME with HL=0): it is
+        dropped here and only the header goes back, so throwing a frame away
+        no longer drags all of it across the link.
 
         FLAGS bit 0 says another frame is already queued, so INL's next
         ETH_IN_STATUS is answerable without a round trip (the PiSCSI trick).
@@ -736,7 +784,12 @@ class EthShuttle(object):
             self._write_many(b"\x00\x00\x00")
             return
 
-        if maxlen and len(frame) > maxlen:
+        if not maxlen:
+            self._write_many(bytes([len(frame) & 0xFF, (len(frame) >> 8) & 0xFF,
+                                    FLAG_MORE_PENDING if more else 0]))
+            return
+
+        if len(frame) > maxlen:
             # The MSX cannot hold it.  Drop it rather than truncate: a partial
             # frame is useless to the stack and costs a whole slow transfer.
             self._log("eth: frame of %d exceeds MSX buffer %d, dropped"
@@ -756,6 +809,9 @@ class EthShuttle(object):
 
         MSX -> [C7][LEN_LO][LEN_HI][frame...][CHKSUM]
         Pi  -> [RC]
+
+        The opcode and the length come byte by byte; the frame and its
+        checksum as ONE block, which the driver sends with OTIR in wait mode.
         """
         hdr = self._read_n(2)
         if hdr is None:
@@ -766,12 +822,10 @@ class EthShuttle(object):
             self._write(ETH_RC_BADLEN)
             return
 
-        body = self._read_n(length)
-        if body is None:
+        block = self._read_block(length + 1)
+        if block is None:
             return
-        rc, chk = self._read()
-        if chk is None:
-            return
+        body, chk = bytes(block[:-1]), block[-1]
 
         if (sum(bytearray(body)) & 0xFF) != chk:
             self._log("eth: send checksum mismatch")

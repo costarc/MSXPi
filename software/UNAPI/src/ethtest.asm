@@ -176,8 +176,19 @@ ARG:        equ     0F847h
             ld      b,0                     ; report only
             ld      a,128
             call    CALL_UNAPI
+            push    af
             call    PRINT_HEX8
             call    NEWLINE
+            ; 02 = MODE_REFUSED: the probe answered with another protocol
+            ; version, and the driver will not touch the link.  Say so in
+            ; words - every routine below would otherwise just fail.
+            pop     af
+            cp      2
+            jr      nz,.modeok
+            ld      de,REFUSED_S
+            ld      c,_STROUT
+            call    BDOS
+.modeok:
 
 ; --- Routines that actually cross the wire ---------------------------------
 ; Everything above is answered from inside the segment.  These two are the
@@ -431,9 +442,11 @@ CALL_UNAPI:
             jr      z,.rom
             dec     a
             ld      iyl,a
-            ld      hl,(HELPER_ADD)
             pop     af
-            jp      (hl)
+            push    hl                      ; not `jp (hl)`: HL is the frame
+            ld      hl,(HELPER_ADD)         ; address ETH_SEND_FRAME needs
+            ex      (sp),hl
+            ret
 .rom:
             pop     af
             call    CALSLT
@@ -510,6 +523,9 @@ SEND_S:     db      "Snd:   $"
 OUT_S:      db      "Out:   $"
 OK_S:       db      "ok",13,10,"$"
 MODE_S:     db      "Mode:  $"
+REFUSED_S:  db      "*** The Pi's msxpi-server speaks another Ethernet",13,10
+            db      "    protocol version than this ROM. Update the Pi",13,10
+            db      "    and the ROM together, then run ETHTEST again.",13,10,"$"
 MAC_S:      db      "MAC:   $"
 NETSTAT_S:  db      "Net:   $"
 INSTAT_S:   db      "InSt:  $"

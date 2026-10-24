@@ -44,7 +44,9 @@ def main():
             '--opt-code-size', 'fusion.lib', 'msxpi-bios.lib', '-L', str(fusion / 'lib'), '-L', tmp,
             '-I', str(MAIN_SRC), str(fusion / 'include/crt0_msxdos.rel'),
             str(SOFTWARE / 'Client/src' / (args.name + '.c')))
-        image = bytearray(0x10000)
+        # gaps (the uninitialised globals) are FFh, as hex2bin leaves them in make.bat's .COM: crt0_msxdos zeroes
+        # nothing, so a program that needs a zero there must write it, and the rig must not hide that
+        image = bytearray(b'\xff' * 0x10000)
         top = 0
         for line in (Path(tmp) / (args.name + '.ihx')).read_text().splitlines():
             n, addr, kind = int(line[1:3], 16), int(line[3:7], 16), int(line[7:9], 16)

@@ -16,7 +16,7 @@
 
 /* ---------------------------------------------------------------- UNAPI */
 
-uint8_t ur_a;
+uint8_t ur_a, ur_cf;
 uint16_t ur_bc,ur_de,ur_hl,ur_ix;
 uint16_t un_ix,un_iy;
 uint8_t un_jp[3];
@@ -41,6 +41,8 @@ __asm
     ld (_ur_hl),hl
     ld (_ur_ix),ix
     ld (_ur_a),a
+    sbc a,a
+    ld (_ur_cf),a
     pop iy
     pop ix
     ret
@@ -107,6 +109,8 @@ static uint8_t unapi(uint8_t fn) {
 #define JIFFY (*(volatile uint16_t *)0xFC9E)
 #define SECONDS(n) ((uint16_t)((n)*60u))
 
+#include "games_local.h"
+
 /* -------------------------------------------------------------- the model */
 
 enum {K_TEXT_L, K_PRIV_IN_L, K_SYSTEM_L, K_OWN_L, K_ACTION_L, K_PRIV_OUT_L};
@@ -131,9 +135,83 @@ typedef struct {
 
 static LRoom lr[LMAXR];
 static uint8_t lcount, lcur, lmeta, lw;
-static uint8_t lkind[LMAXR][LROWS], lnick[LMAXR][LROWS];
-static char ltext[LMAXR][LROWS][TW_MAX + 1];
-static char lusers[LMAXR][LUSERS][12];
+/* The rows' text lives in a mapper segment of its own (7 KB that MCHAT.COM's TPA does not have once INL is
+   loaded), at 4000h when it is mapped into page 1. lt_copy maps it, copies and maps the TPA back, with
+   interrupts off; it runs from a copy in seg_code (page 2 or 3), and its buffers are never in page 1. */
+#define RW (TW_MAX + 3)          /* a row: its kind, the nick's length, the text and its terminator */
+#define LT(r, s) ((char *)0x4000 + ((uint16_t)(r) * LROWS + (s)) * RW)
+#define LU(r, i) ((char *)0x4000 + LMAXR * LROWS * RW + ((uint16_t)(r) * LUSERS + (i)) * 12)   /* the user lists */
+uint8_t lt_seg, lt_tpa;
+static uint16_t map_tab;
+static uint8_t seg_code[32];
+static void lt_copy_code(void) __naked {
+__asm
+    ld hl,#2
+    add hl,sp
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    push bc
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    pop hl
+    ld a,(_lt_seg)
+    di
+    out (#0xFD),a
+    ldir
+    ld a,(_lt_tpa)
+    out (#0xFD),a
+    ei
+    ret
+_lt_copy_end::
+__endasm;
+}
+extern uint8_t lt_copy_end[];
+#define lt_copy(dst, src, n) ((void (*)(void *, const void *, uint16_t))seg_code)(dst, src, n)
+
+/* A = routine (offset in the mapper support table) with A, B */
+/* user i of room r, copied out of the segment */
+static char ub[12];
+static char *uget(uint8_t r, uint8_t i) {
+    lt_copy(ub, LU(r, i), 12);
+    return ub;
+}
+
+static void mapper(uint8_t fn, uint8_t a, uint8_t b) {
+    jp_to(map_tab + fn);
+    ur_a = a; ur_bc = (uint16_t)b << 8;
+    raw_call();
+}
+#define M_ALL_SEG 0x00
+#define M_FRE_SEG 0x03
+#define M_GET_P1 0x21
+
+static const char *lt_open(void) {
+    jp_to(EXTBIO);
+    un_ix = 0; un_iy = 0;
+    ur_a = 0; ur_bc = 0; ur_de = 0x0402; ur_hl = 0;
+    raw_call();
+    map_tab = ur_hl;
+    if (!map_tab) return "No memory mapper support";
+    mapper(M_GET_P1, 0, 0);
+    lt_tpa = ur_a;
+    mapper(M_ALL_SEG, 0, 0);
+    if (ur_cf) return "No free memory segment";
+    lt_seg = ur_a;
+    memcpy(seg_code, (void *)lt_copy_code, lt_copy_end - (uint8_t *)lt_copy_code);
+    return 0;
+}
+
+static void lt_close(void) {
+    if (lt_seg) mapper(M_FRE_SEG, lt_seg, 0);
+    lt_seg = 0;
+}
 
 static struct {
     uint8_t net, conn, ready, active, lost;
@@ -202,10 +280,12 @@ static uint8_t find_room(const char *name) {
 static void push_row(uint8_t r, uint8_t kind, uint8_t nicklen, const char *text, uint8_t len) {
     uint8_t slot = lr[r].next % LROWS;
     if (len > lw) len = lw;
-    lkind[r][slot] = kind;
-    lnick[r][slot] = nicklen;
-    memcpy(ltext[r][slot], text, len);
-    ltext[r][slot][len] = 0;
+    char row[RW];
+    row[0] = kind;
+    row[1] = nicklen;
+    memcpy(row + 2, text, len);
+    row[2 + len] = 0;
+    lt_copy(LT(r, slot), row, len + 3);
     lr[r].next++;
 }
 
@@ -246,14 +326,14 @@ static const char *user_name(const char *u) { return (*u == '@' || *u == '%' || 
 
 static int8_t user_find(uint8_t r, const char *nick) {
     uint8_t i;
-    for (i = 0; i < lr[r].nusers; i++) if (same(user_name(lusers[r][i]), nick)) return i;
+    for (i = 0; i < lr[r].nusers; i++) if (same(user_name(uget(r, i)), nick)) return i;
     return -1;
 }
 
 static void user_del(uint8_t r, const char *nick) {
     int8_t i = user_find(r, nick);
     if (i < 0) return;
-    memmove(lusers[r][i], lusers[r][i + 1], (lr[r].nusers - i - 1) * 12);
+    for (; i + 1 < lr[r].nusers; i++) lt_copy(LU(r, i), LU(r, i + 1), 12);
     lr[r].nusers--;
     lmeta++;
 }
@@ -269,11 +349,11 @@ static void user_add(uint8_t r, const char *nick, char prefix) {
     entry[n] = 0;
     rank = user_rank(entry);
     for (i = 0; i < lr[r].nusers; i++) {
-        uint8_t other = user_rank(lusers[r][i]);
-        if (other > rank || (other == rank && fold_cmp(user_name(lusers[r][i]), user_name(entry)) > 0)) break;
+        uint8_t other = user_rank(uget(r, i));
+        if (other > rank || (other == rank && fold_cmp(user_name(ub), user_name(entry)) > 0)) break;
     }
-    memmove(lusers[r][i + 1], lusers[r][i], (lr[r].nusers - i) * 12);
-    memcpy(lusers[r][i], entry, 12);
+    for (n = lr[r].nusers; n > i; n--) lt_copy(LU(r, n), LU(r, n - 1), 12);
+    lt_copy(LU(r, i), entry, 12);
     lr[r].nusers++;
     lmeta++;
 }
@@ -363,7 +443,7 @@ static void irc_input(char *line) {
         for (r = 0; r < lcount; r++) {
             u = user_find(r, prefix);
             if (u >= 0) {
-                char pre = lusers[r][u][0];
+                char pre = uget(r, u)[0];
                 pre = (pre == '@' || pre == '%' || pre == '+') ? pre : 0;
                 user_add(r, rest, pre);
                 strcpy(np, prefix); strcat(np, " is now ");
@@ -418,6 +498,10 @@ static void irc_input(char *line) {
         if (*text != ':') return;
         text++;
         if (!strncmp(text, "PCH1 ", 5)) return;          /* PChess game traffic */
+        if (!strncmp(text, "MSXG1 ", 6)) {               /* game invitations (games_local.c) */
+            if (*target != '#' && *target != '&') gl_on_message(prefix, text);
+            return;
+        }
         kind = K_TEXT_L;
         if (!strncmp(text, "\x01" "ACTION ", 8)) {
             text += 8; kind = K_ACTION_L;
@@ -443,7 +527,7 @@ static void irc_input(char *line) {
 static uint8_t tcp_open(void) {
     net->open[4] = (uint8_t)cfg_port; net->open[5] = (uint8_t)(cfg_port >> 8);
     net->open[6] = 0xFF; net->open[7] = 0xFF;
-    net->open[8] = 0; net->open[9] = 0; net->open[10] = 0;
+    net->open[8] = 0; net->open[9] = 0; net->open[10] = 2;      /* resident: it outlives this program */
     ur_hl = (uint16_t)net->open;
     if (unapi(TCPIP_TCP_OPEN)) return net_error("CONNECTION FAILED");
     ln.conn = (uint8_t)(ur_bc >> 8); ln.net = NET_OPEN;
@@ -518,6 +602,179 @@ static uint8_t net_begin(const char *nick, const char *room) {
     return tcp_open();
 }
 
+
+/* ------------------------------------------------------- games (PLAYNET) */
+/* MSXG1 invitations (games_local.c, PLAYNET-PROTOCOLS.md 12), the games being the GAME.GPF files in the
+ * current directory. A game is handed to PLAYNET /T through PLAYNET.SES (13.1); the IRC connection stays
+ * open (resident) through the game, and the MCHAT /T that PLAYNET types afterwards takes it back. */
+#include "games_local.c"
+
+#define TCPIP_GET_IPINFO 2
+#define SES_STATE 32
+
+static uint16_t gsec, gjif, grem;
+static uint16_t cfg_gport;
+static uint8_t cfg_glink;               /* MCHAT.INI GAMELINK=1: the game's packets over TCP/IP even with an MSXPi */
+static char cfg_gaddr[16];
+static uint8_t ses[GL_SESSION];
+
+uint16_t gl_seconds(void) {
+    uint16_t j = JIFFY, d = j - gjif;
+    gjif = j;
+    d += grem;
+    gsec += d / 60u;
+    grem = d % 60u;
+    return gsec;
+}
+uint8_t gl_random(void) { return rnd(); }
+void gl_send(const char *nick, const char *text) { irc_line("PRIVMSG ", nick, " :", text); }
+void gl_say(const char *text) { say_system(text); }
+
+static char *put_dec(char *p, uint16_t v) {
+    char d[6]; uint8_t n = 0;
+    do {d[n++] = (char)('0' + v % 10); v /= 10;} while (v);
+    while (n) *p++ = d[--n];
+    *p = 0;
+    return p;
+}
+
+/* An MSXPi command "playnet ..." (PLAYNET-PROTOCOLS.md 15): the reply text into pr. 1 on success. With no
+   interface the control port floats to FFh and the exchange would wait for ever, so it is not tried. */
+static char pcmd[112], pr[80];
+static uint8_t pi_playnet(void) {
+    uint8_t rc;
+    uint16_t size = 0, maxbuf = sizeof(pr) - 1;
+    if (InPort(CONTROL_PORT1) > 1) return 0;
+    msxpi_link_claim();
+    rc = SendCommandToMSXPi(pcmd, false);
+    if (rc == RC_SUCCESS) rc = RECVDATA((uint8_t *)pr, &size, &maxbuf);
+    msxpi_link_release();
+    if (rc != RC_SUCCESS) return 0;
+    pr[size < sizeof(pr) ? size : sizeof(pr) - 1] = 0;
+    return 1;
+}
+
+/* "playnet open ID": the Pi opens its game socket and answers "<profile hash> <candidates>" (the candidates go to out,
+   64 bytes). 0 when there is no MSXPi, or it does not have the game or does not know the command. */
+static uint8_t pi_game_port(char *out) {
+    char *c;
+    strcpy(pcmd, "playnet open "); strcat(pcmd, gl_cur_game);
+    if (!pi_playnet() || !(c = strchr(pr, ' ')) || strlen(c + 1) > 63) return 0;
+    strcpy(out, c + 1);
+    return 1;
+}
+
+uint8_t gl_peers(const char *token, uint8_t seat, const char *candidates) {
+    strcpy(pcmd, "playnet peers "); strcat(pcmd, token);
+    strcat(pcmd, seat ? " 1 " : " 0 "); strcat(pcmd, gl_cur_game); strcat(pcmd, " "); strcat(pcmd, candidates);
+    return pi_playnet() && pr[0] == 'O';
+}
+
+/* the game's UDP port and where it can be reached: the LAN address first, then GAMEADDR (MCHAT.INI: a
+   forwarded or public address) when set */
+uint16_t gl_open(char *out) {
+    uint16_t port = cfg_gport ? cfg_gport : (uint16_t)(5000 + (rnd() & 0x3FF));
+    char *p = out;
+    uint8_t i;
+    if (cfg_glink != 1 && pi_game_port(out)) {gl_link = 2; return 1;}   /* an MSXPi: it carries the game's packets (link 2) */
+    ur_bc = 1 << 8;                                          /* B = 1: the local address */
+    if (unapi(TCPIP_GET_IPINFO)) return 0;
+    for (i = 0; i < 4; i++) {
+        p = put_dec(p, i == 0 ? (uint8_t)ur_hl : i == 1 ? (uint8_t)(ur_hl >> 8) : i == 2 ? (uint8_t)ur_de : (uint8_t)(ur_de >> 8));
+        *p++ = i < 3 ? '.' : ':';
+    }
+    p = put_dec(p, port);
+    if (cfg_gaddr[0]) {*p++ = ','; strcpy(p, cfg_gaddr); p += strlen(p); *p++ = ':'; put_dec(p, port);}
+    return port;
+}
+
+static void ses_name(FCB *f) {
+    memset(f, 0, sizeof(FCB));
+    memcpy(f->name, "PLAYNET SES", 11);
+}
+
+/* the GPF headers in the current directory: the games this machine has */
+static void load_games(void) {
+    static FCB f;
+    static FCB_FIND found;
+    uint8_t *h = ses, i;
+    gl_ngames = 0;
+    memset(&f, 0, sizeof(f));
+    memcpy(f.name, "????????GPF", 11);
+    if (fcb_find_first(&f, &found)) return;
+    do {
+        static FCB g;
+        memset(&g, 0, sizeof(g));
+        memcpy(g.name, found.dirinfo.name, 11);
+        if (fcb_open(&g)) continue;
+        g.record_size = 1;
+        i = (uint8_t)fcb_read(&g, h, 128);
+        fcb_close(&g);
+        if (i == 128 && !memcmp(h, "GPF1", 4) && h[4] == 1 && (h[5] & 1) && gl_ngames < GL_MAX_GAMES) {
+            gl_game *gm = &gl_games[gl_ngames++];
+            memcpy(gm->id, h + 12, 8); gm->id[8] = 0;
+            memcpy(gm->title, h + 20, 24); gm->title[24] = 0;
+            memcpy(gm->roles[0], h + 44, 8); gm->roles[0][8] = 0;
+            memcpy(gm->roles[1], h + 52, 8); gm->roles[1][8] = 0;
+            gm->lockstep = 1;
+            memcpy(gm->hash, h + 8, 4);
+        }
+    } while (!fcb_find_next(&found));
+}
+
+/* the game is handed over: PLAYNET.SES with the session and this connection */
+static uint8_t write_session(void) {
+    static FCB f;
+    uint8_t i;
+    gl_session(ses);
+    ses[59] = ln.conn;
+    strncpy((char *)ses + 60, ln.nick, 16);
+    ses[77] = lcount;
+    for (i = 0; i < lcount; i++) strncpy((char *)ses + 78 + i * 24, lr[i].name, 23);
+    ses_name(&f);
+    if (fcb_create(&f)) return 0;
+    f.record_size = 1;
+    i = fcb_write(&f, ses, GL_SESSION);
+    fcb_close(&f);
+    return i == 0;
+}
+
+/* After a game: PLAYNET wrote its result into PLAYNET.SES. Take the IRC connection back when it is still
+   up, and say how the game ended. 1 = the chat is back as it was. */
+static uint8_t resume_session(void) {
+    static FCB f;
+    uint8_t i, ok = 0;
+    char peer[9];
+    ses_name(&f);
+    if (fcb_open(&f)) return 0;
+    f.record_size = 1;
+    i = (uint8_t)fcb_read(&f, ses, 128) == 128;
+    fcb_close(&f);
+    if (!i || memcmp(ses, "PNS1", 4) || (ses[9] != 1 && ses[9] != 2)) return 0;
+    ses_name(&f);                                             /* used: empty it */
+    if (!fcb_create(&f)) fcb_close(&f);
+    ur_bc = (uint16_t)ses[59] << 8; ur_hl = 0;
+    if (!unapi(TCPIP_TCP_STATE) && (uint8_t)(ur_bc >> 8) == 4) {
+        ln.conn = ses[59]; ln.net = NET_READY; ln.ready = 1; ln.active = 1;
+        ln.started = JIFFY;
+        strncpy(ln.nick, (char *)ses + 60, 16); ln.nick[16] = 0;
+        lcount = ses[77] > LMAXR ? LMAXR : ses[77];
+        if (!lcount) lcount = 1;
+        for (i = 0; i < lcount; i++) {
+            strncpy(lr[i].name, (char *)ses + 78 + i * 24, 23);
+            lr[i].joined = 1;
+            irc_line("NAMES ", lr[i].name, 0, 0);
+        }
+        lcur = 0; lmeta++;
+        ok = 1;
+    }
+    memcpy(peer, ses + 24, 8); peer[8] = 0;
+    gl_restore(peer);
+    gl_resumed(ses[SES_STATE] == 2 ? ses[SES_STATE + 1] : 0);
+    if (!ok) say_system("The IRC connection did not survive the game: connecting again");
+    return ok;
+}
+
 /* ------------------------------------------------------------- settings */
 
 static void load_config(void) {
@@ -548,26 +805,37 @@ static void load_config(void) {
         else if (!strcmp(line, "IRCPORT")) {cfg_port = 0; while (*eq >= '0' && *eq <= '9') cfg_port = cfg_port * 10 + (*eq++ - '0');}
         else if (!strcmp(line, "IRCNICK") && valid_nick(eq)) strcpy(cfg_nick, eq);
         else if (!strcmp(line, "MCHATROOM") && *eq == '#' && strlen(eq) < 24) strcpy(cfg_room, eq);
+        else if (!strcmp(line, "GAMEPORT")) {cfg_gport = 0; while (*eq >= '0' && *eq <= '9') cfg_gport = cfg_gport * 10 + (*eq++ - '0');}
+        else if (!strcmp(line, "GAMEADDR") && strlen(eq) < 16) strcpy(cfg_gaddr, eq);
+        else if (!strcmp(line, "GAMELINK")) cfg_glink = (uint8_t)(*eq == '1');
     }
     memset(reply, 0, 256);
 }
 
 /* Called for "mchat /t"; 0 with a message when TCP/IP is not usable. */
 static const char *tcp_link_start(void) {
+    const char *why;
     uint16_t top = *(uint16_t *)0x0006;
     memset(&ln, 0, sizeof(ln));
     memset(lr, 0, sizeof(lr));
     lcount = 0; lcur = 0; lmeta = 0; lw = 40;
+    /* the start-up zeroes nothing: these come in as FFh, and an FFh GAMEADDR is a string without an end */
+    lt_seg = 0; cfg_gport = 0; cfg_gaddr[0] = 0; cfg_glink = 0;
+    gsec = 0; grem = 0; gjif = JIFFY;
+    gl_init();
     if (!tcp_find()) return "No TCP/IP UNAPI: run INL I first";
-    if ((uint16_t)&net_area < 0x8000) return "TCP/IP buffer is in page 1";
+    if ((uint16_t)&net_area < 0x8000 || (uint16_t)seg_code < 0x8000) return "TCP/IP buffer is in page 1";
+    if ((why = lt_open())) return why;
     if (top < heap_top || top - heap_top < STACK_ROOM) return "Not enough memory for TCP/IP";
     net = &net_area;
     load_config();
+    load_games();
     return 0;
 }
 
 static void tcp_link_stop(void) {
-    if (net) net_close();
+    if (net && !gl_launched()) net_close();      /* a game keeps the connection */
+    lt_close();
 }
 
 /* -------------------------------------------------------------- packets */
@@ -577,10 +845,12 @@ static void packet_header(char type) {
     memcpy(reply, "CHT1", 4);
     reply[4] = !ln.active ? 4 : ln.lost ? 2 : ln.ready ? 1 : 0;
     reply[5] = type;
+    reply[22] = gl_flags();
 }
 
 static void rows_packet(uint8_t r, uint16_t start) {
     uint8_t i, count, slot_size = 2 + lw, per = (256 - 24) / (2 + lw), s;
+    char row[RW];
     uint16_t first, n;
     packet_header('M');
     if (!ln.active || r >= lcount) {reply[4] = 4; return;}
@@ -595,9 +865,10 @@ static void rows_packet(uint8_t r, uint16_t start) {
     reply[20] = lmeta; reply[21] = lcur;
     for (i = 0; i < count; i++) {
         s = (start + i) % LROWS;
-        reply[24 + i * slot_size] = lkind[r][s];
-        reply[25 + i * slot_size] = lnick[r][s];
-        memcpy(reply + 26 + i * slot_size, ltext[r][s], strlen(ltext[r][s]));
+        lt_copy(row, LT(r, s), RW);
+        reply[24 + i * slot_size] = row[0];
+        reply[25 + i * slot_size] = row[1];
+        memcpy(reply + 26 + i * slot_size, row + 2, strlen(row + 2));
     }
 }
 
@@ -609,7 +880,7 @@ static void meta_packet(uint8_t first) {
     reply[8] = lr[lcur].nusers; reply[9] = 0;
     memcpy(reply + 12, ln.nick, strlen(ln.nick) > 11 ? 11 : strlen(ln.nick));
     for (i = 0; i < lcount; i++) memcpy(reply + 24 + i * 12, lr[i].name, strlen(lr[i].name) > 11 ? 11 : strlen(lr[i].name));
-    for (i = first; i < lr[lcur].nusers && n < 15; i++, n++) memcpy(reply + 72 + n * 12, lusers[lcur][i], strlen(lusers[lcur][i]));
+    for (i = first; i < lr[lcur].nusers && n < 15; i++, n++) {uget(lcur, i); memcpy(reply + 72 + n * 12, ub, strlen(ub));}
     reply[10] = n;
 }
 
@@ -674,8 +945,7 @@ static void user_say(char *text) {
         irc_line("PART ", lr[lcur].name, 0, 0);
         for (r = lcur; r + 1 < lcount; r++) {
             lr[r] = lr[r + 1];
-            memcpy(lkind[r], lkind[r + 1], LROWS); memcpy(lnick[r], lnick[r + 1], LROWS);
-            memcpy(ltext[r], ltext[r + 1], sizeof(ltext[0])); memcpy(lusers[r], lusers[r + 1], sizeof(lusers[0]));
+            lt_copy(LT(r, 0), LT(r + 1, 0), LROWS * RW); lt_copy(LU(r, 0), LU(r + 1, 0), LUSERS * 12);
         }
         lcount--;
         if (lcur) lcur--;
@@ -683,9 +953,19 @@ static void user_say(char *text) {
     } else if (!strcmp(text, "who")) {
         char list[LTEXT]; uint8_t i;
         list[0] = 0;
-        for (i = 0; i < lr[lcur].nusers && strlen(list) < LTEXT - 14; i++) {strcat(list, lusers[lcur][i]); strcat(list, " ");}
+        for (i = 0; i < lr[lcur].nusers && strlen(list) < LTEXT - 14; i++) {strcat(list, uget(lcur, i)); strcat(list, " ");}
         add_row(lcur, K_SYSTEM_L, "", list);
-    } else if (!strcmp(text, "help") || !strcmp(text, "?")) {
+    } else if (!strcmp(text, "play")) {
+        char *gid = strchr(arg, ' ');
+        if (gid) {*gid++ = 0; while (*gid == ' ') gid++; for (p = gid; *p; p++) if (*p >= 'A' && *p <= 'Z') *p += 32;}
+        else gid = "";
+        if (!ln.ready) {say_system("! Not connected yet; wait"); return;}
+        gl_play(arg, gid);
+    } else if (!strcmp(text, "accept")) gl_accept();
+    else if (!strcmp(text, "decline")) gl_decline();
+    else if (!strcmp(text, "cancel")) gl_cancel();
+    else if (!strcmp(text, "games")) gl_list();
+    else if (!strcmp(text, "help") || !strcmp(text, "?")) {
         say_system("/nick N /msg N TEXT /join #ROOM /part /me TEXT /who /screen /help. TAB next room, ESC quit");
     } else say_system("! Unknown command; /help");
 }
@@ -715,10 +995,17 @@ static uint8_t local_exchange(const char *cmd) {
             }
         } else {
             lw = (uint8_t)width;
-            net_begin(nick[0] && strcmp(nick, "-") ? nick : cfg_nick, cfg_room);
-            say_system("Connecting...");
+            if (!resume_session()) {
+                net_begin(nick[0] && strcmp(nick, "-") ? nick : cfg_nick, cfg_room);
+                say_system("Connecting...");
+            }
         }
         rows_packet(lcur, 0xFFFF);
+    } else if (!strncmp(p, "launch", 6)) {
+        const char *line = gl_take_launch();
+        packet_header('L');
+        if (line && write_session()) {reply[6] = 1; strcpy((char *)reply + 24, line);}
+        else if (line) say_system("! Cannot write PLAYNET.SES");
     } else if (!strncmp(p, "quit", 4)) {
         net_close(); ln.active = 0;
         packet_header('M'); reply[4] = 4;
