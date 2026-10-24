@@ -5,7 +5,7 @@
 #   openmsx -machine Canon_V-25 -carta kung-fu.rom -script tempo.tcl      (TEMPO_OUT = result file; TEMPO_CART=1 plays by itself)
 if {![info exists ::env(TEMPO_WIN)]} { set ::env(TEMPO_WIN) 20 }
 if {![info exists ::env(TEMPO_SKIP)]} { set ::env(TEMPO_SKIP) 4 }
-set ::lastTap 0; set ::tm 0; set ::sn 0; set ::fr 0; set ::t0 -1; set ::tA -1; set ::done 0
+set ::lastTap 0; set ::leftAt -1; set ::tm 0; set ::sn 0; set ::fr 0; set ::t0 -1; set ::tA -1; set ::done 0
 proc tmHit {what} {
     if {$::t0 < 0 || $::done} return
     if {$what eq "snd"} { incr ::sn } else { incr ::fr }
@@ -17,10 +17,10 @@ proc tmPoll {} {
         if {$::tA < 0} { set ::tA $now }
         if {$::t0 < 0 && $now - $::tA >= $::env(TEMPO_SKIP)} { set ::t0 $now; set ::sn 0; set ::fr 0 }
     } elseif {$::t0 >= 0 && !$::done} {
-        # the fight ended inside the window: report what was seen
-        tmReport $now
-        return
+        # the fight is over (or the game is between two states): report only when it stays out for more than 2 s
+        if {$::leftAt < 0} { set ::leftAt $now } elseif {$now - $::leftAt > 2} { tmReport $::leftAt; return }
     }
+    if {$::t0 >= 0 && [peek 0xE000] == 5} { set ::leftAt -1 }
     if {$::t0 >= 0 && $now - $::t0 >= $::env(TEMPO_WIN)} { tmReport $now; return }
     if {[info exists ::env(TEMPO_CART)]} {
         poke 0xE050 9

@@ -64,9 +64,9 @@ def text(row, column, string):
 MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line (559Bh), erased
         ('STR_TITLE', 13, 10, 'SELECT MODE'),
         ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'),
-        ('STR_HUD1', 2, 12, 'PLAYER 1'), ('STR_HUD2', 2, 12, 'PLAYER 2'),       # in the fight, on the blank row under the HUD
+        ('STR_HUD1', 2, 7, 'PLAYER 1' + ' ' * 10), ('STR_HUD2', 2, 7, 'PLAYER 2' + ' ' * 10),       # in the fight, on the blank row under the HUD
         ('STR_PS1', 14, 12, 'PLAYER 1'), ('STR_PS2', 14, 12, 'PLAYER 2'),
-        ('STR_OUT1', 3, 7, 'PLAYER 1 GAME OVER'), ('STR_OUT2', 3, 7, 'PLAYER 2 GAME OVER'),
+        ('STR_OUT1', 2, 7, 'PLAYER 1 GAME OVER'), ('STR_OUT2', 2, 7, 'PLAYER 2 GAME OVER'),
         ('STR_LIVES', 2, 12, 'P2 REST 3'),
         ('STR_WIN1', 13, 9, 'PLAYER 1 WINS'), ('STR_WIN2', 13, 9, 'PLAYER 2 WINS'))   # Versus: over the game-over screen
 

@@ -9,6 +9,8 @@ is a one-player game; online it gets a play-mode screen with three modes:
   VERSUS  player 1 is Oolong, player 2 controls the opponent of each stage, in
           the game's order. Player 1 wins by beating the fifth opponent, player
           2 wins when player 1 has no REST left. No bonus stages.
+          Player 2 has 3 lives of their own ("P2 REST n" on the screen); the winner is
+          shown on the game-over screen for about 3 seconds.
 You can meet in the MCHAT chat (part 1), or start the game by hand from the
 command line over TCP/IP, without the chat (part 2).
 
@@ -59,11 +61,13 @@ THE PLAY-MODE SCREEN
   same screen and waits.
 
 CONTROLS   Each player uses their own cursor keys + SPACE, or joystick 1.
+  TURN: when a player is out, "PLAYER n GAME OVER" is shown and the other plays on.
   Oolong (player 1; in TURN whoever has the turn): the directions move,
          SPACE or the button with a direction picks the attack.
   The opponent (player 2, VERSUS only):
          LEFT/RIGHT walk.  SPACE or the button: an attack;
          with UP held: another attack; with DOWN held: a third one.
+         The second button (or UP alone): a jump attack.
          Nothing pressed: the opponent stands still.
   CTRL+SHIFT+F5 ends the game on both machines, in every mode.
 

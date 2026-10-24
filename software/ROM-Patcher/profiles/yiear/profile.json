@@ -29,7 +29,7 @@
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "8d32f6948b964d4227389815ec18cddf11820d73bd91cc011dbda7500014018d"
+      "sha256": "414d3611ed1b9a7dbfe18e5333cee31aab506437627ae099cb34a48cdba8fd14"
     }
   },
   "layout": [
@@ -42,7 +42,7 @@
     {
       "source": "ext",
       "offset": 0,
-      "size": 866,
+      "size": 887,
       "destination": 24576
     }
   ],
@@ -74,31 +74,31 @@
     {
       "offset": 156,
       "expected": "cd7140",
-      "replace": "cdbaa0",
+      "replace": "cdcea0",
       "reason": "409Ch: State dispatch -> the extension: state 9, the play-mode screen"
     },
     {
       "offset": 306,
       "expected": "cda342",
-      "replace": "cd21a2",
+      "replace": "cd36a2",
       "reason": "4132h: New game: Turn copies the fresh block to both players"
     },
     {
       "offset": 476,
       "expected": "3a50e0",
-      "replace": "cd52a2",
+      "replace": "cd67a2",
       "reason": "41DCh: A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)"
     },
     {
       "offset": 574,
       "expected": "2150e0",
-      "replace": "cd29a3",
+      "replace": "cd3ea3",
       "reason": "423Eh: Opponent beaten: in Versus player 2 loses a life (none left: player 1 wins); the game's REST + 1 goes nowhere"
     },
     {
       "offset": 584,
       "expected": "3a54e0",
-      "replace": "cd1ea3",
+      "replace": "cd33a3",
       "reason": "4248h: Opponent beaten: Versus has no bonus stage"
     },
     {
@@ -116,7 +116,7 @@
     {
       "offset": 13112,
       "expected": "3a81e1",
-      "replace": "c3c3a2",
+      "replace": "c3d8a2",
       "reason": "7338h: The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides"
     }
   ],
@@ -166,8 +166,8 @@
     "key1": 50210,
     "rdLocal": 50128,
     "stubEnd": 50214,
-    "dispatch": 41146,
-    "menu": 41328,
+    "dispatch": 41166,
+    "menu": 41349,
     "tMode": 50157,
     "tCur": 50158,
     "tOut": 50159,
