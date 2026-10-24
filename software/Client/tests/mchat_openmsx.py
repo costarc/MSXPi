@@ -11,7 +11,9 @@ font the program draws with (tools/gen_mchat_font.py).
     python mchat_openmsx.py [path\\to\\mchat.com]
 
 Windows Python and openMSX with the MSXPi extension. Ports 5044 and 6668
-must be free. Artefacts go to <repo>/../work/mchat-*/.
+must be free. MCHAT_LINK=tcp runs the chat over INL on the server's user-mode network link
+(MCHAT_NET=nat, the default: the IRC fixture is 10.0.2.2, no adapter) or over the Windows TAP (MCHAT_NET=tap).
+Add MCHAT_FORCE1=1 for the checks below on the Canon (they decode SCREEN 2; without /1 the MSX2 starts in SCREEN 6). Artefacts go to <repo>/../work/mchat-*/.
 """
 import os
 import shutil
@@ -65,9 +67,12 @@ WATCH = [int(a) for a in os.environ.get('MCHAT_WATCH', '').split(',') if a]   # 
 TRACE = os.environ.get('MCHAT_TRACE')               # VRAM address: log each change of that byte with PC and stack (vram/trace.log)
 TRACE_BP = os.environ.get('MCHAT_TRACE_BP')         # addr,lo,hi: log calls of the routine at addr whose 2nd argument is in lo..hi (vram/trace.log)
 LINK = os.environ.get('MCHAT_LINK', 'msxpi')      # msxpi (the MSXPi server) or tcp (TCP/IP UNAPI, INL)
+NET = os.environ.get('MCHAT_NET', 'nat')          # tcp only: nat (the server's user-mode link, host = 10.0.2.2) or tap
+IRC_HOST_IP = '10.0.2.2' if NET == 'nat' else '192.168.99.1'
 if LINK == 'tcp':
-    # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host
-    # at 192.168.99.1 through the Windows TAP (msxpi-tcpip-setup.ps1) and needs no MSXPi server for chat.
+    # MSR I and INL I give the Canon a TCP/IP stack; the MSX reaches the IRC fixture on this host. nat (default): the
+    # MSXPi server's user-mode UDP/TCP link (msxpi_ethnat.py) makes the host 10.0.2.2, no adapter needed. tap: the
+    # fixture is at 192.168.99.1 through the Windows TAP (msxpi-tcpip-setup.ps1).
     TIMELINE = [(20, 'MSR I\r'), (32, 'INL I\r'), (46, 'memtop\r'), (49, 'shot:memtop'), (49, 'dump:font'), (50, os.environ.get('MCHAT_CMD', 'mchat /t alice') + '\r')] + [
         (int(58 + (t - 30) * 1.5), a) for t, a in TIMELINE if t >= 30]   # the TCP/IP link is slower
     if os.environ.get('MCHAT_FORCE1'):
@@ -272,17 +277,23 @@ def main():
         shutil.copy(SOFTWARE / 'target/memtop.com', work / 'memtop.com')
         subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'memtop.com',
                         'home/disks/msxpiboot.dsk:MEMTOP.COM'], cwd=work, check=True, stdout=subprocess.DEVNULL)
-        (work / 'MCHAT.INI').write_bytes(b'IRCADDR=192.168.99.1\r\nIRCPORT=%d\r\n' % IRC_PORT)
+        (work / 'MCHAT.INI').write_bytes(b'IRCADDR=%s\r\nIRCPORT=%d\r\n' % (IRC_HOST_IP.encode(), IRC_PORT))
+        if NET == 'nat':     # INL I reads INL.CFG from the current drive: the user-mode link's addresses
+            (work / 'INL.CFG').write_bytes(b'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\x1a')
+            subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'INL.CFG',
+                            'home/disks/msxpiboot.dsk:INL.CFG'], cwd=work, check=True, stdout=subprocess.DEVNULL)
         subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'MCHAT.INI',
                         'home/disks/msxpiboot.dsk:MCHAT.INI'], cwd=work, check=True, stdout=subprocess.DEVNULL)
     script = work / 'mchat.tcl'
     write_script(script, dumps)
 
-    fixture = Server(('0.0.0.0' if LINK == 'tcp' else '127.0.0.1', IRC_PORT))
+    fixture = Server(('0.0.0.0' if LINK == 'tcp' and NET == 'tap' else '127.0.0.1', IRC_PORT))
     threading.Thread(target=fixture.serve_forever, daemon=True).start()
     bob = Bob(fixture)
     env = dict(os.environ, MSXPI_HOME=str(home), MSXPI_PORT=str(MSXPI_PORT), PCHESS_IRC_HOST='127.0.0.1',
                PCHESS_IRC_PORT=str(IRC_PORT), PCHESS_IRC_TLS='0')
+    if LINK == 'tcp' and NET == 'nat':
+        env['MSXPI_ETH_LINK'] = 'udpnat'
     server_log = (work / 'server.log').open('w')
     server = subprocess.Popen([sys.executable, '-u', 'msxpi-server.py'], env=env,
                               cwd=SOFTWARE / 'Server/Python/src', stdout=server_log, stderr=subprocess.STDOUT)
