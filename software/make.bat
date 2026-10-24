@@ -37,7 +37,7 @@ SET ADDR_DATA=0x0
 
 echo -------- Compilation of : %MSXPIBIOSLIB%
 echo msxpi-lib.c
-sdcc -mz80 -c C-common\lib\%MSXPIBIOSLIB%.c
+sdcc -mz80 --sdcccall 0 -c C-common\lib\%MSXPIBIOSLIB%.c
 sdar -rc C-common\lib\%MSXPIBIOSLIB%.lib %MSXPIBIOSLIB%.rel
 del %MSXPIBIOSLIB%.lst
 del %MSXPIBIOSLIB%.sym
@@ -53,7 +53,7 @@ REM (30000 would take 1 minute but leave only 804 bytes; Client\tests\pchess_mem
 REM checks the result).
 SET OPTX=
 IF /I "%1"=="pchess" SET OPTX=--max-allocs-per-node 100000
-SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size %OPTX% fusion.lib %MSXPIBIOSLIB%.lib -L %LIBDIR% -L %MSXPILIB% %INC1% %proga%.c
+SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --sdcccall 0 --no-std-crt0 --opt-code-size %OPTX% fusion.lib %MSXPIBIOSLIB%.lib -L %LIBDIR% -L %MSXPILIB% %INC1% %proga%.c
 SET cpath=%~dp0
 IF NOT EXIST %sourcename%.ihx GOTO _end_
 echo ... Compilation OK
