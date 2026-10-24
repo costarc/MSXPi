@@ -238,3 +238,13 @@ driver as many times as player 1's machine counted interrupts, PROTOCOLS 9.2), a
 and 2.7 % with the worst network tried, because a frame waits for the opponent's input. Emulated seconds, throttle on (the MSXPi device
 needs real time); another session's emulators were running on the host, which does not change emulated time. Not measured: the sound
 by ear or a recording (`RECORD=file.wav`), and a real machine's cost per frame.
+
+## 2026-10-24, the two-TCP/IP-node scenario: added, does not connect (rig problem, not Yie Ar)
+
+`run_yiear.sh SCENARIO=both` starts both machines over TCP/IP without the chat (`MSR I`, `INL I`, `PLAYNET /T yiear P1 5137 10.0.2.2:5138`
+and the mirror on P2, over the server's user-mode UDP link). It builds and starts, PLAYNET prints "Loading the ROM... Connecting", the
+screen goes to the game, and the machine resets about 6 s later without a single frame (`nf` stays 0, no stub in the game's page 3,
+`foreign_writes` n/a). This is the failure already recorded in `HANDOVER-salamander.md` 4b for Soccer's `SCENARIO=mixed` and for a clean
+`master`: InterNestor sends no frame to the server's NAT link, so the TCP/IP game path cannot connect in this rig whatever the game.
+Not investigated further (the user had put the TCP/IP path out of scope; link 2, which uses the MSXPi for the game, works: see above).
+`yiear_debug/initwatch.tcl` traces INIT and the resets for whoever picks this up; `DUMP_EVERY=n` dumps the screen every n emulated s.

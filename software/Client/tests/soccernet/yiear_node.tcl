@@ -233,7 +233,7 @@ proc backCheck {} {
     after time 1 exit
 }
 proc dumpscreen {} {
-    after time 20 dumpscreen
+    after time [expr {[info exists ::env(DUMP_EVERY)] ? $::env(DUMP_EVERY) : 20}] dumpscreen
     set fh [open "$::env(TRACE).screen" a]
     puts $fh "---- t=[expr {int([machine_info time])}] PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] nf=[format %02X [peek $::s_nf]] scene=[peek 0xE000] ie=[debug read {CPU regs} 0x10] dl=[peek $::s_pnDelay] started=[peek $::s_started]"
     catch { foreach l [harness::screen_lines] { if {[string trim $l] ne ""} { puts $fh "|$l" } } }

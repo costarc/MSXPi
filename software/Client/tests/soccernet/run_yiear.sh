@@ -13,10 +13,12 @@
 #   RENDERER=SDLGL-PP to watch it.   EXTRA_TCL / EXTRA_TCL_C  one more script for P1 / P2
 #   SCENARIO=tcp   the chat over TCP/IP on both nodes (MSR I, INL I, MCHAT /1 /T) against the IRC fixture at 10.0.2.2; with an MSXPi
 #                 on each machine the game itself runs over the MSXPi (link 2).
+#   SCENARIO=both  no chat: both machines over TCP/IP (MSR I, INL I, then PLAYNET /T yiear P1 .. 10.0.2.2:..), the game packets over
+#                 the server's user-mode UDP link. PNOPTS = more PLAYNET /T options.
 #   SCENARIO=chat  the players meet in MCHAT (against a local IRC server): P1 invites P2 (/play bob yiear), P2 accepts, and the chat
 #                 starts the game itself. EXITKEY=n then also checks that both machines are back in MCHAT. Needs software/target/mchat.com.
 #                 PLAY_AT / ACCEPT_AT: emulated seconds. IRC_PORT (6637).
-# Not here: the mixed and BOTH=1 game scenarios over TCP/IP (PLAYNET /T).
+# Not here: a mixed pair (one MSXPi node, one TCP/IP node).
 # Results: $WORK/np/{P1,P2}.trace; the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -29,7 +31,7 @@ OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 case "$SCENARIO" in chat) [ -f "$ROOT/software/target/mchat.com" ] ;; *) true ;; esac || { echo "no software/target/mchat.com"; exit 1; }
 CHAT=; case "$SCENARIO" in chat|tcp) CHAT=1;; esac
-TCPN=; [ "$SCENARIO" != tcp ] || TCPN=1
+TCPN=; case "$SCENARIO" in tcp|both) TCPN=1;; esac
 # own ports (other sessions run the Soccer, Ping Pong and Salamander rigs on 8115/8116, 5101/5102, 6671): override with P1PORT/P2PORT/UDP1/UDP2/IRC_PORT
 P1PORT=${P1PORT:-8137}; P2PORT=${P2PORT:-8138}; UDP1=${UDP1:-5137}; UDP2=${UDP2:-5138}
 IRC_PORT=${IRC_PORT:-6637}
@@ -79,9 +81,11 @@ INI
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/YIEAR.GPF" YIEAR.GPF > /dev/null
     nick=$( [ $n = 1 ] && echo alice || echo bob )
+    if [ "$SCENARIO" = tcp ]; then
     printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=51%s\r\nGAMEADDR=10.0.2.2\r\n\032' "$IRC_PORT" $nick $((37 + n)) > "$WORK/MCHAT$n.INI"
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/MCHAT$n.INI" MCHAT.INI > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/mchat/MCHAT.COM" MCHAT.COM > /dev/null
+    fi
   fi
 done
 # the profile hash the servers announce: the GPF's
@@ -103,13 +107,19 @@ start() {  # n port local_udp peer_udp version
     done ) > /dev/null 2>&1 &
 }
 : > "$WORK/server1.log"; : > "$WORK/server2.log"
-[ -z "$CHAT" ] || pings=""; [ -z "$TCPN" ] || pings="${IRC_PING:-3} ${IRC_TIMEOUT:-60}"
-( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) &
+if [ -n "$CHAT" ]; then
+  pings=""; [ -z "$TCPN" ] || pings="${IRC_PING:-3} ${IRC_TIMEOUT:-60}"
+  ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) &
+fi
 start 1 $P1PORT $UDP1 $UDP2
 start 2 $P2PORT $UDP2 $UDP1 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
-[ -z "$TCPN" ] || export PRE_P1="MSR I;INL I" PRE_P2="MSR I;INL I" CHAT_TCP=1
+[ -z "$TCPN" ] || export PRE_P1="MSR I;INL I" PRE_P2="MSR I;INL I"
+[ "$SCENARIO" != tcp ] || export CHAT_TCP=1
+if [ "$SCENARIO" = both ]; then          # no chat: each machine types the start line (PLAYNET /T game role port peer), its game over TCP/IP
+  export CMD_P1="PLAYNET /T $PNOPTS yiear P1 $UDP1 10.0.2.2:$UDP2" CMD_P2="PLAYNET /T $PNOPTS yiear P2 $UDP2 10.0.2.2:$UDP1"
+fi
 node() {  # role port
   xs=""; [ "$1" = P1 ] && xs="$EXTRA_TCL"; [ "$1" = P2 ] && xs="$EXTRA_TCL_C"
   NICK=$( [ "$1" = P1 ] && echo alice || echo bob ) OPPONENT=$( [ "$1" = P1 ] && echo bob || echo alice ) INVITE=$( [ "$1" = P1 ] && echo 1 || echo 0 ) \
