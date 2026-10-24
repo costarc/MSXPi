@@ -30,6 +30,7 @@ BLOCK:          EQU     $E049
 REST:           EQU     $E050
 OPPONENT:       EQU     $E054
 DUMMY:          EQU     $E483                   ; where Versus sends the game's REST + 1
+HOLD:           EQU     200                     ; frames the winner is shown (about 3 s)
 LIVES2:         EQU     3                       ; player 2's lives in Versus
 LIVES_AT:       EQU     2 + 8                   ; the digit in STR_LIVES (the address word, then "P2 REST ")
 
@@ -39,18 +40,54 @@ dispatch:
         jp      z,.menu
         cp      5                               ; a fight in Turn or Versus: the HUD, once in a while
         jp      z,.fight
-        cp      7                               ; the game-over screen of a Versus match: who won
+        cp      7                               ; the game-over screen of a Versus match: who won, held for a while
         jp      nz,OLD_DISPATCH
         push    af
         ld      a,(MODE)
         cp      2
         jr      nz,.old
-        ld      de,STR_WIN1
         ld      a,(tWin)
+        or      a
+        jr      z,.old
+        ld      de,STR_WIN1
         cp      2
-        jr      c,.say                          ; 1 (tWin is set before the game-over screen is reached)
+        jr      c,.w1                           ; 1 (tWin is set before the game-over screen is reached)
         ld      de,STR_WIN2
-        jr      .say
+.w1:    ld      a,(tHold)                       ; state 7 lasts 5 frames: stay here for HOLD frames, then the game goes on
+        or      a
+        jr      nz,.w2
+        ld      a,HOLD
+.w2:    dec     a
+        ld      (tHold),a
+        jr      nz,.w3
+        ld      (tWin),a                        ; over: no winner any more, so the 5 frames the game has left do not start it again
+        jr      .old
+.w3:
+        ld      a,(FRAME)
+        and     15
+        jr      nz,.wend
+        push    bc
+        push    de
+        push    hl
+        call    PRINT
+        pop     hl
+        pop     de
+        pop     bc
+.wend:  pop     af
+        pop     hl                              ; the state's own routine is not run: back to the caller of the dispatcher
+        ret
+.say:   ld      a,(FRAME)
+        and     15
+        jr      nz,.old
+        push    bc
+        push    de
+        push    hl
+        call    PRINT
+        pop     hl
+        pop     de
+        pop     bc
+.old:   pop     af
+        jp      OLD_DISPATCH
 .fight: push    af
         ld      a,(MODE)
         or      a
@@ -90,18 +127,6 @@ dispatch:
         pop     de
         pop     bc
         jr      .old
-.say:   ld      a,(FRAME)
-        and     15
-        jr      nz,.old
-        push    bc
-        push    de
-        push    hl
-        call    PRINT
-        pop     hl
-        pop     de
-        pop     bc
-.old:   pop     af
-        jp      OLD_DISPATCH
 .menu:
         pop     hl                              ; the table address the call pushed
 menu:   ld      a,(SUBSTATE)

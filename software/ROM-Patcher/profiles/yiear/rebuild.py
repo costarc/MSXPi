@@ -35,7 +35,7 @@ STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu',
-            'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tBlk')
+            'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tHold', 'tBlk')
 
 
 def assemble(assembler, engine, scripted, out_dir):
@@ -78,7 +78,7 @@ def assemble_ext(assembler, symbols, out_dir, work=None):
     if work:
         src = Path(work)
         shutil.copyfile(HERE / 'src/ext.asm', src / 'ext.asm')
-    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tBlk')
+    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tHold', 'tBlk')
     (src / 'stub_syms.inc').write_text(''.join('%s: EQU 0x%04X\n' % (n, symbols[n]) for n in names))
     lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
     for name, row, column, string in MENU:

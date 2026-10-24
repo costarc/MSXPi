@@ -25,11 +25,11 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "f965420e9fb28c49141e33f3f110465d82ca8e6ea6c64257dd65b8cfe6034348"
+      "sha256": "5bfcb4cb58e7e571f89f2383f0e15e537b7a404a1839aac990efde35517fe8f0"
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "5dbb5ffa5c04f8d1c48c2f905a9011959863c3e6b5458acb9b348824e1fbb647"
+      "sha256": "8d32f6948b964d4227389815ec18cddf11820d73bd91cc011dbda7500014018d"
     }
   },
   "layout": [
@@ -42,7 +42,7 @@
     {
       "source": "ext",
       "offset": 0,
-      "size": 827,
+      "size": 866,
       "destination": 24576
     }
   ],
@@ -80,31 +80,31 @@
     {
       "offset": 306,
       "expected": "cda342",
-      "replace": "cdfaa1",
+      "replace": "cd21a2",
       "reason": "4132h: New game: Turn copies the fresh block to both players"
     },
     {
       "offset": 476,
       "expected": "3a50e0",
-      "replace": "cd2ba2",
+      "replace": "cd52a2",
       "reason": "41DCh: A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)"
     },
     {
       "offset": 574,
       "expected": "2150e0",
-      "replace": "cd02a3",
+      "replace": "cd29a3",
       "reason": "423Eh: Opponent beaten: in Versus player 2 loses a life (none left: player 1 wins); the game's REST + 1 goes nowhere"
     },
     {
       "offset": 584,
       "expected": "3a54e0",
-      "replace": "cdf7a2",
+      "replace": "cd1ea3",
       "reason": "4248h: Opponent beaten: Versus has no bonus stage"
     },
     {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
-      "replace": "cd21c40000000000",
+      "replace": "cd22c40000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
     },
     {
@@ -116,7 +116,7 @@
     {
       "offset": 13112,
       "expected": "3a81e1",
-      "replace": "c39ca2",
+      "replace": "c3c3a2",
       "reason": "7338h: The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides"
     }
   ],
@@ -163,16 +163,17 @@
     "PN_P1": 50002,
     "PN_P2": 50003,
     "tickSite": 50138,
-    "key1": 50209,
+    "key1": 50210,
     "rdLocal": 50128,
-    "stubEnd": 50213,
+    "stubEnd": 50214,
     "dispatch": 41146,
-    "menu": 41289,
+    "menu": 41328,
     "tMode": 50157,
     "tCur": 50158,
     "tOut": 50159,
     "tWin": 50161,
-    "tLives2": 50162,
-    "tBlk": 50163
+    "tLives2": 50163,
+    "tHold": 50162,
+    "tBlk": 50164
   }
 }

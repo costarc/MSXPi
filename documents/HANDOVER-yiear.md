@@ -248,3 +248,17 @@ screen goes to the game, and the machine resets about 6 s later without a single
 `master`: InterNestor sends no frame to the server's NAT link, so the TCP/IP game path cannot connect in this rig whatever the game.
 Not investigated further (the user had put the TCP/IP path out of scope; link 2, which uses the MSXPi for the game, works: see above).
 `yiear_debug/initwatch.tcl` traces INIT and the resets for whoever picks this up; `DUMP_EVERY=n` dumps the screen every n emulated s.
+
+## 2026-10-24, desync detection and the screen check (done)
+
+- **Desync** (`POKEF=800 MODE=0`, release stub): Oolong's x is changed on P1 at frame 800 (first different frame 801). The next check, at
+  frame 832, caught it: P1 ended the game with result 4 at frame 835, P2 with result 2 (the opponent ended it) at 833, both back at the
+  MSX-DOS prompt. So a desync ends the game on both machines within one check period (32 frames) plus the notice.
+- **Screen** (`yiear_debug/vramcheck.tcl`, which decodes the name table rows the extension prints, with `VRAM_ALSO` to run the
+  Versus forcing script too; the same on both machines): "SELECT MODE / SINGLE / TURN / VERSUS", "P2 REST 3, 2, 1", "PLAYER 1 WINS" and
+  "PLAYER 2 WINS" are on the screen. Not yet decoded from VRAM: Turn's "PLAYER n" and "PLAYER n GAME OVER" (the Turn run of the
+  rig is the way: `MODE=1`, `VRAM_ALSO=turn_deaths.tcl`).
+- **A defect found by it, fixed**: "PLAYER n WINS" was printed in the game's state 7, which lasts 5 frames, so it was practically never
+  seen. The winner's screen is now held for 200 frames (`tHold` in the stub, `HOLD` in `ext.asm`; the game's state routine is not run
+  meanwhile); the winner is cleared at the end so the game's last 5 frames of state 7 do not restart it (204 frames measured, twice).
+- GPF now 2036 bytes.
