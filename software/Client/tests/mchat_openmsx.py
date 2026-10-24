@@ -54,6 +54,11 @@ if MACHINE == 'msx2':
                 (82, 'only here\r'), (92, TAB), (106, 'dump:back'), (107, 'ping\r'), (115, 'dump:pong'),
                 (116, UP + UP), (130, 'dump:scrolled'),
                 (134, '/screen\r'), (148, 'dump:switched'), (149, 'shot:switched'), (152, ESC), (160, 'quit')]
+MSX2_MACHINE = os.environ.get('MCHAT_MSX2_MACHINE', 'Panasonic_FS-A1WSX')
+MSX2_FLOPPY = MSX2_MACHINE == 'Panasonic_FS-A1WSX'
+if MACHINE == 'msx2' and not MSX2_FLOPPY:
+    # No floppy drive (Canon V-25): MCHAT.COM runs from A:, the MSXPi's msxpiboot.dsk, as on the real one.
+    TIMELINE = [(19, 'dump:font'), (22, 'mchat alice\r')] + [(t - 8, a) for t, a in TIMELINE if t > 30]
 
 TIMING = os.environ.get('MCHAT_TIMING')            # 1: report VRAM write bursts per action; check: also fail if slow
 WATCH = [int(a) for a in os.environ.get('MCHAT_WATCH', '').split(',') if a]   # VRAM addresses to log in poll.log when VRAM changes
@@ -67,6 +72,9 @@ if LINK == 'tcp':
         (int(58 + (t - 30) * 1.5), a) for t, a in TIMELINE if t >= 30]   # the TCP/IP link is slower
     if os.environ.get('MCHAT_FORCE1'):
         TIMELINE = [(t, a.replace('mchat /t', 'mchat /1 /t')) for t, a in TIMELINE]
+
+SHOTS = [int(t) for t in os.environ.get('MCHAT_SHOTS', '').split(',') if t]   # extra screenshots (emulated seconds)
+TIMELINE = sorted(TIMELINE + [(t, f'shot:t{t}') for t in SHOTS], key=lambda e: e[0])
 
 GLYPH_ROWS = {}
 for _i, _g in enumerate(gen_mchat_font.GLYPHS):
@@ -143,6 +151,8 @@ def write_script(path, dumps):
                   f'  set b [debug read VRAM {TRACE}]',
                   '  if {$b != $tb} { puts $tlog "TRACE [format %.4f [machine_info time]] $tb -> $b PC=[format %04X [reg PC]] SP=[format %04X [reg SP]] stack=[debug read_block memory [reg SP] 24]"; flush $tlog; set tb $b }',
                   '  after time 0.0003 trace }', 'after time 20 trace']
+    if os.environ.get('MCHAT_EXTRA_TCL'):          # a Tcl file appended to the script (debugging)
+        lines += Path(os.environ['MCHAT_EXTRA_TCL']).read_text().splitlines()
     for when, action in TIMELINE:
         if action == 'quit':
             lines.append(f'after time {when} {{exit}}')
@@ -287,7 +297,7 @@ def main():
         time.sleep(3)
         bob.start()
         with (work / 'openmsx.log').open('w') as out:
-            machine = (['-machine', 'Panasonic_FS-A1WSX', '-ext', 'ram4mb', '-ext', 'MSXPi', '-diska', str(work / 'floppy')]
+            machine = (['-machine', MSX2_MACHINE, '-ext', 'MSXPi', '-ext', 'ram4mb'] + (['-diska', str(work / 'floppy')] if MSX2_FLOPPY else [])
                        if MACHINE == 'msx2' else ['-machine', os.environ.get('MCHAT_OPENMSX_MACHINE', 'Canon_V-25'), '-ext', 'ram2mb', '-ext', 'MSXPi'])
             subprocess.run([OPENMSX, *machine,
                             '-command', 'set renderer none' if not os.environ.get('MCHAT_SHOW') else 'set speed 100', '-script', str(script)],
