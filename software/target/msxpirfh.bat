@@ -40,6 +40,6 @@ pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:games/SOCCER.GPF SOCCER.GPF
-p setbranch
+p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target
 pcopy m:msxpiupd.bat
 p ver

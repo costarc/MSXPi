@@ -6,6 +6,7 @@ refuse anything that is not a plain branch name and pass a good one on to the se
 import re
 import sys
 import unittest
+import unittest.mock
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,7 +23,7 @@ def pcopies(name):
     return {l for l in lines(name) if l.startswith('pcopy m:')}
 
 
-SETBRANCH = 'p setbranch %1%2%3%4%5%6%7%8%9'
+SETBRANCH = 'p update %1%2%3%4%5%6%7%8%9'
 
 
 class BatchFilesTests(unittest.TestCase):
@@ -31,7 +32,7 @@ class BatchFilesTests(unittest.TestCase):
         self.assertEqual(up[1], 'p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target')
         # stage 2 comes from the chosen branch: its file list is the branch's
         self.assertLess(up.index(SETBRANCH), up.index('pcopy m:msxpirfh.bat'))
-        # a server without "p setbranch" is brought up to date from master first
+        # a server without "p update <branch>" is brought up to date from master first
         for before, after in (('p run sh update.sh', 'p update'), ('p update', 'p restart'), ('p restart', SETBRANCH)):
             self.assertLess(up.index(before), up.index(after))
         self.assertIn('p run wget -q -O update.sh https://github.com/costarc/MSXPi/raw/master/software/Server/Setup/update.sh', up)
@@ -43,7 +44,9 @@ class BatchFilesTests(unittest.TestCase):
         self.assertNotIn('p run sh update.sh', rfh)
         self.assertLess(rfh.index('p update'), rfh.index('p restart'))
         self.assertNotIn('%1', ' '.join(rfh))
-        self.assertEqual(rfh[-3:], ['p setbranch', 'pcopy m:msxpiupd.bat', 'p ver'])
+        self.assertNotIn('setbranch', ' '.join(rfh))
+        self.assertEqual(rfh[-3:], ['p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target',
+                                    'pcopy m:msxpiupd.bat', 'p ver'])
         self.assertEqual(rfh.count('pcopy m:msxpiupd.bat'), 1)
 
 
@@ -68,9 +71,12 @@ class ServerUpdateTests(unittest.TestCase):
         with patch.object(system.transport, 'hostType', host), \
              patch.object(system.os.path, 'getmtime', side_effect=OSError), \
              patch.object(system.os, 'replace'), patch('builtins.open', MagicMock()), \
-             patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch('requests.get', return_value=resp) as get, \
+             patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')), \
+             patch.object(system, 'setMSXPiVar') as setvar, \
+             patch('requests.get', return_value=resp) as get, \
              patch.object(system.subprocess, 'run', return_value=done) as run:
             system.update(parm)
+        run.setvar = setvar
         return get, run
 
     def test_branch_reaches_script_url_and_environment(self):
@@ -85,21 +91,23 @@ class ServerUpdateTests(unittest.TestCase):
         self.assertIn('MSXPi/master/software/Server/Setup/update.sh', get.call_args[0][0])
         self.assertNotIn('feature', run.call_args[1]['env'].get('MSXPI_UPDATE_BASE', ''))
 
-    def test_setbranch_is_remembered_by_update(self):
-        sent = []
-        with patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')), \
-             patch.object(system, 'sendmultiblock', side_effect=sent.append), \
-             patch.object(system, 'setMSXPiVar') as setvar:
-            system.setbranch('feature/x')
-            setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/feature/x/software/target')
-            get, _ = self.run_update(None)
-            self.assertIn('MSXPi/feature/x/software/Server/Setup', get.call_args[0][0])
-            for empty in (None, '', '%1'):               # no name (or an unexpanded %1) = master
-                system.setbranch(empty)
-                setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/master/software/target')
-            system.setbranch('x;reboot')
-            self.assertEqual(sent[-1], b'Pi:Error - bad branch name')
-            self.assertEqual(system._update_branch, 'master')   # a bad name changes nothing
+    def test_update_with_a_branch_points_drivem_at_it_and_is_remembered(self):
+        _, run = self.run_update('feature/x')
+        run.setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/feature/x/software/target')
+        get, _ = self.run_update(None)                 # no name: the branch in use
+        self.assertIn('MSXPi/feature/x/software/Server/Setup', get.call_args[0][0])
+        system.update('x;reboot')
+        self.assertEqual(system._update_branch, 'feature/x')   # a bad name changes nothing
+        _, run = self.run_update('master')
+        run.setvar.assert_called_with('DriveM', 'https://github.com/costarc/MSXPi/raw/master/software/target')
+        system._update_branch = 'master'
+
+    def test_a_recent_update_of_the_same_branch_is_not_repeated(self):
+        system._update_branch = 'master'
+        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()),              patch('builtins.open', unittest.mock.mock_open(read_data='feature/x')),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system, 'setMSXPiVar'),              patch.object(system.subprocess, 'run') as run:
+            self.assertIn('already updated from feature/x', system.update('feature/x'))
+            run.assert_not_called()
+        system._update_branch = 'master'
 
     def test_branch_survives_a_server_restart_through_drivem(self):
         system._update_branch = 'master'            # a restarted server has forgotten it
@@ -140,13 +148,12 @@ class BranchResolveTests(unittest.TestCase):
         self.assertIsNone(branch)
         self.assertIn('feature/a feature/b', why)
 
-    def test_setbranch_to_a_missing_branch_keeps_master(self):
+    def test_a_missing_branch_changes_nothing(self):
         system._update_branch = 'master'
-        sent = []
-        with patch.object(system, '_resolve_branch', return_value=(None, 'no branch x')),              patch.object(system, 'sendmultiblock', side_effect=sent.append),              patch.object(system, 'setMSXPiVar') as setvar:
-            system.setbranch('x')
+        with patch.object(system, '_resolve_branch', return_value=(None, 'no branch x')),              patch.object(system, 'setMSXPiVar') as setvar,              patch.object(system.subprocess, 'run') as run:
+            self.assertTrue(system.update('x').startswith('Pi:Error - no branch x'))
         setvar.assert_not_called()
-        self.assertTrue(sent[-1].startswith(b'Pi:Error - no branch x'))
+        run.assert_not_called()
         self.assertEqual(system._update_branch, 'master')
 
     def test_github_unreachable_uses_the_name_as_given(self):
