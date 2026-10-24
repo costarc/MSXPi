@@ -328,9 +328,9 @@ Rig runs cannot overlap (fixed ports), so B2, B3 and B4 can be written in parall
 | A3 | Done | documents corrected; the 4b note says only what was reproduced |
 | A4 | Done | `MCHAT_LINK=tcp MCHAT_FORCE1=1 python mchat_openmsx.py`: 10/10 checks on the NAT link, no TAP |
 | B1 | Done | Yie Ar merged; `build_games.py --check` clean |
-| B2 | Runs done | Ping Pong 1200 frames IDENTICAL: mixed, link 1, link 2, mixed hybrid. Soak on link 1 (`40 5 40000 15`) in progress |
+| B2 | Done | Ping Pong 1200 frames IDENTICAL: mixed, link 1, link 2, mixed hybrid; soak on link 1 (`40 5 40000 15`): 40001 frames IDENTICAL, desync 0 |
 | B3 | Partly | the Yie Ar branch's own rig covers `SCENARIO=both`/`tcp`/`chat`; mixed and hybrid cells to run |
-| B4 | Runner ready | `run_salamander.sh` gains `BOTH=1`, `HYBRID=1`, `EXT1`; runs queued |
+| B4 | Done | 3000 frames IDENTICAL: P2 on Nextor (link 1), link 2 (`HYBRID=1`), both on TCP/IP, both on link 2, P2 with a 1 MB mapper. With `EXT2=ram512k` PLAYNET refuses cleanly ("Not enough memory: this game needs a memory mapper of 512 KB"): Nextor, RAMHELPR and INL leave too few segments, so Salamander on Nextor needs a 1 MB mapper |
 | C1 | Done | measured TPA tops (PROTOCOLS 10.2): D406h MSX-DOS 1, C806h own-drive MSX-DOS 1.8, D706h Nextor. Soccer, Ping Pong, Yie Ar fit all; **Salamander does not fit the own-drive machine: decision D-6 is open** |
 | C1a | Not needed | a window cannot help Salamander (its game RAM is all of C000h-CFFFh); see D-6 |
 | C2 | Done | `tests/test_profiles.py` |
