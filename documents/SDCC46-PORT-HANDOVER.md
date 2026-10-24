@@ -247,3 +247,27 @@ Notes for 4.8 to 4.10:
 - **Known-good SDCC 4.0 MCHAT:** `git show e59728e0~1:software/target/mchat.com` passes all 12 checks of
   `MCHAT_MACHINE=msx2 MCHAT_MSX2_MACHINE=Canon_V-25 python mchat_openmsx.py <com>`. The e59728e0 binary fails
   all 12.
+
+## 6. Progress log (stage 4 findings)
+
+- **Stage 0 baseline:** SDCC 4.0 `mchat.com` passes 12/12 on Canon_V-25 + RAM 4MB (MSX2 build).
+- **FS-A1WSX "Program too big":** TPA top is 0xC906 with a drive (max .COM about 51.4 KB), and the SDCC 4.0
+  mchat is 51,727 bytes. Holding CTRL during boot (drive 2 not initialised) raises it to 0xD606; tested with
+  `client_smoke_openmsx.py --hold-ctrl 12`: the 51,727-byte SDCC 4.0 mchat then loads and runs (SCRMOD 6).
+  Without CTRL it still fails. The SDCC 4.6 mchat is 46.7 KB and loads without CTRL.
+- **Fusion-C licence:** msx.wiki lists CC BY-SA 4.0 (secondary source; the tree has no licence file). Its files
+  are not copied here: `tools/build_fusion46.py` assembles them from the external tree at build time. Stage 5
+  must decide: copy them (and mark them CC BY-SA), or keep the external tree for the `.s` files and
+  `crt0_msxdos.rel`.
+- **SDCC 4.6 internal error in ssh.c** (`validateLink failed in DCL_PTR_OPTIONAL`, SDCCicode.c:2501) on
+  `memmove(cells[vy]+vx, ...)` with a 2-D array; the SDCC 4.0-era tree never rebuilt ssh with 4.6. Worked
+  around with a row pointer. Worth a minimal case for the SDCC tracker.
+- **msxarch under sdcccall(1):** inline `push af` / `pop af` inside C functions (`mapperCopyBank`,
+  `prewarmKonami16PairCache`) shift SP-relative locals, which sdcccall(1) code uses. A mapped ROM then
+  never started (idle loop of the launch trampoline). Replaced with `irq_save()` / `irq_restore()` naked
+  helpers (`__sdcccall(1)`). Scan for the pattern in the games before porting them.
+- **Not testable here:** `MCHAT_LINK=tcp` and the TCP/IP games tests (link to 192.168.99.1 times out for the
+  SDCC 4.0 binaries too), nitros sessions (need xroar), `netcore_cost.py` (needs `sz80`; SDCC 4.6 ships
+  `ucsim_z80` with another command line; the real 4.0.0 in Dev\sdcc-4.0.0 is a macOS build).
+- **Disk/test helpers:** `Client/tests/client_smoke_openmsx.py` (one client, real server, `--floppy`,
+  `--hold-ctrl`, `--wsl-server --fake-ssh`, `--shots`, `--probe`).

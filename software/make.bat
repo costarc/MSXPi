@@ -12,7 +12,7 @@ REM stdlib, no --sdcccall 0, the repo's fusion library. Space-separated, lower c
 REM Every other program is still built the old way (--sdcccall 0): SDCC 4.6's runtime uses
 REM the other convention, so the link warns "Conflicting sdcc options" and the build is
 REM refused (SDCC_ALLOW_ABI_MIX=1 lets it through, only for software	oolsbi_bytecmp.py).
-SET ABI1_PROGRAMS=templatc mchat pcopy p nitros
+SET ABI1_PROGRAMS=templatc mchat pcopy p nitros ssh msxarch
 SET ABI1=0
 FOR %%P IN (%ABI1_PROGRAMS%) DO IF /I "%%P"=="%1" SET ABI1=1
 

@@ -105,12 +105,15 @@ static void vt_csi(uint8_t c) {
     case 'S': case 'T': vt_scroll(top,bottom,n,c=='T'); break;
     case 'P': case '@':
         n=limit(n,VT_COLS-vx);
-        if(c=='P') {
-            memmove(cells[vy]+vx,cells[vy]+vx+n,VT_COLS-vx-n);
-            memset(cells[vy]+VT_COLS-n,' ',n);
-        } else {
-            memmove(cells[vy]+vx+n,cells[vy]+vx,VT_COLS-vx-n);
-            memset(cells[vy]+vx,' ',n);
+        {   /* row pointer: SDCC 4.6 ICEs (validateLink) on memmove(cells[vy]+vx, ...) */
+            uint8_t *row=&cells[vy][0];
+            if(c=='P') {
+                memmove(row+vx,row+vx+n,VT_COLS-vx-n);
+                memset(row+VT_COLS-n,' ',n);
+            } else {
+                memmove(row+vx+n,row+vx,VT_COLS-vx-n);
+                memset(row+vx,' ',n);
+            }
         }
         dirty[vy]=1; break;
     case 'X': vt_erase(vy,vx,vx+limit(n,VT_COLS-vx)-1); break;
