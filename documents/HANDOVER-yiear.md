@@ -204,3 +204,19 @@ so read poses from RAM (E184h) or dump VRAM as `menushot.tcl` does. The first ru
   VRAM as `menushot.tcl` does); which of the attacks 4/5/6 is high, middle or low (a human test); the balance; the chat, link 2, sound,
   speed and exit-key scenarios (I4); opponent 2's weapon only through the jump attack.
 
+## 2026-10-24, last: the chat and link 2 in the rig (done), and a safer rig
+
+- `run_yiear.sh` has `SCENARIO=chat` (alice invites bob with `/play bob yiear`, bob accepts, the chat starts the game) and
+  `SCENARIO=tcp` (the chat over TCP/IP, MSR/INL, `MCHAT /1 /T`; with an MSXPi on each machine the game runs over the MSXPi: **link 2**).
+  `EXITKEY=n` presses Ctrl+Shift+F5 on P2 and checks the return.
+- **Chat** (Versus, `EXITKEY=900`): 901 identical frames, results 2 and 1, both servers saw `playnet restore` then `mchat start`;
+  MCHAT shows "Game with bob ended (the opponent ended it)" and "Game with alice ended (you ended it)".
+- **Link 2** (`SCENARIO=tcp`, same key): 900 identical frames, both back in `MCHAT /T` on the same IRC connection (2 connections,
+  none dropped); MCHAT's line there says "(finished)" for both, not who ended it.
+- **Other sessions' emulators and servers**: the old rig killed every openMSX running a `*node.tcl` script and every listener on
+  8115/8116/6671, which Soccer's, Ping Pong's and Salamander's rigs use too. `run_yiear.sh` now has its own ports (servers 8137/8138, UDP
+  5137/5138, IRC 6637; override with `P1PORT`, `P2PORT`, `UDP1`, `UDP2`, `IRC_PORT`), stops only an openMSX running `yiear_node.tcl`,
+  stops a listener on its ports only if it is an `msxpi-server` or the IRC fixture, and otherwise stops with a message. It does not use
+  `kill_nodes.sh`. The other rigs still use the shared ports and patterns.
+- Still not run: sound tempo and speed against the cartridge, desync detection (`POKEF`), the mixed and `BOTH=1` TCP/IP game
+  scenarios, the new strings on a real screen, a human play test.

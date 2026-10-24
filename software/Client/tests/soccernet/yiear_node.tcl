@@ -198,7 +198,30 @@ proc xendHit {} {
     set ::ended 1
     puts $tf "# xend result=[reg A] frame=[expr {$::frames + [peek $::s_nf]}] desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] lowest_stack_write=[format %04X $::minw] foreign_writes=$::gw"
     flush $tf
-    after time 40 backCheck
+    if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} { after time 45 backShot } else { after time 40 backCheck }
+}
+# chat: MCHAT draws its own font, so after the return a screenshot, and run_yiear.sh checks the MSXPi's logs; MCHAT keeps its
+# last line in its data: "Game with X ended (reason)", looked for in the CPU's view every 5 s
+proc backShot {} {
+    global tf
+    catch { screenshot $::env(TRACE).back.png }
+    puts $tf "# back: PC=[format %04X [reg PC]] t=[expr {int([machine_info time])}]"
+    flush $tf
+    resultLine 12
+}
+proc resultLine {n} {
+    global tf
+    set ram [debug read_block memory 0x0100 0xFE00]
+    if {[regexp {Game with [^\u0000]{1,16} ended \([^\u0000]+\)} $ram line]} {
+        puts $tf "# result line: $line"
+    } elseif {$n > 0} {
+        after time 5 [list resultLine [expr {$n - 1}]]
+        return
+    } else {
+        puts $tf "# result line: none found"
+    }
+    close $tf
+    after time 1 exit
 }
 # back at the MSX-DOS prompt (the loader typed MCHAT, which this disk may not have): the last lines
 proc backCheck {} {
@@ -225,14 +248,35 @@ proc runPre {cmds body} {
     if {![llength $cmds]} { uplevel #0 $body; return }
     harness::run_cmd [string trim [lindex $cmds 0]] 90 [list runPre [lrange $cmds 1 end] $body]
 }
-harness::at_dos_prompt {
-    harness::run_cmd "B:" 30 {
-        set pre {}
-        if {[info exists ::env(PRE_$::roleArg)]} { set pre [split $::env(PRE_$::roleArg) ";"] }
-        runPre $pre {
-            if {[info exists ::env(CMD_$::roleArg)]} { type "$::env(CMD_$::roleArg)\r" } else { type "$::env(PROG) $::roleArg\r" }
+if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
+    # the players meet in the chat and the chat starts the game: NICK, OPPONENT, INVITE (1 on the inviter = P1), PLAY_AT / ACCEPT_AT
+    set ::pre {}
+    if {[info exists ::env(PRE_$::roleArg)]} { set ::pre [split $::env(PRE_$::roleArg) ";"] }
+    set ::chatOpt ""
+    if {[info exists ::env(CHAT_TCP)]} { set ::chatOpt "/T " }
+    harness::at_dos_prompt {
+        harness::run_cmd "B:" 30 {
+          runPre $::pre {
+            type "MCHAT /1 $::chatOpt$::env(NICK)[format %c 13]"
             after time 3 arm
+            if {$::env(INVITE) eq "1"} {
+                after time $::env(PLAY_AT) { type "/play $::env(OPPONENT) yiear[format %c 13]" }
+            } else {
+                after time $::env(ACCEPT_AT) { type "/accept[format %c 13]" }
+            }
+          }
         }
-    }
-} 200
+    } 200
+} else {
+harness::at_dos_prompt {
+        harness::run_cmd "B:" 30 {
+            set pre {}
+            if {[info exists ::env(PRE_$::roleArg)]} { set pre [split $::env(PRE_$::roleArg) ";"] }
+            runPre $pre {
+                if {[info exists ::env(CMD_$::roleArg)]} { type "$::env(CMD_$::roleArg)\r" } else { type "$::env(PROG) $::roleArg\r" }
+                after time 3 arm
+            }
+        }
+    } 200
+}
 after time $::env(TMAX) { puts $tf "# codeDiff=[codeDiff]"; puts $tf "# timeout  nfNow=[peek $::s_nf] rxSeen=[peek $::s_rxSeen] tags=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3}]]}] ,] vals=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} {format %02X [peek [expr {$::s_remRing + $i * 3 + 1}]]}] ,] rxbuf=[join [lmap i {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21} {format %02X [peek [expr {$::s_rxbuf + $i}]]}] ""] PC=[format %04X [reg PC]]"; close $tf; exit }
