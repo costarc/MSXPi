@@ -220,3 +220,21 @@ so read poses from RAM (E184h) or dump VRAM as `menushot.tcl` does. The first ru
   `kill_nodes.sh`. The other rigs still use the shared ports and patterns.
 - Still not run: sound tempo and speed against the cartridge, desync detection (`POKEF`), the mixed and `BOTH=1` TCP/IP game
   scenarios, the new strings on a real screen, a human play test.
+
+## 2026-10-24, the sound tempo and speed check (done)
+
+`yiear_debug/tempo.tcl` counts the sound driver (7C5Ch) and the frame counter (407Eh) per emulated second during 20 s of a fight (it
+starts 4 s after the fight begins). The same script runs on the bare cartridge (`TEMPO_CART=1`, a tap on space on the title) and as
+`EXTRA_TCL` of the rig. Canon V-25 (MSX2, 60 Hz), Single mode:
+
+| | Sound driver calls | Frames |
+|---|---|---|
+| Cartridge | 59.95 / s | 59.95 / s |
+| PLAYNET, no lag (delay 3) | 59.90 and 59.95 / s (the two nodes) | 59.70 and 59.75 / s |
+| PLAYNET, 50 ms lag, 20 ms jitter, 8 % loss (delay 6) | 59.95 and 59.90 / s | 58.35 and 58.30 / s |
+
+The pair stayed identical (3201 frames each run). So the music keeps the original's tempo whatever the network does (the engine ticks the
+driver as many times as player 1's machine counted interrupts, PROTOCOLS 9.2), and the game itself loses 0.4 % of its speed with no lag
+and 2.7 % with the worst network tried, because a frame waits for the opponent's input. Emulated seconds, throttle on (the MSXPi device
+needs real time); another session's emulators were running on the host, which does not change emulated time. Not measured: the sound
+by ear or a recording (`RECORD=file.wav`), and a real machine's cost per frame.
