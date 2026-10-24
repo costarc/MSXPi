@@ -3,21 +3,21 @@
 
     python build_client.py mchat OUTDIR [--sdcc sdcc] [--fusion C:/Users/roniv/Dev/MSX/MSX-C/WorkingFolder/fusion-c]
 
-The same compiler and options as software/make.bat (code at 0106h, fusion-c's crt0_msxdos, msxpi-bios.lib),
-but it works from any checkout (a worktree too) and writes only OUTDIR/NAME.COM: make.bat also copies the
-program into target/ and into the emulator's floppy folder. The sources include fusion-c's header through a
-path relative to the main checkout, so the main checkout's Client/src is put on the include path as well.
+The same compiler and options as software/make.bat (SDCC 4.6, its own calling convention, code at 0106h,
+fusion-c's crt0_msxdos, msxpi-bios.lib, fusion46.lib from tools/build_fusion46.py), but it works from any
+checkout and writes only OUTDIR/NAME.COM: make.bat also copies the program into target/ and into the
+emulator's floppy folder.
 """
 import argparse
 import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 HERE = Path(__file__).resolve().parent
 SOFTWARE = HERE.parents[2]
-MAIN_SRC = Path('C:/Users/roniv/Dev/github/MSXPi/software/Client/src')   # resolves "../../../../../MSX/..."
 
 
 def main():
@@ -38,11 +38,12 @@ def main():
             if done.returncode:
                 raise SystemExit(' '.join(map(str, cmd)) + '\n' + done.stdout + done.stderr)
             return done
+        run(sys.executable, str(SOFTWARE / 'tools/build_fusion46.py'), tmp, '--fusion-c', str(fusion))
         run(sdcc, '-mz80', '-c', str(SOFTWARE / 'C-common/lib/msxpi-bios.c'))
         run(str(tools / 'sdar'), '-rc', 'msxpi-bios.lib', 'msxpi-bios.rel')
         run(sdcc, '--code-loc', '0x106', '--data-loc', '0x0', '--disable-warning', '196', '-mz80', '--no-std-crt0',
-            '--opt-code-size', 'fusion.lib', 'msxpi-bios.lib', '-L', str(fusion / 'lib'), '-L', tmp,
-            '-I', str(MAIN_SRC), str(fusion / 'include/crt0_msxdos.rel'),
+            '--opt-code-size', 'fusion46.lib', 'msxpi-bios.lib', '-L', tmp,
+            str(fusion / 'include/crt0_msxdos.rel'),
             str(SOFTWARE / 'Client/src' / (args.name + '.c')))
         # gaps (the uninitialised globals) are FFh, as hex2bin leaves them in make.bat's .COM: crt0_msxdos zeroes
         # nothing, so a program that needs a zero there must write it, and the rig must not hide that

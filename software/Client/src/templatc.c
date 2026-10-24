@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../C-common/header/fusion_hdr.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 int main(void)

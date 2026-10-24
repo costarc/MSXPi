@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../header/fusion_hdr.h"
+#include "../header/fusion.h"
 #include "../header/msxpi.h"
 #include "payload_generated.h"
 

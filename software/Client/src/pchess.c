@@ -12,8 +12,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include "../../C-common/header/fusion_hdr.h"
-#include "../../C-common/header/fusion_gfx_hdr.h"
+#include "../../C-common/header/fusion.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 #define BOARD_X 8

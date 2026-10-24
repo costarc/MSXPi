@@ -3,7 +3,7 @@
 `payload.z80` is the source of truth for the C and ASM file/disk payload loops.
 Run `python3 software/asm-common/transport/generate.py` after editing it. Generated files
 are checked in; `--check` and both client build scripts reject stale output.
-The C build uses an SDCC ABI-0 stack adapter, while ASM callers pass DE=buffer,
+The C build uses an __sdcccall(0) stack adapter (explicit, so it holds under SDCC 4.6's native convention), while ASM callers pass DE=buffer,
 BC=count and HL=running 16-bit checksum. IX/IY and alternate registers survive.
 Zero bytes perform no I/O. Carry on return reports cancellation; successful
 bytes alone update the pointer/count/checksum. Public BIOS APIs are unchanged.
@@ -75,7 +75,4 @@ feature branches cut from it). Check one of those out to run them.
 - `software/Tests/pcopy_emulator.py`: full copy/upload against isolated served
   disks. See its `--direction` and `--fault` options; use an MSXPi-enabled openMSX.
 
-The Linux pcopy, p and templatc clients build. The unchanged msxarch.c source
-has malformed literals and triggers an SDCC internal compiler error; this
-revision does not repair that separate application. Windows SDCC 4.0 and Linux
-SDCC 4.2 ABI-0 PCOPY builds were both exercised in openMSX.
+All C clients build with SDCC 4.6.0 (make.bat / make.sh) in its native calling convention.

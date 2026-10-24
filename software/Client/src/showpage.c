@@ -10,7 +10,7 @@
  * The VDP vertical scroll register (R23) turns the 256-line VRAM area into a
  * ring: new rows are written just outside the visible window, then R23 moves.
  */
-#include "../../C-common/header/fusion_gfx_hdr.h"
+#include "../../C-common/header/fusion.h"
 
 #define SP_BUFFER_SIZE 4096
 #define SP_HEADER_SIZE 79      /* "RPG2", mode, width, visible, height, stride, palette */

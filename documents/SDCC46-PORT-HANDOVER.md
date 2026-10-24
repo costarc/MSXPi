@@ -271,3 +271,27 @@ Notes for 4.8 to 4.10:
   `ucsim_z80` with another command line; the real 4.0.0 in Dev\sdcc-4.0.0 is a macOS build).
 - **Disk/test helpers:** `Client/tests/client_smoke_openmsx.py` (one client, real server, `--floppy`,
   `--hold-ctrl`, `--wsl-server --fake-ssh`, `--shots`, `--probe`).
+
+## 7. Status at the end of the port session (2026-10-24)
+
+Done: stages 0 to 5. Every C client (templatc, mchat, pcopy, p, nitros, ssh, msxarch, pchess, pchess1,
+pcheckers) builds with SDCC 4.6.0 in its own calling convention; `make.bat` and `make.sh` have no legacy path
+(`--sdcccall 0`, `ABI1_PROGRAMS`, `SDCC_ALLOW_ABI_MIX` and `tools/abi_bytecmp.py` are gone; the "Conflicting sdcc
+options" and "Undefined Global" link guards and the 4.6.0 version check stay). The shipped `.com` files in
+`target/` and in `target/disks/msxpiboot.dsk` are those builds (`make.bat <name>` rebuilds them byte for byte).
+The slow `--max-allocs-per-node` build of pchess and the pcheckers `new_game(0,0)` wrapper are gone.
+
+Open items for the owner:
+1. **Fusion-C licence**: decide between the build-time use of the external tree (now) and copying the `.s`
+   files into the repo under CC BY-SA 4.0. The MSX-DOS startup object `crt0_msxdos.rel` is still taken from
+   the external tree by `make.bat`, `make.sh` and `build_client.py`.
+2. **Not run here** (environment): every TCP/IP test (`MCHAT_LINK=tcp`, `pchess_tcpip`, `pcheckers_tcpip`:
+   the link to 192.168.99.1 times out, also with the SDCC 4.0 binaries), the nitros session test (xroar),
+   `netcore_cost.py` (needs `sz80`), and the host rules tests. Run them where the TAP adapter works.
+3. **Not done on purpose**: no BuildId bump and no `build` run: no firmware, ROM or server code changed (one ID per
+   board/firmware variant). The C clients on `target/` are new binaries; the release job rebuilds them anyway.
+4. **make.sh** was only exercised on Windows (Git Bash, SDCC 4.6.0, `objcopy` shim) for templatc, which was
+   byte-identical to make.bat's. The distro SDCC 4.2 in WSL is refused by design; set `SDCC_BIN`.
+5. msxarch: listing, a plain ROM and TETRIS (mapped) match the SDCC 4.0 build; the other mapper types were
+   not compared.
+6. Optional: report the ssh.c internal error (`memmove(cells[vy]+vx, ...)`) to the SDCC tracker.

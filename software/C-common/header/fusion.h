@@ -35,8 +35,7 @@
  * they are declared __sdcccall(0), so they mean the same whatever convention the program is
  * compiled with. Print, PrintNumber, Width and ReadTPA are C and live in C-common/fusion/.
  *
- * Fusion-C is by Eric Boez and Fernando Garcia (msx_fusion.h is the original, for the
- * programs not ported yet).
+ * Fusion-C is by Eric Boez and Fernando Garcia.
  */
 #ifndef MSXPI_FUSION_H
 #define MSXPI_FUSION_H

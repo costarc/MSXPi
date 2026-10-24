@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #ifndef SSH_VT_TEST
-#include "../../C-common/header/fusion_hdr.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 #endif
 

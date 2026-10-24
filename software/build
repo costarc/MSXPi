@@ -22,9 +22,8 @@ python3 asm-common/transport/generate.py --check || exit 1
 buildClientCommands="${buildClientCommands:-yes}"
 # The C clients that stage builds with make.sh (Client/src/<name>.c).
 cClientCommands="${cClientCommands:-}"
-# Built with make.bat (SDCC 4.6, --sdcccall 0) on Windows: the games sit at the MSX-DOS memory limit and
-# SDCC 4.2 (make.sh) makes pchess about 1 KB bigger, too big for a Canon V-25 with TCP/IP.
-# Elsewhere they go through make.sh like the others.
+# Built with make.bat (SDCC 4.6.0) on Windows; elsewhere they go through make.sh like the others (SDCC 4.6.0
+# on PATH or SDCC_BIN).
 winClientCommands="${winClientCommands:-nitros mchat pchess pchess1 pcheckers}"
 buildBIOS="${buildBIOS:-no}"
 buildLoadrom="${buildLoadrom:-no}"
@@ -241,10 +240,9 @@ if [ "$buildClientCommands" = "yes" ]; then
     cp ./Client/src/playnet/build/PLAYNET.OVL ./target/playnet.ovl
 
     # C clients (SDCC + Fusion-C), through make.sh - one per program.
-    # make.sh is written for Linux: SDCC 4.2 with --sdcccall 0, objcopy, and
-    # the ABI-0 z80.lib at a /mnt/c path.  On Windows (Git Bash/MSYS) it runs
+    # make.sh is written for Linux (SDCC 4.6.0, objcopy).  On Windows (Git Bash/MSYS) it runs
     # under WSL, whatever tools happen to be on PATH here - a native objcopy
-    # does not help, the native SDCC 4.0 knows no --sdcccall.  FUSION_C is
+    # does not help; SDCC_BIN must point at a 4.6.0 there.  FUSION_C is
     # relative to software/, so it resolves the same on both sides.
     for prog in $cClientCommands; do
         echo "Compiling $prog.com (make.sh)"
