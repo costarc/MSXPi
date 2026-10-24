@@ -1,0 +1,179 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "yiear-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 16384,
+    "sha256": "644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848",
+    "crc32": 2316495951,
+    "file": "KUNG-FU.ROM"
+  },
+  "output": {
+    "size": 32768,
+    "fill": 0,
+    "mapper": "plain",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own KUNG-FU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
+    "PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)",
+    "Any MSX with 64 KB RAM on the MSXPi path"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "5bfcb4cb58e7e571f89f2383f0e15e537b7a404a1839aac990efde35517fe8f0"
+    },
+    "ext": {
+      "file": "assets/ext.bin",
+      "sha256": "8d32f6948b964d4227389815ec18cddf11820d73bd91cc011dbda7500014018d"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 16384,
+      "destination": 0
+    },
+    {
+      "source": "ext",
+      "offset": 0,
+      "size": 866,
+      "destination": 24576
+    }
+  ],
+  "patches": [
+    {
+      "offset": 25,
+      "expected": "4340",
+      "replace": "06c5",
+      "reason": "4019h: H.KEYI hook (ld hl,4043h at 4018h) -> the transport's XIRQ, which jumps to 4043h"
+    },
+    {
+      "offset": 71,
+      "expected": "cd5c7c",
+      "replace": "cd2fc1",
+      "reason": "4047h: Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
+    },
+    {
+      "offset": 83,
+      "expected": "cd2245",
+      "replace": "cddac3",
+      "reason": "4053h: TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte"
+    },
+    {
+      "offset": 98,
+      "expected": "fc5c7c",
+      "replace": "fc2fc1",
+      "reason": "4062h: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
+    },
+    {
+      "offset": 156,
+      "expected": "cd7140",
+      "replace": "cdbaa0",
+      "reason": "409Ch: State dispatch -> the extension: state 9, the play-mode screen"
+    },
+    {
+      "offset": 306,
+      "expected": "cda342",
+      "replace": "cd21a2",
+      "reason": "4132h: New game: Turn copies the fresh block to both players"
+    },
+    {
+      "offset": 476,
+      "expected": "3a50e0",
+      "replace": "cd52a2",
+      "reason": "41DCh: A life is lost: Turn saves the block and passes the turn (A = REST, 0 = game over)"
+    },
+    {
+      "offset": 574,
+      "expected": "2150e0",
+      "replace": "cd29a3",
+      "reason": "423Eh: Opponent beaten: in Versus player 2 loses a life (none left: player 1 wins); the game's REST + 1 goes nowhere"
+    },
+    {
+      "offset": 584,
+      "expected": "3a54e0",
+      "replace": "cd1ea3",
+      "reason": "4248h: Opponent beaten: Versus has no bonus stage"
+    },
+    {
+      "offset": 1411,
+      "expected": "cd104557cd3f45b2",
+      "replace": "cd22c40000000000",
+      "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
+    },
+    {
+      "offset": 1453,
+      "expected": "03",
+      "replace": "09",
+      "reason": "45ADh: The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)"
+    },
+    {
+      "offset": 13112,
+      "expected": "3a81e1",
+      "replace": "c3c3a2",
+      "reason": "7338h: The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "yiear",
+    "title": "Yie Ar Kung-Fu",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "plain",
+      "base": 16384
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 49408,
+      "max": 1024
+    },
+    "transport_area": {
+      "address": 50432,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        54528,
+        54783
+      ],
+      [
+        57344,
+        58623
+      ]
+    ],
+    "irq_handler": 16451,
+    "start": "header-init",
+    "min_playnet": 2
+  },
+  "symbols": {
+    "PN_TICK": 49413,
+    "PN_IRQ": 49455,
+    "PN_P1": 50002,
+    "PN_P2": 50003,
+    "tickSite": 50138,
+    "key1": 50210,
+    "rdLocal": 50128,
+    "stubEnd": 50214,
+    "dispatch": 41146,
+    "menu": 41328,
+    "tMode": 50157,
+    "tCur": 50158,
+    "tOut": 50159,
+    "tWin": 50161,
+    "tLives2": 50163,
+    "tHold": 50162,
+    "tBlk": 50164
+  }
+}

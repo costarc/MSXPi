@@ -252,42 +252,56 @@ Patch table (file offset = CPU - 4000h; `T` = address of the transport vector, C
 Glue: `G_READ_LOCAL = 48B9h` (the player-1 reader, which also reads the cursor keys and space), `G_SOUND_TICK = 4F25h`, `G_CHECK_ADDR = E100h`,
 `G_CHECK_LEN = 200h`, and the five entries above. Measured results: see `documents/SOCCERNET-NETPLAY.md`.
 
-## 6. Worked example: Yie Ar Kung-Fu (sketch from static analysis)
+## 6. Worked example: Yie Ar Kung-Fu (a one-player game made two-player)
 
-This is the "second game on paper" used to check the format before it is frozen. Everything below comes from scanning the ROM, not from
-running it. Items marked **to verify** need the debugger.
+The second worked example shows what a package can do beyond networking a game: the MSX Yie Ar Kung-Fu is a **one-player** game, and
+its package adds a play-mode screen with three modes. The design and the measurements are in `documents/YIEAR-DESIGN.md`, the state of
+the work in `documents/HANDOVER-yiear.md`; the package is `software/ROM-Patcher/profiles/yiear/`.
 
 | | |
 |---|---|
-| Dump | `kung-fu.rom` (Konami, RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
-| Image | plain, base 4000h, 16 KB. Page 2 stays plain RAM. |
-| Frame | INIT 4010h installs H.KEYI at 4013h: `ld hl,4043h` (operand at 4019h). Handler 4043h: `call RDVDP / di / call 7C5Ch` (sound) / busy flag E006h bit 0 / `ei / call 4522h` (input) / `call 407Bh` (frame) / `call RDVDP / di / call m,7C5Ch / ei`. This is the same Konami structure as Soccer, with different addresses. |
-| Frame counter | E003h (`inc (hl)` at 407Bh), as in Soccer |
-| Inputs | **One** reader, 4522h: joystick port 1 (`WRTPSG` R15 = 8Fh, `RDPSG` R14) or-ed with keyboard rows 7 and 8 (`SNSMAT`); held byte at E00Ah, new presses at E009h. While E002h bit 6 is set, input comes from a table at 55DEh (4564h), which looks like the demo. **No port-2 read exists.** |
-| R register | no `ld a,r` |
-| `JIFFY` | not read |
-| Game RAM | INIT clears E000h-E3FFh and sets SP = E400h. References elsewhere in page 3 are probably constants. **To verify** with write watches (R7, R8). |
+| Dump | `KUNG-FU.ROM` (Konami, RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
+| Game id / roles | `yiear` / `P1` (seat 0, player 1), `P2` (seat 1, player 2) |
+| Image | plain, base 4000h, output 32 KB: the ROM at 4000h-7FFFh, the **extension** asset at A000h (layout destination 6000h), 8000h-9FFFh fill |
+| Frame | INIT 4010h installs H.KEYI: `ld hl,4043h` (operand at 4019h). Handler 4043h: `call RDVDP / di / call 7C5Ch` (sound) / busy flag E006h bit 0 / `ei / call 4522h` (input) / `call 407Bh` (frame) / `call RDVDP / di / call m,7C5Ch / ei`: the same Konami structure as Soccer |
+| Frame counter | E003h (`inc (hl)` at 407Eh) |
+| Inputs | **One** reader, 4522h: joystick port 1 or-ed with keyboard rows 7 and 8, then (452Bh) the demo override while E002h bit 6 = 0 and the edge logic (E00Ah held, E009h new). A second reader, 4583h, reads the hardware again on the title, demo and game-over screens. No port-2 read exists. |
+| Determinism | no `ld a,r`, no `JIFFY`; randomness from a rotating register in game RAM (6D2Ch) and the frame counter |
+| Game RAM | E000h-E401h (INIT clears E000h-E3FFh, SP = E400h, 53C5h writes E400h-E401h). Measured over 15 emulated minutes through all five opponents, four levels and the bonus stages: nothing else in C000h-F37Fh, nothing in 8000h-BFFFh, no write into the ROM area. `game_ram` = D500h-D5FFh (as Soccer) and E000h-E4FFh (room for the extension's two RAM bytes at E481h). |
+| Stub and transport | as Soccer: stub C100h (at most 1024 bytes; 804 used), transport C500h (512) |
+| Checksum region | E100h-E2FFh (Oolong, the opponent, the projectiles) |
 
-Package sketch:
+Patch table (`T` = C500h; `S.x` = a stub entry, `X.x` = an extension entry):
 
 | CPU | Offset | Expected | Replacement | Reason |
 |---|---|---|---|---|
 | 4019h | 0019h | `43 40` | `T+6` | H.KEYI -> `XIRQ`, which jumps to 4043h |
 | 4047h | 0047h | `CD 5C 7C` | `CD S.PN_IRQ` | sound tick per interrupt -> count the interrupt |
+| 4053h | 0053h | `CD 22 45` | `CD S.tickSite` | **TICK site**: `PN_TICK`, then 452Bh (the reader's second half) on the byte of the player who plays now |
 | 4062h | 0062h | `FC 5C 7C` | `FC S.PN_IRQ` | catch-up sound tick -> count it |
-| 4054h | 0054h | `22 45` | `S.tick` | **TICK site** (the `call 4522h` at 4053h) |
+| 409Ch | 009Ch | `CD 71 40` | `CD X.dispatch` | the state dispatch: the new state 9 (play-mode screen); the Turn and Versus texts |
+| 4132h | 0132h | `CD A3 42` | `CD X.newGame` | new game: Turn gives both players the fresh progress block |
+| 41DCh | 01DCh | `3A 50 E0` | `CD X.lifeLost` | a life is lost: Turn passes the turn; Versus: player 2 wins when REST is 0 |
+| 4248h | 0248h | `3A 54 E0` | `CD X.bonus` | no bonus stage in Versus |
+| 4284h | 0284h | `3A 56 E0` | `C3 X.vsWin` | fifth opponent beaten: in Versus player 1 wins |
+| 4583h | 0583h | `CD 10 45 57 CD 3F 45 B2` | `CD S.key1 00 00 00 00 00` | the second reader: player 1's byte of this frame |
+| 45ADh | 05ADh | `03` | `09` | the title's start goes to state 9 instead of 3 |
+| 7338h | 3338h | `3A 81 E1` | `C3 X.vsDecide` | the shared decision point of all five opponents' AI: in Versus player 2 decides |
 
-Glue: `G_READ_LOCAL = 4522h`, `G_SOUND_TICK = 7C5Ch`, `G_CHECK_ADDR = E000h`, `G_CHECK_LEN = 400h`. The stub goes at C100h and the transport at C500h (measured, see the table above).
+Glue: `G_READ_LOCAL = rdLocal` (the reader's first half, 4510h or-ed with 453Fh: **not** 4522h itself, which writes E009h/E00Ah and
+applies the demo override, so running it on one machine only would make the two machines differ), `G_SOUND_TICK = 7C5Ch`,
+`G_CHECK_ADDR = E100h`, `G_CHECK_LEN = 200h`.
 
-What the sketch shows about the format:
-- **No new field was needed.** The 16 KB image, a different hook address, a different sound driver and a single input reader are all ordinary
-  patches, glue symbols and `netplay` fields.
-- **The real open question is the game, not the format.** With a single port-1 reader, Yie Ar Kung-Fu is either a one-player game (then it is
-  not a PLAYNET candidate) or its two-player mode takes turns on the same controls. In the second case, `S.tick` returns the byte of the player
-  whose turn it is, read from the game's current-player variable. That is a glue choice, which the format already allows (4.4).
-  **To verify** in the emulator before this package is written for real.
-- Konami's 1983-85 cartridges share this handler pattern. A glue template for that family would make several of them small packages.
-  Simultaneous two-player games of that family (Konami's Boxing, Tennis, Ping-Pong) are better next candidates than this one.
+What this example shows about the format:
+- **No new field was needed**, even to add game modes. The new code is an ordinary asset placed by `layout` in the image's free page 2, and
+  every hook into it is an ordinary patch with expected bytes.
+- **State that both machines read must start equal on both.** INIT clears only E000h-E3FFh, so the mode, the current player and Turn's
+  saved blocks live in the stub, whose bytes the loader copies; the extension keeps in RAM only bytes it writes before it reads them.
+- **Menus are inputs like any other.** The play-mode screen reads only `PN_P1`, so only player 1 chooses, and both machines see the same
+  choice on the same frame.
+- **Taking over a CPU character** is possible when its AI chooses among shared action routines: one patch at the decision point gives the
+  choice to `PN_P2`, and the opponent's animations, hit boxes and timers stay the game's.
+- The GPF is 1830 bytes: it fits PLAYNET's 3 KB buffer.
 
 ---
 

@@ -1,0 +1,9 @@
+PN_P1: EQU 0xC352
+PN_P2: EQU 0xC353
+tMode: EQU 0xC3ED
+tCur: EQU 0xC3EE
+tOut: EQU 0xC3EF
+tWin: EQU 0xC3F1
+tLives2: EQU 0xC3F3
+tHold: EQU 0xC3F2
+tBlk: EQU 0xC3F4

@@ -1,0 +1,81 @@
+          YIE AR KUNG-FU ONLINE - QUICK START (MCHAT + PLAYNET)
+          =====================================================
+
+Two MSX computers play Konami's Yie Ar Kung-Fu over the Internet. The original
+is a one-player game; online it gets a play-mode screen with three modes:
+  SINGLE  the original game: player 1 plays, player 2 watches.
+  TURN    the players take turns, as in the arcade: each has their own score,
+          REST and stage, and the turn passes at each lost life.
+  VERSUS  player 1 is Oolong, player 2 controls the opponent of each stage, in
+          the game's order. Player 1 wins by beating the fifth opponent, player
+          2 wins when player 1 has no REST left. No bonus stages.
+You can meet in the MCHAT chat (part 1), or start the game by hand from the
+command line over TCP/IP, without the chat (part 2).
+
+WHAT YOU NEED (each player)
+  - An MSX with MSX-DOS and 64 KB RAM, and an MSXPi or a TCP/IP UNAPI card
+    (GR8NET, ObsoNET, InterNestor Lite, ...).
+  - Your own dump of the game: KUNG-FU.ROM, Konami's Yie Ar Kung-Fu (RC-725),
+    16384 bytes, CRC-32 8A12EC4F. The ROM is not supplied.
+  - Both players must have the same YIEAR.GPF (software/target/games).
+
+INSTALL
+  MSXPi: run the MSXPi update ("msxpiupd"); it copies MCHAT.COM, PLAYNET.COM,
+         PLAYNET.OVL and YIEAR.GPF to the disk. Put KUNG-FU.ROM there too.
+  Others: copy those files, on a PC, into ONE folder or disk (MSX-DOS 1 has no
+         folders). TCP/IP needs a memory mapper: MSX-DOS 2/Nextor, or MSR on
+         MSX-DOS 1. Run "MSR I" and "INL I" (or your card's driver) first.
+
+PART 1 - WITH THE CHAT                         (in the folder with KUNG-FU.ROM)
+  1. MCHAT NICK             MSXPi link         (MCHAT /T NICK: TCP/IP, no MSXPi)
+  2. /WHO lists the room, /GAMES lists the games, CTRL-U picks a player.
+  3. Player 1:  /PLAY NICK YIEAR         Player 2:  /ACCEPT  (or /DECLINE)
+     /CANCEL withdraws an invitation.
+  4. MCHAT closes by itself and the game starts on both machines. Type MCHAT
+     again afterwards to return to the chat.
+
+PART 2 - WITHOUT THE CHAT, OVER TCP/IP (CLI)
+  Each player needs: the other's address as IP:PORT, and a free UDP PORT of
+  their own. Agree on them first (phone, mail, ...). Example:
+
+      Player 1 (192.168.1.50, port 5000)    Player 2 (192.168.1.60, port 5000)
+      PLAYNET /T YIEAR P1 5000 192.168.1.60:5000
+                                            PLAYNET /T YIEAR P2 5000 192.168.1.50:5000
+
+  Syntax:  PLAYNET /T <game> <role> <port> <ip:port>[,<ip:port>[,<ip:port>]]
+    <game>   YIEAR (the name of YIEAR.GPF)
+    <role>   P1 = player 1, P2 = player 2: one of each. Exactly as written.
+    <port>   the UDP port this MSX uses
+    <ip:port> where the opponent can be reached; up to 3, separated by commas
+              (for example a LAN and a public address). No spaces.
+  Start both within a few seconds of each other. The addresses work as in
+  SOCCER-QUICKSTART.txt, part 2. When the game ends the MSX resets (there is
+  no chat to return to).
+
+THE PLAY-MODE SCREEN
+  After PUSH SPACE KEY the screen shows SELECT MODE: SINGLE, TURN, VERSUS.
+  Only player 1 (the one who invited, or P1) chooses: UP/DOWN move the
+  blinking choice, SPACE or the joystick button confirms. Player 2 sees the
+  same screen and waits.
+
+CONTROLS   Each player uses their own cursor keys + SPACE, or joystick 1.
+  Oolong (player 1; in TURN whoever has the turn): the directions move,
+         SPACE or the button with a direction picks the attack.
+  The opponent (player 2, VERSUS only):
+         LEFT/RIGHT walk.  SPACE or the button: an attack;
+         with UP held: another attack; with DOWN held: a third one.
+         Nothing pressed: the opponent stands still.
+  CTRL+SHIFT+F5 ends the game on both machines, in every mode.
+
+IF SOMETHING GOES WRONG
+  "ROM not found / wrong CRC"  - KUNG-FU.ROM must be in the current folder and
+                                 be the exact dump above.
+  Invitation declined at once  - different GPF versions; update both.
+  Does not connect             - wrong IP:PORT, a router blocking UDP, or only one
+                                 side started (or started too late).
+  "Usage: PLAYNET ..." printed - a missing or misspelled argument.
+
+More: documents/YIEAR-DESIGN.md, software/target/games/README.md,
+      documents/MSXCHAT-GAMES.md
+Online gaming is in ALPHA testing: it is not ready for end users yet.
+VERSUS is a first version: the opponents' special moves are not there yet.

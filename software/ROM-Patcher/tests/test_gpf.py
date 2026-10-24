@@ -449,6 +449,62 @@ class PingPongPackageTests(unittest.TestCase):
         self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
 
 
+YIEAR = ROOT / 'profiles/yiear/profile.json'
+
+
+class YieArPackageTests(unittest.TestCase):
+    """Konami's Yie Ar Kung-Fu: the 16 KB ROM at 4000h, the extension (play-mode screen, Turn, Versus) at A000h,
+    12 patches. The real dump when YIEAR_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(YIEAR)
+
+    def test_profile_is_valid_version_2_netplay(self):
+        self.assertEqual(self.profile['version'], 2)
+        self.assertEqual(patcher.abis(self.profile), ['msxpi-netplay-v1'])
+        values = patcher.netplay_values(self.profile)
+        self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('yiear', ['P1', 'P2'], 0x4043))
+        self.assertEqual(len(self.profile['patches']), 12)
+        self.assertEqual(self.profile['source']['file'], 'KUNG-FU.ROM')
+
+    def test_the_gpf_compiles_and_fits_playnet(self):
+        data = patcher.gpf_bytes(self.profile, self.assets)
+        gpf = patcher.read_gpf(data)
+        self.assertLessEqual(len(data), 0x0C00)                            # PLAYNET's GPFBUF: no staging needed
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        self.assertEqual(self.assets['stub'][0], 2)                         # stub ABI 2
+        self.assertEqual(gpf['stub_load'] + gpf['stub_max'], gpf['transport_area'])
+        self.assertEqual(gpf['transport_area'] + gpf['transport_size'], 0xC700)   # 512: the TCP/IP transport
+
+    def test_extension_in_page_2(self):
+        ext = [entry for entry in self.profile['layout'] if entry['source'] == 'ext']
+        self.assertEqual(len(ext), 1)
+        self.assertEqual((ext[0]['destination'], ext[0]['size']), (0x6000, len(self.assets['ext'])))
+        self.assertLessEqual(0x6000 + len(self.assets['ext']), self.profile['output']['size'])   # ends below C000h
+
+    def test_extension_was_built_with_this_stub(self):
+        # src/stub_syms.inc is what ext.asm was assembled with: it must name the published stub's addresses
+        names = dict(re.findall(r'(\w+): EQU 0x([0-9A-F]+)', (YIEAR.parent / 'src/stub_syms.inc').read_text()))
+        for name, value in names.items():
+            if name in self.profile['symbols']:
+                self.assertEqual(int(value, 16), self.profile['symbols'][name], name)
+
+    @unittest.skipUnless(os.environ.get('YIEAR_ROM'), 'set YIEAR_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['YIEAR_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)            # also checks SHA-256, CRC-32, expected bytes
+        patched = set()
+        for patch in self.profile['patches']:
+            patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
+        changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the 12 patches
+        ext = self.assets['ext']
+        self.assertEqual(image[0x6000:0x6000 + len(ext)], ext)
+        self.assertEqual(image[0x4000:0x6000], bytes(0x2000))              # 8000h-9FFFh: fill
+        gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
+
+
 class MusicVersion2Tests(unittest.TestCase):
     def test_version_2_music_package_builds_the_same_rom(self):
         v1, assets = patcher.load_profile(ROOT / 'profiles/goonies/profile.json')
