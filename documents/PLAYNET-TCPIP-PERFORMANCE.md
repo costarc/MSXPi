@@ -335,7 +335,7 @@ same MSXPi could carry the game packets the way the MSXPi path does. Mixed match
 - **`PLAYNET /T`** with link 2 connects through the Pi (flags 40h/80h, as on the MSXPi path) and installs a third transport,
   `transport_hybrid.asm`:
   - `XCHG` is the C9 transaction, run in the game's page 3 with no page switch at all (it is only I/O ports);
-  - every 30th call it also maps D3 and the overlay, for `irc_keep` and one stack service (5.2), so the IRC connection lives through the game;
+  - every `KEEP_EVERY`th call (8 in `transport_hybrid.asm`) it also maps D3 and the overlay, for `irc_keep` and one stack service (5.2), so the IRC connection lives through the game;
   - the return to MSX-DOS is the TCP/IP path's (page 3 of its own, nothing saved).
 - The opponent sees an ordinary MSXNP peer. MSXG does not change.
 
@@ -407,6 +407,17 @@ Q4, K and S sweep (protocol 2 ROM, LDIR `memcpy`, same rig; `PNOPTS` in `run_nat
 | default (K = 2, S = 1) | 6 | 21.79 / 21.87 | 13.9 / 13.7 | 72 / 71 |
 | `/L0` (K = 2, S = 0) | 5 | 21.77 / 21.78 | 13.7 / 13.9 | 71 / 71 |
 | `/K3` | 7 | **24.08 / 24.18** | 9.7 / 9.4 | 48 / 48 |
+
+SDCC 4.6's own `memcpy` is as fast as the LDIR one (stage 1 of the port removed the overlay's copy; measured 2026-10-24).
+
+Re-measured 2026-10-24 on `feature/tcpip-games` at `36168d25` (Soccer, 1200 frames, fps over frames 500-1200, same `SOCCER.GPF`, all IDENTICAL):
+
+| Link | fps |
+|---|---|
+| native pair (0 / 0) | 28.7 |
+| both TCP/IP (1 / 1) | 22.9 |
+| mixed (0 / 1) | 18.0 (the MSXPi node stalls in 48 % of its frames) |
+| hybrid (2 / 2) | 27.6 |
 
 All identical, no desync. K = 3 reaches 86 % of the native pair's 27.9 fps but at the longest input delay (7 frames); K = 2 stays the
 default. S only moves the delay, not the speed.

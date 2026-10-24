@@ -532,7 +532,7 @@ What follows the vector is private to each transport and the loader that install
 
 Two implementations exist:
 - **MSXPi (native).** Each `XCHG` is one opcode-C9 transaction with the Pi (10.1). `XIRQ` is a plain `JP irq_handler`.
-  It is 432 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
+  It is 458 bytes (`software/Client/src/playnet/transport_msxpi.asm`); a game's `transport_area.size` must be at least that
   for PLAYNET to run it over the MSXPi.
 - **UNAPI** (`software/Client/src/playnet/transport_unapi.asm`, `PLAYNET /T`). The game gets a **page-3 segment of its own**: the
   trampoline copies MSX-DOS's page 3 into a new segment and switches to it, so the game's RAM, its stack and the hooks it is given never
@@ -546,7 +546,11 @@ Two implementations exist:
   its own segments into pages 1 and 2 while it runs. `XIRQ` (in the game's page 3 only) counts ticks, the engine's clock, and jumps
   to the game's handler; it never writes `JIFFY`, so games that read it see what they would see on a cartridge. It needs a
   `transport_area` of 512 bytes, inside the TPA (it is written into MSX-DOS's page 3 too), and two mapper segments: the engine's
-  and the game's page 3.
+  and the game's page 3. The transport is 346 bytes, plus the 128-byte buffer at +384 of the 512-byte area.
+- **Hybrid** (`transport_hybrid.asm`, link 2). `XCHG` is the MSXPi transaction; every `KEEP_EVERY`th call (8) it also serves the chat
+  connection through the overlay. It is 384 bytes, the whole of its 384-byte code space (`ASSERT` in the source).
+
+Sizes today (`software/Client/src/playnet/build/`): MSXPi 458, UNAPI 346, hybrid 384 bytes; `transport_area` is 512.
 
 ### 10.1 MSXPi opcode C9 transaction
 

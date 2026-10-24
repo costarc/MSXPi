@@ -40,7 +40,7 @@ Session: normally set by the chat (msxpi_games via msxpi_chat) once both players
     MSXPI_NETPLAY_JITTER_MS  extra random 0..N ms per datagram (default 0)
     MSXPI_NETPLAY_LOSS_PCT   incoming datagrams dropped, percent (default 0)
     MSXPI_NETPLAY_SEED       random seed for the above
-    MSXPI_NETPLAY_VERSION    MSXNP version announced (default 1; tests use it to force a mismatch)
+    MSXPI_NETPLAY_VERSION    MSXNP version announced (default 2 = VERSION; tests use it to force a mismatch)
 """
 import collections
 import heapq
