@@ -96,12 +96,14 @@ Reached on P2: segments, ROM load (CRC right), patches, footprint, connecting. *
 "Could not connect"; the server's NAT link (`msxpi_ethnat.py`, logging added for a test and removed) receives **no frame at all**
 from INL after "Ethernet UNAPI shuttle ready". Soccer's `SCENARIO=mixed` fails the same way, also from a clean `master` worktree
 (`C:\tmp\msxpi-master`), so it is the rig, not this branch.
-(Resolved 2026-10-24, PLAYNET TCP/IP plan A1/A2: the "rig failure" was two things. The ROM openMSX loaded and the server disagreed on the Ethernet
-protocol, so INL had no network (`rig_preflight.py` now checks it); and `run_salamander.sh` forced `MSXPI_NETPLAY_VERSION=1`, which made every
-`TCP=1` run fail with "incompatible opponent".) Lead: openMSX loads the MSXPi BIOS from the user data folder,
+Lead: openMSX loads the MSXPi BIOS from the user data folder,
 `Documents/openMSX/share/systemroms/extensions/msxpibios.rom`, changed 2026-10-22 17:36 (sha1 d3db91..., first in that folder's
 `MSXPi.xml`); a private copy of the user data with the 2 October ROM (163cd9..., `OPENMSX_USER_DATA=C:/tmp/omxuser`) still failed,
-but it was not checked that openMSX used it. Not run yet: Soccer's mixed regression with this branch once the link works.
+but it was not checked that openMSX used it.
+(2026-10-24, PLAYNET TCP/IP plan: the same symptom was reproduced on `feature/tcpip-games` by installing `target/msxpibios.rom`, the 16 KB lower half,
+under that name. openMSX needs the 32 KB image `target/msxpi32k.rom` (MSXPi.xml's first sha1, `50096592`) there. With it, `TCP=1 run_salamander.sh 1500` is
+IDENTICAL. Not shown: that this was also the cause in this section, which failed on a clean master worktree too, and what ROM `d3db91...` was.)
+Not run yet: Soccer's mixed regression with this branch once the link works.
 
 Regressions after these changes (MSXPi path): Salamander `run_salamander.sh 1500` (EXT2=ram512k) IDENTICAL, scenes 0-6, the 512 KB
 node 1 build; Soccer `run_native.sh 0 0 1500` IDENTICAL, foreign writes 0. Patcher tests: 40 run, only `test_games_folder_is_current`
