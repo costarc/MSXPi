@@ -36,7 +36,23 @@ MAPPER_MIN_PLAYNET = 3
 CAPABILITIES = {'mapper-ram': 0x01}
 MAPPER_FIXED = '<BBBH4BBBBBB'           # the MAPPER section before its pairs (14 bytes)
 PAGE3_LOW, PAGE3_HIGH = 0xC000, 0xF37F  # RAM below the BIOS work area
-MIN_TRANSPORT = 192
+# The largest transport plus the UNAPI buffer: the hybrid (384 bytes) and UNAPI (346) transports keep a 128-byte buffer at +384, the
+# MSXPi one is 458 bytes (software/Client/src/playnet/build/, checked in tests/test_profiles.py).
+TRANSPORT_AREA_MIN = 512
+# MSX-DOS's TPA top (the word at 0006h) with the TCP/IP stack loaded, measured with tests/soccernet/tpatop.sh (PLAYNET-PROTOCOLS 10.2).
+# The UNAPI and hybrid transports are written into MSX-DOS's page 3 too: transport area + 512 must lie below the top
+# (PLAYNET.COM's tcpFootprint refuses otherwise).
+TPA_TOPS = {
+    'MSX-DOS 1, no drive of its own (Canon V-25) + MSR + INL': 0xD406,
+    'MSX-DOS 1.8, own drive (Panasonic FS-A1WSX) + MSR + INL': 0xC806,
+    'Nextor + RAMHELPR + INL': 0xD706,
+}
+
+
+def tcpip_misfits(v):
+    """The measured set-ups where this package's transport area is not TPA, so PLAYNET /T cannot run it there."""
+    end = v['transport_area'] + TRANSPORT_AREA_MIN
+    return [name for name, top in TPA_TOPS.items() if end > top]
 INPUT_ROM = 0xFF                        # layout source "input" in a GPF
 
 GAME_ID_RE = re.compile(r'[a-z0-9-]{1,8}')
@@ -348,7 +364,7 @@ def check_netplay(v, asset_sizes):
     stub_high = stub_low + integer(v['stub_max'], 1, PAGE3_HIGH - PAGE3_LOW + 1, 'netplay.stub.max') - 1
     require(stub_high <= PAGE3_HIGH, 'The stub area must lie in page 3 (C000h-F37Fh)')
     area_low = integer(v['transport_area'], PAGE3_LOW, PAGE3_HIGH, 'netplay.transport_area.address')
-    area_high = area_low + integer(v['transport_size'], MIN_TRANSPORT, PAGE3_HIGH - PAGE3_LOW + 1,
+    area_high = area_low + integer(v['transport_size'], TRANSPORT_AREA_MIN, PAGE3_HIGH - PAGE3_LOW + 1,
                                    'netplay.transport_area.size') - 1
     require(area_high <= PAGE3_HIGH, 'The transport area must lie in page 3 (C000h-F37Fh)')
     require(not _overlap(stub_low, stub_high, area_low, area_high), 'The stub and the transport area overlap')

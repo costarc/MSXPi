@@ -358,7 +358,7 @@ packages with the music ABI.
 | `image.base` | CPU address of output offset 0: `16384` (4000h) or `32768` (8000h, for a 16 KB ROM that lives there). The output must end at or below BFFFh. |
 | `stub.asset` | Name of the asset holding the built stub (engine + glue, Part II, 9) |
 | `stub.load`, `stub.max` | Where it is copied, and the most bytes it may ever take. Must be in page 3 (`C000h-F37Fh`). |
-| `transport_area` | Where PLAYNET installs the transport (10). `size` must be at least 192. In page 3. |
+| `transport_area` | Where PLAYNET installs the transport (10). `size` must be at least `TRANSPORT_AREA_MIN` = 512 (the largest transport plus the UNAPI buffer; `patch_rom.py` refuses less). In page 3, outside `game_ram` and the stub, and below the lowest MSX-DOS TPA top PLAYNET supports with a TCP/IP stack loaded, because the UNAPI and hybrid transports are written into MSX-DOS's page 3 too (`tcpFootprint` checks it at run time; the limit is in 10.2). One area serves every link: no profile names a link or a transport. |
 | `game_ram` | Inclusive `[low, high]` ranges of every address the game writes, including its stack. Must not overlap the stub or the transport area. |
 | `irq_handler` | The game's interrupt handler; `XIRQ` ends by jumping there |
 | `start` | `"header-init"` (jump to the INIT address in the image's `AB` header, as the BIOS would) or a CPU address |
@@ -594,6 +594,28 @@ whole packets over UDP (11), so the peer protocol does not change.
   of frame records, so such a packet repeats the last one's records. The Pi drops a DELTA that does not follow the last packet it
   got from that MSX; the stub's resend (a full packet: same F) puts the two back in step.
 - A link timeout clears both: the next packets go in full.
+
+### 10.2 Where the transport area may be
+
+The UNAPI and hybrid transports run in MSX-DOS's page 3 as well as the game's, at the same address, so `transport_area` + 512
+(`TRANSPORT_AREA_MIN`) must lie below MSX-DOS's TPA top, the word at 0006h, with the TCP/IP stack loaded (the stack lowers it).
+`tcpFootprint` in `PLAYNET.COM` checks this at run time and refuses with "The TCP/IP driver uses memory this game overwrites".
+Measured with `software/Client/tests/soccernet/tpatop.sh` (TPATOP.COM before the stack, after MSR I / RAMHELPR I, after INL I), 2026-10-24:
+
+| Set-up | Top before the stack | Top with the stack | Largest `transport_area` |
+|---|---|---|---|
+| MSX-DOS 1 on the MSXPi, no drive of its own (Canon V-25, ram2mb) + MSR + INL | D606h | **D406h** | D206h |
+| MSX-DOS 1.8, the machine's own drive (Panasonic FS-A1WSX, ram4mb) + MSR + INL | C906h | **C806h** | C606h |
+| Nextor (MegaFlashROM SCC+ SD) + RAMHELPR + INL | D706h | **D706h** | D506h |
+
+The areas of Soccer, Ping Pong and Yie Ar Kung-Fu (C500h) fit all three. Salamander's (D000h) fits the first and third but not the
+second: its game RAM is the whole of C000h-CFFFh, so no 512-byte window exists below C806h for any package data to name. On a
+machine like the Panasonic with a drive of its own, Salamander therefore cannot use the TCP/IP transports (link 1, or link 2 through
+the hybrid transport); the MSXPi transport (link 0) needs no stack and is not affected. `build_games.py` prints a note for every
+package and measured set-up where the area does not fit (`patch_rom.TPA_TOPS`). Whether to accept this, to move the part of the
+UNAPI transport that must sit at one address in both page-3 segments into a small thunk, or to require Nextor for Salamander is
+decision D-6 of PLAYNET-TCPIP-IMPLEMENTATION-PLAN.md. The earlier figure of D406h under MSX-DOS 1 and D706h under Nextor
+(HANDOVER-salamander 4b) is confirmed; C806h, which the PChess memory test recorded, is the drive-of-its-own machine.
 
 ## 11. MSXNP: the peer protocol (UDP)
 

@@ -17,6 +17,7 @@ import patch_rom
 
 ROOT = Path(__file__).resolve().parent
 GAMES = ROOT.parent / 'target/games'
+NOTES = []
 
 
 def compile_all():
@@ -29,6 +30,9 @@ def compile_all():
         data = patch_rom.gpf_bytes(profile, assets)
         gpf = patch_rom.read_gpf(data)
         name = gpf['game_id'].upper() + '.GPF'
+        if gpf['transport'] == 'lockstep':
+            for setup in patch_rom.tcpip_misfits(gpf):
+                NOTES.append(f'note: {name} cannot use the TCP/IP transports on {setup} (transport area above its TPA top)')
         if name in out:
             raise SystemExit(f'two packages compile to {name}')
         out[name] = data
@@ -60,6 +64,8 @@ def main():
         print(f'wrote {name}')
     for name in extra:
         print(f'warning: {name} is not built from a package (left alone)')
+    for note in NOTES:
+        print(note)
     print(f'{len(files)} game(s) in {GAMES}')
     return 0
 
