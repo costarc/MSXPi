@@ -95,7 +95,7 @@ uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
 uint8_t PerformHandshake(uint16_t msx_blocksize);
 uint8_t SendCommandToMSXPi(const char* cmd, bool appendDOSParameters);
 uint8_t parseConnError(const uint8_t rc);
-uint16_t get_sp(void) __naked;
+uint16_t get_sp(void) __sdcccall(0) __naked;
 uint16_t get_max_buffer_size(void);
 uint8_t* get_buffer_ptr(void);
 uint8_t printstdout(uint8_t* buffer, uint16_t maxbufsize);

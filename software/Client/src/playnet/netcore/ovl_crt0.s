@@ -50,37 +50,11 @@ init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ldir
 2$:     jp      gsinit
 
-        .area   _CODE
-; memcpy(dst, src, n) with LDIR, in place of the library's byte loop (SDCC z80 calling convention: arguments on
-; the stack, the caller pops them; returns dst in DE). The arguments are read in place, not popped, so an
-; interrupt cannot overwrite them.
-___memcpy::
-        ld      hl,#2
-        add     hl,sp
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                      ; DE = dst
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)                      ; BC = src
-        inc     hl
-        ld      a,(hl)
-        inc     hl
-        ld      h,(hl)
-        ld      l,a                         ; HL = n
-        push    de
-        ld      a,h
-        or      l
-        jr      z,3$
-        push    bc
-        ld      b,h
-        ld      c,l                         ; BC = n
-        pop     hl                          ; HL = src
-        ldir
-3$:     pop     de
-        ret
-
+; NOTE (SDCC 4.6 port, stage 1): this file used to define ___memcpy, an LDIR copy that replaced SDCC 4.0's
+; byte loop (performance). It read its arguments from the stack (SDCC 4.0 convention), which is wrong under
+; SDCC 4.6 (dst in HL, src in DE, count pushed and popped by the callee), so it was removed and 4.6's own
+; memcpy, which also ends in LDIR, is linked. If the copy turns out too slow or the overlay too big, put an
+; override back in the 4.6 convention: see "Stage 1 note" in documents/SDCC46-PORT-HANDOVER.md.
         .area   _HOME
         .area   _CODE
         .area   _INITIALIZER

@@ -266,7 +266,8 @@ static void vt_close(void) {
 /* Assembly instructions must occupy separate lines: ';' starts a comment.
  * Preserve IX for the caller's stack frame and re-enable interrupts after
  * the BIOS slot call. */
-static void put(uint8_t c) __naked {
+/* __sdcccall(0): the asm reads its argument at 4(ix) and the key routine returns in L, under either default. */
+static void put(uint8_t c) __sdcccall(0) __naked {
     c;
     __asm
     push ix
@@ -295,7 +296,7 @@ static uint8_t exchange(const char *cmd) {
     msxpi_link_release();
     return rc==RC_SUCCESS && size==256 && !memcmp(reply,"SSH1",4) && reply[5]<=248;
 }
-static uint8_t key(void) __naked {
+static uint8_t key(void) __sdcccall(0) __naked {
     __asm
     call _Inkey
     ld h,#0

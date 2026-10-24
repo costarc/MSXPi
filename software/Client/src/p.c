@@ -90,7 +90,8 @@ uint8_t processLocalCommands(void) {
     }
 }
 
-int SetTimeFromMSXPi(char hour, char min, char sec) __naked {
+/* __sdcccall(0): the asm reads its three arguments from the stack and returns in HL. */
+int SetTimeFromMSXPi(char hour, char min, char sec) __sdcccall(0) __naked {
     hour; min; sec;   // just to silence "unused" warnings
     __asm
     push ix

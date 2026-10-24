@@ -28,7 +28,8 @@ static uint8_t exchange(const char *cmd) {
 /* BIOS CHPUT renders on the VDP and never treats Ctrl-C as DOS abort.
  * CALSLT returns with interrupts disabled. Restore them before returning:
  * submitting a line calls CHPUT then waits for the interrupt-driven JIFFY. */
-static void put(uint8_t c) __naked {
+/* __sdcccall(0): the asm reads its argument at 4(ix) and the key routine returns in L, under either default. */
+static void put(uint8_t c) __sdcccall(0) __naked {
     c;
     __asm
     push ix
@@ -44,7 +45,7 @@ static void put(uint8_t c) __naked {
     __endasm;
 }
 
-static uint8_t key(void) __naked {
+static uint8_t key(void) __sdcccall(0) __naked {
     __asm
     push ix
     ld c,#6

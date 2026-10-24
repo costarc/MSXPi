@@ -144,7 +144,7 @@ PAYLOAD_ESCAPE:
     __endasm;
 }
 static uint8_t payload_rx(uint8_t *buffer, uint16_t count,
-                                  uint16_t *sum) __naked
+                                  uint16_t *sum) __sdcccall(0) __naked
 {
     buffer; count; sum;
     __asm
@@ -178,7 +178,7 @@ payload_rx_ok:
 }
 
 static uint8_t payload_tx(uint8_t *buffer, uint16_t count,
-                                  uint16_t *sum) __naked
+                                  uint16_t *sum) __sdcccall(0) __naked
 {
     buffer; count; sum;
     __asm

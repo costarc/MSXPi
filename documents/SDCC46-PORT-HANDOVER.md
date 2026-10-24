@@ -114,6 +114,32 @@ Rebuild with `playnet/build.py`, check the overlay still fits, ship `playnet.ovl
 Test only netplay: `pchess_tcpip_openmsx.py`, `pcheckers_tcpip_openmsx.py`, the hybrid (`/T /H`) path,
 `netcore_cost.py`.
 
+### Stage 1 note: the removed LDIR `___memcpy` (re-apply if needed)
+
+`netcore/ovl_crt0.s` had its own `___memcpy` that copies with LDIR, in place of SDCC 4.0's byte loop (a
+performance change). Stage 1 removed it, because it assumed the SDCC 4.0 stack convention. SDCC 4.6's `memcpy`
+(z80.lib, `___memcpy` is an alias) also ends in LDIR, so no speed is expected to be lost, but this was not
+measured: re-check with `netcore_cost.py` and re-apply the override if it matters. The override in the 4.6
+convention (HL = dst, DE = src, count pushed by the caller and popped by the callee, dst returned in DE;
+untested):
+
+```
+___memcpy::
+        pop     af                  ; return address
+        pop     bc                  ; BC = count (the callee pops it)
+        push    af
+        push    hl                  ; dst, for the return value
+        ld      a,b
+        or      c
+        jr      z,1$
+        ex      de,hl               ; HL = src, DE = dst
+        ldir
+1$:     pop     de                  ; DE = dst
+        ret
+```
+(The old SDCC 4.0 version is in git:
+`git show e59728e0:software/Client/src/playnet/netcore/ovl_crt0.s`.)
+
 ### Stage 2: make the hand-written ABI dependencies explicit (byte-identical)
 
 Add `__sdcccall(0)` to the declaration and the definition of every routine whose asm assumes stack arguments

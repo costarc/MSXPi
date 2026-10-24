@@ -144,7 +144,8 @@ static uint8_t lcount, lcur, lmeta, lw;
 uint8_t lt_seg, lt_tpa;
 static uint16_t map_tab;
 static uint8_t seg_code[32];
-static void lt_copy_code(void) __naked {
+/* __sdcccall(0): the copy takes (dst, src, n) from the stack. */
+static void lt_copy_code(void) __sdcccall(0) __naked {
 __asm
     ld hl,#2
     add hl,sp
@@ -173,7 +174,8 @@ _lt_copy_end::
 __endasm;
 }
 extern uint8_t lt_copy_end[];
-#define lt_copy(dst, src, n) ((void (*)(void *, const void *, uint16_t))seg_code)(dst, src, n)
+typedef void lt_copy_fn(void *, const void *, uint16_t) __sdcccall(0);
+#define lt_copy(dst, src, n) ((lt_copy_fn *)seg_code)(dst, src, n)
 
 /* A = routine (offset in the mapper support table) with A, B */
 /* user i of room r, copied out of the segment */

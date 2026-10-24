@@ -64,8 +64,10 @@ def generate():
     c = '\n'.join(lines)
     adapters = []
     for direction in ('RX', 'TX'):
+        # __sdcccall(0): the asm reads its three arguments from the stack and returns the status in L,
+        # whatever calling convention the including program is compiled with.
         adapters.append(f'''static uint8_t payload_{direction.lower()}(uint8_t *buffer, uint16_t count,
-                                  uint16_t *sum) __naked
+                                  uint16_t *sum) __sdcccall(0) __naked
 {{
     buffer; count; sum;
     __asm
