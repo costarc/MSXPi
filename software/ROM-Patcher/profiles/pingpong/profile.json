@@ -139,7 +139,8 @@
     ],
     "irq_handler": 16409,
     "start": "header-init",
-    "min_playnet": 2
+    "min_playnet": 2,
+    "requires": []
   },
   "symbols": {
     "PN_TICK": 49413,

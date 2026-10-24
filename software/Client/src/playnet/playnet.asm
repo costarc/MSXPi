@@ -23,6 +23,7 @@
 ; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
 
 PLAYNET_VERSION: EQU    3                     ; 3: image host mapper-ram (MegaROMs)
+CAPS_KNOWN:      EQU    $01                   ; GPF header byte 99: bit 0 mapper-ram
 
 F_TERM0:        EQU     $00
 F_DIRIN:        EQU     $08                     ; console input, no echo

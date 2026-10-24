@@ -74,6 +74,11 @@ gpfCheck:                                       ; BC = the GPF's length, at GPFB
         ld      hl,msgNewer
         ld      a,R_INCOMPAT
         jp      nc,exitResult
+        ld      a,(GPFBUF+99)                   ; requires: one bit per capability (patch_rom.py CAPABILITIES)
+        and     $FF-CAPS_KNOWN                  ; a bit this PLAYNET does not know
+        ld      hl,msgNewer
+        ld      a,R_INCOMPAT
+        jp      nz,exitResult
         ld      a,(GPFBUF+5)                    ; flags: bit 0 lockstep, bits 1-2 image host
         ld      b,a
         and     $F9

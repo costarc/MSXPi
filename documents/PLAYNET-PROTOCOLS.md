@@ -363,6 +363,7 @@ packages with the music ABI.
 | `irq_handler` | The game's interrupt handler; `XIRQ` ends by jumping there |
 | `start` | `"header-init"` (jump to the INIT address in the image's `AB` header, as the BIOS would) or a CPU address |
 | `min_playnet` | The oldest PLAYNET release that may run this package (integer). Older releases refuse it with "update PLAYNET". |
+| `requires` | List of what the game needs from the machine or from PLAYNET; today only `"mapper-ram"` (required when `image.host` is `mapper-ram`). Never a link or a transport. Optional, default `[]`. |
 
 Validation (tools and the MSX loader): all addresses in range; output size 16384 or 32768 for `plain`; every layout and patch range
 inside its buffer; patches non-overlapping with equal expected/replacement lengths; stub and transport area disjoint from each other,
@@ -435,7 +436,8 @@ Header, 128 bytes:
 | 52 | 8 | role of seat 1 |
 | 60 | 38 | command (transport `none` only), zero-terminated |
 | 98 | 1 | `min_playnet` |
-| 99 | 29 | reserved, 0 |
+| 99 | 1 | `requires`: what the game needs, one bit each: bit 0 `mapper-ram` (a memory mapper for the image). Never a link: one package serves every link. A bit this PLAYNET does not know: refused ("This game needs a newer PLAYNET") |
+| 100 | 28 | reserved, 0 |
 
 Body: a list of sections, each `type (1), length (2), payload`, ending with type 0 and length 0. Readers must skip unknown section
 types. Sections appear in the order below; each appears at most once, except `ASSET`.

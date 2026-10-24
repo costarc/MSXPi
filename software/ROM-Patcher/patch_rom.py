@@ -31,6 +31,9 @@ HOST_PLAIN, HOST_MAPPER = 0, 1          # netplay.image.host, GPF flags bits 1-2
 MAPPER_TYPES = {'konami-scc': 1}        # mapper-ram: the cartridge mappers a stub's bank engine emulates
 MAPPER_BANK = 8192                      # 8 KB banks, two to a 16 KB mapper segment (PLAYNET-PROTOCOLS 7.3)
 MAPPER_MIN_PLAYNET = 3
+# What a package may need from the machine or from PLAYNET (never a link: one package serves every link). One bit each in
+# GPF header byte 99; a loader that meets a bit it does not know refuses the package ("update PLAYNET").
+CAPABILITIES = {'mapper-ram': 0x01}
 MAPPER_FIXED = '<BBBH4BBBBBB'           # the MAPPER section before its pairs (14 bytes)
 PAGE3_LOW, PAGE3_HIGH = 0xC000, 0xF37F  # RAM below the BIOS work area
 MIN_TRANSPORT = 192
@@ -267,7 +270,7 @@ def netplay_values(profile):
     names = list(profile['assets'])
     v = {'game_id': n.get('game_id'), 'title': n.get('title'), 'roles': n.get('roles'),
          'transport': n.get('transport'), 'command': n.get('command', ''),
-         'min_playnet': n.get('min_playnet', 1)}
+         'min_playnet': n.get('min_playnet', 1), 'requires': n.get('requires', [])}
     if v['transport'] == 'none':
         require(profile['source'] is None and not profile['layout'] and not profile['patches'] and not profile['assets'],
                 'A game with transport "none" has no ROM, layout, patches or assets')
@@ -319,6 +322,9 @@ def check_netplay(v, asset_sizes):
     require(isinstance(roles, list) and len(roles) == 2 and all(isinstance(r, str) and ROLE_RE.fullmatch(r) for r in roles),
             'netplay.roles must be two words of 1-8 letters or digits')
     integer(v['min_playnet'], 1, 255, 'netplay.min_playnet')
+    req = v.get('requires', [])
+    require(isinstance(req, list) and len(set(req)) == len(req) and all(r in CAPABILITIES for r in req),
+            'netplay.requires must list each of ' + ', '.join(CAPABILITIES) + ' at most once')
     if v['transport'] == 'none':
         command = v['command']
         require(isinstance(command, str) and COMMAND_RE.fullmatch(command),
@@ -386,6 +392,7 @@ def check_mapper(v):
     """The mapper-ram rules (PLAYNET-PROTOCOLS 7.3)."""
     m = v['mapper']
     require(v['min_playnet'] >= MAPPER_MIN_PLAYNET, f'A mapper-ram package needs min_playnet {MAPPER_MIN_PLAYNET}')
+    require('mapper-ram' in v['requires'], 'A mapper-ram package must list "mapper-ram" in netplay.requires')
     banks = integer(m['banks'], 2, 64, 'netplay.image.banks')
     require(banks & (banks - 1) == 0, 'netplay.image.banks must be a power of two')
     require(v['output_size'] == banks * MAPPER_BANK, 'The ROM must be banks x bank_size bytes')
@@ -481,6 +488,7 @@ def gpf_bytes(profile, assets):
     header[52:60] = _text(v['roles'][1], 8)
     header[60:98] = _text(v['command'] if not lockstep else '', 38)
     header[98] = v['min_playnet']
+    header[99] = sum(CAPABILITIES[r] for r in v['requires'])
     data = bytearray(header + body)
     data[8:12] = struct.pack('<I', crc32(data))
     return bytes(data)
@@ -501,12 +509,13 @@ def read_gpf(data):
     stored = struct.unpack_from('<I', data, 8)[0]
     require(crc32(data[:8] + b'\0\0\0\0' + data[12:]) == stored, 'GPF checksum mismatch: the file is damaged')
     require(data[98] <= PLAYNET_VERSION, 'This game package needs a newer PLAYNET: update PLAYNET')
+    require(data[99] & ~sum(CAPABILITIES.values()) == 0, 'This game package needs something this PLAYNET does not have: update PLAYNET')
     lockstep = bool(data[5] & 1)
     host = (data[5] >> 1) & 3
     require(host in (HOST_PLAIN, HOST_MAPPER), 'This game package needs an image host this PLAYNET does not have')
     v = {'hash': stored, 'game_id': _unpad(data[12:20]), 'title': _unpad(data[20:44]),
          'roles': [_unpad(data[44:52]), _unpad(data[52:60])], 'command': _unpad(data[60:98]),
-         'min_playnet': data[98], 'transport': 'lockstep' if lockstep else 'none',
+         'min_playnet': data[98], 'requires': [n for n, bit in CAPABILITIES.items() if data[99] & bit], 'transport': 'lockstep' if lockstep else 'none',
          'layout': [], 'patches': [], 'assets': []}
     sections, pos = {}, GPF_HEADER
     while True:

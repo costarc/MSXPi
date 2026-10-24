@@ -402,6 +402,23 @@ class MapperRamTests(unittest.TestCase):
                 with self.assertRaisesRegex(patcher.PatchError, message):
                     patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
 
+    def test_requires_is_carried_and_checked(self):
+        self.assertEqual(self.data[99], patcher.CAPABILITIES['mapper-ram'])
+        self.assertEqual(patcher.read_gpf(self.data)['requires'], ['mapper-ram'])
+        profile = copy.deepcopy(self.profile)
+        profile['netplay']['requires'] = []
+        with self.assertRaisesRegex(patcher.PatchError, 'must list "mapper-ram"'):
+            patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
+        profile['netplay']['requires'] = ['mapper-ram', 'warp-drive']
+        with self.assertRaisesRegex(patcher.PatchError, 'netplay.requires'):
+            patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
+
+    def test_a_capability_this_playnet_does_not_know_is_refused(self):
+        data = bytearray(self.data)
+        data[99] |= 0x80
+        with self.assertRaisesRegex(patcher.PatchError, 'needs something this PLAYNET does not have'):
+            patcher.read_gpf(reseal(data))
+
     def test_needs_playnet_3(self):
         profile = copy.deepcopy(self.profile)
         profile['netplay']['min_playnet'] = 2

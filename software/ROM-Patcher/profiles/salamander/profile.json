@@ -700,7 +700,10 @@
     ],
     "irq_handler": 16489,
     "start": "header-init",
-    "min_playnet": 3
+    "min_playnet": 3,
+    "requires": [
+      "mapper-ram"
+    ]
   },
   "symbols": {
     "PN_TICK": 53765,

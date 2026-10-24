@@ -96,7 +96,7 @@ def make_profile(stub, symbols):
             'game_ram': [[0xD500, 0xD5FF], [0xE000, 0xE4FF]],
             'irq_handler': 0x4019,
             'start': 'header-init',
-            'min_playnet': 2},
+            'min_playnet': 2, 'requires': []},
         'symbols': {name: symbols[name] for name in EXPORTED}}
 
 

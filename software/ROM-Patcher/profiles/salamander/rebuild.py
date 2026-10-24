@@ -178,7 +178,7 @@ def make_profile(stub, symbols):
             'game_ram': [[0xC000, 0xCFFF], [0xDA00, 0xDDFF], [0xE000, 0xF0F8]],   # DA00h-DDFFh: the bank engine's pair map
             'irq_handler': 0x4069,
             'start': 'header-init',
-            'min_playnet': 3},
+            'min_playnet': 3, 'requires': ['mapper-ram']},
         'symbols': {name: symbols[name] for name in EXPORTED}}
 
 
