@@ -3,11 +3,15 @@
 2026-10-22. Design session: no code yet.
 2026-10-23. The branch was rebased (fast-forward: it had no commits of its own) onto `feature/tcpip-games` at `1f802adb` (PLAYNET 3,
 with Salamander merged), and the four documents were updated to its protocols and method. Design section 13 lists what changed.
+2026-10-23. Implementation session 1: Single, the play-mode screen, Turn and a first Versus (progress log at the end).
+2026-10-24. Rebased onto `feature/tcpip-games` `36168d25` (23 newer commits, no conflicts; the old tip is kept as
+`backup/yiear-netplay-before-rebase`). Published `YIEAR.GPF` and brought the documents up to date (design section 14: as built).
+**When this work is complete, `feature/yiear-netplay` is merged back into `feature/tcpip-games`** (not into `master`).
 
 | | |
 |---|---|
-| Branch / worktree | `feature/yiear-netplay`, now at `feature/tcpip-games` `1f802adb`, in `C:\Users\roniv\Dev\github\MSXPi-yiear` (the main checkout is shared with other sessions: do not switch branches there) |
-| Model to follow | Salamander: `documents/SALAMANDER-DESIGN.md`, `documents/HANDOVER-salamander.md`, `profiles/salamander/`, `run_salamander.sh`, `salamander_debug/` |
+| Branch / worktree | `feature/yiear-netplay`, on `feature/tcpip-games` `36168d25`, in `C:\Users\roniv\Dev\github\MSXPi-yiear` (the main checkout is shared with other sessions: do not switch branches there). The rebase is **local**: `origin/feature/yiear-netplay` still has the old commits, so the next push needs `--force-with-lease`. |
+| Model to follow | Soccer (`profiles/soccer/`, `run_native.sh`, `SOCCER-QUICKSTART.txt`), and Salamander for the rig scripts (`run_salamander.sh`, `salamander_debug/`) |
 | Design | `documents/YIEAR-DESIGN.md` |
 | Plan | `documents/YIEAR-IMPLEMENTATION-PLAN.md` (steps 1-10) |
 | Tests | `documents/YIEAR-TEST-PLAN.md` (T0-T13) |
@@ -16,11 +20,18 @@ with Salamander merged), and the four documents were updated to its protocols an
 
 ## State
 
-- **Done**: analysis of the ROM (static, from an openMSX disassembly), the design, the implementation plan, the test plan. The user's
-  decisions are recorded in design section 2.
-- **Not done**: everything in the plan. Nothing has been verified dynamically in the emulator yet: every "to verify" in design section 3 is
-  open.
-- Nothing is committed. The four documents are new files in the worktree.
+(2026-10-24; the step-by-step state is the "State" column of the plan's overview)
+
+- **Built**: Single, the play-mode screen (state 9), Turn and a first Versus. 12 patches, stub 804 bytes, extension 662 bytes, **GPF
+  1830 bytes**: it fits `PLAYNET.COM`'s 3 KB buffer, so the planned loader change (plan step 2, design D6/D10) is dropped.
+- **Published**: `software/target/games/YIEAR.GPF` (profile hash `73c47d8c`), its `index.txt` line, the games README row, the
+  `msxpirfh.bat` line, `documents/YIEAR-QUICKSTART.txt`, and `PLAYNET-PROTOCOLS.md` section 6 (the package as built).
+- **Tests**: `test_gpf.py` has `YieArPackageTests` (the profile, the GPF under 3 KB, the extension at A000h, the extension built with
+  the published stub, and with `YIEAR_ROM` the real dump: only the 12 patches differ). All ROM-Patcher and server tests pass.
+- **Rig results so far** (two emulators, MSXPi path, scripted input): Single 3001 identical frames with and without 50 ms lag, 20 ms
+  jitter and 8 % loss; menu 3001; Turn 4001; Versus 4501, both match ends seen. No desync, no foreign writes into the stub.
+- **Not run yet**: chat, link 2, mixed and TCP/IP scenarios; speed against the cartridge; sound tempo; desync detection; the exit key
+  back to the chat; 50 Hz against 60 Hz; real hardware.
 
 ## What was found (the short version)
 
@@ -55,15 +66,24 @@ with Salamander merged), and the four documents were updated to its protocols an
 3. Versus: **the game's order** (player 2 plays the opponents in turn, the game's REST and energy rules, no bonus stages).
 4. An **offline two-player ROM** with the same extension, in a later phase.
 
-Still open for the user (design section 12): D5-D11 (where the extension and its RAM live, the staging rule, `KUNG-FU.ROM`, how a
-Versus match ends, which PLAYNET release takes the staging, the rig's key-driven inputs), whether player 2 gets a REST of its own in
-Versus, and whether the mode should travel with the invitation.
+Built as proposed, still to be confirmed by the user: D5 (the extension at A000h), D7 (`KUNG-FU.ROM`), D8 (how a Versus match
+ends). Settled by the build: D6 and D10 (no staging needed), D9 (the state is in the stub). Still open: D11 (the rig's inputs), whether
+player 2 gets a REST of its own in Versus, and whether the mode should travel with the invitation (design section 12).
 
 ## Next step
 
-Plan **step 1** (dynamic analysis and footprint) and **step 2** (GPF staging) are independent. Step 1 first is recommended,
-because its measurements can move the extension (D5, D9) and fix the Turn block. Then step 3 gives online Single play with the
-existing machinery (`min_playnet` 2, no staging needed yet), before any game logic is written.
+(2026-10-24) What is pending, grouped as reviewed with the user:
+
+1. ~~Housekeeping and publishing~~: done 2026-10-24 (above).
+2. **Versus**: which of actions 4/5/6 is high, middle and low (the up/down mapping is a guess); opponent 2's automatic throw (4638h);
+   the special states of opponents 3 and 4 (E1C0h, E1D0h); a jump for player 2; the per-opponent move tables (plan step 6); a human
+   play test for balance.
+3. **Turn and the mode screen**: "PLAYER n GAME OVER"; T8 (Turn's first life against a Single game); a real screenshot; "PLAYER 1
+   SELECTS"; where the cursor starts (built: SINGLE; design: VERSUS online).
+4. **Tests not run**: chat, link 2, mixed and TCP/IP scenarios (the rig's TCP/IP path is broken for every game, K9); speed against the
+   cartridge; sound tempo; desync detection; the exit key back to the chat; 50 Hz against 60 Hz. Also D11: the rig still uses the
+   engine's SCRIPTED tables, not Tcl keys.
+5. **Later**: the offline two-player ROM (plan step 9) and real hardware (step 10).
 
 ## How the disassembly was made
 

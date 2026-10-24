@@ -69,9 +69,13 @@ MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line 
         ('STR_WIN1', 13, 9, 'PLAYER 1 WINS'), ('STR_WIN2', 13, 9, 'PLAYER 2 WINS'))   # Versus: over the game-over screen
 
 
-def assemble_ext(assembler, symbols, out_dir):
-    """The extension, assembled after the stub (it needs PN_P1): returns its bytes."""
+def assemble_ext(assembler, symbols, out_dir, work=None):
+    """The extension, assembled after the stub (it needs PN_P1): returns its bytes. The generated includes go into
+    src/ for the release; a test build passes its own work folder, so the committed includes keep the release values."""
     src = HERE / 'src'
+    if work:
+        src = Path(work)
+        shutil.copyfile(HERE / 'src/ext.asm', src / 'ext.asm')
     names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tBlk')
     (src / 'stub_syms.inc').write_text(''.join('%s: EQU 0x%04X\n' % (n, symbols[n]) for n in names))
     lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
@@ -170,7 +174,7 @@ def write_syms(path, symbols, stub):
 def test_build(assembler, engine, gpf_path, syms_path):
     with tempfile.TemporaryDirectory() as out:
         stub, symbols = assemble(assembler, engine, True, out)
-        ext, ext_symbols = assemble_ext(assembler, symbols, out)
+        ext, ext_symbols = assemble_ext(assembler, symbols, out, out)
     profile = make_profile(stub, {**symbols, **ext_symbols}, ext)
     profile['id'] = 'yiear-msxpi-netplay-test'
     data = patcher().gpf_bytes(profile, {'stub': stub, 'ext': ext})

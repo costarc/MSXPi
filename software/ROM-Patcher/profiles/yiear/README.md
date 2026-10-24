@@ -8,16 +8,17 @@ Package format `msxpi-rom-patch` version 2 with the `msxpi-netplay-v1` ABI. Desi
 | Input | `KUNG-FU.ROM`, Konami's Yie Ar Kung-Fu (RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
 | Output | a RAM image for PLAYNET (`output.target = "ram-image"`), never a ROM file |
 | Game id, roles | `yiear`; `P1` (seat 0, the inviter), `P2` (seat 1) |
-| Layout for PLAYNET | the ROM at 4000h-7FFFh, stub C100h, transport C500h, game RAM E000h-E4FFh, interrupt handler 4043h |
+| Layout for PLAYNET | the ROM at 4000h-7FFFh, the extension at A000h, stub C100h, transport C500h, game RAM E000h-E4FFh, interrupt handler 4043h |
 | Machine | any MSX with 64 KB (no memory mapper needed on the MSXPi path) |
 
 No ROM data is included. The player supplies their own dump.
 
 ## Status
 
-Single mode only (step 3 of the plan): the second player watches. The five patches of design section 7 that need no extension:
-H.KEYI (4019h), the two sound ticks (4047h, 4062h), the TICK site (4053h) and the second reader (4583h). The play-mode screen,
-Turn and Versus (steps 4-7) are not written.
+Single, the play-mode screen (state 9), Turn and a first Versus are built: 12 patches, stub 804 bytes at C100h, extension 662
+bytes at A000h, GPF 1830 bytes (`software/target/games/YIEAR.GPF`). The two-emulator rig (`run_yiear.sh`) keeps both machines identical
+in every mode. What is still open (the Versus move set, the chat and TCP/IP scenarios, sound and speed checks) is listed in
+`documents/HANDOVER-yiear.md`; where the code differs from the design, `documents/YIEAR-DESIGN.md` section 14 says how.
 
 ## Rebuild (developers)
 

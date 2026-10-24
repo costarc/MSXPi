@@ -3,7 +3,8 @@
 Written 2026-10-22, updated 2026-10-23 for `feature/tcpip-games` (the branch this one is now rebased on). It brings Konami's Yie Ar
 Kung-Fu (MSX, RC-725) to PLAYNET, the online two-player system specified in `documents/PLAYNET-PROTOCOLS.md`, first proven with
 Konami's Soccer (`documents/SOCCERNET-NETPLAY.md`, `documents/PLAYNET-DESIGN.md`) and then with Salamander's co-op
-(`documents/SALAMANDER-DESIGN.md`, `documents/HANDOVER-salamander.md`). Nothing here is implemented yet. The plan is
+(`documents/SALAMANDER-DESIGN.md`, `documents/HANDOVER-salamander.md`). **Updated 2026-10-24: the package is built and published
+(`YIEAR.GPF`); section 14 says where the implementation differs from the design below, and wins where they disagree.** The plan is
 `documents/YIEAR-IMPLEMENTATION-PLAN.md`, the tests are in `documents/YIEAR-TEST-PLAN.md`, and the state of the work is in
 `documents/HANDOVER-yiear.md`.
 
@@ -27,8 +28,8 @@ What `feature/tcpip-games` changed under this design (section 13 has the details
 | Input width | 1 byte |
 | Modes | Single, Turn, Versus, chosen on a new play-mode screen (decisions D1-D3) |
 | Package | `software/ROM-Patcher/profiles/yiear/` (glue, extension, rebuild script, profile) |
-| Rig | `software/Client/tests/soccernet/run_yiear.sh` + `yiear_node.tcl` (to write, modelled on `run_salamander.sh`) |
-| State | Static analysis done. Design updated to PLAYNET 3. No code, no dynamic measurement yet (section 3.6). |
+| Rig | `software/Client/tests/soccernet/run_yiear.sh` + `yiear_node.tcl`, scripts in `yiear_debug/` |
+| State | Built: Single, the play-mode screen, Turn and a first Versus, identical on the two-emulator rig; `YIEAR.GPF` published (1830 bytes). Open work: `documents/HANDOVER-yiear.md`. |
 
 ---
 
@@ -54,9 +55,9 @@ the chat. Two things are new:
 1. **An extension asset** in page 2 (A000h-BFFFh). A 16 KB cartridge leaves page 2 free in the RAM image, and the package format can
    already place an asset there through `layout`. The menu, Turn and Versus are Z80 code in that asset. Only the small entries that the
    lockstep engine must reach stay in the page-3 stub.
-2. **One PLAYNET loader change**: a GPF of up to 8 KB. `PLAYNET.COM` holds a GPF in a 3 KB buffer (`GPFBUF` 2900h-34FFh), and this
-   GPF will be about 4.5-5.5 KB. The loader receives every GPF into page 2 first (section 6). That needs the next PLAYNET release
-   (D10: folded into release 3, `min_playnet: 3`, or release 4). Soccer and Salamander are unaffected.
+2. ~~One PLAYNET loader change: a GPF of up to 8 KB.~~ **Not needed** (section 14): the built GPF is 1830 bytes and fits
+   `PLAYNET.COM`'s 3 KB buffer, so the package runs on today's PLAYNET (`min_playnet` 2). Section 6 is kept for a future game that
+   needs more.
 
 Unlike Salamander, this is a **plain 16 KB ROM**: no bank engine, no mapper segments, and it runs on a 64 KB MSX without a mapper.
 
@@ -79,12 +80,12 @@ Decided in this design, open for review (section 12):
 | # | Point | Proposal |
 |---|---|---|
 | D5 | Where the extension lives | A000h-BFFFh (output offset 6000h), at most 8 KB |
-| D6 | Large GPF support | Every GPF goes to 8000h first. A GPF whose image covers 8000h (Soccer's 32 KB layout) is then moved down to `GPFBUF` (2900h) and must still be 3 KB or less (Soccer 1080 bytes, Salamander 2868). |
+| D6 | Large GPF support | **Not needed for this game (section 14).** Every GPF goes to 8000h first. A GPF whose image covers 8000h (Soccer's 32 KB layout) is then moved down to `GPFBUF` (2900h) and must still be 3 KB or less (Soccer 1080 bytes, Salamander 2868). |
 | D7 | ROM file name | `KUNG-FU.ROM` |
 | D8 | How a Versus match ends | Player 1 wins by beating the fifth opponent. Player 2 wins when player 1 has no REST left. Both end on "PLAYER n WINS", then the title. |
-| D9 | Extension RAM | E480h-E4FFh, in page 3, so the offline ROM can use the same addresses (to be confirmed free, T2) |
-| D10 | PLAYNET release for the 8 KB GPFs | **Fold into release 3** while `feature/tcpip-games` is not on `master` (no PLAYNET 3 is in players' hands): `min_playnet` 3. If release 3 ships first, it becomes release 4 and `min_playnet` 4. A PLAYNET 3 built before the change refuses the GPF cleanly ("too big"). This also answers SALAMANDER-DESIGN 12.2, point 3. |
-| D11 | How the rig drives the game | **Tcl key presses** in `yiear_node.tcl` (`keymatrixdown`/`keymatrixup`, seeded random play after a fixed menu sequence), as `salamander_node.tcl` does, against the release stub and GPF. No scripted tables in the engine (the old `G_SCRIPT` plan is dropped), so the engine and Soccer's stub do not change. `--test-gpf` is kept only for the desync tests (flags bit 0 = 0). |
+| D9 | Extension RAM | E480h-E4FFh, in page 3, so the offline ROM can use the same addresses (to be confirmed free, T2). **As built**: measured free; only E481h-E482h (the menu's cursor and edge byte) are used; the mode, the current player and Turn's blocks are in the stub (section 14). |
+| D10 | PLAYNET release for the 8 KB GPFs | **Not needed for this game (section 14).** Fold into release 3** while `feature/tcpip-games` is not on `master` (no PLAYNET 3 is in players' hands): `min_playnet` 3. If release 3 ships first, it becomes release 4 and `min_playnet` 4. A PLAYNET 3 built before the change refuses the GPF cleanly ("too big"). This also answers SALAMANDER-DESIGN 12.2, point 3. |
+| D11 | How the rig drives the game | **Tcl key presses** in `yiear_node.tcl` (`keymatrixdown`/`keymatrixup`, seeded random play after a fixed menu sequence), as `salamander_node.tcl` does, against the release stub and GPF. No scripted tables in the engine (the old `G_SCRIPT` plan is dropped), so the engine and Soccer's stub do not change. `--test-gpf` is kept only for the desync tests (flags bit 0 = 0). **As built, not followed**: the rig runs the `--test-gpf` build with the engine's SCRIPTED tables (section 14); open for the user. |
 
 ---
 
@@ -502,3 +503,22 @@ The chat, the Pi server, the lockstep engine (`playnet_engine.asm`) and the tran
 | Rig and method | generalise `run_native.sh`, scripted tables in the engine (`G_SCRIPT`) | a rig of the game's own driven by Tcl keys (D11); `rebuild.py --rom/--syms`; stub write watches; speed against the cartridge; publish with `build_games.py` |
 
 The game analysis (sections 3 and 5) and the user's decisions D1-D4 are unaffected.
+
+---
+
+## 14. As built (2026-10-24)
+
+The implementation (commits "Single-mode package" to "Versus mode" on `feature/yiear-netplay`) follows sections 3-5 with these
+differences. Where this section and the sections above disagree, this one is right.
+
+| Area | Design | As built |
+|---|---|---|
+| GPF size, loader | 4.5-5.5 KB, needs GPFs up to 8 KB (section 6, D6, D10) | **1830 bytes** (stub 804, extension 662, 12 patches): fits `GPFBUF`, no loader change, `min_playnet` 2. `test_gpf.py` asserts it stays under 3 KB. |
+| State both machines read | E480h-E4FFh (D9) | in the **stub** (`tMode`, `tCur`, `tOut`, `tWin`, `tBlk`): the loader copies its bytes, so they start equal on both machines; INIT does not clear E480h. The extension keeps in RAM only the menu's cursor (E481h) and edge byte (E482h), written before they are read. |
+| Menu | cursor starts on VERSUS online; "PLAYER 1 SELECTS" | cursor starts on **SINGLE**; no "PLAYER 1 SELECTS" line yet |
+| Title start | patch 45A7h (`jp X.menu`) | patch **45ADh** `03` -> `09`: the title's own start sets state 9 |
+| Turn hooks | sites to be found | **4132h** (`call 42A3h` -> `newGame`) and **41DCh** (`ld a,(E050h)` -> `lifeLost`); block E049h-E05Fh (23 bytes); hi-score E043h-E045h stays global. "PLAYER n" over PLAY START and on row 2 during fights. |
+| Versus | patch the AI dispatch 6B42h, a move table per opponent | the five AI routines share **one decision point, 7335h**; patch **7338h** -> `vsDecide`. One mapping for all opponents: trigger = action 4 (7454h), trigger+up = 5 (7458h), trigger+down = 6 (7450h), left/right = a step (74E7h) every 8 frames, nothing = stand (5522h). No per-opponent tables, no specials, no jump yet. |
+| Versus end | 4280h, 41F3h | **4284h** -> `vsWin` (player 1 wins: REST = 0, state 6, the game's own game over); `lifeLost` sets `tWin` = 2; "PLAYER n WINS" printed over state 7 by `dispatch` |
+| Rig input (D11) | Tcl key presses | the `--test-gpf` build with the engine's **SCRIPTED** tables (Soccer's table: bit 4 starts the game); Turn and Versus tests add Tcl pokes and inputs in `yiear_debug/` |
+| Test builds | must not touch committed files | fixed 2026-10-24: `--test-gpf` writes its generated includes in a temporary folder, and `test_gpf.py` checks that `src/stub_syms.inc` names the published stub's addresses |
