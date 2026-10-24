@@ -18,7 +18,8 @@
 #   SCENARIO=chat  the players meet in MCHAT (against a local IRC server): P1 invites P2 (/play bob yiear), P2 accepts, and the chat
 #                 starts the game itself. EXITKEY=n then also checks that both machines are back in MCHAT. Needs software/target/mchat.com.
 #                 PLAY_AT / ACCEPT_AT: emulated seconds. IRC_PORT (6637).
-# Not here: a mixed pair (one MSXPi node, one TCP/IP node).
+#   SCENARIO=mixed  P1 over the MSXPi, P2 over the TCP/IP UNAPI (MSR I, INL I, PLAYNET /T yiear P2 ..); BOTH=1: P1 too. HYBRID=1: the TCP/IP
+#                 node(s) play through their MSXPi (PLAYNET /T /H, link 2).
 # Results: $WORK/np/{P1,P2}.trace; the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -31,7 +32,9 @@ OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 case "$SCENARIO" in chat) [ -f "$ROOT/software/target/mchat.com" ] ;; *) true ;; esac || { echo "no software/target/mchat.com"; exit 1; }
 CHAT=; case "$SCENARIO" in chat|tcp) CHAT=1;; esac
-TCPN=; case "$SCENARIO" in tcp|both) TCPN=1;; esac
+TCPN=; case "$SCENARIO" in tcp|both|mixed) TCPN=1;; esac
+# is node $1 (1 or 2) a TCP/IP node? every node, except in a mixed pair: P2 only (both with BOTH=1)
+is_tcp() { [ -n "$TCPN" ] && { [ "$SCENARIO" != mixed ] || [ "$1" = 2 ] || [ -n "$BOTH" ]; }; }
 # own ports (other sessions run the Soccer, Ping Pong and Salamander rigs on 8115/8116, 5101/5102, 6671): override with P1PORT/P2PORT/UDP1/UDP2/IRC_PORT
 P1PORT=${P1PORT:-8137}; P2PORT=${P2PORT:-8138}; UDP1=${UDP1:-5137}; UDP2=${UDP2:-5138}
 IRC_PORT=${IRC_PORT:-6637}
@@ -75,7 +78,7 @@ INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$YIEAR_ROM" KUNG-FU.ROM > /dev/null
   [ "$SCENARIO" != chat ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null
-  if [ -n "$TCPN" ]; then                # both nodes over TCP/IP: INL on the server's user-mode UDP link (10.0.2.15), the chat over TCP/IP
+  if is_tcp $n; then                     # a TCP/IP node: INL on the server's user-mode UDP link (10.0.2.15), the chat over TCP/IP
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
     for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
@@ -83,7 +86,7 @@ INI
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/YIEAR.GPF" YIEAR.GPF > /dev/null
     nick=$( [ $n = 1 ] && echo alice || echo bob )
     if [ "$SCENARIO" = tcp ]; then
-    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=51%s\r\nGAMEADDR=10.0.2.2\r\n\032' "$IRC_PORT" $nick $((37 + n)) > "$WORK/MCHAT$n.INI"
+    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=51%s\r\nGAMEADDR=10.0.2.2\r\n%b\032' "$IRC_PORT" $nick $((37 + n)) "${GAMELINK1:+GAMELINK=1\r\n}" > "$WORK/MCHAT$n.INI"
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/MCHAT$n.INI" MCHAT.INI > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/mchat/MCHAT.COM" MCHAT.COM > /dev/null
     fi
@@ -95,8 +98,9 @@ rm -f "$WORK/stop_servers"
 netenv=""
 [ -z "$CHAT" ] || netenv="PCHESS_IRC_HOST=127.0.0.1 PCHESS_IRC_PORT=$IRC_PORT PCHESS_IRC_TLS=0 MSXPI_NETPLAY_LAN=127.0.0.1 MSXPI_NETPLAY_NOSTUN=1"
 start() {  # n port local_udp peer_udp version
-  nat=""; [ -n "$TCPN" ] && nat="MSXPI_ETH_LINK=udpnat"
-  np=""; [ -n "$CHAT" ] || np="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"
+  nat=""; is_tcp $1 && nat="MSXPI_ETH_LINK=udpnat"
+  np=""      # the Pi's own session: an MSXPi node always; a TCP/IP node of a mixed pair only for HYBRID=1 (link 2)
+  if [ -z "$CHAT" ] && { [ "$SCENARIO" != mixed ] || [ -z "$nat" ] || [ -n "$HYBRID" ]; }; then np="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
         $netenv $nat $np \
@@ -116,10 +120,20 @@ start 1 $P1PORT $UDP1 $UDP2
 start 2 $P2PORT $UDP2 $UDP1 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
-[ -z "$TCPN" ] || export PRE_P1="MSR I;INL I" PRE_P2="MSR I;INL I"
+is_tcp 1 && export PRE_P1="MSR I;INL I"
+is_tcp 2 && export PRE_P2="MSR I;INL I"
 [ "$SCENARIO" != tcp ] || export CHAT_TCP=1
 if [ "$SCENARIO" = both ]; then          # no chat: each machine types the start line (PLAYNET /T game role port peer), its game over TCP/IP
   export CMD_P1="PLAYNET /T $PNOPTS yiear P1 $UDP1 10.0.2.2:$UDP2" CMD_P2="PLAYNET /T $PNOPTS yiear P2 $UDP2 10.0.2.2:$UDP1"
+fi
+if [ "$SCENARIO" = mixed ]; then          # what the TCP/IP node(s) type
+  if [ -n "$HYBRID" ]; then
+    is_tcp 1 && export CMD_P1="PLAYNET /T /H $PNOPTS yiear P1"
+    is_tcp 2 && export CMD_P2="PLAYNET /T /H $PNOPTS yiear P2"
+  else
+    is_tcp 1 && export CMD_P1="PLAYNET /T $PNOPTS yiear P1 $UDP1 10.0.2.2:$UDP2"
+    is_tcp 2 && export CMD_P2="PLAYNET /T $PNOPTS yiear P2 $UDP2 10.0.2.2:$UDP1"
+  fi
 fi
 node() {  # role port
   xs=""; [ "$1" = P1 ] && xs="$EXTRA_TCL"; [ "$1" = P2 ] && xs="$EXTRA_TCL_C"
