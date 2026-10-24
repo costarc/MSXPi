@@ -26,10 +26,11 @@ SETBRANCH = 'p setbranch %1%2%3%4%5%6%7%8%9'
 
 
 class BatchFilesTests(unittest.TestCase):
-    def test_msxpiupd_takes_the_branch_after_fetching_stage2_from_master(self):
+    def test_msxpiupd_takes_the_branch_before_fetching_stage2(self):
         up = lines('msxpiupd.bat')
         self.assertEqual(up[1], 'p set DriveM https://github.com/costarc/MSXPi/raw/master/software/target')
-        self.assertLess(up.index('pcopy m:msxpirfh.bat'), up.index(SETBRANCH))
+        # stage 2 comes from the chosen branch: its file list is the branch's
+        self.assertLess(up.index(SETBRANCH), up.index('pcopy m:msxpirfh.bat'))
         # a server without "p setbranch" is brought up to date from master first
         for before, after in (('p run sh update.sh', 'p update'), ('p update', 'p restart'), ('p restart', SETBRANCH)):
             self.assertLess(up.index(before), up.index(after))
@@ -44,6 +45,16 @@ class BatchFilesTests(unittest.TestCase):
         self.assertNotIn('%1', ' '.join(rfh))
         self.assertEqual(rfh[-3:], ['p setbranch', 'pcopy m:msxpiupd.bat', 'p ver'])
         self.assertEqual(rfh.count('pcopy m:msxpiupd.bat'), 1)
+
+
+    def test_every_game_is_copied_to_the_msx_and_listed_for_the_server(self):
+        games = sorted(p.name for p in (TARGET / 'games').glob('*.GPF'))
+        self.assertTrue(games)
+        rfh = lines('msxpirfh.bat')
+        listed = [l.split()[1] for l in (TARGET / 'games' / 'index.txt').read_text().splitlines() if l.strip()]
+        self.assertEqual(sorted(listed), games)
+        for g in games:
+            self.assertIn(f'pcopy m:games/{g} {g}', rfh)
 
 
 class ServerUpdateTests(unittest.TestCase):
