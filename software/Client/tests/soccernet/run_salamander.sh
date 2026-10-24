@@ -22,6 +22,7 @@
 # Results: $WORK/np/{P1,P2}.trace (+ .screen and screenshots); the script prints the comparison.
 STOPF=${1:-3000}; LAGMS=${2:-0}; LOSS=${3:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
+python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (A1)
 ROOT=$(cd "$HERE/../../../.." && pwd)
 RW=$(cd "$ROOT" && pwd -W 2>/dev/null || echo "$ROOT")
 SRC="$ROOT/software/Client/src/playnet"
@@ -81,7 +82,7 @@ start() {  # n port local_udp peer_udp
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
         $net MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS \
-        MSXPI_NETPLAY_DELAY=0 MSXPI_NETPLAY_VERSION=1 python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
+        MSXPI_NETPLAY_DELAY=0 MSXPI_NETPLAY_VERSION=${VER:-2} python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
     done ) > /dev/null 2>&1 &
@@ -108,7 +109,7 @@ node P1 8115 ram2mb &
 NPIDS=$!
 if [ -z "$ONLY" ]; then sleep 5; node P2 8116 ${EXT2:-ram2mb} & NPIDS="$NPIDS $!"; fi
 wait $NPIDS
-python "$HERE/cmp_pair.py" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
+CMP_DROP_LAST=${TCP:+1} python "$HERE/cmp_pair.py" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
 grep -h "^#" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -8
 if [ -n "$EXITKEY" ] && [ -n "$CHAT" ]; then  # both back in MCHAT: restore, then "mchat start"

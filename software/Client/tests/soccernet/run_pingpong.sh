@@ -15,6 +15,7 @@
 # Results: $WORK/np/{P1,P2}.trace; the script prints the comparison.
 LAGMS=${1:-0}; LOSS=${2:-0}; STOPF=${3:-1500}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
+python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (A1)
 ROOT=$(cd "$HERE/../../../.." && pwd)               # repository root
 RW=$(cd "$ROOT" && pwd -W 2>/dev/null || echo "$ROOT")
 SRC="$ROOT/software/Client/src/playnet"
