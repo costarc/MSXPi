@@ -34,7 +34,7 @@ prog="${1:?Usage: make.sh program [output-directory]}"
 # Programs already ported to SDCC 4.6's own calling convention (sdcccall 1); keep in step with
 # ABI1_PROGRAMS in make.bat. Any other program still mixes conventions and the link guard below
 # refuses it unless SDCC_ALLOW_ABI_MIX=1 (only for software/tools/abi_bytecmp.py).
-ABI1_PROGRAMS="templatc mchat pcopy p nitros ssh msxarch"
+ABI1_PROGRAMS="templatc mchat pcopy p nitros ssh msxarch pchess"
 abi1=0
 for p in $ABI1_PROGRAMS; do [[ "$p" == "$prog" ]] && abi1=1; done
 out="${2:-$here/target}"
@@ -68,7 +68,7 @@ sdar -rc "$scratch/msxpi-bios.lib" "$scratch/msxpi-bios.rel"
 # PChess is near the MSX-DOS memory limit: make.bat gives it the larger register
 # allocation search (about 2.4 KB smaller, a build of about 3 minutes).
 optx=()
-[[ "$prog" == pchess ]] && optx=(--max-allocs-per-node 100000)
+[[ "$prog" == pchess && $abi1 == 0 ]] && optx=(--max-allocs-per-node 100000)
 sdcc -mz80 "${abiflags[@]}" --code-loc 0x106 --data-loc 0x0 \
     --disable-warning 196 --no-std-crt0 --opt-code-size "${optx[@]}" \
     "${fusionlib[@]}" msxpi-bios.lib "${stdlib[@]}" -L "$fusion/lib" -L "$scratch" \

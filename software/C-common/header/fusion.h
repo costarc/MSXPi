@@ -121,6 +121,9 @@ unsigned int ReadTPA(void);
 /* Assembler: stack arguments, result in L/HL */
 void SetSC5Palette(Palette *palette) __sdcccall(0);
 void RestoreSC5Palette(void) __sdcccall(0);
+void HMMM(int XS, int YS, int XT, int YT, int DX, int DY) __sdcccall(0);
+void HMMV(int XS, int YS, int DX, int DY, char COL) __sdcccall(0);
+void LMMV(int XS, int YS, int DX, int DY, char COL, unsigned char OP) __sdcccall(0);
 void Cls(void) __sdcccall(0);
 void PrintChar(char c) __sdcccall(0);
 void Locate(char x, char y) __sdcccall(0);

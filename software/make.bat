@@ -12,7 +12,7 @@ REM stdlib, no --sdcccall 0, the repo's fusion library. Space-separated, lower c
 REM Every other program is still built the old way (--sdcccall 0): SDCC 4.6's runtime uses
 REM the other convention, so the link warns "Conflicting sdcc options" and the build is
 REM refused (SDCC_ALLOW_ABI_MIX=1 lets it through, only for software	oolsbi_bytecmp.py).
-SET ABI1_PROGRAMS=templatc mchat pcopy p nitros ssh msxarch
+SET ABI1_PROGRAMS=templatc mchat pcopy p nitros ssh msxarch pchess
 SET ABI1=0
 FOR %%P IN (%ABI1_PROGRAMS%) DO IF /I "%%P"=="%1" SET ABI1=1
 
@@ -75,13 +75,14 @@ del msxpi-bios.asm
 
 echo -------- Compilation of : %1
 
+REM (Only the legacy build: on the sdcccall 1 path pchess leaves 4975 bytes at the tightest TPA top without it.)
 REM PChess is near the MSX-DOS memory limit (a Canon V-25 with the TCP/IP driver loaded
 REM has a TPA top of only 0xC806): the larger register-allocation search makes it
 REM about 2.4 KB smaller than the default, at the price of a build of about 3 minutes
 REM (30000 would take 1 minute but leave only 804 bytes; Client\tests\pchess_memory_test.py
 REM checks the result).
 SET OPTX=
-IF /I "%1"=="pchess" SET OPTX=--max-allocs-per-node 100000
+IF /I "%1"=="pchess" IF "%ABI1%"=="0" SET OPTX=--max-allocs-per-node 100000
 SET LINKLOG=%sourcename%.linklog
 SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 %ABIFLAGS% --no-std-crt0 --opt-code-size %OPTX% %FUSIONLIB% %MSXPIBIOSLIB%.lib -L %LIBDIR% -L %MSXPILIB% %INC1% %proga%.c > %LINKLOG% 2>&1
 type %LINKLOG%
