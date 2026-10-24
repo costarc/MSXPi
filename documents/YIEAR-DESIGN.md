@@ -548,3 +548,23 @@ Left to the implementer, "with criteria from similar games":
 | I3 | Lives in Versus (U2) | Each player has the game's starting lives: 3. P1's are the game's own REST (E050h: decremented at every stage start, 41B4h, and given back when P1 wins a fight, 423Eh, so a win costs P1 nothing). P2's are a counter in the stub: P2 loses one each time P1 beats the opponent. A lost fight costs the loser one life; the next fight is the next opponent (P1 won) or the same one again (P2 won), in the game's order, cycling after the fifth. **The match ends when either player has no lives left**: "PLAYER n WINS", then the game-over screen and the title. The "beat the fifth opponent" rule (4284h) is dropped; the level (E056h) stays 0 for the whole match so the opponents' timings do not change. P2's lives are shown during fights. |
 | I4 | Tests left open | Run on the MSXPi path: the three modes with lag and loss, the chat with the exit key, link 2, the sound tempo against the cartridge, the speed, desync detection |
 | I5 | `KUNG-FU.ROM` (D7), the extension at A000h (D5) | Kept |
+
+### 15.1 As built for I1-I3 (2026-10-24)
+
+- **Moves** (`vsDecide` at 7338h, all five opponents): LEFT/RIGHT walk a step every 8 frames; the button with UP / nothing / DOWN starts the
+  opponent's own actions 5 / 4 / 6 (7458h, 7454h, 7450h); **the second button, or UP alone, is the jump attack**: action `JUMPS[opponent]` =
+  3, 3, 4, 4, 0, the one pose script of each opponent with the airborne flag (10h) in its action table (6E5Bh, 6FFEh, 7302h, 772Ch, 79A3h),
+  started through 7429h. Nothing pressed: the opponent stands.
+- **The throw (I2)**: opponent 2's weapon (7162h/718Dh) is not a separate action: the game runs it by itself while the opponent is in
+  certain poses (E184h = 2, 3, 10h, 11h, 463Ah). So it is player 2's jump attack, not a button of its own. The first version of
+  Versus has no other throw.
+- **Which of 4/5/6 is high, middle or low** was not established (screenshots are black in the headless runs; the poses are only
+  numbers in RAM). The up / nothing / down mapping above is a convention; a human test decides. `yiear_debug/moves.tcl` logs the poses.
+- **Lives (I3, U2)**: player 1's are the game's REST; player 2's are `tLives2` in the stub (3 at the start of a Versus game, shown as
+  "P2 REST n" on row 2 every 16 frames). The patch at **423Eh** (`vsBeaten`) takes one from player 2 each time an opponent is beaten and
+  sends the game's REST + 1 to a dummy byte (E483h) so player 1 does not get it back. When player 2 has none, player 1 wins through the
+  game's own game-over path. When REST is 0, player 2 wins (`lifeLost`, as before). The 4284h patch (fifth opponent) is gone: the
+  opponents cycle and the level rises as in the game.
+- **Turn game over (U5)**: while a player is out, "PLAYER n GAME OVER" is shown on row 3 every 16 frames and the other player's fight
+  goes on (the screen is never frozen; both machines stay in lockstep).
+

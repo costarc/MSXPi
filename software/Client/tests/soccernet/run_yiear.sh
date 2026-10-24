@@ -2,10 +2,11 @@
 # Two openMSX (Canon V-25 + MSXPi) play Konami's Yie Ar Kung-Fu with PLAYNET.COM through two stock msxpi-server.py that
 # relay the stub's packets over UDP on localhost (MSXPi transport, no TAP adapters, no mapper). From run_native.sh.
 #
-#   YIEAR_ROM=/path/to/kung-fu.rom sh run_yiear.sh <lag_ms> <loss_pct> [frames] [jitter_ms]
+#   [MODE=0|1|2] YIEAR_ROM=/path/to/kung-fu.rom sh run_yiear.sh <lag_ms> <loss_pct> [frames] [jitter_ms]
 #
 # Needs sjasmplus (SJASMPLUS=path), the Windows openMSX build with the MSXPi device and your own kung-fu.rom (never
-# committed). The scripted-input test stub and its GPF come from profiles/yiear/rebuild.py --test-gpf. Environment:
+# committed). The player is Tcl key presses (yiear_node.tcl: MODE = the menu choice, 0 Single, 1 Turn, 2 Versus; KEYSEED); the
+# GPF is the release stub's, built by profiles/yiear/rebuild.py --keys --test-gpf. Environment:
 #   OPENMSX  path to openmsx.exe.   WORK  scratch folder (default $TMP/yiear-work)   ONLY=P1  run one node
 #   FORCE_DELAY=n  fix the delay.   POKEF=n  corrupt Oolong on P1 at frame n (desync check)   EXITF=n  P2 exits at frame n
 #   EXITKEY=n  P2 presses Ctrl+Shift+F5 at frame n.   TMAX/NODETMO  emulated / wall seconds before a node is stopped
@@ -26,7 +27,7 @@ WORK=${WORK:-${TMP:-/tmp}/yiear-work}
 mkdir -p "$WORK"; WORKW=$(cd "$WORK" && pwd -W 2>/dev/null || echo "$WORK")
 python "$SRC/build.py" --assembler "$ASM" || exit 1
 python "$ROOT/software/ROM-Patcher/profiles/yiear/rebuild.py" --assembler "$ASM" --rom "$YIEAR_ROM" \
-  --test-gpf "$WORK/YIEAR.GPF" --test-syms "$WORK/stub_syms.tcl" || exit 1
+  --keys --test-gpf "$WORK/YIEAR.GPF" --test-syms "$WORK/stub_syms.tcl" || exit 1
 
 sh "$HERE/kill_nodes.sh"
 touch "$WORK/stop_servers"
@@ -72,7 +73,7 @@ sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 node() {  # role port
   xs=""; [ "$1" = P1 ] && xs="$EXTRA_TCL"; [ "$1" = P2 ] && xs="$EXTRA_TCL_C"
-  PLAYNET_SYMS="$WORKW/stub_syms.tcl" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF PROG="PLAYNET yiear" \
+  MODE=${MODE:-0} KEYSEED=${KEYSEED:-1} PLAYNET_SYMS="$WORKW/stub_syms.tcl" ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF PROG="PLAYNET yiear" \
   MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
   timeout ${NODETMO:-1500} "$OMX" -machine Canon_V-25 -ext ram2mb -ext MSXPi -command "set renderer none" \
     -command "set msxpiserver_port $2" -command "set msxpirom_bank BANK2" \

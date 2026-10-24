@@ -25,9 +25,9 @@ Conventions for every step:
 | 2 | PLAYNET 3 (or 4, design D10): GPFs up to 8 KB, staged in page 2 | - | T0 vectors, T10 Soccer and Salamander regression | **Dropped**: the GPF is 1830 bytes and fits the 3 KB buffer (design 14) |
 | 3 | Yie Ar's rig (`run_yiear.sh`), and the package with Single only (no extension) | 1 | T3-T6 in Single: 3000 identical frames with lag and loss | Done on the rig (scripted, 3001 frames, lag and loss). Open: chat, link 2, TCP/IP scenarios, speed, sound |
 | 4 | The extension and the play-mode screen | 2, 3 | T3 through the menu, T7 the screen | Done (state 9). Open: "PLAYER 1 SELECTS", the start choice, a real screenshot |
-| 5 | Turn | 4 | T3 Turn, T8 | Done (4001 frames). Open: "PLAYER n GAME OVER", T8 against Single |
+| 5 | Turn | 4 | T3 Turn, T8 | Done (4001 frames). "PLAYER n GAME OVER" done (6002 frames). Open: T8 against Single |
 | 6 | Versus analysis: the five opponents' move tables | 1 | the tables, reviewed | Not done: one generic mapping replaced it for now (design 14) |
-| 7 | Versus | 4, 6 | T3 Versus, T9 | First version (4501 frames, both ends seen). Open: attack mapping, specials, jump, balance |
+| 7 | Versus | 4, 6 | T3 Versus, T9 | First version (4501 frames, both ends seen). Redone 2026-10-24: P2 lives, jump, key-press rig (7002 frames). Open: attack mapping, balance |
 | 8 | Publish: GPF, index, documents, chat and TCP/IP scenarios | 5, 7 | T0, T11, T10 | Partly (2026-10-24): `YIEAR.GPF`, `index.txt`, games README, `msxpirfh.bat`, `YIEAR-QUICKSTART.txt`, PROTOCOLS 6. Open: chat, mixed, TCP/IP scenarios |
 | 9 | Offline two-player ROM (later phase) | 7 | T12 | Not started |
 | 10 | Real hardware | 8 | T13 | Not started |

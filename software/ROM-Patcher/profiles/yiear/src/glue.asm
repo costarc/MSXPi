@@ -53,6 +53,7 @@ tMode:          defb    0                       ; 0 Single, 1 Turn, 2 Versus
 tCur:           defb    0                       ; the player who plays now (Turn)
 tOut:           defb    0, 0                    ; Turn: the player has no REST left
 tWin:           defb    0                       ; Versus: who won (1 = player 1 beat the fifth opponent, 2 = player 2)
+tLives2:        defb    3                       ; Versus: player 2's lives (player 1's are the game's REST)
 tBlk:           defs    TURN_N * 2              ; Turn: each player's saved block
 
 ; the second reader (4583h: title, demo and game-over screens) in place of its two hardware reads

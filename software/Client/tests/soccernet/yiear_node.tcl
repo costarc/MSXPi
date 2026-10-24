@@ -44,6 +44,53 @@ proc codeDiff {} {
     }
     return $d
 }
+
+# ---- the player: Tcl key presses on the keyboard matrix (the cursor keys and space are the game's joystick 1 on row 8),
+# chosen from the game's own state, so the same run drives every mode. MODE = the menu choice (0 Single, 1 Turn, 2 Versus),
+# KEYSEED = the play seed. Row 8: bit 0 space, 4 left, 5 up, 6 down, 7 right; row 7 bit 6 = SELECT (the second button).
+if {![info exists ::env(MODE)]} { set ::env(MODE) 0 }
+if {![info exists ::env(KEYSEED)]} { set ::env(KEYSEED) 1 }
+set ::keyMask 0
+set ::keyMask7 0
+set ::menuStep 0
+set ::menuUntil 0
+proc rnd {f} { return [expr {(($f * 1103515245 + 12345 + $::env(KEYSEED) * 7919 + ($::roleArg eq "P2" ? 99991 : 0)) >> 8) & 0xFFFF}] }
+proc setKeys {m8 m7} {
+    foreach {row old new} [list 8 $::keyMask $m8 7 $::keyMask7 $m7] {
+        set up [expr {$old & ~$new}]; set dn [expr {$new & ~$old}]
+        if {$up} { keymatrixup $row $up }
+        if {$dn} { keymatrixdown $row $dn }
+    }
+    set ::keyMask $m8; set ::keyMask7 $m7
+}
+proc drive {f} {
+    set st [peek 0xE000]; set sub [peek 0xE001]
+    set m8 0; set m7 0
+    if {$st != 9} { set ::menuStep 0 }
+    if {$st == 1 || $st == 0 || $st == 2} {
+        # the title or the demo: a tap on space now and then (player 1 only; the demo returns to the title by a key)
+        if {$::roleArg eq "P1" && ($f % 90) < 4} { set m8 1 }
+    } elseif {$st == 9} {
+        if {$::roleArg eq "P1" && $sub > 0} {
+            # the menu: tap down MODE times, then space; one tap = 4 frames down, 8 up
+            set phase [expr {$f % 12}]
+            if {$::menuStep < $::env(MODE)} {
+                if {$phase < 4} { set m8 64 } elseif {$phase == 4 && $::menuLast != 4} { incr ::menuStep }
+            } elseif {$phase < 4} { set m8 1 }
+            set ::menuLast $phase
+        }
+    } elseif {$st == 5} {
+        # a fight: a direction held for 6 frames at a time, the button or SELECT now and then
+        set r [rnd [expr {$f / 6}]]
+        set d [lindex {0 16 32 64 128 128 16 0 128 32} [expr {$r % 10}]]
+        set m8 $d
+        if {(($r >> 4) % 3) == 0 && ($f % 6) < 3} { set m8 [expr {$m8 | 1}] }
+        if {(($r >> 6) % 7) == 0 && ($f % 6) < 3} { set m7 64 }
+    }
+    if {$m8 != $::keyMask || $m7 != $::keyMask7} { setKeys $m8 $m7 }
+}
+set ::menuLast -1
+
 proc line {} {
     global tf sym started frames prevNf stopf
     if {$::ended} { return }
@@ -53,6 +100,7 @@ proc line {} {
     if {$nf < $prevNf} { incr frames 256 }
     set prevNf $nf
     set f [expr {$frames + $nf}]
+    drive $f
     puts $tf "$f [peek 0xE000] [peek 0xE001] [peek 0xE054] [format %02X [peek 0xE00A]] [hash512]"
     if {[info exists ::env(POKEF)] && $::roleArg eq "P1" && $f >= $::env(POKEF) && !$::poked} { set ::poked 1; poke 0xE161 [expr {[peek 0xE161] ^ 0x10}]; puts $tf "# poked Oolong at frame $f" }
     if {[info exists ::env(EXITF)] && $::roleArg eq "P2" && $f >= $::env(EXITF)} { exit }

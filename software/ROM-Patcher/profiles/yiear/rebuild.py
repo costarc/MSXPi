@@ -35,7 +35,7 @@ STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu',
-            'tMode', 'tCur', 'tOut', 'tBlk')
+            'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tBlk')
 
 
 def assemble(assembler, engine, scripted, out_dir):
@@ -66,6 +66,8 @@ MENU = (('STR_PUSH', 16, 9, 'PUSH SPACE KEY'),           # the title's own line 
         ('STR_SINGLE', 15, 12, 'SINGLE'), ('STR_TURN', 17, 12, 'TURN'), ('STR_VERSUS', 19, 12, 'VERSUS'),
         ('STR_HUD1', 2, 12, 'PLAYER 1'), ('STR_HUD2', 2, 12, 'PLAYER 2'),       # in the fight, on the blank row under the HUD
         ('STR_PS1', 14, 12, 'PLAYER 1'), ('STR_PS2', 14, 12, 'PLAYER 2'),
+        ('STR_OUT1', 3, 7, 'PLAYER 1 GAME OVER'), ('STR_OUT2', 3, 7, 'PLAYER 2 GAME OVER'),
+        ('STR_LIVES', 2, 12, 'P2 REST 3'),
         ('STR_WIN1', 13, 9, 'PLAYER 1 WINS'), ('STR_WIN2', 13, 9, 'PLAYER 2 WINS'))   # Versus: over the game-over screen
 
 
@@ -76,7 +78,7 @@ def assemble_ext(assembler, symbols, out_dir, work=None):
     if work:
         src = Path(work)
         shutil.copyfile(HERE / 'src/ext.asm', src / 'ext.asm')
-    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tBlk')
+    names = ('PN_P1', 'PN_P2', 'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tBlk')
     (src / 'stub_syms.inc').write_text(''.join('%s: EQU 0x%04X\n' % (n, symbols[n]) for n in names))
     lines = ['; written by rebuild.py: the menu texts in the game encoding\n']
     for name, row, column, string in MENU:
@@ -111,7 +113,8 @@ def make_profile(stub, symbols, ext):
     patch(0x409C, 'cd7140', b'\xcd' + word('dispatch'), 'State dispatch -> the extension: state 9, the play-mode screen')
     patch(0x45AD, '03', b'\x09','The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)')
     patch(0x4248, '3a54e0', b'\xcd' + word('bonus'), 'Opponent beaten: Versus has no bonus stage')
-    patch(0x4284, '3a56e0', b'\xc3' + word('vsWin'), 'Fifth opponent beaten: in Versus player 1 wins and the match ends')
+    patch(0x423E, '2150e0', b'\xcd' + word('vsBeaten'),
+          "Opponent beaten: in Versus player 2 loses a life (none left: player 1 wins); the game's REST + 1 goes nowhere")
     patch(0x7338, '3a81e1', b'\xc3' + word('vsDecide'),
           'The opponent is idle and decides (all five AI routines come here): in Versus player 2 decides')
     patch(0x4132, 'cda342', b'\xcd' + word('newGame'), 'New game: Turn copies the fresh block to both players')
@@ -171,9 +174,10 @@ def write_syms(path, symbols, stub):
     Path(path).with_suffix('.bin').write_bytes(stub)              # the stub, for the rig's code check
 
 
-def test_build(assembler, engine, gpf_path, syms_path):
+def test_build(assembler, engine, gpf_path, syms_path, keys=False):
+    """keys: the release stub (the player is the rig's Tcl key presses); else the scripted-input stub."""
     with tempfile.TemporaryDirectory() as out:
-        stub, symbols = assemble(assembler, engine, True, out)
+        stub, symbols = assemble(assembler, engine, not keys, out)
         ext, ext_symbols = assemble_ext(assembler, symbols, out, out)
     profile = make_profile(stub, {**symbols, **ext_symbols}, ext)
     profile['id'] = 'yiear-msxpi-netplay-test'
@@ -210,10 +214,11 @@ if __name__ == '__main__':
     parser.add_argument('--rom', type=Path, help="the player's KUNG-FU.ROM, to check the patches against")
     parser.add_argument('--syms', type=Path, help="also write the release stub's symbols as Tcl, for the rig")
     parser.add_argument('--test-gpf', type=Path, help='write a scripted-input test GPF here instead of publishing')
+    parser.add_argument('--keys', action='store_true', help='with --test-gpf: no scripted input (the rig presses keys)')
     parser.add_argument('--test-syms', type=Path, help='with --test-gpf: the stub symbols as Tcl (set ::sym(..)), '
                                                        'and the stub itself beside it (.bin)')
     args = parser.parse_args()
     if args.test_gpf:
-        test_build(args.assembler, args.engine, args.test_gpf, args.test_syms)
+        test_build(args.assembler, args.engine, args.test_gpf, args.test_syms, args.keys)
     else:
         publish(args.assembler, args.engine, args.rom, args.syms)

@@ -185,3 +185,22 @@ the rig runs. Started: `yiear_debug/moves.tcl` (starts each opponent's actions 0
 codes). Findings so far: the action tables are at 6E5Bh, 6FFEh, 7302h, 772Ch and 79A3h (one per opponent, entries point at short pose
 scripts; poses 04/06/08/0A/0C are the attack poses, 7740h-7754h are shared); `screenshot` gives black images in these headless runs,
 so read poses from RAM (E184h) or dump VRAM as `menushot.tcl` does. The first run reached opponent 1 only (action 8 needs checking).
+
+## 2026-10-24, later still: the key-press rig and the new Versus (done)
+
+- **Rig (U8)**: `yiear_node.tcl` plays by Tcl key presses chosen from the game's own state (title taps, the menu choice `MODE` = 0 Single,
+  1 Turn, 2 Versus, random fights from `KEYSEED`); `run_yiear.sh` builds the release stub (`rebuild.py --keys --test-gpf`), so the
+  published code is what runs and a desync ends the game. `versus_test.tcl` and `turn_deaths.tcl` force wins and deaths at the same
+  ticks on both nodes.
+- **Versus (U1, U2, I1-I3)**: player 2 has its own lives (`tLives2`, 3), the match ends when either side has none; the second button
+  or UP alone is the jump attack; the fifth-opponent rule is gone. Design 15.1 has the details.
+- **Turn (U5)**: "PLAYER n GAME OVER" while a player is out, and the other player's fight goes on.
+- **Results** (two emulators on the MSXPi path, delay 6, 50 ms lag, 20 ms jitter, 8 % loss unless noted; frames compared are
+  identical in every run, no desync, 0 foreign writes into the stub): Single 3002 frames (no lag); Versus 5002 (random play) and 7002
+  (three forced wins: player 1 won with `tLives2` = 0; then forced deaths: player 2 won at REST = 0, three matches); Turn 6002 (out flags
+  11, the game over and the restart through the title and the menu).
+- **GPF** 1996 bytes, republished (`build_games.py`); ROM-Patcher tests pass.
+- **Not verified**: the new strings ("PLAYER n GAME OVER", "P2 REST n") on a real screen (screenshots are black in these runs: dump
+  VRAM as `menushot.tcl` does); which of the attacks 4/5/6 is high, middle or low (a human test); the balance; the chat, link 2, sound,
+  speed and exit-key scenarios (I4); opponent 2's weapon only through the jump attack.
+

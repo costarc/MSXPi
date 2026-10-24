@@ -29,13 +29,16 @@ TURN_N:         EQU     23                      ; the per-player block, E049h-E0
 BLOCK:          EQU     $E049
 REST:           EQU     $E050
 OPPONENT:       EQU     $E054
+DUMMY:          EQU     $E483                   ; where Versus sends the game's REST + 1
+LIVES2:         EQU     3                       ; player 2's lives in Versus
+LIVES_AT:       EQU     2 + 8                   ; the digit in STR_LIVES (the address word, then "P2 REST ")
 
 ; 409Ch: call 4071h -> call dispatch. A = the state. States 0-8 go on to the game's dispatcher with the stack untouched.
 dispatch:
         cp      9
-        jr      z,.menu
-        cp      5                               ; a fight in Turn: whose turn it is, once in a while
-        jr      z,.fight
+        jp      z,.menu
+        cp      5                               ; a fight in Turn or Versus: the HUD, once in a while
+        jp      z,.fight
         cp      7                               ; the game-over screen of a Versus match: who won
         jp      nz,OLD_DISPATCH
         push    af
@@ -50,13 +53,43 @@ dispatch:
         jr      .say
 .fight: push    af
         ld      a,(MODE)
-        cp      1
+        or      a
+        jr      z,.old
+        ld      a,(FRAME)
+        and     15
         jr      nz,.old
-        ld      de,STR_HUD1
+        push    bc
+        push    de
+        push    hl
+        ld      a,(MODE)
+        cp      2
+        jr      z,.vsh
+        ld      de,STR_HUD1                     ; Turn: whose turn it is...
         ld      a,(tCur)
         or      a
-        jr      z,.say
+        jr      z,.t1
         ld      de,STR_HUD2
+.t1:    call    PRINT
+        ld      a,(tOut)                        ; ...and who is out (the game goes on for the other player)
+        or      a
+        jr      z,.t2
+        ld      de,STR_OUT1
+        call    PRINT
+.t2:    ld      a,(tOut+1)
+        or      a
+        jr      z,.fin
+        ld      de,STR_OUT2
+        call    PRINT
+        jr      .fin
+.vsh:   ld      a,(tLives2)                     ; Versus: player 2's lives
+        add     a,$10
+        ld      (STR_LIVES + LIVES_AT),a
+        ld      de,STR_LIVES
+        call    PRINT
+.fin:   pop     hl
+        pop     de
+        pop     bc
+        jr      .old
 .say:   ld      a,(FRAME)
         and     15
         jr      nz,.old
@@ -154,7 +187,12 @@ item:   ld      a,(CURSOR)
 newGame:
         call    $42A3
         ld      a,(MODE)
-        cp      1
+        cp      2
+        jr      nz,.nv
+        ld      a,LIVES2
+        ld      (tLives2),a                     ; Versus: player 2's lives (player 1's are the game's REST)
+        ret
+.nv:    cp      1
         ret     nz
         xor     a
         ld      (tCur),a
@@ -250,13 +288,24 @@ vsDecide:
         jp      $733B
 .vs:    ld      a,(PN_P2)
         ld      b,a
+        bit     5,b                             ; the second button: the opponent's jump attack
+        jr      nz,.jump
         bit     4,b                             ; trigger / space: an attack, by the direction held
-        jr      z,.walk
+        jr      z,.nobtn
         bit     0,b
         jp      nz,$7458                        ; up + trigger
         bit     1,b
         jp      nz,$7450                        ; down + trigger
         jp      $7454
+.nobtn: bit     0,b                             ; up alone: jump
+        jr      z,.walk
+.jump:  ld      a,(OPPONENT)
+        ld      e,a
+        ld      d,0
+        ld      hl,JUMPS
+        add     hl,de
+        ld      a,(hl)
+        jp      $7429                           ; start that action (a pose script with the airborne flag)
 .walk:  ld      a,(FRAME)
         and     WALK_MASK
         jr      nz,.stand
@@ -282,14 +331,21 @@ bonus:  ld      a,(MODE)
         xor     a
         ret
 
-; 4284h: ld a,(E056h) -> jp vsWin. The fifth opponent is beaten (E054h has just wrapped to 0). In Versus the match ends:
-; player 1 wins, through the game's own game-over path (state 6 with no REST), which keeps the high score and the title.
-vsWin:  ld      a,(MODE)
+; 423Eh: ld hl,E050h (then inc (hl): REST + 1) -> call vsBeaten. The opponent is beaten. In Versus player 2 loses a life and the
+; game's REST + 1 goes to a dummy byte instead of player 1; when player 2 has no life left, player 1 wins: through the game's own
+; game-over path (state 6 with no REST), which keeps the high score and the title.
+vsBeaten:
+        ld      hl,REST
+        ld      a,(MODE)
         cp      2
-        jr      z,.vs
-        ld      a,($E056)
-        jp      $4287
-.vs:    ld      a,1
+        ret     nz
+        ld      hl,DUMMY
+        ld      a,(tLives2)
+        dec     a
+        ld      (tLives2),a
+        ret     nz
+        pop     hl                              ; no life left: the routine's own ending is not run
+        ld      a,1
         ld      (tWin),a
         xor     a
         ld      (REST),a
@@ -298,6 +354,9 @@ vsWin:  ld      a,(MODE)
         ld      a,6
         ld      (STATE),a
         ret
+
+; the airborne action of each opponent (the pose script with the 10h flag, found in each opponent's action table)
+JUMPS:  defb    3, 3, 4, 4, 0
 
 ; HL = player A's saved block
 blockOf:
