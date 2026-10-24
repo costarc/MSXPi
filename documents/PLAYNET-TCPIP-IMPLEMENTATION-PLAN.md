@@ -318,3 +318,24 @@ F after the matrix and the gated hardware cells
 ```
 
 Rig runs cannot overlap (fixed ports), so B2, B3 and B4 can be written in parallel but must be run one at a time.
+
+## 6. Status (updated as tasks land; newest facts first)
+
+| Task | State | Evidence |
+|---|---|---|
+| A1 | Done | `rig_preflight.py`. **The rig ROM is `software/target/msxpi32k.rom`** (32 KB, sha1 `50096592`) installed as `msxpibios.rom`; `target/msxpibios.rom` is only its 16 KB lower half and breaks every TCP/IP run |
+| A2 | Done | `TCP=1 run_salamander.sh 1500`: 1501 frames IDENTICAL |
+| A3 | Done | documents corrected; the 4b note says only what was reproduced |
+| A4 | Done | `MCHAT_LINK=tcp MCHAT_FORCE1=1 python mchat_openmsx.py`: 10/10 checks on the NAT link, no TAP |
+| B1 | Done | Yie Ar merged; `build_games.py --check` clean |
+| B2 | Runs done | Ping Pong 1200 frames IDENTICAL: mixed, link 1, link 2, mixed hybrid. Soak on link 1 (`40 5 40000 15`) in progress |
+| B3 | Partly | the Yie Ar branch's own rig covers `SCENARIO=both`/`tcp`/`chat`; mixed and hybrid cells to run |
+| B4 | Runner ready | `run_salamander.sh` gains `BOTH=1`, `HYBRID=1`, `EXT1`; runs queued |
+| C1 | Done | measured TPA tops (PROTOCOLS 10.2): D406h MSX-DOS 1, C806h own-drive MSX-DOS 1.8, D706h Nextor. Soccer, Ping Pong, Yie Ar fit all; **Salamander does not fit the own-drive machine: decision D-6 is open** |
+| C1a | Not needed | a window cannot help Salamander (its game RAM is all of C000h-CFFFh); see D-6 |
+| C2 | Done | `tests/test_profiles.py` |
+| C3 | Investigated, deferred | the transports never use `tBuf`; the loader sets the overlay's buffer to area+384 (`playnet_tcp.asm`). Moving it to D3 under the stack is a loader-only change but needs the stack depth under the TPA top measured; nothing needs the 128 bytes yet |
+| C4 | Done | `netplay.requires` / GPF header byte 99; only SALAMAND.GPF changed |
+| C5 | Done | PROTOCOLS 4.6, 4.8, 4.9, 4.10 |
+| D5 | Done | LAN filter in `msxpi_eth.py`, `tests/test_ethfilter.py` |
+

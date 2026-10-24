@@ -15,6 +15,8 @@
 #            WSL's openMSX (nextor_folder.sh); RAMHELPR I, INL I on its server's user-mode UDP link (10.0.2.15), then
 #            PLAYNET /T salamand P2 5102 10.0.2.2:5101. Its memory: EXT2 (ram2mb) behind a slot expander: the
 #            MegaFlashROM's own 512 KB mapper is too small with Nextor, RAMHELPR and INL in it.
+#   BOTH=1   (with TCP=1) P1 too over the TCP/IP UNAPI (its own Nextor image; EXT1 = its memory, default ram2mb).
+#   HYBRID=1 (with TCP=1) the TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2). PNOPTS = more PLAYNET /T options.
 #   EXITKEY=n  P2 presses the exit key (Ctrl+Shift+F5) at frame n: both games end; with CHAT both must be back in
 #            MCHAT (each MSXPi saw "playnet restore", then "mchat start"). Set the frames above n.
 #   CHAT=1   the players meet in MCHAT (software/target/mchat.com, against a local IRC server): alice (P1) invites bob
@@ -64,20 +66,24 @@ INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SALAMANDER_ROM" SALAMAND.ROM > /dev/null || exit 1
   [ -z "$CHAT" ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null || exit 1
 done
-if [ -n "$TCP" ]; then                  # P2's hard disk: C:\PLAYNET
-  D="$WORK/hdplaynet"; rm -rf "$D"; mkdir -p "$D"
+# the TCP/IP nodes' hard disks: C:\PLAYNET (P2; also P1 with BOTH=1)
+for n in 2 1; do
+  [ -n "$TCP" ] || break
+  [ $n = 2 ] || [ -n "$BOTH" ] || continue
+  D="$WORK/hdplaynet$n"; rm -rf "$D"; mkdir -p "$D"
   cp "$SRC/build/PLAYNET.COM" "$SRC/build/PLAYNET.OVL" "$WORK/SALAMAND.GPF" "$ROOT/software/UNAPI/bin/INL.COM" \
     "$ROOT/software/UNAPI/bin/RAMHELPR.COM" "$D/"
   cp "$SALAMANDER_ROM" "$D/SALAMAND.ROM"
   printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$D/INL.CFG"
-  sh "$HERE/nextor_folder.sh" "${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}" "$WORKW/nextor_P2.dsk" \
+  sh "$HERE/nextor_folder.sh" "${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}" "$WORKW/nextor_P$n.dsk" \
     "$(cd "$D" && pwd -W)" PLAYNET || exit 1
-fi
+done
 PROFHASH=$(python -c "import struct,sys; print('%08x' % struct.unpack('<I', open(sys.argv[1],'rb').read()[8:12])[0])" "$WORK/SALAMAND.GPF")
 rm -f "$WORK/stop_servers"
 start() {  # n port local_udp peer_udp
   net="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"   # TCP=1: P2's server is INL's network link
-  [ -n "$TCP" ] && [ $1 = 2 ] && net="MSXPI_ETH_LINK=udpnat"
+  # a TCP/IP node's server is INL's network link; with HYBRID=1 it also runs the node's own session (link 2)
+  [ -n "$TCP" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && { net="MSXPI_ETH_LINK=udpnat"; [ -z "$HYBRID" ] || net="$net MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; }
   [ -n "$CHAT" ] && net="PCHESS_IRC_HOST=127.0.0.1 PCHESS_IRC_PORT=$IRC_PORT PCHESS_IRC_TLS=0 MSXPI_NETPLAY_LAN=127.0.0.1 MSXPI_NETPLAY_NOSTUN=1"
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
@@ -95,10 +101,15 @@ sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 node() {  # role port ext
   hw="-ext $3"; hd="set mute on"; boot=
-  if [ -n "$TCP" ] && [ $1 = P2 ]; then
-    hw="-ext MegaFlashROM_SCC+_SD -ext slotexpander -ext ${EXT2:-ram2mb}"; hd="hdb {$WORKW/nextor_P2.dsk}"; boot=nextor
+  cmd=
+  if [ -n "$TCP" ] && { [ $1 = P2 ] || [ -n "$BOTH" ]; }; then
+    ext=$([ $1 = P2 ] && echo "${EXT2:-ram2mb}" || echo "${EXT1:-ram2mb}")
+    hw="-ext MegaFlashROM_SCC+_SD -ext slotexpander -ext $ext"; hd="hdb {$WORKW/nextor_$1.dsk}"; boot=nextor
+    if [ -n "$HYBRID" ]; then cmd="PLAYNET /T /H $PNOPTS salamand $1"       # link 2: the game's packets through the node's MSXPi
+    elif [ $1 = P2 ]; then cmd="PLAYNET /T $PNOPTS salamand P2 5102 10.0.2.2:5101"
+    else cmd="PLAYNET /T $PNOPTS salamand P1 5101 10.0.2.2:5102"; fi
   fi
-  EXITKEY=$EXITKEY CHAT=$CHAT PLAY_AT=${PLAY_AT:-60} ACCEPT_AT=${ACCEPT_AT:-75} BOOT=$boot PLAYNET_SYMS="$WORKW/stub_syms.tcl" STUB_BIN="$(cd "$PKG" && pwd -W 2>/dev/null || echo "$PKG")/assets/stub.bin" \
+  CMD="$cmd" EXITKEY=$EXITKEY CHAT=$CHAT PLAY_AT=${PLAY_AT:-60} ACCEPT_AT=${ACCEPT_AT:-75} BOOT=$boot PLAYNET_SYMS="$WORKW/stub_syms.tcl" STUB_BIN="$(cd "$PKG" && pwd -W 2>/dev/null || echo "$PKG")/assets/stub.bin" \
   ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF MENU=${MENU:-dual} SEED=${SEED:-0} MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
   timeout ${NODETMO:-1800} "$OMX" -machine Canon_V-25 $hw -ext MSXPi -command "$hd" \
     -command "set msxpiserver_port $2" -command "set msxpirom_bank BANK2" \
