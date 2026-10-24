@@ -155,6 +155,11 @@ only part of the game have been wrong before. Record:
 - the lowest address its stack reaches (the stack is game RAM too),
 - the free ranges. The stub and the transport area go in one of them.
 
+The **transport area** is 512 bytes (`TRANSPORT_AREA_MIN`) in page 3, outside `game_ram` and the stub, and its end must lie below MSX-DOS's
+TPA top with a TCP/IP stack loaded: C806h on a machine with a drive of its own, D406h on MSX-DOS 1 over the MSXPi, D706h on Nextor (10.2).
+One area serves every link: the profile never names a link or a transport. `build_games.py` prints a note for each measured set-up
+where the area does not fit; Soccer, Ping Pong and Yie Ar (C500h) fit them all.
+
 If a RAM clear covers the only free space, shorten it with a patch (the Soccer package does this) and measure again.
 
 ### 4.7 Write the glue
@@ -192,16 +197,22 @@ The engine owns the lockstep exchange, the stall, the input delay and the desync
 
 Patches are written as **file offsets** with the **expected original bytes** (for a ROM at 4000h, file offset = CPU address - 4000h).
 The `netplay` section says where the stub goes and what PLAYNET needs. See Part II, 7, and the complete example in section 5.
+`netplay.requires` lists what the game needs from the machine (today `mapper-ram`), never a link.
 
 ### 4.9 Test
 
 1. `python patch_rom.py --profile profiles/<id>/profile.json --gpf <ID>.GPF ROM` validates the package against your ROM, checks every
    expected byte and writes the GPF.
-2. **Scripted pair**: build the stub with scripted inputs (`-DSCRIPTED`) and run two openMSX instances on the test rig
-   (`software/Client/tests/soccernet/run_native.sh`, to be generalised). Compare the two machines frame by frame. Then repeat with
-   lag, jitter and packet loss.
-3. **Mixed pair**: one node over the MSXPi, one over TCP/IP UNAPI.
-4. **Through the chat**: invite, play, Ctrl+Shift+F5, and check that both machines return to the chat.
+2. **Install the rig's ROM**: openMSX must load the branch's 32 KB `software/target/msxpi32k.rom`, installed as
+   `Documents/openMSX/share/systemroms/extensions/msxpibios.rom` (not `target/msxpibios.rom`, its 16 KB lower half). Every runner starts
+   with `rig_preflight.py`, which stops with the install command when it is not.
+3. **Scripted pair on every link** (`software/Client/tests/soccernet/run_native.sh`, `run_pingpong.sh`, `run_yiear.sh`,
+   `run_salamander.sh`): build the stub with scripted inputs (`-DSCRIPTED`) and run two openMSX instances. Compare the two machines frame
+   by frame, with the same GPF on each link: link 0 (both on the MSXPi), link 1 (`SCENARIO=mixed BOTH=1`, both over TCP/IP), link 2
+   (`BOTH=1 HYBRID=1`, the game's packets through the MSXPi) and a mixed pair (`SCENARIO=mixed`, one on the MSXPi, one over TCP/IP).
+   Then repeat with lag, jitter and packet loss.
+4. **Through the chat**: invite, play, Ctrl+Shift+F5, and check that both machines return to the chat, on the MSXPi (`SCENARIO=chat`) and
+   over TCP/IP (`SCENARIO=tcp`, with and without `GAMELINK1=1`).
 5. **Real hardware**, when you can.
 
 A package is accepted when the scripted pair stays identical over at least 3000 frames (through a full match), with 50 ms lag, 20 ms
@@ -211,7 +222,8 @@ jitter and 8 % loss, and no desync is reported.
 
 Open a pull request that adds `profiles/<id>/` (no ROM data in it), the compiled GPF under `software/target/games/`, and its line in
 `index.txt`. `python software/ROM-Patcher/build_games.py` writes both, and `--check` (run by `tests/test_gpf.py`) fails when the
-folder is out of date. On a Pi, `update.sh` fetches `index.txt` and then only the listed GPFs whose SHA-256 changed. It checks each
+folder is out of date. `tests/test_profiles.py` fails when the profile's engine copy differs from `software/Client/src/playnet/engine/` or
+its published `stub.bin` is not what `rebuild.py` makes. On a Pi, `update.sh` fetches `index.txt` and then only the listed GPFs whose SHA-256 changed. It checks each
 file and replaces it whole, and never touches unlisted files, so a player's own `<ID>.GPF` in `games/` survives. The player-facing
 instructions are in `software/target/games/README.md`. Any change to the package changes its CRC. Players on the old version are then told to update instead of being allowed
 into a game that would drift.
