@@ -189,6 +189,47 @@ class BaseLink(object):
         self.filters = 0x06
         self.dropped = 0
         self.running = True
+        # A real LAN delivers every broadcast, multicast and neighbour's frame to the TAP device; the MSX cannot afford to
+        # fetch them (PLAYNET-TCPIP-PERFORMANCE.md D5). Only the TAP links turn this on.
+        self.lan_filter = os.environ.get("MSXPI_ETH_FILTER", "1") != "0"
+        self.lan_filter_active = False
+        self.filtered = 0
+        self.msx_ip = None
+
+    # --- LAN filter -----------------------------------------------------------
+
+    def learn(self, frame):
+        """Note the MSX's IP address from a frame it sends (the Pi is not told it)."""
+        if len(frame) < 34 or frame[6:12] != self.mac:
+            return
+        et = (frame[12] << 8) | frame[13]
+        if et == 0x0806 and len(frame) >= 42:
+            self.msx_ip = bytes(frame[28:32])                  # ARP sender protocol address
+        elif et == 0x0800 and frame[26:30] != bytes(4):
+            self.msx_ip = bytes(frame[26:30])                  # IPv4 source
+
+    def wanted(self, frame):
+        """Is this received frame one the MSX would use? Its own MAC; ARP for its IP; DHCP. Not other hosts' unicast,
+        not multicast, not other broadcasts. ETH_FILTERS promiscuous (bit 4) takes everything, 'accept broadcast' (bit 2) is
+        required for the broadcasts."""
+        if self.filters & 0x10:
+            return True
+        if len(frame) < 14:
+            return False
+        dst = bytes(frame[0:6])
+        if dst == self.mac:
+            return True
+        if dst != bytes([255]) * 6 or not self.filters & 0x04:
+            return False
+        et = (frame[12] << 8) | frame[13]
+        if et == 0x0806:                                       # ARP request or announcement
+            return len(frame) >= 42 and (self.msx_ip is None or bytes(frame[38:42]) == self.msx_ip)
+        if et == 0x0800 and len(frame) >= 38 and frame[23] == 17:   # UDP
+            ihl = (frame[14] & 0x0F) * 4
+            if len(frame) >= 14 + ihl + 4:
+                port = (frame[14 + ihl + 2] << 8) | frame[14 + ihl + 3]
+                return port in (67, 68)                        # DHCP
+        return False
 
     # --- receive side -------------------------------------------------------
 
@@ -198,6 +239,9 @@ class BaseLink(object):
             return
         if len(frame) > MAX_FRAME:
             self.dropped += 1
+            return
+        if self.lan_filter and self.lan_filter_active and not self.wanted(frame):
+            self.filtered += 1
             return
         # Stand in for the sending NIC that a TAP device does not have.  Done
         # here rather than at pop() so that the length ETH_IN_STATUS reports
@@ -294,6 +338,7 @@ class TapLink(BaseLink):
         BaseLink.__init__(self, *a, **kw)
         import fcntl
         self.ifname = ifname
+        self.lan_filter_active = True
         self.fd = os.open("/dev/net/tun", os.O_RDWR)
         ifr = struct.pack("16sH", ifname.encode(), self.IFF_TAP | self.IFF_NO_PI)
         fcntl.ioctl(self.fd, self.TUNSETIFF, ifr)
@@ -421,6 +466,7 @@ class WinTapLink(BaseLink):
         BaseLink.__init__(self, *a, **kw)
         import ctypes
         import ctypes.wintypes as wintypes
+        self.lan_filter_active = True
         self._ctypes = ctypes
         self._wintypes = wintypes
 
@@ -838,6 +884,7 @@ class EthShuttle(object):
             out = out + b"\x00" * (PAD_TO - len(out))
         out = out + struct.pack("<I", eth_crc32(out))
 
+        self.link.learn(body)
         ok = self.link.transmit(out)
         self._write(ETH_RC_OK if ok else ETH_RC_ERR)
 
