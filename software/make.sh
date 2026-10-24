@@ -34,7 +34,7 @@ prog="${1:?Usage: make.sh program [output-directory]}"
 # Programs already ported to SDCC 4.6's own calling convention (sdcccall 1); keep in step with
 # ABI1_PROGRAMS in make.bat. Any other program still mixes conventions and the link guard below
 # refuses it unless SDCC_ALLOW_ABI_MIX=1 (only for software/tools/abi_bytecmp.py).
-ABI1_PROGRAMS="templatc mchat"
+ABI1_PROGRAMS="templatc mchat pcopy p nitros"
 abi1=0
 for p in $ABI1_PROGRAMS; do [[ "$p" == "$prog" ]] && abi1=1; done
 out="${2:-$here/target}"

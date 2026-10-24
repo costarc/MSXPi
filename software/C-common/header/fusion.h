@@ -65,6 +65,18 @@
 #define WaitForKey WaitKey
 #define KeyboardHit Inkey
 
+/* palette: SetSC5Palette takes the table on the stack, 16 entries */
+typedef struct {
+    unsigned char colour;
+    unsigned char R;
+    unsigned char G;
+    unsigned char B;
+} ColRGB;
+
+typedef struct {
+    ColRGB rgb[16];
+} Palette;
+
 typedef struct {
     unsigned char drive_no;
     unsigned char name[8];
@@ -107,6 +119,8 @@ void Width(char n);
 unsigned int ReadTPA(void);
 
 /* Assembler: stack arguments, result in L/HL */
+void SetSC5Palette(Palette *palette) __sdcccall(0);
+void RestoreSC5Palette(void) __sdcccall(0);
 void Cls(void) __sdcccall(0);
 void PrintChar(char c) __sdcccall(0);
 void Locate(char x, char y) __sdcccall(0);

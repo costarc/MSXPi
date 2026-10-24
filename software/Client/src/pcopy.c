@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../C-common/header/fusion_hdr.h"
 #include "../../C-common/header/msxpi.h"
 
 // Longest source or target argument kept, terminator included.
