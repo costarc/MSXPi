@@ -101,6 +101,13 @@ class ServerUpdateTests(unittest.TestCase):
             self.assertEqual(sent[-1], b'Pi:Error - bad branch name')
             self.assertEqual(system._update_branch, 'master')   # a bad name changes nothing
 
+    def test_branch_survives_a_server_restart_through_drivem(self):
+        system._update_branch = 'master'            # a restarted server has forgotten it
+        with patch.object(system, 'getMSXPiVar', return_value='https://github.com/costarc/MSXPi/raw/feature/x/software/target'):
+            get, run = self.run_update(None)
+        self.assertIn('MSXPi/feature/x/software/Server/Setup', get.call_args[0][0])
+        self.assertIn('/MSXPi/feature/x/software', run.call_args[1]['env']['MSXPI_UPDATE_BASE'])
+
     def test_windows_gets_the_branch_switch(self):
         _, run = self.run_update('dev/x', host='Windows')
         cmd = run.call_args[0][0]

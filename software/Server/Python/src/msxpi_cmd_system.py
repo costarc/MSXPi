@@ -384,6 +384,23 @@ def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
     return None, why
 
 
+def _current_branch() -> str:
+    """The branch "p update" works on: the one "p setbranch" chose.
+
+    "p setbranch" also saves DriveM (msxpi.ini) pointing at the branch, and
+    that survives a server restart where the variable above does not: on a Pi
+    "p restart" is asynchronous, so the restart can land after "p setbranch"
+    and leave the MSX files coming from the branch and the server from master.
+    """
+    if _update_branch != "master":
+        return _update_branch
+    try:
+        m = re.match(r"https://github\.com/costarc/MSXPi/raw/(.+)/software/target$", getMSXPiVar("DriveM") or "")
+    except Exception:
+        m = None
+    return m.group(1) if m and _branch_name(m.group(1)) else "master"
+
+
 def setbranch(parm: Optional[str] = None) -> CommandResult:
     """Choose the git branch the MSX updates from; no name means master.
 
@@ -427,10 +444,11 @@ def update(parm: Optional[str] = None) -> CommandResult:
     "p restart" next (a Pi's msxpi-monitor, or _restart_windows(), brings it
     back); anywhere else the user restarts it.
     """
-    branch = _branch_name(parm) if (parm or "").strip() else _update_branch
+    current = _current_branch()
+    branch = _branch_name(parm) if (parm or "").strip() else current
     if branch is None:
         return "Pi:Error - bad branch name"
-    if branch != _update_branch:
+    if branch != current:
         branch, why = _resolve_branch(branch)
         if branch is None:
             return f"Pi:Error - {why}"
