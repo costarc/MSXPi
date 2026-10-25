@@ -348,6 +348,29 @@ If step 0 shows channel traffic costing frames: before typing `PLAYNET /T`, `MCH
 reads the IRC connection only every 2 s instead of every 0.5 s. A server's ping timeout is minutes, so that is safe. Leaving the channels during the game
 would be the stronger fix, but other players would see the player leave. Decide only on numbers.
 
+#### 5.6a Measured: the chat connection during a game (D1a)
+
+Soccer, 1000 frames after the set-up screens, `run_native.sh SCENARIO=tcp` (link 1: `GAMELINK1=1`; link 2: without), MCHAT /T started
+the game; K=3 on link 1, K=1 on link 2. `irc_fixture_server.py` sends the load once the game starts (`IRC_RATE` lines a second, `IRC_BURST`
+lines every 10 s) and pings every 3 s. Baseline "no IRC" = `SCENARIO=mixed BOTH=1` (and `HYBRID=1`), started by hand, no IRC connection.
+Frames were IDENTICAL on both machines in all 12 runs and no client was dropped. ms in `XCHG` per frame is in emulated time (the host's load
+does not move it); fps is the node's emulated frame rate.
+
+| Chat load during the game | Link 1 ms/frame | Link 1 fps | Link 2 ms/frame | Link 2 fps |
+|---|---|---|---|---|
+| no IRC connection | 8.9 | 23.5 | 4.3 | 28.0 |
+| connected, quiet (PING every 3 s) | 13.2 | 22.7 | 5.4 | 23.2 |
+| 1 line a second | 18.0 | 21.2 | 7.4 | 25.0 |
+| 5 lines a second | 18.5 | 18.7 | 13.4 | 18.2 |
+| 20 lines a second | 19.1 | 20.7 | 11.3 | 22.7 |
+| 50 lines every 10 s | 18.8 | 18.5 | 12.4 | 19.3 |
+
+- On link 1 any traffic costs about 5 ms a frame whatever its rate, and the open connection alone about 4 ms (the stack's timer runs every
+  frame, `timi runs/frame` 0.5 -> 1.0). On link 2 the cost grows with the rate.
+- The fps column is noisy (host load, one run each: link 2's 1 line a second beats the quiet run); the ms column is the reliable one.
+- Result for D-5: dropping the connection gains 3-27 % fps on link 1 and 12-54 % on link 2. `AWAY` or `PART` do not remove the keep-alive
+  PINGs, which are the first 4 ms, so the connection itself has to go (`QUIT` before the game, reconnect on return).
+
 ### 5.7 Expected result
 
 Estimates per game frame, network work only, to be replaced by step 0's measurements:
