@@ -205,6 +205,17 @@ class Conformance(unittest.TestCase):
         self.bob.cmd('resumed 1')
         self.assertEqual(self.bob.said[-1], 'Game with alice ended (you ended it)')
 
+    def test_list_names_every_game(self):
+        """/games on a machine with the four PLAYNET games shows all of them (a long list goes on a second line)."""
+        for line in ('game pingpong Konami_Ping_Pong P1 P2 1', 'game salamand Salamander_(co-op) P1 P2 2',
+                     "game soccer Konami's_Soccer H C 3", 'game yiear Yie_Ar_Kung-Fu P1 P2 4'):
+            self.bob.cmd(line)
+        before = len(self.bob.said)
+        self.bob.cmd('list')
+        text = ' '.join(self.bob.said[before:])
+        for game_id in ('pingpong', 'salamand', 'soccer', 'yiear'):
+            self.assertIn(game_id, text)
+
 
 if __name__ == '__main__':
     unittest.main()

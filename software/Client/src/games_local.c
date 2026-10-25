@@ -150,8 +150,13 @@ void gl_list(void)
         return;
     }
     mp = msg; app("Games:");
-    for (i = 0; i < gl_ngames && mp - msg < (int)sizeof msg - 40; i++) {
-        app(i ? ", " : " ");
+    for (i = 0; i < gl_ngames; i++) {
+        if (mp - msg > (int)sizeof msg - 40) {      /* an entry is at most 37 bytes: a long list goes on a second line, none is dropped */
+            gl_say(msg);
+            mp = msg;
+            app(" ");
+        } else
+            app(i ? ", " : " ");
         app(gl_games[i].id);
         app(" (");
         app(gl_games[i].title);
