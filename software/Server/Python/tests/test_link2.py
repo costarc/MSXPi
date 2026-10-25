@@ -84,19 +84,33 @@ class Faults(unittest.TestCase):
                 tally, bad = F.sweep(direction, pattern(n, n), size)
                 self.assertEqual(dict(tally), {"OK": sum(tally.values())}, (direction, n, bad[:5]))
 
+    def test_slip_everywhere(self):
+        """One MSX transfer that the Pi never sees, at every position, both ways:
+        always a reported abort or success, never a hang, and the next command
+        works within three tries.  (600 bytes in 256-byte blocks: the full sweep
+        in link2_faults.py also runs 512 in one block, where one misaligned
+        block matches its CRC by chance - design 3.7, known limit.)"""
+        import link2_faults as F
+        for direction in ("msx2pi", "pi2msx"):
+            tally, bad = F.sweep_slip(direction, pattern(600, 600), 256)
+            self.assertEqual(bad, [], (direction, dict(tally)))
+
     def test_no_wait_msx(self):
         import link2_faults as F
         tally, bad = F.sweep("pi2msx", pattern(512, 5), 8192, has_wait=False)
         self.assertEqual(list(tally), ["OK"], bad[:5])
 
     def test_random_multibit(self):
-        """Faults of up to 3 bits per byte, at a rate that hits most blocks: nothing
-        may land wrong, and nothing may hang."""
+        """Faults of up to 3 bits per byte, at rates that hit most blocks: nothing
+        may land wrong, and nothing may hang.  LINK2_SLOW=1 runs the test plan's
+        10,000 transfers (about 17 minutes); the default is 300."""
         import random as R
         verdicts = {"OK": 0, "ABORT": 0, "CORRUPT": 0, "HUNG": 0}
-        for seed in range(150):
+        seeds = 5000 if os.environ.get("LINK2_SLOW") == "1" else 150  # x2 directions
+        rates = (1e-3, 3e-3, 1e-2)
+        for seed in range(seeds):
             r = R.Random(seed)
-            rate = (3e-3, 1e-2)[seed % 2]
+            rate = rates[seed % len(rates)]
             data = pattern(r.choice([100, 512, 1500, 3000]), seed)
 
             def hook(d, i, b):
@@ -108,10 +122,18 @@ class Faults(unittest.TestCase):
             for direction in ("msx2pi", "pi2msx"):
                 w = S.Wire(timeout=1.0)
                 w.hook = hook
+                results = []
+
+                def idle():
+                    # afterwards the server waits for commands, as the real one
+                    # does, instead of leaving the MSX talking to nobody
+                    while True:
+                        results.append(B.link_recv(65536))
+
                 if direction == "msx2pi":
-                    srv = S.Server(w, [lambda: B.link_recv(65536)]).start()
+                    srv = S.Server(w, [idle]).start()
                 else:
-                    srv = S.Server(w, [lambda: B.link_send(data)]).start()
+                    srv = S.Server(w, [lambda: B.link_send(data), idle]).start()
                 m = S.Msx(w, 1024)
                 got = res = None
                 try:
@@ -124,11 +146,11 @@ class Faults(unittest.TestCase):
                     verdict = "ABORT"
                 except S.Hung:
                     verdict = "HUNG"
-                srv.join(2)
                 w.close()
-                if direction == "msx2pi" and srv.results and srv.results[0][0] == C.RC_SUCCESS:
-                    if srv.results[0][1] != data:
-                        verdict = "CORRUPT"
+                srv.join(2)
+                accepted = [x[1] for x in results if x and x[0] == C.RC_SUCCESS]
+                if any(x != data for x in accepted):
+                    verdict = "CORRUPT"  # anything the server took must be the data
                 if direction == "pi2msx" and got is not None and got != data:
                     verdict = "CORRUPT"
                 verdicts[verdict] += 1
@@ -147,6 +169,7 @@ class Limits(unittest.TestCase):
         m = S.Msx(w, 8192)
         with self.assertRaises(S.MsxAborted) as cm:
             m.send(pattern(64))
+        m.wr(C.HELLO2)  # the next command: the server stops answering ABORT
         srv.join(2)
         w.close()
         self.assertIn("abort", str(cm.exception))
@@ -176,6 +199,7 @@ class Limits(unittest.TestCase):
         m = S.Msx(w, 512)
         with self.assertRaises(S.MsxAborted) as cm:
             m.send(pattern(1024))
+        m.wr(C.HELLO2)  # the next command: the server stops answering ABORT
         srv.join(2)
         w.close()
         self.assertIn("header", str(cm.exception))

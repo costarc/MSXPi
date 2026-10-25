@@ -64,6 +64,7 @@ from msxpi_const import (
     RC_PROTOERR,
     RC_READY,
     RC_SUCCESS,
+    READY,
 )
 
 BURST_BIT = 0x8000  # in the block length: this payload bursts
@@ -71,9 +72,21 @@ WAIT_BIT = 0x8000  # in the MSX's size word: this transfer may burst
 MAX_BLOCK = 0x7FFF
 
 
-def link_crc(data: bytes | bytearray, crc: int = 0) -> int:
-    """CRC-16/XMODEM (poly 0x1021, init 0, no reflection)."""
+# Init 0xFFFF, not 0 (CRC-16/XMODEM): with 0 an all-zero frame has CRC 0, so the
+# idle link - a hunting Pi offers 0x00 on every transfer - read as a valid empty
+# block by an MSX that had slipped out of step (the slip sweep, design 3.7).
+CRC_INIT = 0xFFFF
+
+
+def link_crc(data: bytes | bytearray, crc: int = CRC_INIT) -> int:
+    """CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection)."""
     return binascii.crc_hqx(bytes(data), crc)
+
+
+def _valid_type(typ: int) -> bool:
+    """A header type is RC_READY (more blocks follow) or another RC code (the
+    last block); anything else is not a header at all."""
+    return RC_SUCCESS <= typ <= RC_PROTOERR
 
 
 class TransportIO:
@@ -89,6 +102,10 @@ class TransportIO:
 
     def byte_out(self, b: int) -> int:
         return self.t.link_send_byte(b & 0xFF)[0]
+
+    def exchange(self, b: int) -> Tuple[int, Optional[int]]:
+        """Send b and return what the MSX sent in the same transfer."""
+        return self.t.link_send_byte(b & 0xFF)
 
     def read_payload(self, n: int):
         return self.t.SPI_ReadPayload(n)
@@ -129,6 +146,25 @@ class Transfer:
         self.next_seq = 0  # seq the receiver expects
         self.last_seq: Optional[int] = None  # last seq accepted (duplicate check)
         self.send_seq = 0  # seq the sender uses next
+
+
+def _abort_flood(o, count: int) -> None:
+    """ABORT, and keep answering ABORT.
+
+    A sender that slipped out of step (a transfer one side saw and the other did
+    not) reads its answer slots at the wrong place, and a single ABORT lands in a
+    slot it never reads.  Repeating it until the sender reaches an answer slot -
+    at most one block and its framing away - always hits one.  Stops as soon as
+    the MSX starts a new transfer: its HELLO2 or READY arrives in the same
+    transfers, so the next command is not held up.
+    """
+    for _ in range(count):
+        rc, b = o.exchange(LINK_ABORT)
+        if rc != RC_SUCCESS or b in (HELLO2, READY):
+            return
+
+
+FLOOD_MARGIN = 16  # framing bytes around a payload, with room to spare
 
 
 def _hdr(typ: int, length: int, seq: int) -> bytes:
@@ -177,7 +213,7 @@ def link2_accept() -> Tuple[int, Optional[Transfer]]:
             return RC_SUCCESS, Transfer(f[0] | (f[1] << 8), bool(flags))
         naks += 1
         if naks >= LINK2_RETRIES:
-            o.byte_out(LINK_ABORT)
+            _abort_flood(o, 5 + FLOOD_MARGIN)
             return RC_PROTOERR, None
         o.byte_out(LINK_NAK)
 
@@ -212,6 +248,7 @@ def link2_recv_block(
         send = answer if payload_phase else o.byte_out
         if naks >= LINK2_RETRIES:
             send(LINK_ABORT)
+            _abort_flood(o, max_len + FLOOD_MARGIN)
             return False
         return bool(send(LINK_NAK))
 
@@ -233,11 +270,13 @@ def link2_recv_block(
         # to it - the block it repeats is already counted in that room.
         too_long = length > (MAX_BLOCK if duplicate else max_len)
         if (
-            not (duplicate or seq == tr.next_seq)
+            not _valid_type(typ)
+            or not (duplicate or seq == tr.next_seq)
             or too_long
             or (burst and (not tr.burst_ok or not length or length % 256))
         ):
             o.byte_out(LINK_ABORT)  # the header slot is a single answer
+            _abort_flood(o, max_len + FLOOD_MARGIN)
             return (RC_BUFOVFLW if too_long else RC_PROTOERR), None, None
 
         if burst:
@@ -288,7 +327,8 @@ def link2_send_block(
         rc, a = o.byte_in()
         if rc != RC_SUCCESS:
             return RC_CONNERR
-        if a == LINK_ABORT:
+        if a in (LINK_ABORT, HELLO2):
+            # HELLO2: the MSX has given this transfer up and is opening the next
             return RC_PROTOERR
         if a == LINK_NAK:
             continue  # resend the header
@@ -311,7 +351,7 @@ def link2_send_block(
         if LINK_ACK in a:
             tr.send_seq = (seq + 1) & 0xFF
             return RC_SUCCESS
-        if LINK_ABORT in a:
+        if LINK_ABORT in a or HELLO2 in a:
             return RC_PROTOERR
         # NAK or anything else: resend the whole block, same seq
     return RC_PROTOERR

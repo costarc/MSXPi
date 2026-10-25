@@ -42,6 +42,15 @@ class Wire:
         self.log = []  # (direction, byte) as delivered, when tracing
         self.trace = False
         self.hook = None  # hook(direction, index, byte) -> byte, for random faults
+        # Slips: MSX transfers that complete without the Pi taking part - a write
+        # lost in the CPLD latch, a read that returns a stale byte.  The bit-flip
+        # faults above never change how many transfers each side sees; these do.
+        self.slips = set()  # MSX transfer numbers that slip
+        self.msx_n = 0
+        self.stale = 0  # what a slipped read returns: the last byte delivered
+
+    def slip(self, index):
+        self.slips.add(index)
 
     def flip(self, direction, index, mask=0x01):
         self.faults[(direction, index)] = self.faults.get((direction, index), 0) ^ mask
@@ -79,6 +88,9 @@ class Wire:
     # --- MSX side ------------------------------------------------------------
     def msx_xfer(self, mosi):
         with self.cv:
+            n, self.msx_n = self.msx_n, self.msx_n + 1
+            if n in self.slips:
+                return self.stale  # the Pi never sees this transfer
             if not self.cv.wait_for(
                 lambda: self.offer is not None or self.closed, self.timeout
             ):
@@ -86,6 +98,7 @@ class Wire:
             if self.offer is None:
                 raise Hung("link closed")
             miso = self._apply("p2m", self.offer)
+            self.stale = miso
             self.offer = None
             self.mosi = self._apply("m2p", mosi & 0xFF)
             self.cv.notify_all()
@@ -105,6 +118,9 @@ class PiIO:
     def byte_out(self, b):
         self.w.pi_xfer(b)
         return C.RC_SUCCESS
+
+    def exchange(self, b):
+        return C.RC_SUCCESS, self.w.pi_xfer(b)
 
     def read_payload(self, n):
         return C.RC_SUCCESS, bytes(self.w.pi_xfer(0) for _ in range(n))
@@ -129,7 +145,7 @@ class PiIO:
 
 
 def crc(data):
-    return binascii.crc_hqx(bytes(data), 0)
+    return binascii.crc_hqx(bytes(data), 0xFFFF)  # CRC-16/CCITT-FALSE, as msxpi_link2
 
 
 class MsxAborted(Exception):
@@ -243,8 +259,10 @@ class Msx:
             burst = bool(hi & 0x80)
             length = lo | ((hi & 0x7F) << 8)
             dup = seq == last_seq
-            if not (dup or seq == next_seq) or length > self.size:
+            valid_type = C.RC_SUCCESS <= typ <= C.RC_PROTOERR
+            if not valid_type or not (dup or seq == next_seq) or length > self.size:
                 self.wr(C.LINK_ABORT)  # header slot: single
+                self._flood()
                 raise MsxAborted("bad header")
             self.wr(C.LINK_ACK)
             if burst:
@@ -265,6 +283,14 @@ class Msx:
             if typ != C.RC_READY:
                 return bytes(out)
 
+    FLOOD_MARGIN = 16
+
+    def _flood(self):
+        """Keep answering ABORT for one block and its framing, so a Pi that
+        slipped out of step meets it at its next answer slot (design 3.7)."""
+        for _ in range(self.size + self.FLOOD_MARGIN):
+            self.wr(C.LINK_ABORT)
+
     def _nak(self, naks, payload=False):
         naks += 1
         self.stats["retries"] += 1
@@ -274,6 +300,7 @@ class Msx:
         if twice:
             self.wr(code)
         if code == C.LINK_ABORT:
+            self._flood()
             raise MsxAborted("receiver limit")
         return naks
 

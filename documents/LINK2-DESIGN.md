@@ -95,10 +95,18 @@ R -> ACK | NAK | ABORT                  sent twice when the block is the final o
 - On a payload NAK, the sender resends the whole block (header included) with the **same seq**.
 - **Duplicates**: the receiver remembers the last seq it accepted. A block that arrives with that
   same seq means its ACK was lost: the receiver reads it in full, discards it and ACKs again. Any
-  seq other than the last one or the next one makes the receiver ABORT.
+  seq other than the last one or the next one makes the receiver ABORT, and so does a header
+  type that is not an RC code (0xE0-0xF0: RC_READY or a final code).
 - **One retry limit, on the receiver**: after `LINK2_RETRIES` (10) consecutive NAKs for one block,
   the receiver sends ABORT. The sender has no limit of its own except a safety cap (32 attempts)
   and CTRL+ESC on the MSX, for a receiver that has disappeared.
+- **A receiver that aborts keeps answering ABORT** for one block and its framing (the block size
+  limit + 16 transfers). A sender that slipped out of step reads its answer slots at the wrong
+  place, and a single ABORT lands where it never looks; repeated, the next slot it reads holds
+  one. The Pi stops early when the MSX's next transfer begins (a HELLO2 or READY arrives in the
+  same transfers), so the next command is not held up.
+- **A sender that reads HELLO2 in an answer slot stops**: the MSX has given the transfer up and
+  is opening the next one.
 - **After the final block's ACK** both ends are idle. The legacy READY / status / READY_ACK step
   after each block is gone: the ACK replaces it.
 - **Final block**: the receiver leaves as soon as it has answered, so its answer is sent twice
@@ -116,10 +124,12 @@ INIR/OTIR finds READY up and is held by /WAIT until the Pi has clocked it. On th
 one RDY-held run: the existing native `msxpi_gpio_burst()` already takes both a transmit and a
 receive buffer, so `[ACK] + N receives` or `[ACK] + N sends` is a single call, with no C change.
 
-### 3.5 Error check: CRC-16/XMODEM
+### 3.5 Error check: CRC-16/CCITT-FALSE
 
-- **Polynomial and init**: 0x1021, init 0, no reflection. On the server this is
-  `binascii.crc_hqx(data, 0)` (C code).
+- **Polynomial and init**: 0x1021, **init 0xFFFF**, no reflection. On the server this is
+  `binascii.crc_hqx(data, 0xFFFF)` (C code). Not init 0 (CRC-16/XMODEM): with 0 an all-zero frame
+  has CRC 0, and the idle link is all zeros - a hunting Pi offers 0x00 on every transfer - so an
+  MSX that had slipped out of step read it as a valid empty final block (section 3.7).
 - **Detection**: every 1-, 2- and 3-bit error and every odd number of flipped bits in blocks up to
   4 KB, and every burst of 16 bits or fewer. For 8 KB blocks the only two-bit errors it misses are
   those exactly 32,767 bits apart.
@@ -157,6 +167,26 @@ two ends out of step. The rules above are what removed them:
 Faults of two bits or more in the same byte are covered by the CRC (and by the random multi-bit
 test), not by these rules.
 
+The audit of phase 1 added a second sweep, `sweep_slip`: at every MSX transfer of a transfer, one
+**slips** - completes on the MSX side without the Pi taking part, as a write lost in the CPLD latch
+or a stale read does. Bit flips never change how many transfers each side sees; slips do. It found:
+
+| Slip | What went wrong | Rule |
+|---|---|---|
+| during the opening, Pi -> MSX | The MSX went on reading the idle link (all 0x00) and took it as a valid empty final block: wrong data, reported as success. | CRC init 0xFFFF (3.5), and a header type must be an RC code. |
+| during the data, Pi -> MSX | The MSX aborted, but its ABORT landed where the out-of-step Pi never reads; the Pi resent the block up to 32 times and swallowed every retry of the next command. | The aborting receiver repeats ABORT for one block and its framing; a sender stops on HELLO2 in an answer slot. |
+
+With these rules a slip anywhere ends in a reported abort and never hangs, and the next command
+works within three tries (most at once). Results: 2,384 slip positions over two block sizes and
+both directions, no hang, no stuck link.
+
+**Known limit**: a slip misaligns the block, and a misaligned block is accepted when it happens to
+match its CRC: 1 in 65,536 per misaligned block for any 16-bit check. The sweep hit exactly one
+(Pi -> MSX, 512 bytes, slip at MSX transfer 37: the shifted payload and the shifted CRC bytes
+agree, 0x856F). Bit flips cannot do this; only slips can, and the GO byte (3.4) removes the
+known source of slips. A one-byte end mark after the CRC (for example `seq XOR 0xFF`) would take
+it to 1 in 16.7 million for one extra transfer per block - open decision.
+
 ## 4. Ethernet (UNAPI) - protocol 3
 
 - **What changes**: ETH_SEND_FRAME and ETH_GET_FRAME bursts start with the Pi's GO byte (as in
@@ -186,11 +216,12 @@ test), not by these rules.
 
 ### 5.2 Server
 
-- **`msxpi_link2.py`**: the LINK2 framing, written against the same transport primitives.
-- **`msxpi_blocks.py`** gets the paired names of section 5.3 as its public functions. Each one
-  hunts for READY or HELLO2 and then runs the legacy or the LINK2 framing. The old names
-  (`recvdata2`, `sendmultiblock`, `senddata`, `recvdata2_oneblock`, `PerformHandshake`) stay as
-  aliases until the command handlers are converted, in one mechanical commit.
+- **`msxpi_link2.py`**: the LINK2 framing, written against the same transport primitives. Its
+  functions are named `link2_*` (`link2_accept`, `link2_send_block`...): they are the LINK2 half
+  behind the public `link_*` functions of `msxpi_blocks.py`, not a second API.
+- **`msxpi_blocks.py`** has the paired names of section 5.3 as its public functions. Each one
+  hunts for READY or HELLO2 and then runs the legacy or the LINK2 framing. Every command handler
+  was converted in one rename-only commit and the old names are gone.
 - **Transport** gains `spi_burst_send(data)` and `spi_burst_recv(n)`: GO plus payload in one
   READY-held run, for native GPIO, fast GPIO and the TCP-framed openMSX link.
 - **Ethernet**: `msxpi_eth.py` gets protocol 3 next to 2 (`OP_PROBE3`, GO bursts, `RC_OK` 0x5A).
@@ -228,10 +259,14 @@ every operation once, from the side that runs it:
 - **Legacy names map onto these**: `SENDDATA` -> `LINK_SEND`, `RECVDATA_ONEBLOCK` ->
   `LINK_RECV_BLOCK`, `PIREADBYTE` -> `LINK_RECV_BYTE`, `PIWRITEBYTE` -> `LINK_SEND_BYTE`,
   `SendCommandToMSXPi` -> `LINK_COMMAND`, `PerformHandshake` -> `LINK_OPEN`. On the server:
-  `recvdata2` -> `link_recv`, `sendmultiblock` -> `link_send`, `senddata_oneblock` ->
-  `link_send_block`, `recvdata2_oneblock` -> `link_recv_block`, `SPI_ByteTransfer` -> the
-  `link_send_byte` / `link_recv_byte` pair. The legacy framing keeps its own internal names; only
-  the public entry points change.
+  `recvdata2` -> `link_recv` (and `link_recv_command` in the main loop), `sendmultiblock` ->
+  `link_send`, `senddata_oneblock` -> `link_send_block`, `recvdata2_oneblock` ->
+  `link_recv_block`, `PerformHandshake` and `pcopy_handshake` -> `link_accept`, and
+  `SPI_ByteTransfer` -> the `link_send_byte` / `link_recv_byte` pair (one primitive bound to both
+  names, so the hot path has no extra call; both return the byte the MSX sent). `senddata`, the
+  legacy sender for receivers that confirm every block (C `RECVDATA`), becomes
+  `link_send_confirmed`; under LINK2 it is the same as `link_send`. The legacy framing keeps its
+  own internal names; only the public entry points change.
 - **The other BIOS routines** get the same treatment in the phase 5 rewrite: one verb-noun scheme
   (`PRINT_PI_STDOUT`, `PARSE_CALL_PARAMETERS`...), no mixed case, and no two names for one
   routine.

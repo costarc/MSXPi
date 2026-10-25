@@ -49,8 +49,8 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
    - `RC_PROTOERR` = 0xF0
 2. `msxpi_link2.py`:
    - the CRC (`binascii.crc_hqx`)
-   - `link_accept()`: answers HELLO2 with HELLO2_ACK and flags, then reads the MSX's size word
-   - `link_send(payload, header_rc)` / `link_send_block()` and `link_recv(maxbuf)` / `link_recv_block()`: header, header ACK,
+   - `link2_accept()`: answers HELLO2 with HELLO2_ACK and flags, then reads the MSX's size frame
+   - `link2_send()` / `link2_send_block()` and `link2_recv()` / `link2_recv_block()`: header, header ACK,
      payload, CRC, ACK/NAK/ABORT, seq and duplicate handling, the receiver-side limit, the
      sender cap
 3. Transport: `spi_burst_send(data)` and `spi_burst_recv(n)`, with GO plus payload in one
@@ -66,8 +66,8 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 5. **Naming, server side**: one mechanical commit converts every command handler from
    `recvdata2` / `sendmultiblock` / `senddata` / `recvdata2_oneblock` / `PerformHandshake` /
    `SPI_ByteTransfer` to the paired names. The commit does nothing else, so it reviews as a pure
-   rename. Then the aliases are removed, so a missed call fails loudly. `msxpi_link2.py` is
-   written with the new names from the start.
+   rename. Then the aliases are removed, so a missed call fails loudly. `msxpi_link2.py` names
+   its functions `link2_*`: the LINK2 half behind the public `link_*`. *Done: 2ebc8d42.*
 6. Unit tests on the simulated link (test plan T1).
 7. Regression: the legacy openMSX smoke and fault runs against the new server (test plan T2).
 

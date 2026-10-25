@@ -39,6 +39,15 @@ The real server code against the Python MSX model, over the lockstep simulated l
    must be 0, and must stay 0 with multi-bit faults of up to 3 bits per block.
 7. **The old server**: the MSX model against the legacy server gets RC_PROTOERR within 16
    exchanges, with no hang.
+8. **Slips** (`link2_faults.sweep_slip`): at every MSX transfer of a transfer, one completes on
+   the MSX side only (a write lost in the CPLD latch, a stale read), in both directions. The
+   server keeps serving afterwards, as the real one does, and the MSX retries the next command up
+   to 3 times. Pass: never wrong data, never a hang, and the next command works within the 3
+   tries.
+9. **Capacity**: an MSX that sends more than the server's buffer is ABORTed in the header slot of
+   the block that does not fit, and is never told the transfer succeeded.
+
+Item 6 runs 300 transfers by default; `LINK2_SLOW=1` runs the full 10,000 (about 17 minutes).
 
 ## T2 - legacy regression (phase 1 onward, every milestone)
 

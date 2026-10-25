@@ -66,6 +66,95 @@ def run(direction, data, d, idx, mask, size=8192, has_wait=True):
         return ("ABORT" if ok2 else "STUCK"), err or ""
 
 
+def run_slip(direction, data, k, size=8192, has_wait=True, tries=3):
+    """One MSX transfer, number k, slips (the Pi never sees it).  Then the MSX
+    repeats a clean follow-up command up to `tries` times, as a user would, while
+    the server keeps serving.  Verdicts: OK, ABORT (first reported, follow-up
+    fine at once), RETRIED (the follow-up needed more than one try), STUCK (no
+    try worked), CORRUPT (wrong data accepted anywhere), HUNG, CRASH (the server
+    raised something other than a wire wait)."""
+    w = S.Wire(timeout=1.0)
+    w.slip(k)
+    follow = pattern(300, 99)
+    results = []
+
+    def forever(step):
+        # The real server goes back to waiting after every transfer, failed or
+        # not, for as long as it runs; a fixed list of steps would run out after
+        # a few failed attempts and leave the MSX talking to nobody.
+        def loop():
+            while True:
+                results.append(step())
+        return loop
+
+    if direction == "msx2pi":
+        steps = [forever(lambda: B.link_recv(65536))]
+    else:
+        steps = [lambda: results.append(B.link_send(data)),
+                 forever(lambda: B.link_send(follow))]
+    srv = S.Server(w, steps).start()
+    m = S.Msx(w, size, has_wait)
+    first_err = None
+    got_first = None
+    attempts = 0
+    follow_ok = False
+    try:
+        try:
+            if direction == "msx2pi":
+                m.send(data)
+            else:
+                got_first = m.recv()
+        except S.MsxAborted as e:
+            first_err = str(e)
+        for attempts in range(1, tries + 1):
+            try:
+                if direction == "msx2pi":
+                    m.send(follow)
+                    follow_ok = True  # the server's results confirm it below
+                else:
+                    got = m.recv()
+                    if got != follow:
+                        w.close()
+                        srv.join(2)
+                        return "CORRUPT", "follow-up data"
+                    follow_ok = True
+                break
+            except S.MsxAborted:
+                continue
+    except S.Hung as e:
+        w.close()
+        srv.join(2)
+        return "HUNG", str(e)
+    w.close()
+    srv.join(2)
+    if srv.error is not None and not isinstance(srv.error, S.Hung):
+        return "CRASH", repr(srv.error)
+    if direction == "msx2pi":
+        accepted = [r[1] for r in results if r and r[0] == C.RC_SUCCESS]
+        if any(x not in (data, follow) for x in accepted):
+            return "CORRUPT", ""
+        follow_ok = follow_ok and follow in accepted
+    elif got_first is not None and got_first != data:
+        return "CORRUPT", ""
+    if not follow_ok:
+        return "STUCK", first_err or ""
+    if attempts > 1:
+        return "RETRIED", first_err or ""
+    return ("OK" if first_err is None else "ABORT"), first_err or ""
+
+
+def sweep_slip(direction, data, size=8192, has_wait=True):
+    """A slip at every MSX transfer of the first transfer (and a few beyond)."""
+    tally = collections.Counter()
+    bad = []
+    for k in range(len(data) + 40):
+        v, info = run_slip(direction, data, k, size, has_wait)
+        tally[v] += 1
+        if v in ("CORRUPT", "HUNG", "CRASH", "STUCK"):
+            bad.append((k, v, info))
+    return tally, bad
+
+
 def sweep(direction, data, size=8192, has_wait=True, masks=(0x01,)):
     n = len(data) + 40
     tally = collections.Counter()
