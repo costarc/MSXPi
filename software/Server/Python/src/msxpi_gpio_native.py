@@ -68,7 +68,7 @@ class NativeGPIO:
             setter(self.cs_setup_ns)
         self.bytes = self.wait_ns = self.elapsed_ns = 0
 
-    def _transfer(self, payload, length, burst=False):
+    def _transfer(self, payload, length, burst=False, want_rx=False):
         result = bytearray()
         # Return to Python at least every 256 bytes to service signals. READY
         # still cycles per BYTE, exactly as the current polled BIOS expects.
@@ -81,7 +81,7 @@ class NativeGPIO:
         for offset in range(0, length, chunk):
             count = min(chunk, length-offset)
             tx = None if payload is None else (C.c_uint8 * count).from_buffer_copy(payload[offset:offset+count])
-            rx = (C.c_uint8 * count)() if payload is None else None
+            rx = (C.c_uint8 * count)() if payload is None or want_rx else None
             done, wait = C.c_size_t(), C.c_uint64()
             start = time.monotonic_ns()
             rc = transfer(self.registers, self.masks, tx, rx, count,
@@ -109,6 +109,12 @@ class NativeGPIO:
     def read_burst(self, length):
         """Receive with READY held for the whole block (MSX OTIR in wait mode)."""
         return self._transfer(None, length, burst=True)
+
+    def exchange_burst(self, payload):
+        """Send payload and read the same number of bytes back, READY held for
+        the whole run.  LINK2 uses it for GO + N receives: payload is the GO
+        byte followed by N zeros, and the first byte read back is discarded."""
+        return self._transfer(payload, len(payload), burst=True, want_rx=True)
 
     def report(self):
         if self.bytes:

@@ -39,6 +39,7 @@ logger = logging.getLogger("msxpi")
 from msxpi_const import (
     BURST_FLAG,
     GLOBALRETRIES,
+    HELLO2,
     MAX_BLOCK_RETRIES,
     RC_BUFOVFLW,
     RC_CHKSUM_ERR,
@@ -51,6 +52,7 @@ from msxpi_const import (
     READY,
     READY_ACK,
 )
+import msxpi_link2
 from msxpi_ethglue import eth_handle_opcode
 from msxpi_transport import (
     SPI_BurstIn,
@@ -62,32 +64,58 @@ from msxpi_transport import (
 )
 
 
-def pcopy_handshake() -> Tuple[int, int]:
-    """Performs the initial handshake with MSX and receives msx_blocksize."""
-    # Wait for READY from MSX
+# The transfer in progress when the MSX opened it with HELLO2 (a msxpi_link2.Transfer),
+# None when it opened it with READY.  Set by _hunt(), so every public function
+# below runs the protocol the MSX chose for THIS transfer; nothing is kept
+# between transfers (LINK2-DESIGN.md 3.2).
+_xfer = None
+
+
+def _hunt(eth: bool = False) -> Tuple[int, int]:
+    """Wait for the MSX to open a transfer, with READY (legacy) or HELLO2 (LINK2).
+
+    Answers the handshake and reads the MSX's size word.  Returns (RC_SUCCESS,
+    size word) with _xfer set for a LINK2 transfer, or (error, 0).  eth: serve the
+    Ethernet UNAPI opcodes that arrive instead (only recvdata2 ever did).
+    """
+    global _xfer
+    _xfer = None
     while True:
         rc, byte = SPI_ByteTransfer()
+        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
+        # retrying spins at full speed and floods the log. Only give up on that;
+        # timeouts and noise still mean keep waiting.
+        if rc == RC_CONNERR:
+            return RC_CONNERR, 0
         if rc != RC_SUCCESS:
-            return RC_HANDSHAKEERR, 0
+            continue  # ignore transient SPI errors
         if byte == READY:
+            SPI_ByteTransfer(READY_ACK)
             break
-
-    # Send READY_ACK back to MSX
-    rc, _ = SPI_ByteTransfer(READY_ACK)
-    if rc != RC_SUCCESS:
-        return RC_HANDSHAKEERR, 0
-
-    # Receive msx_blocksize (low byte, high byte)
+        if byte == HELLO2:
+            rc, tr = msxpi_link2.link_accept()
+            if rc != RC_SUCCESS:
+                return rc, 0
+            _xfer = tr
+            return RC_SUCCESS, tr.msx_size
+        if eth and eth_handle_opcode(byte):
+            # An Ethernet UNAPI fast/bulk op (msxpi_eth.py).  It has already
+            # been served in full and is not a command, so keep waiting for
+            # READY rather than returning to the dispatch loop.
+            continue
+        # garbage: keep waiting
     rc, low = SPI_ByteTransfer()
     if rc != RC_SUCCESS:
         return RC_CONNERR, 0
-
     rc, high = SPI_ByteTransfer()
     if rc != RC_SUCCESS:
         return RC_CONNERR, 0
+    return RC_SUCCESS, low | (high << 8)
 
-    msx_blocksize = low | (high << 8)
-    return RC_SUCCESS, msx_blocksize
+
+def pcopy_handshake() -> Tuple[int, int]:
+    """Performs the initial handshake with MSX and receives msx_blocksize."""
+    return _hunt()
 
 
 def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
@@ -105,44 +133,16 @@ def recvdata2(maxbufsize: int = 8192) -> Tuple[int, Optional[bytes]]:
 
     # -------------------------
     # 1. Initial handshake
-    # MSX   -> READY
+    # MSX   -> READY (or HELLO2: a LINK2 transfer, handled by msxpi_link2)
     # Python-> READY_ACK
     # MSX   -> msxmaxbuf_low, msxmaxbuf_high
     # -------------------------
-    while True:
-        rc, pibyte = SPI_ByteTransfer()
-        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
-        # retrying spins at full speed and floods the log. Only give up on that;
-        # timeouts and noise still mean keep waiting.
-        if rc == RC_CONNERR:
-            return (RC_CONNERR, None)
-        if rc != RC_SUCCESS:
-            continue  # ignore transient SPI errors
-
-        if pibyte == READY:
-            # Send READY_ACK back
-            SPI_ByteTransfer(READY_ACK)
-            break
-        elif eth_handle_opcode(pibyte):
-            # An Ethernet UNAPI fast/bulk op (msxpi_eth.py).  It has already
-            # been served in full and is not a command, so keep waiting for
-            # READY rather than returning to the dispatch loop.  This branch
-            # used to silently discard the byte, which is exactly why the
-            # opcode range was chosen to live here.
-            continue
-        else:
-            # Ignore garbage and keep waiting for READY
-            continue
-
-    # Receive msxmaxbuf (MSX advertised max bytes per block)
-    rc, low = SPI_ByteTransfer()
+    rc, msxmaxbuf = _hunt(eth=True)
     if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-    rc, high = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
+        return (rc, None)
+    if _xfer is not None:
+        return msxpi_link2.link_recv(_xfer, maxbufsize)
 
-    msxmaxbuf = low | (high << 8)
     block_max = min(msxmaxbuf, maxbufsize)
 
     # -------------------------
@@ -410,37 +410,14 @@ def senddata(header_rc: int, payload: bytes | bytearray) -> int:
         return (RC_SUCCESS, status)
 
     # -------------------------
-    # 1. Initial handshake
+    # 1. Initial handshake (READY, or HELLO2 for a LINK2 transfer)
     # -------------------------
-    while True:
-        rc, pibyte = SPI_ByteTransfer()
-        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
-        # retrying spins at full speed and floods the log. Only give up on that;
-        # timeouts and noise still mean keep waiting.
-        if rc == RC_CONNERR:
-            return RC_CONNERR
-        if rc != RC_SUCCESS:
-            # SPI error: ignore and keep waiting
-            continue
-        if pibyte == READY:
-            print("Handshake: Detected READY from MSX (initial)")
-            SPI_ByteTransfer(READY_ACK)
-            print("Handshake: Sent READY_ACK to MSX (initial)")
-            break
-        print(f"Handshake: expected READY, got {pibyte}")
-
-    # Receive msxmaxbuf (maximum payload bytes per block)
-    rc, msxmaxbuf_low = SPI_ByteTransfer()
+    rc, msxmaxbuf = _hunt()
     if rc != RC_SUCCESS:
-        print("senddata: failed to read msxmaxbuf_low")
-        return RC_FAILED
+        return rc
+    if _xfer is not None:
+        return msxpi_link2.link_send(_xfer, payload)
 
-    rc, msxmaxbuf_high = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        print("senddata: failed to read msxmaxbuf_high")
-        return RC_FAILED
-
-    msxmaxbuf = msxmaxbuf_low | (msxmaxbuf_high << 8)
     print(f"senddata: This block size = {msxmaxbuf}")
 
     # -------------------------
@@ -580,36 +557,23 @@ def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
 
     # -------------------------
     # 1. Initial handshake
-    # MSX -> READY
+    # MSX -> READY (or HELLO2: LINK2)
     # Python -> READY_ACK
     # MSX -> msxmaxbuf_low, msxmaxbuf_high
     # -------------------------
-
-    while True:
-        rc, byte = SPI_ByteTransfer()
-        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
-        # retrying spins at full speed and floods the log. Only give up on that;
-        # timeouts and noise still mean keep waiting.
-        if rc == RC_CONNERR:
-            return (RC_CONNERR, None)
+    rc, msxmaxbuf = _hunt()
+    if rc != RC_SUCCESS:
+        return (rc, None)
+    if _xfer is not None:
+        rc, typ, payload = msxpi_link2.link_recv_block(
+            _xfer, min(_xfer.msx_size or msxpi_link2.MAX_BLOCK, maxbufsize)
+        )
         if rc != RC_SUCCESS:
-            continue  # ignore transient SPI noise
+            return (rc, None)
+        if typ == RC_READY:
+            return (RC_READY, payload)
+        return (RC_SUCCESS if typ == RC_SUCCESS else RC_CONNERR, payload)
 
-        if byte == READY:
-            SPI_ByteTransfer(READY_ACK)
-            break
-        # ignore garbage and continue waiting
-
-    # Receive msxmaxbuf
-    rc, low = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    rc, high = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return (RC_CONNERR, None)
-
-    msxmaxbuf = low | (high << 8)
     block_max = min(msxmaxbuf, maxbufsize)
 
     # -------------------------
@@ -740,6 +704,11 @@ def senddata_oneblock(
     length = len(payload)
     if length > msx_blocksize:
         return RC_INVALIDDATASIZE
+    if _xfer is not None:
+        rc = msxpi_link2.link_send_block(_xfer, payload, header_rc, burst)
+        if rc != RC_SUCCESS:
+            return rc
+        return RC_READY if header_rc == RC_READY else RC_SUCCESS
     # A burst block says so in bit 15 of its length; the MSX then reads the
     # payload with /WAIT (INIR) instead of byte by byte. Only when it asked,
     # and only for whole 256-byte runs (a 512-byte sector): the ROM's burst
@@ -839,35 +808,8 @@ def senddata_oneblock(
 
 
 def PerformHandshake() -> Tuple[int, int]:
-    # 1. Initial handshake: MSX -> READY, Python -> READY_ACK
-    while True:
-        rc, byte = SPI_ByteTransfer()
-        # A closed TCP peer is permanent: recv() returns b'' at once, forever, so
-        # retrying spins at full speed and floods the log. Only give up on that;
-        # timeouts and noise still mean keep waiting.
-        if rc == RC_CONNERR:
-            return RC_CONNERR, 0
-        if rc != RC_SUCCESS:
-            continue  # ignore noise
-        if byte == READY:
-            SPI_ByteTransfer(READY_ACK)
-            break
-        else:
-            print(
-                f"PerformHandshake(): discarded stray byte {hex(byte)} while waiting for READY"
-            )
-
-    # Receive msx_blocksize
-    rc, low = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return RC_CONNERR, 0
-    rc, high = SPI_ByteTransfer()
-    if rc != RC_SUCCESS:
-        return RC_CONNERR, 0
-
-    msx_blocksize = low | (high << 8)
-
-    return RC_SUCCESS, msx_blocksize
+    # MSX -> READY (or HELLO2), Python -> its answer, then msx_blocksize
+    return _hunt()
 
 
 def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
@@ -889,6 +831,8 @@ def sendmultiblock(payload: bytes, header_rc: Optional[int] = None) -> int:
     rc, msx_blocksize = PerformHandshake()
     if rc != RC_SUCCESS:
         return rc
+    if _xfer is not None:
+        return msxpi_link2.link_send(_xfer, payload, header_rc)
     # Bit 15 of the block size is the MSX asking for /WAIT burst payloads.
     # Honour it only when this host can hold READY for a whole block; either
     # way it is not part of the size.
@@ -954,3 +898,12 @@ def readParameters(errorMsg: str, needParm: bool = False) -> Tuple[int, Optional
         return RC_FAILED, None
 
     return RC_SUCCESS, parms
+
+
+# Paired names (LINK2-DESIGN.md 5.3): what the MSX sends the Pi receives.  The
+# old names stay as aliases until the command handlers are converted.
+link_open = PerformHandshake
+link_recv = recvdata2
+link_send = sendmultiblock
+link_recv_block = recvdata2_oneblock
+link_send_block = senddata_oneblock

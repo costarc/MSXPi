@@ -87,6 +87,20 @@ RC_FAILNOSTD = 0xEC  # Failed, no standard
 RC_TERMINATE = 0xED  # Terminate connection
 RC_UNEXPECTEDDATA = 0xEE  # Unexpected data
 RC_UNDEFINED = 0xEF  # Undefined error
+RC_PROTOERR = 0xF0  # LINK2 protocol error (peer does not speak it, or out of step)
+
+# =============================================================================
+# LINK2 (see documents/LINK2-DESIGN.md)
+# =============================================================================
+HELLO2 = 0xB2  # MSX -> Pi: opens a LINK2 transfer (READY opens a legacy one)
+HELLO2_ACK = 0xB3  # Pi -> MSX: this server speaks LINK2
+SIZE_MARK = 0xB4  # MSX -> Pi: starts the size frame (mark, lo, hi, crc16)
+LINK_ACK = 0x5A  # receiver -> sender: accepted; for a burst it is also the GO byte
+LINK_NAK = 0xA5  # receiver -> sender: resend
+LINK_ABORT = 0x0F  # either way: give up this transfer
+LINK2_FLAG_BURST = 0x01  # HELLO2 flags, bit 0: the Pi can burst in both directions
+LINK2_RETRIES = 10  # consecutive NAKs for one block before the receiver aborts
+LINK2_SENDER_CAP = 32  # attempts at one block before the sender gives up
 
 # =============================================================================
 # RETRY & TIMEOUT CONFIGURATION

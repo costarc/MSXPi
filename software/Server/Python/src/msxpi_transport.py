@@ -534,12 +534,19 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
     return RC_SUCCESS
 
 
-def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
+def SPI_BurstIn(
+    length: int, go: Optional[int] = None
+) -> Tuple[int, Optional[bytearray]]:
     """Receive a run of bytes with RPI_READY held high for the whole run.
 
     The mirror image of SPI_BurstOut, for the MSX's OTIR side: the CPLD only
     asserts /WAIT while SPI_RDY is high, so the same inter-byte RDY gap that
     would let an INIR read stale data would let an OTIR write vanish.
+
+    go, when given, is a byte offered first, inside the same READY-held run: the
+    LINK2 GO byte, which the MSX reads polled and so can never start its OTIR
+    before the run is up (see LINK2-DESIGN.md 3.4).  It is not part of the
+    result.
 
     Returns (RC_SUCCESS, bytearray) or (error code, None).
     """
@@ -547,7 +554,10 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     if hostType != "RaspberryPi" and _tcp_framed:
         # passive offers, READY held across the run: exactly SPI_BurstIn's GPIO
         # contract, so an OTIR that starts before them loses bytes here too
-        return tcp_exchange(bytes(length), TCP_BURST_TIMEOUT)
+        if go is None:
+            return tcp_exchange(bytes(length), TCP_BURST_TIMEOUT)
+        rc, got = tcp_exchange(bytes((go,)) + bytes(length), TCP_BURST_TIMEOUT)
+        return (rc, got[1:]) if rc == RC_SUCCESS else (rc, None)
 
     if hostType != "RaspberryPi":
         # raw openMSX link: no RDY line to hold; the burst arrives as an
@@ -556,6 +566,8 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
         payload = bytearray()
         quickack = getattr(socket, "TCP_QUICKACK", None)
         try:
+            if go is not None:
+                conn.sendall(bytes((go,)))
             conn.settimeout(None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
             while len(payload) < length:
                 if quickack is not None:
@@ -580,7 +592,10 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
 
     if _NATIVE_GPIO is not None:
         try:
-            data = _NATIVE_GPIO.read_burst(length)
+            if go is None:
+                data = _NATIVE_GPIO.read_burst(length)
+            else:
+                data = _NATIVE_GPIO.exchange_burst(bytes((go,)) + bytes(length))[1:]
             if early:
                 print(
                     "SPI_BurstIn: CS was already low before READY - the MSX started early"
@@ -606,6 +621,23 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
 
     reg[SET] = _M_RDY  # up once, for the whole burst
     try:
+        if go is not None:
+            spins = 0
+            while reg[LEV] & m_cs:
+                spins += 1
+                if not (spins & 0x3FF) and time.perf_counter() > deadline:
+                    return RC_FAILED, None
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
+            for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
+                if go & bit:
+                    reg[SET] = m_miso
+                else:
+                    reg[CLR] = m_miso
+                reg[SET] = m_sclk
+                reg[CLR] = m_sclk
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
         reg[CLR] = m_miso  # passive receive drives MISO low
         for i in range(length):
             spins = 0
@@ -627,6 +659,16 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     finally:
         reg[CLR] = _M_RDY  # and down exactly once
     return RC_SUCCESS, payload
+
+
+def spi_burst_send(data: bytes | bytearray, go: int) -> int:
+    """LINK2, Pi -> MSX: the GO byte and the payload in one READY-held run."""
+    return SPI_BurstOut(bytes((go,)) + bytes(data))
+
+
+def spi_burst_recv(length: int, go: int) -> Tuple[int, Optional[bytearray]]:
+    """LINK2, MSX -> Pi: the GO byte, then length bytes, in one READY-held run."""
+    return SPI_BurstIn(length, go)
 
 
 def tick_sclk():

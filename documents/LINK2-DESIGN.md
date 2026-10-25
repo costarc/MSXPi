@@ -44,7 +44,8 @@ LINK2-TEST-PLAN.md. Background and measurements: BLOCK-RETRIES-FAULT-INJECTION.m
 
 ACK, NAK and ABORT differ from each other in at least 4 bits. **Any other value read where one of
 them is expected is treated as NAK.** That includes 0x00 and 0xFF, the values a stale or idle link
-gives. 0xB2 and 0xB3 are used by nothing else: the RC codes are 0xE0-0xEF, the handshake bytes
+gives. **One exception, found by the fault-sweep tests (section 3.7): the answer to a block header**
+(and to the size frame) **counts as ACK unless it is exactly NAK or ABORT.** 0xB2 and 0xB3 are used by nothing else: the RC codes are 0xE0-0xEF, the handshake bytes
 0xA0-0xAE, the Ethernet opcodes 0xC0-0xC9.
 
 ### 3.2 Opening a transfer
@@ -55,9 +56,16 @@ Every transfer starts with the MSX, exactly as the legacy one does (SENDDATA, Pe
 MSX -> HELLO2                        (repeated until HELLO2_ACK; see below)
 Pi  -> HELLO2_ACK
 Pi  -> flags     bit 0: the Pi can burst in both directions (native/fast GPIO, or TCP-framed openMSX)
-MSX -> size lo, size hi              largest block the MSX accepts; bit 15 = this MSX has /WAIT
+MSX -> SIZE_MARK (0xB4), size lo, size hi, crc lo, crc hi     "size frame", CRC-16 of mark+size
+Pi  -> ACK | NAK                     a frame with a bad CRC or mark is NAKed and sent again
 ```
 
+- The size word is the largest block the MSX accepts; **bit 15 = this transfer may burst** (the MSX
+  has /WAIT and its buffer is outside page 1).
+- **HELLO2, then the answer and the flags are always read as a unit** (three transfers), so that a
+  damaged HELLO2_ACK costs one retry and leaves both ends in step: after sending the answer and the
+  flags the Pi reads the next byte, and a HELLO2 there means "I missed your answer", which it
+  answers again.
 - **Bursts** are used for a block only when both the Pi flag and the MSX's bit 15 are set, the
   block is a non-empty multiple of 256 bytes, and the MSX buffer is not in page 1.
 - **The MSX's wait for `HELLO2_ACK`** counts only exchanges that completed with a wrong answer.
@@ -77,7 +85,8 @@ R -> ACK | NAK                          header check; when R is the Pi and the b
 [Pi -> ACK]                             GO byte, only for a Pi -> MSX burst (the Pi is the sender)
 S -> payload (len bytes)                OTIR/INIR when bursting, polled otherwise
 S -> crc lo, crc hi                     CRC-16 of the payload
-R -> ACK | NAK | ABORT
+R -> ACK | NAK | ABORT                  sent twice when the block is the final one (type not RC_READY);
+                                        the sender takes either (3.7)
 ```
 
 - `len` bit 15 = "this block bursts". It is protected by the header CRC.
@@ -92,10 +101,10 @@ R -> ACK | NAK | ABORT
   and CTRL+ESC on the MSX, for a receiver that has disappeared.
 - **After the final block's ACK** both ends are idle. The legacy READY / status / READY_ACK step
   after each block is gone: the ACK replaces it.
-- **Known corner case**: if the ACK of the *final* block is corrupted, the sender resends to a
-  receiver that has already left. The sender reaches its cap and reports an error for a transfer
-  that in fact succeeded. That is a false error, never silent corruption. Every current command
-  can safely be repeated.
+- **Final block**: the receiver leaves as soon as it has answered, so its answer is sent twice
+  (section 3.7). A single damaged byte can no longer make the sender resend to a receiver that
+  has gone. Two damaged bytes in the same answer still can; the sender then reaches its cap and
+  reports an error for a transfer that in fact succeeded, never silent corruption.
 
 ### 3.4 Why the READY race cannot happen
 
@@ -130,6 +139,23 @@ receive buffer, so `[ACK] + N receives` or `[ACK] + N sends` is a single call, w
 As today: a buffer in 4000h-7FFFh is written through WRSLT (STORE_BYTE) and never bursts, because
 INIR/OTIR address memory directly. The CRC routine reads the buffer with plain loads, so the table
 and the loop live in the ROM/extension in page 1 and the buffer is outside page 1.
+
+### 3.7 What the fault sweep changed
+
+`tests/link2_faults.py` flips one bit at every byte position of a transfer, in both directions,
+for burst and polled blocks. The first sweeps found five places where one damaged byte put the
+two ends out of step. The rules above are what removed them:
+
+| Damaged byte | What went wrong | Rule |
+|---|---|---|
+| HELLO2_ACK | The MSX asked again while the Pi was already reading the size word. | The answer and flags are read as a unit; a HELLO2 where the Pi expects the size frame is answered again. |
+| size word | A damaged size or mark was skipped; the MSX thought it had opened. | The size is a five-byte frame with its own CRC, answered ACK or NAK. |
+| header answer (ACK) | The sender read it as NAK and resent the header while the receiver was already waiting for the payload: an endless mismatch. | Only an exact NAK or ABORT makes the sender resend or stop; anything else counts as ACK. A NAK damaged into garbage is far rarer (it needs a fault in the header first) and is bounded by the limits. |
+| answer to the final block | The receiver leaves as soon as it has answered, so a damaged answer sent the sender into the next command's bytes (a hang after the next READY-looking payload byte). | The answer to the final block is sent twice and the sender takes either. This closes the "false error" corner case of section 3.3. |
+| GO byte (Pi -> MSX) | A damaged GO made the MSX NAK a burst the Pi was already running. | The MSX does not check the value of the GO byte; it only synchronises. |
+
+Faults of two bits or more in the same byte are covered by the CRC (and by the random multi-bit
+test), not by these rules.
 
 ## 4. Ethernet (UNAPI) - protocol 3
 
