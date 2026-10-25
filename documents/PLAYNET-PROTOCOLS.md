@@ -813,15 +813,14 @@ How the chat hands the game to `PLAYNET`. It is the same structure everywhere:
    wipe the `AB` header of the RAM image and reset. A game started without the chat (`PLAYNET <game> <role>`) has no session on the Pi,
    so its save is refused and it always ends this way.
 
-On the TCP/IP path the IRC connection survives the game: `MCHAT /t` opens it as resident (`TCP_OPEN` flag), leaves it open, and
-`MCHAT /T` takes it back with the connection number, nick and rooms from `PLAYNET.SES` (it asks for `NAMES` again; the scrollback
-from before the game is not kept). If the connection is gone, `MCHAT /T` connects again.
-
-In between, `PLAYNET` keeps the connection alive. `PLAYNET.SES` byte 59 goes into the engine's I/O block (byte 133; FFh for a manual
-start). Twice a second, during the connect phase and the game, the engine reads what arrived on it (at most 4 x 56 bytes) and
-throws it away, answering each `PING x` line with `PONG x`. It stops if the connection reports an error. The only silent
-stretches are the program changes: `MCHAT` leaving and `PLAYNET` loading, and the way back to `MCHAT /T`. Each takes seconds, well
-under a server's ping timeout (often 2 to 4 minutes).
+On the TCP/IP path the IRC connection does **not** stay open through the game. `MCHAT /T` sends `QUIT :bye` and closes it when it
+hands the game over, and writes FFh in `PLAYNET.SES` byte 59 (no connection kept). The connection used to be kept (the engine read
+it twice a second and answered `PING`s), but measured on the rig it cost 3-27 % of the frame rate on link 1 and 12-54 % on link 2,
+the open connection alone about 4 ms a frame (PLAYNET-TCPIP-PERFORMANCE.md 5.6a). Back from the game, `MCHAT /T` finds byte 59
+FFh, connects again with the same nick and joins the default room (the other rooms are not rejoined, and the scrollback from before
+the game is not kept). The engine's I/O block byte 133 is FFh in that case, so the keep-alive code does nothing. It still works for
+a `PLAYNET.SES` that carries a connection number (an older `MCHAT`): twice a second it reads what arrived on it (at most 4 x 56 bytes),
+throws it away, and answers each `PING x` with `PONG x`; it stops if the connection reports an error.
 
 ## 15. MSXPi commands used by PLAYNET
 

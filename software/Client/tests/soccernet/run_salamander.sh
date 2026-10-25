@@ -19,7 +19,9 @@
 #   HYBRID=1 (with TCP=1) the TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2). PNOPTS = more PLAYNET /T options.
 #   EXITKEY=n  P2 presses the exit key (Ctrl+Shift+F5) at frame n: both games end; with CHAT both must be back in
 #            MCHAT (each MSXPi saw "playnet restore", then "mchat start"). Set the frames above n.
-#   CHAT=1   the players meet in MCHAT (software/target/mchat.com, against a local IRC server): alice (P1) invites bob
+#   CHAT=1   (with TCP=1 BOTH=1: links 1 and 2, MCHAT /T on Nextor against the IRC fixture at 10.0.2.2; HYBRID=1 plays through the
+#            MSXPi, else GAMELINK=1 over TCP/IP; EXITKEY then checks QUIT before the game and a new connection after it)
+#            the players meet in MCHAT (software/target/mchat.com, against a local IRC server): alice (P1) invites bob
 #            with "/play bob salamand", bob accepts, and the chat starts PLAYNET itself. PLAY_AT / ACCEPT_AT: emulated s.
 # Results: $WORK/np/{P1,P2}.trace (+ .screen and screenshots); the script prints the comparison.
 STOPF=${1:-3000}; LAGMS=${2:-0}; LOSS=${3:-0}
@@ -74,6 +76,13 @@ for n in 2 1; do
   cp "$SRC/build/PLAYNET.COM" "$SRC/build/PLAYNET.OVL" "$WORK/SALAMAND.GPF" "$ROOT/software/UNAPI/bin/INL.COM" \
     "$ROOT/software/UNAPI/bin/RAMHELPR.COM" "$D/"
   cp "$SALAMANDER_ROM" "$D/SALAMAND.ROM"
+  if [ -n "$CHAT" ]; then               # the chat over TCP/IP: MCHAT /T in C:\PLAYNET with its INI (the IRC fixture is the host)
+    cp "$ROOT/software/target/mchat.com" "$D/MCHAT.COM"
+    nick=$( [ $n = 1 ] && echo alice || echo bob )
+    gl='GAMELINK=1\r\n'; [ -z "$HYBRID" ] || gl=""      # link 1: the game's packets over TCP/IP; link 2: through the MSXPi
+    printf 'IRCADDR=10.0.2.2\r\nIRCPORT=%s\r\nIRCNICK=%s\r\nMCHATROOM=#msxpi\r\nGAMEPORT=510%s\r\nGAMEADDR=10.0.2.2\r\n%b\032' \
+      "$IRC_PORT" $nick $n "$gl" > "$D/MCHAT.INI"
+  fi
   printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$D/INL.CFG"
   sh "$HERE/nextor_folder.sh" "${NEXTORHD:-C:/Users/roniv/Dev/MSX/NextorHD.dsk}" "$WORKW/nextor_P$n.dsk" \
     "$(cd "$D" && pwd -W)" PLAYNET || exit 1
@@ -84,7 +93,10 @@ start() {  # n port local_udp peer_udp
   net="MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"   # TCP=1: P2's server is INL's network link
   # a TCP/IP node's server is INL's network link; with HYBRID=1 it also runs the node's own session (link 2)
   [ -n "$TCP" ] && { [ $1 = 2 ] || [ -n "$BOTH" ]; } && { net="MSXPI_ETH_LINK=udpnat"; [ -z "$HYBRID" ] || net="$net MSXPI_NETPLAY=$3:127.0.0.1:$4 MSXPI_NETPLAY_PROFILE=$PROFHASH"; }
-  [ -n "$CHAT" ] && net="PCHESS_IRC_HOST=127.0.0.1 PCHESS_IRC_PORT=$IRC_PORT PCHESS_IRC_TLS=0 MSXPI_NETPLAY_LAN=127.0.0.1 MSXPI_NETPLAY_NOSTUN=1"
+  if [ -n "$CHAT" ]; then
+    net="PCHESS_IRC_HOST=127.0.0.1 PCHESS_IRC_PORT=$IRC_PORT PCHESS_IRC_TLS=0 MSXPI_NETPLAY_LAN=127.0.0.1 MSXPI_NETPLAY_NOSTUN=1"
+    [ -z "$TCP" ] || net="$net MSXPI_ETH_LINK=udpnat"
+  fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
         $net MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS \
@@ -94,7 +106,8 @@ start() {  # n port local_udp peer_udp
     done ) > /dev/null 2>&1 &
 }
 : > "$WORK/server1.log"; : > "$WORK/server2.log"
-[ -z "$CHAT" ] || { ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT > "$WORK/irc.log" 2>&1 ) & }
+pings=""; [ -z "$TCP" ] || pings="${IRC_PING:-3} ${IRC_TIMEOUT:-60}"   # PING every 3 s, drop after 60 s of silence (wall clock)
+[ -z "$CHAT" ] || { ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) & }
 start 1 8115 5101 5102
 start 2 8116 5102 5101
 sleep 15
@@ -123,7 +136,16 @@ wait $NPIDS
 CMP_DROP_LAST=${TCP:+1} python "$HERE/cmp_pair.py" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
 grep -h "^#" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -8
-if [ -n "$EXITKEY" ] && [ -n "$CHAT" ]; then  # both back in MCHAT: restore, then "mchat start"
+if [ -n "$EXITKEY" ] && [ -n "$CHAT" ] && [ -n "$TCP" ]; then   # MCHAT /T quits IRC before the game and connects again after it
+  for nick in alice bob; do
+    if awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { g = 1 } g && $2 == n && / QUIT / { q = 1 } END { exit !q }' "$WORK/irc.log"
+    then echo "$nick: sent QUIT after the launch"; else echo "$nick: NO QUIT after the launch"; fi
+    c=$(awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } END { print c }' "$WORK/irc.log")
+    if awk -v n="$nick" -v c="$c" '$2 == n && $1 > c && / JOIN #/ { ok = 1 } END { exit !ok }' "$WORK/irc.log"
+    then echo "$nick: back in MCHAT /T on a new IRC connection"; else echo "$nick: NOT back in MCHAT /T"; fi
+  done
+  grep -c "^conn" "$WORK/irc.log" | sed 's/^/IRC connections opened: /'
+elif [ -n "$EXITKEY" ] && [ -n "$CHAT" ]; then  # both back in MCHAT: restore, then "mchat start"
   for n in 1 2; do
     if awk '/-> playnet restore/ { r = 1 } r && /-> mchat start/ { ok = 1 } END { exit !ok }' "$WORK/server$n.log"
     then echo "server $n: back in MCHAT after the game"; else echo "server $n: NOT back in MCHAT"; fi

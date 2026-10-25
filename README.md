@@ -20,6 +20,10 @@ Version 1.6 is the current release. What changed is in
 > for example Konami's Soccer over the Internet) are experimental and **not ready for end users yet**.
 > They have only been tested between emulators, expect bugs and missing pieces, and the files, commands and
 > protocols may still change. Try them if you want to help test, but do not rely on them.
+>
+> `MCHAT` plays through the MSXPi when there is one, and over TCP/IP UNAPI (InterNestor Lite on the MSXPi's Ethernet, or a
+> hardware stack such as GR8NET) when there is not. `MCHAT /T` forces TCP/IP even with an MSXPi. TCP/IP play needs a memory
+> mapper (MSR or Nextor); see the users' guide section "Online games" for the requirements.
 
 **Version 1.6 breaks software compatibility with previous ROMs and servers.**
 Upgrade the whole set together: ROM, msxpi-server, the client commands (`.COM`
@@ -281,7 +285,8 @@ Pi's WiFi. Details: `software/UNAPI/README.md`.
 
 * ROM: the updater downloads it but never writes it - repeat Step 2.
 
-Update all three together. Run `p shut` before you switch the MSX off: the Pi is
+Update all three together: the ROM, the server and the clients (`.COM` files, including `playnet.com`, `playnet.ovl`
+and `mchat.com`) come from the same build, so a server update also means flashing `msxpibios.rom` again. Run `p shut` before you switch the MSX off: the Pi is
 powered by the MSX, and an SD card can be corrupted by a sudden power cut.
 
 More detail with pictures: `documents/Quick Start.odt` and the "Hard Way" tutorial

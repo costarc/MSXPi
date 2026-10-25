@@ -136,7 +136,16 @@ if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
         # RAMHELPR I reloads COMMAND2, which comes back on A:
         harness::run_cmd "C:" 10 { harness::run_cmd "CD PLAYNET" 10 { harness::run_cmd "RAMHELPR I" 30 {
             harness::run_cmd "C:" 10 { harness::run_cmd "INL I" 90 {
-                if {[info exists ::env(CMD)] && $::env(CMD) ne ""} { type "$::env(CMD)\r" } else { type "PLAYNET /T salamand $::roleArg 5102 10.0.2.2:5101\r" }
+                if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
+                    # links 1 and 2 from the chat: MCHAT /T, alice invites bob, the chat types PLAYNET itself
+                    if {$::roleArg eq "P1"} {
+                        type "MCHAT /1 /T alice\r"
+                        after time $::env(PLAY_AT) { type "/play bob salamand\r" }
+                    } else {
+                        type "MCHAT /1 /T bob\r"
+                        after time $::env(ACCEPT_AT) { type "/accept\r" }
+                    }
+                } elseif {[info exists ::env(CMD)] && $::env(CMD) ne ""} { type "$::env(CMD)\r" } else { type "PLAYNET /T salamand $::roleArg 5102 10.0.2.2:5101\r" }
                 after time 3 waitStub
             } } } } }
     }

@@ -8,6 +8,10 @@ with one new requirement from the user:
 
 Revision 2 (same day) folds in the user's answers to the first draft. They are recorded in section 9. Nothing here is implemented yet.
 
+> **Later change (D-5):** this design keeps the chat's IRC connection open through a game (resident, `PING`s answered by `PLAYNET`). That was
+> measured and dropped: it cost 3-54 % of the frame rate (PLAYNET-TCPIP-PERFORMANCE.md 5.6a), so `MCHAT /T` now quits IRC before the game and
+> connects again on return (PLAYNET-PROTOCOLS.md 14). The sections below describe the original design.
+
 ---
 
 ## 1. Summary
