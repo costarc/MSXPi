@@ -1,6 +1,6 @@
 /*
  * MSX Free Chat over TCP/IP UNAPI (InterNestor Lite, GR8NET, ObsoNET...),
- * chosen with "mchat /t". local_exchange() takes the same "mchat ..."
+ * used when there is no MSXPi, or forced with "mchat /t". local_exchange() takes the same "mchat ..."
  * commands the MSXPi server does and fills `reply` with the same CHT1
  * packets, so mchat.c does not know which link is in use (see msxpi_chat.py
  * for the packets). It is msxpi_chat.py's ChatIRC in C, with less memory:
@@ -55,6 +55,30 @@ static void jp_to(uint16_t target) {
 
 #define EXTBIO 0xFFCA
 #define ARG 0xF847
+
+/* An MSXPi interface is in the machine when some slot's ROM carries "MSXPI" at 400Ah (the tag the MSXPi BIOS
+ * ROM has in its header). RDSLT returns with interrupts off: they are switched on again before the return. */
+static uint8_t msxpi_present(void) {
+    static const char tag[5] = {'M', 'S', 'X', 'P', 'I'};
+    uint8_t p, s, i, slot, found = 0;
+    for (p = 0; p < 4 && !found; p++) {
+        uint8_t exp = *(volatile uint8_t *)(0xFCC1 + p) & 0x80;
+        for (s = 0; s < (exp ? 4 : 1) && !found; s++) {
+            slot = p | (exp ? (uint8_t)(0x80 | (s << 2)) : 0);
+            for (i = 0; i < 5; i++) {
+                jp_to(0x000C);                  /* RDSLT */
+                ur_a = slot; ur_hl = 0x400A + i;
+                raw_call();
+                if (ur_a != (uint8_t)tag[i]) break;
+            }
+            found = i == 5;
+        }
+    }
+    __asm
+    ei
+    __endasm;
+    return found;
+}
 static void extbio(uint8_t a,uint8_t b,uint16_t hl) {
     memcpy((char *)ARG,"TCP/IP",7);
     un_jp[0]=0xC3; un_jp[1]=(uint8_t)EXTBIO; un_jp[2]=(uint8_t)(EXTBIO>>8);
@@ -607,8 +631,9 @@ static uint8_t net_begin(const char *nick, const char *room) {
 
 /* ------------------------------------------------------- games (PLAYNET) */
 /* MSXG1 invitations (games_local.c, PLAYNET-PROTOCOLS.md 12), the games being the GAME.GPF files in the
- * current directory. A game is handed to PLAYNET /T through PLAYNET.SES (13.1); the IRC connection stays
- * open (resident) through the game, and the MCHAT /T that PLAYNET types afterwards takes it back. */
+ * current directory. A game is handed to PLAYNET /T through PLAYNET.SES (13.1). The IRC connection is closed
+ * (QUIT) before the game: kept open it cost 3-54 % of the game's speed (PLAYNET-TCPIP-PERFORMANCE.md 5.6a), and
+ * the MCHAT /T that PLAYNET types afterwards connects again. */
 #include "games_local.c"
 
 #define TCPIP_GET_IPINFO 2
@@ -729,7 +754,7 @@ static uint8_t write_session(void) {
     static FCB f;
     uint8_t i;
     gl_session(ses);
-    ses[59] = ln.conn;
+    ses[59] = 0xFF;                     /* no connection kept: PLAYNET.OVL has nothing to read */
     strncpy((char *)ses + 60, ln.nick, 16);
     ses[77] = lcount;
     for (i = 0; i < lcount; i++) strncpy((char *)ses + 78 + i * 24, lr[i].name, 23);
@@ -756,7 +781,7 @@ static uint8_t resume_session(void) {
     ses_name(&f);                                             /* used: empty it */
     if (!fcb_create(&f)) fcb_close(&f);
     ur_bc = (uint16_t)ses[59] << 8; ur_hl = 0;
-    if (!unapi(TCPIP_TCP_STATE) && (uint8_t)(ur_bc >> 8) == 4) {
+    if (ses[59] != 0xFF && !unapi(TCPIP_TCP_STATE) && (uint8_t)(ur_bc >> 8) == 4) {
         ln.conn = ses[59]; ln.net = NET_READY; ln.ready = 1; ln.active = 1;
         ln.started = JIFFY;
         strncpy(ln.nick, (char *)ses + 60, 16); ln.nick[16] = 0;
@@ -773,7 +798,7 @@ static uint8_t resume_session(void) {
     memcpy(peer, ses + 24, 8); peer[8] = 0;
     gl_restore(peer);
     gl_resumed(ses[SES_STATE] == 2 ? ses[SES_STATE + 1] : 0);
-    if (!ok) say_system("The IRC connection did not survive the game: connecting again");
+    if (!ok && ses[59] != 0xFF) say_system("The IRC connection did not survive the game: connecting again");
     return ok;
 }
 
@@ -1006,7 +1031,7 @@ static uint8_t local_exchange(const char *cmd) {
     } else if (!strncmp(p, "launch", 6)) {
         const char *line = gl_take_launch();
         packet_header('L');
-        if (line && write_session()) {reply[6] = 1; strcpy((char *)reply + 24, line);}
+        if (line && write_session()) {reply[6] = 1; strcpy((char *)reply + 24, line); net_close(); ln.active = 0;}
         else if (line) say_system("! Cannot write PLAYNET.SES");
     } else if (!strncmp(p, "quit", 4)) {
         net_close(); ln.active = 0;

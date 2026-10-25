@@ -162,16 +162,15 @@ wait $NPIDS
 python "$HERE/cmp_pair.py" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "desync=" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "netplay: [a-z]" "$WORK/server1.log" "$WORK/server2.log" | grep -v "{" | tail -12
-if [ -n "$EXITKEY" ] && [ "$SCENARIO" = tcp ]; then   # back in MCHAT /T on the same connection: NAMES after GO
+if [ -n "$EXITKEY" ] && [ "$SCENARIO" = tcp ]; then   # MCHAT /T quits IRC before the game and connects again after it
   for nick in alice bob; do
-    if awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } c != "" && $1 == c && /NAMES #/ { ok = 1 } END { exit !ok }' "$WORK/irc.log"
-    then echo "$nick: back in MCHAT /T on the same IRC connection"; else echo "$nick: NOT back in MCHAT /T"; fi
+    if awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { g = 1 } g && $2 == n && / QUIT / { q = 1 } END { exit !q }' "$WORK/irc.log"
+    then echo "$nick: sent QUIT after the launch"; else echo "$nick: NO QUIT after the launch"; fi
+    c=$(awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } END { print c }' "$WORK/irc.log")
+    if awk -v n="$nick" -v c="$c" '$2 == n && $1 > c && / JOIN #/ { ok = 1 } END { exit !ok }' "$WORK/irc.log"
+    then echo "$nick: back in MCHAT /T on a new IRC connection"; else echo "$nick: NOT back in MCHAT /T"; fi
   done
   grep -c "^conn" "$WORK/irc.log" | sed 's/^/IRC connections opened: /'
-  for nick in alice bob; do                # PLAYNET's overlay answered the server during the game
-    awk -v n="$nick" '$2 == n && /:MSXG1 (GO|ACCEPT) / { c = $1 } c != "" && $1 == c && /NAMES #/ { exit }
-      c != "" && $1 == c && / PONG / { p++ } END { print n ": " p + 0 " PONG between the launch and the return" }' "$WORK/irc.log"
-  done
   grep "^drop" "$WORK/irc.log" || echo "no IRC client dropped for silence"
 fi
 if [ -n "$EXITKEY" ] && [ "$SCENARIO" = chat ]; then   # both must be back in MCHAT: restore, then "mchat start"

@@ -8,7 +8,8 @@
  * display backend can be replaced (MSX2 modes, another screen mode) without
  * touching this file.
  *
- *   MCHAT [/1] [/t] [nick]   ESC quits; /1 MSX1 screen on an MSX2, /t TCP/IP
+ *   MCHAT [/1] [/t] [nick]   ESC quits; /1 MSX1 screen on an MSX2; with an MSXPi the chat runs through it, without
+ *                            one over TCP/IP UNAPI, and /t forces TCP/IP even when there is an MSXPi
  *   TAB, LEFT/RIGHT    next/previous room       UP/DOWN  read older/newer
  *   HOME               back to the latest       /help    commands
  *
@@ -587,8 +588,8 @@ static void scroll_log(int8_t dir) {
 }
 
 /* Command line: "[/1] [/t] [nick]". /1 forces the MSX1 screen on any machine,
- * /t talks to IRC over TCP/IP UNAPI instead of the MSXPi server. */
-static uint8_t force_msx1;
+ * /t talks to IRC over TCP/IP UNAPI even when there is an MSXPi; without an MSXPi TCP/IP is used anyway. */
+static uint8_t force_msx1, auto_tcp;
 
 static void read_args(char *dest) {
     uint8_t len = *(uint8_t *)0x80, n = 0, i = 0;
@@ -596,6 +597,7 @@ static void read_args(char *dest) {
     dest[0] = 0;
     force_msx1 = 0;
     link_tcp = 0;
+    auto_tcp = 0;
     while (i < len) {
         while (i < len && s[i] == ' ') i++;
         if (i + 1 < len && s[i] == '/' && (s[i + 1] == '1' || s[i + 1] == 't' || s[i + 1] == 'T')) {
@@ -611,6 +613,7 @@ static void read_args(char *dest) {
         dest[n] = 0;
         break;
     }
+    if (!link_tcp && !msxpi_present()) link_tcp = auto_tcp = 1;
 }
 
 /* 0 on an MSX1, else 1: ask the BIOS for SCREEN 6, which only an MSX2 has;
@@ -653,7 +656,10 @@ int main(void) {
     font6_loaded = 0;                  /* the S6 font is read from the BIOS once */
     if (link_tcp) {
         const char *why = tcp_link_start();
-        if (why) {Print((char *)why); Print("\r\n"); return 1;}
+        if (why) {
+            if (auto_tcp) Print("No MSXPi found. ");
+            Print((char *)why); Print("\r\n"); return 1;
+        }
     }
     if (!ui_open()) return 1;
     layout();
