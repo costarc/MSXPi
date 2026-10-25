@@ -285,7 +285,7 @@ void ovl_open(void)
     svc_ticks = ovl_io.service ? nc_now() : 0;
     if (!hybrid) {
         nc_init(ovl_io.profile, ovl_io.version, ovl_io.force_delay, ovl_io.hz,
-                ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 2 : 1),
+                ovl_io.k_want ? ovl_io.k_want : (ovl_io.service ? 3 : 1),
                 ovl_io.s_want != 0xFF ? ovl_io.s_want : (ovl_io.service ? 1 : 0));
         nc_set_peers(ovl_io.cand, ovl_io.ncand);
         nc_restart();
