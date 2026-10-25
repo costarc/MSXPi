@@ -462,7 +462,49 @@ class WinTapLink(BaseLink):
                 found.append((guid, name))
         return found
 
-    def __init__(self, ifname=None, *a, **kw):
+    # Where the setup script's address lives: netsh writes a static address to
+    # IPAddress, DHCP to DhcpIPAddress.  Read from the registry, like the
+    # adapter list, so choosing an adapter needs no subprocess.
+    TCPIP_KEY = r"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces"
+
+    @classmethod
+    def adapter_ips(cls, guid):
+        """IPv4 addresses Windows has configured on the adapter with this GUID."""
+        import winreg
+        ips = []
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                                cls.TCPIP_KEY + "\\" + guid) as k:
+                for name in ("IPAddress", "DhcpIPAddress"):
+                    try:
+                        v = winreg.QueryValueEx(k, name)[0]
+                    except OSError:
+                        continue
+                    ips += [v] if isinstance(v, str) else list(v)
+        except OSError:
+            pass
+        return [ip for ip in ips if ip]
+
+    @classmethod
+    def pick_adapter(cls, adapters, ifname=None, tap_ip=None):
+        """Choose the (guid, name) to open.
+
+        A PC can have several TAP adapters (a second one for a second openMSX).
+        The one to open is the one msxpi-tcpip-setup.ps1 gave the gateway
+        address, so that is matched first; the registry order, which has nothing
+        to do with it, is only the last resort.  An explicit name still wins.
+        """
+        if ifname:
+            named = [a_ for a_ in adapters if a_[1] == ifname]
+            if named:
+                return named[0]
+        if tap_ip:
+            for a_ in adapters:
+                if tap_ip in cls.adapter_ips(a_[0]):
+                    return a_
+        return adapters[0]
+
+    def __init__(self, ifname=None, tap_ip=None, *a, **kw):
         BaseLink.__init__(self, *a, **kw)
         import ctypes
         import ctypes.wintypes as wintypes
@@ -474,9 +516,7 @@ class WinTapLink(BaseLink):
         if not adapters:
             raise OSError("no TAP-Windows adapter found - install the "
                           "OpenVPN TAP driver, then run msxpi-tcpip-setup.ps1")
-        if ifname:
-            adapters = [a_ for a_ in adapters if a_[1] == ifname] or adapters
-        self.guid, self.ifname = adapters[0]
+        self.guid, self.ifname = self.pick_adapter(adapters, ifname, tap_ip)
 
         self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._k32.CreateFileW.restype = wintypes.HANDLE
@@ -893,7 +933,12 @@ class EthShuttle(object):
 # Factory
 # =============================================================================
 
-def make_link(prefer_tap=True, ifname="msxpi0", log=None):
+# The gateway address msxpi-tcpip-setup.ps1 puts on the TAP-Windows adapter
+# (its -TapIp default).  Overridable with TAPIP in msxpi.ini.
+DEFAULT_TAP_IP = "192.168.99.1"
+
+
+def make_link(prefer_tap=True, ifname="msxpi0", log=None, tap_ip=None):
     """A TapLink where possible, a MockLink everywhere else.
 
     Falling back rather than raising is deliberate: the openMSX harness runs on
@@ -919,8 +964,10 @@ def make_link(prefer_tap=True, ifname="msxpi0", log=None):
         # administrator rights; assigning the address and the NAT does, and
         # that is msxpi-tcpip-setup.ps1's job, run once.
         try:
-            link = WinTapLink(ifname=None if ifname == "msxpi0" else ifname)
-            log("eth: TAP device %s up" % link.ifname)
+            link = WinTapLink(ifname=None if ifname == "msxpi0" else ifname,
+                              tap_ip=tap_ip or DEFAULT_TAP_IP)
+            log("eth: TAP device %s up (selected for %s)"
+                % (link.ifname, tap_ip or DEFAULT_TAP_IP))
             return link
         except Exception as e:
             log("eth: TAP unavailable (%s) - falling back to MockLink" % e)

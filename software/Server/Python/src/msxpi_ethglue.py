@@ -85,13 +85,22 @@ def _eth_read_burst(n):
     return bytes(data) if rc == RC_SUCCESS else None
 
 
+def _eth_tap_ip():
+    """TAPIP from msxpi.ini: the gateway address of the TAP-Windows adapter to use."""
+    try:
+        from msxpi_settings import getMSXPiVar
+        return (getMSXPiVar("TAPIP") or "").strip() or None
+    except Exception:
+        return None
+
+
 def eth_get_shuttle():
     """The EthShuttle, created on first use.  None if the module is absent."""
     global _eth_shuttle
     if _eth_mod is None:
         return None
     if _eth_shuttle is None:
-        link = _eth_mod.make_link(log=print)
+        link = _eth_mod.make_link(log=print, tap_ip=_eth_tap_ip())
         _eth_shuttle = _eth_mod.EthShuttle(
             link,
             read_byte=SPI_ByteTransfer,
