@@ -82,14 +82,14 @@ proc waitStub {} {
     }
     after time 0.05 waitStub
 }
-# with EXITKEY: once the ticks stop (the game ended), 40 s for the way back (MCHAT), a screenshot, the end
+# with EXITKEY: once the ticks stop (the game ended), 40 s (BACKWAIT) for the way back (MCHAT), a screenshot, the end
 set ::lastTick 0
 proc npWatch {} {
     if {$::started && !$::ended && [machine_info time] - $::lastTick > 5} {
         set ::ended 1
         puts $::tf [format "# ticks stopped at frame %d t=%.1f PC=%04X" [expr {$::frames + [peek $::s_nf]}] [machine_info time] [reg PC]]
         flush $::tf
-        after time 40 { catch { screenshot $::env(TRACE).back.png }; puts $::tf "# back t=[format %.1f [machine_info time]]"; close $::tf; after time 1 exit }
+        after time [expr {[info exists ::env(BACKWAIT)] ? $::env(BACKWAIT) : 40}] { catch { screenshot $::env(TRACE).back.png }; puts $::tf "# back t=[format %.1f [machine_info time]]"; close $::tf; after time 1 exit }
         return
     }
     after time 1 npWatch
