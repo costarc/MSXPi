@@ -48,10 +48,15 @@ Shipped ROM and tools against the new server, in openMSX:
 - `fault_inject_openmsx.py` with the shipped ROM: verdicts identical to the T0 legacy matrix,
   except the pcopy upload, which must now complete
 - boot from MSXPi (MSX-DOS), then `msxpiupd feature/link2` against a scratch MSXPI_HOME
+- **after each rename commit** (server handlers, then each MSX image): the whole T2 set, plus
+  - a search showing no old name is left outside the alias definitions; once the aliases are
+    removed, no old name at all
+  - an import of every server module, and every ROM image and .COM still assembling
+  - byte-identical binaries where only names changed: a pure rename must not move a single byte
 
 ## T3 - Z80 routine tests (phase 2 and 5, sz80)
 
-- **CRC correctness**: `L2_CRC_UPDATE` and the table against `binascii.crc_hqx` for 1,000 random
+- **CRC correctness**: `LINK_CRC` and the table against `binascii.crc_hqx` for 1,000 random
   buffers, lengths 0-8192.
 - **Cost**: T-states per byte of the CRC pass, the polled RX/TX loops with CRC and the burst
   checksum pass. Each must be no worse than its T0 legacy counterpart.

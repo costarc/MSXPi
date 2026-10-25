@@ -146,9 +146,10 @@ and the loop live in the ROM/extension in page 1 and the buffer is outside page 
 
 ### 5.1 MSX side
 
-- **Same entry points**: the LINK2 routines keep the names and register contracts of the legacy
-  ones (`SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, `SendCommandToMSXPi`), so
-  `msxpi_call.asm`, `msxpiext.asm` and later the DOS driver need no changes to their callers.
+- **New, paired names** (section 5.3) with the register contracts of the legacy routines. The
+  legacy names (`SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, `SendCommandToMSXPi`...)
+  remain as aliases only for callers not yet converted. `msxpi_call.asm` and `msxpiext.asm` move
+  to the new names in phase 2, the DOS driver in phase 6, the .COM tools in phase 7.
 - **Selected at build time** with `-DMSXPI_LINK2`. The BIOS half and msxpiext.bin set it; the DOS
   half does not until phase 6 of the plan.
 - **New code goes in its own file**, `asm-common/include/link2.asm`: CRC table and update, block
@@ -160,12 +161,54 @@ and the loop live in the ROM/extension in page 1 and the buffer is outside page 
 ### 5.2 Server
 
 - **`msxpi_link2.py`**: the LINK2 framing, written against the same transport primitives.
-- **`msxpi_blocks.py`** keeps its public functions (`recvdata2`, `sendmultiblock`, `senddata`,
-  `recvdata2_oneblock`, `PerformHandshake`). Each one hunts for READY or HELLO2 and hands a LINK2
-  transfer to `msxpi_link2`, so no command handler changes.
-- **Transport** gains `SPI_BurstGoOut(data)` and `SPI_BurstGoIn(n)`: GO plus payload in one
+- **`msxpi_blocks.py`** gets the paired names of section 5.3 as its public functions. Each one
+  hunts for READY or HELLO2 and then runs the legacy or the LINK2 framing. The old names
+  (`recvdata2`, `sendmultiblock`, `senddata`, `recvdata2_oneblock`, `PerformHandshake`) stay as
+  aliases until the command handlers are converted, in one mechanical commit.
+- **Transport** gains `spi_burst_send(data)` and `spi_burst_recv(n)`: GO plus payload in one
   READY-held run, for native GPIO, fast GPIO and the TCP-framed openMSX link.
 - **Ethernet**: `msxpi_eth.py` gets protocol 3 next to 2 (`OP_PROBE3`, GO bursts, `RC_OK` 0x5A).
+
+### 5.3 Naming: one name per wire operation, paired across the link
+
+Today the same operation has unrelated names on the two sides. The MSX's `SENDDATA` is answered
+by the server's `recvdata2`; the MSX's `RECVDATA_ONEBLOCK` by `sendmultiblock` /
+`senddata_oneblock`; `PerformHandshake` exists on both sides with different roles. LINK2 names
+every operation once, from the side that runs it:
+
+- **Rules**:
+  - same noun on both sides, opposite verb: what one side **sends** the other **receives**
+  - prefix `LINK_` on the MSX (asm labels, upper case) and `link_` on the server (snake case);
+    C on the MSX uses the asm names in lower case (`link_send()`)
+  - suffixes: `_BYTE` (one transfer), `_BLOCK` (one framed block), none (a whole transfer of one or
+    more blocks)
+- **Pairs**:
+
+| Wire operation | MSX side | Server side |
+|---|---|---|
+| open a transfer (HELLO2 exchange) | `LINK_OPEN` | `link_accept` |
+| one byte, MSX -> Pi | `LINK_SEND_BYTE` | `link_recv_byte` |
+| one byte, Pi -> MSX | `LINK_RECV_BYTE` | `link_send_byte` |
+| one block, MSX -> Pi | `LINK_SEND_BLOCK` | `link_recv_block` |
+| one block, Pi -> MSX | `LINK_RECV_BLOCK` | `link_send_block` |
+| whole transfer, MSX -> Pi | `LINK_SEND` | `link_recv` |
+| whole transfer, Pi -> MSX | `LINK_RECV` | `link_send` |
+| command (name + parameters) | `LINK_COMMAND` | `link_recv_command` (server main loop) |
+| burst payload, MSX -> Pi (OTIR after GO) | `LINK_BURST_SEND` | `spi_burst_recv` |
+| burst payload, Pi -> MSX (INIR after GO) | `LINK_BURST_RECV` | `spi_burst_send` |
+| CRC-16 | `LINK_CRC` | `link_crc` |
+| claim / release the shared link | `LINK_CLAIM` / `LINK_RELEASE` | - |
+
+- **Legacy names map onto these**: `SENDDATA` -> `LINK_SEND`, `RECVDATA_ONEBLOCK` ->
+  `LINK_RECV_BLOCK`, `PIREADBYTE` -> `LINK_RECV_BYTE`, `PIWRITEBYTE` -> `LINK_SEND_BYTE`,
+  `SendCommandToMSXPi` -> `LINK_COMMAND`, `PerformHandshake` -> `LINK_OPEN`. On the server:
+  `recvdata2` -> `link_recv`, `sendmultiblock` -> `link_send`, `senddata_oneblock` ->
+  `link_send_block`, `recvdata2_oneblock` -> `link_recv_block`, `SPI_ByteTransfer` -> the
+  `link_send_byte` / `link_recv_byte` pair. The legacy framing keeps its own internal names; only
+  the public entry points change.
+- **The other BIOS routines** get the same treatment in the phase 5 rewrite: one verb-noun scheme
+  (`PRINT_PI_STDOUT`, `PARSE_CALL_PARAMETERS`...), no mixed case, and no two names for one
+  routine.
 
 ## 6. The DOS half (later phase)
 
