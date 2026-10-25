@@ -588,7 +588,9 @@ def SPI_BurstIn(
     # READY is up, but /WAIT only holds the Z80 while READY is up - so bytes
     # sent in that window overwrite each other and are lost.  Sampled before
     # anything slow; reported only after the burst, so it adds no latency.
-    early = _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
+    # Not with a GO byte: the MSX's polled read of GO starts its transfer before
+    # READY rises by design, and that transfer is the GO byte itself, not payload.
+    early = go is None and _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
 
     if _NATIVE_GPIO is not None:
         try:

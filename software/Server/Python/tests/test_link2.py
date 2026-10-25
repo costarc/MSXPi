@@ -168,6 +168,64 @@ class Limits(unittest.TestCase):
             m.send(pattern(32))  # never gets HELLO2_ACK: gives up after 16 tries
         w.close()
 
+    def test_overflow_is_aborted(self):
+        """More than the server's buffer: the block that does not fit is ABORTed in
+        its header slot, so the MSX does not think the transfer succeeded."""
+        w = S.Wire(timeout=2.0)
+        srv = S.Server(w, [lambda: B.link_recv(600)]).start()
+        m = S.Msx(w, 512)
+        with self.assertRaises(S.MsxAborted) as cm:
+            m.send(pattern(1024))
+        srv.join(2)
+        w.close()
+        self.assertIn("header", str(cm.exception))
+        self.assertEqual(srv.results[0][0], C.RC_BUFOVFLW)
+
+    def test_nak_limit_resets_after_duplicate(self):
+        """The receiver's limit is per block: NAKs spent on a duplicate do not count
+        against the block after it."""
+        import msxpi_link2 as L
+
+        def block(seq, payload, good=True):
+            h = bytes((C.RC_READY, len(payload) & 0xFF, len(payload) >> 8, seq))
+            hc = S.crc(h)
+            pc = S.crc(payload) ^ (0 if good else 1)
+            return [h + bytes((hc & 0xFF, hc >> 8)), payload, bytes((pc & 0xFF, pc >> 8))]
+
+        class Scripted:
+            """Plays back the MSX's side of read_payload; records the answers."""
+
+            def __init__(self, reads):
+                self.reads, self.out = list(reads), []
+
+            def read_payload(self, n):
+                b = self.reads.pop(0)
+                assert len(b) == n, (len(b), n)
+                return C.RC_SUCCESS, b
+
+            def byte_out(self, b):
+                self.out.append(b)
+                return C.RC_SUCCESS
+
+        p0, p1 = pattern(64, 1), pattern(64, 2)
+        reads = []
+        for _ in range(5):
+            reads += block(0, p0, good=False)  # the duplicate of block 0, damaged five times
+        reads += block(0, p0)                  # ... then good: re-ACKed and discarded
+        for _ in range(C.LINK2_RETRIES - 1):
+            reads += block(1, p1, good=False)  # block 1 needs the most NAKs a block may get
+        reads += block(1, p1)
+        io = Scripted(reads)
+        saved, L.io = L.io, io
+        try:
+            tr = L.Transfer(512, False)
+            tr.last_seq, tr.next_seq = 0, 1  # block 0 was accepted; its ACK was lost
+            rc, typ, payload = L.link_recv_block(tr, 512)
+        finally:
+            L.io = saved
+        self.assertEqual((rc, payload), (C.RC_SUCCESS, p1))
+        self.assertNotIn(C.LINK_ABORT, io.out)
+
     def test_old_server_gets_protoerr(self):
         w = S.Wire(timeout=2.0)
 

@@ -229,13 +229,16 @@ def link_recv_block(
         burst = bool(wire_len & BURST_BIT)
         length = wire_len & ~BURST_BIT
         duplicate = seq == tr.last_seq
+        # A duplicate is read and thrown away, so the room left does not apply
+        # to it - the block it repeats is already counted in that room.
+        too_long = length > (MAX_BLOCK if duplicate else max_len)
         if (
             not (duplicate or seq == tr.next_seq)
-            or length > max_len
+            or too_long
             or (burst and (not tr.burst_ok or not length or length % 256))
         ):
             o.byte_out(LINK_ABORT)  # the header slot is a single answer
-            return RC_PROTOERR, None, None
+            return (RC_BUFOVFLW if too_long else RC_PROTOERR), None, None
 
         if burst:
             rc, payload = o.burst_recv(length)  # the header ACK is the GO byte
@@ -255,6 +258,7 @@ def link_recv_block(
         if not answer(LINK_ACK):
             return RC_CONNERR, None, None
         if duplicate:
+            naks = 0  # the limit is per block, and the next one is a new block
             continue  # the sender missed our ACK; it moves on now
         tr.last_seq = seq
         tr.next_seq = (seq + 1) & 0xFF
@@ -320,11 +324,12 @@ def link_recv(
     data = bytearray()
     block_max = min(tr.msx_size or MAX_BLOCK, MAX_BLOCK)
     while True:
-        rc, typ, payload = link_recv_block(tr, block_max)
+        # The room left goes into the header check, so a block that does not fit
+        # is ABORTed in its header slot.  Checking after the block had been ACKed
+        # told the MSX the transfer had succeeded while this side dropped it.
+        rc, typ, payload = link_recv_block(tr, min(block_max, maxbufsize - len(data)))
         if rc != RC_SUCCESS:
             return rc, None
-        if len(data) + len(payload) > maxbufsize:
-            return RC_BUFOVFLW, None
         data.extend(payload)
         if typ != RC_READY:
             return RC_SUCCESS, bytes(data)
