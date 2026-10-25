@@ -52,7 +52,7 @@ import msxpi_ethglue as ethglue
 import msxpi_cmd_disk as disk
 import msxpi_settings as settings
 import msxpi_transport as transport
-from msxpi_blocks import link_send
+from msxpi_blocks import link_recv, link_send
 from msxpi_cmd_disk import msxdos_inihrd, unmount_drive
 from msxpi_cmd_files import run
 from msxpi_ethglue import _eth_release, _eth_relink
@@ -238,6 +238,45 @@ def ver(parms: Optional[str] = None) -> CommandResult:
     version_string = f"MSXPi Server Version {VERSION} Build {BUILD_ID}\n"
     logger.info(f"Sending version info: {version_string.strip()}")
     return link_send(version_string.encode())
+
+
+def link2_pattern(n: int, seed: int = 0) -> bytes:
+    """The test pattern of l2test; L2TEST.BIN generates the same bytes on the MSX."""
+    return bytes((i * 13 + (i >> 8) * 7 + seed) & 0xFF for i in range(n))
+
+
+def l2test(parms: Optional[str] = None) -> CommandResult:
+    """LINK2 test command (documents/LINK2-TEST-PLAN.md, T4).
+
+    l2test pat N SEED   send N pattern bytes (CALL MSXPI("2,addr,l2test pat 8192 7"))
+    l2test sink N SEED  take N bytes from the MSX (L2TEST.BIN), check them against the
+                        pattern and answer "L2TEST OK/BAD ..." with their CRC-16
+    l2test bin          send L2TEST.BIN, the Z80 test program, from MSXPI_HOME
+    """
+    from msxpi_link2 import link_crc
+
+    a = (parms or "").split()
+    op = a[0] if a else ""
+    if op == "pat" and len(a) == 3:
+        return link_send(link2_pattern(int(a[1]), int(a[2])))
+    if op == "sink" and len(a) == 3:
+        n, seed = int(a[1]), int(a[2])
+        rc, data = link_recv(n + 4096)
+        if rc != RC_SUCCESS:
+            logger.info(f"l2test sink: receive failed rc={rc:#04x}")
+            return rc
+        want = link2_pattern(n, seed)
+        bad = next((i for i in range(min(len(data), n)) if data[i] != want[i]), None)
+        if len(data) == n and bad is None:
+            msg = f"L2TEST OK {n} crc {link_crc(data):04X}\n"
+        else:
+            msg = f"L2TEST BAD got {len(data)} want {n} first diff {bad}\n"
+        logger.info(msg.strip())
+        return link_send(msg.encode())
+    if op == "bin":
+        with open(os.path.join(settings.MSXPIHOME, "l2test.bin"), "rb") as f:
+            return link_send(f.read())
+    return link_send(b"usage: l2test pat|sink N SEED | bin\n")
 
 
 def q(parm: Optional[str] = None) -> CommandResult:

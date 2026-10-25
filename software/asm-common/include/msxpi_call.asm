@@ -228,6 +228,46 @@ CALL_DiscardResponse:
         and     a
         ret
 
+ ifdef MSXPI_LINK2
+; ============================================================
+; CALL_MSXPISAVEDATA
+; Receive the response into the buffer at DE, from DE+3 on.
+; First 3 bytes reserved for header:
+;   [0] = final return code (or the error code)
+;   [1..2] = total size (low/high)
+; ============================================================
+CALL_MSXPISAVEDATA:
+        PUSH    DE              ; save base buffer address
+        INC     DE              ; skip header space
+        INC     DE
+        INC     DE
+        LD      BC,MAXBUFSIZE   ; largest block
+        LD      A,2             ; mode 2: blocks follow one another from DE
+        CALL    LINK_RECV       ; NC: A = result code, BC = bytes received
+        POP     DE              ; DE = base buffer address
+        JR      C,RECV_ERROR
+        LD      (DE),A          ; [0] = result code
+        INC     DE
+        LD      A,C
+        LD      (DE),A          ; [1] = total size low
+        INC     DE
+        LD      A,B
+        LD      (DE),A          ; [2] = total size high
+        POP     HL              ; BASIC pointer
+        AND     A
+        RET
+
+RECV_ERROR:
+        LD      (DE),A          ; [0] = error code, so a caller reading the
+        INC     DE              ; header after a failed transfer sees a
+        XOR     A               ; real error instead of whatever was left in
+        LD      (DE),A          ; the buffer
+        INC     DE
+        LD      (DE),A
+        POP     HL              ; BASIC pointer
+        SCF
+        RET
+ else
 ; ============================================================
 ; CALL_MSXPISAVEDATA
 ; Receive data blocks into buffer at DE.
@@ -311,6 +351,8 @@ RECV_ERROR:
         POP     HL              ; restore BASIC pointer, matching RECV_DONE
         SCF                     ; set carry = error
         RET
+
+ endif
 
 CALL_SYNTAX_ERROR:
         ; The help text used to be printed here.  Dropped to reclaim ROM

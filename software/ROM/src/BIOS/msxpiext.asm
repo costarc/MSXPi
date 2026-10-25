@@ -291,10 +291,17 @@ BIOSENTRYADDR:  EQU     $
 ; referenced this table, so the slots were not kept as stubs.
         DW      _MSXPIVER
         DW      _MSXPI
+    IFDEF MSXPI_LINK2
+        DW      LINK_SEND_SIZE      ; HL = largest block, DE = source, BC = length
+        DW      LINK_RECV           ; A = mode, DE = buffer, BC = largest block
+        DW      LINK_SEND
+        DW      LINK_COMMAND
+    ELSE
         DW      PerformHandshake
         DW      RECVDATA_ONEBLOCK
         DW      SENDDATA
         DW      SendCommandToMSXPi
+    ENDIF
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
@@ -310,7 +317,7 @@ BIOSENTRYADDR:  EQU     $
 
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.6.1"
-BuildId: DB "20261024.078"
+BuildId: DB "20261025.079"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 

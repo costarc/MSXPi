@@ -406,3 +406,40 @@ Pi's limit, tags every block but the last RC_READY and the last RC_SUCCESS (or t
 - It sends single answers in header slots and doubled answers after a final block.
 - When it aborts it repeats ABORT until the MSX's next HELLO2 or READY arrives.
 - A legacy READY transfer and a LINK2 transfer can follow each other with no reset between them.
+
+### 8.8 The MSX code as built (phase 2: `asm-common/include/link2.asm`)
+
+Public entry points (registers in the file header of `link2.asm`):
+
+| Entry | In | Out |
+|---|---|---|
+| `LINK_SEND` | DE = source, BC = length | NC: DE = source + length, BC = 0. C: A = RC_* |
+| `LINK_SEND_SIZE` | as `LINK_SEND`, HL = largest block (default 8192) | as `LINK_SEND` |
+| `LINK_RECV` | A = mode, DE = buffer, BC = largest block | NC: A = the transfer's result code, DE = end of data (mode 2), BC = bytes received. C: A = RC_* |
+| `LINK_COMMAND` | DE = zero terminated string | as `LINK_SEND`; C and nothing sent when empty |
+| `LINK_SEND_BYTE` / `LINK_RECV_BYTE` | A = byte / - | A = byte; C = CTRL+ESC (A = RC_ESCPRESSED) |
+
+`LINK_RECV` modes: 0 = blocks are read into the buffer and dropped (`STDOUTTONULL`); 1 = each block is
+printed, a zero put after it first, so the buffer needs BC+1 bytes (`PRINTPISTDOUT`); 2 = blocks follow
+one another from the buffer (`CALL MSXPI("2,..")`). The legacy names that remain are `SENDDATA`,
+`SendCommandToMSXPi`, `PRINTPISTDOUT` and `STDOUTTONULL`, as thin aliases; `PerformHandshake` and
+`RECVDATA_ONEBLOCK` have no equivalent (a transfer is opened and read in one call), and the `BIOSENTRY`
+table of msxpiext.bin lists `LINK_SEND_SIZE`, `LINK_RECV`, `LINK_SEND` and `LINK_COMMAND` in their slots.
+
+How it differs from the paper description above, on purpose:
+
+- **State** lives in a frame on the stack (IX), so the code runs from ROM. Nothing outlives a call.
+- **CRC in the shadow set** (DE' = CRC, H' = table page): the BIOS interrupt routine saves and restores
+  both sets. Polled receive starts the next transfer before it stores and checksums the byte it has just
+  read, and polled send takes each byte into the CRC while that byte goes out, so the CRC work happens
+  inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR.
+- **Page 1**: polled receive stores through `STORE_BYTE` (WRSLT for a destination in 4000h-7FFFh), so a
+  `CALL MSXPI("2,5000,..")` lands in RAM, which the legacy BIOS-half loop did not do. A buffer below 8000h
+  never bursts; the size word's bit 15 is set only for a buffer at 8000h or above on a board with /WAIT
+  (the test of `DSKIO_RXSIZE`: does `$57` change when wait mode goes on).
+- **A damaged flags byte** can leave the Pi bursting to a MSX that thinks it cannot. The MSX reads the GO byte
+  whenever a header says "burst", and uses INIR only if it allowed bursts and the length is a non-zero
+  multiple of 256; otherwise it reads the payload polled, as the model does.
+- **A duplicate in mode 2** is read over the block it repeats (ptr - length), never past the end of the data.
+- Header, ACK and size-frame error handling, the doubled final answers, the NAK limit and the ABORT flood
+  are as in 8.4 to 8.6, line for line.

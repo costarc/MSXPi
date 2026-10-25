@@ -19,13 +19,13 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 |---|---|---|
 | retry investigation | done | 7495484d (fault-injection harness, upload-hang fix, `SENDRETRIES` = 10) |
 | design and plans | done, kept current | ee9d3cf3, ec3cb50a, and every phase since |
-| 0 - tooling | **partly**: the simulated link and MSX model exist; the sz80 bench, the ROM size report and the T-state baselines do **not** | 898d20ab |
+| 0 - tooling | **done**, with a Z80 interpreter instead of sz80: `tests/z80emu.py` hooks the MSXPi ports, which sz80 cannot. T-state baselines, ROM size report (printed by `software/build`) and the simulated link all exist | 898d20ab, and the phase 2 commit |
 | 1 - server dual stack | **done**, audited | 898d20ab, 533a0d7b (overflow, NAK reset), 2ebc8d42 (rename), 2dc875db (slips), 7450e089 (BuildId 20261025.079), and the end-mark commit |
-| 2 - MSX core | not started | - |
+| 2 - MSX core | **done** (see "Phase 2 results" below): `link2.asm`, the BIOS half and msxpiext.bin on LINK2, L2TEST.BIN, `l2test` on the server | the phase 2 commit |
 | 3 to 7 | not started | - |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
-`target/` are still those of `feature/tcpip-games` (nothing on the MSX side has changed yet).
+`target/` now carry the LINK2 BIOS half, msxpiext.bin and L2TEST.BIN (the DOS half is unchanged).
 
 ### What exists, and where
 
@@ -56,23 +56,15 @@ The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the
   `buildMSXdiskImage=no` while that server runs, or ask first. A server-only release is
   `updateServerVersion=yes buildClientCommands=no buildMSXdiskImage=no ./build` (BuildId only).
 
-### Phase 2 starts here
+### Phase 2 results
 
-1. **Finish phase 0 first**: the sz80 bench (`software/tools/z80bench/`), the ROM size report and
-   the T-state baselines of today's PRB_SUM, PAYLOAD_RX and PAYLOAD_TX. Without the baselines
-   "no slower than today" cannot be checked.
-2. **Write `link2.asm` against design section 8**, byte for byte as `link2_sim.Msx` does. The
-   server does not need to change for phase 2, apart from the `l2test` command for L2TEST.BIN
-   (step 5 of phase 2).
-3. **Code to replace in the BIOS half and msxpiext.bin**:
-   - `msxpi_call.asm`: `CALL_MSXPISAVEDATA` (PerformHandshake + RECVDATA_ONEBLOCK loop),
-     `PRINTPISTDOUT`, `STDOUTTONULL`, `SendCommandToMSXPi`
-   - `msxpi_bios.asm`: `SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, `PIREADBYTE`,
-     `PIWRITEBYTE`
-   - the burst code `PAYLOAD_RX_BURST` / `PAYLOAD_TX_BURST` is under `IFDEF MSXPI_DRIVER` today,
-     so the BIOS half does not burst at all yet; LINK2 brings bursts to CALL MSXPI
-4. **Then** the CALL parser and BIOS rewrite of phase 5 can start alongside, with the
-   paired-name rules of design 5.3.
+`link2.asm`, `L2TEST.BIN` (`ROM/src/BIOS/l2test.asm`, built to `target/L2TEST.BIN`) and the server's `l2test`
+command are in; the BIOS half and msxpiext.bin are assembled with `-DMSXPI_LINK2`. Numbers and what was
+not run are in LINK2-TEST-PLAN.md ("Phase 2"); the code as built is in LINK2-DESIGN.md 8.8. Left for later
+phases: `PerformHandshake` / `RECVDATA_ONEBLOCK` have no LINK2 twin (the legacy code is assembled only
+`IFNDEF`), the DOS half and the .COM tools still speak the legacy protocol, and the hardware test (phase 4)
+is the next milestone. `msxpiupd feature/link2` brings the server; the ROM image (`target/msxpi32k.rom`)
+and `msxpiext.bin` have to be flashed / copied by hand.
 
 ## Open questions (defaults used until answered)
 

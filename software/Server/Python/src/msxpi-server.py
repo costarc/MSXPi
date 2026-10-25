@@ -119,6 +119,7 @@ from msxpi_cmd_rom import execrom, msxarchive, ploadr
 from msxpi_cmd_stock import stock
 from msxpi_cmd_system import (
     button_handler,
+    l2test,
     netreset,
     pset,
     q,
@@ -170,6 +171,7 @@ COMMANDS = {
         dskios,
         dskiow,
         irc,
+        l2test,
         mchat,
         pchess,
         nitros,

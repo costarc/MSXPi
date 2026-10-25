@@ -160,13 +160,40 @@ Shipped ROM and tools against the new server, in openMSX:
 | T1.6 random 1-3 bit faults, rates 1e-3..1e-2, 10,000 transfers | 0 corrupt, 0 hung |
 | T1.8 slips at 2,384 positions (512 and 600 bytes, both ways) | 0 corrupt, 0 hung, 0 stuck; next command works within 3 tries |
 | T2 openMSX, shipped ROM against the new server | fault-free PASS; with faults (rate 1.5e-4, seeds 1-4) the same verdicts as the shipped server, every upload completes |
-| T0 Z80 baselines, T3, T4, T5, T6 | not run yet (need the MSX side) |
+| T0 Z80 baselines, T3, T4, T5, T6 | see phase 2 below (T6, hardware, not run) |
 
 What the tests changed in the design is recorded in LINK2-DESIGN.md: section 3.7 for the five
 single-flip desyncs, the two slip failures and the CRC coincidence that led to the end mark, and
 section 3.3 (capacity) for the block that used to be ACKed before it was found not to fit.
 
+**Phase 2 (MSX core), 2026-10-25** - the assembled `link2.asm`, BuildIds ROM 20261025.079, server 20261025.081:
+
+| Test | Result |
+|---|---|
+| T3 byte for byte against `link2_sim.Msx` (`test_link2_z80`: clean both ways and all flag combinations, small blocks, single flips, slips, header and answer damage) | pass |
+| T1 on the Z80 code (`LINK2_MSX=z80 python -m unittest test_link2`): clean, limits, mixed, flip sweep, slip sweep, no-wait, random 1-3 bit faults | all pass |
+| T3 cost, T-states per byte (`z80bench.py`; the Z80's own work, every port answering at once) | burst CRC pass 72.1 against the legacy sum pass 86.0; polled receive 224.8 against 231.5; polled send 167.9 against 168.9 (the CRC included in both). Polled receive stores through a stub here; the real `STORE_BYTE` adds about 20, which the wait for the Pi hides |
+| ROM budget (`software/build` prints it) | BIOS half: code ends at 0x4C0D (legacy 0x4612), 2,994 bytes free below the first fixed entry (0x57BF); msxpiext.bin 3,345 bytes |
+| T4 openMSX, Canon_V-25, BIOS half, clean (`link2_openmsx.py`) | `CALL MSXPIVER`, `CALL MSXPI` modes 0/1/2, responses of 1 to 16,384 bytes into pages 2 and 3, L2TEST.BIN downloaded and run: 11 sends of 1 to 12,000 bytes and 50 x 512 (all with OTIR when the size allows), all verified by the server: 32 of 32 pass |
+| T5 openMSX fault matrix, rates 1.5e-4 (seeds 1-8) and 5e-4 (seeds 1-8), both directions, 32 steps a run | 0 HUNG, 0 CORRUPT. 1.5e-4: 252 pass, 4 reported aborts. 5e-4: 201 pass, 55 reported aborts. Every abort left the link idle (the next step worked) |
+| T4 old server, jumper, T5 slips in openMSX, T6 hardware | not run |
+
+Two test-harness mistakes cost time and are worth knowing: a test buffer at 8000h sits on BASIC's program
+area (the next BASIC line then runs garbage), and the BASIC screen is 29 columns wide, so a result line must
+be short enough not to wrap. The Z80 run found one real bug in the first draft (a damaged flags byte made
+the MSX abort a burst that the model reads polled); it is fixed and recorded in the design, section 8.8.
+
 ## Reporting
 
 Each milestone commit carries the numbers: T1/T3 pass counts, T3 T-states against the baseline,
 the T5 verdict table, T6 KB/s and soak counts. The documents get a results section per phase.
+
+## How to run the MSX-side tests
+
+```
+python -m unittest test_link2_z80                      # T3, byte for byte against the model, about 2 minutes
+LINK2_MSX=z80 python -m unittest test_link2            # T1 on the Z80 code, about 10 minutes
+python z80bench.py                                     # T-states per byte
+python link2_openmsx.py                                # T4: ver, pat, bin (from tests/, after ./build)
+python link2_openmsx.py --rate 0.00015 --seed 1 2 3 4 --port 5051    # T5
+```

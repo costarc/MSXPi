@@ -47,6 +47,8 @@ def _maybe(direction, value):
 
 
 def faulty_exchange(misos, timeout, hold=True):
+    if len(misos) >= 64:
+        print(f"BURST {len(misos)}", flush=True)  # one READY-held run (the harness counts them)
     misos = [_maybe('tx', b & 0xFF) for b in misos]
     rc, got = _exchange(misos, timeout, hold)
     if got is not None:

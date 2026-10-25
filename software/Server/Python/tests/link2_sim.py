@@ -395,3 +395,10 @@ class LegacyMsx:
             if last:
                 return
             off, idx = end, (idx + 1) & 0xFF
+
+
+# LINK2_MSX=z80 runs every test against the assembled Z80 code (z80_msx.py) instead of the
+# Python model above; the model stays reachable as ModelMsx.
+ModelMsx = Msx
+if os.environ.get("LINK2_MSX") == "z80":
+    from z80_msx import Z80Msx as Msx  # noqa: E402,F811

@@ -308,8 +308,12 @@ if [ "$buildBIOS" = "yes" ]; then
     # needs -DMSXPI_RAM_STASH: it runs from RAM, so msxpi_bios.asm uses its own
     # stash buffer rather than the driver's GETWRK workarea. sjasmplus, not
     # zmac, because IFDEF there tests -D defines.
+    echo "Compiling L2TEST.BIN (LINK2 test program)"
+    "$SJASM_DIR/sjasmplus" --inc=./asm-common/include --raw=./target/L2TEST.BIN ./ROM/src/BIOS/l2test.asm ||
+        die "l2test.asm did not assemble"
+
     echo "Compiling the BASIC extension (msxpiext.bin)"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include         --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
+    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH -DMSXPI_LINK2 --inc=./asm-common/include --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
         die "msxpiext.asm did not assemble"
 
     [ -f ./zout/msx-dos.hex ] || die "zmac produced no zout/msx-dos.hex"
@@ -337,11 +341,24 @@ if [ "$buildBIOS" = "yes" ]; then
     echo "Compiling the BIOS-only ROM ($BASICFILE)" \
          "- DOS INIT $DOS_INIT, STATEMENT $DOS_STMT, RET $DOS_RET"
     rm -f "$BASICFILE"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_ROM_STASH --inc=./asm-common/include \
+    "$SJASM_DIR/sjasmplus" -DMSXPI_ROM_STASH -DMSXPI_LINK2 --inc=./asm-common/include \
         --inc=./ROM/src/MSX-DOS -DDOS_INIT=0x$DOS_INIT -DDOS_STMT=0x$DOS_STMT \
-        -DDOS_RET=0x$DOS_RET -DOUTFILE="\"$BASICFILE\"" \
+        -DDOS_RET=0x$DOS_RET -DOUTFILE="\"$BASICFILE\"" --sym=./zout/msxpibas.sym \
         ./ROM/src/BIOS/msxpibios.asm && [ -f "$BASICFILE" ] ||
         die "msxpibios.asm did not assemble - $BASICFILE NOT updated"
+
+    # ROM size report: how far the code can still grow before it meets the first of
+    # the fixed entries above it (GETSLT/GETWRK for ethrom.bin, and the three at the
+    # DOS ROM's header addresses). The ASSERTs in msxpibios.asm fail the build when
+    # it does; this says how much room is left.
+    code_end=$(sed -n 's/^CODE_END: EQU 0x0*\([0-9A-Fa-f]*\).*/\1/p' ./zout/msxpibas.sym)
+    [ -n "$code_end" ] || die "no CODE_END in zout/msxpibas.sym"
+    limit=$((0x6018))
+    for entry in $DOS_INIT $DOS_STMT $DOS_RET; do
+        [ $((0x$entry)) -gt $((0x$code_end)) ] && [ $((0x$entry)) -lt $limit ] && limit=$((0x$entry))
+    done
+    echo "  $BASICNAME: code ends at 0x$code_end, $((limit - 0x$code_end)) bytes free below 0x$(printf %X $limit)"
+    echo "  msxpiext.bin: $(wc -c < ./target/msxpiext.bin) bytes"
 
     # The 32KB EEPROM image: the DOS ROM in the lower half, where a 16KB write
     # has always landed, and the BIOS-only ROM in the upper half.  Written in

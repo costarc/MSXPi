@@ -118,6 +118,9 @@ resetMSXPI:
 		ret
  endif
 		      
+ ifdef MSXPI_LINK2
+; LINK2 (link2.asm) replaces SENDDATA, PerformHandshake and RECVDATA_ONEBLOCK.
+ else
 ; ---------------------------------------------------------
 ; SENDDATA (single-block, size <= MAXBUFSIZE)
 ;   DE = src pointer
@@ -463,6 +466,8 @@ r2_payload_loop:
     jp c,r2_conn_err_x
     jp r2_payload_done
 
+ endif
+
 ; ------------------------------------------------------------
 ; STORE_BYTE - write A to (DE), correctly even when DE is in page 1
 ; ------------------------------------------------------------
@@ -584,6 +589,17 @@ PRB_SUM:                        ; checksum the block, now in memory
     ret
  endif
 
+ ifdef MSXPI_LINK2
+SENDDATA            EQU LINK_SEND
+SendCommandToMSXPi  EQU LINK_COMMAND
+; The CALL MSXPI output modes of LINK_RECV: 1 = print each block, 0 = drop them.
+PRINTPISTDOUT:
+    ld      a,1
+    jp      LINK_RECV
+STDOUTTONULL:
+    xor     a
+    jp      LINK_RECV
+ else
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack
 ; is untouched here, safe to return directly.
@@ -828,6 +844,8 @@ STDOUTTONULL0:
     inc		a					; next block number
 	JR      STDOUTTONULL0    
     
+ endif
+
 ;-----------------------
 ; PRINT
 ;-----------------------
@@ -1025,3 +1043,7 @@ MSXPI_STASH_BUF:
  endif
 
         INCLUDE payload_generated.asm
+
+ ifdef MSXPI_LINK2
+        INCLUDE link2.asm
+ endif
