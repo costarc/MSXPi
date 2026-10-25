@@ -1,5 +1,6 @@
-"""One fault at every byte position of a LINK2 transfer (test plan T1.2).
+"""One fault at every byte position of a LINK2 transfer (test plan T1.2 and T1.8).
 
+sweep(): one bit flipped; sweep_slip(): one MSX transfer the Pi never sees.
 Each run: a faulted transfer, then a clean one in the same direction.  Verdicts:
 OK (data intact), ABORT (reported, and the clean one still works = both idle),
 STUCK (reported but the follow-up failed = ends out of step), CORRUPT, HUNG.
@@ -170,7 +171,11 @@ def sweep(direction, data, size=8192, has_wait=True, masks=(0x01,)):
 
 
 if __name__ == "__main__":
-    for direction in ("msx2pi", "pi2msx"):
-        for n, size in ((512, 8192), (600, 256)):
-            t, bad = sweep(direction, pattern(n, n), size)
-            print(direction, n, size, dict(t), bad[:6], flush=True)
+    # python link2_faults.py [flip|slip]   (default: both; slip takes about 5 minutes)
+    kinds = sys.argv[1:] or ["flip", "slip"]
+    for kind in kinds:
+        run_sweep = {"flip": sweep, "slip": sweep_slip}[kind]
+        for direction in ("msx2pi", "pi2msx"):
+            for n, size in ((512, 8192), (600, 256)):
+                t, bad = run_sweep(direction, pattern(n, n), size)
+                print(kind, direction, n, size, dict(t), bad[:6], flush=True)

@@ -45,6 +45,42 @@ def pi_sends(data, wire=None, size=8192, has_wait=True, pi_burst=True, may_burst
 SIZES = [0, 1, 255, 256, 512, 513, 8192, 8193, 20000]
 
 
+def block(seq, payload, good=True, end=None):
+    """The MSX's side of one block as link2_recv_block reads it: header, payload,
+    and crc + end mark.  good=False damages the CRC; end= overrides the end mark."""
+    h = bytes((C.RC_READY, len(payload) & 0xFF, len(payload) >> 8, seq))
+    hc = S.crc(h)
+    pc = S.crc(payload) ^ (0 if good else 1)
+    e = (seq ^ 0xFF) if end is None else end
+    return [h + bytes((hc & 0xFF, hc >> 8)), payload, bytes((pc & 0xFF, pc >> 8, e))]
+
+
+class Scripted:
+    """Plays back the MSX's side of read_payload; records the answers."""
+
+    def __init__(self, reads):
+        self.reads, self.out = list(reads), []
+
+    def read_payload(self, n):
+        b = self.reads.pop(0)
+        assert len(b) == n, (len(b), n)
+        return C.RC_SUCCESS, b
+
+    def byte_out(self, b):
+        self.out.append(b)
+        return C.RC_SUCCESS
+
+    def recv_block(self, last_seq=None, next_seq=0, size=512):
+        import msxpi_link2 as L
+        saved, L.io = L.io, self
+        try:
+            tr = L.Transfer(size, False)
+            tr.last_seq, tr.next_seq = last_seq, next_seq
+            return L.link2_recv_block(tr, size)
+        finally:
+            L.io = saved
+
+
 class Clean(unittest.TestCase):
     def test_msx_to_pi(self):
         for n in SIZES:
@@ -208,29 +244,6 @@ class Limits(unittest.TestCase):
     def test_nak_limit_resets_after_duplicate(self):
         """The receiver's limit is per block: NAKs spent on a duplicate do not count
         against the block after it."""
-        import msxpi_link2 as L
-
-        def block(seq, payload, good=True):
-            h = bytes((C.RC_READY, len(payload) & 0xFF, len(payload) >> 8, seq))
-            hc = S.crc(h)
-            pc = S.crc(payload) ^ (0 if good else 1)
-            return [h + bytes((hc & 0xFF, hc >> 8)), payload, bytes((pc & 0xFF, pc >> 8))]
-
-        class Scripted:
-            """Plays back the MSX's side of read_payload; records the answers."""
-
-            def __init__(self, reads):
-                self.reads, self.out = list(reads), []
-
-            def read_payload(self, n):
-                b = self.reads.pop(0)
-                assert len(b) == n, (len(b), n)
-                return C.RC_SUCCESS, b
-
-            def byte_out(self, b):
-                self.out.append(b)
-                return C.RC_SUCCESS
-
         p0, p1 = pattern(64, 1), pattern(64, 2)
         reads = []
         for _ in range(5):
@@ -240,15 +253,18 @@ class Limits(unittest.TestCase):
             reads += block(1, p1, good=False)  # block 1 needs the most NAKs a block may get
         reads += block(1, p1)
         io = Scripted(reads)
-        saved, L.io = L.io, io
-        try:
-            tr = L.Transfer(512, False)
-            tr.last_seq, tr.next_seq = 0, 1  # block 0 was accepted; its ACK was lost
-            rc, typ, payload = L.link2_recv_block(tr, 512)
-        finally:
-            L.io = saved
+        rc, typ, payload = io.recv_block(last_seq=0, next_seq=1)  # block 0's ACK was lost
         self.assertEqual((rc, payload), (C.RC_SUCCESS, p1))
         self.assertNotIn(C.LINK_ABORT, io.out)
+
+    def test_end_mark_checked(self):
+        """A block whose CRC is right but whose end mark is not - a misaligned
+        block that matched its CRC by chance - is NAKed, then the good one taken."""
+        p = pattern(64, 5)
+        io = Scripted(block(0, p, end=0x00) + block(0, p))
+        rc, typ, payload = io.recv_block()
+        self.assertEqual((rc, payload), (C.RC_SUCCESS, p))
+        self.assertEqual(io.out, [C.LINK_ACK, C.LINK_NAK, C.LINK_ACK, C.LINK_ACK])
 
     def test_old_server_gets_protoerr(self):
         w = S.Wire(timeout=2.0)

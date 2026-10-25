@@ -234,6 +234,7 @@ class Msx:
                 self.wr(b)
             self.wr(pc & 0xFF)
             self.wr(pc >> 8)
+            self.wr(seq ^ 0xFF)  # end mark
             a = [self.rd() for _ in range(2 if typ != C.RC_READY else 1)]
             if C.LINK_ACK in a:
                 return
@@ -269,7 +270,8 @@ class Msx:
                 self.rd()  # polled GO: its value is not checked, it only syncs
             payload = bytes(self.rd() for _ in range(length))
             pcrc = self.rd() | (self.rd() << 8)
-            if crc(payload) != pcrc:
+            end = self.rd()
+            if crc(payload) != pcrc or end != seq ^ 0xFF:
                 naks = self._nak(naks, True)
                 continue
             self.wr(C.LINK_ACK)

@@ -32,8 +32,8 @@ block is
     S -> type, len lo, len hi, seq, hcrc lo, hcrc hi
     R -> ACK | NAK | ABORT          (for a burst this ACK is the GO byte when R is the Pi)
     [Pi -> ACK]                     (GO byte, Pi -> MSX bursts only)
-    S -> payload, crc lo, crc hi
-    R -> ACK | NAK | ABORT
+    S -> payload, crc lo, crc hi, end mark (seq XOR 0xFF)
+    R -> ACK | NAK | ABORT          (twice for the final block)
 
 The receiver alone decides when to give up (LINK2_RETRIES consecutive NAKs); the
 sender only has a safety cap.  Names follow LINK2-DESIGN.md 5.3: what the MSX
@@ -81,6 +81,16 @@ CRC_INIT = 0xFFFF
 def link_crc(data: bytes | bytearray, crc: int = CRC_INIT) -> int:
     """CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection)."""
     return binascii.crc_hqx(bytes(data), crc)
+
+
+def end_mark(seq: int) -> int:
+    """The byte after a block's CRC.  A slip (a transfer one side saw and the
+    other did not) misaligns the block, and a misaligned block passes a 16-bit
+    CRC by chance 1 time in 65,536; it must then also land the right end mark
+    in the right place, which takes that to 1 in 16.7 million.  It is seq XOR
+    0xFF, so it changes from block to block instead of being a constant that
+    payload data could repeat."""
+    return (seq ^ 0xFF) & 0xFF
 
 
 def _valid_type(typ: int) -> bool:
@@ -287,10 +297,10 @@ def link2_recv_block(
             rc, payload = o.read_payload(length) if length else (RC_SUCCESS, b"")
         if rc != RC_SUCCESS:
             return RC_CONNERR, None, None
-        rc, c = o.read_payload(2)
+        rc, c = o.read_payload(3)  # crc lo, crc hi, end mark
         if rc != RC_SUCCESS:
             return RC_CONNERR, None, None
-        if link_crc(payload) != c[0] | (c[1] << 8):
+        if link_crc(payload) != c[0] | (c[1] << 8) or c[2] != end_mark(seq):
             if not nak():
                 return RC_PROTOERR, None, None
             continue
@@ -319,7 +329,7 @@ def link2_send_block(
     seq = tr.send_seq
     crc = link_crc(payload)
     head = _hdr(typ, len(payload) | (BURST_BIT if burst else 0), seq)
-    tail = bytes((crc & 0xFF, crc >> 8))
+    tail = bytes((crc & 0xFF, crc >> 8, end_mark(seq)))
     for _ in range(LINK2_SENDER_CAP):
         rc = o.write_payload(head)
         if rc != RC_SUCCESS:
