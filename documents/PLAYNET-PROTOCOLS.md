@@ -617,17 +617,27 @@ Measured with `software/Client/tests/soccernet/tpatop.sh` (TPATOP.COM before the
 | Set-up | Top before the stack | Top with the stack | Largest `transport_area` |
 |---|---|---|---|
 | MSX-DOS 1 on the MSXPi, no drive of its own (Canon V-25, ram2mb) + MSR + INL | D606h | **D406h** | D206h |
+| the same, CTRL held while booting | DC06h | **DA06h** | D806h |
 | MSX-DOS 1.8, the machine's own drive (Panasonic FS-A1WSX, ram4mb) + MSR + INL | C906h | **C806h** | C606h |
+| the same, CTRL held while booting | D606h | **D406h** | D206h |
 | Nextor (MegaFlashROM SCC+ SD) + RAMHELPR + INL | D706h | **D706h** | D506h |
 
-The areas of Soccer, Ping Pong and Yie Ar Kung-Fu (C500h) fit all three. Salamander's (D000h) fits the first and third but not the
-second: its game RAM is the whole of C000h-CFFFh, so no 512-byte window exists below C806h for any package data to name. On a
-machine like the Panasonic with a drive of its own, Salamander therefore cannot use the TCP/IP transports (link 1, or link 2 through
-the hybrid transport); the MSXPi transport (link 0) needs no stack and is not affected. `build_games.py` prints a note for every
-package and measured set-up where the area does not fit (`patch_rom.TPA_TOPS`). Whether to accept this, to move the part of the
-UNAPI transport that must sit at one address in both page-3 segments into a small thunk, or to require Nextor for Salamander is
-decision D-6 of PLAYNET-TCPIP-IMPLEMENTATION-PLAN.md. The earlier figure of D406h under MSX-DOS 1 and D706h under Nextor
-(HANDOVER-salamander 4b) is confirmed; C806h, which the PChess memory test recorded, is the drive-of-its-own machine.
+Holding CTRL while MSX-DOS 1 boots leaves out the second drive and frees 1536 bytes (600h) on both machines.
+
+The areas of Soccer, Ping Pong and Yie Ar Kung-Fu (C500h) fit every set-up. Salamander's (D000h) fits all but one: a machine with a
+drive of its own booted without CTRL (C806h). Its game RAM is the whole of C000h-CFFFh, so no 512-byte window exists below C806h for any
+package data to name. There PLAYNET refuses, before connecting, with "Restart the MSX holding CTRL (frees 1.5 KB), or use Nextor";
+the MSXPi transport (link 0) needs no stack and is not affected. Measured on the emulator: Salamander on MSX-DOS 1 with the stack
+loaded (D406h, the same top as the Panasonic with CTRL) passes the check and reaches "Connecting". `build_games.py` prints a note for
+every package and measured set-up where the area does not fit (`patch_rom.TPA_TOPS`).
+
+Could the transport be reworked to need less? Only the code between its two page-3 switches (about 80 bytes of code and data) has to
+sit at the same address in both segments; the rest and the 128-byte buffer could live in MSX-DOS's memory alone. That would shrink
+the requirement from `transport_area` + 512 to `transport_area` + 80. It would not help Salamander on the C806h machine: the address
+must be free in the game's page 3 (Salamander: D000h or above) and TPA in MSX-DOS's, and everything above C806h there is MSX-DOS's
+and the stack's own data. Not done; decision D-6 (owner, 2026-10-25): no DOS 2 requirement, hold CTRL or use Nextor.
+The earlier figure of D406h under MSX-DOS 1 and D706h under Nextor (HANDOVER-salamander 4b) is confirmed; C806h, which the PChess
+memory test recorded, is the drive-of-its-own machine without CTRL.
 
 ## 11. MSXNP: the peer protocol (UDP)
 

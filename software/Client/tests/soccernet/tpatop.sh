@@ -54,6 +54,10 @@ case "$SETUP" in
     HW="-machine Canon_V-25 -ext MegaFlashROM_SCC+_SD -ext slotexpander -ext ram2mb -ext MSXPi"; MEDIA="-command 'hdb {$WORKW/nextor.dsk}'"; DISKA= ;;
   *) echo "SETUP=dos1|nextor|fdd"; exit 1 ;;
 esac
+# EXTRA_B = files for drive B: (tools.dsk), SEQ_OVERRIDE = other commands (a run of PLAYNET to read its message off the screen)
+for f in $EXTRA_A; do python "$HERE/fat12_add.py" "$H/disks/msxpiboot.dsk" "$f" "$(basename $f)" > /dev/null; done   # EXTRA_A: files for drive A: (CTRL at boot leaves A: only)
+for f in $EXTRA_B; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$f" "$(basename $f)" > /dev/null; done
+[ -z "$SEQ_OVERRIDE" ] || SEQ="$SEQ_OVERRIDE"
 pid=$(netstat -ano | grep -E ":$PORT .*LISTENING" | awk '{print $5}' | head -1)
 [ -z "$pid" ] || { echo "port $PORT is in use (pid $pid): another rig? set P1PORT"; exit 1; }
 ( cd "$SERVER"; env MSXPI_PORT=$PORT MSXPI_HOME="$WORKW/msxhome" MSXPI_INI="$WORKW/msxhome/msxpi.ini" MSXPI_TMP="$WORKW/msxhome/tmp" \

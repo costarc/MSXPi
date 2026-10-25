@@ -1596,7 +1596,7 @@ msgNoMapper:    defb    "TCP/IP needs a memory mapper and its routines (MSX-DOS 
 msgNoSeg:       defb    "No free memory mapper segment",0
 msgNoOvl:       defb    "Cannot load PLAYNET.OVL (it must be in the current directory)",0
 msgNoGpf:       defb    "Cannot read the game package (ID.GPF in the current directory)",0
-msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites: it cannot run here",0
+msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites. Restart the MSX holding CTRL (frees 1.5 KB), or use Nextor",0
 msgNoTcpip:     defb    "No TCP/IP UNAPI found: run INL I first",0
 msgNoPort:      defb    "Cannot open the UDP port",0
 nameOvl:        defb    "PLAYNET OVL"

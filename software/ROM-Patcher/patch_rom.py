@@ -44,7 +44,9 @@ TRANSPORT_AREA_MIN = 512
 # (PLAYNET.COM's tcpFootprint refuses otherwise).
 TPA_TOPS = {
     'MSX-DOS 1, no drive of its own (Canon V-25) + MSR + INL': 0xD406,
+    'MSX-DOS 1, no drive of its own, CTRL held at boot': 0xDA06,      # CTRL at boot leaves out the second drive: +1.5 KB
     'MSX-DOS 1.8, own drive (Panasonic FS-A1WSX) + MSR + INL': 0xC806,
+    'MSX-DOS 1.8, own drive, CTRL held at boot': 0xD406,
     'Nextor + RAMHELPR + INL': 0xD706,
 }
 

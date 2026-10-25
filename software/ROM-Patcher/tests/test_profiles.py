@@ -73,10 +73,12 @@ class TpaTops(unittest.TestCase):
             with self.subTest(game=game):
                 self.assertEqual(self.misfits(game), [])
 
-    def test_salamander_does_not_fit_the_drive_of_its_own_machine(self):
-        # the known limit (decision D-6): D000h + 512 is above C806h. Update this test when it is lifted.
+    def test_salamander_needs_ctrl_or_nextor_on_the_drive_of_its_own_machine(self):
+        # decision D-6: D000h + 512 is above C806h, the top on a machine with a drive of its own. Holding CTRL at boot frees
+        # 1.5 KB (D406h) and Nextor has D706h; PLAYNET's refusal says so. This is the only set-up left out.
         self.assertEqual(len(self.misfits('salamander')), 1)
         self.assertIn('Panasonic', self.misfits('salamander')[0])
+        self.assertNotIn('CTRL', self.misfits('salamander')[0])
 
 
 class EngineCopies(unittest.TestCase):

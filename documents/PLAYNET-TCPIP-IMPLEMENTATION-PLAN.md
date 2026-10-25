@@ -298,7 +298,7 @@ frame. One GPF per game across the row.
 | D-3 | Capabilities in GPF | Add `requires` (C4) now while only four packages exist, or keep `min_playnet` only | C4 |
 | D-4 | MSX1 with DenYoNet and no mapper | Out of scope (proposed), or a no-mapper UNAPI path (a redesign) | none |
 | D-5 | The chat connection during a game (links 1 and 2) | Keep it (today), `AWAY` + slower reads, `PART`/`JOIN`, or `QUIT` and reconnect | D1a's numbers |
-| D-6 | A game with no common page-3 window on some set-up | Candidate windows in the GPF (C1a), a smaller shared transport part (redesign), or that game needs Nextor | C1's measurement |
+| D-6 | A game with no common page-3 window on some set-up | **Decided 2026-10-25: no redesign, no DOS 2 requirement.** The transport rework was examined (PROTOCOLS 10.2): it cannot help the one case left (Salamander on a machine with a drive of its own, without CTRL, top C806h). Holding CTRL at boot frees 1.5 KB (top D406h) and Nextor has D706h; PLAYNET says so when it refuses | C1's measurement |
 
 ## 5. Order and parallel work
 
@@ -332,7 +332,7 @@ Rig runs cannot overlap (fixed ports), so B2, B3 and B4 can be written in parall
 | B3 | Partly | the Yie Ar branch's own rig covers `SCENARIO=both`/`tcp`/`chat`; mixed and hybrid cells to run |
 | B4 | Done | 3000 frames IDENTICAL: P2 on Nextor (link 1), link 2 (`HYBRID=1`), both on TCP/IP, both on link 2, P2 with a 1 MB mapper. With `EXT2=ram512k` PLAYNET refuses cleanly ("Not enough memory: this game needs a memory mapper of 512 KB"): Nextor, RAMHELPR and INL leave too few segments, so Salamander on Nextor needs a 1 MB mapper |
 | C1 | Done | measured TPA tops (PROTOCOLS 10.2): D406h MSX-DOS 1, C806h own-drive MSX-DOS 1.8, D706h Nextor. Soccer, Ping Pong, Yie Ar fit all; **Salamander does not fit the own-drive machine: decision D-6 is open** |
-| C1a | Not needed | a window cannot help Salamander (its game RAM is all of C000h-CFFFh); see D-6 |
+| C1a | Not needed | a window cannot help Salamander (its game RAM is all of C000h-CFFFh); see D-6, decided: hold CTRL or use Nextor |
 | C2 | Done | `tests/test_profiles.py` |
 | C3 | Investigated, deferred | the transports never use `tBuf`; the loader sets the overlay's buffer to area+384 (`playnet_tcp.asm`). Moving it to D3 under the stack is a loader-only change but needs the stack depth under the TPA top measured; nothing needs the 128 bytes yet |
 | C4 | Done | `netplay.requires` / GPF header byte 99; only SALAMAND.GPF changed |
