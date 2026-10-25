@@ -67,7 +67,7 @@ from msxpi_const import (
 )
 import msxpi_transport as transport
 import msxpi_settings as settings
-from msxpi_blocks import readParameters, recvdata2, senddata, sendmultiblock
+from msxpi_blocks import readParameters, link_recv, link_send_confirmed, link_send
 from msxpi_cmd_files import pathExpander
 from msxpi_settings import getMSXPiVar
 
@@ -425,7 +425,7 @@ def ploadr(parms: Optional[str] = None) -> CommandResult:
     def reject(reason):
         print(reason)
         header = build_rom_header(MAPPER_REJECTED, 0, 0, 0)
-        return sendmultiblock(header + reason.encode())
+        return link_send(header + reason.encode())
 
     if not filename:
         return reject("Pi:Error - no filename given")
@@ -458,7 +458,7 @@ def ploadr(parms: Optional[str] = None) -> CommandResult:
         is_last = (offset + len(chunk)) >= len(buf)
         if is_last:
             _ploadr_cache = None
-        return sendmultiblock(chunk, header_rc=RC_SUCCESS if is_last else RC_READY)
+        return link_send(chunk, header_rc=RC_SUCCESS if is_last else RC_READY)
     _ploadr_cache = None
 
     rc, buf = fetch_and_uncompress(filepath)
@@ -505,7 +505,7 @@ def ploadr(parms: Optional[str] = None) -> CommandResult:
         chunk = buf[offset : offset + block_size]
         is_last = (offset + len(chunk)) >= len(buf)
         header_rc = RC_SUCCESS if is_last else RC_READY
-        return sendmultiblock(chunk, header_rc=header_rc)
+        return link_send(chunk, header_rc=header_rc)
 
     # Header-only request: "ploadr <file> H" - used by LOADRPI.COM's
     # searchpatch_first, which needs just the header to decide plain-vs-
@@ -513,14 +513,14 @@ def ploadr(parms: Optional[str] = None) -> CommandResult:
     # one block at a time.
     if len(parts) == 2 and parts[1].upper() == "H":
         _ploadr_cache = (filepath, buf)
-        return sendmultiblock(header)
+        return link_send(header)
 
     # Legacy whole-file request: "ploadr <file>" (no extra params) -
     # unchanged, still used by ploadr.c's plain-ROM path.
-    rc = sendmultiblock(header)
+    rc = link_send(header)
     if rc != RC_SUCCESS:
         return rc
-    rc = sendmultiblock(buf)
+    rc = link_send(buf)
     return RC_SUCCESS
 
 
@@ -876,7 +876,7 @@ def msxarchive(parms: Optional[str] = None) -> CommandResult:
     rc, files = fetch_file_list(url, indexFile)
 
     if rc == RC_FAILED:
-        senddata(RC_FAILED, files.encode().ljust(PAGESIZE, b"\x00"))
+        link_send_confirmed(RC_FAILED, files.encode().ljust(PAGESIZE, b"\x00"))
         return RC_FAILED
 
     pages = paginate_files(files, nrows, ncolumns, None)
@@ -893,11 +893,11 @@ def msxarchive(parms: Optional[str] = None) -> CommandResult:
     )
     cmd = "1"
     text = get_page(files, pages, page, ncolumns)
-    rc = sendmultiblock(text.encode().ljust(PAGESIZE, b"\x00"))
+    rc = link_send(text.encode().ljust(PAGESIZE, b"\x00"))
 
     try:
         while True:
-            rc, parm = recvdata2()
+            rc, parm = link_recv()
             parm = parm.decode(errors="ignore").split("\x00", 1)[0]
             cmd = str(parm).lower()  # normalize to string for command checks
 
@@ -934,7 +934,7 @@ def msxarchive(parms: Optional[str] = None) -> CommandResult:
                 def reject(reason):
                     print(reason)
                     header = build_rom_header(MAPPER_REJECTED, 0, 0, 0)
-                    sendmultiblock(header + reason.encode(), RC_TERMINATE)
+                    link_send(header + reason.encode(), RC_TERMINATE)
                     return RC_FAILED
 
                 # The MSX appends the addresses it relocated its resident
@@ -1078,13 +1078,13 @@ def msxarchive(parms: Optional[str] = None) -> CommandResult:
                 # it is loading; a client that does not use it ignores it,
                 # like the reason text of a rejection.
                 name = filename.encode("ascii", "replace")[:64]
-                rc = sendmultiblock(header + name)
+                rc = link_send(header + name)
                 if rc != RC_SUCCESS:
                     return rc
-                rc = sendmultiblock(buf)
+                rc = link_send(buf)
                 return RC_SUCCESS
 
-            rc = senddata(RC_SUCCESS, text.encode().ljust(PAGESIZE, b"\x00"))
+            rc = link_send_confirmed(RC_SUCCESS, text.encode().ljust(PAGESIZE, b"\x00"))
 
     finally:
         transport.DISABLETIMEOUT = False  # Restore timeout setting

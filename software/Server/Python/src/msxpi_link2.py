@@ -37,7 +37,7 @@ block is
 
 The receiver alone decides when to give up (LINK2_RETRIES consecutive NAKs); the
 sender only has a safety cap.  Names follow LINK2-DESIGN.md 5.3: what the MSX
-sends the Pi receives (link_recv*), and the other way round (link_send*).
+sends the Pi receives (link2_recv*), and the other way round (link2_send*).
 
 The wire is reached through a small io object so the same code runs on the real
 transport and on the simulated link of tests/link2_sim.py.
@@ -85,10 +85,10 @@ class TransportIO:
         self.t = t
 
     def byte_in(self) -> Tuple[int, Optional[int]]:
-        return self.t.SPI_ByteTransfer()
+        return self.t.link_recv_byte()
 
     def byte_out(self, b: int) -> int:
-        return self.t.SPI_ByteTransfer(b & 0xFF)[0]
+        return self.t.link_send_byte(b & 0xFF)[0]
 
     def read_payload(self, n: int):
         return self.t.SPI_ReadPayload(n)
@@ -137,14 +137,14 @@ def _hdr(typ: int, length: int, seq: int) -> bytes:
     return h + bytes((c & 0xFF, c >> 8))
 
 
-def link_accept() -> Tuple[int, Optional[Transfer]]:
+def link2_accept() -> Tuple[int, Optional[Transfer]]:
     """The HELLO2 byte has just been read: answer it and take the MSX's size frame.
 
     HELLO2_ACK, flags, then the MSX sends  SIZE_MARK, lo, hi, crc-lo, crc-hi  and
     gets ACK or NAK.  A HELLO2 where the mark should be means the MSX missed our
     answer and is asking again: answer again, so a corrupted HELLO2_ACK costs one
     retry and nothing else.  As everywhere, an ACK that arrives garbled counts as
-    ACK on the MSX side (see link_send_block); here the Pi only ever sends it.
+    ACK on the MSX side (see link2_send_block); here the Pi only ever sends it.
     """
     o = _io()
     flags = LINK2_FLAG_BURST if o.can_burst() else 0
@@ -182,7 +182,7 @@ def link_accept() -> Tuple[int, Optional[Transfer]]:
         o.byte_out(LINK_NAK)
 
 
-def link_recv_block(
+def link2_recv_block(
     tr: Transfer, max_len: int
 ) -> Tuple[int, Optional[int], Optional[bytes]]:
     """Receive one block from the MSX.
@@ -265,7 +265,7 @@ def link_recv_block(
         return RC_SUCCESS, typ, bytes(payload)
 
 
-def link_send_block(
+def link2_send_block(
     tr: Transfer, payload: bytes | bytearray, typ: int, burst: bool = False
 ) -> int:
     """Send one block to the MSX.  Returns RC_SUCCESS once it is ACKed, RC_PROTOERR
@@ -317,7 +317,7 @@ def link_send_block(
     return RC_PROTOERR
 
 
-def link_recv(
+def link2_recv(
     tr: Transfer, maxbufsize: int = 8192
 ) -> Tuple[int, Optional[bytes]]:
     """A whole transfer from the MSX: blocks until one whose type is not RC_READY."""
@@ -327,7 +327,7 @@ def link_recv(
         # The room left goes into the header check, so a block that does not fit
         # is ABORTed in its header slot.  Checking after the block had been ACKed
         # told the MSX the transfer had succeeded while this side dropped it.
-        rc, typ, payload = link_recv_block(tr, min(block_max, maxbufsize - len(data)))
+        rc, typ, payload = link2_recv_block(tr, min(block_max, maxbufsize - len(data)))
         if rc != RC_SUCCESS:
             return rc, None
         data.extend(payload)
@@ -335,7 +335,7 @@ def link_recv(
             return RC_SUCCESS, bytes(data)
 
 
-def link_send(
+def link2_send(
     tr: Transfer, payload: bytes | bytearray, header_rc: Optional[int] = None
 ) -> int:
     """A whole transfer to the MSX, in blocks no larger than the MSX accepts."""
@@ -348,7 +348,7 @@ def link_send(
         # An explicit header_rc only ever tags the last block: the MSX takes any
         # type other than RC_READY as "last".
         typ = (RC_SUCCESS if header_rc is None else header_rc) if last else RC_READY
-        rc = link_send_block(tr, payload[offset:end], typ, burst=True)
+        rc = link2_send_block(tr, payload[offset:end], typ, burst=True)
         if rc != RC_SUCCESS:
             return rc
         if last:

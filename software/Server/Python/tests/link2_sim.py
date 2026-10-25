@@ -290,8 +290,6 @@ class Server:
         self.t = threading.Thread(target=self.run, daemon=True)
 
     def run(self):
-        sbt = msxpi_blocks.SPI_ByteTransfer
-
         def spi(b=None):
             if b is None:
                 return C.RC_SUCCESS, self.w.pi_xfer(0)
@@ -300,10 +298,11 @@ class Server:
 
         saved = {
             n: getattr(msxpi_blocks, n)
-            for n in ("SPI_ReadPayload", "SPI_WritePayload", "SPI_BurstIn", "SPI_BurstOut")
+            for n in ("link_recv_byte", "link_send_byte", "SPI_ReadPayload",
+                      "SPI_WritePayload", "SPI_BurstIn", "SPI_BurstOut")
         }
         w = self.w
-        msxpi_blocks.SPI_ByteTransfer = spi
+        msxpi_blocks.link_recv_byte = msxpi_blocks.link_send_byte = spi
         msxpi_blocks.SPI_ReadPayload = lambda n: (
             C.RC_SUCCESS, bytearray(w.pi_xfer(0) for _ in range(n)))
         msxpi_blocks.SPI_BurstIn = msxpi_blocks.SPI_ReadPayload
@@ -317,7 +316,6 @@ class Server:
         except Exception as e:  # noqa: BLE001
             self.error = e
         finally:
-            msxpi_blocks.SPI_ByteTransfer = sbt
             for n, f in saved.items():
                 setattr(msxpi_blocks, n, f)
 

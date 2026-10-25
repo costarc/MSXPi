@@ -62,8 +62,8 @@ import collections
 
 # --- Wire protocol ----------------------------------------------------------
 #
-# The MSX signals a fast op by sending an opcode byte where recvdata2() is
-# waiting for READY ($AA).  recvdata2() ignores every non-READY byte, so the
+# The MSX signals a fast op by sending an opcode byte where link_recv() is
+# waiting for READY ($AA).  link_recv() ignores every non-READY byte, so the
 # opcode range only has to avoid the values that loop already reacts to.
 # $A0-$AE (READY/ACK/BUSY...) and $E0-$EF (RC_*) are taken; $C0-$CF is free.
 
@@ -690,7 +690,7 @@ class EthShuttle(object):
     simply finds READY up for every byte.
 
     write_burst is what lets the MSX use INIR.  Hardware /WAIT is gated on
-    SPI_RDY, and the per-byte SPI_ByteTransfer() raises and drops RPI_READY
+    SPI_RDY, and the per-byte link_recv_byte() raises and drops RPI_READY
     around every single byte - during that gap an INIR read would NOT stall and
     would silently return a stale byte.  A burst-capable transport must hold
     RPI_READY high for the whole run.  Without one, everything here still works

@@ -59,7 +59,7 @@ class Clean(unittest.TestCase):
     def test_pi_to_msx(self):
         for n in SIZES:
             if n == 0:
-                continue  # sendmultiblock refuses empty payloads (legacy rule)
+                continue  # link_send refuses empty payloads (legacy rule)
             for has_wait in (True, False):
                 for pi_burst in (True, False):
                     d = pattern(n, n + 7)
@@ -220,7 +220,7 @@ class Limits(unittest.TestCase):
         try:
             tr = L.Transfer(512, False)
             tr.last_seq, tr.next_seq = 0, 1  # block 0 was accepted; its ACK was lost
-            rc, typ, payload = L.link_recv_block(tr, 512)
+            rc, typ, payload = L.link2_recv_block(tr, 512)
         finally:
             L.io = saved
         self.assertEqual((rc, payload), (C.RC_SUCCESS, p1))

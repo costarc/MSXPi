@@ -100,7 +100,7 @@ import msxpi_cmd_disk as disk
 import msxpi_cmd_media as media
 import msxpi_settings as settings
 import msxpi_transport as transport
-from msxpi_blocks import recvdata2, sendmultiblock
+from msxpi_blocks import link_recv_command, link_send
 from msxpi_cmd_disk import (
     dosinit,
     dskioini,
@@ -218,7 +218,7 @@ def resolve_command(cmd: str):
 
 def _reply(payload: bytes) -> None:
     try:
-        sendmultiblock(payload)
+        link_send(payload)
     except Exception:
         pass
 
@@ -398,7 +398,7 @@ def connect():
 
 def serve_gpio() -> None:
     """SPI mode: keep trying forever."""
-    # Set the GPIO link up first: without this the first recvdata2() ran on
+    # Set the GPIO link up first: without this the first link_recv_command() ran on
     # unconfigured pins, failed with "Please set pin numbering mode", and only
     # the error path below set the link up - a false error on every start.
     connect()
@@ -406,7 +406,7 @@ def serve_gpio() -> None:
     while True:
         try:
             transport.DISABLETIMEOUT = True
-            rc, buf = recvdata2()
+            rc, buf = link_recv_command()
             if rc == RC_SUCCESS:
                 transport.DISABLETIMEOUT = False
                 handle_command(buf)
@@ -449,7 +449,7 @@ def serve_tcp(server_socket: socket.socket) -> None:
         try:
             while True:
                 transport.DISABLETIMEOUT = True
-                rc, buf = recvdata2()
+                rc, buf = link_recv_command()
                 if rc == RC_SUCCESS and buf is not None:
                     transport.DISABLETIMEOUT = False
                     handle_command(buf)

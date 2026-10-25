@@ -45,7 +45,7 @@ from msxpi_const import (
     RC_SUCCESS,
     RC_SUCCNOSTD,
 )
-from msxpi_blocks import recvdata2, sendmultiblock
+from msxpi_blocks import link_recv, link_send
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 
 # irc
@@ -63,7 +63,7 @@ def chatgpt(query: str) -> CommandResult:
         print(
             "Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini"
         )
-        sendmultiblock(
+        link_send(
             b"Pi:Error - OPENAIKEY is not defined. Define your key with PSET or add to msxpi.ini"
         )
         return RC_FAILED
@@ -91,7 +91,7 @@ def chatgpt(query: str) -> CommandResult:
         openai_response = response.json()
         if "choices" in openai_response:
             response_text = openai_response["choices"][0]["message"]["content"]
-            sendmultiblock(response_text.encode())
+            link_send(response_text.encode())
         else:
             # No completion: the API replied with an error object (or something
             # unexpected). It is a dict, so turn it into text before sending.
@@ -107,11 +107,11 @@ def chatgpt(query: str) -> CommandResult:
             else:
                 detail = str(openai_response)
             print("Pi:Error - " + detail)
-            sendmultiblock(("Pi:Error - " + detail).encode("ascii", errors="replace"))
+            link_send(("Pi:Error - " + detail).encode("ascii", errors="replace"))
     except Exception as e:
         error_msg = f"Pi:Error - {str(e)}"
         print(error_msg)
-        sendmultiblock(error_msg.encode())
+        link_send(error_msg.encode())
 
 
 def renderpage(parms: Optional[str] = None) -> CommandResult:
@@ -125,11 +125,11 @@ def renderpage(parms: Optional[str] = None) -> CommandResult:
         print(f"renderpage: {exc}")
         detail = (str(exc).splitlines() or [type(exc).__name__])[0]
         message = ("showpage: " + detail)[:240]
-        return sendmultiblock(message.encode("ascii", "replace"), RC_FAILED)
+        return link_send(message.encode("ascii", "replace"), RC_FAILED)
     if not payload:
         # scroll at the top or bottom: nothing to draw.
-        return sendmultiblock(b"END", RC_SUCCNOSTD)
-    return sendmultiblock(payload)
+        return link_send(b"END", RC_SUCCNOSTD)
+    return link_send(payload)
 
 
 # showpage is the public command name used by the combined `p` client.
@@ -144,12 +144,12 @@ def template(parms: Optional[str] = None) -> CommandResult:
     # If your MSX command send parameters, we go read them:
     if parms == None or parms == "":
         print(f"Sending error message")
-        rc = sendmultiblock("This command requires a parameter".encode())
+        rc = link_send("This command requires a parameter".encode())
         return
 
     response = f"Response from MSXPi: I received parameter '{parms}'"
     print(f"Sending back: {response}")
-    rc = sendmultiblock(response.encode())
+    rc = link_send(response.encode())
 
     return
 
@@ -166,7 +166,7 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
                 setMSXPiVar("PCHESSELO", str(LEVEL_ELO[int(args[1]) - 1]))
             if args[0] == "rooms" and len(args) == 2 and args[1] in ("relay", "irc"):
                 setMSXPiVar("PCHESSROOMS", args[1])
-            return sendmultiblock(
+            return link_send(
                 level_packet(
                     getMSXPiVar("PCHESSELO"),
                     rooms_mode({"PCHESSROOMS": getMSXPiVar("PCHESSROOMS")}),
@@ -203,7 +203,7 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
         payload[:4] = b"PCH1"
         message = b"Install requirements-pchess.txt on server"
         payload[72 : 72 + len(message)] = message
-    return sendmultiblock(bytes(payload))
+    return link_send(bytes(payload))
 
 
 def mchat(parms: Optional[str] = None) -> CommandResult:
@@ -222,7 +222,7 @@ def mchat(parms: Optional[str] = None) -> CommandResult:
         )
     }
     irc_config["GAMESDIR"] = _games_dir()
-    return sendmultiblock(handle_command(parms or "", irc_config))
+    return link_send(handle_command(parms or "", irc_config))
 
 
 def _games_dir() -> str:
@@ -239,13 +239,13 @@ def playnet(parms: Optional[str] = None) -> CommandResult:
     command = (parms or "").strip()
     upload = None
     if command.split()[:1] == ["save"]:
-        rc, upload = recvdata2(SAVE_MAX)
+        rc, upload = link_recv(SAVE_MAX)
         if rc != RC_SUCCESS:
             return rc
     ok, payload = playnet_command(command, upload, _games_dir())
     if ok:
-        return sendmultiblock(payload)
-    return sendmultiblock(("Pi:Er:" + payload).encode("ascii", "replace"), RC_FAILED)
+        return link_send(payload)
+    return link_send(("Pi:Er:" + payload).encode("ascii", "replace"), RC_FAILED)
 
 
 def irc(parms: str) -> CommandResult:
@@ -256,7 +256,7 @@ def irc(parms: str) -> CommandResult:
     # Helpers
     # ------------------------------------------------------------
     def sendmsg(text: str, rc=RC_SUCCESS):
-        sendmultiblock(text.encode(), rc)
+        link_send(text.encode(), rc)
 
     def not_connected():
         sendmsg("Pi:Er:Not connected", RC_SUCCNOSTD)

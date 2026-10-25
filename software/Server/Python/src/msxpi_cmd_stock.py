@@ -40,7 +40,7 @@ from msxpi_const import (
     CommandResult,
     HTTP_TIMEOUT,
 )
-from msxpi_blocks import sendmultiblock
+from msxpi_blocks import link_send
 from msxpi_settings import getMSXPiVar
 
 
@@ -798,15 +798,15 @@ def stock(command_str: str) -> CommandResult:
         try:
             cache_interval = int(parts[1])
         except:
-            sendmultiblock(b"ERROR: Use STARTCACHE <seconds>")
+            link_send(b"ERROR: Use STARTCACHE <seconds>")
             return
         if cache_running:
-            sendmultiblock(b"Cache already running")
+            link_send(b"Cache already running")
             return
         cache_running = True
         cache_thread = threading.Thread(target=cache_updater, daemon=True)
         cache_thread.start()
-        sendmultiblock(f"Cache started, interval={cache_interval}s".encode())
+        link_send(f"Cache started, interval={cache_interval}s".encode())
         return
 
     # -------------------------
@@ -814,7 +814,7 @@ def stock(command_str: str) -> CommandResult:
     # -------------------------
     if subcmd == "STOPCACHE":
         cache_running = False
-        sendmultiblock(b"Cache stopping...")
+        link_send(b"Cache stopping...")
         return
 
     # -------------------------
@@ -831,12 +831,12 @@ def stock(command_str: str) -> CommandResult:
             f"Age: {age:.1f}s\n"
             f"Interval: {cache_interval}s"
         )
-        sendmultiblock(msg.encode())
+        link_send(msg.encode())
         return
 
     if subcmd == "HISTORY":
         if len(parts) < 2:
-            sendmultiblock(b"ERROR: Use HISTORY <symbol>,<interval>,<range>")
+            link_send(b"ERROR: Use HISTORY <symbol>,<interval>,<range>")
             return
 
         args = parts[1].replace(" ", "").split(",")
@@ -847,7 +847,7 @@ def stock(command_str: str) -> CommandResult:
         candles = fetch_history_with_failover(symbol, interval, range_)
 
         if not candles:
-            sendmultiblock(b"ERROR: No history data")
+            link_send(b"ERROR: No history data")
             return
 
         lines = []
@@ -860,7 +860,7 @@ def stock(command_str: str) -> CommandResult:
                 f"V({i})={c['volume']}"
             )
 
-        sendmultiblock("\n".join(lines).encode())
+        link_send("\n".join(lines).encode())
         return
 
     # -------------------------
@@ -868,7 +868,7 @@ def stock(command_str: str) -> CommandResult:
     # -------------------------
     if subcmd == "FETCHLIST":
         if len(parts) < 2:
-            sendmultiblock(b"ERROR: Use FETCHLIST <symbols>")
+            link_send(b"ERROR: Use FETCHLIST <symbols>")
             return
 
         raw_list = parts[1].replace(" ", "")
@@ -884,7 +884,7 @@ def stock(command_str: str) -> CommandResult:
         except Exception as e:
             msg = f"ERROR: Batch request failed: {str(e)}"
             print(msg)
-            sendmultiblock(msg.encode())
+            link_send(msg.encode())
             return
 
         # Format output
@@ -919,12 +919,12 @@ def stock(command_str: str) -> CommandResult:
 
             lines.append(line)
 
-        sendmultiblock("\n".join(lines).encode())
+        link_send("\n".join(lines).encode())
         return
 
     if subcmd == "NTCANDLE":
         if len(parts) < 2:
-            sendmultiblock(
+            link_send(
                 b"ERROR: Use NTCANDLE <symbol>,<threshold>,<interval>,<range>"
             )
             return
@@ -939,7 +939,7 @@ def stock(command_str: str) -> CommandResult:
         # Fetch history using MSX parameters
         candles = fetch_history_with_failover(symbol, interval, range_)
         if not candles:
-            sendmultiblock(b"ERROR: No history data")
+            link_send(b"ERROR: No history data")
             return
 
         # Build non-temporal candles
@@ -986,4 +986,4 @@ def stock(command_str: str) -> CommandResult:
         lines.append("END")
         ll = lines
         print(len("\r\n".join(lines).encode()))
-        sendmultiblock("\r\n".join(lines).encode())
+        link_send("\r\n".join(lines).encode())

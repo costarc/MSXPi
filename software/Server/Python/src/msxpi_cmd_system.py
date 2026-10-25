@@ -52,7 +52,7 @@ import msxpi_ethglue as ethglue
 import msxpi_cmd_disk as disk
 import msxpi_settings as settings
 import msxpi_transport as transport
-from msxpi_blocks import sendmultiblock
+from msxpi_blocks import link_send
 from msxpi_cmd_disk import msxdos_inihrd, unmount_drive
 from msxpi_cmd_files import run
 from msxpi_ethglue import _eth_release, _eth_relink
@@ -72,7 +72,7 @@ def pset(data: str) -> CommandResult:
         out = ""
         for name, value in settings._config.items():
             out += f"{name}={shown_value(name, value)}\n"
-        return sendmultiblock(out.encode())
+        return link_send(out.encode())
 
     # Split into tokens
     parts = data.split()
@@ -90,7 +90,7 @@ def pset(data: str) -> CommandResult:
             "set varname /d          Delete variable\n"
             "set /h                  Show this help"
         )
-        return sendmultiblock(helptext.encode())
+        return link_send(helptext.encode())
 
     # Now treat first token as variable name
     varname = parts[0]
@@ -102,8 +102,8 @@ def pset(data: str) -> CommandResult:
     if len(parts) == 1:
         for name, value in settings._config.items():
             if name.upper() == varname_upper:
-                return sendmultiblock(f"{name}={shown_value(name, value)}".encode())
-        return sendmultiblock(f"{varname} not found".encode())
+                return link_send(f"{name}={shown_value(name, value)}".encode())
+        return link_send(f"{varname} not found".encode())
 
     # ---------------------------------------------------------
     # 3. Per-variable help:  set wifi /h
@@ -115,7 +115,7 @@ def pset(data: str) -> CommandResult:
             "set varname value       Set variable\n"
             "set varname /d          Delete variable\n"
         )
-        return sendmultiblock(helptext.encode())
+        return link_send(helptext.encode())
 
     # ---------------------------------------------------------
     # 4. Delete variable:  set wifi /d
@@ -123,7 +123,7 @@ def pset(data: str) -> CommandResult:
     if parts[1].lower() in ("/d", "/delete"):
         print(f"Deleting variable {varname}")
         rc = setMSXPiVar(varname, "")  # empty value = delete
-        return sendmultiblock("Pi:Ok".encode())
+        return link_send("Pi:Ok".encode())
 
     # ---------------------------------------------------------
     # 5. Set or update variable:  set wifi MYSSID
@@ -145,9 +145,9 @@ def pset(data: str) -> CommandResult:
             rc, disk.drive1Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
 
-        return sendmultiblock("Pi:Ok".encode())
+        return link_send("Pi:Ok".encode())
 
-    return sendmultiblock("Pi:Error".encode())
+    return link_send("Pi:Error".encode())
 
 
 def interfaces_report():
@@ -209,7 +209,7 @@ def wifi(cmd: str) -> CommandResult:
     wificountry = getMSXPiVar("WIFICOUNTRY")
 
     if cmd[:2] == "/h":
-        sendmultiblock("Pi:Usage:\npwifi display | set".encode())
+        link_send("Pi:Usage:\npwifi display | set".encode())
         return RC_SUCCESS
 
     if cmd[:1] == "s" or cmd[:1] == "S":
@@ -223,10 +223,10 @@ def wifi(cmd: str) -> CommandResult:
             )
             run(wifisetcmd)
         else:
-            sendmultiblock(b"Parameter not supported in this platform")
+            link_send(b"Parameter not supported in this platform")
     else:
         if transport.hostType == "RaspberryPi":
-            sendmultiblock(interfaces_report().encode())
+            link_send(interfaces_report().encode())
         else:
             run("ipconfig")
 
@@ -237,16 +237,16 @@ def ver(parms: Optional[str] = None) -> CommandResult:
     """Send server version information to MSX."""
     version_string = f"MSXPi Server Version {VERSION} Build {BUILD_ID}\n"
     logger.info(f"Sending version info: {version_string.strip()}")
-    return sendmultiblock(version_string.encode())
+    return link_send(version_string.encode())
 
 
 def q(parm: Optional[str] = None) -> CommandResult:
     """Client-side quit notification (see sendQuit() in msxarch.c/p.c). The
     client sends this and, on most paths, exits back to DOS immediately
     afterward without waiting for/completing a reply - so this must return
-    None (no sendmultiblock reply attempted). Previously there was no "q"
+    None (no link_send reply attempted). Previously there was no "q"
     handler at all, so this hit the KeyError/"Unknown command" path, which
-    tried to sendmultiblock() an error string to a client that had already
+    tried to link_send() an error string to a client that had already
     gone away - leaving the server mid-handshake with nobody listening,
     corrupting the next session's protocol state (surfaced as garbage
     checksums, a forced reconnect, and a "Disk error reading drive A" on
@@ -257,15 +257,15 @@ def q(parm: Optional[str] = None) -> CommandResult:
 def restart(parm: Optional[str] = None) -> CommandResult:
     if transport.hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
-        sendmultiblock(b"Pi:Ok")
+        link_send(b"Pi:Ok")
         exitDueToSyncError()
     elif transport.hostType == "Windows":
         print("Restarting MSXPi Server")
-        sendmultiblock(b"Pi:Ok")
+        link_send(b"Pi:Ok")
         _restart_windows()
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b"Command not supported by this platform")
+        link_send(b"Command not supported by this platform")
 
 
 def _restart_windows() -> None:
@@ -748,7 +748,7 @@ def reboot(parm: Optional[str] = None) -> CommandResult:
         os.system("sudo reboot")
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b"Command not supported by this platform")
+        link_send(b"Command not supported by this platform")
 
 
 def shut(parm: Optional[str] = None) -> CommandResult:
@@ -765,7 +765,7 @@ def shut(parm: Optional[str] = None) -> CommandResult:
     no_reply = (parm or "").strip().lower() in ("nowait", "noack", "quiet")
     if transport.hostType == "RaspberryPi" and platform.system() == "Linux":
         if not no_reply:
-            sendmultiblock(b"Pi:Ok")
+            link_send(b"Pi:Ok")
         print("Shutting down Raspberry Pi in 2 seconds")
         subprocess.Popen(
             "sleep 2; sudo shutdown -h now",
@@ -778,7 +778,7 @@ def shut(parm: Optional[str] = None) -> CommandResult:
     else:
         print("Command not supported by this platform")
         if not no_reply:
-            sendmultiblock(b"Command not supported by this platform")
+            link_send(b"Command not supported by this platform")
 
 
 def button_handler(channel):

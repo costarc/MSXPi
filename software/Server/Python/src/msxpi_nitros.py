@@ -389,5 +389,5 @@ def handle_command(arguments):
 
 
 def nitros(arguments=None):
-    from msxpi_blocks import sendmultiblock
-    return sendmultiblock(handle_command(arguments))
+    from msxpi_blocks import link_send
+    return link_send(handle_command(arguments))

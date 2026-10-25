@@ -106,7 +106,7 @@ LINK2_SENDER_CAP = 32  # attempts at one block before the sender gives up
 # RETRY & TIMEOUT CONFIGURATION
 # =============================================================================
 GLOBALRETRIES = 10  # Global retry limit
-# Block-level retry limit when the Pi sends (senddata_oneblock).  Must equal
+# Block-level retry limit when the Pi sends (link_send_block).  Must equal
 # what the MSX allows for the same block - GLOBALRETRIES in
 # asm-common/include/include.asm and MAX_BLOCK_RETRIES in C-common msxpi.h -
 # and every ROM and .COM in the field: resending after the MSX has given up
@@ -140,7 +140,7 @@ MAPPER_REJECTED = 0xFF  # Mapper rejected (unsupported)
 PLAIN_ROM_MAX_SIZE = 32768  # Client's fixed load window (32KB)
 ROM_MAX_SIZE = 1048576  # Maximum ROM size cap (1MB)
 
-# Block-size / length bit that marks a /WAIT burst payload (see sendmultiblock).
+# Block-size / length bit that marks a /WAIT burst payload (see link_send).
 BURST_FLAG = 0x8000
 
 st_init = 0  # waiting loop, waiting for a command

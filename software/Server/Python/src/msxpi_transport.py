@@ -140,15 +140,15 @@ _NATIVE_GPIO = None
 
 # ---------------------------------------------------------------------------
 # Profiler.  Enable with MSXPI_PROFILE=1.  Answers one question: how much of the
-# wall-clock time is actually spent inside SPI_ByteTransfer()?
+# wall-clock time is actually spent inside _spi_byte()?
 #
-# 8 KB in 9.6 s is ~1.17 ms/byte, but SPI_ByteTransfer() should be nowhere near
+# 8 KB in 9.6 s is ~1.17 ms/byte, but _spi_byte() should be nowhere near
 # that.  If "in transfer" comes back as a small fraction of elapsed, the cost is
 # in the protocol/Python layers above, or in waiting for the MSX - and no amount
 # of GPIO tuning will touch it.
 _PROFILE = bool(os.environ.get("MSXPI_PROFILE"))
 _prof_n = 0  # transfers completed
-_prof_busy = 0.0  # seconds inside SPI_ByteTransfer, total
+_prof_busy = 0.0  # seconds inside _spi_byte, total
 _prof_spin = 0.0  # of which: spinning on SPI_CS, i.e. waiting for the MSX
 _prof_t0 = None  # wall clock at the first transfer
 _PROF_EVERY = 1024
@@ -165,7 +165,7 @@ def _prof_report(force=False):
     print(
         f"[prof] {_prof_n} bytes | wall {elapsed:.2f}s "
         f"({elapsed / _prof_n * 1e6:.0f} us/byte) | "
-        f"in SPI_ByteTransfer {_prof_busy:.2f}s ({per:.0f} us/byte, "
+        f"in _spi_byte {_prof_busy:.2f}s ({per:.0f} us/byte, "
         f"{100.0 * _prof_busy / elapsed:.1f}% of wall) | "
         f"of which spinning on CS {spin:.0f} us/byte | "
         f"unaccounted {100.0 * (elapsed - _prof_busy) / elapsed:.1f}%"
@@ -428,7 +428,7 @@ def tcp_exchange(
 ) -> Tuple[int, Optional[bytearray]]:
     """Offer bytes the way the Pi does, one CPLD transfer per byte.  hold=True
     keeps READY up across the run (a burst); hold=False drops READY after every
-    byte, as SPI_ByteTransfer does, but still sends all offers in one write so
+    byte, as _spi_byte does, but still sends all offers in one write so
     a payload costs one round trip instead of one per byte.
     Returns (rc, the bytes the CPLD sent)."""
     count = len(misos)
@@ -457,7 +457,7 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
 
     This is what makes hardware /WAIT usable.  The CPLD asserts /WAIT only
     while SPI_RDY is high (MSXPi.vhd: wait_assert <= wait_mode and SPI_RDY and
-    spi_en and ...), and SPI_ByteTransfer() raises and drops RPI_READY around
+    spi_en and ...), and _spi_byte() raises and drops RPI_READY around
     every single byte.  In that inter-byte gap an INIR read on the MSX would
     NOT stall and would silently return a stale byte, desynchronising the
     stream.  Holding RDY up across the burst closes that window.
@@ -497,7 +497,7 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
     SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
     m_sclk, m_miso, m_cs = _M_SCLK, _M_MISO, _M_CS
 
-    # Bounded, unlike SPI_ByteTransfer's spin.  That one waits forever on
+    # Bounded, unlike _spi_byte's spin.  That one waits forever on
     # purpose - it is the server idling for the next command - but a burst is
     # different: the MSX has committed to reading N bytes, and if it stops
     # early there is nobody left to assert CS.  The driver DOES stop early: on
@@ -683,7 +683,7 @@ def tick_sclk():
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
 
-def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
+def _spi_byte(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
 
     byte_in = 0
     if hostType == "RaspberryPi":
@@ -721,7 +721,7 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
             None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT,
         )
         if rc != RC_SUCCESS:
-            print(f"SPI_ByteTransfer(): virtual SPI transfer failed rc={rc:#04x}")
+            print(f"_spi_byte(): virtual SPI transfer failed rc={rc:#04x}")
             return rc, None
         byte_in = got[0]
     else:
@@ -739,17 +739,26 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
             try:
                 buf = conn.recv(1)
                 if buf == b"":  # connection closed
-                    print("SPI_ByteTransfer(): connection closed by peer")
+                    print("_spi_byte(): connection closed by peer")
                     return RC_CONNERR, None
                 byte_in = buf[0]
             except socket.timeout:
-                print("SPI_ByteTransfer(): recv timed out")
+                print("_spi_byte(): recv timed out")
                 return RC_FAILED, None
             except IndexError:
-                print("SPI_ByteTransfer(): e-connection closed by peer")
+                print("_spi_byte(): e-connection closed by peer")
                 return RC_CONNERR, None
 
     return RC_SUCCESS, byte_in
+
+
+# The per-byte pair (LINK2-DESIGN.md 5.3), named from this side: the MSX's
+# LINK_SEND_BYTE arrives here as link_recv_byte(), and link_send_byte(b) is read
+# by its LINK_RECV_BYTE.  One CPLD transfer either way, so both are the same
+# primitive bound to two names - no wrapper on the hottest path - and both
+# return (rc, the byte the MSX sent).
+link_recv_byte = _spi_byte
+link_send_byte = _spi_byte
 
 
 def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
@@ -778,7 +787,7 @@ def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
                 conn.setsockopt(socket.IPPROTO_TCP, quickack, 1)
             except OSError:
                 quickack = None
-        rc, byte = SPI_ByteTransfer()
+        rc, byte = _spi_byte()
         if rc != RC_SUCCESS:
             return rc, None
         payload[i] = byte
@@ -786,7 +795,7 @@ def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
 
 
 def SPI_WritePayload(payload: bytes | bytearray) -> int:
-    """Same per-byte READY/CS contract as SPI_ByteTransfer, in native chunks."""
+    """Same per-byte READY/CS contract as _spi_byte, in native chunks."""
     if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
         try:
             _NATIVE_GPIO.write(payload)
@@ -800,7 +809,7 @@ def SPI_WritePayload(payload: bytes | bytearray) -> int:
         rc, _ = tcp_exchange(bytes(payload), SYNCTRANSFTIMEOUT, hold=False)
         return rc
     for byte in payload:
-        rc, _ = SPI_ByteTransfer(byte if isinstance(byte, int) else ord(byte))
+        rc, _ = _spi_byte(byte if isinstance(byte, int) else ord(byte))
         if rc != RC_SUCCESS:
             return rc
     return RC_SUCCESS
@@ -850,7 +859,7 @@ def cpld_announce(online):
             if online:
                 return
             # Going offline with a byte pending: clock it out first (ten
-            # edges, as SPI_ByteTransfer does) - the flag only changes
+            # edges, as _spi_byte does) - the flag only changes
             # outside a transfer.  Nobody reads that byte any more.
             for _ in range(10):
                 GPIO.output(SPI_SCLK, GPIO.HIGH)

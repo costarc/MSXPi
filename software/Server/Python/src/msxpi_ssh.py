@@ -109,7 +109,7 @@ def handle_command(arguments):
         session.close(); return packet(3, str(exc).encode('ascii', 'replace'))
 
 def ssh(arguments=None):
-    from msxpi_blocks import sendmultiblock
+    from msxpi_blocks import link_send
     # This handler owns the response transfer. Return None so the generic
-    # command dispatcher never attempts a second reply after sendmultiblock.
-    sendmultiblock(handle_command(arguments))
+    # command dispatcher never attempts a second reply after link_send.
+    link_send(handle_command(arguments))
