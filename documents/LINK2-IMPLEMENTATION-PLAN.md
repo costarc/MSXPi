@@ -13,6 +13,67 @@ Design: LINK2-DESIGN.md. Tests per phase: LINK2-TEST-PLAN.md.
 `msxpiupd feature/link2` on the MSX brings the server and the MSX files to that milestone. The
 EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jumper, full 32 KB).
 
+## Status (2026-10-25)
+
+| Phase | State | Commits on `feature/link2` |
+|---|---|---|
+| retry investigation | done | 7495484d (fault-injection harness, upload-hang fix, `SENDRETRIES` = 10) |
+| design and plans | done, kept current | ee9d3cf3, ec3cb50a, and every phase since |
+| 0 - tooling | **partly**: the simulated link and MSX model exist; the sz80 bench, the ROM size report and the T-state baselines do **not** | 898d20ab |
+| 1 - server dual stack | **done**, audited | 898d20ab, 533a0d7b (overflow, NAK reset), 2ebc8d42 (rename), 2dc875db (slips), 7450e089 (BuildId 20261025.079), and the end-mark commit |
+| 2 - MSX core | not started | - |
+| 3 to 7 | not started | - |
+
+The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
+`target/` are still those of `feature/tcpip-games` (nothing on the MSX side has changed yet).
+
+### What exists, and where
+
+- **Server**:
+  - `software/Server/Python/src/msxpi_link2.py`: the LINK2 framing (`link2_accept`,
+    `link2_send_block`, `link2_recv_block`, `link2_send`, `link2_recv`), the CRC, the end mark
+    and the ABORT flood
+  - `msxpi_blocks.py`: the public `link_*` functions, each choosing legacy or LINK2 from the
+    transfer's first byte
+  - `msxpi_transport.py`: `spi_burst_send` / `spi_burst_recv` (GO + payload in one READY-held
+    run) and the `link_send_byte` / `link_recv_byte` pair
+  - constants in `msxpi_const.py`
+- **Tests** (`software/Server/Python/tests`):
+  - `link2_sim.py`: the lockstep simulated link, the MSX model `Msx`, which is the reference for
+    the Z80 code (design section 8), and `LegacyMsx`
+  - `test_link2.py`: test plan T1, 14 tests
+  - `link2_faults.py`: the flip and slip sweeps
+  - `fault_server.py` + `fault_inject_openmsx.py`: the openMSX fault harness (test plan T2/T5)
+- **Test ROMs without touching the install**: build with the zmac + sjasmplus recipe of
+  ETH-DRIVER-SPEED-HANDOVER.md section 5 (DOS half first; the BIOS half takes its `DOS_INIT`,
+  `DOS_STMT` and `DOS_RET` addresses), concatenate to 32 KB, and run it through the openMSX
+  extension `MSXPiTest` (`Documents/openMSX/share/extensions/MSXPiTest.xml`, a copy of MSXPi.xml
+  without sha1s whose ROM is `C:/tmp/fi/msxpitest.rom`). `fault_inject_openmsx.py --rom` does
+  the copy. An unchanged build reproduces the shipped `msxpi32k.rom` byte for byte (sha1
+  50096592).
+- **Careful with `software/build`**: a full build copies the disk images into
+  `C:\home\pi\msxpi\disks`, which the user's own server serves. Use
+  `buildMSXdiskImage=no` while that server runs, or ask first. A server-only release is
+  `updateServerVersion=yes buildClientCommands=no buildMSXdiskImage=no ./build` (BuildId only).
+
+### Phase 2 starts here
+
+1. **Finish phase 0 first**: the sz80 bench (`software/tools/z80bench/`), the ROM size report and
+   the T-state baselines of today's PRB_SUM, PAYLOAD_RX and PAYLOAD_TX. Without the baselines
+   "no slower than today" cannot be checked.
+2. **Write `link2.asm` against design section 8**, byte for byte as `link2_sim.Msx` does. The
+   server does not need to change for phase 2, apart from the `l2test` command for L2TEST.BIN
+   (step 5 of phase 2).
+3. **Code to replace in the BIOS half and msxpiext.bin**:
+   - `msxpi_call.asm`: `CALL_MSXPISAVEDATA` (PerformHandshake + RECVDATA_ONEBLOCK loop),
+     `PRINTPISTDOUT`, `STDOUTTONULL`, `SendCommandToMSXPi`
+   - `msxpi_bios.asm`: `SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, `PIREADBYTE`,
+     `PIWRITEBYTE`
+   - the burst code `PAYLOAD_RX_BURST` / `PAYLOAD_TX_BURST` is under `IFDEF MSXPI_DRIVER` today,
+     so the BIOS half does not burst at all yet; LINK2 brings bursts to CALL MSXPI
+4. **Then** the CALL parser and BIOS rewrite of phase 5 can start alongside, with the
+   paired-name rules of design 5.3.
+
 ## Open questions (defaults used until answered)
 
 1. **.COM tools and the C library** (pcopy, p, mchat, ssh...): move them to LINK2 in this
@@ -25,14 +86,14 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 3. **The real Pi's GPIO engine**: native (`MSXPI_NATIVE_GPIO=1`) or the Python fast path? Both get
    the GO bursts, but the speed baselines must be measured on the engine you actually run.
    *Default: native.*
-4. **Branch name** `feature/link2`: fine?
+4. **Branch name** `feature/link2`: in use and pushed.
 
 ## Phase 0 - tooling (no behaviour change)
 
 - `software/Server/Python/tests/link2_sim.py`: a lockstep virtual link. Two byte queues stand in
   for the CPLD. The server side uses the real `msxpi_blocks`/`msxpi_link2`, through a test
-  transport. The MSX side is a Python model of the MSX LINK2 code. Fault hooks: flip, drop, or
-  corrupt a chosen byte.
+  transport. The MSX side is a Python model of the MSX LINK2 code. Fault hooks: flip a bit in a
+  chosen byte (`Wire.flip`, `Wire.hook`), or slip a chosen MSX transfer (`Wire.slip`). *Done.*
 - `software/tools/z80bench/`: assembles single routines with sjasmplus and runs them in `sz80`
   (SDCC's simulator, already used by netcore_cost.py) to get exact T-states and sizes. This is
   for the CRC loop, the polled loops and the burst checksum pass.

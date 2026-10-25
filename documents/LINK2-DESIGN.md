@@ -38,6 +38,7 @@ LINK2-TEST-PLAN.md. Background and measurements: BLOCK-RETRIES-FAULT-INJECTION.m
 | `READY` | 0xAA | MSX -> Pi | opens a **legacy** transfer (unchanged) |
 | `HELLO2` | 0xB2 | MSX -> Pi | opens a **LINK2** transfer |
 | `HELLO2_ACK` | 0xB3 | Pi -> MSX | the server speaks LINK2 |
+| `SIZE_MARK` | 0xB4 | MSX -> Pi | first byte of the size frame (3.2) |
 | `ACK` | 0x5A | receiver -> sender | header or block accepted; also the Pi's "go" byte for bursts |
 | `NAK` | 0xA5 | receiver -> sender | resend |
 | `ABORT` | 0x0F | either | give up this transfer |
@@ -85,11 +86,15 @@ R -> ACK | NAK                          header check; when R is the Pi and the b
 [Pi -> ACK]                             GO byte, only for a Pi -> MSX burst (the Pi is the sender)
 S -> payload (len bytes)                OTIR/INIR when bursting, polled otherwise
 S -> crc lo, crc hi                     CRC-16 of the payload
+S -> end mark                           seq XOR 0xFF (3.7)
 R -> ACK | NAK | ABORT                  sent twice when the block is the final one (type not RC_READY);
                                         the sender takes either (3.7)
 ```
 
 - `len` bit 15 = "this block bursts". It is protected by the header CRC.
+- **End mark**: the receiver NAKs a block whose CRC is right but whose end mark is not; that is a
+  misaligned block that matched its CRC by chance (3.7). The end mark is always sent polled,
+  after the CRC, also when the payload burst.
 - `seq` counts 0..255 per transfer and wraps.
 - On a header NAK, the sender resends the header (counted as an attempt).
 - On a payload NAK, the sender resends the whole block (header included) with the **same seq**.
@@ -97,6 +102,9 @@ R -> ACK | NAK | ABORT                  sent twice when the block is the final o
   same seq means its ACK was lost: the receiver reads it in full, discards it and ACKs again. Any
   seq other than the last one or the next one makes the receiver ABORT, and so does a header
   type that is not an RC code (0xE0-0xF0: RC_READY or a final code).
+- **Capacity**: a block that does not fit the room the receiver has left is ABORTed in its header
+  slot, never ACKed: an ACK followed by a drop would tell the sender the transfer succeeded. A
+  duplicate is exempt, since the block it repeats is already counted.
 - **One retry limit, on the receiver**: after `LINK2_RETRIES` (10) consecutive NAKs for one block,
   the receiver sends ABORT. The sender has no limit of its own except a safety cap (32 attempts)
   and CTRL+ESC on the MSX, for a receiver that has disappeared.
@@ -180,12 +188,14 @@ With these rules a slip anywhere ends in a reported abort and never hangs, and t
 works within three tries (most at once). Results: 2,384 slip positions over two block sizes and
 both directions, no hang, no stuck link.
 
-**Known limit**: a slip misaligns the block, and a misaligned block is accepted when it happens to
+**End mark**: a slip misaligns the block, and a misaligned block is accepted when it happens to
 match its CRC: 1 in 65,536 per misaligned block for any 16-bit check. The sweep hit exactly one
 (Pi -> MSX, 512 bytes, slip at MSX transfer 37: the shifted payload and the shifted CRC bytes
-agree, 0x856F). Bit flips cannot do this; only slips can, and the GO byte (3.4) removes the
-known source of slips. A one-byte end mark after the CRC (for example `seq XOR 0xFF`) would take
-it to 1 in 16.7 million for one extra transfer per block - open decision.
+agree, 0x856F). Bit flips cannot do this; only slips can. So every block now ends with an end
+mark, `seq XOR 0xFF`, after its CRC: a misaligned block must also bring the right end mark to the
+right place, 1 in 16.7 million, for one extra transfer per block. With the end mark the sweep is
+clean: 2,384 slip positions, no wrong data, no hang, no stuck link, and the case at transfer 37
+is NAKed and resent.
 
 ## 4. Ethernet (UNAPI) - protocol 3
 
@@ -294,3 +304,105 @@ The decision is made from measured sizes, not estimates.
 
 **Update order**: server first (`msxpiupd` runs from MSX-DOS, which is still legacy), then flash
 the ROM image and copy msxpiext.bin. `msxpiupd` itself keeps working throughout.
+
+## 8. MSX implementation reference (for phase 2)
+
+The executable reference is **`software/Server/Python/tests/link2_sim.py`, class `Msx`**: the Z80
+code must put the same bytes on the wire in the same order, and react to every answer the same
+way. It is what the server's tests run against (the unit tests, the flip and slip sweeps, 10,000
+random transfers). Where the Z80 code or this section disagrees with `Msx`, `Msx` is right and
+the document gets fixed.
+
+### 8.1 Constants (asm `EQU`s)
+
+Values as on the server (`msxpi_const.py`, and `FLOOD_MARGIN` in `msxpi_link2.py`); the
+MSX-only `WRONG_ANSWERS` and the MSX's own `FLOOD_MARGIN` are in `link2_sim.Msx`.
+
+| Name | Value | Use |
+|---|---|---|
+| `HELLO2` / `HELLO2_ACK` / `SIZE_MARK` | 0xB2 / 0xB3 / 0xB4 | opening |
+| `LINK_ACK` / `LINK_NAK` / `LINK_ABORT` | 0x5A / 0xA5 / 0x0F | answers; ACK is also the GO byte |
+| `LINK2_FLAG_BURST` | 0x01 | bit 0 of the flags after HELLO2_ACK |
+| `LINK2_RETRIES` | 10 | NAKs per block before the receiver aborts |
+| `LINK2_SENDER_CAP` | 32 | attempts per block (and per size frame) before the sender gives up |
+| `LINK2_WRONG_ANSWERS` | 16 | completed HELLO2 exchanges with a wrong answer before RC_PROTOERR |
+| `LINK2_FLOOD_MARGIN` | 16 | ABORT flood length = the MSX's block size + 16 |
+| `RC_PROTOERR` | 0xF0 | protocol error; valid header types are 0xE0-0xF0 |
+
+### 8.2 CRC-16/CCITT-FALSE
+
+- Poly 0x1021, init 0xFFFF, MSB first, no reflection, no final XOR. Check value:
+  CRC("123456789") = **0x29B1** (`binascii.crc_hqx(b"123456789", 0xFFFF)`).
+- Table, MSB first: for i in 0..255: c = i << 8; 8 times: c = ((c << 1) ^ 0x1021) if c & 0x8000
+  else (c << 1); T[i] = c & 0xFFFF. Kept as two 256-byte page-aligned halves (high bytes, low
+  bytes), generated by `asm-common/transport/generate.py`.
+- Update for one byte b: idx = (crc >> 8) ^ b; crc = ((crc << 8) & 0xFFFF) ^ T[idx]. With the CRC
+  in DE (D high) and the byte in A: `xor d / ld l,a / ld h,TBL_HI / ld a,(hl) / xor e / ld d,a /
+  inc h / ld e,(hl)`.
+- Covers the size frame (mark, lo, hi), the block header (4 bytes) and the payload, each with its
+  own CRC; sent low byte first.
+
+### 8.3 Byte primitives
+
+- **Polled read** (`LINK_RECV_BYTE`): wait for `$56` = 0, `OUT ($56),0`, wait for `$56` = 0,
+  `IN ($5A)`. One transfer, read only after it has completed.
+- **Polled write** (`LINK_SEND_BYTE`): wait for `$56` = 0, `OUT ($5A),byte`. Returns at once; the
+  next primitive's wait covers completion.
+- **Burst** (`LINK_BURST_RECV` / `LINK_BURST_SEND`): only straight after a polled read of the Pi's
+  GO byte (3.4): `OUT ($57),1`, INIR/OTIR in 256-byte runs, `OUT ($57),0`, then the CRC pass over
+  the buffer. Never with a buffer in page 1.
+- CTRL+ESC is checked in every wait, as today (`PAYLOAD_ESCAPE`), and returns RC_ESCPRESSED.
+
+### 8.4 LINK_OPEN (the MSX opens every transfer)
+
+```
+repeat:  write HELLO2; read answer; read flags          (always all three)
+         answer = HELLO2_ACK -> done; else wrong += 1; wrong = 16 -> RC_PROTOERR
+size word = block size | 0x8000 if (/WAIT present and buffer not in page 1 and the caller allows)
+repeat up to 32: write SIZE_MARK, lo, hi, crc lo, crc hi; read answer
+         ABORT -> RC_PROTOERR; NAK -> again; anything else -> open
+burst allowed = (flags bit 0) and (size word bit 15)
+```
+
+### 8.5 LINK_SEND_BLOCK (MSX -> Pi)
+
+```
+burst = allowed and len > 0 and len % 256 = 0
+repeat up to 32 (same seq every time):
+    write type, len lo, len hi (| 0x80 if burst), seq, hcrc lo, hcrc hi
+    read answer: ABORT -> RC_PROTOERR; NAK -> again; anything else -> go on (if burst, it was GO)
+    payload: OTIR (burst) or polled writes
+    write crc lo, crc hi, end mark (seq XOR 0xFF)
+    read 1 answer (2 when type is not RC_READY): any ACK -> done; any ABORT -> RC_PROTOERR; else again
+cap reached -> RC_PROTOERR
+```
+
+### 8.6 LINK_RECV_BLOCK (Pi -> MSX)
+
+```
+loop:
+    read 6 header bytes; header crc wrong -> write NAK (1 byte), count it, again
+    type not in 0xE0..0xF0, or seq neither next nor last, or len > block size or > room left
+    in the caller's buffer (a duplicate: block size only)
+        -> write ABORT, flood, RC_PROTOERR
+    write ACK; burst: polled read of GO (value not checked), then INIR; else polled reads
+    read crc lo, crc hi, end mark
+    crc or end mark wrong -> write NAK (twice if type is not RC_READY), count it, again
+    write ACK (twice if type is not RC_READY)
+    seq = last seq (a duplicate) -> discard it, reset the count, again
+    keep it: last = seq, next = seq + 1; return type and length
+count reaches 10 -> write ABORT (twice if final), flood, RC_PROTOERR
+flood = block size + 16 polled writes of ABORT
+```
+
+A transfer (`LINK_RECV`) repeats `LINK_RECV_BLOCK` until a type other than RC_READY, which is the
+transfer's result code for the caller. `LINK_SEND` cuts the data into blocks no larger than the
+Pi's limit, tags every block but the last RC_READY and the last RC_SUCCESS (or the caller's code).
+
+### 8.7 What the MSX can rely on from the server
+
+- It answers HELLO2 again whenever a HELLO2 arrives where the size frame should be.
+- Every Pi -> MSX burst starts with the GO byte, and READY stays up into the payload.
+- It sends single answers in header slots and doubled answers after a final block.
+- When it aborts it repeats ABORT until the MSX's next HELLO2 or READY arrives.
+- A legacy READY transfer and a LINK2 transfer can follow each other with no reset between them.
