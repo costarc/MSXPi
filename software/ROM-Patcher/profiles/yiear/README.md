@@ -5,7 +5,7 @@ Package format `msxpi-rom-patch` version 2 with the `msxpi-netplay-v1` ABI. Desi
 
 | | |
 |---|---|
-| Input | `KUNG-FU.ROM`, Konami's Yie Ar Kung-Fu (RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
+| Input | `KUNGFU.ROM`, Konami's Yie Ar Kung-Fu (RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
 | Output | a RAM image for PLAYNET (`output.target = "ram-image"`), never a ROM file |
 | Game id, roles | `yiear`; `P1` (seat 0, the inviter), `P2` (seat 1) |
 | Layout for PLAYNET | the ROM at 4000h-7FFFh, the extension at A000h, stub C100h, transport C500h, game RAM E000h-E4FFh, interrupt handler 4043h |

@@ -272,7 +272,7 @@ the work in `documents/HANDOVER-yiear.md`; the package is `software/ROM-Patcher/
 
 | | |
 |---|---|
-| Dump | `KUNG-FU.ROM` (Konami, RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
+| Dump | `KUNGFU.ROM` (Konami, RC-725), 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` |
 | Game id / roles | `yiear` / `P1` (seat 0, player 1), `P2` (seat 1, player 2) |
 | Image | plain, base 4000h, output 32 KB: the ROM at 4000h-7FFFh, the **extension** asset at A000h (layout destination 6000h), 8000h-9FFFh fill |
 | Frame | INIT 4010h installs H.KEYI: `ld hl,4043h` (operand at 4019h). Handler 4043h: `call RDVDP / di / call 7C5Ch` (sound) / busy flag E006h bit 0 / `ei / call 4522h` (input) / `call 407Bh` (frame) / `call RDVDP / di / call m,7C5Ch / ei`: the same Konami structure as Soccer |

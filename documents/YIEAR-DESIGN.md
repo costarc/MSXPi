@@ -23,7 +23,7 @@ What `feature/tcpip-games` changed under this design (section 13 has the details
 |---|---|
 | Dump | 16384 bytes, CRC-32 `8A12EC4F`, SHA-256 `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` (the dump PROTOCOLS section 6 names; the user's copy is `C:\Users\roniv\Dev\MSX\gameroms\kung-fu.rom`) |
 | Game id / GPF | `yiear` / `YIEAR.GPF` |
-| ROM file name | `KUNG-FU.ROM` (`source.file`; what the dump is usually called; decision D7) |
+| ROM file name | `KUNGFU.ROM` (`source.file`; what the dump is usually called; decision D7) |
 | Roles | `P1` (seat 0, the inviter), `P2` (seat 1) |
 | Input width | 1 byte |
 | Modes | Single, Turn, Versus, chosen on a new play-mode screen (decisions D1-D3) |
@@ -81,7 +81,7 @@ Decided in this design, open for review (section 12):
 |---|---|---|
 | D5 | Where the extension lives | A000h-BFFFh (output offset 6000h), at most 8 KB |
 | D6 | Large GPF support | **Not needed for this game (section 14).** Every GPF goes to 8000h first. A GPF whose image covers 8000h (Soccer's 32 KB layout) is then moved down to `GPFBUF` (2900h) and must still be 3 KB or less (Soccer 1080 bytes, Salamander 2868). |
-| D7 | ROM file name | `KUNG-FU.ROM` |
+| D7 | ROM file name | `KUNGFU.ROM` |
 | D8 | How a Versus match ends | Player 1 wins by beating the fifth opponent. Player 2 wins when player 1 has no REST left. Both end on "PLAYER n WINS", then the title. |
 | D9 | Extension RAM | E480h-E4FFh, in page 3, so the offline ROM can use the same addresses (to be confirmed free, T2). **As built**: measured free; only E481h-E482h (the menu's cursor and edge byte) are used; the mode, the current player and Turn's blocks are in the stub (section 14). |
 | D10 | PLAYNET release for the 8 KB GPFs | **Not needed for this game (section 14).** Fold into release 3** while `feature/tcpip-games` is not on `master` (no PLAYNET 3 is in players' hands): `min_playnet` 3. If release 3 ships first, it becomes release 4 and `min_playnet` 4. A PLAYNET 3 built before the change refuses the GPF cleanly ("too big"). This also answers SALAMANDER-DESIGN 12.2, point 3. |
@@ -398,7 +398,7 @@ it on the local machine only would make the two machines' RAM differ), `G_SOUND_
 (the objects; at most 512, so the sketch's E000h/400h is not allowed). These are the stub ABI 2 engine's only glue symbols
 (`playnet_engine.asm` header), the same set Soccer and Salamander define.
 
-`rebuild.py --rom KUNG-FU.ROM` checks every expected byte against the dump, that the patches do not overlap, and that no jump in the
+`rebuild.py --rom KUNGFU.ROM` checks every expected byte against the dump, that the patches do not overlap, and that no jump in the
 ROM lands inside a patched span (run on the disassembly, as for Salamander, and kept out of the repository).
 
 ---
@@ -547,7 +547,7 @@ Left to the implementer, "with criteria from similar games":
 | I2 | Opponent 2's throw | **Player 2 throws**, with the second button (input bit 5: joystick button B, or the keyboard key the game reads there), instead of the throw firing by itself |
 | I3 | Lives in Versus (U2) | Each player has the game's starting lives: 3. P1's are the game's own REST (E050h: decremented at every stage start, 41B4h, and given back when P1 wins a fight, 423Eh, so a win costs P1 nothing). P2's are a counter in the stub: P2 loses one each time P1 beats the opponent. A lost fight costs the loser one life; the next fight is the next opponent (P1 won) or the same one again (P2 won), in the game's order, cycling after the fifth. **The match ends when either player has no lives left**: "PLAYER n WINS", then the game-over screen and the title. The "beat the fifth opponent" rule (4284h) is dropped; the level (E056h) stays 0 for the whole match so the opponents' timings do not change. P2's lives are shown during fights. |
 | I4 | Tests left open | Run on the MSXPi path: the three modes with lag and loss, the chat with the exit key, link 2, the sound tempo against the cartridge, the speed, desync detection |
-| I5 | `KUNG-FU.ROM` (D7), the extension at A000h (D5) | Kept |
+| I5 | `KUNGFU.ROM` (D7), the extension at A000h (D5) | Kept |
 
 ### 15.1 As built for I1-I3 (2026-10-24)
 

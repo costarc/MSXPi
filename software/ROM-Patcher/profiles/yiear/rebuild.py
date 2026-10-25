@@ -2,7 +2,7 @@
 """Developer-only: assemble the Yie Ar Kung-Fu stub (PLAYNET engine + src/glue.asm) and write the profile.
 
     python rebuild.py --assembler sjasmplus                      release stub -> assets/stub.bin, profile.json
-    python rebuild.py --assembler sjasmplus --rom KUNG-FU.ROM    also check every patch's expected bytes against the dump
+    python rebuild.py --assembler sjasmplus --rom KUNGFU.ROM    also check every patch's expected bytes against the dump
     python rebuild.py --assembler sjasmplus --test-gpf T.GPF --test-syms T.tcl
                                                                  scripted-input test build for the two-emulator
                                                                  rig: a GPF and the stub's symbols for Tcl; the
@@ -125,9 +125,9 @@ def make_profile(stub, symbols, ext):
     return {
         'format': 'msxpi-rom-patch', 'version': 2, 'id': 'yiear-msxpi-netplay-v1',
         'abi': ['msxpi-netplay-v1'],
-        'source': {'size': ROM_SIZE, 'sha256': ROM_SHA256, 'crc32': ROM_CRC32, 'file': 'KUNG-FU.ROM'},
+        'source': {'size': ROM_SIZE, 'sha256': ROM_SHA256, 'crc32': ROM_CRC32, 'file': 'KUNGFU.ROM'},
         'output': {'size': OUT_SIZE, 'fill': 0, 'mapper': 'plain', 'target': 'ram-image'},
-        'requirements': ["The player's own KUNG-FU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
+        'requirements': ["The player's own KUNGFU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
                          'PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)',
                          'Any MSX with 64 KB RAM on the MSXPi path'],
         'assets': {'stub': {'file': 'assets/stub.bin', 'sha256': hashlib.sha256(stub).hexdigest()},
@@ -211,7 +211,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--assembler', required=True, help='sjasmplus executable')
     parser.add_argument('--engine', type=Path, default=ENGINE, help='PLAYNET engine source')
-    parser.add_argument('--rom', type=Path, help="the player's KUNG-FU.ROM, to check the patches against")
+    parser.add_argument('--rom', type=Path, help="the player's KUNGFU.ROM, to check the patches against")
     parser.add_argument('--syms', type=Path, help="also write the release stub's symbols as Tcl, for the rig")
     parser.add_argument('--test-gpf', type=Path, help='write a scripted-input test GPF here instead of publishing')
     parser.add_argument('--keys', action='store_true', help='with --test-gpf: no scripted input (the rig presses keys)')

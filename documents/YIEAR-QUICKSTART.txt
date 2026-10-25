@@ -17,18 +17,18 @@ command line over TCP/IP, without the chat (part 2).
 WHAT YOU NEED (each player)
   - An MSX with MSX-DOS and 64 KB RAM, and an MSXPi or a TCP/IP UNAPI card
     (GR8NET, ObsoNET, InterNestor Lite, ...).
-  - Your own dump of the game: KUNG-FU.ROM, Konami's Yie Ar Kung-Fu (RC-725),
+  - Your own dump of the game: KUNGFU.ROM, Konami's Yie Ar Kung-Fu (RC-725),
     16384 bytes, CRC-32 8A12EC4F. The ROM is not supplied.
   - Both players must have the same YIEAR.GPF (software/target/games).
 
 INSTALL
   MSXPi: run the MSXPi update ("msxpiupd"); it copies MCHAT.COM, PLAYNET.COM,
-         PLAYNET.OVL and YIEAR.GPF to the disk. Put KUNG-FU.ROM there too.
+         PLAYNET.OVL and YIEAR.GPF to the disk. Put KUNGFU.ROM there too.
   Others: copy those files, on a PC, into ONE folder or disk (MSX-DOS 1 has no
          folders). TCP/IP needs a memory mapper: MSX-DOS 2/Nextor, or MSR on
          MSX-DOS 1. Run "MSR I" and "INL I" (or your card's driver) first.
 
-PART 1 - WITH THE CHAT                         (in the folder with KUNG-FU.ROM)
+PART 1 - WITH THE CHAT                         (in the folder with KUNGFU.ROM)
   1. MCHAT NICK             MSXPi link         (MCHAT /T NICK: TCP/IP, no MSXPi)
   2. /WHO lists the room, /GAMES lists the games, CTRL-U picks a player.
   3. Player 1:  /PLAY NICK YIEAR         Player 2:  /ACCEPT  (or /DECLINE)
@@ -72,7 +72,7 @@ CONTROLS   Each player uses their own cursor keys + SPACE, or joystick 1.
   CTRL+SHIFT+F5 ends the game on both machines, in every mode.
 
 IF SOMETHING GOES WRONG
-  "ROM not found / wrong CRC"  - KUNG-FU.ROM must be in the current folder and
+  "ROM not found / wrong CRC"  - KUNGFU.ROM must be in the current folder and
                                  be the exact dump above.
   Invitation declined at once  - different GPF versions; update both.
   Does not connect             - wrong IP:PORT, a router blocking UDP, or only one

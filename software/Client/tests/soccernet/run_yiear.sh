@@ -76,7 +76,7 @@ var WIDTH=80
 var SPI_HW=False
 INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null
-  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$YIEAR_ROM" KUNG-FU.ROM > /dev/null
+  python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$YIEAR_ROM" KUNGFU.ROM > /dev/null
   [ "$SCENARIO" != chat ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null
   if is_tcp $n; then                     # a TCP/IP node: INL on the server's user-mode UDP link (10.0.2.15), the chat over TCP/IP
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"

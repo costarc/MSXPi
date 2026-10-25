@@ -482,7 +482,7 @@ class YieArPackageTests(unittest.TestCase):
         values = patcher.netplay_values(self.profile)
         self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('yiear', ['P1', 'P2'], 0x4043))
         self.assertEqual(len(self.profile['patches']), 12)
-        self.assertEqual(self.profile['source']['file'], 'KUNG-FU.ROM')
+        self.assertEqual(self.profile['source']['file'], 'KUNGFU.ROM')
 
     def test_the_gpf_compiles_and_fits_playnet(self):
         data = patcher.gpf_bytes(self.profile, self.assets)

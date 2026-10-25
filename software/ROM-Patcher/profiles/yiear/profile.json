@@ -9,7 +9,7 @@
     "size": 16384,
     "sha256": "644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848",
     "crc32": 2316495951,
-    "file": "KUNG-FU.ROM"
+    "file": "KUNGFU.ROM"
   },
   "output": {
     "size": 32768,
@@ -18,7 +18,7 @@
     "target": "ram-image"
   },
   "requirements": [
-    "The player's own KUNG-FU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
+    "The player's own KUNGFU.ROM: Konami's Yie Ar Kung-Fu (RC-725), 16 KB, the dump identified above",
     "PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)",
     "Any MSX with 64 KB RAM on the MSXPi path"
   ],
