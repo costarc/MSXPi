@@ -130,7 +130,7 @@ resetMSXPI:
 ; Uses:
 ;   AF, BC, DE, HL
 ;
-; Retries the block (up to GLOBALRETRIES times, see
+; Retries the block (up to SENDRETRIES times, see
 ; asm-common/include/include.asm) on a checksum mismatch, matching
 ; recvdata2()/recvdata2_oneblock()'s own resend expectation on the Python
 ; side - see SENDDATA's own comment at the mismatch branch below.
@@ -250,7 +250,7 @@ SD2_SEND_DONE:
 ; -------------------------
 ; Checksum mismatch: Python's receivers (recvdata2/recvdata2_oneblock)
 ; always loop back to await a fresh header on mismatch (see their own
-; comments) - resend the whole block from scratch, up to GLOBALRETRIES
+; comments) - resend the whole block from scratch, up to SENDRETRIES
 ; times (asm-common/include/include.asm), instead of erroring out on the
 ; first bad block like before.
 ; -------------------------
@@ -261,7 +261,7 @@ SD2_SEND_DONE:
     push    hl
     pop     ix              ; IX = retry_count + 1
     ld      a,l
-    cp      GLOBALRETRIES
+    cp      SENDRETRIES
     jr      nc,SD2_CHKSUM_ERR
  ifdef MSXPI_DRIVER
     pop     bc              ; a retry never bursts: clear length bit 15 in

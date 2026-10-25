@@ -92,7 +92,12 @@ RC_UNDEFINED = 0xEF  # Undefined error
 # RETRY & TIMEOUT CONFIGURATION
 # =============================================================================
 GLOBALRETRIES = 10  # Global retry limit
-MAX_BLOCK_RETRIES = 3  # Block-level retry limit
+# Block-level retry limit when the Pi sends (senddata_oneblock).  Must equal
+# what the MSX allows for the same block - GLOBALRETRIES in
+# asm-common/include/include.asm and MAX_BLOCK_RETRIES in C-common msxpi.h -
+# and every ROM and .COM in the field: resending after the MSX has given up
+# eats its next command (a run of "Disk error" in the fault-injection tests).
+MAX_BLOCK_RETRIES = 3
 SPI_INT_TIME = 3000  # SPI interrupt time (milliseconds)
 
 # Timeout values (in seconds)

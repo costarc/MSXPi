@@ -628,8 +628,13 @@ def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
     # of step that the connection died and the server reinitialised over and
     # over - seen on hardware about forty blocks into a 512 KB upload, where
     # the retry should have absorbed one bad byte invisibly.
-    attempts = 0
-
+    #
+    # No retry limit here, as in recvdata2(): the sender decides when to give
+    # up.  SENDDATA2 (pcopy's upload) resends for as long as the checksums
+    # differ, so stopping after MAX_BLOCK_RETRIES left it resending into the
+    # idle command loop, which never answers with a matching checksum - a
+    # hang until CTRL+ESC.  A sender that does give up starts its next command
+    # with READY bytes, which fail the length check below and end this loop.
     while True:
         # --- header_rc ---
         rc, header_rc = SPI_ByteTransfer()
@@ -680,10 +685,6 @@ def recvdata2_oneblock(maxbufsize: int) -> Tuple[int, Optional[bytes]]:
         if msxsum == local_sum:
             # Block accepted
             break
-
-        attempts += 1
-        if attempts >= MAX_BLOCK_RETRIES:
-            return (RC_CHKSUM_ERR, None)
 
         # Otherwise MSX will resend the same block; loop again
 

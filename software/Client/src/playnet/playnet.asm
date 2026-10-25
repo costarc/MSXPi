@@ -1149,7 +1149,7 @@ sendBlk:
         ld      (sbRc),a
         ld      (sbPtr),hl
         ld      (sbLen),bc
-        ld      a,GLOBALRETRIES
+        ld      a,SENDRETRIES
         ld      (sbTry),a
 .try:   ld      a,(sbRc)
         call    PIWRITEBYTE
