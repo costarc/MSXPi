@@ -48,5 +48,6 @@ foreach t {40 100 140 180 240} {
         set fh [open "$::env(MSXPI_HARNESS_OUT).t$t" w]
         foreach l [harness::screen_lines] { puts $fh "|$l" }
         close $fh
+        catch { screenshot "$::env(MSXPI_HARNESS_OUT).t$t.png" }
     }} $t]
 }

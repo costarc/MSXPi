@@ -657,11 +657,12 @@ int main(void) {
     if (link_tcp) {
         const char *why = tcp_link_start();
         if (why) {
+            Screen(0);                      /* msx_version() left SCREEN 6: the message and the DOS prompt need the text screen */
             if (auto_tcp) Print("No MSXPi found. ");
             Print((char *)why); Print("\r\n"); return 1;
         }
     }
-    if (!ui_open()) return 1;
+    if (!ui_open()) {Screen(0); return 1;}
     layout();
     ring_clear();
     strcpy(rname[0], "#MSXPI");
