@@ -197,6 +197,21 @@ the MSX abort a burst that the model reads polled); it is fixed and recorded in 
 | T5 openMSX, rate 5e-4, seeds 1-4, 32 steps a run | 0 HUNG, 0 CORRUPT: 99 pass, 29 reported aborts, all on blocks of 8 KB or more (phase 2: 201 pass, 55 aborts over 8 seeds). The step after every abort worked |
 | ETHTEST/ETHBENCH in openMSX with a disk system, T6 hardware | not run: the BIOS half's driver installs only with a disk system, and Canon_V-25 has none |
 
+**Phase 4 (real hardware), 2026-10-26.** MSX booted from MFRSCC+SD with the MSXPi cartridge in slot 2 and the
+A14 jumper set, so the DOS half is off and CALL MSXPI is the BIOS half (LINK2). ROM 20261026.080, server
+20261026.083. (A first round booted MSX-DOS1 from the MSXPi EEPROM: that exercised the legacy half against
+the new server and `L2TEST.BIN`, which carries its own LINK2 code, so only the L2TEST bursts counted.)
+
+| Test | Result |
+|---|---|
+| T6.2 `CALL MSXPIVER`, three response modes, `l2test pat 512 7` (RC 0, size 512, 0 byte errors) | pass |
+| T6.3 L2TEST sends of 512 bytes with OTIR from D000h | pass as reported ("as expected"): `OK` = all, `F=0000`. Smoke run 10 x 512 gave OK=000A F=0000 six times |
+| T6.4 `l2test pat 8192`, 100 downloads into D000h, all 8192 bytes | BAD=0; 37.3 s by stopwatch = 21.4 KB/s |
+| JIFFY/TIME as a timer | unusable for speed: interrupts are off during transfers and frames are lost (a run of 20 x 8 KB read 29 jiffies). Time with a stopwatch or the server log |
+| Control (legacy burst without GO), soak, ETHTEST/ETHBENCH, MSX-DOS half | not run |
+
+No T0 hardware baseline exists for comparison; the legacy ROM would have to be reflashed to take one.
+
 ## Reporting
 
 Each milestone commit carries the numbers: T1/T3 pass counts, T3 T-states against the baseline,
