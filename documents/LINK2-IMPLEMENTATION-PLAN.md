@@ -61,10 +61,8 @@ The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the
   `updateServerVersion=yes buildClientCommands=no buildMSXdiskImage=no ./build` (BuildId only).
   A ROM milestone is `buildBIOS=yes buildClientCommands=no buildMSXdiskImage=no updateServerVersion=yes
   updateRomVersion=yes ./build`: ROM halves, msxpiext.bin, ethrom3.bin and L2TEST.BIN, nothing else.
-- **`buildClientCommands=yes` overwrites `target/msxarch.com`** with the old asm version (`msxarch.asm`,
-  5,300 bytes) instead of the SDCC 4.6 C build that `feature/tcpip-games` ships (14,181 bytes, `make.bat
-  msxarch`). The first phase 2 audit committed exactly that; it was put back in the second. After such a
-  build, restore it (`git checkout 542df0c3 -- software/target/msxarch.com`) or rebuild it with make.bat.
+- `buildClientCommands=yes` no longer touches `target/msxarch.com`: the old asm `msxarch.asm` and its build line were
+  deleted (phase 7 follow-up); the C build (`make.bat msxarch`) is the only one.
 - **Every milestone that changes the server bumps its BuildId** (`updateServerVersion=yes`). Phase 3 did not
   (the server changed under 20261025.081); the second audit's build is 20261026.082.
 
@@ -193,7 +191,7 @@ The BSS is not cleared: `l2ctest.c` found its own counters uninitialised.
   cannot express; it would need a block-level send in the library. `piCommand` could move on its own, but a binary
   holds one protocol (`msxpi_bios.asm` drops the legacy routines under `MSXPI_LINK2`). It keeps the legacy
   protocol, which the dual stack server still serves.
-- `msxarch.asm` (the old asm version `buildClientCommands=yes` copies over the C one): not converted, obsolete.
+- `msxarch.asm` (the old asm version): deleted; the C `msxarch.c` is the only one.
 - `ROM-Patcher/profiles/*`: their own copies of `msxpi_bios.asm`, untouched.
 - Hardware: no C client was run on the real machine.
 

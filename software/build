@@ -225,9 +225,6 @@ if [ "$buildClientCommands" = "yes" ]; then
     "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
         --raw=./target/template.com ./Client/src/template.com.asm ||
         die "template.com did not assemble"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
-        --raw=./target/msxarch.com ./Client/src/msxarch.asm ||
-        die "msxarch.com did not assemble"
     "$SJASM_DIR/sjasmplus" --inc=./asm-common/include \
         --raw=./target/ping.com ./Client/src/ping.asm ||
         die "ping.com did not assemble"
