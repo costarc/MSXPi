@@ -206,7 +206,18 @@ is NAKed and resent.
 - **Choosing the version**: the driver sends `OP_PROBE3` (0xCA) instead of `OP_PROBE` (0xC0). The
   server answers with protocol 3 and serves that driver in v3 until the next probe. Only one ROM
   half is ever mapped, so only one driver is active at a time.
-- **Builds**: `ethrom.bin` is built twice, v2 for the DOS half (unchanged) and v3 for the BIOS half.
+- **Builds**: `ethrom.bin` is built twice, v2 for the DOS half (unchanged) and v3 (`ethrom3.bin`, from
+  `ethrom3.asm`, which defines `ETH_V3` and includes `ethrom.asm`) for the BIOS half. The v3 image is 1376
+  bytes and starts at `UNAPI_ORG3` = 7A80h, 41 bytes below the v2 origin, to make room; the build reports
+  what is left below 8000h.
+- **As built**: the MSX reads GO in `ETH_GO` (polled, with wait mode off for that one byte) at the start of
+  each reply (`ETH_OPX`, the first block of `FN_GET_FRAME`) and before `ETH_TX_BLOCK`'s OTIR. The server
+  sends each reply as one run, GO first (`spi_burst_send`), and takes ETH_SEND_FRAME's payload with
+  `spi_burst_recv`. The RC check is a compare with `ETH_RC_OK`, not a test for zero.
+- **Tested**: `test_ethshuttle` (shuttle, both protocols) and `test_eth3_z80`: the assembled driver, v2 and
+  v3, in /WAIT and polled mode, against the real shuttle on the lockstep wire (probe, in_status,
+  get_frame, send_frame 16..1514, bad checksum, GO placement). Not yet run: ETHTEST/ETHBENCH in openMSX
+  with a disk system, and real hardware (phase 4).
 
 ## 5. Software structure
 

@@ -487,6 +487,38 @@ ETH_WAIT_READY:
 ; why msxpi_eth.py receives ETH_SEND_FRAME's payload with SPI_BurstIn, which
 ; holds RDY for the whole run, and never byte by byte.
 
+            ifdef ETH_V3
+; --- ETH_GO: read the Pi's GO byte, polled, at the start of a burst (protocol 3).
+; The Pi raises READY and offers GO, then holds READY through the whole burst.
+; Reading GO polled means INIR/OTIR can never start before the burst is up: a
+; wait-mode IN would run at full speed if READY were still down.  Wait mode is
+; off for this one byte and back on after it.
+; Out: CF=1 on timeout.  Corrupts AF; BC, DE, HL preserved.
+ETH_GO:
+            push    bc
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_WAIT
+            jr      nz,.read
+            xor     a
+            out     (CTRL2),a               ; wait mode off for the polled read
+.read:
+            call    ETH_WAIT_READY
+            jr      c,.out
+            xor     a
+            out     (CTRL1),a               ; request a byte
+            call    ETH_WAIT_READY
+            jr      c,.out
+            in      a,(DATA1)               ; GO: its value is not checked
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_WAIT
+            jr      nz,.ok
+            ld      a,WAITMODE_ON
+            out     (CTRL2),a
+.ok:        or      a                       ; CF=0
+.out:       pop     bc                      ; (POP keeps the flags)
+            ret
+            endif
+
 ; --- ETH_TX_BLOCK: send BC bytes (1 or more) from HL, then their 8-bit sum.
 ; Out: CF=1 on timeout.  Corrupts AF, BC, DE, HL.
 ;
@@ -506,6 +538,10 @@ ETH_TX_BLOCK:
             pop     bc
             pop     hl
 
+            ifdef ETH_V3
+            call    ETH_GO                  ; the Pi takes the block as a burst
+            ret     c                       ; and offers GO when it is up
+            endif
             ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.polled

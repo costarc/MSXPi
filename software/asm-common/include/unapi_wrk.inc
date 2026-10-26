@@ -127,6 +127,7 @@ UNAPI_WRKEND	EQU	o_RXC_FRAME+RX_INLINE_MAX+1	; UNAPI size; also the ROM's MYSIZE
 KERNEL_GETSLT	EQU	06018H	; kernel GETSLT (msx-dos.mac)
 KERNEL_GETWRK	EQU	06027H	; kernel GETWRK (msx-dos.mac)
 
+UNAPI_ORG3	EQU	07A80H	; the protocol 3 image (BIOS-only half, ethrom3.bin): 1408 bytes below 8000H
 UNAPI_ORG	EQU	07AC9H	; Boundary between the DOS driver below and the UNAPI
 				; image above.  Moved up from 07AB8H for the /WAIT disk
 				; bursts and the PerformHandshake fix.  The UNAPI image

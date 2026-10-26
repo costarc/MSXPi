@@ -22,7 +22,8 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 | 0 - tooling | **done**, with a Z80 interpreter instead of sz80: `tests/z80emu.py` hooks the MSXPi ports, which sz80 cannot. T-state baselines, ROM size report (printed by `software/build`) and the simulated link all exist | 898d20ab, and the phase 2 commit |
 | 1 - server dual stack | **done**, audited | 898d20ab, 533a0d7b (overflow, NAK reset), 2ebc8d42 (rename), 2dc875db (slips), 7450e089 (BuildId 20261025.079), and the end-mark commit |
 | 2 - MSX core | **done** (see "Phase 2 results" below): `link2.asm`, the BIOS half and msxpiext.bin on LINK2, L2TEST.BIN, `l2test` on the server | the phase 2 commit |
-| 3 to 7 | not started | - |
+| 3 - Ethernet protocol 3 | **done** in code and in the Z80 tests (`test_eth3_z80`); openMSX with a disk and hardware are phase 4 | the phase 3 commit |
+| 4 to 7 | not started (phase 4 needs the real MSX) | - |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
 `target/` now carry the LINK2 BIOS half, msxpiext.bin and L2TEST.BIN (the DOS half is unchanged).

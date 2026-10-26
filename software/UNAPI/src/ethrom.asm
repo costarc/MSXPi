@@ -66,7 +66,11 @@ ARG:        equ     0F847h
 GETSLT:     equ     KERNEL_GETSLT       ; addresses kept in unapi_wrk.inc
 GETWRK:     equ     KERNEL_GETWRK
 
+            ifdef ETH_V3
+            org     UNAPI_ORG3
+            else
             org     UNAPI_ORG
+            endif
 
 ; =============================================================================
 ; Initialisation - called from the disk ROM's INIENV

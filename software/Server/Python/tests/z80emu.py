@@ -531,6 +531,15 @@ class Z80:
                     self.pc = (self.pc - 2) & 0xFFFF; self.t += 21
                 else:
                     self.t += 16
+            elif z == 1:  # CPI/CPD/CPIR/CPDR
+                m = self.rb(self.hl)
+                res = (self.a - m) & 0xFF
+                self.hl += step; self.bc = self.bc - 1
+                self.f = (self.f & C_) | (res & S_) | (Z_ if res == 0 else 0)                     | (H_ if (self.a & 0xF) < (m & 0xF) else 0) | N_ | (P_ if self.bc else 0)
+                if rep and self.bc and res != 0:
+                    self.pc = (self.pc - 2) & 0xFFFF; self.t += 21
+                else:
+                    self.t += 16
             elif z == 2:  # INI/IND/INIR/INDR
                 self.wb(self.hl, self.io_in(self.bc))
                 self.r[0] = (self.r[0] - 1) & 0xFF

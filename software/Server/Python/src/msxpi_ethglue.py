@@ -37,7 +37,8 @@ logger = logging.getLogger("msxpi")
 from msxpi_const import (
     RC_SUCCESS,
 )
-from msxpi_transport import SPI_BurstIn, SPI_BurstOut, link_recv_byte, link_send_byte
+from msxpi_transport import (SPI_BurstIn, SPI_BurstOut, link_recv_byte, link_send_byte,
+                             spi_burst_recv, spi_burst_send)
 
 # IRC client integration (currently disabled - awaiting complete implementation)
 # TODO: Integrate IRC client when msxpi_irc module is ready
@@ -85,6 +86,17 @@ def _eth_read_burst(n):
     return bytes(data) if rc == RC_SUCCESS else None
 
 
+def _eth_write_burst_go(data):
+    # protocol 3: GO and the reply in one READY-held run
+    return 0 if spi_burst_send(data, _eth_mod.ETH_GO) == RC_SUCCESS else 1
+
+
+def _eth_read_burst_go(n):
+    # protocol 3: GO, then ETH_SEND_FRAME's payload, in one READY-held run
+    rc, data = spi_burst_recv(n, _eth_mod.ETH_GO)
+    return bytes(data) if rc == RC_SUCCESS else None
+
+
 def _eth_tap_ip():
     """TAPIP from msxpi.ini: the gateway address of the TAP-Windows adapter to use."""
     try:
@@ -111,6 +123,8 @@ def eth_get_shuttle():
             write_byte=_eth_write_byte,
             write_burst=_eth_write_burst,
             read_burst=_eth_read_burst,
+            write_burst_go=_eth_write_burst_go,
+            read_burst_go=_eth_read_burst_go,
             log=print,
         )
         print("eth: Ethernet UNAPI shuttle ready (%s)" % type(link).__name__)

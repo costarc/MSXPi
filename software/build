@@ -291,6 +291,9 @@ if [ "$buildBIOS" = "yes" ]; then
     SJASM_BIN="$(cd "$SJASM_DIR" && pwd)/sjasm.exe"
     ( cd UNAPI/src && "$SJASM_BIN" ethrom.asm ../../ROM/src/MSX-DOS/ethrom.bin ethrom.lst ) ||
         die "the Ethernet UNAPI ROM driver did not assemble"
+    echo "Compiling Ethernet UNAPI driver (ROM variant, protocol 3)"
+    ( cd UNAPI/src && "$SJASM_BIN" ethrom3.asm ../../ROM/src/MSX-DOS/ethrom3.bin ethrom3.lst ) ||
+        die "the Ethernet UNAPI protocol 3 ROM driver did not assemble"
 
     # Where the image lands in the ROM, and whether it still fits, is asserted
     # inside msxpi-driver.mac - so a driver that has outgrown the free tail
@@ -359,6 +362,7 @@ if [ "$buildBIOS" = "yes" ]; then
     done
     echo "  $BASICNAME: code ends at 0x$code_end, $((limit - 0x$code_end)) bytes free below 0x$(printf %X $limit)"
     echo "  msxpiext.bin: $(wc -c < ./target/msxpiext.bin) bytes"
+    echo "  ethrom3.bin (protocol 3, BIOS half): $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin) bytes, $((0x8000 - 0x7A80 - $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin))) free below 8000h"
     # The DOS half: the padding between the MSXPi code and the UNAPI driver image,
     # as zmac lists it, is the room phase 6 (the DOS driver on LINK2) has left.
     dos_pad=$(sed -n 's/.*\([0-9A-F]\{4\}\) \.\. \([0-9A-F]\{4\}\).*DEFS *UNAPI_ORG-\$.*/\1 \2/p' ./zout/msx-dos.lst | head -1)
