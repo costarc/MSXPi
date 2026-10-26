@@ -96,3 +96,7 @@ log open. Count F and the server log's retries and aborts. Expect 0 F, 0 aborts.
 
 If the Canon hangs at power on: reflash the previous image, and tell me; the legacy ROM + the new server
 works (phase 1).
+
+## Note for loops
+
+A download of 8 KB into D000h covers D003h-F002h, which includes the L2TEST parameters at E000h. A loop that mixes both must rewrite the parameters (command, E040, E042, E044, E046) after every download.
