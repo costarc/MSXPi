@@ -242,6 +242,13 @@ def playnet(parms: Optional[str] = None) -> CommandResult:
         rc, upload = link_recv(SAVE_MAX)
         if rc != RC_SUCCESS:
             return rc
+        if upload is not None and len(upload) == 8 and upload[:4] == b"PNSV":
+            # LINK2 PLAYNET: the 8 byte header is one transfer, the area a second one
+            # (the legacy client sends both as one, which is always longer than 8)
+            rc, area = link_recv(SAVE_MAX)
+            if rc != RC_SUCCESS:
+                return rc
+            upload += area or b""
     ok, payload = playnet_command(command, upload, _games_dir())
     if ok:
         return link_send(payload)

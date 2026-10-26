@@ -62,6 +62,8 @@ R_CANCEL:       EQU     7
 R_ROM:          EQU     8
 R_MACHINE:      EQU     9
 
+        DEFINE  MSXPI_LINK2                     ; LINK2: the paired LINK_* names of link2.asm
+        DEFINE  LINK2_CRC_NOTABLE               ; the 512 byte table does not fit under CRCT: slower CRC, same bytes
         org     $0100
 
 start:  ld      hl,hiImage                      ; the page-1 part into place, before CRCT and the GPF
@@ -993,6 +995,8 @@ trampEnd:
 ; Before the game: MSX-DOS's area up to FFFEh goes to the MSXPi ("playnet save"); the slot registers stay here and in the
 ; transport. The game never maps page 0's RAM, so this program is still there when XEND comes back to pnBack.
 saveDos:
+        di                                      ; the area is read twice (burst, then its CRC): the interrupt
+                                        ; routine's counters (JIFFY...) must not change under it
         ld      hl,(HIMEM)                      ; the area starts at HIMEM, or lower where the game's RAM
         ld      (svStart),hl                    ; reaches below it: MSX-DOS 2 keeps code and data between
         ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh; MSX-DOS 1: its
@@ -1086,120 +1090,17 @@ svLow:  push    de
         ld      (svStart),hl                    ; below the start so far
         ret
 
-; "playnet save", after the command: the header and the area as one transfer that the MSXPi's recvdata2
-; takes (one handshake, blocks of at most MAXBUFSIZE, RC_READY on all but the last). CF on a link error.
+; "playnet save", after the command: the header and the area as two transfers (the server joins them).
+; CF on a link error.
 sendSave:
-.hs:    ld      a,READY
-        call    PIWRITEBYTE
-        ret     c
-        call    PIREADBYTE
-        ret     c
-        cp      READY_ACK
-        jr      nz,.hs
-        ld      a,MAXBUFSIZE_LO
-        call    PIWRITEBYTE
-        ret     c
-        ld      a,MAXBUFSIZE_HI
-        call    PIWRITEBYTE
-        ret     c
-        xor     a
-        ld      (sbIdx),a
-        ld      hl,svHdr
+        ld      de,svHdr
         ld      bc,SV_HDR
-        ld      a,RC_READY
-        call    sendBlk
+        call    LINK_SEND
         ret     c
-        ld      hl,(svStart)
-        ld      (sbSrc),hl
-        ld      hl,(svLen)
-        ld      (sbLeft),hl
-.next:  ld      hl,(sbLeft)
-        ld      de,MAXBUFSIZE+1
-        call    cpHLDE
-        ld      b,h
-        ld      c,l
-        ld      a,RC_SUCCESS
-        jr      c,.size                         ; the rest fits one block: the last one
-        ld      bc,MAXBUFSIZE
-        ld      a,RC_READY
-.size:  push    af
-        ld      hl,(sbLeft)
-        or      a
-        sbc     hl,bc
-        ld      (sbLeft),hl
-        ld      hl,(sbSrc)
-        push    hl
-        add     hl,bc
-        ld      (sbSrc),hl
-        pop     hl
-        pop     af
-        push    af
-        call    sendBlk
-        pop     de                              ; D = this block's header code
-        ret     c
-        ld      a,d
-        cp      RC_READY
-        jr      z,.next
-        or      a
-        ret
-
-; one block: HL = data, BC = length, A = header code (RC_READY / RC_SUCCESS). Resent on a checksum
-; mismatch, as SENDDATA does. CF on an error.
-sendBlk:
-        ld      (sbRc),a
-        ld      (sbPtr),hl
-        ld      (sbLen),bc
-        ld      a,SENDRETRIES
-        ld      (sbTry),a
-.try:   ld      a,(sbRc)
-        call    PIWRITEBYTE
-        ret     c
-        ld      a,(sbLen)
-        call    PIWRITEBYTE
-        ret     c
-        ld      a,(sbLen+1)
-        call    PIWRITEBYTE
-        ret     c
-        ld      a,(sbIdx)
-        call    PIWRITEBYTE
-        ret     c
-        ld      de,(sbPtr)
-        ld      bc,(sbLen)
-        ld      hl,0
-        call    PAYLOAD_TX
-        ret     c
-        ld      a,l
-        add     a,h
-        ld      (sbSum),a
-        call    PIWRITEBYTE                     ; our checksum, then the MSXPi's
-        ret     c
-        call    PIREADBYTE
-        ret     c
-        ld      hl,sbSum
-        cp      (hl)
-        jr      z,.ok
-        ld      hl,sbTry
-        dec     (hl)
-        jr      nz,.try
-        scf
-        ret
-.ok:    call    PIREADBYTE                      ; READY, its status, then our READY_ACK
-        ret     c
-        cp      READY
-        scf
-        ret     nz
-        call    PIREADBYTE
-        ret     c
-        cp      RC_SUCCESS
-        scf
-        ret     nz
-        ld      a,READY_ACK
-        call    PIWRITEBYTE
-        ret     c
-        ld      hl,sbIdx
-        inc     (hl)
-        or      a
-        ret
+        ld      de,(svStart)
+        ld      bc,(svLen)
+        ld      hl,BLKSIZE                      ; blocks of BLKSIZE: the CRC without a table is slow, and the Pi
+        jp      LINK_SEND_SIZE                  ; waits for its end after each block
 
 ; XEND comes here (the transport's xBack) with MSX-DOS's slots, interrupts off, A = the result code and
 ; B, C = the game's slot registers. Fetch the saved area, put it back, set up the screen MSX-DOS had and
@@ -1283,8 +1184,6 @@ piCommand:
         ld      (pcCmd),de
         ld      (pcDst),hl
         dec     bc                              ; one byte for the terminator
-        add     hl,bc
-        ld      (pcLim),hl
         ld      h,b                             ; the block size asked for: min(room, BLKSIZE)
         ld      l,c
         ld      de,BLKSIZE
@@ -1293,7 +1192,7 @@ piCommand:
         ex      de,hl
 .bsz:   ld      (pcBsz),hl
         ld      de,(pcCmd)
-        call    SendCommandToMSXPi
+        call    LINK_COMMAND
         ret     c
         ld      a,(pcUp)
         or      a
@@ -1301,38 +1200,13 @@ piCommand:
         ret     c
         ld      de,(pcDst)
         ld      bc,(pcBsz)
-        xor     a
-        ld      (pcIdx),a
-        call    PerformHandshake
+        ld      a,2                             ; mode 2: the blocks follow one another from DE
+        call    LINK_RECV
         ret     c
-.blk:   ld      hl,(pcLim)                      ; room for another whole block?
-        or      a
-        sbc     hl,de
-        push    de
-        ld      de,(pcBsz)
-        call    cpHLDE
-        pop     de
-        ld      hl,msgTooBig
-        jp      c,exitQuiet
-        ld      a,(pcIdx)
-        ld      bc,(pcBsz)
-        call    RECVDATA_ONEBLOCK
-        ret     c
-        cp      RC_READY
-        jr      nz,.last
-        ld      hl,pcIdx
-        inc     (hl)
-        jr      .blk
-.last:  ld      b,a
+        push    af
         xor     a
-        ld      (de),a
-        ld      hl,(pcDst)
-        ex      de,hl
-        or      a
-        sbc     hl,de
-        ld      a,b
-        ld      b,h
-        ld      c,l
+        ld      (de),a                          ; DE = the end of the data
+        pop     af
         or      a                               ; CF = 0
         ret
 
@@ -1601,7 +1475,6 @@ msgNoTcpip:     defb    "No TCP/IP UNAPI found: run INL I first",0
 msgNoPort:      defb    "Cannot open the UDP port",0
 nameOvl:        defb    "PLAYNET OVL"
 msgLink:        defb    "Cannot talk to the MSXPi",0
-msgTooBig:      defb    "The MSXPi sent more than PLAYNET can hold",0
 msgBadSession:  defb    "The MSXPi sent no valid game session",0
 msgNewer:       defb    "This game needs a newer PLAYNET",0
 msgOwnProgram:  defb    "This game is not started by PLAYNET",0
@@ -1629,6 +1502,7 @@ cmdSave:        defb    "playnet save",0
 cmdRestore:     defb    "playnet restore",0
 keysMchat:      defb    "MCHAT",13
 keysMchatT:     defb    "MCHAT /T",13
+msgTooBig:      defb    "The MSXPi sent more than PLAYNET can hold",0
 msgNoSave:      defb    "MSX-DOS could not be saved: the game will end with a reset",0
 cmdResult:      defb    "playnet result "
 cmdResultN:     defb    "0",0
@@ -1637,7 +1511,7 @@ cmdProfileId:   defs    10
 
         INCLUDE "include.asm"
         INCLUDE "putchar_clients.asm"
-        INCLUDE "msxpi_bios.asm"
+        INCLUDE "msxpi_bios.asm"            ; with MSXPI_LINK2: link2.asm at its end
         INCLUDE "transport_msxpi.inc"
         INCLUDE "transport_unapi.inc"
         INCLUDE "transport_hybrid.inc"
@@ -1706,8 +1580,6 @@ t0:             defw    0
 tDot:           defw    0
 c9sp:           defw    0
 pcDst:          defw    0
-pcLim:          defw    0
-pcIdx:          defb    0
 pcBsz:          defw    0
 pcCmd:          defw    0
 tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until the trampoline copies it
@@ -1744,14 +1616,6 @@ svStart:        defw    0                       ; where the area starts: HIMEM, 
 svLen:          defw    0                       ; bytes from the start to FFFEh
 svFFFF:         defb    0                       ; what to write back at FFFFh
 bkSlots:        defw    0                       ; the game's slot registers, for the fallback reset
-sbIdx:          defb    0
-sbSrc:          defw    0
-sbLeft:         defw    0
-sbRc:           defb    0
-sbPtr:          defw    0
-sbLen:          defw    0
-sbTry:          defb    0
-sbSum:          defb    0
 crcVal:         defs    4
 mHost:          defb    0                       ; image host: 0 plain, 1 mapper-ram
         INCLUDE "mapper_low.asm"                ; the mapper-ram loader's page-0 part
