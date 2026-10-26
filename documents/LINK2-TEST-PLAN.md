@@ -236,7 +236,7 @@ back, `p date`):
 
 | Test | Result |
 |---|---|
-| clean run | PASS: all files identical, 0 retry prompts. The server saw 198 Pi -> MSX bursts of GO + 512 (sector reads) and 328 MSX -> Pi bursts of 512 (**sector writes with OTIR**, off since before LINK2) |
+| clean run | PASS: all files identical, 0 retry prompts. (This line used to read the server's 328 "BURST 512" lines as sector writes with OTIR. On the TCP-framed openMSX link a polled 512-byte block is one exchange too, so that counter cannot tell; see the pcopy timing below for the breakpoint counts) |
 | rate 1.5e-4, seeds 1-4 | 0 "Abort, Retry" prompts and 0 sector checksum mismatches (the legacy DOS half on the same seeds: 4 prompts, 30 mismatches). pcopy, still legacy (phase 7), aborted a file in all four runs (legacy DOS half: three), always detected ("Transfer aborted by server", the partial file left behind) |
 | the one silent corruption (seed 3) | in pcopy's legacy **upload**: two flips of bit 3 in opposite directions in one 8 KB block (FAULT #103 and #104, rx), which the 8-bit sum cannot see. The LINK2 sector reads around it took six faults and recovered. This is design section 2's first row, and phase 7's job |
 | T4 BIOS half, T3, T1 | unchanged since phase 5 (`link2.asm` is the same code); T4 run again on the built ROM: 32/32 pass |
@@ -245,6 +245,32 @@ back, `p date`):
 
 Note on the harness: `--seed` takes several values after one flag (`--seed 1 2 3 4`); repeating the flag keeps
 only the last.
+
+**pcopy speed, 512 KB from the internet onto the MSXPi disk** (`pcopy /z r2:solid.lzh b:`: msxarchive.nl ->
+server -> pcopy, still the legacy protocol -> MSX-DOS -> DSKIO -> the Pi's B: image). The user's runs
+(2026-10-26):
+
+| Setup | Time |
+|---|---|
+| openMSX, Panasonic FS-A1WSX + MSXPi + ram4mb, MSX-DOS from the LINK2 DOS half, B: = Pi image | 1:36.03 |
+| Canon V-25 (hardware), MSX-DOS from MFR SCC+ SD, A: = SD card (only pcopy's download crosses the link) | 1:02.37, about 8.2 KB/s: the legacy rate (phase 4: 8.8 KB/s), as pcopy is legacy |
+
+Measured here on the same openMSX setup (FS-A1WSX + MSXPiTest + ram4mb, fresh copies of the served disk images,
+the feature/link2 server, real time from typing the command to the next prompt, the two ROMs alternated):
+
+| DOS half | Runs | Time |
+|---|---|---|
+| LINK2 (phase 6 build, 20261026.082) | 3 (+2 with breakpoints) | 83.50, 83.51, 83.60 s |
+| legacy (the phase 5 build's DOS half) | 3 | 89.20, 89.20, 89.30 s |
+
+LINK2 is 6.4% faster here; every run ended "File copied successfully" with no retry prompt. The gain is small
+because **pcopy's sectors do not burst**. Breakpoints in the DOS half (one run): 103 DSKIO calls, 43 INIR and 14 OTIR
+bursts, and the burst decision at each `LINK_OPEN` shows why: the Pi allowed bursts every time (flags 01), but
+the MSX allows them only for a buffer at 8000h or above (MSX-DOS's FAT and directory buffers, sectors staged
+through $SECBUF), and pcopy's sectors come from its buffer at 0100h-3BFFh in page 0 (64 transfers each from
+0100h ... 3B00h): all polled. Under MSX-DOS page 0 is RAM; only page 1, where this ROM sits, must never burst,
+and DSKIO already stages any sector touching it (DSKIO_P1_TEST). Letting the DOS half burst outside page 1 is
+the obvious next gain, larger on hardware, where a polled byte costs much more than in openMSX. Not done.
 
 ## Reporting
 
