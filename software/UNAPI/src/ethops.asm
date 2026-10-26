@@ -68,6 +68,7 @@ FLAG_MORE:      equ     001h
 ; before every burst it takes (LINK2-DESIGN.md 3.4, 4), and RC_OK = 5Ah.
 ETH_PROTO:      equ     3
 OP_PROBE_USED:  equ     OP_PROBE3
+ETH_GO_BYTE:    equ     05Ah        ; the Pi's GO (msxpi_eth.ETH_GO)
             else
 ETH_PROTO:      equ     2
 OP_PROBE_USED:  equ     OP_PROBE

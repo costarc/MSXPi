@@ -710,7 +710,7 @@ class EthShuttle(object):
 
     def __init__(self, link, read_byte, write_byte, write_burst=None,
                  read_burst=None, log=None, write_burst_go=None,
-                 read_burst_go=None):
+                 read_burst_go=None, proto_file=None):
         self.link = link
         self._read = read_byte
         self._write = write_byte
@@ -721,6 +721,8 @@ class EthShuttle(object):
         self._burst_go = write_burst_go
         self._read_burst_go = read_burst_go
         self._log = log or (lambda *a: None)
+        # Where the protocol the last probe chose is kept (None: not kept).
+        self._proto_file = proto_file
 
         # Dict dispatch, built once, instead of an if/elif chain walked on every
         # opcode. Bound methods are stored directly so a call costs one dict
@@ -744,7 +746,35 @@ class EthShuttle(object):
 
         # Replies that never change are built once here rather than being
         # reassembled per call.
-        self._set_proto(2)
+        self._set_proto(self._saved_proto())
+
+    def _saved_proto(self):
+        """The protocol the last probe chose, kept across a server restart.
+
+        A driver probes only when it starts and on ETH_RESET, so a restarted
+        server that fell back to 2 would answer a protocol 3 driver with no GO
+        and RC_OK 0: every transaction fails until the MSX is reset.  The DOS
+        half's driver probes with OP_PROBE when it starts, so a file left at 3
+        cannot mislead it.
+        """
+        if self._proto_file:
+            try:
+                with open(self._proto_file) as f:
+                    return 3 if f.read().strip() == "3" else 2
+            except OSError:
+                pass
+        return 2
+
+    def _probe(self, version):
+        if version != self.proto and self._proto_file:
+            try:
+                with open(self._proto_file, "w") as f:
+                    f.write("%d\n" % version)
+            except OSError as exc:
+                self._log("eth: cannot keep the protocol in %s: %s"
+                          % (self._proto_file, exc))
+        self._set_proto(version)
+        self._write_many(self._probe_reply)
 
     def _set_proto(self, version):
         """Serve the driver in protocol 2 or 3 until its next probe."""
@@ -756,12 +786,10 @@ class EthShuttle(object):
         self._netstat_down = bytes([self._ok, 0])
 
     def _op_probe(self):
-        self._set_proto(2)
-        self._write_many(self._probe_reply)
+        self._probe(2)
 
     def _op_probe3(self):
-        self._set_proto(3)
-        self._write_many(self._probe_reply)
+        self._probe(3)
 
     def _op_get_hwadd(self):
         self._fast(self._ok, self.link.mac)

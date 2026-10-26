@@ -205,19 +205,32 @@ is NAKed and resent.
   the implementation plan.
 - **Choosing the version**: the driver sends `OP_PROBE3` (0xCA) instead of `OP_PROBE` (0xC0). The
   server answers with protocol 3 and serves that driver in v3 until the next probe. Only one ROM
-  half is ever mapped, so only one driver is active at a time.
+  half is ever mapped, so only one ROM driver is active at a time.
+- **The choice survives a server restart**: a driver probes only when it starts and on ETH_RESET, so a
+  server that came back in protocol 2 would fail every transaction of a v3 driver until the MSX is reset.
+  The shuttle keeps the last probe's version in `MSXPIHOME/eth_proto` and starts from it. A v2 driver
+  probes when it starts, so a file left at 3 cannot mislead it.
+- **One protocol at a time**: a v2 RAM driver (`ETHUNAPI.COM`) installed next to the BIOS half's v3 ROM
+  driver switches the server back to 2 when it probes, and the ROM driver then fails until its next
+  probe. Use one or the other; this is not worked around.
 - **Builds**: `ethrom.bin` is built twice, v2 for the DOS half (unchanged) and v3 (`ethrom3.bin`, from
-  `ethrom3.asm`, which defines `ETH_V3` and includes `ethrom.asm`) for the BIOS half. The v3 image is 1376
-  bytes and starts at `UNAPI_ORG3` = 7A80h, 41 bytes below the v2 origin, to make room; the build reports
-  what is left below 8000h.
+  `ethrom3.asm`, which defines `ETH_V3` and includes `ethrom.asm`) for the BIOS half. The v3 image is 1381
+  bytes and starts at `UNAPI_ORG3` = 7A80h, 73 bytes below the v2 origin (7AC9h), to make room; 27 bytes
+  are left below 8000h, and the build reports them.
 - **As built**: the MSX reads GO in `ETH_GO` (polled, with wait mode off for that one byte) at the start of
   each reply (`ETH_OPX`, the first block of `FN_GET_FRAME`) and before `ETH_TX_BLOCK`'s OTIR. The server
   sends each reply as one run, GO first (`spi_burst_send`), and takes ETH_SEND_FRAME's payload with
   `spi_burst_recv`. The RC check is a compare with `ETH_RC_OK`, not a test for zero.
-- **Tested**: `test_ethshuttle` (shuttle, both protocols) and `test_eth3_z80`: the assembled driver, v2 and
-  v3, in /WAIT and polled mode, against the real shuttle on the lockstep wire (probe, in_status,
-  get_frame, send_frame 16..1514, bad checksum, GO placement). Not yet run: ETHTEST/ETHBENCH in openMSX
-  with a disk system, and real hardware (phase 4).
+- **GO is checked here** (unlike LINK2's, 3.7): an Ethernet reply has no header or CRC, so GO is the only
+  thing that says a burst follows. When the server refuses ETH_SEND_FRAME's length it answers BADLEN in
+  the GO slot; with GO unchecked the MSX ran its OTIR anyway, and the frame went into the server's opcode
+  hunt, where any byte C0h-CAh in it is taken as an opcode (the test sends a frame of C8h, OP_RESET). It
+  also stops an IN_STATUS reply, which has no result code, being taken from a link that is out of step. A
+  wrong GO fails the transaction, and `ETH_FAIL`'s resync drains the rest.
+- **Tested**: `test_ethshuttle` (shuttle, both protocols, the kept version) and `test_eth3_z80`: the
+  assembled driver, v2 and v3, in /WAIT and polled mode, against the real shuttle on the lockstep wire
+  (probe, in_status, get_frame, send_frame 16..1514, bad checksum, GO placement, a refused length, a server
+  restart). Not yet run: ETHTEST/ETHBENCH in openMSX with a disk system, and real hardware (phase 4).
 
 ## 5. Software structure
 
@@ -450,7 +463,13 @@ How it differs from the paper description above, on purpose:
   only for a buffer at 8000h or above on a board with /WAIT (the test of `DSKIO_RXSIZE`: does `$57` change
   when wait mode goes on).
 - **Room in mode 2**: the caller gives no size, so the MSX uses what the RAM has: a block that would end past
-  F380h (the system area) from a buffer below it, or past FFFFh, is ABORTed in its header. T3 covers it.
+  F380h (the system area) from a buffer below it, or past FFFFh, is ABORTed in its header. A block that ends
+  exactly at 10000h wraps the sum to 0 and is judged as "past F380h" too (the first version let one from
+  below F380h through). T3 covers all three.
+- **Mode 1 needs BC+1 bytes**: `CALL MSXPIVER` reads up to 127 bytes into the 128 below HIMEM, so the
+  terminator never lands on HIMEM itself.
+- **L2TEST** reads the server's summary after every send, failed or not: the `l2test sink` command answers
+  a failed receive too, and an unread answer would be taken by the next repetition's command.
 - **Names**: `msxpi_call.asm` and the msxpiext table use `LINK_COMMAND`, `LINK_PRINT`, `LINK_DISCARD`,
   `LINK_RECV_BYTE` and `LINK_SEND_BYTE`; the legacy DOS half defines the first three as aliases of its own
   routines. `PIREADBYTE`/`PIWRITEBYTE` are not assembled in a LINK2 build.

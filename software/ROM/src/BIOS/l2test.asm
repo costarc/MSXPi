@@ -113,12 +113,18 @@ L2T_REP:
     ld   de,(P_BUF)
     ld   bc,(P_LEN)
     call LINK_SEND
-    jr   c,L2T_FAILED
+    sbc  a,a                    ; FFh when the send failed
+    ld   (L2T_SENDF),a
+    ; The reply is read either way: the server's sink answers a failed receive
+    ; too, and an unread answer would meet the next repetition's command.
     ld   de,R_REPLY
     ld   bc,128
     ld   a,2
     call LINK_RECV
     jr   c,L2T_FAILED
+    ld   a,(L2T_SENDF)
+    or   a
+    jr   nz,L2T_FAILED
     ld   hl,R_REPLY
     ld   de,L2T_OKTEXT
     ld   b,9
@@ -176,6 +182,7 @@ L2T_MSG2:   DB " F=",0
 L2T_MSG3:   DB " T=",0
 L2T_PTR:    DW 0
 L2T_I:      DB 0
+L2T_SENDF:  DB 0
 L2T_T0:     DW 0
 
     INCLUDE "include.asm"

@@ -136,9 +136,9 @@ _MSXPIVER:
         call    PRINT
         ld      de,vercommand
         call    LINK_COMMAND
-        ld		bc,127          ; one less than the room: the text terminator follows
-		ld		HL,(HIMEM)
-        or      a
+        ld		bc,127          ; a block of up to 127 bytes and its terminator,
+		ld		HL,(HIMEM)      ; in the 128 bytes below HIMEM
+        scf                     ; HL = HIMEM - 127 - 1
         sbc     hl,bc
         ld      d,h
         ld      e,l

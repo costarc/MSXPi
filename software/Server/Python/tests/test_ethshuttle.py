@@ -3,6 +3,7 @@ inline, ETH_GET_FRAME's discard (maxlen 0) and ETH_SEND_FRAME's burst receive.
 
 The shuttle is driven through fake transport callables, so this runs anywhere
 without a Pi or an MSX - the byte layouts here are what ethops.asm reads."""
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -216,6 +217,22 @@ class Protocol3(unittest.TestCase):
         wire.to_pi.extend(bytes([64, 0]) + f + bytes([sum(f) & 0xFF]))
         sh.handle(eth.OP_SEND_FRAME)
         self.assertEqual(bytes(wire.out), bytes([eth.ETH_GO, self.OK]))
+
+    def test_the_protocol_is_kept_across_a_restart(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            keep = os.path.join(tmp, 'eth_proto')
+
+            def shuttle():
+                return eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                                      write_burst_go=self.wire.write_burst_go,
+                                      read_burst_go=self.wire.read_burst_go,
+                                      proto_file=keep)
+            self.assertEqual(shuttle().proto, 2)           # no file yet
+            shuttle().handle(eth.OP_PROBE3)
+            self.assertEqual(shuttle().proto, 3)
+            shuttle().handle(eth.OP_PROBE)
+            self.assertEqual(shuttle().proto, 2)
 
 
 if __name__ == '__main__':

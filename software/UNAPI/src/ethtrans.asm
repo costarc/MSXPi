@@ -493,7 +493,11 @@ ETH_WAIT_READY:
 ; Reading GO polled means INIR/OTIR can never start before the burst is up: a
 ; wait-mode IN would run at full speed if READY were still down.  Wait mode is
 ; off for this one byte and back on after it.
-; Out: CF=1 on timeout.  Corrupts AF; BC, DE, HL preserved.
+; Unlike LINK2's GO (LINK2-DESIGN.md 3.7), this one is checked: nothing else
+; frames an Ethernet reply, so it is what stops an OTIR into a Pi that refused
+; the length, and an IN_STATUS reply (no result code) taken from a link that is
+; out of step.  A wrong GO fails the transaction; ETH_FAIL's resync drains it.
+; Out: CF=1 on timeout or a wrong GO.  Corrupts AF; BC, DE, HL preserved.
 ETH_GO:
             push    bc
             ld      a,(ix+o_ETH_MODE)
@@ -508,7 +512,10 @@ ETH_GO:
             out     (CTRL1),a               ; request a byte
             call    ETH_WAIT_READY
             jr      c,.out
-            in      a,(DATA1)               ; GO: its value is not checked
+            in      a,(DATA1)
+            cp      ETH_GO_BYTE             ; anything else is not a burst: the
+            scf                             ; Pi refused the frame (BADLEN), is
+            jr      nz,.out                 ; out of step, or serves protocol 2
             ld      a,(ix+o_ETH_MODE)
             cp      MODE_WAIT
             jr      nz,.ok

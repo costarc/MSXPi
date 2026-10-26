@@ -183,6 +183,20 @@ area (the next BASIC line then runs garbage), and the BASIC screen is 29 columns
 be short enough not to wrap. The Z80 run found one real bug in the first draft (a damaged flags byte made
 the MSX abort a burst that the model reads polled); it is fixed and recorded in the design, section 8.8.
 
+**Phase 3 (Ethernet protocol 3) and the audit of phases 2 and 3, 2026-10-26** - BuildIds ROM 20261026.080, server
+20261026.082 (the audit's fixes are listed in LINK2-IMPLEMENTATION-PLAN.md, "Audit of phases 2 and 3"):
+
+| Test | Result |
+|---|---|
+| `test_ethshuttle` (shuttle, protocols 2 and 3, the version kept across a restart) | 17/17 pass |
+| `test_eth3_z80`: the assembled driver, v2 and v3, /WAIT and polled, against the shuttle (probe, in_status, get_frame, send_frame 16..1514, bad checksum, GO placement, a refused length, a server restart) | 8/8 pass; the refused-length test fails on the phase 3 driver (it sent the frame into the opcode hunt) |
+| T3 `test_link2_z80`, with the new case: a block that ends exactly at 10000h from below F380h | 9/9 pass; the new case fails on the phase 2 code |
+| T1 `test_link2` | 14/14 pass |
+| T1 on the Z80 code (`LINK2_MSX=z80`) | 14/14 pass |
+| T4 openMSX, Canon_V-25, BIOS half, clean | 32/32 pass |
+| T5 openMSX, rate 5e-4, seeds 1-4, 32 steps a run | 0 HUNG, 0 CORRUPT: 99 pass, 29 reported aborts, all on blocks of 8 KB or more (phase 2: 201 pass, 55 aborts over 8 seeds). The step after every abort worked |
+| ETHTEST/ETHBENCH in openMSX with a disk system, T6 hardware | not run: the BIOS half's driver installs only with a disk system, and Canon_V-25 has none |
+
 ## Reporting
 
 Each milestone commit carries the numbers: T1/T3 pass counts, T3 T-states against the baseline,

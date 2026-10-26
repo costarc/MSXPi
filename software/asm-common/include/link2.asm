@@ -590,10 +590,11 @@ L2R_CEIL:                       ; ends past F380h: fine only from a buffer alrea
     cp   $80
     jp   c,L2R_BAD
     jr   L2R_ACK
-L2R_WRAP:
-    ld   a,h
-    or   l
+L2R_WRAP:                       ; past 10000h: never. Ending exactly there is the
+    ld   a,h                    ; end past F380h above (a buffer below F380h would
+    or   l                      ; run over the system area on its way)
     jp   nz,L2R_BAD
+    jr   L2R_CEIL
 L2R_ACK:
     ld   a,LINK_ACK
     call LINK_SEND_BYTE

@@ -79,7 +79,7 @@ class Ports:
             self.wait = bool(v & 1) and self.has_wait
 
 
-def pi_shuttle(wire, link):
+def pi_shuttle(wire, link, proto_file=None):
     """The shuttle with the transport callables of msxpi_ethglue, on the wire."""
     def rb():
         return 0, wire.pi_xfer(0)
@@ -104,7 +104,8 @@ def pi_shuttle(wire, link):
         return rburst(n)
 
     return eth.EthShuttle(link, rb, wb, write_burst=burst, read_burst=rburst,
-                          write_burst_go=burst_go, read_burst_go=rburst_go)
+                          write_burst_go=burst_go, read_burst_go=rburst_go,
+                          proto_file=proto_file)
 
 
 class Rig:
@@ -235,6 +236,45 @@ class DriverAgainstShuttle(unittest.TestCase):
         rig.call("FN_IN_STATUS")
         x = rig.transfers(before)
         self.assertEqual((x[0][1], [p for p, _ in x[1:]]), (0xC5, [0] * 5))
+
+    def test_a_refused_length_is_not_sent_into_the_opcode_hunt(self):
+        # The Pi answers the length with BADLEN instead of GO (as for a length damaged
+        # on the wire).  Protocol 3 checks GO, so the frame is never sent with OTIR:
+        # sent, its bytes would be read as opcodes (here 0xC8, OP_RESET).
+        for mode in (MODE_WAIT, MODE_POLL):
+            rig = Rig(3, mode)
+            self.addCleanup(rig.close)
+            rig.call("ETH_VERIFY")
+
+            def refuse(rig=rig):
+                rig.sh._read_n(2)
+                rig.sh._write(eth.ETH_RC_BADLEN)
+            rig.sh._dispatch[eth.OP_SEND_FRAME] = refuse
+            n = 64
+            rig.cpu.mem[0x9000:0x9000 + n] = frame(n, fill=eth.OP_RESET)
+            before = len(rig.wire.log)
+            cpu = rig.call("FN_SEND_FRAME", hl=0x9000, bc=n, d=0)
+            self.assertNotEqual(cpu.a, 0, mode)
+            self.assertNotIn(eth.OP_RESET, [m for _, m in rig.transfers(before)], mode)
+            # and the link still works
+            rig.sh._dispatch[eth.OP_SEND_FRAME] = rig.sh._op_send_frame
+            rig.link.sent = []
+            cpu = rig.call("FN_SEND_FRAME", hl=0x9000, bc=n, d=0)
+            self.assertEqual(cpu.a, 0, mode)
+
+    def test_protocol_3_survives_a_server_restart(self):
+        # The driver probes only when it starts; a restarted server must still serve 3.
+        with tempfile.TemporaryDirectory() as tmp:
+            keep = os.path.join(tmp, "eth_proto")
+            for kept, works in ((keep, True), (None, False)):
+                rig = Rig(3, MODE_WAIT)
+                self.addCleanup(rig.close)
+                rig.sh = pi_shuttle(rig.wire, rig.link, kept)
+                rig.call("ETH_VERIFY")
+                rig.sh = pi_shuttle(rig.wire, rig.link, kept)     # the restart
+                rig.link.inject(frame(67))
+                cpu = rig.call("FN_IN_STATUS")
+                self.assertEqual((cpu.a, cpu.bc) == (1, 67), works, kept)
 
 
 if __name__ == "__main__":

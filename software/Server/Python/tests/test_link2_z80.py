@@ -85,6 +85,11 @@ class RoomCeiling(unittest.TestCase):
     def test_ends_exactly_at_the_ceiling(self):
         self.assertEqual(self.run_recv(0xF280, 0x100), pattern(0x100, 5))
 
+    def test_ends_exactly_at_10000h_from_below_the_system_area(self):
+        # HL wraps to 0: past F380h all the same, so it is refused (F100h keeps the
+        # block clear of the emulator's stack below F000h)
+        self.assertEqual(self.run_recv(0xF100, 0xF00), "aborted")
+
 
 class ByteForByte(unittest.TestCase):
     def same(self, *a, **k):
