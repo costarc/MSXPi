@@ -298,7 +298,7 @@ the obvious next gain, larger on hardware, where a polled byte costs much more t
 | `mchat_openmsx.py` | 10/10 |
 | `pchess_chat_openmsx.py`, `pchess1_chat_openmsx.py` (17 checks), `pcheckers_chat_openmsx.py` (10) | all pass |
 | `pchess_memory_test.py` | pass; 4,384 bytes free with INL loaded (the library added about 600 bytes of code and 768 of BSS per client) |
-| fault matrix, rate 1.5e-4, seeds 1-3, `pcopy` 3 downloads (8 KB blocks) + 1 upload | new `pcopy.com`: seed 1 FAILED (the upload was aborted with "Transfer aborted" / "Link error", no file left), seeds 2 and 3 PASS (173 and 162 faults); 0 corrupt, 0 hung, 0 truncated files. The legacy `pcopy.com` on seeds 1 and 2: both FAILED, its aborted downloads left **empty or truncated files** (FI1-3 truncated(0), truncated(16384)), 0 corrupt |
+| fault matrix, rate 1.5e-4, seeds 1-3, `pcopy` 3 downloads (8 KB blocks) + 1 upload | new `pcopy.com`: seed 1 FAILED (the upload was aborted with "Transfer aborted" / "Link error", no file left), seeds 2 and 3 PASS (173 and 162 faults); 0 corrupt, 0 hung, 0 truncated files. The legacy `pcopy.com` on the same seeds: seeds 1 and 2 FAILED, its aborted downloads left **empty or truncated files** (truncated(0), truncated(16384)); seed 3 **CORRUPT**: a 13,173 byte file left at 8,192 bytes and another at 32,768 |
 | fault matrix, rate 5e-4 | every 8 KB block is damaged with probability 0.98, so ten tries in a row fail with probability 0.8: all downloads were aborted and removed (seeds 1, 2), 0 corrupt, 0 hung. That is the retry limit doing what it is for, not a defect; 1.5e-4 is the rate of the earlier phases |
 
 Not run: hardware.
