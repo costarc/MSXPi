@@ -106,7 +106,7 @@ Shipped ROM and tools against the new server, in openMSX:
   - `CALL MSXPIVER`
   - all three response modes ("0,...", "1,...", "2,addr,...")
   - responses of 0, 1, 512, 8 KB and 32 KB bytes
-  - buffers in page 2 and page 3 (bursts) and in page 1 (polled, WRSLT)
+  - buffers in page 2 and page 3 (page 1 is ROM under BASIC)
   - every result compared with what the server sent (the server's `l2test` command returns a
     seeded pattern, and its CRC is printed on both sides)
 - **L2TEST.BIN** (downloaded by CALL MSXPI, run through `DEFUSR`):

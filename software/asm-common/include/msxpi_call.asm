@@ -21,7 +21,7 @@
 ;   MSXPIVERSION   the banner _MSXPIVER prints (and its BuildId, which the
 ;                  build script rewrites in the host file by name)
 ;   CALL_TABLE     the commands it exposes, ending with ENDOFCMDS/DB 0
-; and, through msxpi_bios.asm: PRINT, PRINTPISTDOUT, SendCommandToMSXPi,
+; and, through msxpi_bios.asm: PRINT, LINK_PRINT, LINK_COMMAND,
 ; PerformHandshake, RECVDATA_ONEBLOCK.
 ; ------------------------------------------------------------------------------
 
@@ -135,14 +135,14 @@ _MSXPIVER:
         ld      hl,MSXPIVERSION
         call    PRINT
         ld      de,vercommand
-        call    SendCommandToMSXPi
-        ld		bc,128
+        call    LINK_COMMAND
+        ld		bc,127          ; one less than the room: the text terminator follows
 		ld		HL,(HIMEM)
         or      a
         sbc     hl,bc
         ld      d,h
         ld      e,l
-		call    PRINTPISTDOUT
+		call    LINK_PRINT
         pop     hl
         ret
 vercommand:
@@ -183,7 +183,7 @@ _MSXPI:
         PUSH    AF
         PUSH    DE
         POP     HL
-        CALL    SendCommandToMSXPi
+        CALL    LINK_COMMAND
         JR      NC,CALL_SUCCESS
         POP     AF
         POP     HL
@@ -213,7 +213,7 @@ CALL_SUCCESS:
 ; ---------------------------------
         ld      bc,MAXBUFSIZE
         xor     a               ; block = 0
-        call	PRINTPISTDOUT
+        call	LINK_PRINT
         pop     hl              ; BASIC pointer
         and     a
         ret
@@ -223,7 +223,7 @@ CALL_SUCCESS:
 CALL_DiscardResponse:
         ld      bc,MAXBUFSIZE
         xor     a               ; block = 0
-        call	STDOUTTONULL
+        call	LINK_DISCARD
         pop     hl              ; BASIC pointer
         and     a
         ret
@@ -298,7 +298,7 @@ RECV_OK:
         ; BC = size of block just read
         POP     HL              ; HL = current total size
         ADD     HL,BC           ; add block size
-        ; check return code in A - matches PRINTPISTDOUT's own check
+        ; check return code in A - matches LINK_PRINT's own check
         ; (cp RC_READY / ret nz): RC_READY means another block follows,
         ; anything else means this was the last block. RECVDATA_ONEBLOCK
         ; already caught real transport failures via carry, so the RC

@@ -296,20 +296,23 @@ BIOSENTRYADDR:  EQU     $
         DW      LINK_RECV           ; A = mode, DE = buffer, BC = largest block
         DW      LINK_SEND
         DW      LINK_COMMAND
+        DW      CHKPIRDY
+        DW      LINK_RECV_BYTE
+        DW      LINK_SEND_BYTE
     ELSE
         DW      PerformHandshake
         DW      RECVDATA_ONEBLOCK
         DW      SENDDATA
-        DW      SendCommandToMSXPi
-    ENDIF
+        DW      LINK_COMMAND
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
+    ENDIF
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER
         DW      PRINTDIGIT
-        DW      PRINTPISTDOUT
+        DW      LINK_PRINT
 
 ; ================================================================
 ; Text messages used in the loader

@@ -9,7 +9,7 @@ types CALL MSXPI statements at the BASIC prompt, and checks what lands in memory
 
 Tests (default: all):
   ver    CALL MSXPIVER, CALL MSXPI("1,..,ver"), CALL MSXPI("0,..,ver")
-  pat    CALL MSXPI("2,addr,l2test pat N SEED") for N in 0.. 32 KB, buffers in pages 2 and 3;
+  pat    CALL MSXPI("2,addr,l2test pat N SEED") for N in 0.. 32 KB, buffers in pages 2 and 3 (page 1 is ROM there: BASIC's RAM starts at 8000h);
          the memory is compared with the pattern
   bin    L2TEST.BIN downloaded by CALL MSXPI, then run with DEFUSR: bulk MSX -> Pi sends
          (the server checks them and the MSX prints its verdict)

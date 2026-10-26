@@ -134,8 +134,8 @@ class Z80Msx:
         self._call("LINK_SEND_SIZE", hl=self.size, de=src, bc=len(data))
         self._check()
 
-    def recv(self, maxbuf=65536, may_burst=True):
-        buf = self.SRC_BURST if may_burst else self.SRC_PLAIN
+    def recv(self, maxbuf=65536, may_burst=True, at=None):
+        buf = at if at is not None else (self.SRC_BURST if may_burst else self.SRC_PLAIN)
         self.cpu.mem[buf:buf + 0x6000] = bytes(0x6000)  # (no stale data from the last run)
         self._call("LINK_RECV", de=buf, bc=self.size, a=2)
         self._check()

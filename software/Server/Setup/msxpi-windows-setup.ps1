@@ -341,7 +341,7 @@ if ($Stage) {
 foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxpi_transport.py", "msxpi_blocks.py",
                  "msxpi_cmd_disk.py", "msxpi_cmd_files.py", "msxpi_cmd_media.py", "msxpi_cmd_rom.py",
                  "msxpi_cmd_stock.py", "msxpi_cmd_system.py", "msxpi_cmd_web.py",
-                 "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py",
+                 "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py", "msxpi_link2.py",
                  "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_game_irc.py",
                  "msxpi_pcheckers_irc.py", "msxpi_ssh.py",
                  "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py")) {

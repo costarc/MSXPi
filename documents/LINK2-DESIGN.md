@@ -433,10 +433,21 @@ How it differs from the paper description above, on purpose:
   both sets. Polled receive starts the next transfer before it stores and checksums the byte it has just
   read, and polled send takes each byte into the CRC while that byte goes out, so the CRC work happens
   inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR.
-- **Page 1**: polled receive stores through `STORE_BYTE` (WRSLT for a destination in 4000h-7FFFh), so a
-  `CALL MSXPI("2,5000,..")` lands in RAM, which the legacy BIOS-half loop did not do. A buffer below 8000h
-  never bursts; the size word's bit 15 is set only for a buffer at 8000h or above on a board with /WAIT
-  (the test of `DSKIO_RXSIZE`: does `$57` change when wait mode goes on).
+- **Page 1**: `CALL MSXPI("2,addr,..")` runs from BASIC, where page 1 is ROM and the RAM starts at 8000h, so
+  a buffer below 8000h is not a use case and is not tested. `STORE_BYTE` (WRSLT through RAMAD1, a slot only
+  a disk kernel sets) serves the DOS half. A buffer below 8000h never bursts; the size word's bit 15 is set
+  only for a buffer at 8000h or above on a board with /WAIT (the test of `DSKIO_RXSIZE`: does `$57` change
+  when wait mode goes on).
+- **Room in mode 2**: the caller gives no size, so the MSX uses what the RAM has: a block that would end past
+  F380h (the system area) from a buffer below it, or past FFFFh, is ABORTed in its header. T3 covers it.
+- **Names**: `msxpi_call.asm` and the msxpiext table use `LINK_COMMAND`, `LINK_PRINT`, `LINK_DISCARD`,
+  `LINK_RECV_BYTE` and `LINK_SEND_BYTE`; the legacy DOS half defines the first three as aliases of its own
+  routines. `PIREADBYTE`/`PIWRITEBYTE` are not assembled in a LINK2 build.
+- **Registers**: the `LINK_*` routines clobber IY and keep the CRC in the shadow set. Safe under the BIOS
+  interrupt handler, which saves both; recheck before the DOS driver and the .COM tools move to LINK2.
+- **Z80 emulator** (tests): `inc/dec (ix+d)` is 23 T-states; every opcode fetch costs the MSX's extra wait state
+  (`m1_wait`, 0 for a bare Z80).
+- **DOS half room**: the build prints it (`msxpibios: ... bytes free below the UNAPI driver`).
 - **A damaged flags byte** can leave the Pi bursting to a MSX that thinks it cannot. The MSX reads the GO byte
   whenever a header says "burst", and uses INIR only if it allowed bursts and the length is a non-zero
   multiple of 256; otherwise it reads the payload polled, as the model does.

@@ -264,6 +264,9 @@ def l2test(parms: Optional[str] = None) -> CommandResult:
         rc, data = link_recv(n + 4096)
         if rc != RC_SUCCESS:
             logger.info(f"l2test sink: receive failed rc={rc:#04x}")
+            # Answer anyway: the MSX waits for the summary line, and without one its
+            # next receive would be read by the command loop.
+            link_send(f"L2TEST BAD receive failed rc {rc:#04x}\n".encode())
             return rc
         want = link2_pattern(n, seed)
         bad = next((i for i in range(min(len(data), n)) if data[i] != want[i]), None)

@@ -61,6 +61,31 @@ def trace(cls, direction, data, size=8192, has_wait=True, pi_burst=True, may_bur
     return list(w.log), outcome
 
 
+class RoomCeiling(unittest.TestCase):
+    """Mode 2 has no caller size: a buffer below F380h must end by F380h (design 8.6)."""
+
+    def run_recv(self, at, n):
+        w = S.Wire(timeout=2.0)
+        srv = S.Server(w, [lambda: B.link_send(pattern(n, 5))], True).start()
+        m = z80_msx.Z80Msx(w, 8192, True)
+        try:
+            return bytes(m.recv(at=at))
+        except (S.MsxAborted, S.Hung):    # the ABORT flood ends with the Pi giving up
+            return "aborted"
+        finally:
+            w.close()
+            srv.join(2)
+
+    def test_fits(self):
+        self.assertEqual(self.run_recv(0xF000, 0x300), pattern(0x300, 5))
+
+    def test_past_the_system_area(self):
+        self.assertEqual(self.run_recv(0xF300, 0x200), "aborted")
+
+    def test_ends_exactly_at_the_ceiling(self):
+        self.assertEqual(self.run_recv(0xF280, 0x100), pattern(0x100, 5))
+
+
 class ByteForByte(unittest.TestCase):
     def same(self, *a, **k):
         ref = trace(S.ModelMsx, *a, **k)

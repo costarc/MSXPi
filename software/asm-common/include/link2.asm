@@ -570,10 +570,27 @@ L2R_ROOM:
     ld   a,(ix+L2_MODE)
     cp   2
     jr   nz,L2R_ACK
-    ld   l,(ix+L2_PTR)          ; mode 2: the block must fit below 10000h
-    ld   h,(ix+L2_PTR+1)
-    add  hl,bc
-    jr   nc,L2R_ACK
+    ld   l,(ix+L2_PTR)          ; mode 2: the caller gives no size, so the room is
+    ld   h,(ix+L2_PTR+1)        ; what the RAM has: a buffer below F380h (the system
+    add  hl,bc                  ; area) must end by there, any buffer by 10000h
+    jr   c,L2R_WRAP
+    ld   a,h
+    cp   $F3
+    jr   c,L2R_ACK
+    jr   nz,L2R_CEIL
+    ld   a,l
+    cp   $81
+    jr   c,L2R_ACK
+L2R_CEIL:                       ; ends past F380h: fine only from a buffer already there
+    ld   a,(ix+L2_PTR+1)
+    cp   $F3
+    jp   c,L2R_BAD
+    jr   nz,L2R_ACK
+    ld   a,(ix+L2_PTR)
+    cp   $80
+    jp   c,L2R_BAD
+    jr   L2R_ACK
+L2R_WRAP:
     ld   a,h
     or   l
     jp   nz,L2R_BAD

@@ -11,6 +11,7 @@ pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
 pcopy m:INL.CFG
 pcopy m:IRC.BAS
+pcopy m:L2TEST.BIN
 pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
 pcopy m:STELNET.COM

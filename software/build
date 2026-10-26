@@ -359,6 +359,15 @@ if [ "$buildBIOS" = "yes" ]; then
     done
     echo "  $BASICNAME: code ends at 0x$code_end, $((limit - 0x$code_end)) bytes free below 0x$(printf %X $limit)"
     echo "  msxpiext.bin: $(wc -c < ./target/msxpiext.bin) bytes"
+    # The DOS half: the padding between the MSXPi code and the UNAPI driver image,
+    # as zmac lists it, is the room phase 6 (the DOS driver on LINK2) has left.
+    dos_pad=$(sed -n 's/.*\([0-9A-F]\{4\}\) \.\. \([0-9A-F]\{4\}\).*DEFS *UNAPI_ORG-\$.*/\1 \2/p' ./zout/msx-dos.lst | head -1)
+    if [ -n "$dos_pad" ]; then
+        set -- $dos_pad
+        echo "  $BIOSNAME: MSXPi code ends at 0x$1, $((0x$2 - 0x$1 + 1)) bytes free below the UNAPI driver at 0x$(printf %X $((0x$2 + 1)))"
+    else
+        echo "  $BIOSNAME: DOS-half room not reported (no UNAPI padding line in zout/msx-dos.lst)"
+    fi
 
     # The 32KB EEPROM image: the DOS ROM in the lower half, where a 16KB write
     # has always landed, and the BIOS-only ROM in the upper half.  Written in

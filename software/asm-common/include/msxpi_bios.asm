@@ -64,6 +64,7 @@ CHKPIRDY:
         ret c
         jp PAYLOAD_WAIT
 
+ ifndef MSXPI_LINK2   ; LINK2 has LINK_RECV_BYTE / LINK_SEND_BYTE (link2.asm)
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
@@ -102,7 +103,8 @@ PIWRITEBYTE_ERR:
             pop     af
             scf
             ret
-            
+ endif
+
 ; resetMSXPI
 ; Called on beginning of every command
 ; OUT ($56),$FF resets the CPLD transfer state (and clears /WAIT mode),
@@ -590,16 +592,18 @@ PRB_SUM:                        ; checksum the block, now in memory
  endif
 
  ifdef MSXPI_LINK2
-SENDDATA            EQU LINK_SEND
-SendCommandToMSXPi  EQU LINK_COMMAND
 ; The CALL MSXPI output modes of LINK_RECV: 1 = print each block, 0 = drop them.
-PRINTPISTDOUT:
+LINK_PRINT:
     ld      a,1
     jp      LINK_RECV
-STDOUTTONULL:
+LINK_DISCARD:
     xor     a
     jp      LINK_RECV
  else
+; The LINK2 names (link2.asm) for the legacy routines, so msxpi_call.asm builds with either.
+LINK_COMMAND        EQU SendCommandToMSXPi
+LINK_PRINT          EQU PRINTPISTDOUT
+LINK_DISCARD        EQU STDOUTTONULL
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack
 ; is untouched here, safe to return directly.

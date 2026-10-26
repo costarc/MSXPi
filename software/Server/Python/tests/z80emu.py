@@ -25,6 +25,7 @@ class Z80:
         self.iff1 = self.iff2 = False
         self.i = 0
         self.t = 0  # T-states
+        self.m1_wait = 1  # the MSX adds one wait state to every opcode fetch (M1); 0 for a bare Z80
         self.n = 0  # instructions
         self.io_in = lambda port: 0xFF
         self.io_out = lambda port, v: None
@@ -199,11 +200,15 @@ class Z80:
             return
         self.n += 1
         op = self.fetch()
+        self.t += self.m1_wait
         if op == 0xCB:
+            self.t += self.m1_wait      # a prefix is a second M1
             self.cb(None, 0)
         elif op == 0xED:
+            self.t += self.m1_wait
             self.ed()
         elif op in (0xDD, 0xFD):
+            self.t += self.m1_wait
             self.indexed(op)
         else:
             self.main(op, None)
@@ -287,7 +292,7 @@ class Z80:
                 v = self.reg_get(y, self.get_idx(idx) if idx is not None else None, d)
                 v = self.inc8(v) if z == 4 else self.dec8(v)
                 self.reg_set(y, v, self.get_idx(idx) if idx is not None else None, d)
-                self.t += (4 if y != 6 else (11 if idx is None else 19))
+                self.t += (4 if y != 6 else (11 if idx is None else 23))
             elif z == 6:
                 d = 0
                 if y == 6 and idx is not None:
