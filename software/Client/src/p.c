@@ -112,16 +112,11 @@ int SetTimeFromMSXPi(char hour, char min, char sec) __sdcccall(0) __naked {
 }
 
 void SetDateTime(void) {
-    uint16_t block_size;            // Will hold size of received block - Updated by RECVDATA_ONEBLOCK
-    uint16_t block_index = 0;       // Current block index - always zero
+    uint16_t block_size;            // Will hold the size of the transfer
 
     uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
 
-    uint8_t rc = PerformHandshake(BLKSIZE);
-    if (rc != RC_SUCCESS)
-        return;
-
-    rc = RECVDATA_ONEBLOCK(buffer, &block_size, BLKSIZE);
+    uint8_t rc = link_recv(LINK_RECV_BUFFER, buffer, BLKSIZE, &block_size);
 
     if (rc == RC_SUCCESS) {
         
@@ -289,7 +284,7 @@ int main(void)
     // would silently stop the Ethernet UNAPI ISR polling for the rest of the
     // session.
     msxpi_link_claim();
-    uint8_t rc = SendCommandToMSXPi("", false);
+    uint8_t rc = link_command("", false);
 	uint8_t rcFinal = parseConnError(rc);
     if (rcFinal == RC_SUCCESS || rcFinal == RC_FAILED || rc == RC_BUFOVFLW) {
         if (StrCompare(parms, "date") == 0) {

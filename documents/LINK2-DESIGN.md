@@ -241,6 +241,9 @@ is NAKed and resent.
   legacy names (`SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, `SendCommandToMSXPi`...)
   remain as aliases only for callers not yet converted. `msxpi_call.asm` and `msxpiext.asm` move
   to the new names in phase 2, the DOS driver in phase 6, the .COM tools in phase 7.
+  The C clients use lower-case twins (`link_command`, `link_send`, `link_recv`, `link_recv_open` /
+  `link_recv_next`) of `msxpi-bios.c`, which wrap `link2.asm` itself (translated to SDAS by
+  `asm-common/transport/link2_c.py`) with its CRC table built in RAM.
 - **Selected at build time** with `-DMSXPI_LINK2`. The BIOS half and msxpiext.bin set it; the DOS
   half does not until phase 6 of the plan.
 - **New code goes in its own file**, `asm-common/include/link2.asm`: CRC table and update, block

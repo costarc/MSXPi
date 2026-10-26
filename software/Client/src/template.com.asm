@@ -33,10 +33,11 @@
 ; This command must have an equivalent function in the msxpi-server.py program
 ; The function name must be the same defined in the "command" string in this program
 ;
+        DEFINE  MSXPI_LINK2         ; LINK2: the paired LINK_* names of link2.asm
         org     $0100
 
 MAIN:
-        call    resetMSXPI          ; Clear queue / reset MSXPi port state
+        call    resetMSXPI          ; reset MSXPi port state
 
 
 
@@ -56,16 +57,13 @@ MAIN:
 ; Send Command to RPi
 sendCmd:
         ld      de,command
-        call    SendCommandToMSXPi
+        call    LINK_COMMAND        ; DE = command string, zero terminated
         jr      c, PRINTPIERR
 
 ; Read and display output from MSXPi
         ld      de,buf
-        ld      bc,BLKSIZE
-        call    CLEARBUF
-        ld      de,buf
-        ld      bc,BLKSIZE
-        call    PRINTPISTDOUT
+        ld      bc,BLKSIZE-1        ; largest block; the buffer holds one byte more
+        call    LINK_PRINT          ; prints every block as it arrives
         call    PRINTNLINE
         ret
 		

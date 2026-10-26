@@ -554,23 +554,19 @@ static void net_apply(void) {
 /* One command to the MSXPi server (or the TCP/IP link): 1 when it gave a
  * state or chat packet, 0 with the reason in status when it did not. */
 static uint8_t exchange(const char *cmd) {
-    uint8_t rc,tries=0; uint16_t size=0;
+    uint8_t rc; uint16_t size=0;
     if(link_tcp) {
         local_exchange(cmd);
         size=256; rc=RC_SUCCESS;
     } else {
-        /* No interface: port $56 floats to $FF and CHKPIRDY() never returns. */
+        /* No interface: port $56 floats to $FF and the link wait never ends. */
         if(InPort(CONTROL_PORT1)>1) {
             strcpy(status,"NO MSXPI - ESC MENU LINK TCPIP");
             return 0;
         }
         msxpi_link_claim();
-        rc=SendCommandToMSXPi(cmd,false);
-        if(rc==RC_SUCCESS) rc=PerformHandshake(256);
-        if(rc==RC_SUCCESS) {
-            do { size=0; rc=RECVDATA_ONEBLOCK(reply,&size,256); }
-            while(rc==RC_CHKSUM_ERR && ++tries<MAX_BLOCK_RETRIES);
-        }
+        rc=link_command(cmd,false);
+        if (rc == RC_SUCCESS) rc = link_recv(LINK_RECV_BUFFER, (uint8_t *)reply, 256, &size);
         msxpi_link_release();
     }
     if(rc!=RC_SUCCESS || size!=256 || memcmp(reply,"PCH1",4)) {

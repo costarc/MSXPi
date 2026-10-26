@@ -157,7 +157,7 @@ static uint8_t link_tcp;
 #include "mchat_local.c"
 
 static uint8_t xchg(const char *c) {
-    uint8_t rc, tries = 0;
+    uint8_t rc;
     uint16_t size = 0;
     if (link_tcp) {
         if (local_exchange(c)) return 1;
@@ -165,12 +165,8 @@ static uint8_t xchg(const char *c) {
         return 0;
     }
     msxpi_link_claim();
-    rc = SendCommandToMSXPi(c, false);
-    if (rc == RC_SUCCESS) rc = PerformHandshake(256);
-    if (rc == RC_SUCCESS) {
-        do { size = 0; rc = RECVDATA_ONEBLOCK(reply, &size, 256); }
-        while (rc == RC_CHKSUM_ERR && ++tries < MAX_BLOCK_RETRIES);
-    }
+    rc = link_command(c, false);
+    if (rc == RC_SUCCESS) rc = link_recv(LINK_RECV_BUFFER, (uint8_t *)reply, 256, &size);
     msxpi_link_release();
     if (rc != RC_SUCCESS || size != 256 || memcmp(reply, "CHT1", 4)) {
         strcpy(note, "LINK ERROR - RETRYING");

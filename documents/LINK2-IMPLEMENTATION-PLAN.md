@@ -26,7 +26,7 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 | 4 - real hardware | **functional, READY race and speed done** (results in LINK2-TEST-PLAN.md "Phase 4": 1000 x 512 OTIR sends OK, 21.4 KB/s vs 8.8 KB/s legacy for 8 KB downloads). **soak done** (1 h 40 min, 136 rounds: 136,000 OTIR sends counted on the MSX, 129,240 `L2TEST OK` in the server log, 0 BAD, 0 F); Ethernet and the control run are not done | b64bc860, 166552a5, bf28efa7, d195f996 |
 | 5 - optimise | **done** (see "Phase 5 results"): `link2.asm` 1406 -> 1156 bytes with the same wire bytes and faster polled loops, CALL handler rewritten, legacy code out of LINK2 images, a table-less CRC for the DOS half | the phase 5 commit |
 | 6 - DOS driver | **done** in openMSX (see "Phase 6 results"): DSKIO and CALL MSXPI on LINK2 with the CRC table, burst writes back; the Ethernet UNAPI driver left the DOS half (question 5); hardware not run | the phase 6 commit |
-| 7 | not started | - |
+| 7 - .COM tools and the C library | **done** in openMSX (see "Phase 7 results"): the C library speaks LINK2 through the code of `link2.asm`, every C client is converted, `template.com` too; hardware not run, `playnet` left on the legacy protocol | the phase 7 commit |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
 `target/` now carry the LINK2 BIOS half, msxpiext.bin and L2TEST.BIN (the DOS half is unchanged).
@@ -158,11 +158,50 @@ Not done: T6 on hardware (COPY both ways, the pcopy batch, the COPY that failed 
 expected to work); the game quickstarts (SOCCER, YIEAR) say to run INL after the card's driver, which on an
 MSXPi DOS half now means ETHUNAPI first.
 
+### Phase 7 results
+
+**The C library.** `C-common/lib/msxpi-bios.c` has no protocol code of its own any more. Its LINK2 is
+`asm-common/include/link2.asm`, the very code of the ROM: `asm-common/transport/link2_c.py` (run by
+`generate.py`) turns it into SDAS (`C-common/lib/link2_generated.h`: conditional assembly evaluated, macros
+expanded, constants as numbers, `#` on immediates), so the Python model `Msx` is the reference for the C clients too.
+
+| Where | Change |
+|---|---|
+| `link_command(cmd, appendTail)` | was `SendCommandToMSXPi`; one `link_send` of the command string |
+| `link_send(src, size)` | one whole transfer to the Pi (was `SENDDATA2`) |
+| `link_recv(mode, buffer, maxblock, &received)` | one whole transfer from the Pi, modes 0 (drop), 1 (print each block) and 2 (blocks one after another) (was `PerformHandshake` + `RECVDATA` / the `RECVDATA_ONEBLOCK` loop) |
+| `link_recv_open` / `link_recv_next` | the same transfer a block at a time, for a caller that puts each block somewhere of its own (msxarch's ROM banks, showpage, pcopy's one-block replies). The frame is the one `LINK_RECV` keeps on the stack, in 26 bytes of RAM |
+| `printstdout` | `link_recv` mode 1 |
+| gone | `CHKPIRDY`, `PIREADBYTE`, `PIWRITEBYTE`, `RECVDATA`, `RECVDATA_ONEBLOCK`, `PerformHandshake`, `SENDDATA2`, `payload_rx`/`payload_tx` and their generated header (`payload_generated.h`), the retry loops in the clients (LINK2 retries inside the transfer) |
+| the CRC table | 512 bytes on a page boundary, built in RAM at the first transfer (`l2_table_mem`, 768 bytes of BSS) instead of carried in every program; "built already" is told from four table bytes, since the programs are linked with `--no-std-crt0` and BSS is not cleared |
+| `PRINT`, `STORE_BYTE` | the two routines `link2.asm` expects of its host: a C `Print` call and `ld (de),a` |
+| `RC_PROTOERR` (F0h) | in `msxpi.h`, with a `parseConnError` message |
+
+Clients converted: `p` (and `showpage`, which it includes), `pcopy`, `ssh`, `nitros`, `mchat` (+ `mchat_local`),
+`pchess`, `pchess1`, `pcheckers`, `msxarch`, `templatc`, and `template.com` (asm: `MSXPI_LINK2`, `LINK_COMMAND`,
+`LINK_PRINT`). Each of the ssh/nitros/mchat/pchess polls is one `link_command` and one `link_recv` of the 256-byte
+block. Sizes: a client grows about 600 bytes (the code of `link2.asm` against the two payload loops and the
+handshakes) and 768 bytes of BSS; `pchess_memory_test.py` still passes (4,384 bytes free with INL loaded).
+
+**Also**: `SENDDATA2`/`RECVDATA` have no limit question left, since a LINK2 transfer is bounded by `LINK2_RETRIES` and
+`LINK2_SENDER_CAP`; **pcopy deletes the partial file when a download is aborted** (`abort_download`: close, then BDOS 13h).
+The BSS is not cleared: `l2ctest.c` found its own counters uninitialised.
+
+**Not done**:
+
+- `playnet`: `sendSave` sends a header and a memory area as one transfer of two blocks, which `LINK_SEND` (one buffer)
+  cannot express; it would need a block-level send in the library. `piCommand` could move on its own, but a binary
+  holds one protocol (`msxpi_bios.asm` drops the legacy routines under `MSXPI_LINK2`). It keeps the legacy
+  protocol, which the dual stack server still serves.
+- `msxarch.asm` (the old asm version `buildClientCommands=yes` copies over the C one): not converted, obsolete.
+- `ROM-Patcher/profiles/*`: their own copies of `msxpi_bios.asm`, untouched.
+- Hardware: no C client was run on the real machine.
+
 ## Open questions (defaults used until answered)
 
 1. **.COM tools and the C library** (pcopy, p, mchat, ssh...): move them to LINK2 in this
-   project, after the DOS driver (phase 7)? *Default: yes, phase 7. Until then they keep using
-   the legacy protocol, which the server keeps serving.*
+   project, after the DOS driver (phase 7)? *Answered by default: yes, done in phase 7; `playnet`
+   is the exception (see "Phase 7 results"). The server keeps serving the legacy protocol.*
 2. **Ethernet frame check**: keep the 8-bit sum, fixing only GO and `RC_OK` (design section 4),
    or also move it to CRC-16? CRC costs about +40 T-states a byte on every frame (about 1.5x the
    per-byte cost of a send) on the INL hot path. *Default: keep the sum; IP, TCP and UDP check
@@ -301,7 +340,7 @@ build is pushed for the real-MSX test (phase 4).
 5. **Update path**: `msxpiupd` from a LINK2 MSX-DOS. The server already speaks both protocols, so
    the order no longer matters, and an old server gives a clean error.
 
-## Phase 7 - .COM tools and the C library (question 1)
+## Phase 7 - .COM tools and the C library (question 1) (done: see "Phase 7 results")
 
 - `msxpi-bios.c`: LINK2 using the shared generated payload/CRC code, under the paired names in
   lower case (`link_send()`, `link_recv_block()`...); the old C names stay as macros until every

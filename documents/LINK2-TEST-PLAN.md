@@ -149,6 +149,21 @@ Shipped ROM and tools against the new server, in openMSX:
 7. **Phase 6**: boot MSX-DOS from LINK2, COPY 41 KB to and from MSXPi drives 50 times
    (byte-identical, checked with the server's copy), pcopy, then `msxpiupd feature/link2` itself.
 
+## T7 - the C library and the .COM tools (phase 7)
+
+1. **L2CTEST.COM** (`Client/src/l2ctest.c`, built with `make.bat l2ctest`, not shipped): `link_send` of 1, 255, 256, 8191,
+   8192 and 9000 bytes from a buffer below 8000h (polled) and from 8000h (the Pi may burst), each checked by the
+   server's `l2test sink`; `link_recv` modes 2, 0 and 1 of the server's patterns; `link_recv_open` / `link_recv_next`
+   taking 20,000 bytes as 8192 + 8192 + 3616 into two places, with RC_READY, RC_READY, RC_SUCCESS in that order.
+   Prints `L2C PASS n FAIL m`.
+   `python Client/tests/client_smoke_openmsx.py l2ctest.com "l2ctest" "L2C PASS 15 FAIL 0" --wsl-server --wait 50`
+2. **Each client end to end** in openMSX: `p cd`, `pcopy` (upload and download, byte for byte; a 22,912 byte download =
+   3 blocks), `ssh` (fake sshd), `template.com`, `mchat_openmsx.py`, `pchess_chat_openmsx.py`,
+   `pchess1_chat_openmsx.py`, `pcheckers_chat_openmsx.py`, `pchess_memory_test.py`.
+3. **Fault matrix** with the new `pcopy.com` (`fault_inject_openmsx.py --pcopy`): no corrupt file, no hang. A download
+   that the link cannot finish is aborted ("Transfer aborted by server", "Link error.") and the partial file deleted.
+4. Hardware: not run.
+
 ## Results so far
 
 **Phase 1 (server dual stack), 2026-10-25:**
@@ -271,6 +286,22 @@ through $SECBUF), and pcopy's sectors come from its buffer at 0100h-3BFFh in pag
 0100h ... 3B00h): all polled. Under MSX-DOS page 0 is RAM; only page 1, where this ROM sits, must never burst,
 and DSKIO already stages any sector touching it (DSKIO_P1_TEST). Letting the DOS half burst outside page 1 is
 the obvious next gain, larger on hardware, where a polled byte costs much more than in openMSX. Not done.
+
+**Phase 7 (the C library and the .COM tools), 2026-10-26** - no server change (BuildId unchanged), clients rebuilt into `target/`:
+
+| Test | Result |
+|---|---|
+| L2CTEST.COM (T7.1), openMSX | `L2C PASS 15 FAIL 0`: polled and burst-eligible sends of 1..9000 bytes, `link_recv` modes 2, 0, 1, a 20,000 byte stream a block at a time into two places |
+| `p cd`, `template.com` | reply printed through `link_recv` mode 1 |
+| `pcopy` upload (14,973 bytes, 2 blocks) and download (`/etc/os-release`, 22,912 bytes = 3 blocks) | byte for byte identical |
+| `ssh` against the fake sshd | `FAKE SSH READY` |
+| `mchat_openmsx.py` | 10/10 |
+| `pchess_chat_openmsx.py`, `pchess1_chat_openmsx.py` (17 checks), `pcheckers_chat_openmsx.py` (10) | all pass |
+| `pchess_memory_test.py` | pass; 4,384 bytes free with INL loaded (the library added about 600 bytes of code and 768 of BSS per client) |
+| fault matrix, rate 1.5e-4, seeds 1-3, `pcopy` 3 downloads (8 KB blocks) + 1 upload | new `pcopy.com`: seed 1 FAILED (the upload was aborted with "Transfer aborted" / "Link error", no file left), seeds 2 and 3 PASS (173 and 162 faults); 0 corrupt, 0 hung, 0 truncated files. The legacy `pcopy.com` on seeds 1 and 2: both FAILED, its aborted downloads left **empty or truncated files** (FI1-3 truncated(0), truncated(16384)), 0 corrupt |
+| fault matrix, rate 5e-4 | every 8 KB block is damaged with probability 0.98, so ten tries in a row fail with probability 0.8: all downloads were aborted and removed (seeds 1, 2), 0 corrupt, 0 hung. That is the retry limit doing what it is for, not a defect; 1.5e-4 is the rate of the earlier phases |
+
+Not run: hardware.
 
 ## Reporting
 

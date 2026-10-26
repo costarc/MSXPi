@@ -673,8 +673,8 @@ static uint8_t pi_playnet(void) {
     uint16_t size = 0, maxbuf = sizeof(pr) - 1;
     if (InPort(CONTROL_PORT1) > 1) return 0;
     msxpi_link_claim();
-    rc = SendCommandToMSXPi(pcmd, false);
-    if (rc == RC_SUCCESS) rc = RECVDATA((uint8_t *)pr, &size, &maxbuf);
+    rc = link_command(pcmd, false);
+    if (rc == RC_SUCCESS) rc = link_recv(LINK_RECV_BUFFER, (uint8_t *)pr, maxbuf, &size);
     msxpi_link_release();
     if (rc != RC_SUCCESS) return 0;
     pr[size < sizeof(pr) ? size : sizeof(pr) - 1] = 0;
