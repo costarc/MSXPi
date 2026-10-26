@@ -30,6 +30,7 @@ from typing import List, Optional, Tuple
 
 # Standard library imports
 import re
+import shlex
 import sys
 import time
 import subprocess
@@ -215,12 +216,15 @@ def wifi(cmd: str) -> CommandResult:
 
     if cmd[:1] == "s" or cmd[:1] == "S":
         if transport.hostType == "RaspberryPi":
+            # A saved profile for this SSID that lacks key-mgmt (left by an
+            # earlier attempt, or by the imager) makes "wifi connect" fail with
+            # "802-11-wireless-security.key-mgmt: property is missing".
+            # Dropping it first lets nmcli build a complete one; the delete
+            # failing because there is no such profile is fine.
+            q = shlex.quote
             wifisetcmd = (
-                'sudo nmcli device wifi connect "'
-                + wifissid
-                + '" password "'
-                + wifipass
-                + '"'
+                f"sudo nmcli connection delete id {q(wifissid)} >/dev/null 2>&1; "
+                f"sudo nmcli device wifi connect {q(wifissid)} password {q(wifipass)}"
             )
             run(wifisetcmd)
         else:
