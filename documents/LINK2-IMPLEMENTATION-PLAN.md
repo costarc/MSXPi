@@ -26,7 +26,7 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 | 4 - real hardware | **functional, READY race and speed done** (results in LINK2-TEST-PLAN.md "Phase 4": 1000 x 512 OTIR sends OK, 21.4 KB/s vs 8.8 KB/s legacy for 8 KB downloads). **soak done** (1 h 40 min, 136 rounds: 136,000 OTIR sends counted on the MSX, 129,240 `L2TEST OK` in the server log, 0 BAD, 0 F); Ethernet and the control run are not done | b64bc860, 166552a5, bf28efa7, d195f996 |
 | 5 - optimise | **done** (see "Phase 5 results"): `link2.asm` 1406 -> 1156 bytes with the same wire bytes and faster polled loops, CALL handler rewritten, legacy code out of LINK2 images, a table-less CRC for the DOS half | the phase 5 commit |
 | 6 - DOS driver | **done** in openMSX (see "Phase 6 results"): DSKIO and CALL MSXPI on LINK2 with the CRC table, burst writes back; the Ethernet UNAPI driver left the DOS half (question 5); hardware not run | the phase 6 commit |
-| 7 - .COM tools and the C library | **done** in openMSX (see "Phase 7 results"): the C library speaks LINK2 through the code of `link2.asm`, every C client is converted, `template.com` too; hardware not run, `playnet` left on the legacy protocol | the phase 7 commit |
+| 7 - .COM tools and the C library | **done** in openMSX (see "Phase 7 results"): the C library speaks LINK2 through the code of `link2.asm`, every C client is converted, `template.com` too; hardware not run, `playnet`, the asm msxarch and the ROM-Patcher runtimes handled in a follow-up (see "Not done" below) | the phase 7 commit |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
 `target/` now carry the LINK2 BIOS half, msxpiext.bin and L2TEST.BIN (the DOS half is unchanged).
@@ -185,14 +185,22 @@ handshakes) and 768 bytes of BSS; `pchess_memory_test.py` still passes (4,384 by
 `LINK2_SENDER_CAP`; **pcopy deletes the partial file when a download is aborted** (`abort_download`: close, then BDOS 13h).
 The BSS is not cleared: `l2ctest.c` found its own counters uninitialised.
 
-**Not done**:
+**The three remaining tools (phase 7 follow-up, 2026-10-26)**:
 
-- `playnet`: `sendSave` sends a header and a memory area as one transfer of two blocks, which `LINK_SEND` (one buffer)
-  cannot express; it would need a block-level send in the library. `piCommand` could move on its own, but a binary
-  holds one protocol (`msxpi_bios.asm` drops the legacy routines under `MSXPI_LINK2`). It keeps the legacy
-  protocol, which the dual stack server still serves.
+- `playnet`: converted. `piCommand` is `LINK_COMMAND` + `LINK_RECV` mode 2; `playnet save` sends the 8 byte header and
+  the area as **two transfers** (`LINK_SEND`, then `LINK_SEND_SIZE` with blocks of BLKSIZE); the server joins them
+  (a first transfer of exactly 8 bytes starting `PNSV`; a legacy client's single transfer is longer and still works).
+  The contiguous-buffer idea did not apply: the game image already occupies RBUF when the save runs. Two things the
+  conversion found: `LINK2_CRC_NOTABLE` (the 512 byte table does not fit under CRCT; PLAYNET.COM 11,049 bytes) makes a
+  CRC pass ~70 us a byte, so an 8 KB burst block timed the Pi out (hence BLKSIZE blocks); and the area is read twice
+  (burst, then the CRC pass), so `saveDos` runs with interrupts off or JIFFY & co. change under the CRC.
 - `msxarch.asm` (the old asm version): deleted; the C `msxarch.c` is the only one.
-- `ROM-Patcher/profiles/*`: their own copies of `msxpi_bios.asm`, untouched.
+- `ROM-Patcher/profiles/*` (arctic, goonies, nemesis, vampire; the others use the playnet path and had no legacy
+  call): `runtime.asm` has `DEFINE MSXPI_LINK2` and `exchange` is `LINK_COMMAND` + `LINK_RECV` mode 2 (256 byte block:
+  a longer reply ends in RC_PROTOERR, i.e. the link is disabled, where the legacy code treated it as an invalid PID).
+  The shared sources in `goonies/src` now carry the current `msxpi_bios.asm`, `include.asm`, `payload_generated.asm`,
+  `link2.asm` and `link2_crc_table.asm`; the Goonies bounded `PAYLOAD_WAIT` (about 15 s, so a missing Pi cannot freeze
+  the game) is kept, returning RC_CONNERR. Runtime 3,015 bytes, `code_end` CBC7 (limit D000).
 - Hardware: no C client was run on the real machine.
 
 ## Open questions (defaults used until answered)

@@ -314,6 +314,17 @@ upload corruption is pcopy's legacy sum, the same two faults).
 | `pcopy` upload (14,973 bytes, 2 blocks) and download (`/etc/os-release`, 22,912 bytes = 3 blocks) | byte for byte identical |
 | `ssh` against the fake sshd | `FAKE SSH READY` |
 | `mchat_openmsx.py` | 10/10 |
+
+**Phase 7 follow-up (playnet, ROM-Patcher runtimes), 2026-10-26**:
+
+| Test | Result |
+|---|---|
+| `run_native.sh 0 0 1500` with `SCENARIO=chat EXITKEY=700`, two openMSX nodes, Soccer (PLAYNET.COM 11,049 bytes, LINK2) | 699 identical frames, results 2 and 1, `playnet save` (8 byte header + 14 blocks of 512) and `playnet restore` served, both nodes back in MCHAT |
+| first attempts: area as 8 KB blocks, then without `di` | save failed (RC_PROTOERR): the CRC without a table is too slow for the Pi; then NAKs to the cap at block 14: JIFFY changing between the burst and the CRC pass |
+| server `test_netplay` | 39 OK (`test_games` has a missing-fixture import error that is there without this change) |
+| ROM-Patcher `test_patcher`, `test_profiles`, `test_arctic`, `test_gpf` | OK |
+| `emulator_runtime.py` (Goonies, openMSX) | mock, invalid, offline PASS; invalid and offline now run the real LINK2 exchange to its 15 s bounded timeout |
+| `emulator_live.py` / a real server answering the cartridge | **not run** (needs the archive and mp3 player; a bare cart + MSXPi device never connected in a quick try) |
 | `pchess_chat_openmsx.py`, `pchess1_chat_openmsx.py` (17 checks), `pcheckers_chat_openmsx.py` (10) | all pass |
 | `pchess_memory_test.py` | pass; 4,384 bytes free with INL loaded (the library added about 600 bytes of code and 768 of BSS per client) |
 | fault matrix, rate 1.5e-4, seeds 1-3, `pcopy` 3 downloads (8 KB blocks) + 1 upload | new `pcopy.com`: seed 1 FAILED (the upload was aborted with "Transfer aborted" / "Link error", no file left), seeds 2 and 3 PASS (173 and 162 faults); 0 corrupt, 0 hung, 0 truncated files. The legacy `pcopy.com` on the same seeds: seeds 1 and 2 FAILED, its aborted downloads left **empty or truncated files** (truncated(0), truncated(16384)); seed 3 **CORRUPT**: a 13,173 byte file left at 8,192 bytes and another at 32,768 |

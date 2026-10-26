@@ -1,6 +1,7 @@
 ; Generated from Goonies shared runtime by rebuild.py.
 ; Shared single-player MSXPi runtime, configuration ABI msxpi-music-v1.
 ; Game-specific entry, event detection, volume filter and exit live in game.asm.
+        DEFINE MSXPI_LINK2     ; LINK2: LINK_COMMAND / LINK_RECV of link2.asm
         org $8000
         include "game.asm"
 
@@ -180,40 +181,18 @@ stop_ok:
 ; failure (so a disconnected Pi cannot freeze every frame).
 exchange:
         call resetMSXPI
-        call SendCommandToMSXPi
+        call LINK_COMMAND
         jr c,exchange_error
-        ld bc,256
-        call PerformHandshake
-        jr c,exchange_error
-        xor a
-        ld (response_index),a
-response_next:
-        ld a,(response_index)
+        ld a,2                 ; mode 2: the reply from the buffer
         ld de,response
         ld bc,256
-        call RECVDATA_ONEBLOCK
+        call LINK_RECV         ; one block of at most 256: a longer reply ends in RC_PROTOERR
         jr c,exchange_error
-        xor a
-        ld (de),a              ; payload <=256; allocation 257
-        ld a,(MSXPI_STASH_BUF+5)
-        cp RC_READY
-        jr z,response_more
         cp RC_SUCCESS
         jr nz,exchange_error
-        ld a,(response_index)
-        or a
-        ret z
-        ld a,1                 ; drained multipart response is not a valid PID
-        ld (response),a
-        or a
+        xor a
+        ld (de),a              ; payload <=256; allocation 257
         ret
-response_more:
-        ld a,(response_index)
-        inc a
-        cp 16
-        jr nc,exchange_error
-        ld (response_index),a
-        jr response_next
 exchange_error:
         call resetMSXPI
         ld a,1
@@ -237,7 +216,6 @@ current:      db 0
 desired:      db 0
 silence_frames: db 0
 link_failed:  db 0
-response_index: db 0
 response:     ds 257,0
 code_end:
         assert code_end <= $9000

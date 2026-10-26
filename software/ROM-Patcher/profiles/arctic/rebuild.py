@@ -23,7 +23,8 @@ def main():
     assets = HERE/'assets'
     assets.mkdir(exist_ok=True)
     shared = HERE.parent/'goonies/src'
-    for name in ('msxpi_bios.asm', 'include.asm', 'payload_generated.asm'):
+    for name in ('msxpi_bios.asm', 'include.asm', 'payload_generated.asm', 'link2.asm',
+                 'link2_crc_table.asm'):
         (src/name).write_bytes((shared/name).read_bytes())
     runtime = (shared/'runtime.asm').read_text()
     runtime = runtime.replace('org $c000', 'org $8000')
@@ -31,7 +32,7 @@ def main():
     (src/'runtime.asm').write_text('; Generated from Goonies shared runtime by rebuild.py.\n'+runtime)
     symbols = {}
     for name in ('runtime', 'gateway'):
-        subprocess.run([args.assembler, '-DMSXPI_RAM_STASH',
+        subprocess.run([args.assembler,
                         f'--raw=../assets/{name}.bin', f'--sym={name}.sym',
                         f'{name}.asm'], cwd=src, check=True)
         for line in (src/f'{name}.sym').read_text().splitlines():

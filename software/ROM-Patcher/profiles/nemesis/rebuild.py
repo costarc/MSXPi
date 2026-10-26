@@ -38,9 +38,10 @@ def main():
     assets = HERE/'assets'
     assets.mkdir(exist_ok=True)
     shared = HERE.parent/'goonies/src'
-    for name in ('msxpi_bios.asm', 'include.asm', 'payload_generated.asm', 'runtime.asm'):
+    for name in ('msxpi_bios.asm', 'include.asm', 'payload_generated.asm', 'link2.asm',
+                 'link2_crc_table.asm', 'runtime.asm'):
         (src/name).write_bytes((shared/name).read_bytes())
-    subprocess.run([args.assembler, '-DMSXPI_RAM_STASH', '--raw=../assets/runtime.bin',
+    subprocess.run([args.assembler, '--raw=../assets/runtime.bin',
                     '--sym=runtime.sym', '--lst=runtime.lst', 'runtime.asm'], cwd=src, check=True)
     symbols = {}
     for line in (src/'runtime.sym').read_text().splitlines():
