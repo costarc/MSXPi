@@ -205,9 +205,9 @@ the new server and `L2TEST.BIN`, which carries its own LINK2 code, so only the L
 | Test | Result |
 |---|---|
 | T6.2 `CALL MSXPIVER`, three response modes, `l2test pat 512 7` (RC 0, size 512, 0 byte errors) | pass |
-| T6.3 L2TEST sends of 512 bytes with OTIR from D000h | pass as reported ("as expected"): `OK` = all, `F=0000`. Smoke run 10 x 512 gave OK=000A F=0000 six times |
+| T6.3 L2TEST sends of 512 bytes with OTIR from D000h, 1000 repetitions | **pass**: `OK=03E8 F=0000 T=08EC`; 38.7 s by stopwatch = 12.9 KB/s (T = 2284 jiffies = 38.1 s at 60 Hz, so JIFFY agrees for short transfers). Smoke run 10 x 512 gave OK=000A F=0000 six times |
 | T6.4 `l2test pat 8192`, 100 downloads into D000h, all 8192 bytes | BAD=0; 37.3 s by stopwatch = 21.4 KB/s |
-| JIFFY/TIME as a timer | unusable for speed: interrupts are off during transfers and frames are lost (a run of 20 x 8 KB read 29 jiffies). Time with a stopwatch or the server log |
+| JIFFY/TIME as a timer | unusable for long transfers: interrupts are off during transfers and frames are lost (a run of 20 x 8 KB read 29 jiffies). Time with a stopwatch or the server log |
 | Control (legacy burst without GO), soak, ETHTEST/ETHBENCH, MSX-DOS half | not run |
 
 No T0 hardware baseline exists for comparison; the legacy ROM would have to be reflashed to take one.
