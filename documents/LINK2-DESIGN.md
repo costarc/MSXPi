@@ -488,9 +488,12 @@ How it differs from the paper description above, on purpose:
   T-states a byte more on the burst CRC pass.
 - **Page 1**: `CALL MSXPI("2,addr,..")` runs from BASIC, where page 1 is ROM and the RAM starts at 8000h, so
   a buffer below 8000h is not a use case and is not tested. `STORE_BYTE` (WRSLT through RAMAD1, a slot only
-  a disk kernel sets) serves the DOS half. A buffer below 8000h never bursts; the size word's bit 15 is set
-  only for a buffer at 8000h or above on a board with /WAIT (the test of `DSKIO_RXSIZE`: does `$57` change
-  when wait mode goes on).
+  a disk kernel sets) serves the DOS half. **No burst touches page 1** (`L2_IN_PAGE1`): the size word's bit 15
+  is set only for a buffer that does not start in page 1, on a board with /WAIT (does `$57` change when wait
+  mode goes on), and every block is checked again, sent or received, so a block that reaches page 1 goes
+  polled. Page 0 bursts: under MSX-DOS it is RAM (DSKIO's sectors from programs such as pcopy, whose
+  buffer is in page 0), in BASIC it is the BIOS ROM, where no buffer lives. Until 2026-10-26 only buffers at
+  8000h or above burst, which left every pcopy sector polled (LINK2-TEST-PLAN.md, the pcopy timing).
 - **Room in mode 2**: the caller gives no size, so the MSX uses what the RAM has: a block that would end past
   F380h (the system area) from a buffer below it, or past FFFFh, is ABORTed in its header. A block that ends
   exactly at 10000h wraps the sum to 0 and is judged as "past F380h" too (the first version let one from

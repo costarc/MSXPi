@@ -55,6 +55,7 @@ class Ports:
         self.latch = 0xFF
         self.wait = False
         self.xfers = 0
+        self.burst_xfers = 0  # transfers in wait mode: INIR/OTIR bursts
 
     def io_in(self, port):
         p = port & 0xFF
@@ -63,6 +64,7 @@ class Ports:
         if p == 0x5A:
             if self.wait:
                 self.xfers += 1
+                self.burst_xfers += 1
                 return self.w.msx_xfer(0)
             return self.latch
         if p == 0x57:
@@ -78,6 +80,7 @@ class Ports:
             self.latch = self.w.msx_xfer(0)
         elif p == 0x5A:
             self.xfers += 1
+            self.burst_xfers += self.wait
             self.w.msx_xfer(v)
         elif p == 0x57:
             self.wait = bool(v & 1) and self.has_wait
@@ -129,9 +132,9 @@ class Z80Msx:
         if self.cpu.f & 1:
             raise self._A("Z80 LINK2: A=%02X" % self.cpu.a)
 
-    def send(self, data, may_burst=True):
+    def send(self, data, may_burst=True, at=None):
         data = bytes(data)
-        src = self.SRC_BURST if may_burst else self.SRC_PLAIN
+        src = at if at is not None else (self.SRC_BURST if may_burst else self.SRC_PLAIN)
         self.cpu.mem[src:src + len(data)] = data
         self._call("LINK_SEND_SIZE", hl=self.size, de=src, bc=len(data))
         self._check()

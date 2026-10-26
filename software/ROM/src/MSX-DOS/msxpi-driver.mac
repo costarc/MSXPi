@@ -211,8 +211,9 @@ DSKIO_WRITE:
 ; page 2 first - so under Nextor every sector takes the direct path. Staging
 ; every sector through the page-3 buffer (R2/R2.1) broke COPY on a real
 ; Canon V-25 + MFR SD ("Bad file allocation table reading drive A:").
-; LINK_SEND bursts a sector from 8000h up when the Pi and /WAIT allow it, and
-; returns DE past it.
+; LINK_SEND bursts a sector outside page 1 (page 0 is RAM here: program
+; buffers, pcopy's among them) when the Pi and /WAIT allow it, and returns DE
+; past it.  Sectors touching page 1 never get here: they are staged above.
 DSKIO_WRITE_LOOP:
         push    bc
         ld      a,d
@@ -301,7 +302,7 @@ DSKIO_READ:
         pop     de                ; buffer to write data from rpi
         pop     bc                ; number of bytes to transfer
 ; One LINK2 transfer a sector, mode 2 (into the buffer at DE).  It bursts into a
-; buffer from 8000h up when the Pi and /WAIT allow it.
+; buffer outside page 1 when the Pi and /WAIT allow it.
 DSKIO_READ_LOOP:
         push    bc
         push    de                 ; caller destination survives reception
@@ -535,7 +536,7 @@ OEMSTA:
 MSXPIVERSION:
         DB      13,10,"MSXPi BIOS v1.6.1",13,10
 		DB		"Build "
-BuildId: DB "20261026.082"
+BuildId: DB "20261026.083"
         DB      13,10,"RCC (c) 2015-2026",13,10,0
 ; ================================================================
 ; Table of Commands available/implemented

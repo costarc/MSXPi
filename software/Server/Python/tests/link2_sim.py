@@ -152,8 +152,17 @@ class MsxAborted(Exception):
     pass
 
 
+def in_page1(start, n):
+    """The block start .. start+n-1 touches page 1 (4000h-7FFFh), where the MSX never bursts."""
+    return n > 0 and start < 0x8000 and start + n - 1 >= 0x4000
+
+
 class Msx:
-    """Model of the MSX LINK2 code (design sections 3.2 and 3.3)."""
+    """Model of the MSX LINK2 code (design sections 3.2 and 3.3).
+
+    `at`, where given, is the MSX buffer's address: a transfer whose buffer starts in
+    page 1 does not offer bursts, and a block that touches page 1 is not sent as one
+    (link2.asm L2_IN_PAGE1).  Without it, `may_burst` alone decides, as before."""
 
     WRONG_ANSWERS = 16
 
@@ -169,7 +178,9 @@ class Msx:
     def wr(self, b):
         self.w.msx_xfer(b)
 
-    def open(self, may_burst=True):
+    def open(self, may_burst=True, at=None):
+        if at is not None and 0x4000 <= at < 0x8000:
+            may_burst = False
         wrong = 0
         while True:
             self.wr(C.HELLO2)
@@ -198,9 +209,9 @@ class Msx:
             raise MsxAborted("open: sender cap reached")
         self.burst_ok = self.pi_burst and self.has_wait and may_burst
 
-    def send(self, data, may_burst=True):
+    def send(self, data, may_burst=True, at=None):
         """LINK_SEND: one transfer of one or more blocks."""
-        self.open(may_burst)
+        self.open(may_burst, at)
         data = bytes(data)
         # the server learns our size from the word; blocks are limited by it
         seq = 0
@@ -208,14 +219,17 @@ class Msx:
         while True:
             end = min(off + self.size, len(data))
             last = end >= len(data)
-            self._send_block(data[off:end], C.RC_SUCCESS if last else C.RC_READY, seq)
+            self._send_block(data[off:end], C.RC_SUCCESS if last else C.RC_READY, seq,
+                             None if at is None else at + off)
             seq = (seq + 1) & 0xFF
             if last:
                 return
             off = end
 
-    def _send_block(self, payload, typ, seq):
+    def _send_block(self, payload, typ, seq, at=None):
         burst = self.burst_ok and payload and not len(payload) % 256
+        if at is not None and in_page1(at, len(payload)):
+            burst = False
         hdr = bytes([typ, len(payload) & 0xFF, (len(payload) >> 8) & 0x7F | (0x80 if burst else 0), seq])
         hc = crc(hdr)
         pc = crc(payload)
@@ -242,9 +256,10 @@ class Msx:
                 raise MsxAborted("server aborted (payload)")
         raise MsxAborted("sender cap reached")
 
-    def recv(self, maxbuf=65536, may_burst=True):
-        """LINK_RECV: a whole transfer from the Pi."""
-        self.open(may_burst)
+    def recv(self, maxbuf=65536, may_burst=True, at=None):
+        """LINK_RECV: a whole transfer from the Pi.  (Whether the MSX reads a burst with
+        INIR or polled does not show on the wire: only the open frame depends on `at`.)"""
+        self.open(may_burst, at)
         out = bytearray()
         last_seq = None
         next_seq = 0

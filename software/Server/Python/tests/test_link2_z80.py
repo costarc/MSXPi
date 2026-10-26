@@ -24,7 +24,7 @@ from test_link2 import pattern
 
 
 def trace(cls, direction, data, size=8192, has_wait=True, pi_burst=True, may_burst=True,
-          flips=(), slips=(), follow=True):
+          flips=(), slips=(), follow=True, at=None, keep=None):
     """(wire log, outcome) of one transfer (and a clean follow-up) with the given MSX."""
     w = S.Wire(timeout=2.0)
     w.trace = True
@@ -45,14 +45,16 @@ def trace(cls, direction, data, size=8192, has_wait=True, pi_burst=True, may_bur
         steps = [lambda: results.append(B.link_send(data) if data else None), follow_loop]
     srv = S.Server(w, steps, pi_burst).start()
     m = cls(w, size, has_wait)
+    if keep is not None:
+        keep.append(m)
     outcome = []
     for payload in ([data] + ([pattern(300, 99)] if follow else [])):
         try:
             if direction == "msx2pi":
-                m.send(payload, may_burst)
+                m.send(payload, may_burst, at=at)
                 outcome.append("sent")
             else:
-                outcome.append(bytes(m.recv(may_burst=may_burst)))
+                outcome.append(bytes(m.recv(may_burst=may_burst, at=at)))
         except S.MsxAborted:
             outcome.append("aborted")
         except S.Hung:
@@ -85,6 +87,55 @@ class Crc(unittest.TestCase):
             self.assertEqual(self.crc(image, b"123456789"), 0x29B1, extra)
             for data in samples:
                 self.assertEqual(self.crc(image, data), binascii.crc_hqx(data, 0xFFFF), (extra, len(data)))
+
+
+class PageOne(unittest.TestCase):
+    """Bursts from any buffer outside page 1 (4000h-7FFFh): page 0 is RAM under MSX-DOS.
+    A buffer that starts in page 1 does not offer bursts; a block that touches page 1
+    goes polled, in either direction."""
+
+    @staticmethod
+    def burst_bytes(at, n, size):
+        """Bytes the rule lets burst: the first transfer only (the follow-up is 300 bytes)."""
+        if 0x4000 <= at < 0x8000:
+            return 0
+        total = 0
+        for off in range(0, n, size):
+            ln = min(size, n - off)
+            if ln and not ln % 256 and not S.in_page1(at + off, ln):
+                total += ln
+        return total
+
+    def check(self, direction, at, n, size):
+        data = pattern(n, 3)
+        keep = []
+        want = trace(S.Msx, direction, data, size=size, at=at)
+        got = trace(z80_msx.Z80Msx, direction, data, size=size, at=at, keep=keep)
+        label = f"{direction} at {at:04X}, {n} bytes in blocks of {size}"
+        self.assertEqual(got[1], want[1], label)
+        self.assertEqual(got[0], want[0], label + ": wire differs from the model")
+        if direction == "pi2msx":
+            self.assertEqual(got[1][0], data, label)
+        self.assertEqual(keep[0].ports.burst_xfers, self.burst_bytes(at, n, size), label)
+
+    def test_page0_bursts(self):
+        for d in ("msx2pi", "pi2msx"):
+            self.check(d, 0x1000, 4096, 1024)
+
+    def test_blocks_that_reach_page1_go_polled(self):
+        for d in ("msx2pi", "pi2msx"):
+            self.check(d, 0x3800, 4096, 1024)   # 3800-3FFF burst, 4000-47FF polled
+            self.check(d, 0x3F00, 512, 512)     # one block across 4000h: polled
+
+    def test_a_buffer_in_page1_never_bursts(self):
+        for d in ("msx2pi", "pi2msx"):
+            self.check(d, 0x6000, 2048, 1024)
+            self.check(d, 0x7F00, 1024, 256)    # even its blocks from 8000h up: the open said no
+
+    def test_page2_and_3_as_before(self):
+        for d in ("msx2pi", "pi2msx"):
+            self.check(d, 0x8000, 4096, 1024)
+            self.check(d, 0xC000, 512, 512)
 
 
 class RoomCeiling(unittest.TestCase):

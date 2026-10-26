@@ -389,6 +389,26 @@ L2_HASWAIT:
     cp   b
     ret
 
+; C = the block HL .. HL+BC-1 touches page 1 (4000h-7FFFh), which never bursts: there
+; the DOS half's own ROM is mapped while it runs, and in BASIC the BASIC ROM.  Page 0
+; is RAM under MSX-DOS (the BIOS ROM in BASIC, where no buffer lives).  BC > 0.
+; Uses AF.
+L2_IN_PAGE1:
+    ld   a,h
+    cp   $80
+    jr   nc,L2IP_OUT            ; starts at 8000h or above
+    push hl
+    add  hl,bc
+    dec  hl                     ; the last byte
+    ld   a,h
+    pop  hl
+    cp   $40
+    ccf                         ; C: it ends at 4000h or above
+    ret
+L2IP_OUT:
+    or   a
+    ret
+
 ; ============================================================================
 ; B bytes of the frame at IX out (L2_PUT_FRAME), or B bytes in to HL (L2_GET_BYTES)
 ; ============================================================================
@@ -428,8 +448,10 @@ L2_SEND_BLOCK:
     jr   nz,L2S_HEADER          ; not a multiple of 256
     or   b
     jr   z,L2S_HEADER           ; empty
-    bit  7,(ix+L2_PTR+1)
-    jr   z,L2S_HEADER           ; source in page 0 or 1
+    ld   l,(ix+L2_PTR)
+    ld   h,(ix+L2_PTR+1)
+    call L2_IN_PAGE1
+    jr   c,L2S_HEADER           ; the block touches page 1
     ld   d,$80
 L2S_HEADER:
     ld   (ix+L2_END),d
@@ -518,8 +540,8 @@ L2_OK:
     ret
 
 ; ============================================================================
-; LINK_OPEN (design 8.4).  IX = frame; L2_SIZE and L2_PTR set.  A buffer at
-; 8000h or above may burst.
+; LINK_OPEN (design 8.4).  IX = frame; L2_SIZE and L2_PTR set.  A buffer that does
+; not start in page 1 may burst; each block is checked again (L2_IN_PAGE1).
 ; ============================================================================
 L2_OPEN:
     ld   b,LINK2_WRONG_ANSWERS
@@ -540,8 +562,10 @@ L2O_HELLO:
     jr   L2_PROTO
 L2O_ACKED:
     ld   e,0                    ; E = 1: this transfer may burst on the MSX side
-    bit  7,(ix+L2_PTR+1)
-    jr   z,L2O_NOWAIT
+    ld   a,(ix+L2_PTR+1)
+    sub  $40
+    cp   $40
+    jr   c,L2O_NOWAIT           ; the buffer starts in page 1
     call L2_HASWAIT
     jr   z,L2O_NOWAIT
     inc  e
@@ -718,6 +742,8 @@ L2R_DEST:
     or   b
     jr   z,L2R_POLL
     ex   de,hl                  ; HL = destination
+    call L2_IN_PAGE1
+    jr   c,L2R_POLL_HL          ; a block that touches page 1 is read polled
     push hl
     push bc
     ld   d,b                    ; runs of 256
@@ -726,6 +752,8 @@ L2R_DEST:
     pop  hl
     call LINK_CRC               ; the CRC pass over what was received
     jr   L2R_TRAIL
+L2R_POLL_HL:
+    ex   de,hl
 L2R_POLL:
     call LINK_GET
     ret  c

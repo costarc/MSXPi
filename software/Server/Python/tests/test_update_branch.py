@@ -61,6 +61,15 @@ class BatchFilesTests(unittest.TestCase):
 
 
 class ServerUpdateTests(unittest.TestCase):
+    # These are about the update itself, on a server whose MSX has not used LINK2: a
+    # LINK2 transfer earlier in the same run (test_link2) would turn the guard on.
+    def setUp(self):
+        self.link2_used = system.msxpi_link2.used
+        system.msxpi_link2.used = False
+
+    def tearDown(self):
+        system.msxpi_link2.used = self.link2_used
+
     def test_bad_branch_names_are_refused(self):
         for bad in ('x;reboot', '../x', '-rf', 'a|b', '$(id)', 'x' * 200):
             self.assertEqual(system.update(bad), 'Pi:Error - bad branch name', bad)
@@ -123,6 +132,9 @@ class ServerUpdateTests(unittest.TestCase):
 
 
 class BranchResolveTests(unittest.TestCase):
+    setUp = ServerUpdateTests.setUp
+    tearDown = ServerUpdateTests.tearDown
+
     def test_dos2_pieces_are_glued_back(self):
         # MSX-DOS 2: "msxpiupd feature/x" -> %1=feature %2=/x; unused %n are empty
         self.assertEqual(system._branch_name('feature/x'), 'feature/x')
