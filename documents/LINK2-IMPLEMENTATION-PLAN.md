@@ -111,7 +111,7 @@ What changed, all with the same bytes on the wire (T3 byte for byte against the 
 | `link2.asm`, speed | polled loops count runs of 256 with DJNZ, CTRL+ESC once a run | +11 |
 | `msxpi_call.asm` (LINK2) | `_MSXPI`, `PARSE_CALL_PARAMETERS` and mode 2 rewritten: `LINK_RECV` with the mode in A, one header writer for success and failure, the syntax error shares `SYNTAX_ERROR`; `CALL MSXPIVER` shares the receive tail; `ExtractCommand` folded into the parser | 88 in the DOS half |
 | legacy code in LINK2 images | `PAYLOAD_RX`, `PAYLOAD_TX`, `PAYLOAD_ADVANCE` (generator), `PAYLOAD_*_BURST`, `MSXPI_GETSTASH`, `LINK_DISCARD` not assembled | 60-90 per image |
-| `LINK2_CRC_NOTABLE` | the CRC without its 512-byte table, written for the DOS half (`L2_CRC_BYTE`); no image uses it since the DOS half kept the table (phase 6) | -512 +35 |
+| `LINK2_CRC_NOTABLE` | the CRC without its 512-byte table, written for the DOS half (`L2_CRC_BYTE`), which kept the table (phase 6); PLAYNET.COM uses it (no room for the table), in 512-byte blocks | -512 +35 |
 
 Sizes: BIOS half code ends at 0x4A0D (phase 2: 0x4C0D; the CRC table moved down a page), 3,506 bytes free below
 the DOS ROM's INIT entry. msxpiext.bin 3,089 bytes (phase 2: 3,345; its table sits on a page boundary, so a few

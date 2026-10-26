@@ -481,8 +481,8 @@ How it differs from the paper description above, on purpose:
   read, and polled send takes each byte into the CRC while that byte goes out, so the CRC work happens
   inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR. The polled
   loops count in runs of 256 with DJNZ and check CTRL+ESC once a run (phase 5).
-- **Table-less CRC** (`LINK2_CRC_NOTABLE`, written for the DOS half; unused since the DOS half kept the table,
-  section 6, but still built and tested by T3): each step is
+- **Table-less CRC** (`LINK2_CRC_NOTABLE`, written for the DOS half, which kept the table in the
+  end, section 6; used by PLAYNET.COM, where the table does not fit, and tested by T3): each step is
   computed as x = (crc >> 8) ^ byte, x ^= x >> 4, crc = (crc << 8) ^ (x << 12) ^ (x << 5) ^ x, in
   `L2_CRC_BYTE`, using B' and C' as well. Same CRC (T3 checks both against `binascii.crc_hqx`), about 135
   T-states a byte more on the burst CRC pass.

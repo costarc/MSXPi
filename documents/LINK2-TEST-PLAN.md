@@ -320,6 +320,7 @@ upload corruption is pcopy's legacy sum, the same two faults).
 | Test | Result |
 |---|---|
 | `run_native.sh 0 0 1500` with `SCENARIO=chat EXITKEY=700`, two openMSX nodes, Soccer (PLAYNET.COM 11,049 bytes, LINK2) | 699 identical frames, results 2 and 1, `playnet save` (8 byte header + 14 blocks of 512) and `playnet restore` served, both nodes back in MCHAT |
+| the same run on the shipped binary (PLAYNET.COM 11,083 bytes: the page-1 burst rule of `link2.asm` included; `target/playnet.com` had stayed the 10,765-byte legacy build until then) | 700 identical frames, results 2 and 1, desync 0, both nodes back in MCHAT. Run with `ALLOW_ROM=1`: `rig_preflight.py` reads the Ethernet protocol from the first driver in the 32 KB image, which since phase 6 is the BIOS half's protocol 3, and compares it with the server's default 2, though the server speaks both (stale check, irrelevant to the MSXPi transport) |
 | first attempts: area as 8 KB blocks, then without `di` | save failed (RC_PROTOERR): the CRC without a table is too slow for the Pi; then NAKs to the cap at block 14: JIFFY changing between the burst and the CRC pass |
 | server `test_netplay` | 39 OK (`test_games` has a missing-fixture import error that is there without this change) |
 | ROM-Patcher `test_patcher`, `test_profiles`, `test_arctic`, `test_gpf` | OK |
