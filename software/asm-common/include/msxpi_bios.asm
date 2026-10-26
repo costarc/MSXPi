@@ -520,6 +520,7 @@ STORE_BYTE_1:
     ret
 
  ifdef MSXPI_DRIVER
+ ifndef MSXPI_LINK2             ; LINK2 has LINK_BURST_RECV / LINK_BURST_SEND
 ; ------------------------------------------------------------
 ; PAYLOAD_RX_BURST / PAYLOAD_TX_BURST - payload with hardware /WAIT
 ; ------------------------------------------------------------
@@ -590,14 +591,12 @@ PRB_SUM:                        ; checksum the block, now in memory
     jr      nz,PRB_SUM
     ret
  endif
+ endif
 
  ifdef MSXPI_LINK2
-; The CALL MSXPI output modes of LINK_RECV: 1 = print each block, 0 = drop them.
+; LINK_RECV in mode 1 (print each block), for the BIOSENTRY table of msxpiext.bin.
 LINK_PRINT:
     ld      a,1
-    jp      LINK_RECV
-LINK_DISCARD:
-    xor     a
     jp      LINK_RECV
  else
 ; The LINK2 names (link2.asm) for the legacy routines, so msxpi_call.asm builds with either.
@@ -1017,6 +1016,9 @@ CLEARBUF:
 ; Contract, identical either way: returns HL = IX = base of a block whose
 ; offsets 5..7 are free for this routine. Clobbers AF/HL/IX only - callers
 ; push whatever else they need around it.
+;
+; Not assembled with LINK2, which keeps its state in a stack frame.
+ ifndef MSXPI_LINK2
  ifdef MSXPI_DRIVER
 MSXPI_GETSTASH equ GETWRK       ; a plain alias, not a trampoline - the
                                 ; driver build stays byte-identical to
@@ -1044,6 +1046,7 @@ MSXPI_STASH_BUF:
             dw      MSXPI_DRIVER_or_MSXPI_RAM_STASH_must_be_defined
   endif
   endif
+ endif
  endif
 
         INCLUDE payload_generated.asm

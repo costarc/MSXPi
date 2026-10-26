@@ -10,6 +10,7 @@ doubled final answer, the end mark, the ABORT flood).
 
     python -m unittest test_link2_z80          (about 5 minutes)
 """
+import binascii
 import os
 import random
 import sys
@@ -59,6 +60,31 @@ def trace(cls, direction, data, size=8192, has_wait=True, pi_burst=True, may_bur
     w.close()
     srv.join(2)
     return list(w.log), outcome
+
+
+class Crc(unittest.TestCase):
+    """LINK_CRC with the table (BIOS half, msxpiext.bin) and without it (DOS half)."""
+
+    def crc(self, image, data):
+        import z80emu
+        code, sym = image
+        cpu = z80emu.Z80()
+        cpu.mem[0x0100:0x0100 + len(code)] = code
+        cpu.mem[0x8000:0x8000 + len(data)] = data
+        cpu.sp = 0xF000
+        cpu.run_call(sym["L2_CRC_INIT"])
+        cpu.run_call(sym["LINK_CRC"], hl=0x8000, bc=len(data))
+        cpu.run_call(sym["L2_CRC_GET"])
+        return cpu.de
+
+    def test_both_variants(self):
+        rng = random.Random(7)
+        samples = [b"123456789", b"", bytes(range(256)), bytes(rng.randrange(256) for _ in range(1000))]
+        for extra in ([], ["-DLINK2_CRC_NOTABLE"]):
+            image = z80_msx.assemble(extra)
+            self.assertEqual(self.crc(image, b"123456789"), 0x29B1, extra)
+            for data in samples:
+                self.assertEqual(self.crc(image, data), binascii.crc_hqx(data, 0xFFFF), (extra, len(data)))
 
 
 class RoomCeiling(unittest.TestCase):

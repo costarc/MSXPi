@@ -41,9 +41,11 @@ def assemble(extra=()):
 
 
 def image():
+    """The image under test: LINK2_CRC_NOTABLE=1 in the environment selects the DOS
+    half's table-less CRC."""
     global _image
     if _image is None:
-        _image = assemble()
+        _image = assemble(["-DLINK2_CRC_NOTABLE"] if os.environ.get("LINK2_CRC_NOTABLE") else [])
     return _image
 
 

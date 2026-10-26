@@ -64,6 +64,11 @@ def generate():
     rx, rest = asm.split('PAYLOAD_TX:\n', 1)
     tx, rest = ('PAYLOAD_TX:\n'+rest).split('; A is the completed byte.', 1)
     advance_wait, escape = ('; A is the completed byte.'+rest).split('PAYLOAD_ESCAPE:\n', 1)
+    # The polled loops with the legacy sum are not assembled in a LINK2 image, which
+    # uses PAYLOAD_WAIT and PAYLOAD_ESCAPE only (link2.asm has its own loops).
+    legacy = lambda body: ' ifndef MSXPI_LINK2\n' + body + ' endif\n'
+    advance, wait = advance_wait.split('; Fast ready path', 1)
+    rx, tx, advance_wait = legacy(rx), legacy(tx), legacy(advance) + '; Fast ready path' + wait
     # Keep ESC's comments with the preceding fragment; labels define the split.
     escape = 'PAYLOAD_ESCAPE:\n'+escape
     pieces = {'payload_tx_generated.asm': tx,

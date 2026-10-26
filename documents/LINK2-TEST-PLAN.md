@@ -213,6 +213,21 @@ the new server and `L2TEST.BIN`, which carries its own LINK2 code, so only the L
 
 The baseline was taken on the same EEPROM, DOS half against BIOS half, no reflash.
 
+**Phase 5 (optimise), 2026-10-26.** The BIOS half from the current sources next to the shipped DOS half
+(20261026.080), server 20261026.083:
+
+| Test | Result |
+|---|---|
+| T3 `test_link2_z80` (with the new `Crc` test: both CRC variants against `binascii.crc_hqx`, check value 0x29B1), `test_eth3_z80`, T1 `test_link2` | 32/32 pass |
+| T3 `test_link2_z80` with the table-less CRC (`LINK2_CRC_NOTABLE=1`) | 10/10 pass |
+| T1 on the Z80 code (`LINK2_MSX=z80`), table / table-less | 14/14 and 14/14 pass (clean, limits, mixed, flip and slip sweeps, no-wait, random 1-3 bit faults) |
+| T3 cost (`z80bench.py`), table | burst CRC pass 85.1 (legacy 97.0), polled receive 224.1 (260.0), polled send 151.1 (190.0); phase 2 was 85.1 / 257.9 / 194.0 |
+| T3 cost, table-less (DOS half) | 220.1 / 359.1 / 286.1: slower than legacy on every loop |
+| T4 openMSX, Canon_V-25, BIOS half, clean | 32/32 pass (a first run found the CALL handler writing mode-2 data past the command: `LINK_COMMAND` returns DE moved, as `LINK_SEND` does; fixed before this run) |
+| T5 openMSX, rate 5e-4, seeds 1-4, 32 steps a run | 0 HUNG, 0 CORRUPT: 99 pass, 29 reported aborts, all on blocks of 8 KB or more: the same as phase 3 |
+| Legacy DOS half from the current sources | byte for byte the shipped one (the shared files leave it alone) |
+| T6 hardware | not run |
+
 ## Reporting
 
 Each milestone commit carries the numbers: T1/T3 pass counts, T3 T-states against the baseline,

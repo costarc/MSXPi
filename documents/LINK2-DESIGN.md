@@ -432,7 +432,7 @@ Pi's limit, tags every block but the last RC_READY and the last RC_SUCCESS (or t
 - When it aborts it repeats ABORT until the MSX's next HELLO2 or READY arrives.
 - A legacy READY transfer and a LINK2 transfer can follow each other with no reset between them.
 
-### 8.8 The MSX code as built (phase 2: `asm-common/include/link2.asm`)
+### 8.8 The MSX code as built (`asm-common/include/link2.asm`, phase 2, size pass in phase 5)
 
 Public entry points (registers in the file header of `link2.asm`):
 
@@ -441,7 +441,7 @@ Public entry points (registers in the file header of `link2.asm`):
 | `LINK_SEND` | DE = source, BC = length | NC: DE = source + length, BC = 0. C: A = RC_* |
 | `LINK_SEND_SIZE` | as `LINK_SEND`, HL = largest block (default 8192) | as `LINK_SEND` |
 | `LINK_RECV` | A = mode, DE = buffer, BC = largest block | NC: A = the transfer's result code, DE = end of data (mode 2), BC = bytes received. C: A = RC_* |
-| `LINK_COMMAND` | DE = zero terminated string | as `LINK_SEND`; C and nothing sent when empty |
+| `LINK_COMMAND` | DE = zero terminated string | as `LINK_SEND` (DE moves past the string); C and nothing sent when empty |
 | `LINK_SEND_BYTE` / `LINK_RECV_BYTE` | A = byte / - | A = byte; C = CTRL+ESC (A = RC_ESCPRESSED) |
 
 `LINK_RECV` modes: 0 = blocks are read into the buffer and dropped (`STDOUTTONULL`); 1 = each block is
@@ -453,11 +453,18 @@ table of msxpiext.bin lists `LINK_SEND_SIZE`, `LINK_RECV`, `LINK_SEND` and `LINK
 
 How it differs from the paper description above, on purpose:
 
-- **State** lives in a frame on the stack (IX), so the code runs from ROM. Nothing outlives a call.
+- **State** lives in a frame on the stack (IX), so the code runs from ROM. Nothing outlives a call. Since
+  phase 5 the frame sits right below the caller's pushed AF, BC, DE and HL, and those slots are the
+  transfer's arguments (mode, largest block, buffer, bytes to send), so nothing is copied in.
 - **CRC in the shadow set** (DE' = CRC, H' = table page): the BIOS interrupt routine saves and restores
   both sets. Polled receive starts the next transfer before it stores and checksums the byte it has just
   read, and polled send takes each byte into the CRC while that byte goes out, so the CRC work happens
-  inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR.
+  inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR. The polled
+  loops count in runs of 256 with DJNZ and check CTRL+ESC once a run (phase 5).
+- **Table-less CRC** (`LINK2_CRC_NOTABLE`, for the DOS half, which has no room for the table): each step is
+  computed as x = (crc >> 8) ^ byte, x ^= x >> 4, crc = (crc << 8) ^ (x << 12) ^ (x << 5) ^ x, in
+  `L2_CRC_BYTE`, using B' and C' as well. Same CRC (T3 checks both against `binascii.crc_hqx`), about 135
+  T-states a byte more on the burst CRC pass.
 - **Page 1**: `CALL MSXPI("2,addr,..")` runs from BASIC, where page 1 is ROM and the RAM starts at 8000h, so
   a buffer below 8000h is not a use case and is not tested. `STORE_BYTE` (WRSLT through RAMAD1, a slot only
   a disk kernel sets) serves the DOS half. A buffer below 8000h never bursts; the size word's bit 15 is set
@@ -471,9 +478,14 @@ How it differs from the paper description above, on purpose:
   terminator never lands on HIMEM itself.
 - **L2TEST** reads the server's summary after every send, failed or not: the `l2test sink` command answers
   a failed receive too, and an unread answer would be taken by the next repetition's command.
-- **Names**: `msxpi_call.asm` and the msxpiext table use `LINK_COMMAND`, `LINK_PRINT`, `LINK_DISCARD`,
-  `LINK_RECV_BYTE` and `LINK_SEND_BYTE`; the legacy DOS half defines the first three as aliases of its own
-  routines. `PIREADBYTE`/`PIWRITEBYTE` are not assembled in a LINK2 build.
+- **Names**: `msxpi_call.asm` calls `LINK_COMMAND` and `LINK_RECV` with the mode in A; the msxpiext table
+  lists `LINK_PRINT` (`LINK_RECV` in mode 1) as well. The legacy DOS half defines `LINK_COMMAND`,
+  `LINK_PRINT` and `LINK_DISCARD` as aliases of its own routines. `PIREADBYTE`/`PIWRITEBYTE`, the legacy
+  payload loops (`PAYLOAD_RX`, `PAYLOAD_TX`, `PAYLOAD_ADVANCE`, the `*_BURST` pair) and `MSXPI_GETSTASH`
+  are not assembled in a LINK2 build.
+- **Assemblers**: written in the subset both accept (sjasmplus for the BIOS half, msxpiext.bin and the
+  tests; zmac for the DOS half). The `ASSERT`s on the table's alignment are sjasmplus-only
+  (`ifdef __SJASMPLUS__`).
 - **Registers**: the `LINK_*` routines clobber IY and keep the CRC in the shadow set. Safe under the BIOS
   interrupt handler, which saves both; recheck before the DOS driver and the .COM tools move to LINK2.
 - **Z80 emulator** (tests): `inc/dec (ix+d)` is 23 T-states; every opcode fetch costs the MSX's extra wait state
