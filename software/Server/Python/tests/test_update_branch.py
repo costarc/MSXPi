@@ -161,5 +161,97 @@ class BranchResolveTests(unittest.TestCase):
             self.assertEqual(system._resolve_branch('feature/x'), ('feature/x', ''))
 
 
+class Link2GuardTests(unittest.TestCase):
+    """An MSX that has used LINK2 (the DOS half's disk, CALL MSXPI) must not be left
+    with a server without it: msxpiupd.bat from master asks for master's server first."""
+
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = self.tmp.name
+        self.used = system.msxpi_link2.used
+        system.msxpi_link2.used = True
+        system._update_branch = 'master'
+
+    def tearDown(self):
+        system.msxpi_link2.used = self.used
+        system._update_branch = 'master'
+        self.tmp.cleanup()
+
+    def blocks(self, folder, link2):
+        import os
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, 'msxpi_blocks.py'), 'w') as f:
+            f.write('import msxpi_link2' if link2 else 'import msxpi_transport')
+
+    def test_update_to_a_branch_without_link2_is_refused(self):
+        with patch.object(system, '_branch_speaks_link2', return_value=False),              patch.object(system, 'setMSXPiVar') as setvar,              patch.object(system.subprocess, 'run') as run, patch('requests.get') as get:
+            msg = system.update(None)                      # msxpiupd.bat: master first
+        self.assertIn('has no LINK2', msg)
+        get.assert_not_called()
+        run.assert_not_called()
+        setvar.assert_not_called()
+
+    def test_update_to_a_link2_branch_goes_ahead(self):
+        with patch.object(system, '_branch_speaks_link2', return_value=True),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system.os.path, 'getmtime', side_effect=OSError),              patch.object(system, 'setMSXPiVar'),              patch('requests.get', side_effect=RuntimeError('fetched')):
+            self.assertIn('fetched', system.update('feature/link2'))
+
+    def test_a_legacy_msx_is_not_checked(self):
+        system.msxpi_link2.used = False
+        with patch.object(system, '_branch_speaks_link2') as probe,              patch.object(system.os.path, 'getmtime', side_effect=OSError),              patch('requests.get', side_effect=RuntimeError('fetched')):
+            self.assertIn('fetched', system.update(None))
+        probe.assert_not_called()
+
+    def restart(self, host):
+        with patch.object(system.transport, 'hostType', host),              patch.object(system.settings, 'MSXPIHOME', self.home),              patch.object(system, 'link_send') as send,              patch.object(system, '_restart_windows') as win,              patch.object(system, 'exitDueToSyncError') as pi:
+            system.restart()
+        return send.call_args[0][0], win.called or pi.called
+
+    def test_windows_restart_into_a_staged_server_without_link2_is_refused(self):
+        import os
+        self.blocks(self.home, True)
+        staged = os.path.join(self.home, 'staged')
+        self.blocks(staged, False)
+        open(os.path.join(staged, 'READY'), 'w').close()
+        msg, restarted = self.restart('Windows')
+        self.assertFalse(restarted)
+        self.assertIn(b'not restarted', msg)
+        self.assertFalse(os.path.exists(os.path.join(staged, 'READY')))   # start-openmsx.bat must not apply it
+
+    def test_windows_restart_into_a_link2_staged_server_goes_ahead(self):
+        import os
+        staged = os.path.join(self.home, 'staged')
+        self.blocks(staged, True)
+        open(os.path.join(staged, 'READY'), 'w').close()
+        msg, restarted = self.restart('Windows')
+        self.assertTrue(restarted)
+        self.assertEqual(msg, b'Pi:Ok')
+
+    def test_pi_restart_into_files_without_link2_is_refused(self):
+        self.blocks(self.home, False)                  # update.sh from master wrote them
+        msg, restarted = self.restart('RaspberryPi')
+        self.assertFalse(restarted)
+        self.assertIn(b'not restarted', msg)
+
+    def test_this_server_speaks_link2(self):
+        """The file test the restart guard uses says yes for these sources (and no for a
+        msxpi_blocks.py without msxpi_link2, as master's has none)."""
+        import os
+        self.assertTrue(system._speaks_link2(os.path.dirname(os.path.abspath(system.__file__))))
+        self.blocks(self.home, False)
+        self.assertFalse(system._speaks_link2(self.home))
+
+    def test_a_link2_transfer_sets_the_flag(self):
+        import link2_sim as S
+        import msxpi_blocks as B
+        system.msxpi_link2.used = False
+        w = S.Wire(timeout=2.0)
+        srv = S.Server(w, [lambda: B.link_send(b'hello')], True).start()
+        self.assertEqual(bytes(S.Msx(w, 8192, True).recv()), b'hello')
+        w.close()
+        srv.join(2)
+        self.assertTrue(system.msxpi_link2.used)
+
+
 if __name__ == '__main__':
     unittest.main()

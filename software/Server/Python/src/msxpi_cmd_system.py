@@ -49,6 +49,7 @@ from msxpi_const import (
     VERSION,
 )
 import msxpi_ethglue as ethglue
+import msxpi_link2
 import msxpi_cmd_disk as disk
 import msxpi_settings as settings
 import msxpi_transport as transport
@@ -296,7 +297,70 @@ def q(parm: Optional[str] = None) -> CommandResult:
     print("q(): client quit")
 
 
+LINK2_PROBE = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Python/src/msxpi_link2.py"
+
+
+def _speaks_link2(folder: str) -> bool:
+    """Whether the server files in folder speak LINK2: their msxpi_blocks.py uses
+    msxpi_link2 (a server without LINK2 has neither). True when it cannot tell."""
+    try:
+        with open(os.path.join(folder, "msxpi_blocks.py"), encoding="utf-8", errors="replace") as f:
+            return "msxpi_link2" in f.read()
+    except OSError:
+        return True
+
+
+def _branch_speaks_link2(branch: str) -> Optional[bool]:
+    """Whether the branch's server has LINK2 (None: GitHub cannot be asked)."""
+    import requests
+
+    try:
+        return requests.head(LINK2_PROBE.format(branch=branch), timeout=15).status_code == 200
+    except Exception as e:
+        print(f"update: cannot check {branch} for LINK2: {e}", flush=True)
+        return None
+
+
+def _restart_keeps_link2() -> Optional[str]:
+    """Why "p restart" must not happen now, or None.
+
+    Once the MSX has used LINK2, its ROM (the DOS half's disk driver, CALL MSXPI)
+    needs a LINK2 server: a server without it cannot read the disk, and the MSX
+    cannot even load P.COM to put things right. That is what msxpiupd.bat from
+    master does, as it brings the server up to date from master before the
+    branch it was given: on Windows "p update" stages master's files and
+    "p restart" puts them in place; on a Pi update.sh writes them directly.
+    So the restart is refused while the files it would start lack LINK2 (a
+    staged set is dropped too, or the next start-openmsx.bat would apply it),
+    and this server keeps running; the "p update <branch>" that follows in
+    msxpiupd.bat brings LINK2 files again.
+    """
+    if not msxpi_link2.used:
+        return None
+    home = os.path.abspath(settings.MSXPIHOME)
+    staged = os.path.join(home, "staged")
+    if transport.hostType == "Windows" and os.path.isfile(os.path.join(staged, "READY")):
+        if _speaks_link2(staged):
+            return None
+        try:
+            os.replace(staged, f"{staged}.nolink2-{int(time.time())}")
+        except OSError:
+            try:
+                os.remove(os.path.join(staged, "READY"))
+            except OSError:
+                pass
+        return "Pi:Error - not restarted: the staged server has no LINK2, which this MSX's ROM needs (staged update dropped)"
+    if not _speaks_link2(home):
+        return "Pi:Error - not restarted: the server files have no LINK2, which this MSX's ROM needs. p update <a LINK2 branch> first"
+    return None
+
+
 def restart(parm: Optional[str] = None) -> CommandResult:
+    why = _restart_keeps_link2()
+    if why:
+        print(why)
+        link_send(why.encode())
+        return
     if transport.hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
         link_send(b"Pi:Ok")
@@ -482,6 +546,11 @@ def update(parm: Optional[str] = None) -> CommandResult:
         branch, why = _resolve_branch(branch)
         if branch is None:
             return f"Pi:Error - {why}\nUpdating from {current}"
+    # An MSX that uses LINK2 cannot work with a server without it (see
+    # _restart_keeps_link2): msxpiupd.bat from master asks for master first.
+    if msxpi_link2.used and _branch_speaks_link2(branch) is False:
+        return (f"Pi:Error - the {branch} server has no LINK2, which this MSX's ROM needs."
+                f"\nKept this server. Use: msxpiupd <a LINK2 branch>")
     if explicit:
         _update_branch = branch
         setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")

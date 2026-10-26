@@ -176,6 +176,11 @@ def _abort_flood(o, count: int) -> None:
 
 FLOOD_MARGIN = 16  # framing bytes around a payload, with room to spare
 
+# The MSX has opened a LINK2 transfer since this server started: its ROM needs a
+# LINK2 server, so "p update" and "p restart" must not leave it with one that is
+# not (msxpi_cmd_system).
+used = False
+
 
 def _hdr(typ: int, length: int, seq: int) -> bytes:
     h = bytes((typ & 0xFF, length & 0xFF, (length >> 8) & 0xFF, seq & 0xFF))
@@ -220,6 +225,8 @@ def link2_accept() -> Tuple[int, Optional[Transfer]]:
         if b == SIZE_MARK and link_crc(bytes((b, f[0], f[1]))) == f[2] | (f[3] << 8):
             if o.byte_out(LINK_ACK) != RC_SUCCESS:
                 return RC_CONNERR, None
+            global used
+            used = True
             return RC_SUCCESS, Transfer(f[0] | (f[1] << 8), bool(flags))
         naks += 1
         if naks >= LINK2_RETRIES:
