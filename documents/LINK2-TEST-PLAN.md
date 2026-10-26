@@ -148,6 +148,39 @@ Shipped ROM and tools against the new server, in openMSX:
    expect 0 aborts.
 7. **Phase 6**: boot MSX-DOS from LINK2, COPY 41 KB to and from MSXPi drives 50 times
    (byte-identical, checked with the server's copy), pcopy, then `msxpiupd feature/link2` itself.
+8. **Phase 7**: the C clients and tools on the hardware, checklist below (T6.7).
+
+### T6.7 - phase 7 on the hardware, step by step
+
+The ROM and the EEPROM are the phase 6 ones: nothing to flash for the C clients. Only the server and the files in
+`target/` change. Each step says what to look for; a failure is a message from the client (`Link error.`,
+`Transfer aborted...`) or a hang that CTRL+ESC ends.
+
+1. `msxpiupd feature/link2` from MSX-DOS (it brings the server and the `target/` files); `p restart` is refused
+   until the MSX speaks LINK2, so reboot the MSX after the update. `p ver` shows the board, `p cd` and `p dir` must print.
+2. **L2CTEST.COM** is not shipped: build it (`make.bat l2ctest` with `MAKE_OUTDIR`) and copy it to the MSX disk,
+   or skip to 3. Expect `L2C PASS 15 FAIL 0`; it covers sends from page 0/1 (polled) and from 8000h (bursts), the three
+   receive modes and block-by-block receive.
+3. **pcopy**, both directions, byte for byte against the source on the Pi: download 22,912 bytes (3 blocks) and a ROM of
+   at least 128 KB; upload `MCHAT.COM` (47 KB) and a 128 KB file; compare with `cmp` on the Pi. Time one 128 KB download
+   against the same on the previous release (note KB/s; the openMSX numbers say bursts help only for buffers outside page 1).
+   Pull the Pi's network cable or stop the server in the middle of a download: pcopy must print an error and leave **no**
+   partial file on the MSX disk.
+4. **ssh**, **nitros**, **p date**, **template**: one command each; `ssh` for a minute of typing and a full-screen program.
+5. **mchat** against an IRC server for ten minutes: room tab, private line, scroll back.
+6. **pchess / pchess1 / pcheckers**: a local game and a chat line; leave one running for ten minutes (the poll is
+   a LINK2 transfer every second or so: count `Link error` on the status line, expect none).
+7. **msxarch**: list a repository, load a plain 16 KB ROM and a mapper ROM (Konami and ASCII8 or ASCII16); both start.
+8. **playnet** (the converted build, `target/playnet.com`): a game over the MSXPi link as in `PLAYNET-PROTOCOLS.md`; then
+   `playnet save` and the restore: the saved area comes back identical. The table-less CRC is slow (about 70 us a byte):
+   watch that no game frame is missed while a save runs.
+9. **ROM-Patcher game ROMs** (arctic, goonies, nemesis, vampire): needs your own dumps in `C:/Users/roniv/Dev/MSX/gameroms`,
+   built with each profile's `rebuild.py --rom`; boot one on the MSX and check the runtime talks to the Pi (music or
+   multiplayer feature of the profile) and that unplugging the Pi does not freeze the game.
+10. **Record**: a table in "Results so far" with each step, the figures (KB/s, count of retries from the server log: grep
+    `NAK`/`ABORT`), and the date. Server log: `Server/Python/src` console, or `journalctl` on the Pi.
+11. **Soak** (optional, like phase 4): a loop of pcopy downloads and a chat session overnight; expect 0 `Link error`.
+
 
 ## T7 - the C library and the .COM tools (phase 7)
 
