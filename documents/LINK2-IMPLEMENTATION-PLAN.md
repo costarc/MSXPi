@@ -23,7 +23,7 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 | 1 - server dual stack | **done**, audited | 898d20ab, 533a0d7b (overflow, NAK reset), 2ebc8d42 (rename), 2dc875db (slips), 7450e089 (BuildId 20261025.079), and the end-mark commit |
 | 2 - MSX core | **done**, audited twice (see "Phase 2 results" and "Audit of phases 2 and 3" below): `link2.asm`, the BIOS half and msxpiext.bin on LINK2, L2TEST.BIN, `l2test` on the server | f0179004, 4f177089 (first audit), the second-audit commit |
 | 3 - Ethernet protocol 3 | **done** in code and in the Z80 tests (`test_eth3_z80`), audited; openMSX with a disk and hardware are phase 4 | d9c367cb, the second-audit commit |
-| 4 - real hardware | **started**: procedure in LINK2-PHASE4-HARDWARE.md, waiting for the Canon results | - |
+| 4 - real hardware | **functional, READY race and speed done** (results in LINK2-TEST-PLAN.md "Phase 4": 1000 x 512 OTIR sends OK, 21.4 KB/s vs 8.8 KB/s legacy for 8 KB downloads). **The 2-hour soak is underway** (started 2026-10-26); Ethernet and the control run are not done. Gate: a clean soak before phase 6 | b64bc860, 166552a5, bf28efa7, d195f996 |
 | 5 to 7 | not started | - |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
