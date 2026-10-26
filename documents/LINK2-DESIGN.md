@@ -208,8 +208,9 @@ is NAKed and resent.
   half is ever mapped, so only one ROM driver is active at a time.
 - **The choice survives a server restart**: a driver probes only when it starts and on ETH_RESET, so a
   server that came back in protocol 2 would fail every transaction of a v3 driver until the MSX is reset.
-  The shuttle keeps the last probe's version in `MSXPIHOME/eth_proto` and starts from it. A v2 driver
-  probes when it starts, so a file left at 3 cannot mislead it.
+  The server keeps the last probe's version as `ETHPROTO` in msxpi.ini (written only when a probe changes
+  it, as `p update` keeps `DriveM`) and the shuttle starts from it. A v2 driver probes when it starts, so a
+  value left at 3 cannot mislead it. `--reset-ini` drops it; the next probe sets it again.
 - **One protocol at a time**: a v2 RAM driver (`ETHUNAPI.COM`) installed next to the BIOS half's v3 ROM
   driver switches the server back to 2 when it probes, and the ROM driver then fails until its next
   probe. Use one or the other; this is not worked around.

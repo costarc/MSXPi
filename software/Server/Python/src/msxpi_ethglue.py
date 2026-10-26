@@ -27,7 +27,6 @@
 from __future__ import annotations
 
 # Standard library imports
-import os
 import time
 import logging
 
@@ -107,13 +106,17 @@ def _eth_tap_ip():
         return None
 
 
-def _eth_proto_file():
-    """MSXPIHOME/eth_proto: the Ethernet protocol (2 or 3) the last probe chose."""
-    try:
-        import msxpi_settings
-        return os.path.join(msxpi_settings.MSXPIHOME, "eth_proto")
-    except Exception:
-        return None
+# ETHPROTO in msxpi.ini: the Ethernet protocol (2 or 3) the last probe chose,
+# kept across a server restart like DriveM (see EthShuttle._saved_proto).
+def _eth_load_proto():
+    from msxpi_settings import getMSXPiVar
+    v = (getMSXPiVar("ETHPROTO") or "").strip()
+    return int(v) if v.isdigit() else None
+
+
+def _eth_save_proto(version):
+    from msxpi_settings import setMSXPiVar
+    setMSXPiVar("ETHPROTO", str(version))
 
 
 def eth_get_shuttle():
@@ -135,7 +138,8 @@ def eth_get_shuttle():
             read_burst=_eth_read_burst,
             write_burst_go=_eth_write_burst_go,
             read_burst_go=_eth_read_burst_go,
-            proto_file=_eth_proto_file(),
+            load_proto=_eth_load_proto,
+            save_proto=_eth_save_proto,
             log=print,
         )
         print("eth: Ethernet UNAPI shuttle ready (%s)" % type(link).__name__)

@@ -79,7 +79,7 @@ class Ports:
             self.wait = bool(v & 1) and self.has_wait
 
 
-def pi_shuttle(wire, link, proto_file=None):
+def pi_shuttle(wire, link, kept=None):
     """The shuttle with the transport callables of msxpi_ethglue, on the wire."""
     def rb():
         return 0, wire.pi_xfer(0)
@@ -105,7 +105,8 @@ def pi_shuttle(wire, link, proto_file=None):
 
     return eth.EthShuttle(link, rb, wb, write_burst=burst, read_burst=rburst,
                           write_burst_go=burst_go, read_burst_go=rburst_go,
-                          proto_file=proto_file)
+                          load_proto=None if kept is None else (lambda: kept.get('v')),
+                          save_proto=None if kept is None else (lambda v: kept.__setitem__('v', v)))
 
 
 class Rig:
@@ -264,18 +265,15 @@ class DriverAgainstShuttle(unittest.TestCase):
 
     def test_protocol_3_survives_a_server_restart(self):
         # The driver probes only when it starts; a restarted server must still serve 3.
-        with tempfile.TemporaryDirectory() as tmp:
-            keep = os.path.join(tmp, "eth_proto")
-            for kept, works in ((keep, True), (None, False)):
-                rig = Rig(3, MODE_WAIT)
-                self.addCleanup(rig.close)
-                rig.sh = pi_shuttle(rig.wire, rig.link, kept)
-                rig.call("ETH_VERIFY")
-                rig.sh = pi_shuttle(rig.wire, rig.link, kept)     # the restart
-                rig.link.inject(frame(67))
-                cpu = rig.call("FN_IN_STATUS")
-                self.assertEqual((cpu.a, cpu.bc) == (1, 67), works, kept)
-
+        for kept, works in (({}, True), (None, False)):     # {}: ETHPROTO in msxpi.ini
+            rig = Rig(3, MODE_WAIT)
+            self.addCleanup(rig.close)
+            rig.sh = pi_shuttle(rig.wire, rig.link, kept)
+            rig.call("ETH_VERIFY")
+            rig.sh = pi_shuttle(rig.wire, rig.link, kept)     # the restart
+            rig.link.inject(frame(67))
+            cpu = rig.call("FN_IN_STATUS")
+            self.assertEqual((cpu.a, cpu.bc) == (1, 67), works, kept)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,7 +3,6 @@ inline, ETH_GET_FRAME's discard (maxlen 0) and ETH_SEND_FRAME's burst receive.
 
 The shuttle is driven through fake transport callables, so this runs anywhere
 without a Pi or an MSX - the byte layouts here are what ethops.asm reads."""
-import os
 import sys
 import unittest
 from pathlib import Path
@@ -219,21 +218,30 @@ class Protocol3(unittest.TestCase):
         self.assertEqual(bytes(wire.out), bytes([eth.ETH_GO, self.OK]))
 
     def test_the_protocol_is_kept_across_a_restart(self):
-        import tempfile
-        with tempfile.TemporaryDirectory() as tmp:
-            keep = os.path.join(tmp, 'eth_proto')
+        kept = {}     # stands in for ETHPROTO in msxpi.ini
 
-            def shuttle():
-                return eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
-                                      write_burst_go=self.wire.write_burst_go,
-                                      read_burst_go=self.wire.read_burst_go,
-                                      proto_file=keep)
-            self.assertEqual(shuttle().proto, 2)           # no file yet
-            shuttle().handle(eth.OP_PROBE3)
-            self.assertEqual(shuttle().proto, 3)
-            shuttle().handle(eth.OP_PROBE)
-            self.assertEqual(shuttle().proto, 2)
+        def shuttle():
+            return eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                                  write_burst_go=self.wire.write_burst_go,
+                                  read_burst_go=self.wire.read_burst_go,
+                                  load_proto=lambda: kept.get('v'),
+                                  save_proto=lambda v: kept.__setitem__('v', v))
+        self.assertEqual(shuttle().proto, 2)           # nothing kept yet
+        shuttle().handle(eth.OP_PROBE3)
+        self.assertEqual((kept, shuttle().proto), ({'v': 3}, 3))
+        shuttle().handle(eth.OP_PROBE)
+        self.assertEqual((kept, shuttle().proto), ({'v': 2}, 2))
 
+    def test_a_store_that_fails_is_not_fatal(self):
+        def boom(*a):
+            raise OSError("read-only")
+        sh = eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                            write_burst_go=self.wire.write_burst_go,
+                            read_burst_go=self.wire.read_burst_go,
+                            load_proto=boom, save_proto=boom)
+        self.assertEqual(sh.proto, 2)
+        sh.handle(eth.OP_PROBE3)
+        self.assertEqual(sh.proto, 3)
 
 if __name__ == '__main__':
     unittest.main()

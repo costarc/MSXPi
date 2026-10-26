@@ -188,7 +188,7 @@ the MSX abort a burst that the model reads polled); it is fixed and recorded in 
 
 | Test | Result |
 |---|---|
-| `test_ethshuttle` (shuttle, protocols 2 and 3, the version kept across a restart) | 17/17 pass |
+| `test_ethshuttle` (shuttle, protocols 2 and 3, the version kept across a restart, a store that fails) | 18/18 pass |
 | `test_eth3_z80`: the assembled driver, v2 and v3, /WAIT and polled, against the shuttle (probe, in_status, get_frame, send_frame 16..1514, bad checksum, GO placement, a refused length, a server restart) | 8/8 pass; the refused-length test fails on the phase 3 driver (it sent the frame into the opcode hunt) |
 | T3 `test_link2_z80`, with the new case: a block that ends exactly at 10000h from below F380h | 9/9 pass; the new case fails on the phase 2 code |
 | T1 `test_link2` | 14/14 pass |

@@ -710,7 +710,7 @@ class EthShuttle(object):
 
     def __init__(self, link, read_byte, write_byte, write_burst=None,
                  read_burst=None, log=None, write_burst_go=None,
-                 read_burst_go=None, proto_file=None):
+                 read_burst_go=None, load_proto=None, save_proto=None):
         self.link = link
         self._read = read_byte
         self._write = write_byte
@@ -721,8 +721,11 @@ class EthShuttle(object):
         self._burst_go = write_burst_go
         self._read_burst_go = read_burst_go
         self._log = log or (lambda *a: None)
-        # Where the protocol the last probe chose is kept (None: not kept).
-        self._proto_file = proto_file
+        # The protocol the last probe chose, kept by the caller (ETHPROTO in
+        # msxpi.ini, see msxpi_ethglue): load_proto() -> 2, 3 or None, and
+        # save_proto(version).  None: not kept.
+        self._load_proto = load_proto
+        self._save_proto = save_proto
 
         # Dict dispatch, built once, instead of an if/elif chain walked on every
         # opcode. Bound methods are stored directly so a call costs one dict
@@ -754,25 +757,22 @@ class EthShuttle(object):
         A driver probes only when it starts and on ETH_RESET, so a restarted
         server that fell back to 2 would answer a protocol 3 driver with no GO
         and RC_OK 0: every transaction fails until the MSX is reset.  The DOS
-        half's driver probes with OP_PROBE when it starts, so a file left at 3
+        half's driver probes with OP_PROBE when it starts, so a value left at 3
         cannot mislead it.
         """
-        if self._proto_file:
+        if self._load_proto is not None:
             try:
-                with open(self._proto_file) as f:
-                    return 3 if f.read().strip() == "3" else 2
-            except OSError:
-                pass
+                return 3 if self._load_proto() == 3 else 2
+            except Exception as exc:
+                self._log("eth: cannot read the kept protocol: %s" % exc)
         return 2
 
     def _probe(self, version):
-        if version != self.proto and self._proto_file:
+        if version != self.proto and self._save_proto is not None:
             try:
-                with open(self._proto_file, "w") as f:
-                    f.write("%d\n" % version)
-            except OSError as exc:
-                self._log("eth: cannot keep the protocol in %s: %s"
-                          % (self._proto_file, exc))
+                self._save_proto(version)
+            except Exception as exc:
+                self._log("eth: cannot keep the protocol: %s" % exc)
         self._set_proto(version)
         self._write_many(self._probe_reply)
 
