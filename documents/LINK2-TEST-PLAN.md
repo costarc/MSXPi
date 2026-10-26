@@ -285,7 +285,25 @@ the MSX allows them only for a buffer at 8000h or above (MSX-DOS's FAT and direc
 through $SECBUF), and pcopy's sectors come from its buffer at 0100h-3BFFh in page 0 (64 transfers each from
 0100h ... 3B00h): all polled. Under MSX-DOS page 0 is RAM; only page 1, where this ROM sits, must never burst,
 and DSKIO already stages any sector touching it (DSKIO_P1_TEST). Letting the DOS half burst outside page 1 is
-the obvious next gain, larger on hardware, where a polled byte costs much more than in openMSX. Not done.
+the obvious next gain, larger on hardware, where a polled byte costs much more than in openMSX.
+
+**Bursts outside page 1, 2026-10-26** (ROM 20261026.083): a block bursts unless it touches page 1 (`L2_IN_PAGE1`,
+design 8.8). Same openMSX setup and command, 3 runs:
+
+| | Time | Breakpoints |
+|---|---|---|
+| before (bursts from 8000h up) | 83.50, 83.51, 83.60 s | 43 INIR, 14 OTIR |
+| bursts outside page 1 | 89.81, 89.67, 90.93 s | 80 INIR, **1038 OTIR**: pcopy's sectors now burst |
+
+Slower in openMSX, as the emulator works: its MSXPi device charges every transfer the same 20 us
+(`TRANSFER_TIME` in MSXPiDevice.cc), polled or burst. A polled send's CRC work runs inside that 20 us (about
+42 us a byte, the Z80 loop), while a burst stalls 20 us a byte and then runs the CRC pass (about 50 us a byte).
+On hardware a polled byte waits for the Pi to notice it (phase 4: 8.8 KB/s polled against 21.4 KB/s burst,
+CRC pass included), so there the bursts should win; **the hardware run decides** (the same `pcopy /z` booted
+from the MSXPi DOS half, B: = Pi image, against the previous ROM). Correctness: `PageOne` (Z80, byte for byte
+with the model, burst bytes counted), T3 both CRC variants, T1 on the Z80 code, T4 32/32, MSX-DOS clean PASS
+and the rate 1.5e-4 seeds 1-4 with the same verdicts as phase 6 (0 DOS prompts, 0 sector mismatches; the seed 3
+upload corruption is pcopy's legacy sum, the same two faults).
 
 **Phase 7 (the C library and the .COM tools), 2026-10-26** - no server change (BuildId unchanged), clients rebuilt into `target/`:
 
