@@ -306,17 +306,31 @@ every operation once, from the side that runs it:
   (`PRINT_PI_STDOUT`, `PARSE_CALL_PARAMETERS`...), no mixed case, and no two names for one
   routine.
 
-## 6. The DOS half (later phase)
+## 6. The DOS half (phase 6)
 
-The DOS half has about 60-80 bytes free today; LINK2 needs the table (512 bytes) and its code
-there. The budget comes from, in order:
+The DOS half had 61 bytes free; LINK2 needs the table (512 bytes) and its code there. The budget was
+to come from, in order:
 
 1. the legacy routines that LINK2 replaces (SENDDATA, RECVDATA_ONEBLOCK, the status handshakes),
 2. the optimised CALL handler and BIOS code,
-3. only if still short: a table-less CRC in the DOS half alone (+~40 T-states a byte on burst
-   reads), or moving part of the Ethernet driver out of the DOS half.
+3. only if still short: a table-less CRC in the DOS half alone, or moving part of the Ethernet
+   driver out of the DOS half.
 
-The decision is made from measured sizes, not estimates.
+**Measured** (phase 6): with 1 and 2, and the table-less CRC, the DOS half was still 332 bytes short,
+and the table-less CRC turned out about 135 T-states a byte slower than the table, slower than the
+legacy sum on every loop. **Decided** (user, 2026-10-26): the Ethernet UNAPI driver (protocol 2, 1,335
+bytes) leaves the DOS half, and the DOS half keeps the CRC table. Ethernet is still in the BIOS half
+(protocol 3) and in the RAM driver (ETHUNAPI.COM). The DOS half now ends with 512 bytes free.
+
+Consequences:
+
+- **DSKIO runs with interrupts off** (the caller's state given back), as MSX disk ROMs do: TIME stops
+  during disk access. It used to raise a busy flag in the work area, which only the Ethernet driver
+  in this ROM read; the RAM driver keeps its own flag, so the flag would no longer keep its ISR off
+  the link. The whole DSKIO is covered because the server is inside the `dskior`/`dskiow` command
+  between the transfers of one call.
+- **The work area** (MYSIZE) is 5 bytes instead of 181: more TPA.
+- **INIENV** does nothing (it handed over to the Ethernet driver).
 
 ## 7. Compatibility
 
@@ -325,10 +339,13 @@ The decision is made from measured sizes, not estimates.
 | legacy ROM / .COM tools | new server | legacy protocol, as today (plus the upload-hang fix) |
 | LINK2 BIOS half / msxpiext.bin | new server | LINK2 |
 | LINK2 BIOS half / msxpiext.bin | old server | clean error: "server does not speak LINK2 - update" |
-| DOS half (legacy) + BIOS half (LINK2) in one EEPROM | new server | each half speaks its own protocol; a jumper apart |
+| DOS half (legacy) + BIOS half (LINK2) in one EEPROM | new server | each half speaks its own protocol; a jumper apart (up to phase 5) |
+| DOS half (LINK2, phase 6) | new server | LINK2 for DSKIO and CALL MSXPI; the .COM tools still legacy (phase 7) |
+| DOS half (LINK2, phase 6) | old server | the disk does not work: the old server does not answer HELLO2 |
 
-**Update order**: server first (`msxpiupd` runs from MSX-DOS, which is still legacy), then flash
-the ROM image and copy msxpiext.bin. `msxpiupd` itself keeps working throughout.
+**Update order**: server first (`msxpiupd` runs from MSX-DOS), then flash the ROM image and copy
+msxpiext.bin. From phase 6 on the order matters in one direction only: a LINK2 DOS half needs a
+LINK2 server to boot from MSXPi, so the server must be updated before the EEPROM.
 
 ## 8. MSX implementation reference (for phase 2)
 
@@ -461,7 +478,8 @@ How it differs from the paper description above, on purpose:
   read, and polled send takes each byte into the CRC while that byte goes out, so the CRC work happens
   inside the wait for the Pi. The burst paths run a CRC pass over the buffer after INIR/OTIR. The polled
   loops count in runs of 256 with DJNZ and check CTRL+ESC once a run (phase 5).
-- **Table-less CRC** (`LINK2_CRC_NOTABLE`, for the DOS half, which has no room for the table): each step is
+- **Table-less CRC** (`LINK2_CRC_NOTABLE`, written for the DOS half; unused since the DOS half kept the table,
+  section 6, but still built and tested by T3): each step is
   computed as x = (crc >> 8) ^ byte, x ^= x >> 4, crc = (crc << 8) ^ (x << 12) ^ (x << 5) ^ x, in
   `L2_CRC_BYTE`, using B' and C' as well. Same CRC (T3 checks both against `binascii.crc_hqx`), about 135
   T-states a byte more on the burst CRC pass.

@@ -9,6 +9,7 @@ p restart
 pcopy m:API.BAS
 pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
+pcopy m:ETHUNAPI.COM
 pcopy m:INL.CFG
 pcopy m:IRC.BAS
 pcopy m:L2TEST.BIN

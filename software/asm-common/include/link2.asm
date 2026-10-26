@@ -53,9 +53,10 @@
 ; into ROM.  The CRC runs in the shadow registers (DE' = CRC, H' = table page):
 ; the BIOS interrupt routine saves and restores both sets.
 ;
-; LINK2_CRC_NOTABLE (the DOS half, which has no room for the 512-byte table)
-; computes each CRC step without the table, in L2_CRC_BYTE.  Same CRC, about
-; 100 T-states more a byte; it uses B' and C' too.
+; LINK2_CRC_NOTABLE computes each CRC step without the 512-byte table, in
+; L2_CRC_BYTE: same CRC, about 135 T-states more a byte, and it uses B' and C'
+; too.  Written for the DOS half, which kept the table in the end (the Ethernet
+; driver made room); no image uses it, the tests still do.
 ; ------------------------------------------------------------------------------
 
 HELLO2:               EQU $B2

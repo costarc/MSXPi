@@ -228,6 +228,23 @@ The baseline was taken on the same EEPROM, DOS half against BIOS half, no reflas
 | Legacy DOS half from the current sources | byte for byte the shipped one (the shared files leave it alone) |
 | T6 hardware | not run |
 
+**Phase 6 (MSX-DOS driver on LINK2), 2026-10-26.** The DOS half with LINK2 and the CRC table, no Ethernet
+driver (LINK2-IMPLEMENTATION-PLAN.md, "Phase 6 results"); `fault_inject_openmsx.py` (MSX-DOS booted from the
+DOS half: pcopy of three files into A:, which is sector reads and burst sector writes, MCHAT.COM uploaded
+back, `p date`):
+
+| Test | Result |
+|---|---|
+| clean run | PASS: all files identical, 0 retry prompts. The server saw 198 Pi -> MSX bursts of GO + 512 (sector reads) and 328 MSX -> Pi bursts of 512 (**sector writes with OTIR**, off since before LINK2) |
+| rate 1.5e-4, seeds 1-4 | 0 "Abort, Retry" prompts and 0 sector checksum mismatches (the legacy DOS half on the same seeds: 4 prompts, 30 mismatches). pcopy, still legacy (phase 7), aborted a file in all four runs (legacy DOS half: three), always detected ("Transfer aborted by server", the partial file left behind) |
+| the one silent corruption (seed 3) | in pcopy's legacy **upload**: two flips of bit 3 in opposite directions in one 8 KB block (FAULT #103 and #104, rx), which the 8-bit sum cannot see. The LINK2 sector reads around it took six faults and recovered. This is design section 2's first row, and phase 7's job |
+| T4 BIOS half, T3, T1 | unchanged since phase 5 (`link2.asm` is the same code); T4 run again on the built ROM: 32/32 pass |
+| clean run on the built ROM (BuildId ROM 20261026.082) | PASS |
+| T6 hardware (COPY both ways, the pcopy batch, the COPY that failed with burst writes) | not run |
+
+Note on the harness: `--seed` takes several values after one flag (`--seed 1 2 3 4`); repeating the flag keeps
+only the last.
+
 ## Reporting
 
 Each milestone commit carries the numbers: T1/T3 pass counts, T3 T-states against the baseline,

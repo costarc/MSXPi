@@ -281,12 +281,14 @@ if [ "$buildBIOS" = "yes" ]; then
     update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "$updateRomVersion"
     update_build_id ./ROM/src/BIOS/msxpibios.asm         "BuildId: DB " "$updateRomVersion"
 
-    # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
-    # exist before zmac runs - and it is built with sjasm, not zmac, because the
+    # The Ethernet UNAPI ROM drivers, built with sjasm, not zmac, because the
     # same sources also build the RAM (mapped segment) variant that ETHUNAPI.COM
-    # installs, and those are sjasm syntax throughout. sjasm resolves its
-    # includes against the current directory, hence the subshell - so the tool
-    # path has to be made absolute BEFORE cd'ing away.
+    # installs, and those are sjasm syntax throughout. ethrom3.bin goes into the
+    # BIOS half; the DOS half no longer carries a driver (LINK2 took its room),
+    # so ethrom.bin (protocol 2) is built only to keep ethrom.asm assembling
+    # (test_eth3_z80 runs it). sjasm resolves its includes against the current
+    # directory, hence the subshell - so the tool path has to be made absolute
+    # BEFORE cd'ing away.
     echo "Compiling Ethernet UNAPI driver (ROM variant)"
     SJASM_BIN="$(cd "$SJASM_DIR" && pwd)/sjasm.exe"
     ( cd UNAPI/src && "$SJASM_BIN" ethrom.asm ../../ROM/src/MSX-DOS/ethrom.bin ethrom.lst ) ||
@@ -294,10 +296,14 @@ if [ "$buildBIOS" = "yes" ]; then
     echo "Compiling Ethernet UNAPI driver (ROM variant, protocol 3)"
     ( cd UNAPI/src && "$SJASM_BIN" ethrom3.asm ../../ROM/src/MSX-DOS/ethrom3.bin ethrom3.lst ) ||
         die "the Ethernet UNAPI protocol 3 ROM driver did not assemble"
+    # The RAM driver goes out with the ROM: it is the Ethernet driver for MSX-DOS
+    # booted from the DOS half, which has none of its own any more. Assembled by
+    # UNAPI/build.sh; msxpirfh.bat copies everything in target/ to the MSX.
+    cp UNAPI/src/ETHUNAPI.COM target/ETHUNAPI.COM || die "could not copy ETHUNAPI.COM to target/"
 
-    # Where the image lands in the ROM, and whether it still fits, is asserted
-    # inside msxpi-driver.mac - so a driver that has outgrown the free tail
-    # fails this build rather than producing a corrupt ROM.
+    # Where ethrom3.bin lands in the BIOS half, and whether it still fits, is
+    # asserted inside msxpibios.asm - so a driver that has outgrown the free
+    # tail fails this build rather than producing a corrupt ROM.
     #
     # zmac's exit status is the only thing that says whether the ROM is good.
     # Without this check a failed assembly left the PREVIOUS zout/msx-dos.hex in
@@ -363,14 +369,14 @@ if [ "$buildBIOS" = "yes" ]; then
     echo "  $BASICNAME: code ends at 0x$code_end, $((limit - 0x$code_end)) bytes free below 0x$(printf %X $limit)"
     echo "  msxpiext.bin: $(wc -c < ./target/msxpiext.bin) bytes"
     echo "  ethrom3.bin (protocol 3, BIOS half): $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin) bytes, $((0x8000 - 0x7A80 - $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin))) free below 8000h"
-    # The DOS half: the padding between the MSXPi code and the UNAPI driver image,
-    # as zmac lists it, is the room phase 6 (the DOS driver on LINK2) has left.
-    dos_pad=$(sed -n 's/.*\([0-9A-F]\{4\}\) \.\. \([0-9A-F]\{4\}\).*DEFS *UNAPI_ORG-\$.*/\1 \2/p' ./zout/msx-dos.lst | head -1)
+    # The DOS half: the padding at the end of the ROM, as zmac lists it, is the
+    # room the MSXPi code (LINK2 and its CRC table included) has left.
+    dos_pad=$(sed -n 's/.*\([0-9A-F]\{4\}\) \.\. \([0-9A-F]\{4\}\).*DEFS[[:space:]]*08000H-\$.*/\1 \2/p' ./zout/msx-dos.lst | head -1)
     if [ -n "$dos_pad" ]; then
         set -- $dos_pad
-        echo "  $BIOSNAME: MSXPi code ends at 0x$1, $((0x$2 - 0x$1 + 1)) bytes free below the UNAPI driver at 0x$(printf %X $((0x$2 + 1)))"
+        echo "  $BIOSNAME: MSXPi code ends at 0x$1, $((0x$2 - 0x$1 + 1)) bytes free below 0x8000"
     else
-        echo "  $BIOSNAME: DOS-half room not reported (no UNAPI padding line in zout/msx-dos.lst)"
+        echo "  $BIOSNAME: DOS-half room not reported (no padding line in zout/msx-dos.lst)"
     fi
 
     # The 32KB EEPROM image: the DOS ROM in the lower half, where a 16KB write

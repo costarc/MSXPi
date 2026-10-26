@@ -25,7 +25,7 @@ EEPROM still has to be flashed by hand (`at28c256` with `msxpi32k.rom`, A15 jump
 | 3 - Ethernet protocol 3 | **done** in code and in the Z80 tests (`test_eth3_z80`), audited; openMSX with a disk and hardware are phase 4 | d9c367cb, the second-audit commit |
 | 4 - real hardware | **functional, READY race and speed done** (results in LINK2-TEST-PLAN.md "Phase 4": 1000 x 512 OTIR sends OK, 21.4 KB/s vs 8.8 KB/s legacy for 8 KB downloads). **The 2-hour soak is underway** (started 2026-10-26); Ethernet and the control run are not done. Gate: a clean soak before phase 6 | b64bc860, 166552a5, bf28efa7, d195f996 |
 | 5 - optimise | **done** (see "Phase 5 results"): `link2.asm` 1406 -> 1156 bytes with the same wire bytes and faster polled loops, CALL handler rewritten, legacy code out of LINK2 images, a table-less CRC for the DOS half | the phase 5 commit |
-| 6 - DOS driver | **blocked on a decision** (see "Phase 6 status"): DSKIO on LINK2 is written and assembles, but the DOS half is 332 bytes over even with the table-less CRC | not committed |
+| 6 - DOS driver | **done** in openMSX (see "Phase 6 results"): DSKIO and CALL MSXPI on LINK2 with the CRC table, burst writes back; the Ethernet UNAPI driver left the DOS half (question 5); hardware not run | the phase 6 commit |
 | 7 | not started | - |
 
 The branch is pushed. `msxpiupd feature/link2` brings this server to an MSX; the MSX files in
@@ -113,7 +113,7 @@ What changed, all with the same bytes on the wire (T3 byte for byte against the 
 | `link2.asm`, speed | polled loops count runs of 256 with DJNZ, CTRL+ESC once a run | +11 |
 | `msxpi_call.asm` (LINK2) | `_MSXPI`, `PARSE_CALL_PARAMETERS` and mode 2 rewritten: `LINK_RECV` with the mode in A, one header writer for success and failure, the syntax error shares `SYNTAX_ERROR`; `CALL MSXPIVER` shares the receive tail; `ExtractCommand` folded into the parser | 88 in the DOS half |
 | legacy code in LINK2 images | `PAYLOAD_RX`, `PAYLOAD_TX`, `PAYLOAD_ADVANCE` (generator), `PAYLOAD_*_BURST`, `MSXPI_GETSTASH`, `LINK_DISCARD` not assembled | 60-90 per image |
-| `LINK2_CRC_NOTABLE` | the CRC without its 512-byte table, for the DOS half (`L2_CRC_BYTE`) | -512 +35 |
+| `LINK2_CRC_NOTABLE` | the CRC without its 512-byte table, written for the DOS half (`L2_CRC_BYTE`); no image uses it since the DOS half kept the table (phase 6) | -512 +35 |
 
 Sizes: BIOS half code ends at 0x4A0D (phase 2: 0x4C0D; the CRC table moved down a page), 3,506 bytes free below
 the DOS ROM's INIT entry. msxpiext.bin 3,089 bytes (phase 2: 3,345; its table sits on a page boundary, so a few
@@ -129,28 +129,34 @@ Not done: the naming pass is limited to the code that moved (the LINK2 branch of
 `link2.asm`); the legacy branch of `msxpi_call.asm` and the legacy routines in `msxpi_bios.asm` keep their
 names until the DOS half and the .COM tools move (phases 6 and 7), when they go altogether.
 
-### Phase 6 status (2026-10-26)
+### Phase 6 results
 
-DSKIO on LINK2 is written (not committed): `msx-dos.mac` defines `MSXPI_LINK2` and `LINK2_CRC_NOTABLE`;
-reads are one `LINK_RECV` mode 2 a sector, writes one `LINK_SEND` a sector (bursting from 8000h up when the Pi
-and /WAIT allow: burst writes are back), sector info and commands through `LINK_SEND`/`LINK_COMMAND`;
-`DSKIO_TXSIZE`, `DSKIO_RXSIZE` and work area offsets 5..7 are gone. zmac assembles `link2.asm` unchanged.
+The budget first (2026-10-26, before the decision): with the legacy code removed (about 670 bytes), the CALL
+handler rewrite (88) and the table-less CRC, LINK2 (1,154 bytes) still left the DOS half 332 bytes over the
+UNAPI driver at 0x7AC9, and the table-less CRC was slower than the legacy sum on every loop. Question 5 below
+took the Ethernet UNAPI driver (protocol 2, 1,335 bytes) out of the DOS half instead (design section 6).
 
-**It does not fit.** The DOS half's MSXPi code ends at 0x7C15 against the UNAPI driver at 0x7AC9: 332 bytes
-over, with the table-less CRC already used and everything LINK2 replaces removed:
+What the DOS half is now:
 
-| | Bytes |
-|---|---|
-| free before (legacy) | 61 |
-| legacy code removed (`SENDDATA`, `PerformHandshake`, `RECVDATA_ONEBLOCK`, the status handshakes, `PRINTPISTDOUT`, `STDOUTTONULL`, `SendCommandToMSXPi`, the burst pair, `DSKIO_RXSIZE`) | about 670 |
-| CALL handler rewrite | 88 |
-| LINK2 code needed (table-less, 0x7793-0x7C15) | 1,154 |
-| **short** | **332** |
+- `msx-dos.mac` defines `MSXPI_LINK2`; the DOS half carries LINK2 with the CRC table (0x7C00-0x7DFF). MSXPi
+  code ends at 0x7BF7; **512 bytes free** below 0x8000 (the build prints it).
+- DSKIO: reads are one `LINK_RECV` mode 2 a sector, writes one `LINK_SEND` a sector, bursting from 8000h up
+  when the Pi and /WAIT allow (**burst writes are back**); the sector info and the commands go through
+  `LINK_SEND`/`LINK_COMMAND`. `DSKIO_TXSIZE`, `DSKIO_RXSIZE` and their files are gone.
+- DSKIO runs with interrupts off (the caller's state given back) instead of the busy flag, which only the
+  ROM's own Ethernet driver read (design section 6). INIENV is a plain RET. MYSIZE 5 bytes (was 181).
+- `ETHUNAPI.COM` (the RAM driver) now goes out with the ROM in `target/`, so `msxpiupd` delivers it: it is
+  the Ethernet driver for MSX-DOS booted from the DOS half. `ethrom.asm` (protocol 2, ROM) is no longer in
+  any image; the build still assembles it because `test_eth3_z80` runs it.
+- The DOS ROM's header addresses did not move (INIT 0x57BF, STATEMENT 0x65DB), so the BIOS half is the
+  phase 5 one with a new BuildId.
 
-The table-less CRC also makes the DOS half slower than legacy on bursts (220 against 97 T-states a byte on
-the CRC pass, about 60k T-states, 17 ms, more per 512-byte sector), which breaks the "no speed loss" goal.
-The remaining fallback of design section 6 is moving the Ethernet driver (1,335 bytes, v2) out of the DOS
-half; routine 128 alone is about 20 bytes. The choice is the user's (see the open question 5 below).
+Tests: see LINK2-TEST-PLAN.md "Phase 6".
+
+Not done: T6 on hardware (COPY both ways, the pcopy batch, the COPY that failed with burst writes before);
+`msxpiupd` from a LINK2 MSX-DOS (it uses pcopy and p, still legacy, against a dual-stack server, so it is
+expected to work); the game quickstarts (SOCCER, YIEAR) say to run INL after the card's driver, which on an
+MSXPi DOS half now means ETHUNAPI first.
 
 ## Open questions (defaults used until answered)
 
@@ -165,11 +171,8 @@ half; routine 128 alone is about 20 bytes. The choice is the user's (see the ope
    the GO bursts, but the speed baselines must be measured on the engine you actually run.
    *Default: native.*
 4. **Branch name** `feature/link2`: in use and pushed.
-5. **Phase 6, the DOS half** (see "Phase 6 status"): LINK2 does not fit. Options: (a) take the Ethernet UNAPI
-   driver out of the DOS half (Ethernet stays in the BIOS half and the RAM driver), which leaves room for
-   the CRC table too, so no speed loss; (b) find 332 bytes elsewhere (kernel dead code, CALL MSXPI out of
-   the DOS half, `STORE_BYTE`...) and accept the slower table-less CRC; (c) keep the DOS half on the legacy
-   protocol. *No default: phase 6 waits for the answer.*
+5. **Phase 6, the DOS half**: LINK2 did not fit. *Answered (2026-10-26): take the Ethernet UNAPI driver out
+   of the DOS half and use the CRC table there.* Ethernet stays in the BIOS half and the RAM driver.
 
 ## Phase 0 - tooling (no behaviour change)
 
@@ -286,7 +289,7 @@ build is pushed for the real-MSX test (phase 4).
 - **Speed pass**: unroll the CRC and burst checksum loops where measurements show a gain.
 - **Report**: bytes saved per routine, and the projected DOS-half budget.
 
-## Phase 6 - MSX-DOS driver on LINK2 (if it fits)
+## Phase 6 - MSX-DOS driver on LINK2 (done: see "Phase 6 results")
 
 1. Assemble the DOS half with `-DMSXPI_LINK2`, using the optimised code. DSKIO keeps its
    structure; `DSKIO_TXSIZE`/`DSKIO_RXSIZE` go (bursts are negotiated in the HELLO2 exchange).
