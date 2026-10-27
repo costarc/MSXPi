@@ -28,6 +28,7 @@ from __future__ import annotations
 
 # Standard library imports
 from typing import Callable, Iterable, Optional, Tuple
+import threading
 import time
 import subprocess
 import logging
@@ -895,6 +896,65 @@ def release_gpio():
         GPIO.cleanup()
 
 
+_button_thread = None
+
+
+def _button_monitor(on_button: Callable) -> None:
+    """Watch the shutdown button by polling, and call on_button(gpio) once per
+    confirmed press.
+
+    This replaced GPIO.add_event_detect(FALLING).  An edge callback fires once
+    per press: when the contact bounced high for a few ms inside the 200 ms
+    the handler wanted to see held low, the handler gave up, RPi.GPIO's
+    bouncetime swallowed the bounce edges that followed, and the held button
+    did nothing until it was released and pressed again.  Also, the pin's
+    edge detection was lost whenever the library re-claimed the line.  Polling
+    counts consecutive low samples - a bounce just restarts the count - and
+    it does not care what the rest of the server does with the GPIO setup.
+
+    Noise from SCLK/CS (header pins 38/40, next to GPIO 26 on pin 37) is
+    continuous during a transfer; it never holds the line low for 200 ms
+    straight."""
+    low = 0
+    while True:
+        time.sleep(0.005)
+        pin = RPI_SHUTDOWN
+        if pin is None or _stopping:
+            low = 0
+            continue
+        try:
+            is_low = GPIO.input(pin) == GPIO.LOW
+        except Exception:
+            # pin not set up yet, or released by a cleanup in progress
+            low = 0
+            time.sleep(0.2)
+            continue
+        low = low + 1 if is_low else 0
+        if low < 40:
+            continue
+        try:
+            on_button(pin)
+        except Exception as e:
+            print(f"MSXPi Server: shutdown button handler failed ({e})")
+        # Re-arm only after the button is released.
+        try:
+            while GPIO.input(pin) == GPIO.LOW:
+                time.sleep(0.02)
+        except Exception:
+            pass
+        low = 0
+
+
+def _start_button_monitor(on_button: Callable) -> None:
+    global _button_thread
+    if _button_thread is not None and _button_thread.is_alive():
+        return
+    _button_thread = threading.Thread(
+        target=_button_monitor, args=(on_button,), name="msxpi-button", daemon=True
+    )
+    _button_thread.start()
+
+
 def initialize_connection(
     host: str, port: int, on_button: Callable
 ) -> Optional[socket.socket]:
@@ -908,31 +968,16 @@ def initialize_connection(
         time.sleep(0.2)
         GPIO.output(RPI_READY, GPIO.LOW)
 
-        # Idempotent on purpose: this function is the error-recovery path for
-        # the command loop below, so it runs again on every glitch.  A second
-        # add_event_detect on the same channel raises "Conflicting edge
-        # detection already enabled", which used to escape and kill the
-        # server - turning one bad byte into a crash loop that the monitor
-        # restarted for ever, with the MSX unable to boot at all.
+        # Idempotent: this function is also the error-recovery path for the
+        # command loop, so it runs again on every glitch.
         if RPI_SHUTDOWN is None:
             print("MSXPi Server: no shutdown button (RPI_SHUTDOWN=none in msxpi.ini)")
         else:
-            try:
-                GPIO.remove_event_detect(RPI_SHUTDOWN)
-            except Exception:
-                pass
-            try:
-                GPIO.add_event_detect(
-                    RPI_SHUTDOWN, GPIO.FALLING, callback=on_button, bouncetime=200
-                )
-                print(
-                    f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
-                    f"(press: reboot, hold 3 s: shutdown)"
-                )
-            except Exception as e:
-                # Losing the shutdown button is a far smaller problem than
-                # losing the server, so carry on rather than raise.
-                print(f"MSXPi Server: shutdown button unavailable ({e})")
+            _start_button_monitor(on_button)
+            print(
+                f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
+                f"(press: reboot, hold 3 s: shutdown)"
+            )
         logger.info(f"[MSXPi Server on {hostType}] Listening on GPIOs:")
         logger.info(
             f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **"

@@ -897,26 +897,18 @@ def shut(parm: Optional[str] = None) -> CommandResult:
 
 
 def button_handler(channel):
-    # A press must hold the line low WITHOUT A BREAK for 200 ms.  Noise coupled
-    # from SCLK/CS (header pins 38/40, next to transport.GPIO 26 on pin 37) is continuous
-    # during a transfer, so a single sample could land low and reboot the Pi;
-    # sampling every 5 ms cannot be fooled that way.
-    for _ in range(40):
-        time.sleep(0.005)
-        if transport.GPIO.input(transport.RPI_SHUTDOWN) != transport.GPIO.LOW:
-            return
+    # Called by the transport's button monitor once the line has been held low
+    # for 200 ms.  Released before 3 s: reboot.  Still held at 3 s: shut down
+    # then, without waiting for the release.
     start = time.time()
-    # Wait for release
     while transport.GPIO.input(transport.RPI_SHUTDOWN) == transport.GPIO.LOW:
+        if time.time() - start >= 3:
+            print("Shutdown triggered")
+            os.system("sudo shutdown -h now")
+            return
         time.sleep(0.01)
-    duration = time.time() - start
-
-    if duration >= 3:
-        print("Shutdown triggered")
-        os.system("sudo shutdown -h now")
-    else:
-        print("Reboot triggered")
-        os.system("sudo reboot")
+    print("Reboot triggered")
+    os.system("sudo reboot")
 
 
 def exitDueToSyncError():
