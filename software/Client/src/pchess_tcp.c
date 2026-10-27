@@ -279,6 +279,7 @@ static struct {
     char pending[80]; uint16_t pending_at; uint8_t pending_tries,has_pending;
     char last_move[80];
     uint16_t last_seek; uint8_t seeked;
+    uint16_t offered_at;
     char players[7][17]; uint16_t seen_at[7]; uint8_t players_n;
     uint16_t rx_len;
 } irc;
@@ -340,6 +341,13 @@ static uint8_t is_free(void) {
            (irc.phase==PH_PLAYING && game_over_now());
 }
 
+/* Free, or only waiting for an answer to our own OFFER: that invite can be
+ * replaced (SEEK, another OFFER) or given up for one we received (ACCEPT),
+ * instead of locking the player out until it times out. */
+static uint8_t can_start(void) {
+    return is_free() || irc.phase==PH_OFFERED;
+}
+
 static void new_match(void) {
     board_reset();
     irc.side=1; irc.has_pending=0; irc.last_move[0]=0;
@@ -367,11 +375,16 @@ static void seen(const char *nick) {
     irc.seen_at[i]=JIFFY;
 }
 
+static uint8_t peer_accept(void);
+
 static uint8_t peer_offer(const char *nick) {
     uint8_t i;
     if(!valid_nick(nick)) { fail="Invalid nickname"; return 0; }
-    if(!is_free() || same(nick,irc.nick)) { fail="Cannot challenge now"; return 0; }
+    if(!can_start() || same(nick,irc.nick)) { fail="Cannot challenge now"; return 0; }
+    if(irc.has_invite && same(irc.invite,nick) && irc.phase!=PH_OFFERED)
+        return peer_accept();   /* they invited us first: answer that, do not cross it */
     new_match();
+    irc.offered_at=JIFFY;
     strcpy(irc.peer,nick);
     for(i=0;i<16;i++) irc.match[i]="0123456789abcdef"[rnd()&15];
     irc.match[16]=0;
@@ -383,7 +396,7 @@ static uint8_t peer_offer(const char *nick) {
 }
 
 static uint8_t peer_accept(void) {
-    if(!is_free() || !irc.has_invite) { fail="No invitation"; return 0; }
+    if(!can_start() || !irc.has_invite) { fail="No invitation"; return 0; }
     new_match();
     strcpy(irc.peer,irc.invite); strcpy(irc.match,irc.invite_match);
     irc.has_invite=0; irc.side=0; irc.phase=PH_ACCEPTED;
@@ -408,7 +421,7 @@ static void room_pair(const char *sender) {
 
 static uint8_t peer_seek(void) {
     if(irc.room[0]) { fail="In a room; no lobby"; return 0; }
-    if(!is_free()) { fail="Already in a match"; return 0; }
+    if(!can_start()) { fail="Already in a match"; return 0; }
     if(irc.seeked && (uint16_t)(JIFFY-irc.last_seek)<SECONDS(60)) { fail="Wait before announcing again"; return 0; }
     if(!say("#msxpi","PCH1 SEEK")) return 0;
     irc.last_seek=JIFFY; irc.seeked=1;
@@ -516,10 +529,19 @@ static void peer_receive(const char *sender,const char *target,char *text) {
     if(!same(target,irc.nick)) return;
     if(!strcmp(f[1],"OFFER") && n==3 && is_hex16(f[2])) {
         seen(sender);
-        if(is_free()) {
+        if(irc.phase==PH_OFFERED && irc.peer[0] && same(sender,irc.peer)) {
+            /* Both of us invited each other: the lower nick's OFFER stands
+             * (it plays white, as in a room), the other side answers it. */
+            if(fold_cmp(irc.nick,sender)<0) return;
             strncpy(irc.invite,sender,16); irc.invite[16]=0;
             strcpy(irc.invite_match,f[2]); irc.has_invite=1;
-            strcpy(msg,"INVITE "); strcat(msg,sender); strcat(msg," PRESS 7"); set_status(msg);
+            peer_accept();
+            return;
+        }
+        if(can_start()) {
+            strncpy(irc.invite,sender,16); irc.invite[16]=0;
+            strcpy(irc.invite_match,f[2]); irc.has_invite=1;
+            strcpy(msg,"INVITE "); strcat(msg,sender); strcat(msg," PRESS 8"); set_status(msg);
             if(irc.room[0]) peer_accept();
         }
         return;
@@ -578,6 +600,10 @@ static void peer_receive(const char *sender,const char *target,char *text) {
 }
 
 static void peer_tick(void) {
+    if(irc.phase==PH_OFFERED && (uint16_t)(JIFFY-irc.offered_at)>=SECONDS(60)) {
+        irc.peer[0]=0; irc.match[0]=0; irc.phase=PH_LOBBY;
+        set_status("INVITE TIMED OUT");
+    }
     if(irc.result) irc.has_pending=0;
     if(irc.has_pending && (uint16_t)(JIFFY-irc.pending_at)>=SECONDS(5)) {
         if(irc.pending_tries>=3) {
@@ -896,7 +922,7 @@ static uint8_t local_exchange(const char *cmd) {
     } else if(link_mode!=MODE_IRC) {
         /* Lobby commands before 4 ONLINE, as the server says. */
         fail=(!strcmp(verb,"players") || !strcmp(verb,"seek") || !strcmp(verb,"offer") ||
-              !strcmp(verb,"accept"))?"Go online first (4)":
+              !strcmp(verb,"accept"))?"Go online first (5)":
              (!strcmp(verb,"say") || !strcmp(verb,"chat"))?"NO ONE TO CHAT WITH":"Start a game first";
     } else if(!strcmp(verb,"players")) {
         if(irc.room[0]) fail="In a room; no lobby";

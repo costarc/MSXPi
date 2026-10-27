@@ -250,5 +250,56 @@ class Reconnect(Base):
         self.assertNotIn('OUT OF SYNC', b.peer.status)
 
 
+
+class CrossedInvites:
+    """Both players invite each other, or an invite is never answered."""
+    PEER = None
+
+    def wire(self, *names):
+        self.inbox = []
+        self.peers = {n: self.PEER(n, lambda target, text, n=n: self.inbox.append((n, target, text)))
+                      for n in names}
+        return [self.peers[n] for n in names]
+
+    def pump(self):
+        while self.inbox:
+            sender, target, text = self.inbox.pop(0)
+            for nick, peer in self.peers.items():
+                if nick.lower() == target.lower():
+                    peer.receive(sender, target, text)
+
+    def test_both_invite_each_other_and_a_game_starts(self):
+        a, b = self.wire('alice', 'bob')
+        a.offer('bob'); b.offer('alice'); self.pump()
+        self.assertEqual((a.phase, b.phase), ('playing', 'playing'))
+        self.assertEqual((a.peer, b.peer), ('bob', 'alice'))
+        self.assertNotEqual(a.side, b.side)
+
+    def test_inviting_someone_who_invited_you_accepts_instead(self):
+        a, b = self.wire('alice', 'bob')
+        a.offer('bob'); self.pump()
+        b.offer('alice'); self.pump()
+        self.assertEqual((a.phase, b.phase), ('playing', 'playing'))
+
+    def test_seek_and_accept_work_while_an_invite_is_pending(self):
+        a, b = self.wire('alice', 'bob')
+        a.offer('bob')                      # never delivered
+        a.seek()                            # was "Already in a match"
+        self.assertEqual(a.status, 'SEEK SENT')
+
+    def test_an_unanswered_invite_times_out(self):
+        a, b = self.wire('alice', 'bob')
+        a.offer('bob')
+        a.offered_at -= 61
+        a.tick()
+        self.assertEqual(a.phase, 'lobby')
+        self.assertEqual(a.status, 'INVITE TIMED OUT')
+        self.assertTrue(a.free())
+
+
+class CheckersCrossedInvites(CrossedInvites, unittest.TestCase):
+    PEER = CheckersPeer
+
+
 if __name__ == '__main__':
     unittest.main()

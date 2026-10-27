@@ -193,18 +193,21 @@ if python3 -c "import chess" 2>/dev/null ||
 else
     echo "warn python-chess: pchess off"
 fi
-# NitrOS-9 (NITROS) runs in XRoar, and NITROS list/put/get use ToolShed's os9. Both are in
-# Raspberry Pi OS; only the CoCo ROMs (bas13, extbas11, disk11.rom) are not, and cannot
-# be shipped: they go in the -rompath folder of nitros/nitros.json.
-for pkg in xroar toolshed; do
-    if dpkg -s "$pkg" >/dev/null 2>&1; then
-        :
-    elif apt_add "$pkg"; then
-        echo "ok   $pkg (NitrOS)"
-    else
-        echo "warn $pkg: NitrOS off (sudo apt install $pkg)"
-    fi
+# NitrOS-9 (NITROS) runs in XRoar, and NITROS list/put/get use ToolShed's os9. Raspberry Pi
+# OS 13 has no package for either, so msxpi-nitros-setup.sh (below) installs them, from apt
+# or built from source; it takes minutes, so it is run by hand, once. The CoCo ROMs
+# (bas13, extbas11, disk11.rom) cannot be shipped: they go in the -rompath of nitros.json.
+for cmd in xroar os9; do
+    command -v "$cmd" >/dev/null 2>&1 || echo "warn $cmd: NitrOS off - sh msxpi-nitros-setup.sh"
 done
+# The script that builds them when the OS has no such package (Raspberry Pi OS 13).
+f=msxpi-nitros-setup.sh
+if get "$SETUP_BASE" "$f"; then
+    mv -f "$f.new" "$f"
+    echo "ok   $f"
+else
+    rm -f "$f.new"
+fi
 # certifi: pchess ONLINE (IRC over TLS) imports it.
 if python3 -c "import certifi" 2>/dev/null ||
    apt_add python3-certifi ||

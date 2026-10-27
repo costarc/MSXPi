@@ -509,8 +509,14 @@ void msxpi_link_claim(void) __naked
         ; frame pointer even when discovery finds no implementation.
         push    ix
         push    iy
+        ld      a,i                 ; P/V = interrupt state on entry
+        push    af
         ld      b,#1
         call    un_call
+        pop     af                  ; EXTBIO handlers and CALSLT can return
+        jp      po,1$               ; with interrupts off (a Nextor/MFR slot
+        ei                          ; chain does): give back what the caller had
+    1$:
         pop     iy
         pop     ix
         ret
@@ -522,8 +528,14 @@ void msxpi_link_release(void) __naked
     __asm
         push    ix
         push    iy
+        ld      a,i                 ; as in msxpi_link_claim
+        push    af
         ld      b,#0
         call    un_call
+        pop     af
+        jp      po,2$
+        ei
+    2$:
         pop     iy
         pop     ix
         ret

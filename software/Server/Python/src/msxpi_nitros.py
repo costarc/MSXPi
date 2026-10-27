@@ -208,9 +208,11 @@ class Session:
                     )
                 except FileNotFoundError:
                     raise FileNotFoundError(
-                        'XRoar not found: install it (sudo apt install xroar toolshed) '
+                        'XRoar not found: install it: sh ~/msxpi/msxpi-nitros-setup.sh '
                         'or set its path in nitros.json') from None
                 self.last_poll = time.monotonic()
+                print(f'NitrOS: XRoar started (pid {self.process.pid}), DriveWire port {port}; '
+                      f'its output goes to {self.log.name}', flush=True)
                 self.worker = threading.Thread(target=self._run, args=(self.listener, self.bridge, self.stop_event), daemon=True)
                 self.worker.start()
                 threading.Thread(target=self._watch, args=(self.stop_event,), daemon=True).start()
@@ -229,11 +231,13 @@ class Session:
             else:
                 return
             self.connection = connection
+            print('NitrOS: XRoar connected to the DriveWire port', flush=True)
             if event.is_set():
                 connection.close()
                 return
             bridge.serve(connection, event)
         except (OSError, EOFError, ValueError) as exc:
+            print(f'NitrOS: DriveWire bridge ended: {exc!r}', flush=True)
             if not event.is_set():
                 self.error = str(exc)
         finally:
@@ -247,6 +251,7 @@ class Session:
                     return
                 if self.process.poll() is not None:
                     self.error = 'XRoar exited; check the session log'
+                    print(f'NitrOS: XRoar exited with code {self.process.returncode}', flush=True)
                     break
                 if time.monotonic() - self.last_poll > self.lease:
                     self.error = 'MSX console disconnected (lease expired)'
@@ -323,7 +328,7 @@ atexit.register(session.close)
 
 DEFAULT_CONFIG = {
     'xroar': ['xroar', '-ui', 'null', '-ao', 'null', '-machine', 'coco2bus', '-ram', '64',
-              '-rompath', '/home/pi/roms/coco', '-cart', 'rsdos', '-cart-becker',
+              '-rompath', '/home/pi/msxpi/nitros/roms', '-cart', 'rsdos', '-cart-becker',
               '-run', '/home/pi/msxpi/nitros/boot.bin'],
     'boot_disk': 'boot.dsk',
     'exchange_disk': 'exchange.dsk',
@@ -393,12 +398,43 @@ def exchange(config, action, args):
     return b'File copied\r\n'
 
 
+# The CoCo ROMs the coco2bus machine needs: Color BASIC, Extended Color BASIC
+# and the Disk BASIC (RS-DOS) cartridge. They cannot be shipped with MSXPi.
+REQUIRED_ROMS = ('bas13.rom', 'extbas11.rom', 'disk11.rom')
+
+
+def check_roms(config):
+    """Raise ValueError naming the missing CoCo ROMs and the folder(s) XRoar
+    will look in (its -rompath, from nitros.json).  Nothing is checked when
+    the config has no -rompath: XRoar then uses its own default search path."""
+    command = config.get('xroar')
+    if not isinstance(command, list) or '-rompath' not in command:
+        return
+    index = command.index('-rompath') + 1
+    if index >= len(command):
+        return
+    separator = ';' if os.name == 'nt' else ':'
+    folders = [f for f in command[index].split(separator) if f]
+    found = set()
+    for folder in folders:
+        try:
+            found.update(name.lower() for name in os.listdir(folder))
+        except OSError:
+            pass
+    missing = [rom for rom in REQUIRED_ROMS if rom not in found]
+    if missing:
+        raise ValueError('CoCo ROMs missing: %s. Put them in %s (the -rompath in nitros.json)'
+                         % (' '.join(missing), ' or '.join(folders)))
+
+
 def handle_command(arguments):
     try:
         args = shlex.split(arguments or '')
         action = args.pop(0).lower() if args else 'start'
         if action == 'start' and not args:
-            session.start(load_config())
+            config = load_config()
+            check_roms(config)
+            session.start(config)
             return session.poll()
         if action == 'poll' and len(args) <= 1:
             return session.poll(bytes.fromhex(args[0]) if args else b'')
