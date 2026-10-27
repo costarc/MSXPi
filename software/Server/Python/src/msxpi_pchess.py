@@ -548,7 +548,7 @@ def handle_command(command, irc_config=None, room_config=None, engine_config=Non
             return packet(_irc.poll())
         # Lobby commands before 5 ONLINE: say so, not "Start a game first".
         if args[0] in ('players','seek','offer','accept') and not _use_irc:
-            raise ValueError('Go online first (4)')
+            raise ValueError('Go online first (5)')
         if args[0]=='players' and _irc.peer.room:
             raise ValueError('In a room; no lobby')
         if _use_irc and args[0] in ('seek','offer','accept','poll','move','players','draw','resign','say','chat'):
