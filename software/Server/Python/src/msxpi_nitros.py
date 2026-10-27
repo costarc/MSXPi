@@ -328,7 +328,7 @@ atexit.register(session.close)
 
 DEFAULT_CONFIG = {
     'xroar': ['xroar', '-ui', 'null', '-ao', 'null', '-machine', 'coco2bus', '-ram', '64',
-              '-rompath', '/home/pi/roms/coco', '-cart', 'rsdos', '-cart-becker',
+              '-rompath', '/home/pi/msxpi/nitros/roms', '-cart', 'rsdos', '-cart-becker',
               '-run', '/home/pi/msxpi/nitros/boot.bin'],
     'boot_disk': 'boot.dsk',
     'exchange_disk': 'exchange.dsk',

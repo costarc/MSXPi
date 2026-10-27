@@ -133,8 +133,9 @@ NitrOS-9 for MSX files below.
    separately.
 3. Copy `boot.bin`, `boot.dsk`, `exchange.dsk`, `files/` and the sample JSON
    into `/home/pi/msxpi/nitros/`. Edit `nitros.json` with the paths on the Pi.
-   The default example uses `/home/pi/msxpi/nitros/` and
-   `/home/pi/roms/coco/`.
+   The default config uses `/home/pi/msxpi/nitros/` and puts the CoCo ROMs
+   (bas13, extbas11, disk11) in
+   `/home/pi/msxpi/nitros/roms/`.
 4. Install the new `msxpi_nitros.py` module with the updated MSXPi server. In
    the MSX-DOS prompt, type `p set NITROS_CONFIG
    /home/pi/msxpi/nitros/nitros.json`. This stores the runtime path in the
