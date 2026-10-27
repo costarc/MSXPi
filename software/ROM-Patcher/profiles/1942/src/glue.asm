@@ -43,15 +43,20 @@ H_KEYI:         EQU     $FD9A
 ; patched out of 6D09h), the second one only for the text entry.
 rdLocal:
         push    hl
+        ld      a,(INPUT)                       ; the game's readers use ED10h as scratch, and it is checksummed:
+        push    af                              ; put it back
         call    GAME_JOY
         ld      a,(INPUT)
         ld      b,a
         call    GAME_KEY
         ld      a,(INPUT)
+        ld      c,a
+        pop     af
+        ld      (INPUT),a
         pop     hl
         ld      (hl),b
         inc     hl
-        ld      (hl),a
+        ld      (hl),c
         ret
 
 ; HL = the active player's input: the second player's only while two players play and it is their turn

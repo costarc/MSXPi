@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "26681e3622a762945fdf44799023509ca009b04e58e099c6270b67d934120221"
+      "sha256": "f4fb3f0dcbf35077524f7c71240db295a3a774fde9139c47f2f342ebe281118d"
     }
   },
   "layout": [
@@ -40,49 +40,49 @@
     {
       "offset": 20,
       "expected": "3200603c3200683c3200703c320078",
-      "replace": "cd88e5000000000000000000000000",
+      "replace": "cd91e5000000000000000000000000",
       "reason": "4014h (bank 0): INIT: the four bank-register writes -> clear the game RAM, SP = F380h, H.KEYI -> XIRQ (initGame)"
     },
     {
       "offset": 353,
       "expected": "cd096d",
-      "replace": "cd71e5",
+      "replace": "cd7ae5",
       "reason": "4161h (bank 0): input the frame -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 994,
       "expected": "cd096d",
-      "replace": "cd71e5",
+      "replace": "cd7ae5",
       "reason": "43E2h (bank 0): input pause: until the key is released -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1004,
       "expected": "cd096d",
-      "replace": "cd71e5",
+      "replace": "cd7ae5",
       "reason": "43ECh (bank 0): input pause: until a key is pressed -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1128,
       "expected": "cd096d",
-      "replace": "cd5de5",
+      "replace": "cd66e5",
       "reason": "4468h (bank 0): input the title menu: player 1, the inviter -> inP1: PN_TICK, then the net input"
     },
     {
       "offset": 1287,
       "expected": "cd096d",
-      "replace": "cd65e5",
+      "replace": "cd6ee5",
       "reason": "4507h (bank 0): input the game over wait: anyone -> inAny: PN_TICK, then the net input"
     },
     {
       "offset": 1438,
       "expected": "cdaa6d",
-      "replace": "cd7ce5",
+      "replace": "cd85e5",
       "reason": "459Eh (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
       "offset": 1463,
       "expected": "cdaa6d",
-      "replace": "cd7ce5",
+      "replace": "cd85e5",
       "reason": "45B7h (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
@@ -142,55 +142,55 @@
     {
       "offset": 8448,
       "expected": "ed5fe67f",
-      "replace": "cddde500",
+      "replace": "cde6e500",
       "reason": "6100h (bank 1): ld a,r -> rAnd7F, deterministic"
     },
     {
       "offset": 8487,
       "expected": "ed5fe67f",
-      "replace": "cddde500",
+      "replace": "cde6e500",
       "reason": "6127h (bank 1): ld a,r -> rAnd7F, deterministic"
     },
     {
       "offset": 9122,
       "expected": "ed5f1f",
-      "replace": "cdd8e5",
+      "replace": "cde1e5",
       "reason": "63A2h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9135,
       "expected": "ed5fe60c",
-      "replace": "cde3e500",
+      "replace": "cdece500",
       "reason": "63AFh (bank 1): ld a,r -> rAnd0C, deterministic"
     },
     {
       "offset": 9169,
       "expected": "ed5fe63f",
-      "replace": "cde9e500",
+      "replace": "cdf2e500",
       "reason": "63D1h (bank 1): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 9176,
       "expected": "ed5f1f",
-      "replace": "cdd8e5",
+      "replace": "cde1e5",
       "reason": "63D8h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9456,
       "expected": "ed5fe60f",
-      "replace": "cdefe500",
+      "replace": "cdf8e500",
       "reason": "64F0h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
       "offset": 9685,
       "expected": "ed5f1f",
-      "replace": "cdd8e5",
+      "replace": "cde1e5",
       "reason": "65D5h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9843,
       "expected": "ed5f1f",
-      "replace": "cdd8e5",
+      "replace": "cde1e5",
       "reason": "6673h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
@@ -202,7 +202,7 @@
     {
       "offset": 10514,
       "expected": "ed5fe60f",
-      "replace": "cdefe500",
+      "replace": "cdf8e500",
       "reason": "6912h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
@@ -416,12 +416,12 @@
     "MK_W1": 58270,
     "MK_W2": 58317,
     "MK_W3": 58323,
-    "inP1": 58717,
-    "inAct": 58737,
-    "inAny": 58725,
-    "keyAct": 58748,
-    "initGame": 58760,
-    "rnd": 58813,
-    "stubEnd": 58869
+    "inP1": 58726,
+    "inAct": 58746,
+    "inAny": 58734,
+    "keyAct": 58757,
+    "initGame": 58769,
+    "rnd": 58822,
+    "stubEnd": 58878
   }
 }
