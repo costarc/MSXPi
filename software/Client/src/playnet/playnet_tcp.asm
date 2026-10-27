@@ -17,6 +17,15 @@ OVL_POLL:       EQU     $8006
 OVL_BYE:        EQU     $800C
 OVL_CLOSE:      EQU     $800F
 OVL_VERSION:    EQU     $8012
+BR_DOS:         EQU     $801E                   ; the bridge's variables (netcore/ovl_crt0.s)
+BR_GAME3:       EQU     $801F
+BR_STACK:       EQU     $8020
+BR_PUTP2:       EQU     $8022
+BR_POST:        EQU     $8025
+BR_OVL:         EQU     $8027
+BR_BLK:         EQU     $8028
+BR_TICK:        EQU     $802A
+BR_TAIL:        EQU     $802C
 OVL_IOPTR:      EQU     $8013
 OVLTMP:         EQU     CRCT                    ; the overlay passes through here before the CRC table is
 OVLMAX:         EQU     $4000-CRCT              ; built and the GPF read: CRCT, GPFBUF and BOUNCE (7 KB)
@@ -479,15 +488,29 @@ tcpFootprint:
         ld      a,40
         jp      c,badPkg                        ; the transport area is too small for this transport
         ld      hl,(npTArea)                    ; it goes into MSX-DOS's page 3 as well: it must be TPA
+        ld      (dBlk),hl
+        xor     a
+        ld      (bridge),a
         ld      de,TU_AREA
         add     hl,de
         ex      de,hl
         ld      hl,($0006)
         call    cpHLDE
-        ld      hl,msgFootprint
-        ld      a,R_MACHINE
-        jp      c,exitResult
+        ret     nc
+        ld      a,(hyb)                         ; it is not: the bridged transport (transport_unapi_br.asm) keeps
+        or      a                               ; only a 512-byte block in MSX-DOS's page 3, under the private stack
+        jr      nz,.no                          ; (link 2's hybrid transport has none)
+        inc     a
+        ld      (bridge),a
+        ld      hl,($0006)
+        ld      de,$400
+        or      a
+        sbc     hl,de
+        ld      (dBlk),hl
         ret
+.no:    ld      hl,msgFootprint
+        ld      a,R_MACHINE
+        jp      exitResult
 ; ---- connect (11.3) through the overlay ------------------------------------------------------------
 tcpConnect:
         call    tcpFootprint
@@ -500,7 +523,7 @@ tcpConnect:
         ld      (ix+IO_TICKS+1),h
         ld      a,(hz)
         ld      (ix+IO_HZ),a
-        ld      hl,(npTArea)                    ; io.buf: the transport area's last 128 bytes (page 3)
+        ld      hl,(dBlk)                       ; io.buf: the transport area's last 128 bytes (page 3)
         ld      de,384
         add     hl,de
         ld      (ix+IO_BUF),l
@@ -696,10 +719,17 @@ tcpTransport:
         ld      de,tuRelocs
         ld      a,(hyb)
         or      a
-        jr      z,.sel
+        jr      z,.nh
         ld      hl,thImage                      ; link 2: the C9 transaction, in the game's page 3
         ld      bc,TH_SIZE
         ld      de,thRelocs
+        jr      .sel
+.nh:    ld      a,(bridge)
+        or      a
+        jr      z,.sel
+        ld      hl,tbImage                      ; the page-3 switch in the overlay: no code in MSX-DOS's page 3
+        ld      bc,TB_SIZE
+        ld      de,tbRelocs
 .sel:   push    de
         ld      de,tBuf
         ldir
@@ -735,9 +765,35 @@ tcpTransport:
         ld      (tBuf+TU_GAMESEG3),a
         call    mapOvl                          ; netcore's clock, from now on: the transport's counter
         ld      ix,(ovlIo)
-        ld      hl,(npTArea)
+        ld      hl,(dBlk)
         ld      de,TU_TICKS
         add     hl,de
         ld      (ix+IO_TICKS),l
         ld      (ix+IO_TICKS+1),h
+        ld      a,(bridge)
+        or      a
+        jp      z,unmapOvl
+        ld      (BR_TICK),hl                    ; the bridge's variables (netcore/ovl_crt0.s)
+        ld      a,(dosSeg3)
+        ld      (BR_DOS),a
+        ld      a,(g3Seg)
+        ld      (BR_GAME3),a
+        ld      hl,($0006)
+        ld      (BR_STACK),hl
+        ld      hl,(mapTab)
+        ld      de,M_PUT_P2
+        add     hl,de
+        ld      (BR_PUTP2+1),hl
+        ld      hl,(npTArea)
+        ld      de,TB_POST
+        add     hl,de
+        ld      (BR_POST),hl
+        ld      a,(ovlSeg)
+        ld      (BR_OVL),a
+        ld      hl,(dBlk)
+        ld      (BR_BLK),hl
+        ld      (tBuf+TB_BOOTIX),hl             ; xBoot's IX
+        ld      de,TB_TAIL
+        add     hl,de
+        ld      (BR_TAIL),hl
         jp      unmapOvl

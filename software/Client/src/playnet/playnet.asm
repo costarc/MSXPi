@@ -41,8 +41,8 @@ KEYBUF:         EQU     $FBF0
 PUTPNT:         EQU     $F3F8
 GETPNT:         EQU     $F3FA
 
-CRCT:           EQU     $2500
-GPFBUF:         EQU     $2900
+CRCT:           EQU     $2600
+GPFBUF:         EQU     $2A00
 GPFMAX:         EQU     $0C00
 BOUNCE:         EQU     $3500
 CHUNK:          EQU     $0B00
@@ -807,6 +807,12 @@ install:
         ld      (vStubLen),hl
         ld      hl,(npTArea)
         ld      (vTDst),hl
+        ld      (vTDst2),hl                     ; bridged: the shim into the game's page 3,
+        ld      a,(tcp)
+        or      a
+        jr      z,.nt
+        ld      hl,(dBlk)                       ; the same image into MSX-DOS's block (dBlk = npTArea unless bridged)
+.nt:    ld      (vTDst),hl
         ld      hl,(npStart)
         ld      (vStart),hl
         ld      a,(RAMAD1)
@@ -828,8 +834,13 @@ install:
         ld      hl,TU_SIZE
         ld      a,(hyb)
         or      a
-        jr      z,.hs
+        jr      z,.nhy
         ld      hl,TH_SIZE
+        jr      .hs
+.nhy:   ld      a,(bridge)
+        or      a
+        jr      z,.hs
+        ld      hl,TB_SIZE
 .hs:    ld      a,(g3Seg)                       ; and the game's own page 3
         ld      (vG3),a
         ld      a,(gameSeg2)
@@ -953,6 +964,10 @@ trEarly:
         ld      de,(vStubDst)                   ; it has there, above its TPA top)
         ld      bc,(vStubLen)
         ldir
+        ld      de,(vTDst2)                     ; bridged: the shim, in G3 only (else the same copy again)
+        ld      hl,tBuf
+        ld      bc,(vTLen)
+        ldir
         ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
         ld      ($FD9F),a
         ld      a,(EXPTBL)                      ; main BIOS slot into page 0
@@ -980,6 +995,7 @@ vStubSrc:       defw    0
 vStubDst:       defw    0
 vStubLen:       defw    0
 vTDst:          defw    0
+vTDst2:         defw    0                       ; bridged: where the shim goes in the game's page 3
 vRam1:          defb    0
 vTLen:          defw    0                       ; the transport's length
 vG3:            defb    0                       ; TCP/IP: the game's page-3 segment, else 0
@@ -1171,7 +1187,12 @@ pnBack:
 .dos:   jp      0                               ; MSX-DOS warm start
 .fail:  ld      hl,(npTArea)
         ld      de,TR_BOOT
-        add     hl,de
+        ld      a,(bridge)
+        or      a
+        jr      z,.fb
+        ld      hl,(dBlk)
+        ld      de,TB_BOOT
+.fb:    add     hl,de
         ld      bc,(bkSlots)
         jp      (hl)
 
@@ -1515,6 +1536,7 @@ cmdProfileId:   defs    10
         INCLUDE "transport_msxpi.inc"
         INCLUDE "transport_unapi.inc"
         INCLUDE "transport_hybrid.inc"
+        INCLUDE "transport_unapi_br.inc"
         INCLUDE "playnet_tcp.asm"
 
 ; ---- variables ------------------------------------------------------------------------------------
@@ -1586,6 +1608,7 @@ tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until
         ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
         ASSERT  tBuf+TU_SIZE <= BOUNCE+CHUNK
         ASSERT  tBuf+TH_SIZE <= BOUNCE+CHUNK
+        ASSERT  tBuf+TB_SIZE <= BOUNCE+CHUNK
         ASSERT  GPFBUF+GPFMAX+BLKSIZE <= BOUNCE+$800  ; a GPF's last block from the MSXPi may run into BOUNCE
 tcp:            defb    0                       ; 1: PLAYNET /T (playnet_tcp.asm)
 lport:          defw    0
@@ -1602,6 +1625,8 @@ hz:             defb    60
 kMode:          defb    0                       ; PLAYNET /T /K1../K3: the send interval to announce (0: by the stack)
 lMode:          defb    $FF                     ; /L0../L9: the service latency to announce, in frames ($FF: by the stack)
 svcMode:        defb    2                       ; PLAYNET /T /S0, /S1: the TCP/IP stack's service (2: by the stack found)
+dBlk:           defw    0                       ; TCP/IP: the transport's block in MSX-DOS's page 3 (npTArea, or under the TPA top)
+bridge:         defb    0                       ; 1: the bridged transport (the game's transport area is not TPA in MSX-DOS)
 hyb:            defb    0                       ; link 2 (/H, or the session's): the game's packets through the MSXPi
 ovlLen:         defw    0
 ovlIo:          defw    0
