@@ -1,0 +1,427 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "1942-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 131072,
+    "sha256": "d8442d2c08958f0bc9be7d2078e3cf07224e1ec3493ddce3215ed8df2bd37b1f",
+    "crc32": 3382597121,
+    "file": "1942.ROM"
+  },
+  "output": {
+    "size": 131072,
+    "fill": 0,
+    "mapper": "ascii8",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own 1942.ROM: ASCII's 1942 for the MSX, 128 KB, the dump identified above",
+    "PLAYNET release 3, over an MSXPi or over TCP/IP UNAPI",
+    "A memory mapper with at least 20 free 16 KB segments for the game (512 KB recommended: 28 segments play without pauses)"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "4cd69a259987ae4e69795fc0ba0138567d8f47b3a9f6031120b60fe50cd41d61"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 131072,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 20,
+      "expected": "3200603c3200683c3200703c320078",
+      "replace": "cd84e5000000000000000000000000",
+      "reason": "4014h (bank 0): INIT: the four bank-register writes -> clear the game RAM, SP = F380h, H.KEYI -> XIRQ (initGame)"
+    },
+    {
+      "offset": 353,
+      "expected": "cd096d",
+      "replace": "cd6de5",
+      "reason": "4161h (bank 0): input the frame -> inAct: PN_TICK, then the net input"
+    },
+    {
+      "offset": 994,
+      "expected": "cd096d",
+      "replace": "cd6de5",
+      "reason": "43E2h (bank 0): input pause: until the key is released -> inAct: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1004,
+      "expected": "cd096d",
+      "replace": "cd6de5",
+      "reason": "43ECh (bank 0): input pause: until a key is pressed -> inAct: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1128,
+      "expected": "cd096d",
+      "replace": "cd59e5",
+      "reason": "4468h (bank 0): input the title menu: player 1, the inviter -> inP1: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1287,
+      "expected": "cd096d",
+      "replace": "cd61e5",
+      "reason": "4507h (bank 0): input the game over wait: anyone -> inAny: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1438,
+      "expected": "cdaa6d",
+      "replace": "cd78e5",
+      "reason": "459Eh (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1463,
+      "expected": "cdaa6d",
+      "replace": "cd78e5",
+      "reason": "45B7h (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
+    },
+    {
+      "offset": 1729,
+      "expected": "320070",
+      "replace": "cdc9e3",
+      "reason": "46C1h (bank 0): ld (7000h),a -> MK_W2"
+    },
+    {
+      "offset": 1734,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "46C6h (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 1778,
+      "expected": "320070",
+      "replace": "cdc9e3",
+      "reason": "46F2h (bank 0): ld (7000h),a -> MK_W2"
+    },
+    {
+      "offset": 1783,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "46F7h (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 4392,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "5128h (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 5197,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "544Dh (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 7381,
+      "expected": "3600",
+      "replace": "0000",
+      "reason": "5CD5h (bank 0): INIT: ld (4000h),0 (the ldir after it is already gone): a write into the ROM copy"
+    },
+    {
+      "offset": 7664,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "5DF0h (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 7820,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "5E8Ch (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 8448,
+      "expected": "ed5fe67f",
+      "replace": "cdd9e500",
+      "reason": "6100h (bank 1): ld a,r -> rAnd7F, deterministic"
+    },
+    {
+      "offset": 8487,
+      "expected": "ed5fe67f",
+      "replace": "cdd9e500",
+      "reason": "6127h (bank 1): ld a,r -> rAnd7F, deterministic"
+    },
+    {
+      "offset": 9122,
+      "expected": "ed5f1f",
+      "replace": "cdd4e5",
+      "reason": "63A2h (bank 1): ld a,r -> rRra, deterministic"
+    },
+    {
+      "offset": 9135,
+      "expected": "ed5fe60c",
+      "replace": "cddfe500",
+      "reason": "63AFh (bank 1): ld a,r -> rAnd0C, deterministic"
+    },
+    {
+      "offset": 9169,
+      "expected": "ed5fe63f",
+      "replace": "cde5e500",
+      "reason": "63D1h (bank 1): ld a,r -> rAnd3F, deterministic"
+    },
+    {
+      "offset": 9176,
+      "expected": "ed5f1f",
+      "replace": "cdd4e5",
+      "reason": "63D8h (bank 1): ld a,r -> rRra, deterministic"
+    },
+    {
+      "offset": 9456,
+      "expected": "ed5fe60f",
+      "replace": "cdebe500",
+      "reason": "64F0h (bank 1): ld a,r -> rAnd0F, deterministic"
+    },
+    {
+      "offset": 9685,
+      "expected": "ed5f1f",
+      "replace": "cdd4e5",
+      "reason": "65D5h (bank 1): ld a,r -> rRra, deterministic"
+    },
+    {
+      "offset": 9843,
+      "expected": "ed5f1f",
+      "replace": "cdd4e5",
+      "reason": "6673h (bank 1): ld a,r -> rRra, deterministic"
+    },
+    {
+      "offset": 10345,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "6869h (bank 1): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 10514,
+      "expected": "ed5fe60f",
+      "replace": "cdebe500",
+      "reason": "6912h (bank 1): ld a,r -> rAnd0F, deterministic"
+    },
+    {
+      "offset": 11635,
+      "expected": "cd776d",
+      "replace": "000000",
+      "reason": "6D73h (bank 1): The secret key combination (6D77h) is not read: it is local"
+    },
+    {
+      "offset": 12682,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "718Ah (bank 1): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 23446,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "9B96h (bank 2): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 23478,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "9BB6h (bank 2): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 23510,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "9BD6h (bank 2): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 23836,
+      "expected": "320078",
+      "replace": "cdcfe3",
+      "reason": "9D1Ch (bank 2): ld (7800h),a -> MK_W3"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "1942",
+    "title": "1942 (turn based)",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 2,
+    "image": {
+      "host": "mapper-ram",
+      "mapper": "ascii8",
+      "bank_size": 8192,
+      "banks": 16,
+      "block": 58112,
+      "start_banks": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "page1_pairs": [
+        [
+          0,
+          1
+        ]
+      ],
+      "page2_pairs": [
+        [
+          2,
+          3
+        ],
+        [
+          5,
+          4
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          2,
+          10
+        ],
+        [
+          2,
+          11
+        ],
+        [
+          2,
+          12
+        ],
+        [
+          2,
+          13
+        ],
+        [
+          2,
+          14
+        ],
+        [
+          2,
+          15
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          5,
+          3
+        ],
+        [
+          5,
+          8
+        ],
+        [
+          5,
+          9
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          5,
+          11
+        ],
+        [
+          5,
+          12
+        ],
+        [
+          5,
+          13
+        ],
+        [
+          5,
+          14
+        ],
+        [
+          5,
+          15
+        ]
+      ],
+      "pinned": [
+        1,
+        12
+      ],
+      "min_segments": 20,
+      "recommended_segments": 28
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 57368,
+      "max": 1512
+    },
+    "transport_area": {
+      "address": 56672,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        49152,
+        56671
+      ],
+      [
+        57344,
+        57366
+      ],
+      [
+        58880,
+        62335
+      ]
+    ],
+    "irq_handler": 16702,
+    "start": "header-init",
+    "min_playnet": 3,
+    "requires": [
+      "mapper-ram"
+    ]
+  },
+  "symbols": {
+    "PN_TICK": 57373,
+    "PN_IRQ": 57392,
+    "PN_P1": 57936,
+    "PN_P2": 57938,
+    "MK_BLOCK": 58112,
+    "MK_SEG2": 58121,
+    "MK_W0": 58260,
+    "MK_W1": 58266,
+    "MK_W2": 58313,
+    "MK_W3": 58319,
+    "inP1": 58713,
+    "inAct": 58733,
+    "inAny": 58721,
+    "keyAct": 58744,
+    "initGame": 58756,
+    "rnd": 58809,
+    "stubEnd": 58865
+  }
+}

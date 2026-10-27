@@ -396,7 +396,7 @@ first. Design and measurements: `documents/SALAMANDER-DESIGN.md`, section 5. Fir
 
 | Field | Rule |
 |---|---|
-| `mapper` | `"konami-scc"` (the only one so far; the bank engine works for any 8 KB mapper, the patches decide which registers) |
+| `mapper` | `"konami-scc"` (1) or `"ascii8"` (2, 1942); the bank engine works for any 8 KB mapper, the patches decide which registers) |
 | `bank_size` | `8192` |
 | `banks` | 2-64, a power of two. The ROM (`source.size`, `output.size`) is `banks` x 8 KB, and the layout is the identity: one entry, the whole input at 0. |
 | `block` | Address of the bank engine's block (`MK_BLOCK`) inside the stub. The loader fills it. Its first 4 bytes are the engine's version (1), the bank mask, and the room of its two tables. |
@@ -461,7 +461,7 @@ types. Sections appear in the order below; each appears at most once, except `AS
 | 3 | `LAYOUT` | output size (4), fill byte (1), count (1), then count x (source (1): `FFh` = the ROM, else asset index; source offset (4); size (4); destination offset (4)) |
 | 4 | `PATCH` | count (2), then count x (output offset (4), length (1), expected bytes, replacement bytes) |
 | 5 | `ASSET` | the bytes of one asset. Assets are numbered 0, 1, ... in file order. |
-| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
+| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC, 2 = ASCII8), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
 
 The profile hash is what players compare: it appears in invitations (12), in the peer handshake (11.3) and in the session record (13).
 Because the stub is an asset inside the file, the hash covers the engine and the glue too.
