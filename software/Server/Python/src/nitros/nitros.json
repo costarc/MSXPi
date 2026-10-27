@@ -1,0 +1,9 @@
+{
+  "xroar": ["xroar", "-ui", "null", "-ao", "null", "-machine", "coco2bus", "-ram", "64", "-rompath", "/home/pi/roms/coco", "-cart", "rsdos", "-cart-becker", "-run", "/home/pi/msxpi/nitros/boot.bin"],
+  "boot_disk": "boot.dsk",
+  "exchange_disk": "exchange.dsk",
+  "exchange_dir": "files",
+  "os9": "os9",
+  "log": "xroar.log",
+  "lease_seconds": 15
+}

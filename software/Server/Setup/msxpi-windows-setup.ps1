@@ -360,6 +360,17 @@ foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperR
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }
 
+# Default NitrOS-9 runtime config, only when absent: the user edits it for their XRoar and ROMs.
+New-Item -ItemType Directory -Force "$MsxPiHome
+itros" | Out-Null
+if (-not (Test-Path "$MsxPiHome
+itros
+itros.json")) {
+    Get-File "$srv/nitros/nitros.json" "$MsxPiHome
+itros
+itros.json" -Optional | Out-Null
+}
+
 # Never overwrite msxpi.ini: it holds the user's API keys and PSET values.
 if (-not (Test-Path "$MsxPiHome\msxpi.ini")) {
     Copy-Item "$MsxPiHome\msxpi-JumperLeft.ini" "$MsxPiHome\msxpi.ini"

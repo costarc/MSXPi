@@ -316,6 +316,19 @@ session = Session()
 atexit.register(session.close)
 
 
+DEFAULT_CONFIG = {
+    'xroar': ['xroar', '-ui', 'null', '-ao', 'null', '-machine', 'coco2bus', '-ram', '64',
+              '-rompath', '/home/pi/roms/coco', '-cart', 'rsdos', '-cart-becker',
+              '-run', '/home/pi/msxpi/nitros/boot.bin'],
+    'boot_disk': 'boot.dsk',
+    'exchange_disk': 'exchange.dsk',
+    'exchange_dir': 'files',
+    'os9': 'os9',
+    'log': 'xroar.log',
+    'lease_seconds': 15,
+}
+
+
 def load_config():
     # Use the existing MSXPi p set configuration so the host-side NitrOS
     # runtime can be selected from the MSX. This is a path to the detailed
@@ -324,6 +337,12 @@ def load_config():
 
     path = getMSXPiVar('NITROS_CONFIG') or str(Path(MSXPIHOME) / 'nitros' / 'nitros.json')
     path = Path(path).resolve()
+    if not path.exists() and not getMSXPiVar('NITROS_CONFIG'):
+        # First run: the update has not shipped nitros/nitros.json yet. Write
+        # the default (the same as Python/src/nitros/nitros.json), never over
+        # a file the user has.
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(DEFAULT_CONFIG, indent=2) + '\n')
     config = json.loads(path.read_text())
     for name in ('boot_disk', 'exchange_disk', 'exchange_dir', 'log'):
         if name in config:

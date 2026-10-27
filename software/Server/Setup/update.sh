@@ -49,7 +49,7 @@ BASE="${MSXPI_UPDATE_BASE:-https://raw.githubusercontent.com/costarc/MSXPi/maste
 SETUP_BASE="${MSXPI_UPDATE_SETUP_BASE:-${BASE%/Python/src}/Setup}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR" || exit 1
-mkdir -p native
+mkdir -p native nitros
 
 # get <base> <file>: BASE is a URL, or a directory (msxpi-setup.sh run from a
 # checkout). Either way the file is only replaced when the copy is complete.
@@ -118,6 +118,17 @@ for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msx
         rc=1
     fi
 done
+# Default NitrOS-9 runtime config (msxpi_nitros.py reads nitros/nitros.json). Only when
+# absent: once the user has edited it for their XRoar and ROMs, an update leaves it alone.
+if [ ! -s nitros/nitros.json ]; then
+    if get "$BASE" nitros/nitros.json; then
+        mv -f nitros/nitros.json.new nitros/nitros.json
+        echo "ok   nitros/nitros.json (default)"
+    else
+        rm -f nitros/nitros.json.new
+        echo "FAIL nitros/nitros.json (the server writes a default when NitrOS starts)"
+    fi
+fi
 # Run by msxpi-monitor at every start to give the MSX its network. Older setups
 # never installed it, so on those it arrives with the first update.
 f=msxpi-tcpip-setup.sh
