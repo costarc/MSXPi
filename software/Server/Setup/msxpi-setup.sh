@@ -310,7 +310,7 @@ install_packages() {
     # network-manager is deliberately not here: the WiFi commands use it where the
     # image already has it, and adding it to an image without it would change how
     # the Pi connects to the network under the running SSH session.
-    apt_optional alsa-utils mpv smbclient html2text logrotate
+    apt_optional alsa-utils mpv smbclient html2text logrotate xroar toolshed
 }
 
 # ------------------------------------------------------------------------------

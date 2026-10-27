@@ -193,6 +193,18 @@ if python3 -c "import chess" 2>/dev/null ||
 else
     echo "warn python-chess: pchess off"
 fi
+# NitrOS-9 (NITROS) runs in XRoar, and NITROS list/put/get use ToolShed's os9. Both are in
+# Raspberry Pi OS; only the CoCo ROMs (bas13, extbas11, disk11.rom) are not, and cannot
+# be shipped: they go in the -rompath folder of nitros/nitros.json.
+for pkg in xroar toolshed; do
+    if dpkg -s "$pkg" >/dev/null 2>&1; then
+        :
+    elif apt_add "$pkg"; then
+        echo "ok   $pkg (NitrOS)"
+    else
+        echo "warn $pkg: NitrOS off (sudo apt install $pkg)"
+    fi
+done
 # certifi: pchess ONLINE (IRC over TLS) imports it.
 if python3 -c "import certifi" 2>/dev/null ||
    apt_add python3-certifi ||
