@@ -503,7 +503,7 @@ def main() -> None:
                 server_socket.close()
             except Exception:
                 pass
-        for image in (disk.drive0Data, disk.drive1Data):
+        for image in (getattr(disk, "drive0Data", None), getattr(disk, "drive1Data", None)):
             unmount_drive(image)
         print("MSXPi Server: Terminating")
 

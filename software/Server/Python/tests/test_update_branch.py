@@ -113,9 +113,22 @@ class ServerUpdateTests(unittest.TestCase):
 
     def test_a_recent_update_of_the_same_branch_is_not_repeated(self):
         system._update_branch = 'master'
-        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()),              patch('builtins.open', unittest.mock.mock_open(read_data='feature/x')),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system, 'setMSXPiVar'),              patch.object(system.subprocess, 'run') as run:
+        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()),              patch('builtins.open', unittest.mock.mock_open(read_data='feature/x B1')),              patch.object(system, '_disk_build_id', return_value='B1'),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system, 'setMSXPiVar'),              patch.object(system.subprocess, 'run') as run:
             self.assertIn('already updated from feature/x', system.update('feature/x'))
             run.assert_not_called()
+        system._update_branch = 'master'
+
+    def test_a_stale_stamp_from_another_build_is_not_trusted(self):
+        # update.sh from master only touches the stamp: the branch name left in
+        # it, with a fresh time, must not hide that master's files are on disk.
+        system._update_branch = 'master'
+        done = MagicMock(returncode=0, stdout=b'ok x
+')
+        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()),              patch('builtins.open', unittest.mock.mock_open(read_data='feature/x B1')),              patch.object(system, '_disk_build_id', return_value='B0'),              patch.object(system.os, 'replace'),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system, 'setMSXPiVar'),              patch('requests.get', return_value=MagicMock(content=b'#!/bin/sh
+')),              patch.object(system.subprocess, 'run', return_value=done) as run:
+            out = system.update('feature/x')
+        self.assertNotIn('already updated', out)
+        run.assert_called_once()
         system._update_branch = 'master'
 
     def test_branch_survives_a_server_restart_through_drivem(self):

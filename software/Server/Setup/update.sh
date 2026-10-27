@@ -221,6 +221,6 @@ fi
 
 # "p update" (sent by msxpirfh.bat right after this script) skips its own
 # update when this is recent.
-touch .last-update
+: > .last-update
 
 exit $rc

@@ -494,6 +494,16 @@ def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
     return None, why
 
 
+def _disk_build_id(home: str) -> str:
+    """BUILD_ID of the server files on disk (not the running server's)."""
+    try:
+        with open(os.path.join(home, "msxpi_const.py"), encoding="utf-8") as f:
+            m = re.search(r'^BUILD_ID\s*=\s*"([^"]+)"', f.read(), re.M)
+        return m.group(1) if m else "unknown"
+    except (OSError, TypeError):
+        return "unknown"
+
+
 def _current_branch() -> str:
     """The branch "p update" works on: the one "p update <branch>" chose.
 
@@ -563,11 +573,18 @@ def update(parm: Optional[str] = None) -> CommandResult:
     stamp = os.path.join(home, UPDATE_STAMP)
     # The stamp holds the branch of the last update (empty: master, as written
     # by update.sh itself when msxpiupd.bat runs it first).
+    # update.sh only touches the file, so a master update.sh run on top of a
+    # branch's files leaves the old branch name in it with a fresh time: the
+    # name counts only with the build it was written for, which must still be
+    # the one on disk.
     try:
         if time.time() - os.path.getmtime(stamp) < 600:
             with open(stamp) as f:
-                if (f.read().strip() or "master") == branch:
-                    return f"Pi:Ok - server already updated from {branch}"
+                words = f.read().split()
+            if not words and branch == "master":
+                return f"Pi:Ok - server already updated from {branch}"
+            if len(words) == 2 and words[0] == branch and words[1] == _disk_build_id(home):
+                return f"Pi:Ok - server already updated from {branch}"
     except OSError:
         pass
 
@@ -606,7 +623,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
     if done.returncode == 0:
         try:
             with open(stamp, "w") as f:
-                f.write(branch)
+                f.write(f"{branch} {_disk_build_id(home)}")
         except OSError:
             pass
 
