@@ -95,6 +95,7 @@ keyAct: call    PN_TICK
 initGame:
         pop     de                              ; the return address: MSX-DOS's stack is inside C000h-DD5Fh
         ld      sp,$F380
+        push    de                              ; (zero uses DE)
         ld      hl,$C000
         ld      bc,$1D60
         call    zero
@@ -108,8 +109,7 @@ initGame:
         ld      (H_KEYI),a
         ld      hl,PN_TRANSPORT+6
         ld      (H_KEYI+1),hl
-        ex      de,hl
-        jp      (hl)
+        ret
 zero:   ld      e,l
         ld      d,h
         inc     de
