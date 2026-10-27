@@ -211,6 +211,8 @@ class Session:
                         'XRoar not found: install it: sh ~/msxpi/msxpi-nitros-setup.sh '
                         'or set its path in nitros.json') from None
                 self.last_poll = time.monotonic()
+                print(f'NitrOS: XRoar started (pid {self.process.pid}), DriveWire port {port}; '
+                      f'its output goes to {self.log.name}', flush=True)
                 self.worker = threading.Thread(target=self._run, args=(self.listener, self.bridge, self.stop_event), daemon=True)
                 self.worker.start()
                 threading.Thread(target=self._watch, args=(self.stop_event,), daemon=True).start()
@@ -229,11 +231,13 @@ class Session:
             else:
                 return
             self.connection = connection
+            print('NitrOS: XRoar connected to the DriveWire port', flush=True)
             if event.is_set():
                 connection.close()
                 return
             bridge.serve(connection, event)
         except (OSError, EOFError, ValueError) as exc:
+            print(f'NitrOS: DriveWire bridge ended: {exc!r}', flush=True)
             if not event.is_set():
                 self.error = str(exc)
         finally:
@@ -247,6 +251,7 @@ class Session:
                     return
                 if self.process.poll() is not None:
                     self.error = 'XRoar exited; check the session log'
+                    print(f'NitrOS: XRoar exited with code {self.process.returncode}', flush=True)
                     break
                 if time.monotonic() - self.last_poll > self.lease:
                     self.error = 'MSX console disconnected (lease expired)'
