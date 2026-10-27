@@ -122,10 +122,15 @@ class ServerUpdateTests(unittest.TestCase):
         # update.sh from master only touches the stamp: the branch name left in
         # it, with a fresh time, must not hide that master's files are on disk.
         system._update_branch = 'master'
-        done = MagicMock(returncode=0, stdout=b'ok x
-')
-        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()),              patch('builtins.open', unittest.mock.mock_open(read_data='feature/x B1')),              patch.object(system, '_disk_build_id', return_value='B0'),              patch.object(system.os, 'replace'),              patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')),              patch.object(system, 'setMSXPiVar'),              patch('requests.get', return_value=MagicMock(content=b'#!/bin/sh
-')),              patch.object(system.subprocess, 'run', return_value=done) as run:
+        done = MagicMock(returncode=0, stdout=b'ok x\n')
+        with patch.object(system.os.path, 'getmtime', return_value=system.time.time()), \
+             patch('builtins.open', unittest.mock.mock_open(read_data='feature/x B1')), \
+             patch.object(system, '_disk_build_id', return_value='B0'), \
+             patch.object(system.os, 'replace'), \
+             patch.object(system, '_resolve_branch', side_effect=lambda b: (b, '')), \
+             patch.object(system, 'setMSXPiVar'), \
+             patch('requests.get', return_value=MagicMock(content=b'#!/bin/sh\n')), \
+             patch.object(system.subprocess, 'run', return_value=done) as run:
             out = system.update('feature/x')
         self.assertNotIn('already updated', out)
         run.assert_called_once()
