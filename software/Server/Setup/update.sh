@@ -199,7 +199,9 @@ fi
 for pkg in xroar toolshed; do
     if dpkg -s "$pkg" >/dev/null 2>&1; then
         :
-    elif apt_add "$pkg"; then
+    elif apt_add "$pkg" ||
+         { [ -z "${APT_UPDATED:-}" ] && APT_UPDATED=1 &&
+           as_root apt-get update -qq >/dev/null 2>&1 && apt_add "$pkg"; }; then
         echo "ok   $pkg (NitrOS)"
     else
         echo "warn $pkg: NitrOS off (sudo apt install $pkg)"
