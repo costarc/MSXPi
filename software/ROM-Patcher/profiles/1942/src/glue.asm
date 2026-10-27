@@ -25,7 +25,7 @@ G_CHECK_ADDR:   EQU     $ED00                   ; the player blocks and what fol
 G_CHECK_LEN:    EQU     $0200
 
 MK_BANKS:       EQU     16                      ; 128 KB of 8 KB banks
-MK_P1_MAX:      EQU     1                       ; page 1 is always (0,1): the game writes the W2 and W3 registers only
+MK_P1_MAX:      EQU     2                       ; page 1 is always (0,1) (the game writes the W2 and W3 registers only); the loader wants a spare entry
 MK_P2_MAX:      EQU     24
 MK_MAP:         EQU     $E600                   ; the bank engine's pair map, E600h-E9FFh
 

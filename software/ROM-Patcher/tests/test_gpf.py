@@ -432,6 +432,45 @@ class MapperRamTests(unittest.TestCase):
             patcher.check_netplay(patcher.netplay_values(profile), {0: 1395})
 
 
+P1942 = ROOT / 'profiles/1942/profile.json'
+
+
+class Game1942Tests(unittest.TestCase):
+    """Capcom's 1942: an ASCII8 mapper-ram package with the stub in the little RAM the game leaves. The real dump when P1942_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(P1942)
+        self.data = patcher.gpf_bytes(self.profile, self.assets)
+
+    def test_round_trip(self):
+        gpf = patcher.read_gpf(self.data)
+        self.assertEqual(self.data[5], 3)                                # lockstep, image host 1
+        image = self.profile['netplay']['image']
+        self.assertEqual(image['mapper'], 'ascii8')
+        self.assertEqual(gpf['mapper']['type'], 2)
+        self.assertEqual(gpf['mapper']['pairs'], [image['page1_pairs'], image['page2_pairs']])
+        self.assertEqual(gpf['mapper']['pinned'], [1, 12])
+        self.assertLessEqual(len(self.data), 3072, "PLAYNET.COM's GPF buffer is 3 KB")
+
+    def test_layout_is_apart_from_the_games_ram(self):
+        gpf = patcher.read_gpf(self.data)
+        stub = (gpf['stub_load'], gpf['stub_load'] + gpf['stub_max'] - 1)
+        area = (gpf['transport_area'], gpf['transport_area'] + gpf['transport_size'] - 1)
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        for low, high in gpf['game_ram']:
+            self.assertTrue(high < stub[0] or low > stub[1], (low, high))
+            self.assertTrue(high < area[0] or low > area[1], (low, high))
+
+    @unittest.skipUnless(os.environ.get('P1942_ROM'), 'set P1942_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['P1942_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)        # also checks SHA-256, CRC-32 and every expected byte
+        self.assertEqual(len(image), 131072)
+        for patch in self.profile['patches']:
+            data = bytes.fromhex(patch['replace'])
+            self.assertEqual(image[patch['offset']:patch['offset'] + len(data)], data)
+
+
 PINGPONG = ROOT / 'profiles/pingpong/profile.json'
 
 

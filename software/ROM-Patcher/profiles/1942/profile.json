@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "4cd69a259987ae4e69795fc0ba0138567d8f47b3a9f6031120b60fe50cd41d61"
+      "sha256": "4c77aa14c5d747026b1ad5b0dd794e316797341b35f0d625f04e5a770516e17c"
     }
   },
   "layout": [
@@ -40,85 +40,85 @@
     {
       "offset": 20,
       "expected": "3200603c3200683c3200703c320078",
-      "replace": "cd84e5000000000000000000000000",
+      "replace": "cd88e5000000000000000000000000",
       "reason": "4014h (bank 0): INIT: the four bank-register writes -> clear the game RAM, SP = F380h, H.KEYI -> XIRQ (initGame)"
     },
     {
       "offset": 353,
       "expected": "cd096d",
-      "replace": "cd6de5",
+      "replace": "cd71e5",
       "reason": "4161h (bank 0): input the frame -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 994,
       "expected": "cd096d",
-      "replace": "cd6de5",
+      "replace": "cd71e5",
       "reason": "43E2h (bank 0): input pause: until the key is released -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1004,
       "expected": "cd096d",
-      "replace": "cd6de5",
+      "replace": "cd71e5",
       "reason": "43ECh (bank 0): input pause: until a key is pressed -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1128,
       "expected": "cd096d",
-      "replace": "cd59e5",
+      "replace": "cd5de5",
       "reason": "4468h (bank 0): input the title menu: player 1, the inviter -> inP1: PN_TICK, then the net input"
     },
     {
       "offset": 1287,
       "expected": "cd096d",
-      "replace": "cd61e5",
+      "replace": "cd65e5",
       "reason": "4507h (bank 0): input the game over wait: anyone -> inAny: PN_TICK, then the net input"
     },
     {
       "offset": 1438,
       "expected": "cdaa6d",
-      "replace": "cd78e5",
+      "replace": "cd7ce5",
       "reason": "459Eh (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
       "offset": 1463,
       "expected": "cdaa6d",
-      "replace": "cd78e5",
+      "replace": "cd7ce5",
       "reason": "45B7h (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
       "offset": 1729,
       "expected": "320070",
-      "replace": "cdc9e3",
+      "replace": "cdcde3",
       "reason": "46C1h (bank 0): ld (7000h),a -> MK_W2"
     },
     {
       "offset": 1734,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "46C6h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 1778,
       "expected": "320070",
-      "replace": "cdc9e3",
+      "replace": "cdcde3",
       "reason": "46F2h (bank 0): ld (7000h),a -> MK_W2"
     },
     {
       "offset": 1783,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "46F7h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 4392,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "5128h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 5197,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "544Dh (bank 0): ld (7800h),a -> MK_W3"
     },
     {
@@ -130,79 +130,79 @@
     {
       "offset": 7664,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "5DF0h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 7820,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "5E8Ch (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 8448,
       "expected": "ed5fe67f",
-      "replace": "cdd9e500",
+      "replace": "cddde500",
       "reason": "6100h (bank 1): ld a,r -> rAnd7F, deterministic"
     },
     {
       "offset": 8487,
       "expected": "ed5fe67f",
-      "replace": "cdd9e500",
+      "replace": "cddde500",
       "reason": "6127h (bank 1): ld a,r -> rAnd7F, deterministic"
     },
     {
       "offset": 9122,
       "expected": "ed5f1f",
-      "replace": "cdd4e5",
+      "replace": "cdd8e5",
       "reason": "63A2h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9135,
       "expected": "ed5fe60c",
-      "replace": "cddfe500",
+      "replace": "cde3e500",
       "reason": "63AFh (bank 1): ld a,r -> rAnd0C, deterministic"
     },
     {
       "offset": 9169,
       "expected": "ed5fe63f",
-      "replace": "cde5e500",
+      "replace": "cde9e500",
       "reason": "63D1h (bank 1): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 9176,
       "expected": "ed5f1f",
-      "replace": "cdd4e5",
+      "replace": "cdd8e5",
       "reason": "63D8h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9456,
       "expected": "ed5fe60f",
-      "replace": "cdebe500",
+      "replace": "cdefe500",
       "reason": "64F0h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
       "offset": 9685,
       "expected": "ed5f1f",
-      "replace": "cdd4e5",
+      "replace": "cdd8e5",
       "reason": "65D5h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9843,
       "expected": "ed5f1f",
-      "replace": "cdd4e5",
+      "replace": "cdd8e5",
       "reason": "6673h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 10345,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "6869h (bank 1): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 10514,
       "expected": "ed5fe60f",
-      "replace": "cdebe500",
+      "replace": "cdefe500",
       "reason": "6912h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
@@ -214,31 +214,31 @@
     {
       "offset": 12682,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "718Ah (bank 1): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23446,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "9B96h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23478,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "9BB6h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23510,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "9BD6h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23836,
       "expected": "320078",
-      "replace": "cdcfe3",
+      "replace": "cdd3e3",
       "reason": "9D1Ch (bank 2): ld (7800h),a -> MK_W3"
     }
   ],
@@ -412,16 +412,16 @@
     "PN_P2": 57938,
     "MK_BLOCK": 58112,
     "MK_SEG2": 58121,
-    "MK_W0": 58260,
-    "MK_W1": 58266,
-    "MK_W2": 58313,
-    "MK_W3": 58319,
-    "inP1": 58713,
-    "inAct": 58733,
-    "inAny": 58721,
-    "keyAct": 58744,
-    "initGame": 58756,
-    "rnd": 58809,
-    "stubEnd": 58865
+    "MK_W0": 58264,
+    "MK_W1": 58270,
+    "MK_W2": 58317,
+    "MK_W3": 58323,
+    "inP1": 58717,
+    "inAct": 58737,
+    "inAny": 58725,
+    "keyAct": 58748,
+    "initGame": 58760,
+    "rnd": 58813,
+    "stubEnd": 58869
   }
 }

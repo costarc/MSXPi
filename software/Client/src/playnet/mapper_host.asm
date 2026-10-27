@@ -31,12 +31,14 @@ mParse: ld      hl,(pMapper)
         ld      bc,mRecEnd-mRec
         ldir
         ld      (mPairs),hl
-        ld      hl,(mType)                      ; type 1 (Konami SCC), 8 KB banks
-        ld      de,$0801
-        or      a
-        sbc     hl,de
-        ld      a,51
-        jp      nz,badPkg
+        ld      hl,(mType)                      ; type 1 (Konami SCC) or 2 (ASCII8), 8 KB banks
+        ld      a,h
+        cp      8
+        jp      nz,.bad51
+        ld      a,l
+        dec     a
+        cp      2
+        jp      nc,.bad51
         ld      a,(mBanks)                      ; 2-64 banks, a power of two
         ld      b,a
         dec     a
