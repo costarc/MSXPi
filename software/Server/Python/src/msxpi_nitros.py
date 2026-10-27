@@ -398,12 +398,43 @@ def exchange(config, action, args):
     return b'File copied\r\n'
 
 
+# The CoCo ROMs the coco2bus machine needs: Color BASIC, Extended Color BASIC
+# and the Disk BASIC (RS-DOS) cartridge. They cannot be shipped with MSXPi.
+REQUIRED_ROMS = ('bas13.rom', 'extbas11.rom', 'disk11.rom')
+
+
+def check_roms(config):
+    """Raise ValueError naming the missing CoCo ROMs and the folder(s) XRoar
+    will look in (its -rompath, from nitros.json).  Nothing is checked when
+    the config has no -rompath: XRoar then uses its own default search path."""
+    command = config.get('xroar')
+    if not isinstance(command, list) or '-rompath' not in command:
+        return
+    index = command.index('-rompath') + 1
+    if index >= len(command):
+        return
+    separator = ';' if os.name == 'nt' else ':'
+    folders = [f for f in command[index].split(separator) if f]
+    found = set()
+    for folder in folders:
+        try:
+            found.update(name.lower() for name in os.listdir(folder))
+        except OSError:
+            pass
+    missing = [rom for rom in REQUIRED_ROMS if rom not in found]
+    if missing:
+        raise ValueError('CoCo ROMs missing: %s. Put them in %s (the -rompath in nitros.json)'
+                         % (' '.join(missing), ' or '.join(folders)))
+
+
 def handle_command(arguments):
     try:
         args = shlex.split(arguments or '')
         action = args.pop(0).lower() if args else 'start'
         if action == 'start' and not args:
-            session.start(load_config())
+            config = load_config()
+            check_roms(config)
+            session.start(config)
             return session.poll()
         if action == 'poll' and len(args) <= 1:
             return session.poll(bytes.fromhex(args[0]) if args else b'')
