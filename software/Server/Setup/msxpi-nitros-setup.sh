@@ -40,7 +40,7 @@ if ! have os9; then
       tar xzf toolshed.tgz &&
       cd "toolshed-$TOOLSHED_VERSION" &&
       make -C build/unix >"$WORK/toolshed.log" 2>&1 &&
-      as_root make -C build/unix install >>"$WORK/toolshed.log" 2>&1
+      as_root install -m 755 build/unix/os9/os9 build/unix/decb/decb /usr/local/bin >>"$WORK/toolshed.log" 2>&1
     ) || { tail -20 "$WORK/toolshed.log" 2>/dev/null; fail "ToolShed build"; }
     have os9 || fail "ToolShed built, but os9 is not on PATH (look in /usr/local/bin, /usr/bin)"
     echo "ok   toolshed (built)"
