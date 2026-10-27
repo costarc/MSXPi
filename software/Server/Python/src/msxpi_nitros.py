@@ -208,7 +208,7 @@ class Session:
                     )
                 except FileNotFoundError:
                     raise FileNotFoundError(
-                        'XRoar not found: install it (sudo apt install xroar toolshed) '
+                        'XRoar not found: install it: sh ~/msxpi/msxpi-nitros-setup.sh '
                         'or set its path in nitros.json') from None
                 self.last_poll = time.monotonic()
                 self.worker = threading.Thread(target=self._run, args=(self.listener, self.bridge, self.stop_event), daemon=True)
