@@ -43,22 +43,23 @@ H_KEYI:         EQU     $FD9A
 ; ---- inputs ------------------------------------------------------------------------------------------
 ; Local input, 2 bytes at HL: what the game's own readers leave in ED10h (6D77h, the secret key combination, is
 ; patched out of 6D09h), the second one only for the text entry.
+; Each byte is stored as soon as it is read: the readers clobber every register (6DAAh leaves B = FFh).
 rdLocal:
-        push    hl
         ld      a,(INPUT)                       ; the game's readers use ED10h as scratch, and it is checksummed:
         push    af                              ; put it back
+        push    hl
         call    GAME_JOY
+        pop     hl
         ld      a,(INPUT)
-        ld      b,a
+        ld      (hl),a
+        inc     hl
+        push    hl
         call    GAME_KEY
+        pop     hl
         ld      a,(INPUT)
-        ld      c,a
+        ld      (hl),a
         pop     af
         ld      (INPUT),a
-        pop     hl
-        ld      (hl),b
-        inc     hl
-        ld      (hl),c
         ret
 
 ; HL = the active player's input: the second player's only while two players play and it is their turn

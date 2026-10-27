@@ -19,14 +19,17 @@ machines in lockstep and only the inputs cross the network, from a 128 KB MegaRO
   shot down, the other player gets the next one: the game swaps the two players' blocks (4295h) and flips bit 0 of `EFA0h`. So the
   package needs no game logic: the machine whose player is not active just watches, and the game gets the active player's input.
 - **One input routine.** The game polls everything in one routine, 6D09h (joystick/cursors via GTSTCK and GTTRIG, space, a few
-  keys via SNSMAT), and the hi-score name entry in 6DAAh. There is no interrupt handler: the BIOS interrupt only paces the
-  frame (`ei; halt` at 4871h, 30 frames/s). Each of the 5 + 2 call sites becomes a call to the stub: PN_TICK, then the net input.
+  keys via SNSMAT), and the hi-score name entry in 6DAAh. The BIOS interrupt paces the frame (`ei; halt` at 4871h, 30 frames/s)
+  and runs the music driver, which the game hooks to H.TIMI (2.1). Each of the 5 + 2 call sites becomes a call to the stub:
+  PN_TICK, then the net input.
 - **The hard part is the room, not the game.** The game owns C000h-DD5Fh (the stage map, 7 KB, built at each stage by 71A8h)
-  and EA00h-F37Fh, and writes E000h-E016h. Free: DD60h-DFFFh and E017h-E9FFh. The transport (512 bytes) goes at DD60h, the
-  stub at E018h-E5FFh (1501 of 1512 bytes used) and the bank engine's pair map at E600h-E9FFh.
-- **Memory**: 25 bank switches a frame, so the pair map is needed. 13 pinned segments plus spares: minimum 20, recommended 28.
-- **No sound work.** The game plays its music from its main loop; there is no SCC and no per-interrupt driver
-  (`G_SOUND_TICK = 0`).
+  and EA00h-F37Fh, and writes E000h-E016h. Free while it plays: DD60h-DFFFh and E017h-E9FFh (at INIT the title graphics use
+  D000h-DFFFh for a table: moved to C800h). The transport (512 bytes) goes at DD60h, the stub at E018h-E5FFh (1507 of 1512 bytes
+  used) and the bank engine's pair map at E600h-E9FFh.
+- **Memory**: 25 bank switches a frame, so the pair map is needed. 13 pinned segments plus spares: minimum 20, recommended 24.
+- **Sound: the engine ticks the driver.** The game hooks its music driver (7C74h) to H.TIMI; the hook now points at PN_IRQ and
+  the engine ticks the driver T times a TICK, T = the interrupts player 1's machine counted (`G_SOUND_TICK`, with
+  `G_SOUND_MIN = 0`: a TICK is an input poll, and most title polls see no interrupt).
 - **MSXPi link only for now.** The UNAPI and hybrid transports must sit in MSX-DOS's page 3 below the TPA top (D406h-D706h);
   1942 leaves no free RAM there.
 
@@ -41,7 +44,7 @@ Tcl watchpoints over several minutes of a bot playing.
 |---|---|
 | Header | `AB`, INIT = 4013h, no STATEMENT/DEVICE/TEXT |
 | INIT 4013h | writes the four bank registers (banks 0, 1, 2, 3 into 6000h, 6800h, 7000h, 7800h: 4014h-4022h), clears a few variables, WRTVDP, SP = F380h, then **never returns**: it runs the game's main loop at 4066h (title menu 4443h, new game 40D7h, frame 413Fh). |
-| Interrupt | The game installs no hook. The BIOS interrupt runs, and the game waits for it with `ei; halt` at 4871h (inside 4858h, once per frame). It reads neither JIFFY nor the VDP status (only the BIOS does). |
+| Interrupt | The sound initialisation (7B60h) points H.TIMI at the music driver 7C74h (at 7B71h): it counts in `ED15h` and `E008h` and needs bank 2 in W2 (it calls 8009h-802Bh). No H.KEYI handler. The game waits for the interrupt with `ei; halt` at 4871h (inside 4858h, once per frame). It reads neither JIFFY nor the VDP status (only the BIOS does). (The first version of this design missed the hook: the machines diverged in `ED15h`.) |
 | Frame 413Fh | one pass of 415Dh-41A3h is one game frame: input (6D09h), the game, `halt`. |
 | Slots | 5CC0h: RSLREG/WSLREG puts page 2 in the slot of page 1 (the cartridge's). In PLAYNET both are the same RAM slot. |
 
@@ -90,7 +93,8 @@ Measured with write watchpoints during 10,000 frames of a bot playing:
 |---|---|
 | C000h-DBFFh | the stage map, written by 71A8h at the start of a stage |
 | DC00h-DD5Fh | a copy of F000h-F15Fh (7B21h), restored by 7B24h |
-| DD60h-DFFFh | **free** |
+| D000h-DFFFh | at INIT only: the title graphics (9B30h, from 403Fh) expand a 4 KB table here (9D1Ah). Missed by the watchpoints (armed after INIT); it wrote over the transport. Moved to C800h-D7FFh |
+| DD60h-DFFFh | **free** after INIT |
 | E000h-E016h | variables (`E010h` the most) |
 | E017h-E9FFh | **free** (E000h-E7FFh measured, E800h-E9FFh by the code: the first use is the `ldir` at EA00h) |
 | EA00h-ECFFh | a work buffer (cleared with `ldir` at 4980h and 41EFh) |
@@ -102,22 +106,24 @@ Measured with write watchpoints during 10,000 frames of a bot playing:
 | Piece | Where | |
 |---|---|---|
 | Transport | DD60h-DF5Fh | PLAYNET's (MSXPi), unchanged |
-| Stub | E018h-E5F0h | the engine, the 8 KB bank engine, the glue |
+| Stub | E018h-E5FAh | the engine, the 8 KB bank engine, the glue |
 | Pair map | E600h-E9FFh | the bank engine's 1 KB map |
 | Game RAM saved by PLAYNET | C000h-DD5Fh, E000h-E016h, E600h-F37Fh | |
 
-### 3.1 Patches (34, generated by `rebuild.py`)
+### 3.1 Patches (40, generated by `rebuild.py`)
 
 | Group | Sites | Replacement |
 |---|---|---|
 | INIT | 4014h-4022h (the four bank writes) | `call initGame` + nops: SP = F380h, clear C000h-DD5Fh, E000h-E017h, EA00h-F2FFh, H.KEYI -> XIRQ |
 | INIT | 5CD5h `ld (hl),0` (hl = 4000h) | nop |
+| INIT | 9D22h `ld de,D000h`; 9C1Eh, 9C48h, 9C92h, 9CBCh `ld b,D0h` | the title graphics table at C800h (D000h-DFFFh holds the transport) |
+| Sound | 7B75h `ld de,7C74h` (the H.TIMI hook) | `ld de,PN_IRQ`: the engine ticks 7C74h (`G_SOUND_TICK`) |
 | Frame, pause | 4161h, 43E2h, 43ECh | `call inAct` |
 | Title menu | 4468h | `call inP1` (the inviter) |
 | After game over | 4507h | `call inAny` (either player) |
 | Name entry | 459Eh, 45B7h | `call keyAct` |
 | Secret keys | 6D73h `call 6D77h` | nops |
-| `ld a,r` | the 10 above | `call rAnd7F/rRra/rAnd0C/rAnd3F/rAnd0F` |
+| `ld a,r` | the 10 above | `call rnd/rRra/rAnd0C/rAnd3F/rAnd0F` (`rnd` is `ld a,r / and 7Fh`) |
 | Bank switches | 14 sites | `call MK_W2` / `call MK_W3` |
 
 `inP1`, `inAny`, `inAct` all start with PN_TICK (the exchange), then pick: player 1's byte, the OR of both, or the active player's
@@ -139,9 +145,9 @@ exchanges in a loop therefore depends on the network, not on time: the title's 4
 | 1 | page 1, always (0,1) (the table has a second, unused entry: the loader wants a spare per page) |
 | 12 | page 2, pinned: (2,3) (5,4) (5,6) (5,7) (2,8) (2,9) (2,10) (2,11) (2,12) (2,13) (2,14) (2,15) |
 | 4 | (2,4) (2,6) (2,7) (5,3), seen in play |
-| 7 | spares (the clock replaces among the 12 non-pinned) |
+| 4 | (5,8) (5,9) (5,10) (5,11), never seen; the clock replaces among the 8 non-pinned |
 
-Minimum 20, recommended 28.
+20 page-2 table entries (`MK_P2_MAX`; 24 before, cut for room in the stub). Minimum 20, recommended 24.
 
 ## 4. Open points
 
