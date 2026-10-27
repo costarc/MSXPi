@@ -74,7 +74,7 @@ for n in 2 1; do
   [ $n = 2 ] || [ -n "$BOTH" ] || continue
   D="$WORK/hdplaynet$n"; rm -rf "$D"; mkdir -p "$D"
   cp "$SRC/build/PLAYNET.COM" "$SRC/build/PLAYNET.OVL" "$WORK/1942.GPF" "$ROOT/software/UNAPI/bin/INL.COM" \
-    "$ROOT/software/UNAPI/bin/RAMHELPR.COM" "$D/"
+    "$ROOT/software/UNAPI/bin/RAMHELPR.COM" "$ROOT/software/target/ETHUNAPI.COM" "$D/"
   cp "$P1942_ROM" "$D/1942.ROM"
   if [ -n "$CHAT" ]; then               # the chat over TCP/IP: MCHAT /T in C:\PLAYNET with its INI (the IRC fixture is the host)
     cp "$ROOT/software/target/mchat.com" "$D/MCHAT.COM"
