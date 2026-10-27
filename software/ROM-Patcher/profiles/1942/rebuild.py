@@ -123,6 +123,9 @@ def make_patches(symbols):
     # The input readers: every call is a TICK
     for cpu, expected, routine, what in INPUT_CALLS:
         patch(0, cpu, expected, b'\xcd' + word(routine), f'input {what} -> {routine}: PN_TICK, then the net input')
+    # The waits for a jingle to end poll the driver's busy byte (F068h) with no input read: no TICK, no sound tick, no exit key
+    for cpu, expected in ((0x45F3, 'cd707c'), (0x51F7, 'cd707c'), (0x5612, '3a68f0')):
+        patch(0, cpu, expected, b'\xcd' + word('sndSt'), 'wait for the sound driver -> sndSt: PN_TICK, then F068h')
     patch(1, 0x6D73, 'cd776d', bytes(3), 'The secret key combination (6D77h) is not read: it is local')
     patch(1, 0x7B75, '11747c', b'' + word('PN_IRQ'),
           'the H.TIMI hook: the music driver (7C74h) -> PN_IRQ, which counts; the engine ticks the driver (G_SOUND_TICK)')

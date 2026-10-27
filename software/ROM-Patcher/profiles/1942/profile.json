@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "5efff8334f3868fa8be7d68959d2ca557204f9f837987bc2ac0458c620846b2e"
+      "sha256": "714d033e98042846fe57cb709dedf7d31edafe74006e5adde75353624791b6af"
     }
   },
   "layout": [
@@ -86,6 +86,12 @@
       "reason": "45B7h (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
+      "offset": 1523,
+      "expected": "cd707c",
+      "replace": "cdf5e5",
+      "reason": "45F3h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
+    },
+    {
       "offset": 1729,
       "expected": "320070",
       "replace": "cdd3e3",
@@ -116,10 +122,22 @@
       "reason": "5128h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
+      "offset": 4599,
+      "expected": "cd707c",
+      "replace": "cdf5e5",
+      "reason": "51F7h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
+    },
+    {
       "offset": 5197,
       "expected": "320078",
       "replace": "cdd9e3",
       "reason": "544Dh (bank 0): ld (7800h),a -> MK_W3"
+    },
+    {
+      "offset": 5650,
+      "expected": "3a68f0",
+      "replace": "cdf5e5",
+      "reason": "5612h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
     },
     {
       "offset": 7381,
@@ -154,43 +172,43 @@
     {
       "offset": 9122,
       "expected": "ed5f1f",
-      "replace": "cde4e5",
+      "replace": "cddee5",
       "reason": "63A2h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9135,
       "expected": "ed5fe60c",
-      "replace": "cde9e500",
+      "replace": "cde3e500",
       "reason": "63AFh (bank 1): ld a,r -> rAnd0C, deterministic"
     },
     {
       "offset": 9169,
       "expected": "ed5fe63f",
-      "replace": "cdefe500",
+      "replace": "cde9e500",
       "reason": "63D1h (bank 1): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 9176,
       "expected": "ed5f1f",
-      "replace": "cde4e5",
+      "replace": "cddee5",
       "reason": "63D8h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9456,
       "expected": "ed5fe60f",
-      "replace": "cdf5e500",
+      "replace": "cdefe500",
       "reason": "64F0h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
       "offset": 9685,
       "expected": "ed5f1f",
-      "replace": "cde4e5",
+      "replace": "cddee5",
       "reason": "65D5h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9843,
       "expected": "ed5f1f",
-      "replace": "cde4e5",
+      "replace": "cddee5",
       "reason": "6673h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
@@ -202,7 +220,7 @@
     {
       "offset": 10514,
       "expected": "ed5fe60f",
-      "replace": "cdf5e500",
+      "replace": "cdefe500",
       "reason": "6912h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {

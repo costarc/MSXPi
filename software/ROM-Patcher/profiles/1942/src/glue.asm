@@ -127,23 +127,15 @@ zero:   ld      e,l
 ; ---- ld a,r ------------------------------------------------------------------------------------------
 ; R differs between machines. Each "ld a,r" and the instruction after it becomes a call to one of these:
 ; the same instruction on a deterministic value (xorshift, bit 7 clear as R's would be).
-rnd:    push    hl
+rnd:    push    hl                              ; a 16-bit LFSR (taps 002Dh, 65535 long), A = its high byte, bit 7 clear
         ld      hl,(rndS)
-        ld      a,h
-        rra
+        add     hl,hl
+        jr      nc,.n
         ld      a,l
-        rra
-        xor     h
-        ld      h,a
-        ld      a,l
-        rra
-        ld      a,h
-        rra
-        xor     l
+        xor     $2D
         ld      l,a
-        xor     h
-        ld      h,a
-        ld      (rndS),hl
+.n:     ld      (rndS),hl
+        ld      a,h
         and     $7F
         pop     hl
         ret
@@ -161,6 +153,12 @@ rAnd3F: call    rnd
 rAnd0F: call    rnd
         and     $0F
         ret
+
+; ---- the sound driver's wait loops --------------------------------------------------------------------------
+; The game waits for a jingle to end by polling the driver's state (F068h) without reading input: 5612h, 45F3h,
+; 51F7h. Only a TICK ticks the driver, so each poll is one (and the exit key is scanned in it).
+sndSt:  call    PN_TICK
+        jp      $7C70                           ; the game's own ld a,(F068h) / ret
 
 stubEnd:
         ASSERT  stubEnd <= PN_ORG + STUB_MAX
