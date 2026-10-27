@@ -330,6 +330,21 @@ L2_HASWAIT:
     ld a,c
     cp b
     ret
+L2_IN_PAGE1:
+    ld a,h
+    cp #0x80
+    jr nc,L2IP_OUT
+    push hl
+    add hl,bc
+    dec hl
+    ld a,h
+    pop hl
+    cp #0x40
+    ccf
+    ret
+L2IP_OUT:
+    or a
+    ret
 L2_PUT_FRAME:
     push ix
     pop hl
@@ -360,8 +375,10 @@ L2_SEND_BLOCK:
     jr nz,L2S_HEADER
     or b
     jr z,L2S_HEADER
-    bit 7,23(ix)
-    jr z,L2S_HEADER
+    ld l,22(ix)
+    ld h,23(ix)
+    call L2_IN_PAGE1
+    jr c,L2S_HEADER
     ld d,#0x80
 L2S_HEADER:
     ld 14(ix),d
@@ -466,8 +483,10 @@ L2O_HELLO:
     jr L2_PROTO
 L2O_ACKED:
     ld e,#0x0
-    bit 7,23(ix)
-    jr z,L2O_NOWAIT
+    ld a,23(ix)
+    sub #0x40
+    cp #0x40
+    jr c,L2O_NOWAIT
     call L2_HASWAIT
     jr z,L2O_NOWAIT
     inc e
@@ -628,6 +647,8 @@ L2R_DEST:
     or b
     jr z,L2R_POLL
     ex de,hl
+    call L2_IN_PAGE1
+    jr c,L2R_POLL_HL
     push hl
     push bc
     ld d,b
@@ -636,6 +657,8 @@ L2R_DEST:
     pop hl
     call LINK_CRC
     jr L2R_TRAIL
+L2R_POLL_HL:
+    ex de,hl
 L2R_POLL:
     call LINK_GET
     ret c
