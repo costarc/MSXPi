@@ -360,15 +360,13 @@ foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperR
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
 }
 
-# Default NitrOS-9 runtime config, only when absent: the user edits it for their XRoar and ROMs.
-New-Item -ItemType Directory -Force "$MsxPiHome
-itros" | Out-Null
-if (-not (Test-Path "$MsxPiHome
-itros
-itros.json")) {
-    Get-File "$srv/nitros/nitros.json" "$MsxPiHome
-itros
-itros.json" -Optional | Out-Null
+# Default NitrOS-9 runtime config and guest images, only when absent: they are the user's to
+# edit (nitros.json for their XRoar and ROMs) and writable (the disks).
+New-Item -ItemType Directory -Force "$MsxPiHome\nitros\files" | Out-Null
+foreach ($f in @("nitros.json", "boot.bin", "boot.dsk", "exchange.dsk", "msxexit")) {
+    if (-not (Test-Path "$MsxPiHome\nitros\$f")) {
+        Get-File "$srv/nitros/$f" "$MsxPiHome\nitros\$f" -Optional | Out-Null
+    }
 }
 
 # Never overwrite msxpi.ini: it holds the user's API keys and PSET values.

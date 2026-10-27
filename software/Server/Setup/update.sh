@@ -120,15 +120,19 @@ for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msx
 done
 # Default NitrOS-9 runtime config (msxpi_nitros.py reads nitros/nitros.json). Only when
 # absent: once the user has edited it for their XRoar and ROMs, an update leaves it alone.
-if [ ! -s nitros/nitros.json ]; then
-    if get "$BASE" nitros/nitros.json; then
-        mv -f nitros/nitros.json.new nitros/nitros.json
-        echo "ok   nitros/nitros.json (default)"
+# The guest images (boot.dsk, exchange.dsk, boot.bin, msxexit) come the same way: they are
+# writable guest disks, so an existing one is never replaced.
+mkdir -p nitros/files
+for f in nitros.json boot.bin boot.dsk exchange.dsk msxexit; do
+    [ -s "nitros/$f" ] && continue
+    if get "$BASE" "nitros/$f"; then
+        mv -f "nitros/$f.new" "nitros/$f"
+        echo "ok   nitros/$f (default)"
     else
-        rm -f nitros/nitros.json.new
-        echo "FAIL nitros/nitros.json (the server writes a default when NitrOS starts)"
+        rm -f "nitros/$f.new"
+        echo "FAIL nitros/$f"
     fi
-fi
+done
 # Run by msxpi-monitor at every start to give the MSX its network. Older setups
 # never installed it, so on those it arrives with the first update.
 f=msxpi-tcpip-setup.sh
@@ -215,7 +219,7 @@ if [ "$(id -u)" = 0 ]; then
         msxpi_netplay.py msxpi_chat.py msxpi_games.py \
         msxpi_player.py msxpi_link2.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         msxpi-tcpip-setup.sh 2>/dev/null
-    chown -R "$owner" native 2>/dev/null
+    chown -R "$owner" native nitros 2>/dev/null
     chown -R "$owner" "$GAMES_DIR" 2>/dev/null
 fi
 
