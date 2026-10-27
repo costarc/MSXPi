@@ -20,13 +20,15 @@ STUB_MAX:       EQU     $E600-$E018             ; netplay.stub.max
 
 G_INPUT_BYTES:  EQU     2                       ; byte 0: joystick and triggers (6D09h), byte 1: text entry key (6DAAh)
 G_READ_LOCAL:   EQU     rdLocal
-G_SOUND_TICK:   EQU     0                       ; the game plays its sound from its main loop, not from an interrupt
+G_SOUND_TICK:   EQU     $7C74                   ; the music driver: the game hooks it to H.TIMI (7B71h), patched to PN_IRQ.
+G_SOUND_MIN:    EQU     0                       ; It needs bank 2 in W2, which every TICK site has. A TICK is an input
+                                                ; poll (the title polls without waiting): no interrupt, no tick
 G_CHECK_ADDR:   EQU     $ED00                   ; the player blocks and what follows
 G_CHECK_LEN:    EQU     $0200
 
 MK_BANKS:       EQU     16                      ; 128 KB of 8 KB banks
 MK_P1_MAX:      EQU     2                       ; page 1 is always (0,1) (the game writes the W2 and W3 registers only); the loader wants a spare entry
-MK_P2_MAX:      EQU     24
+MK_P2_MAX:      EQU     20                      ; 16 pairs seen in play, and room
 MK_MAP:         EQU     $E600                   ; the bank engine's pair map, E600h-E9FFh
 
 GAME_JOY:       EQU     $6D09                   ; the game's input reader: ED10h = direction, triggers, STOP
@@ -80,7 +82,7 @@ inAny:  call    PN_TICK
         jr      setIn
 inAct:  call    PN_TICK
         call    active
-        ld      a,(hl)
+setHL:  ld      a,(hl)
 setIn:  ld      (INPUT),a
         ret
 
@@ -88,9 +90,7 @@ setIn:  ld      (INPUT),a
 keyAct: call    PN_TICK
         call    active
         inc     hl
-        ld      a,(hl)
-        ld      (INPUT),a
-        ret
+        jr      setHL
 
 ; ---- INIT: the same RAM on both machines, and the interrupt hook ----------------------------------------------
 ; The BIOS cleared the RAM of a cartridge game's machine; under MSX-DOS it holds whatever it held. At 4014h, in place
@@ -148,11 +148,8 @@ rnd:    push    hl
         ret
 rndS:   defw    $A5C3
 
-rRra:   call    rnd                             ; ld a,r / rra
+rRra:   call    rnd                             ; ld a,r / rra (ld a,r / and 7Fh is rnd itself)
         rra
-        ret
-rAnd7F: call    rnd                             ; ld a,r / and 7Fh
-        and     $7F
         ret
 rAnd0C: call    rnd
         and     $0C

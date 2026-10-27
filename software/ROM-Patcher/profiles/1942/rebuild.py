@@ -55,7 +55,7 @@ BANK_SWITCHES = [
 ]
 
 # ld a,r and the instruction after it (all in bank 1) -> call to the glue's deterministic version
-LD_A_R = [(0x6100, 'ed5fe67f', 'rAnd7F'), (0x6127, 'ed5fe67f', 'rAnd7F'), (0x63A2, 'ed5f1f', 'rRra'),
+LD_A_R = [(0x6100, 'ed5fe67f', 'rnd'), (0x6127, 'ed5fe67f', 'rnd'), (0x63A2, 'ed5f1f', 'rRra'),
           (0x63AF, 'ed5fe60c', 'rAnd0C'), (0x63D1, 'ed5fe63f', 'rAnd3F'), (0x63D8, 'ed5f1f', 'rRra'),
           (0x64F0, 'ed5fe60f', 'rAnd0F'), (0x65D5, 'ed5f1f', 'rRra'), (0x6673, 'ed5f1f', 'rRra'),
           (0x6912, 'ed5fe60f', 'rAnd0F')]
@@ -66,14 +66,17 @@ INPUT_CALLS = [(0x4161, 'cd096d', 'inAct', 'the frame'), (0x43E2, 'cd096d', 'inA
                (0x4507, 'cd096d', 'inAny', 'the game over wait: anyone'),
                (0x459E, 'cdaa6d', 'keyAct', 'hi-score name entry'), (0x45B7, 'cdaa6d', 'keyAct', 'hi-score name entry')]
 
+# The title graphics routine (9B30h) reads its table at D000h + C006h * 8 + 0..7: ld b,D0h / add hl,bc
+TABLE_READS = (0x9C1E, 0x9C48, 0x9C92, 0x9CBC)
+
 # Pairs the loader builds. Page 1 is always (0,1). Page 2: the first twelve are pinned and are the homes of banks 2-15
 # (the game only ever has bank 2 or 5 in W2, so every other bank needs a pair of its own); then the pairs seen in play,
 # then the ones that could come. The loader builds as many as the machine has segments for.
 PAGE1_PAIRS = [(0, 1)]
 PAGE2_PAIRS = [(2, 3), (5, 4), (5, 6), (5, 7), (2, 8), (2, 9), (2, 10), (2, 11), (2, 12), (2, 13), (2, 14), (2, 15),
-               (2, 4), (2, 6), (2, 7), (5, 3), (5, 8), (5, 9), (5, 10), (5, 11), (5, 12), (5, 13), (5, 14), (5, 15)]
+               (2, 4), (2, 6), (2, 7), (5, 3), (5, 8), (5, 9), (5, 10), (5, 11)]     # MK_P2_MAX (glue.asm) entries
 PINNED = (1, 12)
-MIN_SEGMENTS, RECOMMENDED_SEGMENTS = 20, 28
+MIN_SEGMENTS, RECOMMENDED_SEGMENTS = 20, 24
 
 
 def offset(bank, cpu):
@@ -112,10 +115,17 @@ def make_patches(symbols):
     patch(0, 0x4014, '320060' '3c' '320068' '3c' '320070' '3c' '320078', b'\xcd' + word('initGame') + bytes(12),
           'INIT: the four bank-register writes -> clear the game RAM, SP = F380h, H.KEYI -> XIRQ (initGame)')
     patch(0, 0x5CD5, '3600', bytes(2), 'INIT: ld (4000h),0 (the ldir after it is already gone): a write into the ROM copy')
+    # The title graphics (9B30h, once, from INIT) expand a 4 KB table into D000h-DFFFh: over the transport. It goes
+    # to C800h-D7FFh instead (the routine's own scratch is C000h-C020h; the stage map overwrites both later).
+    patch(2, 0x9D22, '1100d0', bytes.fromhex('1100c8'), 'INIT: the title graphics table D000h -> C800h (the transport is at DD60h)')
+    for cpu in TABLE_READS:
+        patch(2, cpu, '06d0', bytes.fromhex('06c8'), 'the title graphics table D000h -> C800h')
     # The input readers: every call is a TICK
     for cpu, expected, routine, what in INPUT_CALLS:
         patch(0, cpu, expected, b'\xcd' + word(routine), f'input {what} -> {routine}: PN_TICK, then the net input')
     patch(1, 0x6D73, 'cd776d', bytes(3), 'The secret key combination (6D77h) is not read: it is local')
+    patch(1, 0x7B75, '11747c', b'' + word('PN_IRQ'),
+          'the H.TIMI hook: the music driver (7C74h) -> PN_IRQ, which counts; the engine ticks the driver (G_SOUND_TICK)')
     for cpu, expected, routine in LD_A_R:
         patch(1, cpu, expected, b'\xcd' + word(routine) + bytes(len(expected) // 2 - 3),
               f'ld a,r -> {routine}, deterministic')

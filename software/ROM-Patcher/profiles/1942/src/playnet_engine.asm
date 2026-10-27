@@ -9,6 +9,9 @@
 ;   G_SOUND_TICK   the sound driver, called with interrupts off after the exchange, T times a frame (0 = none)
 ;   G_CHECK_ADDR, G_CHECK_LEN   region checksummed every 32 frames (even length, at most 512)
 ; Optional: SCRIPTED (test builds: the local input comes from a fixed table, not from G_READ_LOCAL).
+;   G_SOUND_MIN    0: a frame that counted no interrupt ticks the driver 0 times (default 1: at least once), for a game
+;                  whose TICKs are input polls rather than frames
+
 ; The game's own per-interrupt sound calls are patched to PN_IRQ, which only counts interrupts.
 ;
 ; Both machines run the whole game; only the inputs cross the network. Frame F uses the local input read
@@ -23,7 +26,12 @@
 ; Sound: the original ticks its driver on every interrupt, and the game reads the driver's state (it
 ; waits for a jingle to end), so the number of ticks must be the same on both machines. Each frame record
 ; carries, after the W input bytes, the interrupts its sender counted during its last frame. Frame F ticks
-; the driver T times, T = the count in player 1's record for F (seat 0), limited to 1..SND_MAX.
+; the driver T times, T = the count in player 1's record for F (seat 0), limited to 1..SND_MAX (0..SND_MAX
+; with G_SOUND_MIN = 0).
+
+        IF      !EXIST G_SOUND_MIN
+G_SOUND_MIN:    EQU     1
+        ENDIF
 
 W:              EQU     G_INPUT_BYTES
 REC:            EQU     W+1                     ; frame record: W input bytes, then the interrupt count
@@ -88,9 +96,14 @@ tickDone:
         IF      G_SOUND_TICK
         ld      a,(sndN)                        ; the sound driver ticks here, as often as
         or      a                               ; player 1's machine counted interrupts
+        IF      G_SOUND_MIN
         jr      nz,.n1
         inc     a
-.n1:    cp      SND_MAX+1
+.n1:
+        ELSE
+        jr      z,.none
+        ENDIF
+        cp      SND_MAX+1
         jr      c,.n2
         ld      a,SND_MAX
 .n2:    ld      b,a
@@ -100,6 +113,7 @@ tickDone:
         ei
         pop     bc
         djnz    .snd
+.none:
         ENDIF
         pop     iy
         pop     ix
