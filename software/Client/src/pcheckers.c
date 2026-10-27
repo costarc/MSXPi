@@ -15,6 +15,7 @@
 #include "../../C-common/header/fusion.h"
 #include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
+#include "arrowkeys.h"
 
 #define BOARD_X 8
 #define BOARD_Y 12
@@ -987,8 +988,8 @@ static uint8_t menu(void) {
 }
 
 int main(void) {
-    uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
-    uint16_t lastarrow=0,lastpoll=0,now;
+    uint8_t key,joy,fire,lastjoy=0,lastfire=0;
+    uint16_t lastpoll=0,now;
     /* SCREEN 5 and the VDP commands need an MSX2 (V9938) or later. */
     if(!*(volatile uint8_t *)0xFAF8) {
         Print("PCHECKERS NEEDS AN MSX2\r\n");
@@ -1028,11 +1029,7 @@ int main(void) {
         if(fire && !lastfire) key=' ';
         lastjoy=joy; lastfire=fire;
         now=*(volatile uint16_t *)0xFC9E;
-        /* Consume rapid BIOS repeats without queuing delayed cursor moves. */
-        if(key>=0x1c && key<=0x1f) {
-            if(arrow_seen && (uint16_t)(now-lastarrow)<8) key=0;
-            else {lastarrow=now; arrow_seen=1;}
-        }
+        key=arrow_gate(key);   /* arrowkeys.h */
         if(!key) {
             /* Every 2 s on the MSXPi; every second on TCP/IP, where this
              * poll is also what reads the IRC connection. */
@@ -1107,6 +1104,7 @@ int main(void) {
             entry[entry_len++]=key; entry[entry_len]=0;
         }
         draw_board();
+        arrow_done();
     }
     tcp_link_stop();
     RestoreSC5Palette();
