@@ -53,3 +53,5 @@ __pycache__/
 
 # Rebuilt by make.bat on every client build
 software/C-common/lib/msxpi-bios.lib
+software/C-common/lib/msxpi-bios46.lib
+software/C-common/lib/fusion46.lib

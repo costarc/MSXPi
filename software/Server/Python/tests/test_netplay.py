@@ -23,10 +23,11 @@ def free_ports(count):
     return ports
 
 
-def make_pair(**env_b):
+def make_pair(env_a=None, **env_b):
     pa, pb = free_ports(2)
     ea = {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pa, pb), 'MSXPI_NETPLAY_SEED': '1'}
     eb = {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pb, pa), 'MSXPI_NETPLAY_SEED': '2'}
+    ea.update(env_a or {})
     eb.update(env_b)
     quiet = lambda *a: None
     return n.Netplay(None, None, ea, quiet), n.Netplay(None, None, eb, quiet)
@@ -57,12 +58,62 @@ def packet(seq, width=1):
     return bytes([n.KIND_GAME, seq, 0, width]) + bytes((seq + i) & 0xFF for i in range(8 * (width + 1))) + b'\xff\x00'
 
 
+def stream(count, width=2, first=0):
+    """Consecutive game packets as the stub sends them: F = seq = first..first+count-1, each carrying the records of
+    frames F-7..F (W input bytes and a count, from the frame number), so each repeats 7 records of the one before."""
+    rec = lambda f: bytes(((f * 7 + i) & 0xFF) for i in range(width)) + bytes([f % 3 + 1])
+    return [bytes([n.KIND_GAME, f & 0xFF, f & 0xFF, width]) + b''.join(rec(f - 7 + j) for j in range(8))
+            + bytes([f & 0xF0, (f * 5) & 0xFF]) for f in range(first, first + count)]
+
+
+class Deltas(unittest.TestCase):
+    def test_a_following_packet_shrinks_to_r_plus_4_bytes(self):
+        for width in (1, 2, 4):
+            p0, p1 = stream(2, width, first=20)
+            d = n.delta_of(p1, p0)
+            self.assertEqual(len(d), width + 5)
+            self.assertEqual(n.undelta(d, p0), p1)
+
+    def test_a_packet_every_k_frames_carries_k_records(self):
+        for width in (1, 2, 4):
+            for k in (2, 3):
+                p0, *_, pk = stream(k + 1, width, first=250)
+                d = n.delta_of(pk, p0)
+                self.assertEqual(len(d), k * (width + 1) + 4)
+                self.assertLess(len(d), 22)                             # shorter than any full packet
+                self.assertEqual(n.undelta(d, p0), pk)
+
+    def test_only_the_next_packets_are_deltas(self):
+        p0, p1, p2, p3, p4 = stream(5)
+        self.assertIsNone(n.delta_of(p4, p0))                           # F four ahead: more than MAX_K
+        self.assertIsNone(n.delta_of(p0, p0))                           # a resend
+        self.assertIsNone(n.delta_of(p0, p1))                           # an older window
+        self.assertIsNone(n.delta_of(p1, None))
+        changed = bytearray(p1)
+        changed[5] ^= 1                                                 # an old record that changed
+        self.assertIsNone(n.delta_of(bytes(changed), p0))
+        self.assertIsNone(n.undelta(n.delta_of(p2, p1), p0))            # applied to the wrong base
+        self.assertIsNone(n.undelta(n.delta_of(p1, p0), None))
+
+    def test_wraps_at_frame_255(self):
+        p0, p1 = stream(2, first=255)
+        self.assertEqual(n.undelta(n.delta_of(p1, p0), p0), p1)
+
+
 class Delay(unittest.TestCase):
     def test_choose_delay(self):
         self.assertEqual(n.choose_delay([0.001] * 8), 3)       # localhost
         self.assertEqual(n.choose_delay([0.125] * 8), 6)       # 125 ms round trip, clamped
         self.assertEqual(n.choose_delay([0.040] * 8), 3)
         self.assertEqual(n.choose_delay([2.0] * 8), n.MAX_DELAY)
+
+    def test_delay_rule_with_k_and_service(self):
+        # ceil(rtt90 / 2 / 20 ms) + 2 + (K - 1) + S, clamped to 2..7
+        self.assertEqual(n.choose_delay([0.001] * 8, 2, 0), 4)
+        self.assertEqual(n.choose_delay([0.001] * 8, 2, 1), 5)
+        self.assertEqual(n.choose_delay([0.001] * 8, 3, 2), 7)
+        self.assertEqual(n.choose_delay([0.125] * 8, 3, 1), n.MAX_DELAY)
+        self.assertEqual(n.MAX_DELAY, 7)
 
     def test_outlier_is_ignored_by_the_percentile(self):
         rtts = [0.001] * 7 + [0.5]
@@ -85,6 +136,21 @@ class Session(unittest.TestCase):
         self.assertEqual(self.a.delay, self.b.delay)
         self.assertGreaterEqual(self.a.delay, n.MIN_DELAY)
         self.assertLessEqual(self.a.delay, n.MAX_DELAY)
+
+    def test_k_is_the_larger_and_s_the_larger_of_both_sides(self):
+        for env_a, env_b in (({'MSXPI_NETPLAY_K': '1'}, {'MSXPI_NETPLAY_K': '2', 'MSXPI_NETPLAY_S': '1'}),
+                             ({'MSXPI_NETPLAY_K': '2', 'MSXPI_NETPLAY_S': '1'}, {'MSXPI_NETPLAY_K': '1'})):
+            self.pair = make_pair(env_a, **env_b)      # either side may be the leader: seeds differ, so try both
+            self.a, self.b = self.pair
+            self.a.restart()
+            self.b.restart()
+            self.assertTrue(wait_for(lambda: self.a.state == n.S_READY and self.b.state == n.S_READY))
+            self.assertEqual((self.a.k, self.b.k), (2, 2))
+            self.assertEqual(self.a.delay, self.b.delay)
+            self.assertEqual(self.a.delay, 5)                   # localhost: 3, + (K - 1) + S
+            self.assertEqual(txn(self.a, 0x80)[2], 2)           # the status carries K
+            for s in self.pair:
+                s.sock.close()
 
     def test_same_seed_still_elects_a_leader(self):
         pa, pb = free_ports(2)
@@ -127,7 +193,7 @@ class Session(unittest.TestCase):
         self.assertEqual(b.delay, 5)
 
     def test_version_mismatch_stops_both(self):
-        self.start(MSXPI_NETPLAY_VERSION='2')
+        self.start(MSXPI_NETPLAY_VERSION='3')
         self.assertTrue(wait_for(lambda: self.a.state == n.S_VERSION and self.b.state == n.S_VERSION))
         self.assertEqual(txn(self.a, 0x80)[0], 0xA0 + n.ST_VERSION)
 
@@ -136,7 +202,7 @@ class Session(unittest.TestCase):
         quiet = lambda *a: None
         a = n.Netplay(None, None, {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pa, pb)}, quiet)
         b = n.Netplay(None, None, {'MSXPI_NETPLAY': '%d:127.0.0.1:%d' % (pb, pa),
-                                   'MSXPI_NETPLAY_VERSION': '2'}, quiet)
+                                   'MSXPI_NETPLAY_VERSION': '3'}, quiet)
         self.pair = (a, b)
         a.restart()
         time.sleep(0.3)
@@ -173,7 +239,7 @@ class Session(unittest.TestCase):
         st = txn(self.a, 0x80)
         self.assertEqual(st[0], 0xA0 + n.ST_READY)
         self.assertEqual(st[1], self.a.delay)
-        self.assertEqual(st[2], self.a.delay)
+        self.assertEqual(st[2], self.a.k)                  # the third byte is K
 
 
 class Relay(unittest.TestCase):
@@ -221,6 +287,41 @@ class Relay(unittest.TestCase):
             self.assertTrue(wait_for(lambda: self.b.stats['malformed'] == 1, 2))
         finally:
             junk.close()
+
+    def test_delta_from_the_msx_is_relayed_in_full(self):
+        p0, p1 = stream(2)
+        txn(self.a, 1, p0)
+        txn(self.a, 1 | 4, n.delta_of(p1, p0))
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 2))
+        self.assertEqual([txn(self.b, 2)[1:-1] for _ in range(2)], [p0, p1])
+        self.assertEqual(self.a.stats['deltas_in'], 1)
+
+    def test_delta_without_its_base_is_lost(self):
+        p0, p1, p2 = stream(3)
+        txn(self.a, 1 | 4, n.delta_of(p1, p0))                          # the Pi never had p0
+        txn(self.a, 1, p0)
+        txn(self.a, 1 | 4, n.delta_of(p2, p1))                          # its base p1 never arrived
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 1))
+        time.sleep(0.2)
+        self.assertEqual(len(self.b.ready), 1)
+        self.assertEqual(self.a.stats['malformed'], 2)
+
+    def test_replies_are_deltas_only_when_allowed(self):
+        packets = stream(4)
+        for pkt in packets:
+            txn(self.a, 1, pkt)
+        self.assertTrue(wait_for(lambda: len(self.b.ready) == 4))
+        r0 = txn(self.b, 2 | 8)                                         # no base yet: in full
+        r1 = txn(self.b, 2 | 8)
+        r2 = txn(self.b, 2)                                             # not allowed: in full
+        r3 = txn(self.b, 2 | 8)
+        self.assertEqual(r0[1:-1], packets[0])
+        self.assertEqual(r1[0], 7)
+        self.assertEqual(r1[-1], sum(r1[1:-1]) & 0xFF)
+        self.assertEqual(n.undelta(r1[1:-1], packets[0]), packets[1])
+        self.assertEqual(r2[1:-1], packets[2])
+        self.assertEqual(n.undelta(r3[1:-1], packets[2]), packets[3])
+        self.assertEqual(self.b.stats['deltas_out'], 2)
 
     def test_poll_with_nothing_waiting(self):
         self.assertEqual(txn(self.b, 2), b'\x00\x00')

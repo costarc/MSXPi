@@ -1,0 +1,157 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "pingpong-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 16384,
+    "sha256": "8e0f57b2c52e85505505c1d4bb4643eb7311213676f0ecfe21dd06571fc0bbd5",
+    "crc32": 1059062929,
+    "file": "PINGPONG.ROM"
+  },
+  "output": {
+    "size": 16384,
+    "fill": 0,
+    "mapper": "plain",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own PINGPONG.ROM: Konami's Ping Pong (1985), 16 KB, the dump identified above",
+    "PLAYNET, over an MSXPi or over TCP/IP UNAPI (with a memory mapper)",
+    "Any MSX with 64 KB RAM on the MSXPi path"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "c76dfadf1fee88f3f386b848b242588f9ce4db202693e59f2e0ed7a9b8b3a199"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 16384,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 19,
+      "expected": "32ee40",
+      "replace": "000000",
+      "reason": "4013h: Anti-copy write ld (40EEh),a (a RET over a DJNZ): a no-op on a cartridge, harmful in RAM"
+    },
+    {
+      "offset": 29,
+      "expected": "cd9551",
+      "replace": "cd2fc1",
+      "reason": "401Dh: Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
+    },
+    {
+      "offset": 51,
+      "expected": "cde347",
+      "replace": "cdd9c3",
+      "reason": "4033h: TICK site: the pad reader, once per frame -> PN_TICK (the exchange), then the reader"
+    },
+    {
+      "offset": 74,
+      "expected": "fc9551",
+      "replace": "fc2fc1",
+      "reason": "404Ah: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
+    },
+    {
+      "offset": 82,
+      "expected": "22f840",
+      "replace": "000000",
+      "reason": "4052h: Anti-copy write ld (40F8h),hl (0000h over the operand of a JP): same"
+    },
+    {
+      "offset": 117,
+      "expected": "1940",
+      "replace": "06c5",
+      "reason": "4075h: H.KEYI hook (ld hl,4019h at 4074h) -> the transport's XIRQ, which jumps to 4019h"
+    },
+    {
+      "offset": 683,
+      "expected": "cd004857cd1248b2",
+      "replace": "cddfc30000000000",
+      "reason": "42ABh: Menu reader: player 1's byte of this frame"
+    },
+    {
+      "offset": 935,
+      "expected": "cd004857cd1248b2",
+      "replace": "cddfc30000000000",
+      "reason": "43A7h: Title menu reader: player 1's byte of this frame"
+    },
+    {
+      "offset": 973,
+      "expected": "3202e0",
+      "replace": "cde7c3",
+      "reason": "43CDh: Title menu start: both choices are the 2 player mode"
+    },
+    {
+      "offset": 2022,
+      "expected": "cd004857cd1248b2",
+      "replace": "cddfc30000000000",
+      "reason": "47E6h: Player 1's pad: the byte of this frame"
+    },
+    {
+      "offset": 2117,
+      "expected": "cd024857cd5248b2",
+      "replace": "cde3c30000000000",
+      "reason": "4845h: Player 2's pad: the other player's byte of this frame"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "pingpong",
+    "title": "Konami Ping Pong",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "plain",
+      "base": 16384
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 49408,
+      "max": 1024
+    },
+    "transport_area": {
+      "address": 50432,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        54528,
+        54783
+      ],
+      [
+        57344,
+        58623
+      ]
+    ],
+    "irq_handler": 16409,
+    "start": "header-init",
+    "min_playnet": 2,
+    "requires": []
+  },
+  "symbols": {
+    "PN_TICK": 49413,
+    "PN_IRQ": 49455,
+    "PN_P1": 50002,
+    "PN_P2": 50003,
+    "tickSite": 50137,
+    "key1": 50143,
+    "key2": 50147,
+    "forceTwo": 50151,
+    "rdLocal": 50128,
+    "stubEnd": 50157
+  }
+}

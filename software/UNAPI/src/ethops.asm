@@ -53,6 +53,17 @@ OP_RESET:       equ     0C8h
 ETH_RC_OK:      equ     000h
 FLAG_MORE:      equ     001h
 
+; The wire protocol version OP_PROBE must report - PROTO_VERSION in
+; msxpi_eth.py.  2: ETH_IN_STATUS carries small frames inline (see
+; FN_IN_STATUS), and ETH_SEND_FRAME's payload is received as one RDY-held
+; burst so that it can be sent with OTIR.  A mismatch is refused, not worked
+; around: see MODE_REFUSED.
+ETH_PROTO:      equ     2
+
+; ETH_IN_STATUS reply flag (o_RXC): 0 no frame, 1 a frame is waiting at the Pi,
+; RXF_INLINE the frame came with this reply and is held in the work area.
+RXF_INLINE:     equ     2
+
 MAX_FRAME_LEN:  equ     1514
 MIN_FRAME_LEN:  equ     16
 
@@ -62,8 +73,9 @@ MIN_FRAME_LEN:  equ     16
 ; In:  A = opcode
 ;      B = argument byte, sent only when C is non-zero
 ;      C = 0 no argument, non-zero send B
-;      D = number of reply bytes to read into ETH_BUF
-;      E = 0 accept any reply, 1 require ETH_BUF[0] == ETH_RC_OK
+;      D = number of reply bytes to read into ETH_BUF (1 or more)
+;      E = 0 accept any reply, 1 require ETH_BUF[0] == ETH_RC_OK,
+;          2 the ETH_IN_STATUS reply - see ETH_OPX
 ; Out: CF=0 success, ETH_BUF holds the reply
 ;      CF=1 failure (busy, link dead, not ready, timeout, or bad result code)
 ;
@@ -77,15 +89,21 @@ MIN_FRAME_LEN:  equ     16
 ; a leftover byte from the previous reply's MAC address - and a benchmark
 ; reporting 2048 of 2048 calls "successful" in zero elapsed time.  Every fast
 ; op answers with a result code first, so checking it is what turns a silent
-; wrong answer into an honest failure.  E=0 is only for ETH_IN_STATUS, whose
+; wrong answer into an honest failure.  E=2 is only for ETH_IN_STATUS, whose
 ; reply has no result-code byte.
+;
+; The parameters stay in their registers throughout: ETH_LOCK, ETH_BEGIN and
+; ETH_TX only corrupt AF, so only the opcode has to be parked.
 ETH_OP:
+            ld      h,o_ETH_BUF
+; --- ETH_OPX: ETH_OP with H = the work-area offset the reply is read to.
+; E=2 is ETH_IN_STATUS: when its flag says RXF_INLINE the frame and its
+; checksum follow the 5-byte reply and are read, in the same transaction,
+; into the bytes after it (o_RXC_FRAME).  The length is checked before a byte
+; of it is read: in wait mode a desynchronised link returns garbage, and a
+; garbage length would write far past the end of the work area.
+ETH_OPX:
             ld      (ix+o_ETH_OPC),a
-            ld      (ix+o_ETH_ARG),b
-            ld      (ix+o_ETH_HASARG),c
-            ld      (ix+o_ETH_RLEN),d
-            ld      (ix+o_ETH_CHKRC),e
-
             call    ETH_LOCK
             ret     c                       ; busy or dead - do not unlock
 
@@ -96,26 +114,27 @@ ETH_OP:
             call    ETH_TX
             jr      c,.fail
 
-            ld      a,(ix+o_ETH_HASARG)
+            ld      a,c
             or      a
             jr      z,.noarg
-            ld      a,(ix+o_ETH_ARG)
+            ld      a,b
             call    ETH_TX
             jr      c,.fail
 .noarg:
-            ld      a,(ix+o_ETH_RLEN)
-            or      a
-            jr      z,.done
-            ld      c,a
+            ld      a,h
+            ld      c,d
             ld      b,0
-            ld      a,o_ETH_BUF
             call    WRKPTR
-            call    ETH_RX_BLOCK
+            push    de
+            call    ETH_RX_BLOCK            ; HL ends just past the reply
+            pop     de
             jr      c,.fail
 
-            ld      a,(ix+o_ETH_CHKRC)
+            ld      a,e
             or      a
             jr      z,.done
+            dec     a
+            jr      nz,.inline
             ld      a,(ix+o_ETH_BUF)        ; result code must be ETH_RC_OK
             or      a
             jr      nz,.fail
@@ -130,6 +149,23 @@ ETH_OP:
             call    ETH_UNLOCK
             scf
             ret
+.inline:
+            ld      a,(ix+o_RXC)
+            cp      RXF_INLINE
+            jr      nz,.done                ; no frame, or only announced
+            ld      c,(ix+o_RXC+1)
+            ld      a,(ix+o_RXC+2)
+            or      a
+            jr      nz,.fail                ; 256 or more: not a real reply
+            ld      b,a
+            ld      a,c
+            dec     a
+            cp      RX_INLINE_MAX
+            jr      nc,.fail                ; 0, or larger than the buffer
+            inc     bc                      ; and the checksum
+            call    ETH_RX_BLOCK
+            jr      c,.fail
+            jr      .done
 
 ; =============================================================================
 ; 1: ETH_RESET
@@ -150,19 +186,32 @@ FN_RESET:
             ; ETH_OP below, which takes ETH_LOCK - a lock this very flag would
             ; otherwise refuse, leaving reset unable to clear it.
             ld      (ix+o_LINK_BUSY),0
+            ; A refused Pi gets probed again, so updating the server is
+            ; enough - ETHTEST and INL's installer both reset first.
+            ld      a,(ix+o_ETH_MODE)
+            cp      MODE_REFUSED
+            call    z,ETH_DETECT
             call    ETH_REVIVE
             ld      (ix+o_ETH_LASTSEND),0        ; "no frames sent since last reset"
+            ld      (ix+o_RXC),0                 ; and none held: the Pi's
+                                                 ; queue is emptied below
             ld      a,OP_RESET
-            ld      b,0
             ld      c,0
-            ; TWO bytes, not one: every fast op replies with a result code
-            ; followed by its payload, and OP_RESET's payload is one byte.
-            ; Reading only the result code leaves the payload byte on the wire,
-            ; and every later transaction then reads shifted data - a silent
-            ; desync rather than a clean failure.
-            ld      d,2
-            ld      e,1
+            ; ETH_OP1 reads TWO bytes, not one: every fast op replies with a
+            ; result code followed by its payload, and OP_RESET's payload is
+            ; one byte.  Reading only the result code leaves the payload byte
+            ; on the wire, and every later transaction then reads shifted data
+            ; - a silent desync rather than a clean failure.
+            jp      ETH_OP1
+
+; --- ETH_OP1: a fast op whose reply is a result code and ONE byte.
+; In: A = opcode, B = argument, C = 0 none / non-zero send B (as ETH_OP).
+; Out: CF=0 A = the byte, or CF=1 failure.  Corrupts BC, DE, HL.
+ETH_OP1:
+            ld      de,2*256+1              ; RC + 1 byte, RC must be ok
             call    ETH_OP
+            ret     c
+            ld      a,(ix+o_ETH_BUF+1)
             ret
 
 ; =============================================================================
@@ -173,10 +222,8 @@ FN_RESET:
 ; which means L is byte 0 and B is byte 5 - not the other way round.
 FN_GET_HWADD:
             ld      a,OP_GET_HWADD
-            ld      b,0
-            ld      c,0
-            ld      d,7                     ; RC + 6 address bytes
-            ld      e,1
+            ld      c,0                     ; no argument
+            ld      de,7*256+1              ; RC + 6 address bytes, RC ok
             call    ETH_OP
             jr      c,.cached               ; on failure report what we know
 
@@ -206,16 +253,10 @@ FN_GET_HWADD:
 ; Out: A = 0 not connected, 1 connected.
 FN_GET_NETSTAT:
             ld      a,OP_GET_NETSTAT
-            ld      b,0
             ld      c,0
-            ld      d,2                     ; RC + state
-            ld      e,1
-            call    ETH_OP
-            jr      c,.down
-            ld      a,(ix+o_ETH_BUF+1)
-            ret
-.down:
-            xor     a
+            call    ETH_OP1
+            ret     nc
+            xor     a                       ; cannot reach the link: down
             ret
 
 ; =============================================================================
@@ -228,13 +269,8 @@ FN_GET_NETSTAT:
 FN_NET_ONOFF:
             ld      a,OP_NET_ONOFF
             ld      c,1                     ; B already holds the argument
-            ld      d,2
-            ld      e,1
-            call    ETH_OP
-            jr      c,.unknown
-            ld      a,(ix+o_ETH_BUF+1)
-            ret
-.unknown:
+            call    ETH_OP1
+            ret     nc
             ld      a,2                     ; cannot reach the link: disabled
             ret
 
@@ -257,13 +293,8 @@ FN_DUPLEX:
 FN_FILTERS:
             ld      a,OP_FILTERS
             ld      c,1
-            ld      d,2
-            ld      e,1
-            call    ETH_OP
-            jr      c,.unknown
-            ld      a,(ix+o_ETH_BUF+1)
-            ret
-.unknown:
+            call    ETH_OP1
+            ret     nc
             xor     a
             ret
 
@@ -281,29 +312,43 @@ FN_FILTERS:
 ;
 ; The reply has no RC byte: the first byte IS the availability flag.
 ;
-; TODO: ETH_GET_FRAME already learns whether another frame is queued behind the
-; one it returns.  Caching that would let most calls here answer with no round
-; trip at all, which on this link is the single biggest win available.
+; Wire (protocol 2): [C5] -> [flag][len lo][len hi][ethertype hi][ethertype lo]
+; and, when flag is RXF_INLINE, the frame and its checksum straight after.
+;
+; The Pi sends a waiting frame inline when it is at most RX_INLINE_MAX bytes,
+; and takes it off its queue as it does.  It is kept in the work area (o_RXC)
+; until ETH_GET_FRAME collects it, so a small frame - every PLAYNET packet, ARP,
+; a TCP ACK - costs ONE transaction instead of two.  Larger frames are only
+; announced (flag 1) and come over in ETH_GET_FRAME's own transaction, as
+; before.  While a frame is held, calls here answer from it with no round trip.
+;
+; ETH_OPX does the reading, and checks the length before anything is read
+; into the work area: in wait mode a desynchronised link returns garbage, and a
+; garbage length would otherwise write far past the end of the work area.
+;
+; Any failure drops the held frame (o_RXC = 0).  The Pi has already let go of
+; it, so it is lost - the same as a frame lost on the wire, which the stack
+; above recovers from.
 FN_IN_STATUS:
+            ld      a,(ix+o_RXC)
+            cp      RXF_INLINE
+            jr      z,.report               ; holding one: answer locally
             ld      a,OP_IN_STATUS
-            ld      b,0
             ld      c,0
-            ld      d,5                     ; flag, len lo/hi, ethertype hi/lo
-            ld      e,0
-            call    ETH_OP
-            jr      c,.none
-
-            ld      a,(ix+o_ETH_BUF+0)
+            ld      de,5*256+2              ; 5 reply bytes, a frame may follow
+            ld      h,o_RXC
+            call    ETH_OPX
+            jr      nc,.report
+            ld      (ix+o_RXC),0            ; whatever arrived is not a reply
+.report:
+            ld      a,(ix+o_RXC)
             or      a
-            jr      z,.none
-            ld      c,(ix+o_ETH_BUF+1)      ; little-endian length
-            ld      b,(ix+o_ETH_BUF+2)
-            ld      h,(ix+o_ETH_BUF+3)      ; ethertype, big-endian on the wire
-            ld      l,(ix+o_ETH_BUF+4)
+            ret     z                       ; A=0: none
+            ld      c,(ix+o_RXC+1)          ; little-endian length
+            ld      b,(ix+o_RXC+2)
+            ld      h,(ix+o_RXC+3)          ; ethertype, big-endian on the wire
+            ld      l,(ix+o_RXC+4)
             ld      a,1
-            ret
-.none:
-            xor     a
             ret
 
 ; =============================================================================
@@ -314,24 +359,36 @@ FN_IN_STATUS:
 ;      BC = size of the retrieved frame (when A=0)
 ;
 ; Wire: [C6][maxlen lo][maxlen hi] -> [len lo][len hi][flags] and, when len is
-; non-zero, the frame followed by a one-byte checksum.
+; non-zero, the frame followed by a one-byte checksum.  maxlen 0 is "discard":
+; the Pi drops the frame and answers with its length and flags only, so HL=0
+; costs three bytes on the wire instead of the whole frame.
+;
+; A frame ETH_IN_STATUS already brought in is the oldest one - the Pi took it
+; off its queue - so it is handed over first, from the work area, with no link
+; traffic.  That is still done under the lock: an ETH_IN_STATUS interrupting
+; the copy must not refill the buffer underneath it, and with the lock held it
+; can only report "no frame" until we are done.
 FN_GET_FRAME:
             ld      (ix+o_ETH_DEST),l
             ld      (ix+o_ETH_DEST+1),h
 
             call    ETH_LOCK
             jr      c,.none
+            ld      a,(ix+o_RXC)
+            cp      RXF_INLINE
+            jr      z,.held
             call    ETH_BEGIN
             jr      c,.fail
 
+            ld      de,MAX_FRAME_LEN
+            ld      a,h
+            or      l
+            jr      nz,.keep
+            ld      d,a                     ; discard: maxlen 0
+            ld      e,a
+.keep:
             ld      a,OP_GET_FRAME
-            call    ETH_TX
-            jr      c,.fail
-            ld      a,MAX_FRAME_LEN & 0FFh
-            call    ETH_TX
-            jr      c,.fail
-            ld      a,(MAX_FRAME_LEN >> 8) & 0FFh
-            call    ETH_TX
+            call    ETH_TX3
             jr      c,.fail
 
             ld      a,o_ETH_BUF             ; len lo, len hi, flags
@@ -342,32 +399,24 @@ FN_GET_FRAME:
 
             ld      c,(ix+o_ETH_BUF+0)
             ld      b,(ix+o_ETH_BUF+1)
+            ld      (ix+o_ETH_FLEN),c
+            ld      (ix+o_ETH_FLEN+1),b
             ld      a,b
             or      c
             jr      z,.empty                ; length 0: nothing was waiting
 
-            ld      (ix+o_ETH_FLEN),c
-            ld      (ix+o_ETH_FLEN+1),b
             ld      l,(ix+o_ETH_DEST)
             ld      h,(ix+o_ETH_DEST+1)
             ld      a,h
             or      l
-            jr      nz,.into_buffer
-
-            ; HL=0 means discard: the bytes still have to be pulled off the
-            ; wire, so read and drop them.
-            call    ETH_RX_SINK
-            jr      c,.fail
-            jr      .checksum
-.into_buffer:
+            jr      z,.got                  ; discarded: no frame follows
             call    ETH_RX_BLOCK
             jr      c,.fail
-.checksum:
             call    ETH_RX                  ; trailing checksum
             jr      c,.fail
-
-            call    ETH_END
-            call    ETH_UNLOCK
+.got:
+            call    ETH_END                 ; harmless after .held: no
+            call    ETH_UNLOCK              ; ETH_BEGIN, wait mode already off
             ld      c,(ix+o_ETH_FLEN)
             ld      b,(ix+o_ETH_FLEN+1)
             xor     a                       ; A=0: retrieved
@@ -376,8 +425,7 @@ FN_GET_FRAME:
 .empty:
             call    ETH_END
             call    ETH_UNLOCK
-            ld      a,1
-            ret
+            jr      .none
 .fail:
             call    ETH_FAIL
             call    ETH_UNLOCK
@@ -385,22 +433,33 @@ FN_GET_FRAME:
             ld      a,1
             ret
 
-; --- ETH_RX_SINK: read BC bytes and throw them away.
-; Used by the discard path so the wire stays in step.  Nothing is stored, so
-; unlike ETH_RX_BLOCK it needs no destination - HL is neither read nor
-; written.
-ETH_RX_SINK:
-.loop:
-            push    bc
-            call    ETH_RX
-            pop     bc
+; The frame ETH_IN_STATUS brought in.  HL is still the caller's destination
+; (ETH_LOCK only touches AF); 0 discards it, exactly as on the wire.
+.held:
+            ld      (ix+o_RXC),0            ; collected - the lock covers this
+            ld      c,(ix+o_RXC+1)
+            ld      b,(ix+o_RXC+2)
+            ld      (ix+o_ETH_FLEN),c
+            ld      (ix+o_ETH_FLEN+1),b
+            ld      a,h
+            or      l
+            jr      z,.got
+            ex      de,hl
+            ld      a,o_RXC_FRAME
+            call    WRKPTR
+            ldir
+            jr      .got
+
+; --- ETH_TX3: send A, then E, then D - an opcode and its 16-bit argument.
+; Out: CF=1 on timeout.  Corrupts AF; BC/DE/HL preserved.
+ETH_TX3:
+            call    ETH_TX
             ret     c
-            dec     bc
-            ld      a,b
-            or      c
-            jr      nz,.loop
-            or      a
-            ret
+            ld      a,e
+            call    ETH_TX
+            ret     c
+            ld      a,d
+            jp      ETH_TX
 
 ; =============================================================================
 ; 9: ETH_SEND_FRAME
@@ -429,68 +488,42 @@ ETH_RX_SINK:
 ;
 ; Wire: [C7][len lo][len hi][frame...][checksum] -> [RC]
 FN_SEND_FRAME:
-            ld      (ix+o_ETH_SRC),l
-            ld      (ix+o_ETH_SRC+1),h
-            ld      (ix+o_ETH_FLEN),c
-            ld      (ix+o_ETH_FLEN+1),b
-
             ; Length check first: an invalid length is not a failed
-            ; transmission, so ETH_OUT_STATUS must not record it.
-            ;
-            ; Both comparisons clear carry before SBC - without that the result
-            ; depends on whatever set the flag last - and both boundaries are
-            ; inclusive: 16 and 1514 are legal lengths.
-            ld      h,b
-            ld      l,c
-            ld      de,MIN_FRAME_LEN
-            or      a
-            sbc     hl,de                   ; BC - 16
-            jr      c,.badlen               ; BC < 16
+            ; transmission, so ETH_OUT_STATUS must not record it.  Both
+            ; boundaries are inclusive: 16 and 1514 are legal lengths.  ADD
+            ; sets carry exactly when BC reaches the negated bound, so no flag
+            ; left over from earlier can leak into the result.
+            push    hl
+            ld      hl,-MIN_FRAME_LEN
+            add     hl,bc
+            jr      nc,.badlen              ; BC < 16
+            ld      hl,-(MAX_FRAME_LEN+1)
+            add     hl,bc
+            jr      c,.badlen               ; BC > 1514
+            pop     hl
 
-            ld      h,b
-            ld      l,c
-            ld      de,MAX_FRAME_LEN
-            or      a
-            sbc     hl,de                   ; BC - 1514
-            jr      c,.lenok                ; BC < 1514
-            jr      nz,.badlen              ; BC > 1514
-.lenok:
-
+            ; ETH_LOCK, ETH_BEGIN and ETH_TX3 only corrupt AF, so the frame's
+            ; address and length stay in HL and BC throughout.
             call    ETH_LOCK
             jr      c,.carrier
             call    ETH_BEGIN
             jr      c,.fail
 
             ld      a,OP_SEND_FRAME
-            call    ETH_TX
-            jr      c,.fail
-            ld      a,(ix+o_ETH_FLEN)
-            call    ETH_TX
-            jr      c,.fail
-            ld      a,(ix+o_ETH_FLEN+1)
-            call    ETH_TX
+            ld      d,b
+            ld      e,c
+            call    ETH_TX3                 ; opcode, length
             jr      c,.fail
 
-            ; Payload, accumulating the checksum as we go.
-            ld      l,(ix+o_ETH_SRC)
-            ld      h,(ix+o_ETH_SRC+1)
-            ld      c,(ix+o_ETH_FLEN)
-            ld      b,(ix+o_ETH_FLEN+1)
-            call    ETH_TX_SUM
-            jr      c,.fail
-            ld      a,(ix+o_ETH_SUM)
-            call    ETH_TX
+            ; Payload and its checksum: OTIR in wait mode.  The Pi receives
+            ; them as one RDY-held burst.
+            call    ETH_TX_BLOCK
             jr      c,.fail
 
-            call    ETH_RX
-            jr      c,.fail
-            ld      (ix+o_ETH_BUF),a
-
-            call    ETH_END
+            call    ETH_RX                  ; the Pi's result code, with Z set
+            jr      c,.fail                 ; from it - ETH_END and ETH_UNLOCK
+            call    ETH_END                 ; both preserve the flags
             call    ETH_UNLOCK
-
-            ld      a,(ix+o_ETH_BUF)
-            or      a
             jr      nz,.rejected
             ld      (ix+o_ETH_LASTSEND),2   ; OUT_STATUS: finished successfully
             xor     a                       ; A=0: sent
@@ -507,34 +540,8 @@ FN_SEND_FRAME:
             ld      a,3
             ret
 .badlen:
+            pop     hl
             ld      a,1                     ; not recorded in ETH_LASTSEND
-            ret
-
-; --- ETH_TX_SUM: send BC bytes from HL, leaving the 8-bit sum in ETH_SUM.
-; Keep the sum in E and wait directly: ETH_TX's per-byte register saves and
-; repeated indexed checksum accesses are unnecessary inside a payload loop.
-; ETH_WAIT_READY preserves DE/HL, but corrupts BC. No keyboard/BIOS calls here.
-; Out: CF=1 on timeout; corrupts AF/BC/DE/HL.
-ETH_TX_SUM:
-            ld      e,0
-.loop:
-            ld      a,b
-            or      c
-            jr      z,.done
-            push    bc
-            call    ETH_WAIT_READY
-            pop     bc
-            ret     c
-            ld      a,(hl)
-            out     (DATA1),a
-            add     a,e
-            ld      e,a
-            inc     hl
-            dec     bc
-            jr      .loop
-.done:
-            ld      (ix+o_ETH_SUM),e
-            or      a
             ret
 
 ; =============================================================================
@@ -569,13 +576,16 @@ FN_SET_HWADD:
 ;
 ; The signature matters: a stale or floating bus can produce a zero result code
 ; by luck, but not three specific ASCII bytes in order.
+;
+; A good signature with the wrong protocol version is a Pi that answers but
+; speaks another wire format.  That sets MODE_REFUSED, which ETH_LOCK honours,
+; so every later call fails cleanly instead of desynchronising - and since
+; ETH_DETECT only runs once, it stays refused until ETH_RESET probes again.
 ETH_VERIFY:
             call    ETH_REVIVE              ; clear any latched failure first
             ld      a,OP_PROBE
-            ld      b,0
-            ld      c,0
-            ld      d,5                     ; RC + 'E','T','H',version
-            ld      e,1
+            ld      c,0                     ; no argument
+            ld      de,5*256+1              ; RC + 'E','T','H',version, RC ok
             call    ETH_OP
             ret     c
             ld      a,(ix+o_ETH_BUF+1)
@@ -587,8 +597,10 @@ ETH_VERIFY:
             ld      a,(ix+o_ETH_BUF+3)
             cp      "H"
             jr      nz,.bad
-            or      a                       ; CF=0
-            ret
+            ld      a,(ix+o_ETH_BUF+4)
+            cp      ETH_PROTO
+            ret     z                       ; CF=0
+            ld      (ix+o_ETH_MODE),MODE_REFUSED
 .bad:
             scf
             ret

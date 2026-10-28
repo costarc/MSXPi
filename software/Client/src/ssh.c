@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #ifndef SSH_VT_TEST
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 #endif
 
@@ -105,12 +105,15 @@ static void vt_csi(uint8_t c) {
     case 'S': case 'T': vt_scroll(top,bottom,n,c=='T'); break;
     case 'P': case '@':
         n=limit(n,VT_COLS-vx);
-        if(c=='P') {
-            memmove(cells[vy]+vx,cells[vy]+vx+n,VT_COLS-vx-n);
-            memset(cells[vy]+VT_COLS-n,' ',n);
-        } else {
-            memmove(cells[vy]+vx+n,cells[vy]+vx,VT_COLS-vx-n);
-            memset(cells[vy]+vx,' ',n);
+        {   /* row pointer: SDCC 4.6 ICEs (validateLink) on memmove(cells[vy]+vx, ...) */
+            uint8_t *row=&cells[vy][0];
+            if(c=='P') {
+                memmove(row+vx,row+vx+n,VT_COLS-vx-n);
+                memset(row+VT_COLS-n,' ',n);
+            } else {
+                memmove(row+vx+n,row+vx,VT_COLS-vx-n);
+                memset(row+vx,' ',n);
+            }
         }
         dirty[vy]=1; break;
     case 'X': vt_erase(vy,vx,vx+limit(n,VT_COLS-vx)-1); break;
@@ -266,7 +269,8 @@ static void vt_close(void) {
 /* Assembly instructions must occupy separate lines: ';' starts a comment.
  * Preserve IX for the caller's stack frame and re-enable interrupts after
  * the BIOS slot call. */
-static void put(uint8_t c) __naked {
+/* __sdcccall(0): the asm reads its argument at 4(ix) and the key routine returns in L, under either default. */
+static void put(uint8_t c) __sdcccall(0) __naked {
     c;
     __asm
     push ix
@@ -295,7 +299,7 @@ static uint8_t exchange(const char *cmd) {
     msxpi_link_release();
     return rc==RC_SUCCESS && size==256 && !memcmp(reply,"SSH1",4) && reply[5]<=248;
 }
-static uint8_t key(void) __naked {
+static uint8_t key(void) __sdcccall(0) __naked {
     __asm
     call _Inkey
     ld h,#0

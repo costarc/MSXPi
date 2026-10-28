@@ -307,6 +307,28 @@ class PlaynetCommands(unittest.TestCase):
         msxpi_chat._chat = None                                   # works before the chat started too
         self.assertEqual(self.run_command('profile soccer'), (True, fx.SOCCER))
 
+    def test_open_and_peers_for_a_tcpip_chat_player(self):
+        np = n.Netplay(None, None, {'MSXPI_NETPLAY_NOSTUN': '1', 'MSXPI_NETPLAY_LAN': '127.0.0.1'}, lambda *a: None)
+        env = patch.dict(os.environ, {'MSXPI_NETPLAY_NOSTUN': '1', 'MSXPI_NETPLAY_LAN': '127.0.0.1'})
+        env.start()
+        saved, msxpi_chat.default_netplay = msxpi_chat.default_netplay, lambda: np
+        try:
+            ok, reply = self.run_command('open soccer')
+            self.assertTrue(ok)
+            profile, candidates = reply.decode().split()
+            self.assertEqual(profile, '%08x' % self.p.a.games['soccer'].profhash)
+            self.assertRegex(candidates, r'^127\.0\.0\.1:\d+$')
+            self.assertEqual(self.run_command('peers 0a0b0c0d 1 soccer 10.0.0.2:5101,10.0.0.3:5102'), (True, b'OK'))
+            self.assertEqual(np.profile_hash, self.p.a.games['soccer'].profhash)
+            self.assertEqual(np.peers, [('10.0.0.2', 5101), ('10.0.0.3', 5102)])
+            for bad in ('peers xyz 1 soccer 10.0.0.2:5101', 'peers 0a0b0c0d 2 soccer 10.0.0.2:5101',
+                        'peers 0a0b0c0d 1 soccer -', 'open tanks', 'open nope', 'peers 0a0b0c0d 1 nope 10.0.0.2:5101'):
+                self.assertFalse(self.run_command(bad)[0], bad)
+        finally:
+            msxpi_chat.default_netplay = saved
+            env.stop()
+            np.close()
+
     def test_session_save_restore_result(self):
         self.p.a.play('bob')
         self.p.b.accept()

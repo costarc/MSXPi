@@ -15,6 +15,7 @@
 static uint16_t now;
 static char cands[64] = "127.0.0.1:5000";
 static uint32_t seed = 12345;
+static uint8_t link2;
 
 void gl_send(const char *nick, const char *text) { printf("SEND %s %s\n", nick, text); }
 void gl_say(const char *text) { printf("SAY %s\n", text); }
@@ -25,7 +26,14 @@ uint16_t gl_open(char *out)
 {
     const char *p = strchr(cands, ':');
     strcpy(out, cands);
+    if (link2) { gl_link = 2; return 1; }
     return p ? (uint16_t)atoi(p + 1) : 0;
+}
+
+uint8_t gl_peers(const char *token, uint8_t seat, const char *candidates)
+{
+    printf("PEERS %s %u %s %s\n", token, seat, gl_cur_game, candidates);
+    return 1;
 }
 
 int main(void)
@@ -45,6 +53,7 @@ int main(void)
             { uint32_t h = (uint32_t)strtoul(hash, 0, 16); for (i = 0; i < 4; i++) g->hash[i] = (uint8_t)(h >> 8 * i); }
             g->lockstep = 1;
         } else if (!strcmp(line, "open")) strncpy(cands, arg, 63);
+        else if (!strcmp(line, "link2")) link2 = 1;
         else if (!strcmp(line, "time")) now = (uint16_t)atoi(arg);
         else if (!strcmp(line, "play")) {
             char *gid = strchr(arg, ' ');

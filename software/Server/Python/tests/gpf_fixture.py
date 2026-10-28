@@ -23,8 +23,8 @@ def make_gpf(game_id, title, roles, transport='lockstep', command='', revision=0
         return patch_rom.gpf_bytes(profile, {})
     netplay.update({'input_bytes': 1, 'image': {'host': 'plain', 'base': 0x4000},
                     'stub': {'asset': 'stub', 'load': 0xF000, 'max': 576},
-                    'transport_area': {'address': 0xF240, 'size': 192},
-                    'game_ram': [[0xE000, 0xEFFF]], 'irq_handler': 0x4043, 'start': 'header-init'})
+                    'transport_area': {'address': 0xEA00, 'size': 512},
+                    'game_ram': [[0xE000, 0xE9FF]], 'irq_handler': 0x4043, 'start': 'header-init'})
     profile = {'format': 'msxpi-rom-patch', 'version': 2, 'id': game_id + '-test', 'abi': ['msxpi-netplay-v1'],
                'source': {'size': 16384, 'sha256': '0' * 64, 'crc32': revision, 'file': 'GAME.ROM'},
                'output': {'size': 16384, 'fill': 0, 'mapper': 'plain', 'target': 'ram-image'},

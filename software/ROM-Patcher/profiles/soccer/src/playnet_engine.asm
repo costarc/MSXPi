@@ -1,4 +1,4 @@
-; PLAYNET lockstep engine (stub ABI 1). Specification: documents/PLAYNET-PROTOCOLS.md, sections 9-11.
+; PLAYNET lockstep engine (stub ABI 2). Specification: documents/PLAYNET-PROTOCOLS.md, sections 9-11.
 ;
 ; A game's glue defines these, then INCLUDEs this file, then adds the entry points its patches call:
 ;   PN_ORG         netplay.stub.load: where the stub is copied (page 3)
@@ -15,8 +15,10 @@
 ; at frame F-D and the remote input for F (D = the input delay agreed before the game started; frames
 ; 0..D-1 need no remote input). Frame numbers are 8-bit and wrap; the live window is never above 16
 ; frames, so differences are taken modulo 256. A packet carries the last 8 frames of local input, so a
-; loss of up to 7 consecutive packets is repaired by the next one. While the remote input for F is
-; missing, the frame waits here with interrupts on, polling the transport and resending every 16th poll.
+; loss of up to 7 consecutive packets is repaired by the next one. A packet goes out every K frames (K = 1..3,
+; agreed in the handshake: a transport that is slow per packet sends fewer; the delay D includes K - 1).
+; While the remote input for F is missing, the frame waits here with interrupts on, polling the transport and
+; resending when 3 interrupts (about 50 ms) have passed since the last send.
 ;
 ; Sound: the original ticks its driver on every interrupt, and the game reads the driver's state (it
 ; waits for a jingle to end), so the number of ticks must be the same on both machines. Each frame record
@@ -61,15 +63,16 @@ R_DESYNC:       EQU     4                       ; the machines lost sync
 
         org     PN_ORG
 
-; ---- header (stub ABI 1) -----------------------------------------------------------------
-pnHeader:       defb    1                       ; stub ABI version
+; ---- header (stub ABI 2) -----------------------------------------------------------------
+pnHeader:       defb    2                       ; stub ABI version
 pnSeat:         defb    0                       ; written by the loader: 0 = player 1 (the inviter), 1 = player 2
-pnDelay:        defb    3                       ; written by the loader: input delay in frames, 2-6
+pnDelay:        defb    3                       ; written by the loader: input delay in frames, 2-7
         IFDEF   SCRIPTED
 pnFlags:        defb    0                       ; set by the build: bit 0 = end the game on a desync
         ELSE                                    ; (release builds); test builds only record it
 pnFlags:        defb    1
         ENDIF
+pnK:            defb    1                       ; written by the loader: a packet every K frames, 1-3
 
 ; ---- PN_TICK: once per game frame, before the game uses any input -----------------------
 ; Preserves BC, DE, HL, IX, IY. Returns with interrupts enabled.
@@ -138,10 +141,35 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         ld      (irqLast),a
         sub     c
         ld      (hl),a
+        ld      a,(kPhase)                      ; a packet goes out on every K-th frame
+        or      a
+        jr      z,.snd
+        dec     a
+        ld      (kPhase),a
+        ld      a,(nf)                          ; a frame between: only look, and only if the remote input is missing
+        call    remSlot
+        ld      a,(nf)
+        cp      (hl)
+        jr      z,.got
+        ld      hl,0
+        jr      .xchg
+.snd:   ld      a,(pnK)
+        dec     a
+        ld      (kPhase),a
+        ld      a,(irqCnt)
+        ld      (sentAt),a
         call    send                            ; txbuf := F, own[F+D-7 .. F+D]
         ld      hl,txbuf
 .xchg:  ld      de,rxbuf
         call    XCHG                            ; send and/or take a packet, one transaction
+        ld      c,a
+        ld      hl,irqCnt                       ; E = interrupts the call took away from the game: count them
+        di
+        ld      a,(hl)
+        add     a,e
+        ld      (hl),a
+        ei
+        ld      a,c
         call    onStatus
         ld      a,(nf)                          ; has the remote input for F arrived?
         call    remSlot
@@ -150,11 +178,34 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         jr      z,.got
         ld      hl,stallCnt
         inc     (hl)
-        ld      a,(hl)
-        and     15
-        ld      hl,0                            ; just poll...
-        jr      nz,.xchg
-        ld      hl,txbuf                        ; ...and every 16th poll resend as well
+        ld      a,(irqCnt)                      ; just poll, and resend when 3 interrupts have passed
+        ld      hl,sentAt                       ; since the last send
+        sub     (hl)
+        cp      3
+        ld      hl,0
+        jr      c,.xchg
+        ld      a,(irqCnt)
+        ld      (sentAt),a
+        ld      a,(rsAlt)                       ; resends alternate between the usual window (F+D-7 .. F+D) and an older
+        xor     1                               ; one that reaches back to F-D-1, the oldest frame the opponent can be at:
+        ld      (rsAlt),a                       ; its record is in no later packet, and the usual window never has it
+        jr      z,.rsNew                        ; again once we are D frames ahead (D > 3)
+        ld      a,(pnDelay)
+        add     a,a
+        sub     6                               ; shift the window back by 2D-6 frames (none for D <= 3)
+        jr      nc,.rsBack
+        xor     a
+.rsBack:ld      c,a
+        ld      a,(nf)
+        push    af
+        sub     c
+        ld      (nf),a
+        call    send
+        pop     af
+        ld      (nf),a
+        jr      .rsGo
+.rsNew: call    send                            ; rebuilt: the records computed since the last send may be the missing ones
+.rsGo:  ld      hl,txbuf
         jr      .xchg
 .got:                                           ; PN_P1, PN_P2 := this frame's inputs, by seat
         ld      a,(nf)
@@ -391,6 +442,9 @@ nf:             defb    $FF                     ; current frame, -1 before the f
 PN_FRAME:       EQU     nf
 rxSeen:         defb    $FF
 stallCnt:       defb    0
+rsAlt:          defb    0                       ; which window the next resend uses
+kPhase:         defb    0                       ; frames to wait before the next packet
+sentAt:         defb    0                       ; irqCnt at the last send
 desync:         defb    0
 desyncF:        defb    0
 irqCnt:         defb    0                       ; interrupts seen by PN_IRQ (wraps)

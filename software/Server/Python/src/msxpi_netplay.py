@@ -12,9 +12,17 @@ see msxpi_ethglue.eth_handle_opcode):
            [FE][REASON]                             the opponent left (BYE with its result code)
            [A0+STATE][DELAY][DELAY]                 status, when FLAGS bit 7 is set
 
-FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet, bit 5 send BYE
-(L = 1, the packet byte is the result code), bit 6 (re)start the session (handshake), bit 7 return the
-status instead.  STATE: 0 connecting, 1 ready, 2 incompatible, 3 failed, 4 the opponent left.
+FLAGS: bit 0 forward the packet to the peer, bit 1 return the oldest delivered packet, bit 2 the packet is a
+DELTA, bit 3 the reply may be a DELTA, bit 5 send BYE (L = 1, the packet byte is the result code), bit 6
+(re)start the session (handshake), bit 7 return the status instead.  STATE: 0 connecting, 1 ready,
+2 incompatible, 3 failed, 4 the opponent left.
+
+DELTA (PLAYNET-PROTOCOLS.md 10.1): consecutive game packets repeat most of their 8 frame records, so on the
+MSXPi link a packet that follows the previous one in that direction (same kind and W, F d = 1..MAX_K more, its
+first 8 - d records the previous one's last 8 - d) travels as seq, F, the d new records, check tag, check value:
+d * R + 4 bytes (R = W + 1; d is K, a packet every K frames).  The Pi rebuilds it from the last packet the MSX
+sent, and sends one only when the MSX allows it (bit 3, it holds the last packet the Pi gave it); a reply of
+fewer than 22 bytes (the shortest full packet) is a DELTA.
 
 Peer datagrams start with a kind byte: 1-6 = 14-byte control datagram (type, version, nonce, a, b),
 10h = game packet of 14 + 8W bytes (W = input bytes per frame, 1-4, in its byte 3; each of its 8 frame records
@@ -32,7 +40,7 @@ Session: normally set by the chat (msxpi_games via msxpi_chat) once both players
     MSXPI_NETPLAY_JITTER_MS  extra random 0..N ms per datagram (default 0)
     MSXPI_NETPLAY_LOSS_PCT   incoming datagrams dropped, percent (default 0)
     MSXPI_NETPLAY_SEED       random seed for the above
-    MSXPI_NETPLAY_VERSION    MSXNP version announced (default 1; tests use it to force a mismatch)
+    MSXPI_NETPLAY_VERSION    MSXNP version announced (default 2 = VERSION; tests use it to force a mismatch)
 """
 import collections
 import heapq
@@ -49,7 +57,7 @@ KIND_GAME = 0x10
 MIN_WIDTH, MAX_WIDTH = 1, 4             # input bytes per player per frame
 MAX_PKT = 14 + 8 * MAX_WIDTH            # 46
 CTL = struct.Struct("<BBIII")           # type, version, nonce, a, b  = 14 bytes
-VERSION = 1                             # MSXNP
+VERSION = 2                             # MSXNP (2: K and S in HELLO, K in SETUP; PLAYNET-TCPIP-PERFORMANCE.md 5.3)
 
 T_HELLO, T_PING, T_PONG, T_SETUP, T_ACK, T_BYE = 1, 2, 3, 4, 5, 6
 
@@ -68,7 +76,8 @@ CONNECT_TIMEOUT = 120.0                # no READY after this: failed
 START_TIMEOUT = 60.0                   # READY but no game packet after this: gone
 DEAD_AFTER = 15.0                      # playing, and nothing from the opponent for this long: gone
 BYE_REPEAT, BYE_GAP = 3, 0.1
-MIN_DELAY, MAX_DELAY = 2, 6
+MIN_DELAY, MAX_DELAY = 2, 7
+MIN_K, MAX_K = 1, 3                    # send interval, in frames
 
 
 STUN_SERVER = ("stun.l.google.com", 19302)
@@ -79,6 +88,29 @@ def game_packet_ok(data):
     """True for a well-formed MSXNP game packet (kind, width, length)."""
     return (len(data) >= 4 and data[0] == KIND_GAME and MIN_WIDTH <= data[3] <= MAX_WIDTH
             and len(data) == 14 + 8 * data[3])
+
+
+def delta_of(new, base):
+    """The DELTA of game packet `new` against `base` (seq, F, the d new records, check tag and value), or None
+    when `new` does not follow `base` (F 1..MAX_K frames later, the records in between the same)."""
+    if not base or len(new) != len(base) or new[0] != base[0] or new[3] != base[3]:
+        return None
+    d = (new[2] - base[2]) & 0xFF
+    r = (len(new) - 6) // 8
+    if not MIN_K <= d <= MAX_K or new[4:4 + (8 - d) * r] != base[4 + d * r:4 + 8 * r]:
+        return None
+    return bytes(new[1:3]) + bytes(new[4 + (8 - d) * r:])
+
+
+def undelta(delta, base):
+    """The game packet a DELTA stands for, from `base` (the previous one), or None when it does not fit."""
+    if not base:
+        return None
+    r = (len(base) - 6) // 8
+    d, rest = divmod(len(delta) - 4, r)
+    if rest or not MIN_K <= d <= MAX_K or delta[1] != (base[2] + d) & 0xFF:
+        return None
+    return bytes([base[0], delta[0], delta[1], base[3]]) + bytes(base[4 + d * r:4 + 8 * r]) + bytes(delta[2:])
 
 
 def lan_address():
@@ -157,11 +189,12 @@ def instance():
     return _instance
 
 
-def choose_delay(rtts):
-    """Input delay in frames from measured round trips (seconds)."""
+def choose_delay(rtts, k=1, service=0):
+    """Input delay in frames from measured round trips (seconds), the send interval k (frames) and the
+    larger of the two sides' service latency (frames): ceil(rtt90 / 2 / 20 ms) + 2 + (k - 1) + service."""
     s = sorted(rtts)
     rtt = s[int(0.9 * (len(s) - 1))]
-    d = int(-(-(rtt * 1000.0 / 2) // FRAME_MS)) + 2   # ceil(one-way / frame) + 2
+    d = int(-(-(rtt * 1000.0 / 2) // FRAME_MS)) + 2 + (k - 1) + service
     return max(MIN_DELAY, min(MAX_DELAY, d))
 
 
@@ -175,6 +208,8 @@ class Netplay:
         self.loss = float(env.get("MSXPI_NETPLAY_LOSS_PCT", "0"))
         self.version = int(env.get("MSXPI_NETPLAY_VERSION", str(VERSION)))
         self.profile_hash = int(env.get("MSXPI_NETPLAY_PROFILE", "0"), 16)
+        self.want_k = max(MIN_K, min(MAX_K, int(env.get("MSXPI_NETPLAY_K", "1"))))    # what this side's transport costs:
+        self.want_s = max(0, min(255, int(env.get("MSXPI_NETPLAY_S", "0"))))          # K frames apart, S frames to deliver
         self.rng = random.Random(int(env.get("MSXPI_NETPLAY_SEED", "1985")))
         self.lock = threading.RLock()
         self.heap = []                    # (release_time, n, datagram)
@@ -187,7 +222,8 @@ class Netplay:
         self.peer = None                  # the address that answered: locked once known
         self.state = S_IDLE
         self.delay = 0
-        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0)
+        self.k = 1                        # the agreed send interval
+        self.stats = dict(tx=0, rx=0, dropped=0, badsum=0, delivered=0, malformed=0, deltas_in=0, deltas_out=0)
         self.last_log = 0.0
         self._reset_session()
         if spec:
@@ -274,11 +310,15 @@ class Netplay:
         self.last_rx = self.t_start
         self.playing = False              # a game packet came from the opponent
         self.delay = 0
+        self.k = 1
+        self.peer_k, self.peer_s = 1, 0   # what the opponent announced in HELLO
         self.bye_reason = None            # the opponent's result code, from its BYE
         self.local_result = None          # ours, when we sent BYE
         self.bye_left = 0
         self.next_bye = 0.0
         self.ready.clear()
+        self.msx_sent = None              # the last game packet the MSX sent (a DELTA's base)
+        self.msx_got = None               # the last one given to the MSX
 
     def restart(self):
         with self.lock:
@@ -316,7 +356,7 @@ class Netplay:
     def _set_ready(self, now, how):
         self.state = S_READY
         self.t_ready = now
-        self.log("netplay: ready, delay %d%s" % (self.delay, how))
+        self.log("netplay: ready, delay %d, K %d%s" % (self.delay, self.k, how))
 
     # ---- network threads -----------------------------------------------------------
     def _rx_loop(self, sock):
@@ -378,7 +418,7 @@ class Netplay:
                 return
             if now >= self.next_hello and st == S_CONNECT:
                 self.next_hello = now + 0.2
-                self._send_ctl(T_HELLO, self.profile_hash)
+                self._send_ctl(T_HELLO, self.profile_hash, self.want_k | (self.want_s << 8))
             if self.leader and st == S_CONNECT and now >= self.next_ping and (
                     self.pings_sent < PINGS or (len(self.rtts) < MIN_SAMPLES and self.pings_sent < MAX_PINGS)):
                 self.next_ping = now + 0.1      # keep pinging while too few answers came back
@@ -387,13 +427,15 @@ class Netplay:
                 self.pings_sent += 1
             if self.leader and st == S_CONNECT and len(self.rtts) >= MIN_SAMPLES and (
                     len(self.rtts) >= PINGS or now - self.next_ping > 1.0):
-                self.delay = int(os.environ.get('MSXPI_NETPLAY_DELAY', '0')) or choose_delay(self.rtts)
+                self.k = max(self.want_k, self.peer_k)
+                self.delay = int(os.environ.get('MSXPI_NETPLAY_DELAY', '0')) or choose_delay(
+                    self.rtts, self.k, max(self.want_s, self.peer_s))
                 self.state = S_SETUP
-                self.log("netplay: leader, rtt samples %s -> delay %d"
-                         % (["%.0f" % (r * 1000) for r in self.rtts], self.delay))
+                self.log("netplay: leader, rtt samples %s, K %d, S %d -> delay %d"
+                         % (["%.0f" % (r * 1000) for r in self.rtts], self.k, max(self.want_s, self.peer_s), self.delay))
             if self.state == S_SETUP and now >= self.next_setup:
                 self.next_setup = now + 0.2
-                self._send_ctl(T_SETUP, self.delay)
+                self._send_ctl(T_SETUP, self.delay, self.k)
         elif st == S_READY:
             if not self.playing and now - self.t_ready > START_TIMEOUT:
                 self.state = S_DEAD
@@ -414,7 +456,7 @@ class Netplay:
                 self.log("netplay: incompatible opponent (MSXNP %d, profile %08x; ours %d, %08x)"
                          % (ver, a if typ == T_HELLO else 0, self.version, self.profile_hash))
             if self.state == S_INCOMPATIBLE and typ == T_HELLO:
-                self._send_ctl(T_HELLO, self.profile_hash)   # let a peer that started later see it too
+                self._send_ctl(T_HELLO, self.profile_hash, self.want_k | (self.want_s << 8))   # let a peer that started later see it too
             return
         self.last_rx = now
         if typ == T_BYE:
@@ -423,6 +465,9 @@ class Netplay:
                 self.bye_reason = a & 0xFF
                 self.log("netplay: the opponent ended the game (result %d)" % self.bye_reason)
         elif typ == T_HELLO:
+            if self.state == S_CONNECT:
+                self.peer_k = max(MIN_K, min(MAX_K, b & 0xFF))
+                self.peer_s = (b >> 8) & 0xFF
             if self.state == S_CONNECT and self.peer_nonce is None:
                 self.peer_nonce = nonce
                 if nonce == self.nonce:
@@ -439,8 +484,9 @@ class Netplay:
         elif typ == T_SETUP:
             if self.state == S_CONNECT:
                 self.delay = a
+                self.k = max(MIN_K, min(MAX_K, b))
                 self._set_ready(now, " (from the leader)")
-            self._send_ctl(T_ACK, a)
+            self._send_ctl(T_ACK, a, b)
         elif typ == T_ACK:
             if self.state == S_SETUP and a == self.delay:
                 self._set_ready(now, "")
@@ -473,6 +519,13 @@ class Netplay:
         if (sum(pkt) & 0xFF) != s or length > MAX_PKT:
             self.stats["badsum"] += 1
             flags &= 0x80                 # corrupted: treat the packet part as lost
+        if flags & 4 and flags & 1:       # a DELTA: the packet it stands for
+            pkt = undelta(pkt, self.msx_sent)
+            if pkt is None:               # not after the base we hold: lost (the MSX resends in full)
+                self.stats["malformed"] += 1
+                flags &= ~1
+            else:
+                self.stats["deltas_in"] += 1
         if flags & 0x40:
             self.restart()
         if flags & 0x20:
@@ -488,11 +541,12 @@ class Netplay:
                 if code != getattr(self, '_last_code', None):
                     self._last_code = code
                     self.log('netplay: status -> %d delay %d (state %d)' % (code, d, self.state))
-                write(bytes([0xA0 + code, d, d]))
+                write(bytes([0xA0 + code, d, self.k if code == ST_READY else 1]))   # state, delay, K
                 return True
             if flags & 1 and self.state == S_READY:
                 if game_packet_ok(pkt):
                     self._send(bytes(pkt))
+                    self.msx_sent = bytes(pkt)
                     self.stats["tx"] += 1
                 else:
                     self.stats["malformed"] += 1
@@ -503,8 +557,15 @@ class Netplay:
                 write(bytes([0xFE, self.bye_reason or 0]))
                 return True
             out = self.ready.popleft() if (flags & 2 and self.ready) else b""
+            base = self.msx_got if flags & 8 else None
+            if out:
+                self.msx_got = out
         if out:
             self.stats["delivered"] += 1
+            d = delta_of(out, base)
+            if d is not None:
+                self.stats["deltas_out"] += 1
+                out = d
             write(bytes([len(out)]) + out + bytes([sum(out) & 0xFF]))
         else:
             write(b"\x00\x00")

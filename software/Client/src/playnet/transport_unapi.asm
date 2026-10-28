@@ -34,6 +34,7 @@ IO_REASON:      EQU     39
 IO_TXBUF:       EQU     41
 IO_RXBUF:       EQU     87
 JIFFY:          EQU     $FC9E
+MAPPER_P1:      EQU     $FD
 MAPPER_P2:      EQU     $FE
 MAPPER_P3:      EQU     $FF
 
@@ -50,7 +51,10 @@ tDosSub: defb   0                       ; +16
 ; this transport's own (the loader; the same in D3 and G3)
 tHandler: defw  0                       ; the game's interrupt handler (netplay.irq_handler)
 tOvlSeg: defb   0                       ; PLAYNET.OVL's mapper segment
-tGameSeg2: defb 0                       ; the game's (the TPA's) segment in page 2
+tGameSeg1: defb 0                       ; the TPA's segments in pages 1 and 2
+tGameSeg2: defb 0
+tSegs:  defw    0                       ; the game's segments in pages 1 and 2 now: tGameSeg1, or the
+                                        ; mapper-ram bank engine's (MK_BLOCK+8), which changes them by OUT
 tDosSeg3: defb  0                       ; MSX-DOS's segment in page 3 (D3)
 tGameSeg3: defb 0                       ; the game's (G3)
 tIo:    defw    0                       ; the overlay's I/O block
@@ -59,11 +63,13 @@ tTicks: defw    0                       ; interrupts since the game started (G3)
 tSp:    defw    0
 tRx:    defw    0
 tCode:  defb    0
+tLost:  defb    0                       ; interrupts MSX-DOS took during the last XCHG (G3)
 tStack: defw    0                       ; the private stack's top in D3: MSX-DOS's TPA top (the loader)
 tBuf:   EQU     tBase+384               ; 128 bytes for the UNAPI calls (the overlay's io.buf), in D3
 
 ; XCHG. In: HL = packet to send, or 0; DE = receive buffer (L bytes). Out: A = 0 nothing received,
-; 1 a packet is at DE, 2 the opponent is gone, 3 the opponent left (B = its result code).
+; 1 a packet is at DE, 2 the opponent is gone, 3 the opponent left (B = its result code); E = the
+; interrupts that MSX-DOS's handler took during the call (the game's did not see them; 0 on the MSXPi path).
 xchg:   di
         push    ix
         push    iy
@@ -104,12 +110,29 @@ xchg:   di
         ld      (tTicks),hl
         ld      a,(tOvlSeg)
         call    tPutP2
+        ld      hl,(JIFFY)              ; MSX-DOS's interrupt count, to see the interrupts taken in the call
+        push    hl
         ei                              ; the TCP/IP stack's timer runs from MSX-DOS's hooks
         call    OVL_XCHG
         di
+        pop     de                      ; JIFFY before
+        ld      hl,(JIFFY)
+        or      a
+        sbc     hl,de                   ; HL = interrupts the game did not see (MSX-DOS's handler took them)
         ld      a,(tGameSeg3)
         out     (MAPPER_P3),a           ; the game's page 3 again
         ld      sp,(tSp)
+        ld      a,h
+        or      a
+        ld      a,l
+        jr      z,.lost
+        ld      a,255
+.lost:  ld      (tLost),a
+        ld      e,a
+        ld      d,0
+        ld      hl,(tTicks)             ; the game's clock catches up with them
+        add     hl,de
+        ld      (tTicks),hl
         ld      ix,(tIo)
         ld      c,(ix+IO_STATUS)
         ld      b,(ix+IO_REASON)
@@ -127,8 +150,14 @@ xchg:   di
         ld      b,0
         ldir
         pop     bc
-.out:   ld      a,(tGameSeg2)
+.out:   ld      hl,(tSegs)              ; the game's pages 1 and 2: a RAM implementation of the UNAPI
+        ld      a,(hl)                  ; may have put back the segments PUT_P1/PUT_P2 recorded instead
+        out     (MAPPER_P1),a
+        inc     hl
+        ld      a,(hl)
         out     (MAPPER_P2),a
+        ld      a,(tLost)
+        ld      e,a                     ; E = the interrupts counted above, for the engine's irqCnt
         ld      a,c
         pop     iy
         pop     ix

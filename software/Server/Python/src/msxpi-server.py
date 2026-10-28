@@ -331,6 +331,7 @@ def load_config(ini_path: str) -> MSXPiConfig:
             ["PCHESSLISTEN", "0.0.0.0"],
             ["PCHESSPORT", "5080"],
             ["PCHESSROOMS", "relay"],
+            ["TAPIP", "192.168.99.1"],
             ["SPI_HW", "False"],
             ["SPI_CS", "21"],
             ["SPI_SCLK", "20"],

@@ -10,6 +10,7 @@
 # Puts MSR.COM, RAMHELPR.COM and INL.COM (software/UNAPI/bin) and MCHAT.COM on the tools disk (B:).
 # Results: $WORK/measure.txt (+ .screen). Environment: OPENMSX, WORK, INSTALL, PROBE, NODETMO.
 HERE=$(cd "$(dirname "$0")" && pwd)
+python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (A1)
 ROOT=$(cd "$HERE/../../../.." && pwd)
 RW=$(cd "$ROOT" && pwd -W 2>/dev/null || echo "$ROOT")
 OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}

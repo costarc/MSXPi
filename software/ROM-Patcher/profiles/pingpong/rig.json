@@ -1,0 +1,43 @@
+{
+  "script": "run_pingpong.sh",
+  "rom_env": "PINGPONG_ROM",
+  "rom": "PINGPONG.ROM",
+  "frames": 1200,
+  "argv": [
+    "lag",
+    "loss",
+    "frames",
+    "jitter"
+  ],
+  "env": {},
+  "links": {
+    "0": {},
+    "1": {
+      "SCENARIO": "both"
+    },
+    "2": {
+      "SCENARIO": "mixed",
+      "BOTH": "1",
+      "HYBRID": "1"
+    },
+    "mixed": {
+      "SCENARIO": "mixed"
+    },
+    "mixed2": {
+      "SCENARIO": "mixed",
+      "HYBRID": "1"
+    }
+  },
+  "chat": {
+    "0": {
+      "SCENARIO": "chat"
+    },
+    "1": {
+      "SCENARIO": "tcp",
+      "GAMELINK1": "1"
+    },
+    "2": {
+      "SCENARIO": "tcp"
+    }
+  }
+}

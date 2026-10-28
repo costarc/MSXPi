@@ -12,8 +12,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/vdp_graph2.h"
+#include "../../C-common/header/fusion.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 #define BOARD_X 8
@@ -472,6 +472,7 @@ static void new_game(uint8_t ai,uint8_t human_side) {
     memset(painted,255,sizeof(painted));
     new_turn();
 }
+
 
 /* A new game in the same online room, after a rematch or a reset by the
  * other player. */

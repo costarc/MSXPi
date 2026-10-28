@@ -26,8 +26,10 @@
 # ------------------------------------------------------------------------------
 
 # Linux equivalent of make.bat. Build a client without deploying disk images.
+# Needs SDCC 4.6.0 (the distro's 4.2 is refused): put it on PATH or set SDCC_BIN=<its bin directory>.
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
+[[ -z "${SDCC_BIN:-}" ]] || PATH="$SDCC_BIN:$PATH"
 python3 "$here/asm-common/transport/generate.py" --check
 prog="${1:?Usage: make.sh program [output-directory]}"
 [[ "$prog" =~ ^[A-Za-z0-9_-]+$ ]] || { echo "Invalid program name" >&2; exit 1; }
@@ -36,28 +38,24 @@ mkdir -p "$out"
 out="$(cd "$out" && pwd)"
 fusion="${FUSION_C:-$here/../../../MSX/MSX-C/WorkingFolder/fusion-c}"
 fusion="$(cd "$fusion" && pwd)"
-# The distro's SDCC 4.2 standard library uses ABI 1 even with --sdcccall 0.
-# Use the ABI-0 runtime shipped with the existing Windows SDCC 4.0 toolchain.
-legacy="${SDCC_ABI0_LIB:-/mnt/c/Apps/SDCC/lib/z80/z80.lib}"
-[[ -f "$legacy" ]] || { echo "Set SDCC_ABI0_LIB to an SDCC ABI-0 z80.lib" >&2; exit 1; }
-for tool in sdcc sdar objcopy; do command -v "$tool" >/dev/null; done
+for tool in sdcc sdar sdasz80 objcopy; do command -v "$tool" >/dev/null || { echo "$tool not found" >&2; exit 1; }; done
+sdcc --version | grep -q ' 4\.6\.0 ' || { echo "SDCC 4.6.0 is required (set SDCC_BIN)" >&2; exit 1; }
 scratch="$(mktemp -d "$out/.${prog}-build.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 
-# Fusion-C's prebuilt library and the BIOS's naked routines take stack
-# arguments. SDCC 4.2 defaults to register arguments, so select ABI 0.
-sdcc -mz80 --sdcccall 0 -c "$here/C-common/lib/msxpi-bios.c" \
-    -o "$scratch/msxpi-bios.rel"
+python3 "$here/tools/build_fusion46.py" "$scratch" --fusion-c "$fusion"
+sdcc -mz80 -c "$here/C-common/lib/msxpi-bios.c" -o "$scratch/msxpi-bios.rel"
 sdar -rc "$scratch/msxpi-bios.lib" "$scratch/msxpi-bios.rel"
-# PChess is near the MSX-DOS memory limit: make.bat gives it the larger register
-# allocation search (about 2.4 KB smaller, a build of about 3 minutes).
-optx=()
-[[ "$prog" == pchess ]] && optx=(--max-allocs-per-node 100000)
-sdcc -mz80 --sdcccall 0 --code-loc 0x106 --data-loc 0x0 \
-    --disable-warning 196 --no-std-crt0 --nostdlib --opt-code-size \
-    fusion.lib msxpi-bios.lib "$legacy" -L "$fusion/lib" -L "$scratch" \
-    "$fusion/include/crt0_msxdos.rel" "$here/Client/src/$prog.c" \
-    -o "$scratch/$prog.ihx"
+sdcc -mz80 --code-loc 0x106 --data-loc 0x0     --disable-warning 196 --no-std-crt0 --opt-code-size     fusion46.lib msxpi-bios.lib -L "$scratch"     "$fusion/include/crt0_msxdos.rel" "$here/Client/src/$prog.c"     -o "$scratch/$prog.ihx" 2>&1 | tee "$scratch/link.log"
+# Permanent link guards, as in make.bat.
+if grep -q 'Conflicting sdcc options' "$scratch/link.log"; then
+    echo "ERROR: $prog mixes calling conventions (linker: Conflicting sdcc options)." >&2
+    exit 1
+fi
+if grep -q 'Undefined Global' "$scratch/link.log"; then
+    echo "ERROR: $prog has undefined symbols (linker: Undefined Global)." >&2
+    exit 1
+fi
 objcopy -I ihex -O binary --gap-fill 0xff "$scratch/$prog.ihx" "$scratch/$prog.com"
 cp "$scratch/$prog.com" "$out/$prog.com"
 echo "Built $out/$prog.com"

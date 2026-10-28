@@ -37,7 +37,7 @@ logger = logging.getLogger("msxpi")
 from msxpi_const import (
     RC_SUCCESS,
 )
-from msxpi_transport import SPI_BurstOut, SPI_ByteTransfer
+from msxpi_transport import SPI_BurstIn, SPI_BurstOut, SPI_ByteTransfer
 
 # IRC client integration (currently disabled - awaiting complete implementation)
 # TODO: Integrate IRC client when msxpi_irc module is ready
@@ -78,13 +78,29 @@ def _eth_write_burst(data):
     return 0 if SPI_BurstOut(data) == RC_SUCCESS else 1
 
 
+def _eth_read_burst(n):
+    # ETH_SEND_FRAME's payload: the MSX sends it with OTIR, so READY must stay
+    # up for the whole block - see SPI_BurstIn.  None on failure, as _read_n.
+    rc, data = SPI_BurstIn(n)
+    return bytes(data) if rc == RC_SUCCESS else None
+
+
+def _eth_tap_ip():
+    """TAPIP from msxpi.ini: the gateway address of the TAP-Windows adapter to use."""
+    try:
+        from msxpi_settings import getMSXPiVar
+        return (getMSXPiVar("TAPIP") or "").strip() or None
+    except Exception:
+        return None
+
+
 def eth_get_shuttle():
     """The EthShuttle, created on first use.  None if the module is absent."""
     global _eth_shuttle
     if _eth_mod is None:
         return None
     if _eth_shuttle is None:
-        link = _eth_mod.make_link(log=print)
+        link = _eth_mod.make_link(log=print, tap_ip=_eth_tap_ip())
         _eth_shuttle = _eth_mod.EthShuttle(
             link,
             read_byte=SPI_ByteTransfer,
@@ -94,6 +110,7 @@ def eth_get_shuttle():
             # through, or every write would look like a failure.
             write_byte=_eth_write_byte,
             write_burst=_eth_write_burst,
+            read_burst=_eth_read_burst,
             log=print,
         )
         print("eth: Ethernet UNAPI shuttle ready (%s)" % type(link).__name__)

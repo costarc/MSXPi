@@ -12,15 +12,18 @@
 ; in page 3 and start the game the way the BIOS starts a cartridge.
 ;
 ; Memory (any MSX with 64 KB RAM and MSX-DOS):
-;   0100h-23FFh  this program          2400h-27FFh  CRC-32 tables (4 x 256)
-;   2800h-33FFh  the GPF (3 KB)        3400h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
-;                                                   then the relocated transport at 3C00h
-;   (PLAYNET /T: PLAYNET.OVL passes through 2800h-3FFFh on its way to its segment)
+;   0100h-24FFh  this program          2500h-28FFh  CRC-32 tables (4 x 256)
+;   2900h-34FFh  the GPF (3 KB)        3500h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
+;                                                   then the relocated transport at 3D00h
+;   (PLAYNET /T: PLAYNET.OVL passes through 2500h-3FFFh on its way to its segment)
+;   4000h-       the mapper-ram loader and other start-up code (in the file after programEnd, copied there
+;                at the start), until the image is in
 ;   4000h-BFFFh  the game image        C000h-       the start-up trampoline, copied there at the end
 ; The game never maps page 0's RAM: this program is still here when the game ends, and pnBack brings
 ; MSX-DOS back (PROTOCOLS 14), using 4000h-BFFFh (the dead image) for the restore buffer and its stack.
 
-PLAYNET_VERSION: EQU    1
+PLAYNET_VERSION: EQU    3                     ; 3: image host mapper-ram (MegaROMs)
+CAPS_KNOWN:      EQU    $01                   ; GPF header byte 99: bit 0 mapper-ram
 
 F_TERM0:        EQU     $00
 F_DIRIN:        EQU     $08                     ; console input, no echo
@@ -38,12 +41,15 @@ KEYBUF:         EQU     $FBF0
 PUTPNT:         EQU     $F3F8
 GETPNT:         EQU     $F3FA
 
-CRCT:           EQU     $2400
-GPFBUF:         EQU     $2800
+CRCT:           EQU     $2500
+GPFBUF:         EQU     $2900
 GPFMAX:         EQU     $0C00
-BOUNCE:         EQU     $3400
-CHUNK:          EQU     $0C00
+BOUNCE:         EQU     $3500
+CHUNK:          EQU     $0B00
 TRAMP:          EQU     $C000
+TRAMP_SP:       EQU     TRAMP+$100              ; the trampoline's stack (Soccer's stub starts at C100h)
+        ASSERT  trLateEnd+128 <= TRAMP_SP        ; room under it: 86 bytes used with Soccer
+        ASSERT  TRAMP+trampEnd-trampSrc+32 <= TRAMP_SP  ; and ENASLT's 32 above the copy part's variables
 SV_HDR:         EQU     8                       ; the saved area (14): 'PNSV', start, length, then start-FFFEh
 SV_MAX:         EQU     $4000-8                 ; under 16 KB (start >= C008h): a segment, or RBUF to C000h
 RBUF:           EQU     $8000                   ; the MSXPi restore buffer: page 2, the game image's RAM
@@ -58,7 +64,11 @@ R_MACHINE:      EQU     9
 
         org     $0100
 
-start:  ld      hl,msgBanner
+start:  ld      hl,hiImage                      ; the page-1 part into place, before CRCT and the GPF
+        ld      de,hiStart                      ; buffer (where it is in the file) are used
+        ld      bc,hiEnd-hiStart
+        ldir
+        ld      hl,msgBanner
         call    PRINT
         call    resetMSXPI
         call    getSlot1
@@ -174,400 +184,6 @@ sesFields:
         ldir
         ret
 
-; ---- game package (8) -------------------------------------------------------------------------
-getProfile:
-        ld      a,(tcp)
-        or      a
-        jp      nz,tcpGpf
-        ld      hl,cmdProfileId                 ; "playnet profile " + id
-        ld      de,gameId
-.cat:   ld      a,(de)
-        ld      (hl),a
-        inc     hl
-        inc     de
-        or      a
-        jr      nz,.cat
-        ld      de,cmdProfile
-        ld      hl,GPFBUF
-        ld      bc,GPFMAX
-        call    piCommand
-        jp      c,linkErr
-        cp      RC_SUCCESS
-        jp      nz,piRefused
-gpfCheck:                                       ; BC = the GPF's length, at GPFBUF
-        ld      (gpfLen),bc
-        ld      hl,-128
-        add     hl,bc
-        ld      a,1
-        jp      nc,badPkg                       ; shorter than the header
-        ld      hl,GPFBUF
-        ld      de,magicGPF
-        call    cmp4
-        ld      a,2
-        jp      nz,badPkg
-        ld      a,(GPFBUF+4)
-        dec     a
-        ld      hl,msgNewer
-        ld      a,R_INCOMPAT
-        jp      nz,exitResult                   ; a newer GPF format
-        ld      hl,(GPFBUF+6)                   ; body length + 128 = what arrived
-        ld      de,128
-        add     hl,de
-        ld      de,(gpfLen)
-        or      a
-        sbc     hl,de
-        ld      a,3
-        jp      nz,badPkg
-        call    crcStart                        ; the profile hash: CRC-32 with bytes 8-11 as zero
-        ld      hl,GPFBUF
-        ld      bc,8
-        call    crcUpdate
-        ld      hl,zero4
-        ld      bc,4
-        call    crcUpdate
-        ld      hl,(gpfLen)
-        ld      bc,-12
-        add     hl,bc
-        ld      b,h
-        ld      c,l
-        ld      hl,GPFBUF+12
-        call    crcUpdate
-        call    crcFinish
-        ld      hl,crcVal
-        ld      de,GPFBUF+8
-        call    cmp4
-        ld      a,4
-        jp      nz,badPkg                       ; damaged
-        ld      a,(GPFBUF+98)                   ; min_playnet
-        cp      PLAYNET_VERSION+1
-        ld      hl,msgNewer
-        ld      a,R_INCOMPAT
-        jp      nc,exitResult
-        ld      a,(GPFBUF+5)                    ; flags: bit 0 lockstep, bits 1-2 image host
-        cp      1
-        ld      hl,msgOwnProgram
-        jp      nz,exitResult
-        ld      a,(manual)
-        or      a
-        ret     nz
-        ld      hl,sesBuf+12                    ; the session's profile hash
-        ld      de,GPFBUF+8
-        call    cmp4
-        ld      hl,msgChanged
-        ld      a,R_INCOMPAT
-        jp      nz,exitResult
-        ret
-
-; Walk the sections and check the package's rules again (7.2, 8.3): a GPF from the MSXPi is not trusted
-; more than one from a disk. A = check number on failure (shown to the player).
-parseGpf:
-        ld      hl,GPFBUF+128
-.sec:   ld      c,(hl)                          ; type
-        inc     hl
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)                          ; DE = length
-        inc     hl                              ; HL = payload
-        push    hl
-        add     hl,de
-        ld      (secEnd),hl
-        push    de
-        ld      de,(gpfLen)
-        ld      hl,GPFBUF
-        add     hl,de
-        ld      de,(secEnd)
-        or      a
-        sbc     hl,de                           ; the end of the file minus the end of the section
-        pop     de
-        pop     hl
-        ld      a,10
-        jp      c,badPkg                        ; runs past the end of the file
-        ld      a,c
-        or      a
-        jr      z,.done
-        dec     a
-        jr      nz,.n1
-        ld      (pSource),hl
-.n1:    dec     a
-        jr      nz,.n2
-        ld      (pNetplay),hl
-.n2:    dec     a
-        jr      nz,.n3
-        ld      (pLayout),hl
-.n3:    dec     a
-        jr      nz,.n4
-        ld      (pPatch),hl
-.n4:    dec     a
-        jr      nz,.next
-        ld      a,(nAssets)                     ; an asset: remember where and how long
-        cp      8
-        ld      a,11
-        jp      nc,badPkg
-        push    hl
-        ld      a,(nAssets)
-        add     a,a
-        add     a,a
-        ld      c,a
-        ld      b,0
-        ld      hl,assetTab
-        add     hl,bc
-        pop     bc                              ; BC = asset address
-        ld      (hl),c
-        inc     hl
-        ld      (hl),b
-        inc     hl
-        ld      (hl),e
-        inc     hl
-        ld      (hl),d
-        ld      hl,nAssets
-        inc     (hl)
-.next:  ld      hl,(secEnd)
-        jr      .sec
-.done:  ld      hl,(pSource)                    ; all four sections are required
-        ld      a,h
-        or      l
-        ld      a,12
-        jp      z,badPkg
-        ld      hl,(pNetplay)
-        ld      a,h
-        or      l
-        ld      a,12
-        jp      z,badPkg
-        ld      hl,(pLayout)
-        ld      a,h
-        or      l
-        ld      a,12
-        jp      z,badPkg
-        ld      hl,(pPatch)
-        ld      a,h
-        or      l
-        ld      a,12
-        jp      z,badPkg
-        ld      hl,(pNetplay)                   ; the fixed part of NETPLAY into np...
-        ld      de,np
-        ld      bc,17
-        ldir
-        ld      (pRanges),hl
-        ld      hl,(pSource)                    ; SOURCE: size (4), CRC-32 (4), file name (12)
-        ld      de,srcSize
-        ld      bc,20
-        ldir
-        ld      hl,(pLayout)                    ; LAYOUT: output size (4), fill, count
-        ld      de,outSize
-        ld      bc,6
-        ldir
-        ld      (pLayEnt),hl
-        ; -- the image: base 4000h or 8000h, 16 or 32 KB, ending at or below BFFFh
-        ld      a,(npBase)
-        or      a
-        ld      a,20
-        jp      nz,badPkg
-        ld      a,(npBase+1)
-        cp      $40
-        jr      z,.b1
-        cp      $80
-        ld      a,20
-        jp      nz,badPkg
-.b1:    ld      hl,(outSize+2)
-        ld      a,h
-        or      l
-        ld      a,21
-        jp      nz,badPkg
-        ld      hl,(outSize)
-        ld      a,l
-        or      a
-        ld      a,21
-        jp      nz,badPkg
-        ld      a,h
-        cp      $40
-        jr      z,.b2
-        cp      $80
-        ld      a,21
-        jp      nz,badPkg
-.b2:    ld      de,(npBase)
-        add     hl,de
-        ld      (imgEnd),hl                     ; the first address after the image
-        ld      de,$C001
-        call    cpHLDE
-        ld      a,22
-        jp      nc,badPkg
-        ld      hl,(srcSize+2)
-        ld      a,h
-        or      l
-        ld      a,23
-        jp      nz,badPkg
-        ; -- input width
-        ld      a,(npW)
-        dec     a
-        cp      4
-        ld      a,24
-        jp      nc,badPkg
-        ; -- the stub asset fits its room
-        ld      a,(npStubAsset)
-        ld      hl,nAssets
-        cp      (hl)
-        ld      a,25
-        jp      nc,badPkg
-        ld      a,(npStubAsset)
-        call    assetAt                         ; HL = address, DE = length
-        ld      (stubSrc),hl
-        ld      (stubLen),de
-        ld      hl,(npStubMax)
-        call    cpHLDE
-        ld      a,26
-        jp      c,badPkg                        ; longer than stub.max
-        ; -- stub area and transport area in page 3 (C000h-F37Fh), apart from each other
-        ld      hl,(npStubLoad)
-        ld      de,(npStubMax)
-        call    page3
-        ld      a,27
-        jp      c,badPkg
-        ld      (stubHi),hl
-        ld      hl,(npTArea)
-        ld      de,(npTSize)
-        call    page3
-        ld      a,28
-        jp      c,badPkg
-        ld      (tHi),hl
-        ld      hl,TR_SIZE-1
-        ld      de,(npTSize)
-        call    cpHLDE
-        ld      a,29
-        jp      nc,badPkg                       ; this PLAYNET's transport does not fit the area
-        ld      hl,(npStubLoad)
-        ld      de,(stubHi)
-        ld      (ovLo),hl
-        ld      (ovHi),de
-        ld      hl,(npTArea)
-        ld      de,(tHi)
-        call    overlap
-        ld      a,30
-        jp      c,badPkg
-        ld      hl,(npStubLoad)                 ; and apart from this program's start-up code
-        ld      de,(stubHi)
-        ld      bc,TRAMP
-        call    overTramp
-        ld      a,31
-        jp      c,badPkg
-        ld      hl,(npTArea)
-        ld      de,(tHi)
-        call    overTramp
-        ld      a,31
-        jp      c,badPkg
-        ; -- the game's RAM is apart from both
-        ld      hl,(pRanges)
-        ld      a,(npRanges)
-        or      a
-        ld      a,32
-        jp      z,badPkg
-        ld      a,(npRanges)
-        ld      b,a
-.rng:   push    bc
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        inc     hl
-        ld      c,(hl)
-        inc     hl
-        ld      b,(hl)
-        inc     hl
-        push    hl
-        push    bc
-        push    de
-        ld      hl,(npStubLoad)
-        ld      (ovLo),hl
-        ld      hl,(stubHi)
-        ld      (ovHi),hl
-        pop     hl                              ; HL = low
-        pop     de                              ; DE = high
-        push    de
-        push    hl
-        call    overlap
-        ld      a,33
-        jp      c,badPkg
-        ld      hl,(npTArea)
-        ld      (ovLo),hl
-        ld      hl,(tHi)
-        ld      (ovHi),hl
-        pop     hl
-        pop     de
-        call    overlap
-        ld      a,34
-        jp      c,badPkg
-        pop     hl
-        pop     bc
-        djnz    .rng
-        ; -- the interrupt handler and the start address are inside the image
-        ld      hl,(npIrq)
-        call    inImage
-        ld      a,35
-        jp      c,badPkg
-        ld      hl,(npStart)
-        ld      a,h
-        or      l
-        jr      z,.lay
-        call    inImage
-        ld      a,36
-        jp      c,badPkg
-        ; -- layout entries: source (1), offset (4), size (4), destination (4)
-.lay:   ld      hl,(pLayEnt)
-        ld      a,(outSize+5)                   ; count
-        or      a
-        ret     z
-        ld      b,a
-.ent:   push    bc
-        push    hl
-        ld      de,lyEnt
-        ld      bc,13
-        ldir
-        ld      hl,(lyOff+2)                    ; 32-bit fields: the high words must be zero here
-        ld      de,(lySize+2)
-        ld      a,h
-        or      l
-        or      d
-        or      e
-        ld      hl,(lyDest+2)
-        or      h
-        or      l
-        ld      a,40
-        jp      nz,badPkg
-        ld      a,(lySrc)                       ; the source holds offset + size bytes
-        cp      $FF
-        jr      z,.inp
-        ld      hl,nAssets
-        cp      (hl)
-        ld      a,41
-        jp      nc,badPkg
-        ld      a,(lySrc)
-        call    assetAt                         ; DE = asset length
-        jr      .src
-.inp:   ld      de,(srcSize)
-.src:   ld      hl,(lyOff)
-        ld      bc,(lySize)
-        add     hl,bc
-        ld      a,42
-        jp      c,badPkg
-        inc     de
-        call    cpHLDE
-        ld      a,42
-        jp      nc,badPkg
-        ld      hl,(lyDest)                     ; destination + size inside the output
-        ld      bc,(lySize)
-        add     hl,bc
-        ld      a,43
-        jp      c,badPkg
-        ld      de,(outSize)
-        inc     de
-        call    cpHLDE
-        ld      a,43
-        jp      nc,badPkg
-        pop     hl
-        ld      bc,13
-        add     hl,bc
-        pop     bc
-        djnz    .ent
-        ret
-
 ; HL = start, DE = length: CF if not inside page 3 (C000h-F37Fh) or empty; else HL = last address
 page3:  ld      a,d
         or      e
@@ -611,13 +227,13 @@ overlap:
         ccf
         ret
 
-; HL = low, DE = high: CF if [low, high] overlaps the trampoline (TRAMP .. TRAMP + its size - 1)
+; HL = low, DE = high: CF if [low, high] overlaps the trampoline and its stack (TRAMP .. TRAMP_SP - 1)
 overTramp:
         push    hl
         push    de
         ld      hl,TRAMP
         ld      (ovLo),hl
-        ld      hl,TRAMP+trampEnd-trampSrc-1
+        ld      hl,TRAMP_SP-1
         ld      (ovHi),hl
         pop     de
         pop     hl
@@ -633,6 +249,14 @@ inImage:
         ccf
         ret
 
+; CF if HL < BC (unsigned); HL, DE and BC are kept
+cpHLDE.bc:
+        push    de
+        ld      d,b
+        ld      e,c
+        call    cpHLDE
+        pop     de
+        ret
 ; CF if HL < DE (unsigned); HL and DE are kept
 cpHLDE: or      a
         sbc     hl,de
@@ -739,13 +363,17 @@ loadRom:
         sbc     hl,de
         ld      hl,msgWrongRom
         jp      nz,romErr
-        ld      hl,(fcb+18)
-        ld      a,h
-        or      l
+        ld      hl,(fcb+18)                     ; (above 64 KB only with mapper-ram)
+        ld      de,(srcSize+2)
+        or      a
+        sbc     hl,de
         ld      hl,msgWrongRom
         jp      nz,romErr
         ld      hl,msgLoading
         call    PRINT
+        ld      a,(mHost)
+        or      a
+        jp      nz,mLoad
         call    crcStart
         call    ram1                            ; the image starts as the fill byte
         ld      hl,(npBase)
@@ -904,6 +532,9 @@ copyAssets:
 
 ; ---- patches: every expected byte must be there --------------------------------------------
 patchImage:
+        ld      a,(mHost)
+        or      a
+        jp      nz,mPatch
         call    ram1
         ld      hl,(pPatch)
         ld      c,(hl)
@@ -981,6 +612,7 @@ connect:
         jp      nz,tcpConnect
         ld      hl,msgConnect
         call    PRINT
+mpConnect:                                      ; (link 2 joins here: tcpConnect has printed it)
         ld      a,(manual)
         or      a
         jr      nz,.go
@@ -1050,6 +682,8 @@ connect:
         jp      exitResult
 .ready: ld      a,(stDelay)
         ld      (delay),a
+        ld      a,(stK)
+        ld      (kAgreed),a
         ld      hl,msgReady
         call    PRINT
         ld      a,(delay)
@@ -1057,8 +691,8 @@ connect:
         call    PUTCHAR
         jp      PRINTNLINE
 
-; A = FLAGS (bit 7 set). C9, FLAGS, L = 0, SUM = 0 -> A0+state, delay, delay. Out: A = state,
-; (stDelay); CF when the link failed.
+; A = FLAGS (bit 7 set). C9, FLAGS, L = 0, SUM = 0 -> A0+state, delay, K. Out: A = state,
+; (stDelay), (stK); CF when the link failed.
 c9status:
         di
         ld      (c9sp),sp
@@ -1071,6 +705,7 @@ c9status:
         call    c9rxb
         ld      (stDelay),a
         call    c9rxb
+        ld      (stK),a
         ei
         ld      a,b
         and     $0F
@@ -1119,12 +754,23 @@ install:
         call    PRINT
         call    PRINTNLINE
         ld      hl,(stubSrc)                    ; the stub's header: seat and delay
+        ld      a,(hl)
+        ld      (stubAbi),a
         inc     hl
         ld      a,(seat)
         ld      (hl),a
         inc     hl
         ld      a,(delay)
         ld      (hl),a
+        inc     hl                              ; pnFlags: the build's
+        inc     hl                              ; pnK
+        ld      a,(kAgreed)
+        ld      b,a
+        ld      a,(stubAbi)
+        cp      2
+        jr      c,.noK                          ; an ABI 1 stub has no pnK (that byte is PN_TICK's code)
+        ld      (hl),b                          ; pnK
+.noK:
         ld      a,(tcp)                         ; the transport, relocated to its area
         or      a
         jr      z,.pi
@@ -1163,12 +809,26 @@ install:
         ld      (vStart),hl
         ld      a,(RAMAD1)
         ld      (vRam1),a
+        ld      a,(mHost)                       ; mapper-ram: the start pairs into pages 1 and 2
+        ld      (vMap),a
+        or      a
+        jr      z,.nm
+        ld      ix,(mBlk)
+        ld      a,(ix+8)
+        ld      (vSeg1),a
+        ld      a,(ix+9)
+        ld      (vSeg2),a
+.nm:
         ld      hl,TR_SIZE
         ld      a,(tcp)
         or      a
         jr      z,.tl
         ld      hl,TU_SIZE
-        ld      a,(g3Seg)                       ; and the game's own page 3
+        ld      a,(hyb)
+        or      a
+        jr      z,.hs
+        ld      hl,TH_SIZE
+.hs:    ld      a,(g3Seg)                       ; and the game's own page 3
         ld      (vG3),a
         ld      a,(gameSeg2)
         ld      (vGame2),a
@@ -1188,19 +848,21 @@ install:
 .go:    di
         jp      TRAMP
 
-; HL = a relocation list (offsets in tBuf of the words to move by npTArea), FFFFh at the end
+; HL = a relocation list: the words in tBuf to move by npTArea, each as its distance from the last one (from
+; tBuf-1 at first), one byte each, 0 at the end (build.py)
 relocate:
-        ld      e,(hl)
-        inc     hl
-        ld      d,(hl)
-        inc     hl
-        ld      a,d
-        and     e
-        inc     a
+        ld      de,tBuf-1
+.next:  ld      a,(hl)
+        or      a
         ret     z
-        push    hl
-        ld      hl,tBuf
-        add     hl,de
+        inc     hl
+        add     a,e
+        ld      e,a
+        jr      nc,.w
+        inc     d
+.w:     push    hl
+        push    de
+        ex      de,hl
         ld      e,(hl)
         inc     hl
         ld      d,(hl)
@@ -1212,47 +874,21 @@ relocate:
         ld      (hl),d
         dec     hl
         ld      (hl),e
+        pop     de
         pop     hl
-        jr      relocate
+        jr      .next
 
 ; Runs from C000h. Copies the stub and the transport into page 3 (MSX-DOS is gone from here on),
 ; then starts the game with page 0 = main BIOS and page 1 = the RAM holding it.
+; Its own stack ends at TRAMP_SP: MSX-DOS's can be in the stub's area (D53Fh under MSX-DOS 1 on the V-25), where
+; ENASLT, INIT32 and their interrupts would push. That stack goes down to about C0AAh (Soccer), over the copy part
+; (.early, run first and placed last); what runs after INIT32 is at the start. The game starts on MSX-DOS's stack, as before.
 trampSrc:
         PHASE   TRAMP
-        ld      hl,(vStubSrc)
-        ld      de,(vStubDst)
-        ld      bc,(vStubLen)
-        ldir
-        ld      hl,tBuf
-        ld      de,(vTDst)
-        ld      bc,(vTLen)
-        ldir
-        ld      a,(vG3)                         ; TCP/IP: the game gets a page 3 of its own, a copy of
-        or      a                               ; MSX-DOS's (this code and the transport are in it)
-        jr      z,.p3
-        call    .put
-        ld      hl,$C000
-        ld      de,$8000
-        ld      bc,$3FFF                        ; not FFFFh: the sub-slot register
-        ldir
-        ld      a,(vGame2)
-        call    .put
-        ld      a,(vG3)
-        out     ($FF),a
-.p3:    ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
-        ld      ($FD9F),a
-        ld      a,(EXPTBL)                      ; main BIOS slot into page 0
-        and     3
-        ld      c,a
-        in      a,($A8)
-        and     $FC
-        or      c
-        out     ($A8),a
-        ld      a,(vRam1)                       ; RAM, holding the game, into page 1
-        ld      h,$40
-        call    ENASLT
-        di
-        ld      hl,$FD9A                        ; hooks left by DOS that point outside the BIOS become
+        ld      (vDosSp),sp
+        ld      sp,TRAMP_SP
+        jp      trEarly
+trLate: ld      hl,$FD9A                        ; hooks left by DOS that point outside the BIOS become
 .hook:  ld      a,(hl)                          ; RET, as a bare cartridge would see them
         cp      $F7
         jr      nz,.next
@@ -1274,7 +910,6 @@ trampSrc:
         ld      a,l
         cp      $CF
         jr      c,.hook
-        call    INIT32                          ; SCREEN 1, as before a cartridge INIT
         ld      hl,(vStart)
         ld      a,h
         or      l
@@ -1286,19 +921,70 @@ trampSrc:
         inc     hl
         ld      h,(hl)
         ld      l,a
-.go:    jp      (hl)
+.go:    push    hl
+        call    INIT32                          ; SCREEN 1, as before a cartridge INIT
+        pop     hl
+        ld      sp,(vDosSp)
+        jp      (hl)
+vStart:         defw    0
+vBase:          defw    0
+vDosSp:         defw    0
+trLateEnd:
+trEarly:
+        ld      hl,tBuf
+        ld      de,(vTDst)
+        ld      bc,(vTLen)
+        ldir
+        ld      a,(vG3)                         ; TCP/IP: the game gets a page 3 of its own, a copy of
+        or      a                               ; MSX-DOS's (this code and the transport are in it)
+        jr      z,.p3
+        call    .put
+        ld      hl,$C000
+        ld      de,$8000
+        ld      bc,$3FFF                        ; not FFFFh: the sub-slot register
+        ldir
+        ld      a,(vGame2)
+        call    .put
+        ld      a,(vG3)
+        out     ($FF),a
+.p3:    ld      hl,(vStubSrc)                   ; the stub: TCP/IP, in G3 only (MSX-DOS's page 3 keeps what
+        ld      de,(vStubDst)                   ; it has there, above its TPA top)
+        ld      bc,(vStubLen)
+        ldir
+        ld      a,$C9                           ; no MSX-DOS timer hook (in G3 only, on the TCP/IP path)
+        ld      ($FD9F),a
+        ld      a,(EXPTBL)                      ; main BIOS slot into page 0
+        and     3
+        ld      c,a
+        in      a,($A8)
+        and     $FC
+        or      c
+        out     ($A8),a
+        ld      a,(vMap)                        ; mapper-ram: the segments of the start pairs
+        or      a
+        jr      z,.ram
+        ld      a,(vSeg1)
+        out     ($FD),a
+        ld      a,(vSeg2)
+        out     ($FE),a
+.ram:   ld      a,(vRam1)                       ; RAM, holding the game, into page 1
+        ld      h,$40
+        call    ENASLT
+        di
+        jp      trLate
 .put:   ld      hl,(vPut)                       ; A = segment: MSX-DOS's PUT_P2
         jp      (hl)
 vStubSrc:       defw    0
 vStubDst:       defw    0
 vStubLen:       defw    0
 vTDst:          defw    0
-vStart:         defw    0
-vBase:          defw    0
 vRam1:          defb    0
 vTLen:          defw    0                       ; the transport's length
 vG3:            defb    0                       ; TCP/IP: the game's page-3 segment, else 0
 vGame2:         defb    0                       ; TCP/IP: the TPA's page-2 segment
+vMap:           defb    0                       ; mapper-ram: 1, and the start pairs' segments
+vSeg1:          defb    0
+vSeg2:          defb    0
 vPut:           defw    0                       ; TCP/IP: MSX-DOS's PUT_P2
         DEPHASE
 trampEnd:
@@ -1309,26 +995,28 @@ trampEnd:
 saveDos:
         ld      hl,(HIMEM)                      ; the area starts at HIMEM, or lower where the game's RAM
         ld      (svStart),hl                    ; reaches below it: MSX-DOS 2 keeps code and data between
-        ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh), and Soccer
-        ld      b,a                             ; uses E000h-F37Fh. A range below the TPA top is TPA.
+        ld      a,(npRanges)                    ; the TPA top and HIMEM (Nextor: DC06h-E6FDh; MSX-DOS 1: its
+        ld      b,a                             ; code), and Soccer uses E000h-F37Fh. The TPA is not kept.
         ld      hl,(pRanges)
 .rng:   ld      e,(hl)
         inc     hl
         ld      d,(hl)                          ; DE = low
         inc     hl
-        inc     hl
+        ld      a,(hl)
         inc     hl
         push    hl
-        ld      hl,($0006)
-        ex      de,hl                           ; HL = low, DE = the TPA top
-        call    cpHLDE
-        jr      c,.next                         ; in the TPA
-        ld      de,(svStart)
-        call    cpHLDE
-        jr      nc,.next
-        ld      (svStart),hl                    ; below the start so far
-.next:  pop     hl
+        ld      h,(hl)
+        ld      l,a                             ; HL = high
+        call    svLow
+        pop     hl
+        inc     hl
         djnz    .rng
+        ld      de,(npStubLoad)                 ; the stub and the transport are written there too
+        ld      hl,(npStubMax)
+        call    svArea
+        ld      de,(npTArea)
+        ld      hl,(npTSize)
+        call    svArea
         ld      hl,(svStart)
         ld      de,$10000-SV_MAX
         call    cpHLDE
@@ -1377,6 +1065,26 @@ saveDos:
 .no:    ld      hl,msgNoSave                    ; the game still runs, and ends with a reset
         call    PRINT
         jp      PRINTNLINE
+
+; DE = the start of an area the game writes, HL = its size
+svArea: dec     hl
+        add     hl,de
+; DE = low, HL = high (inclusive) of an area the game writes: the saved area starts at its part above the TPA top
+; (all of it, or from the TPA top when it straddles it: a stub low in page 3 may run over MSX-DOS 1's code) when
+; that is below the start so far. Keeps B.
+svLow:  push    de
+        ld      de,($0006)
+        call    cpHLDE
+        pop     hl                              ; HL = low
+        ret     c                               ; all in the TPA
+        call    cpHLDE
+        jr      nc,.above
+        ex      de,hl                           ; from the TPA top
+.above: ld      de,(svStart)
+        call    cpHLDE
+        ret     nc
+        ld      (svStart),hl                    ; below the start so far
+        ret
 
 ; "playnet save", after the command: the header and the area as one transfer that the MSXPi's recvdata2
 ; takes (one handshake, blocks of at most MAXBUFSIZE, RC_READY on all but the last). CF on a link error.
@@ -1501,6 +1209,9 @@ pnBack:
                                                 ; (CALSLT), 1 (MSR's routines map it), 2 (RBUF, segments)
         ld      (bkSlots),bc
         ld      (bkCode),a
+        ld      a,(mHost)                       ; mapper-ram: MSX-DOS's own segments in pages 1 and 2
+        or      a
+        call    nz,mUnmap
         ld      a,8                             ; the PSG's three channels silent
         ld      b,3
 .psg:   out     ($A0),a
@@ -1873,10 +1584,10 @@ printHex:
 .p:     jp      PUTCHAR
 
 ; ---- text ----------------------------------------------------------------------------------------
-msgBanner:      defb    "PLAYNET 1 - online games for MSX",13,10,0
+msgBanner:      defb    "PLAYNET 3 - online games for MSX",13,10,0
 msgUsage:       defb    "Usage: PLAYNET  (started by MCHAT), PLAYNET game role,",13,10
-                defb    "       PLAYNET /T (started by MCHAT /T), or",13,10
-                defb    "       PLAYNET /T game role port ip:port[,ip:port]",0
+                defb    "       PLAYNET /T [/S0|/S1] [/K1..3] [/L0..9] (started by MCHAT /T), or",13,10
+                defb    "       PLAYNET /T [options] game role port ip:port[,ip:port]",0
 msgNoSes:       defb    "No game waiting in PLAYNET.SES (start it from MCHAT /T)",0
 nameSes:        defb    "PLAYNET SES"
 sesEnd:         defb    2,0                     ; state ended, result code
@@ -1885,7 +1596,7 @@ msgNoMapper:    defb    "TCP/IP needs a memory mapper and its routines (MSX-DOS 
 msgNoSeg:       defb    "No free memory mapper segment",0
 msgNoOvl:       defb    "Cannot load PLAYNET.OVL (it must be in the current directory)",0
 msgNoGpf:       defb    "Cannot read the game package (ID.GPF in the current directory)",0
-msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites: it cannot run here",0
+msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites. Restart the MSX holding CTRL (frees 1.5 KB), or use Nextor",0
 msgNoTcpip:     defb    "No TCP/IP UNAPI found: run INL I first",0
 msgNoPort:      defb    "Cannot open the UDP port",0
 nameOvl:        defb    "PLAYNET OVL"
@@ -1929,6 +1640,7 @@ cmdProfileId:   defs    10
         INCLUDE "msxpi_bios.asm"
         INCLUDE "transport_msxpi.inc"
         INCLUDE "transport_unapi.inc"
+        INCLUDE "transport_hybrid.inc"
         INCLUDE "playnet_tcp.asm"
 
 ; ---- variables ------------------------------------------------------------------------------------
@@ -1936,12 +1648,16 @@ manual:         defb    0
 seat:           defb    0
 delay:          defb    0
 stDelay:        defb    0
+stK:            defb    1                       ; the Pi's send interval K (status reply)
+stubAbi:        defb    0                       ; the stub's ABI version (its header byte 0)
+kAgreed:        defb    1                       ; the agreed K, for the stub's header
 dosSlot1:       defb    0
 gameId:         defs    9
 roleArg:        defs    9
 peer:           defs    9                       ; 8 bytes + a terminator
 title:          defs    25
-argBuf:         defs    128
+argBuf:         EQU     GPFBUF                  ; the command line, 128 bytes: parsed (and copied out) before
+                                                ; anything comes into GPFBUF
 sesBuf:         defs    64
 fcb:            defs    37
 gpfLen:         defw    0
@@ -1996,6 +1712,9 @@ pcBsz:          defw    0
 pcCmd:          defw    0
 tBuf:           EQU     BOUNCE+$800             ; the relocated transport, until the trampoline copies it
         ASSERT  tBuf+TR_SIZE <= BOUNCE+CHUNK
+        ASSERT  tBuf+TU_SIZE <= BOUNCE+CHUNK
+        ASSERT  tBuf+TH_SIZE <= BOUNCE+CHUNK
+        ASSERT  GPFBUF+GPFMAX+BLKSIZE <= BOUNCE+$800  ; a GPF's last block from the MSXPi may run into BOUNCE
 tcp:            defb    0                       ; 1: PLAYNET /T (playnet_tcp.asm)
 lport:          defw    0
 ncand:          defb    0
@@ -2003,10 +1722,15 @@ cands:          defs    18                      ; 3 x (ip 4, port 2)
 mapTab:         defw    0                       ; the mapper support routines
 ovlSeg:         defb    0
 g3Seg:          defb    0                       ; the game's page 3 (TCP/IP)
+gameSeg1:       defb    0                       ; the TPA's pages 1 and 2 (TCP/IP; this order)
 gameSeg2:       defb    0
 dosSeg3:        defb    0
 segsHeld:       defb    0
 hz:             defb    60
+kMode:          defb    0                       ; PLAYNET /T /K1../K3: the send interval to announce (0: by the stack)
+lMode:          defb    $FF                     ; /L0../L9: the service latency to announce, in frames ($FF: by the stack)
+svcMode:        defb    2                       ; PLAYNET /T /S0, /S1: the TCP/IP stack's service (2: by the stack found)
+hyb:            defb    0                       ; link 2 (/H, or the session's): the game's packets through the MSXPi
 ovlLen:         defw    0
 ovlIo:          defw    0
 ovlOpen:        defb    0
@@ -2029,5 +1753,16 @@ sbLen:          defw    0
 sbTry:          defb    0
 sbSum:          defb    0
 crcVal:         defs    4
+mHost:          defb    0                       ; image host: 0 plain, 1 mapper-ram
+        INCLUDE "mapper_low.asm"                ; the mapper-ram loader's page-0 part
 programEnd:
-        ASSERT  programEnd <= CRCT
+        ASSERT  programEnd <= CRCT               ; PLAYNET /T loads PLAYNET.OVL through CRCT-3FFFh
+; Page 1: code that runs only before the image is in RAM. start copies it to 4000h; a plain game's image lands
+; over it later, and a mapper-ram game never maps an image there.
+hiImage:
+        DISP    $4000
+hiStart:
+        INCLUDE "playnet_gpf.asm"               ; the game package: fetched, checked, parsed
+        INCLUDE "mapper_host.asm"               ; the mapper-ram loader
+hiEnd:
+        ENT

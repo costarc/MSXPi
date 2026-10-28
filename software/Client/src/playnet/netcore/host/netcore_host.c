@@ -2,11 +2,12 @@
  * (Server/Python/tests/test_netcore.py). A real UDP socket, a centisecond clock, and a game loop that
  * sends one game packet per 20 ms frame once ready and counts what comes back.
  *
- *   netcore_host LPORT PEER_IP PEER_PORT PROFILE_HEX FRAMES [BYE_AT [WIDTH [VERSION [NONCE_HEX]]]]
+ *   netcore_host LPORT PEER_IP PEER_PORT PROFILE_HEX FRAMES [BYE_AT [WIDTH [VERSION [NONCE_HEX [K [S]]]]]]]
  *
  * Prints one line per event: "STATUS n delay d leader l", "PACKET seq", "LEFT reason", "GONE", "DONE rx=n".
  * BYE_AT > 0: after that many frames, end the game here with result 1.
  * NONCE_HEX: when not 0, every nonce this side draws (to choose who leads).
+ * K, S: the send interval and the service latency this side announces (default 1, 0).
  *
  *   gcc -O2 -I.. -o netcore_host netcore_host.c ../netcore.c
  */
@@ -69,7 +70,7 @@ int main(int argc, char **argv)
 {
     struct sockaddr_in me;
     nc_addr cand;
-    uint8_t pkt[NC_MAX_PKT], rx[NC_MAX_PKT], reason, d, st, last = 0xFF, width = 1, ver = 1;
+    uint8_t pkt[NC_MAX_PKT], rx[NC_MAX_PKT], reason, d, st, last = 0xFF, width = 1, ver = 2, k = 1, s = 0;
     unsigned frames, bye_at = 0, f = 0, got = 0, i;
     uint16_t next_frame = 0, done_at = 0;
     uint8_t ended = 0;
@@ -84,6 +85,8 @@ int main(int argc, char **argv)
     if (argc > 7) width = (uint8_t)atoi(argv[7]);
     if (argc > 8) ver = (uint8_t)atoi(argv[8]);
     if (argc > 9) forced_nonce = (uint32_t)strtoul(argv[9], 0, 16);
+    if (argc > 10) k = (uint8_t)atoi(argv[10]);
+    if (argc > 11) s = (uint8_t)atoi(argv[11]);
     srand((unsigned)time(0) ^ (unsigned)getpid());
     setvbuf(stdout, 0, _IOLBF, 0);
 
@@ -99,16 +102,17 @@ int main(int argc, char **argv)
     inet_pton(AF_INET, argv[2], cand.ip);
     cand.port = (uint16_t)atoi(argv[3]);
 
-    nc_init((uint32_t)strtoul(argv[4], 0, 16), ver, 0);
+    nc_init((uint32_t)strtoul(argv[4], 0, 16), ver, 0, 100, k, s);   /* nc_now() is in centiseconds */
     nc_set_peers(&cand, 1);
     nc_restart();
+    next_frame = nc_now();                          /* (0 would be "in the future" for half of every 655 s clock cycle) */
     for (;;) {
         sleep_ms(5);
         nc_poll();
         st = nc_status(&d);
         if (st != last) {
             last = st;
-            printf("STATUS %u delay %u leader %u\n", st, d, nc_is_leader());
+            printf("STATUS %u delay %u leader %u k %u\n", st, d, nc_is_leader(), nc_k());
             if (st == NC_ST_INCOMPATIBLE || st == NC_ST_FAILED)
                 break;
         }

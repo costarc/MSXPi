@@ -13,7 +13,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <string.h>
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 #define NAMTBL 0x1800

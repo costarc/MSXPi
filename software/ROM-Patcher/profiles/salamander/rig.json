@@ -1,0 +1,47 @@
+{
+  "script": "run_salamander.sh",
+  "rom_env": "SALAMANDER_ROM",
+  "rom": "SALAMAND.ROM",
+  "frames": 3000,
+  "argv": [
+    "frames",
+    "lag",
+    "loss"
+  ],
+  "env": {},
+  "links": {
+    "0": {},
+    "1": {
+      "TCP": "1",
+      "BOTH": "1"
+    },
+    "2": {
+      "TCP": "1",
+      "BOTH": "1",
+      "HYBRID": "1"
+    },
+    "mixed": {
+      "TCP": "1"
+    },
+    "mixed2": {
+      "TCP": "1",
+      "HYBRID": "1"
+    }
+  },
+  "chat": {
+    "0": {
+      "CHAT": "1"
+    },
+    "1": {
+      "CHAT": "1",
+      "TCP": "1",
+      "BOTH": "1"
+    },
+    "2": {
+      "CHAT": "1",
+      "TCP": "1",
+      "BOTH": "1",
+      "HYBRID": "1"
+    }
+  }
+}

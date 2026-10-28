@@ -10,8 +10,9 @@
 ;   +15 CLOSE  close the UDP port
 ;   +18 version of this vector (1)
 ;   +19 address of the I/O block
+;   +21 KEEP  one service of the stack and the IRC connection (the hybrid transport, transport_hybrid.asm)
         .module ovl_crt0
-        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io
+        .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io, _ovl_keep
         .globl  l__DATA, s__DATA, l__INITIALIZER, s__INITIALIZER, s__INITIALIZED
 
         .area   _HEADER (ABS)
@@ -24,6 +25,7 @@
         jp      _ovl_close
         .db     1
         .dw     _ovl_io
+        jp      _ovl_keep
 
 init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ld      bc,#l__DATA
@@ -48,6 +50,11 @@ init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ldir
 2$:     jp      gsinit
 
+; NOTE (SDCC 4.6 port, stage 1): this file used to define ___memcpy, an LDIR copy that replaced SDCC 4.0's
+; byte loop (performance). It read its arguments from the stack (SDCC 4.0 convention), which is wrong under
+; SDCC 4.6 (dst in HL, src in DE, count pushed and popped by the callee), so it was removed and 4.6's own
+; memcpy, which also ends in LDIR, is linked. If the copy turns out too slow or the overlay too big, put an
+; override back in the 4.6 convention: see "Stage 1 note" in documents/SDCC46-PORT-HANDOVER.md.
         .area   _HOME
         .area   _CODE
         .area   _INITIALIZER

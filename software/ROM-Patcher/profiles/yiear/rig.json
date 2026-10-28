@@ -1,0 +1,45 @@
+{
+  "script": "run_yiear.sh",
+  "rom_env": "YIEAR_ROM",
+  "rom": "kung-fu.rom",
+  "frames": 1200,
+  "argv": [
+    "lag",
+    "loss",
+    "frames",
+    "jitter"
+  ],
+  "env": {
+    "MODE": "2"
+  },
+  "links": {
+    "0": {},
+    "1": {
+      "SCENARIO": "both"
+    },
+    "2": {
+      "SCENARIO": "mixed",
+      "BOTH": "1",
+      "HYBRID": "1"
+    },
+    "mixed": {
+      "SCENARIO": "mixed"
+    },
+    "mixed2": {
+      "SCENARIO": "mixed",
+      "HYBRID": "1"
+    }
+  },
+  "chat": {
+    "0": {
+      "SCENARIO": "chat"
+    },
+    "1": {
+      "SCENARIO": "tcp",
+      "GAMELINK1": "1"
+    },
+    "2": {
+      "SCENARIO": "tcp"
+    }
+  }
+}

@@ -43,6 +43,14 @@
 ; Uses implementation-specific routine 128 to force the backend, which is why
 ; that routine exists.
 ;
+; ETHBENCH S replaces those passes with ETH_SEND_FRAME: SEND_ITER frames at
+; each length in SEND_LENS, under /WAIT (OTIR) and then polled.  The lengths
+; straddle the 256-byte runs ETH_TX_BLOCK splits a frame into, and the Pi
+; checks every frame's checksum, so ok=SEND_ITER says each length arrived
+; byte-exact under both backends.  The frames go out on the real network: an
+; unused locally administered destination, ethertype 88B5 (IEEE "local
+; experimental"), so nothing on the LAN acts on them.
+;
 ; Reading the result: each line prints ELAPSED JIFFIES then OK COUNT, both hex.
 ;
 ;   The OK count MUST equal ITERATIONS (0800h). Anything less means that pass
@@ -70,6 +78,9 @@ ITERATIONS: equ     2048
 FN_RESET:       equ 1
 FN_GET_NETSTAT: equ 3          ; 3 bytes on the wire: opcode + RC + state
 FN_GET_HWADD:   equ 2          ; 8 bytes: opcode + RC + six address bytes
+FN_SEND_FRAME:  equ 9
+SEND_ITER:      equ 32          ; frames per length in ETHBENCH S
+MAX_SEND:       equ 1514
 FN_SET_MODE:   equ  128         ; implementation-specific
 MODE_REPORT:    equ 0
 MODE_POLL_HW:   equ 1
@@ -132,6 +143,12 @@ RESET_MSXPI:    equ 0FFh
             ld      a,FN_SET_MODE
             call    CALL_UNAPI
             ld      (ORIG_MODE),a
+            ; 2 = refused: the Pi speaks another protocol version.  Forcing a
+            ; mode below would override that and benchmark a link the driver
+            ; has rightly given up on, so stop here instead.
+            cp      2
+            ld      de,REFUSED_S
+            jp      z,DIE
 
 ; --- Control: time a pure delay loop that touches nothing ------------------
 ; If this reads 0000 then JIFFY is not advancing at all and EVERY figure below
@@ -158,6 +175,9 @@ RESET_MSXPI:    equ 0FFh
             ld      a,l
             call    PRINT_HEX8
             call    NEWLINE
+
+            call    HAS_S_ARG
+            jr      z,.sends
 
 ; --- Both backends ----------------------------------------------------------
 ; The OK count says whether a pass's figures are real.  Each backend is measured at TWO payload sizes.  A transaction costs
@@ -201,8 +221,25 @@ RESET_MSXPI:    equ 0FFh
             call    BDOS
             ld      b,MODE_POLL_HW
             call    RUN_PASS
+            jr      .restore
+
+; --- ETHBENCH S: ETH_SEND_FRAME at every length in SEND_LENS ----------------
+.sends:
+            ld      de,SENDHDR_S
+            ld      c,_STROUT
+            call    BDOS
+            ld      hl,SEND_ITER
+            ld      (PASS_ITER),hl
+            ld      a,FN_SEND_FRAME
+            ld      (BENCH_FN),a
+            call    FILL_SENDBUF
+            ld      b,MODE_WAIT
+            call    SEND_TABLE
+            ld      b,MODE_POLL_HW
+            call    SEND_TABLE
 
 ; --- Restore whatever the installer had detected ----------------------------
+.restore:
             ld      a,(ORIG_MODE)
             inc     a                       ; routine 128 takes mode+1
             ld      b,a
@@ -245,10 +282,16 @@ RUN_PASS:
             ld      hl,(JIFFY)
             ld      (T_START),hl
 
-            ld      bc,ITERATIONS
+            ld      bc,(PASS_ITER)
 .loop:
             push    bc
             ld      a,(BENCH_FN)
+            cp      FN_SEND_FRAME
+            jr      nz,.call
+            ld      hl,SENDBUF
+            ld      bc,(SEND_LEN)
+            ld      d,0                     ; synchronous
+.call:
             call    CALL_UNAPI
             ; Force interrupts back on.  We are unambiguously in foreground
             ; here, so this is safe - and the UNAPI RAM helper has to disable
@@ -261,13 +304,21 @@ RUN_PASS:
             ei
             ; ETH_GET_NETSTAT reports success in A; ETH_GET_HWADD returns the
             ; address in L-H-E-D-C-B, and L is non-zero only on a real fetch
-            ; because the cache is seeded with zeros.
+            ; because the cache is seeded with zeros.  ETH_SEND_FRAME returns
+            ; 0 when sent, so that one is turned round: A=0 -> FFh.
             ld      c,a
             ld      a,(BENCH_FN)
+            cp      FN_SEND_FRAME
+            jr      z,.sent
             cp      FN_GET_HWADD
             ld      a,c
             jr      nz,.checka
             ld      a,l
+            jr      .checka
+.sent:
+            ld      a,c
+            sub     1
+            sbc     a,a
 .checka:
             or      a
             jr      z,.notok
@@ -301,12 +352,92 @@ RUN_PASS:
             call    NEWLINE
             ret
 
+; --- SEND_TABLE: one RUN_PASS per length in SEND_LENS, under mode B ---------
+; Each line is labelled with the backend and the length: "W-05EA: ".
+SEND_TABLE:
+            ld      a,b
+            ld      (SEND_MODE),a
+            ld      hl,SEND_LENS
+.next:
+            ld      e,(hl)
+            inc     hl
+            ld      d,(hl)
+            inc     hl
+            ld      a,d
+            or      e
+            ret     z
+            ld      (SEND_LEN),de
+            push    hl
+            ld      a,(SEND_MODE)
+            ld      e,"W"
+            cp      MODE_WAIT
+            jr      z,.label
+            ld      e,"P"
+.label:
+            ld      c,02h
+            call    BDOS
+            ld      e,"-"
+            ld      c,02h
+            call    BDOS
+            ld      a,(SEND_LEN+1)
+            call    PRINT_HEX8
+            ld      a,(SEND_LEN)
+            call    PRINT_HEX8
+            ld      de,COLON_S
+            ld      c,_STROUT
+            call    BDOS
+            ld      a,(SEND_MODE)
+            ld      b,a
+            call    RUN_PASS
+            pop     hl
+            jr      .next
+
+; --- FILL_SENDBUF: a 1514-byte frame - header, then each byte its own address's
+; low byte, so a dropped or doubled byte changes the checksum.
+FILL_SENDBUF:
+            ld      hl,SENDBUF
+            ld      bc,MAX_SEND
+.fill:
+            ld      (hl),l
+            inc     hl
+            dec     bc
+            ld      a,b
+            or      c
+            jr      nz,.fill
+            ld      hl,SEND_HDR
+            ld      de,SENDBUF
+            ld      bc,SEND_HDR_LEN
+            ldir
+            ret
+
+; --- HAS_S_ARG: Z if the command line holds an S (either case).
+HAS_S_ARG:
+            ld      hl,80h
+            ld      b,(hl)
+            inc     b
+.scan:
+            dec     b
+            jr      z,.none
+            inc     hl
+            ld      a,(hl)
+            and     0DFh
+            cp      "S"
+            ret     z
+            jr      .scan
+.none:
+            or      1                       ; NZ
+            ret
+
 ; --- CALL_UNAPI: invoke routine A -------------------------------------------
 ; Segment FFh means the implementation is in ROM and is reached with a plain
 ; inter-slot call; anything else is a mapped RAM segment and goes through the
 ; RAM helper's CALL_MAP.  Which one is in use matters to the numbers this
 ; program prints: the helper's CALL_MAP costs a segment switch per call and
 ; returns with interrupts disabled, CALSLT does neither.
+;
+; The helper is entered through the stack, not `jp (hl)`: HL is an input of
+; ETH_SEND_FRAME, and loading the helper's address into it would send the
+; frame from wherever the helper lives.
 CALL_UNAPI:
             push    af
             ld      a,(IMP_SLOT)
@@ -317,9 +448,11 @@ CALL_UNAPI:
             jr      z,.rom
             dec     a
             ld      iyl,a
-            ld      hl,(HELPER_ADD)
             pop     af
-            jp      (hl)
+            push    hl
+            ld      hl,(HELPER_ADD)
+            ex      (sp),hl
+            ret
 .rom:
             pop     af
             call    CALSLT
@@ -373,6 +506,17 @@ T_START:    dw      0
 OK_COUNT:   dw      0
 ORIG_MODE:  db      0
 BENCH_FN:   db      3
+PASS_ITER:  dw      ITERATIONS
+SEND_LEN:   dw      0
+SEND_MODE:  db      0
+
+; The limits, and both sides of the 256-byte runs ETH_TX_BLOCK's OTIR makes.
+SEND_LENS:  dw      16, 64, 255, 256, 257, 512, 513, 1514, 0
+
+SEND_HDR:   db      02h,00h,00h,00h,00h,01h     ; nobody: locally administered
+            db      02h,4Dh,53h,58h,50h,69h     ; the driver's MAC
+            db      88h,0B5h                    ; IEEE local experimental
+SEND_HDR_LEN: equ   $-SEND_HDR
 
 UNAPI_ID:   db      "ETHERNET",0
 UNAPI_ID_LEN: equ   $-UNAPI_ID
@@ -390,6 +534,15 @@ POLLOM_S:   db      "poll-om:$"
 WAIT_S:     db      "/WAIT:  $"
 DONE_S:     db      "done.",13,10,"$"
 NOHELPER_S: db      "*** No RAM helper installed.",13,10,"$"
+REFUSED_S:  db      "*** The Pi's msxpi-server speaks another Ethernet",13,10
+            db      "    protocol version than this ROM. Update the Pi",13,10
+            db      "    and the ROM together, then run ETHTEST again.",13,10,"$"
 NONE_S:     db      "*** No ETHERNET implementation found.",13,10,"$"
 OK_S:       db      "  ok=$"
+SENDHDR_S:  db      "ETH_SEND_FRAME, 0020 frames a line:",13,10
+            db      "W/P-length: jiffies, ok must be 0020.",13,10,"$"
+COLON_S:    db      ": $"
 CRLF_S:     db      13,10,"$"
+
+; Past the end of the image: the TPA is free from here.
+SENDBUF:    equ     $

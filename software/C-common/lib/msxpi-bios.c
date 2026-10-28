@@ -29,7 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
+#include "../header/fusion.h"
 #include "../header/msxpi.h"
 #include "payload_generated.h"
 
@@ -77,6 +77,7 @@ static uint8_t chk_spins;
  * PAYLOAD_ESCAPE, which reads the key matrix directly: unlike Inkey() it
  * never consumes a key from the BIOS buffer, and a plain ESC is not an abort.
  */
+/* Convention-neutral: the result is in both A and L, where sdcccall(1) and sdcccall(0) return 8 bits. */
 static uint8_t ctrl_esc_pressed(void) __naked
 {
     __asm
@@ -748,7 +749,7 @@ uint8_t parseConnError(const uint8_t rc) {
     return rc;
 }
 
-uint16_t get_sp(void) __naked {
+uint16_t get_sp(void) __sdcccall(0) __naked {   /* returns SP in HL */
     __asm
     ld hl, #0
     add hl, sp

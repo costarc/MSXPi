@@ -86,6 +86,16 @@ openMSX
 - TCP_NODELAY on the server socket. Each OUT to the data port is its own one-byte write, and with Nagle plus the server's delayed ACK each took about 40 ms, so a 512-byte burst write took minutes and looked exactly like a hung transfer.
 - MSXPiNoROM.xml: the MSXPi I/O ports with no EPROM, for running MSXPIEXT.BIN the way it is used on an interface without one.
 
+Online games over TCP/IP (alpha)
+- PLAYNET plays Soccer, Ping Pong, Salamander and Yie Ar Kung-Fu on every link: through the MSXPi (link 0), over TCP/IP UNAPI with game packets as UDP (link 1, InterNestor Lite or a hardware stack), or with the chat and stack on TCP/IP and the game's packets through the MSXPi (link 2). A pair may mix links. One game package (GPF) serves every link.
+- MCHAT chooses the link: through the MSXPi when it finds one (the "MSXPI" tag in a slot ROM), over TCP/IP UNAPI otherwise; `MCHAT /T` forces TCP/IP. `MCHAT.INI` `GAMELINK=1` makes the game use TCP/IP even when an MSXPi is present.
+- MCHAT /T quits IRC before a game and connects again after it: an open chat connection cost 3-54 % of the frame rate. It rejoins the default room only.
+- The TCP/IP game path needs a memory mapper (MSR, or Nextor's RAM helper). A package can declare what it needs (`requires`, GPF header byte 99): Salamander needs `mapper-ram`; PLAYNET refuses a package that needs something it does not know and says what to update. The transport area of every package is at least 512 bytes below MSX-DOS's TPA top once the stack is loaded; where it is not (Salamander on a machine with its own disk drive under MSX-DOS 1) PLAYNET asks the player to restart holding CTRL (frees 1.5 KB) or to use Nextor.
+- InterNestor sends a game packet every 3 frames (K = 3, one more frame of input delay than K = 2, about 10 % faster); the MSXPi and hardware stacks send every frame.
+- The server's Ethernet link drops frames not meant for the MSX (a LAN filter, `MSXPI_ETH_FILTER=0` turns it off).
+- Protocol versions: package format `msxpi-rom-patch` 2, netplay ABI `msxpi-netplay-v1`, GPF 1, stub ABI 2, PLAYNET release 3, peer protocol MSXNP 2, invitations MSXG1, session record PNS1, Ethernet UNAPI protocol 2. ROM, server and clients come from the same build.
+- Not tested on real hardware yet: GR8NET and DenYoNet, MSX1 with a stack-only mapper, a real IRC server's handling of the nick after the QUIT. MSX1 with no memory mapper cannot play over TCP/IP (use an MSXPi). Players behind symmetric or carrier-grade NAT cannot connect to each other directly; both are told so.
+
 Housekeeping
 - MIT licence headers and version 1.6 across the sources, third-party copyrights preserved.
 - The discontinued C server, the MEMTEST ROM and the legacy client sources are gone; asm-common/transport holds the generated transfer code.

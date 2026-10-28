@@ -29,8 +29,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/msx_fusion.h"
-#include "../../../../../MSX/MSX-C/WorkingFolder/fusion-c/header/rammapper.h"
+#include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
 
 #define PAGESIZE (22 * 80)
@@ -716,21 +715,44 @@ static void patchWindow(uint8_t* base, uint16_t rangeLo, uint16_t rangeHi,
     }
 }
 
+// Interrupt state around a block of C code. These are routines, not inline "push af / pop af":
+// SDCC's native calling convention addresses locals relative to SP, which a push hidden from the
+// compiler would shift. __sdcccall(1) on purpose: argument and result in A, whatever the default.
+// irq_save() returns 1 when interrupts were enabled and leaves them disabled.
+static uint8_t irq_save(void) __sdcccall(1) __naked {
+    __asm
+        ld a, i
+        ld a, #0
+        jp po, 1$
+        inc a
+    1$:
+        di
+        ret
+    __endasm;
+}
+
+static void irq_restore(uint8_t was_enabled) __sdcccall(1) __naked {
+    was_enabled;
+    __asm
+        or a
+        ret z
+        ei
+        ret
+    __endasm;
+}
+
 static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePage, uint8_t targetPage) {
     uint8_t storageSegment = storageSegments[bank >> 1];
     uint16_t sourceOffset = (bank & 1) ? BANK_HALF_SIZE : 0;
     uint8_t* src;
     uint8_t* dst;
     uint16_t i;
+    uint8_t irq;
 
     // Keep the caller's interrupt state. This routine is also used by the
     // Konami pair-cache prewarm, where page 2 temporarily maps an allocated
     // cache segment instead of the segment DOS/BIOS expects there.
-    __asm
-        ld a, i
-        di
-        push af
-    __endasm;
+    irq = irq_save();
 
     PutPN_direct(sourcePage, storageSegment);
     src = (sourcePage == 1 ? PAGE1ADDRESS : PAGE2ADDRESS) + sourceOffset;
@@ -740,12 +762,7 @@ static void mapperCopyBank(uint8_t bank, uint16_t targetOffset, uint8_t sourcePa
     }
     PutPN_direct(sourcePage, sourcePage == 1 ? execSegment1 : execSegment2);
 
-    __asm
-        pop af
-        jp po, 91$
-        ei
-    91$:
-    __endasm;
+    irq_restore(irq);
 }
 
 // ---------------------------------------------------------------------------
@@ -1241,15 +1258,12 @@ static void relocateResidentHandlers8K(uint16_t storageCount) {
 static void prewarmKonami16PairCache(void) {
     uint8_t e, b;
     uint8_t* cache;
+    uint8_t irq;
 
     // Do not let the DOS/BIOS timer handler run while page 2 points at a
     // temporary cache segment. mapperCopyBank() preserves this disabled state
     // between the two 8K copies for each 16K cache pair.
-    __asm
-        ld a, i
-        di
-        push af
-    __endasm;
+    irq = irq_save();
 
     cache = (uint8_t*)RESIDENT_CACHE1_ADDR;
     for (e = 1, b = 0; e < pairCacheCounts[1]; b++) {
@@ -1270,12 +1284,7 @@ static void prewarmKonami16PairCache(void) {
     PutPN_direct(1, execSegment1);
     PutPN_direct(2, execSegment2);
 
-    __asm
-        pop af
-        jp po, 92$
-        ei
-    92$:
-    __endasm;
+    irq_restore(irq);
 }
 
 static void patchAllStorageSegmentsKonami(uint16_t segmentCount) {
