@@ -28,7 +28,7 @@ Os dois jogadores precisam destes arquivos juntos **em um disco ou em uma pasta*
 | `MCHAT.COM` | o chat | `software/target/` |
 | `PLAYNET.COM` | inicia o jogo | `software/target/` |
 | `PLAYNET.OVL` | acompanha o `PLAYNET.COM` | `software/target/` |
-| `SOCCER.GPF` (ou o `.GPF` de outro jogo) | o pacote do jogo | `software/target/games/` |
+| `SOCCER.GPF` (ou o `.GPF` de outro jogo, inclusive `1942.GPF`) | o pacote do jogo | `software/target/games/` |
 | `SOCCER.ROM` (ou a ROM do jogo) | **a sua própria cópia do jogo** | você (não é fornecida) |
 | `MCHAT.INI` | suas configurações (opcional, veja o Passo 4) | você escreve |
 
@@ -49,6 +49,18 @@ Os dois jogadores precisam destes arquivos juntos **em um disco ou em uma pasta*
 | Ping Pong da Konami | `PINGPONG.GPF` | `PINGPONG.ROM` | 16384 bytes |
 | Yie Ar Kung-Fu da Konami | `YIEAR.GPF` | `KUNGFU.ROM` | 16384 bytes |
 | Salamander da Konami | `SALAMAND.GPF` | `SALAMAND.ROM` | 131072 bytes (veja "Salamander" no final) |
+| 1942 da ASCII (2 jogadores, alternando) | `1942.GPF` | `1942.ROM` | 131072 bytes (veja "1942" no final) |
+
+**Confira seus arquivos (SHA-256).** Para ter certeza de que a ROM e o arquivo do jogo estão corretos, compare o SHA-256 deles (em um
+PC: `certutil -hashfile ARQUIVO SHA256` no Windows, `sha256sum ARQUIVO` no Linux). A ROM também deve bater com o CRC-32 (o jogo confere).
+
+| Jogo | Arquivo da ROM | CRC-32 da ROM | SHA-256 da ROM | Arquivo do jogo | SHA-256 do arquivo do jogo |
+|---|---|---|---|---|---|
+| soccer | `SOCCER.ROM` | `74BC8295` | `b9536809a1784afb2e49a43d80ba9c6c8c15cd31ecbd6c284e9bf62c6927dcd4` | `SOCCER.GPF` | `edba577c288e12a32fc967e5de76ea7c79917b90068a150fc30243ef7e868fd4` |
+| pingpong | `PINGPONG.ROM` | `3F200491` | `8e0f57b2c52e85505505c1d4bb4643eb7311213676f0ecfe21dd06571fc0bbd5` | `PINGPONG.GPF` | `86c27bc629fbefebf4f2b474db82b7ea2196bafe8136579f07784864f6117bf8` |
+| yiear | `KUNGFU.ROM` | `8A12EC4F` | `644c78c7d20bb30802888b513b384cf0ce4f9d8b6fd490f30e6211ac92274848` | `YIEAR.GPF` | `98fb924e2cb4bde2fb550c7ee2b50d68d396bac7ef4d37f51d5f6c10cb714dd7` |
+| salamand | `SALAMAND.ROM` | `C36F559D` | `edbbba820ac67d6a55b9dc5da9309e45979936d5620c07d09793efaf077e86b9` | `SALAMAND.GPF` | `ff63ffc488093036e7699ec6ca87cb2706095a1e12028ddfd26792fdc86ef7e2` |
+| 1942 | `1942.ROM` | `C99E5601` | `d8442d2c08958f0bc9be7d2078e3cf07224e1ec3493ddce3215ed8df2bd37b1f` | `1942.GPF` | `e26d8db77eb391cbfc9e98de27b6758d1f6e4bcf7a343196d928182482914686` |
 
 > **Importante - quais ROMs são suportadas.** Só são suportadas as ROMs baixadas do MSX Archive:
 > <https://www.msxarchive.nl/pub/msx/games/roms/msx1/> e <https://www.msxarchive.nl/pub/msx/games/roms/msx2/>.
@@ -158,6 +170,8 @@ Para **parar o jogo**, pressione **Ctrl+Shift+F5**, ou termine a partida. Você 
 
 **Salamander:** usa muita memória. Use um mapeador de **1 MB** com Nextor (512 KB bastam no MSX-DOS 1). Em máquina com drive próprio
 rodando MSX-DOS 1, reinicie segurando **CTRL** ou use o Nextor. Soccer, Ping Pong e Yie Ar Kung-Fu funcionam em qualquer uma.
+
+**1942:** o modo de dois jogadores do 1942 é por turnos: escolha **2 PLAYERS** na tela de título; cada jogador pilota na sua vez. Precisa de um mapeador de memória com pelo menos **20 segmentos livres (24 recomendados)**, então use um mapeador de 512 KB ou mais. **Situação:** o `1942.GPF` está em `software/target/games/`. Foi testado por TCP/IP só com um dos dois jogadores em um MSXPi; dois jogadores só com TCP/IP ainda não foram experimentados.
 
 ## Jogando sem o chat (avançado, opcional)
 
