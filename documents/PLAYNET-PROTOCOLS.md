@@ -825,7 +825,7 @@ throws it away, and answers each `PING x` with `PONG x`; it stops if the connect
 ## 15. MSXPi commands used by PLAYNET
 
 Sent over the MSXPi command channel, like `mchat`. Data blocks use the MSXPi block transfer that other MSXPi clients use
-(`SENDDATA2` / `RECVDATA` on the MSX). On success the reply block has the header code `RC_SUCCESS` (E0h) and carries the
+(LINK2 since MSXPi 1.7.0: `LINK_SEND` / `LINK_RECV` on the MSX). On success the reply block has the header code `RC_SUCCESS` (E0h) and carries the
 payload below. On failure it has `RC_FAILED` (E7h) and carries a message starting with `Pi:Er:`, which PLAYNET shows to the player.
 
 | Command | Reply on success |

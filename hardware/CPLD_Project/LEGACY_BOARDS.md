@@ -19,9 +19,11 @@ and `WAIT_SUPPORT`.
 | v1.1, v1.2.1b | V1.1 Rev.1, V1.2.1b | `v1.1/MSXPi_v1.6_wait.pof` ($14) | AT28C256, flashed in circuit | V1.1 Rev.1: `RPI_SHUTDOWN=none` |
 | v1.3, v1.4, v1.5 | V1.3 Rev.1 | `MSXPi_v1.6.pof` ($0E) | AT28C256, flashed in circuit | - |
 
-- **ROM:** every board uses the same `software/target/msxpibios.rom`, the one
-  `software/build` produces.
-- **Server:** the same v1.6 server on every Pi. Pins from the `msxpi-Jumper*.ini`
+- **ROM:** every board uses the same ROM, the one `software/build` produces
+  (`software/target/msxpibios.rom`, or `msxpi32k.rom` for a 32 KB EEPROM).
+  From 1.7.0 every board must be rewritten with the 1.7.0 ROM; the CPLD
+  images below (v1.6) do not change.
+- **Server:** the same 1.7.0 server on every Pi. Pins from the `msxpi-Jumper*.ini`
   file matching the board (the older boards use `msxpi-JumperLeft.ini`); the
   extras column lists what to add. Settings left out stay unset.
 

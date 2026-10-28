@@ -143,6 +143,7 @@ TCP/IP stack first:
 
 ```text
 MSX-DOS 1 with a memory mapper:   MSR I      then  INL I
+MSXPi's own MSX-DOS 1 ROM:        MSR I, ETHUNAPI, then INL I
 Nextor / MSX-DOS 2:               RAMHELPR I then  INL I
 ```
 

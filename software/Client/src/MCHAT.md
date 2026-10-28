@@ -51,7 +51,8 @@ docstring. Tests: `Server/Python/tests/test_chat.py`.
 plain TCP (no TLS or SASL on a Z80; the server must accept port 6667).
 Memory is smaller: 3 rooms of 32 rows and 32 users each, and changing the
 screen width clears the history. The UNAPI layer is copied from
-`pchess_tcp.c`. On an MSX1 run `MSR I` and `INL I` first. Settings are in
+`pchess_tcp.c`. On an MSX1 run `MSR I` and `INL I` first (with `ETHUNAPI`
+between them on an MSXPi booted from its MSX-DOS 1 ROM). Settings are in
 `MCHAT.INI` in the current directory: `IRCADDR` (default `irc.libera.chat`),
 `IRCPORT` (6667), `IRCNICK` (`msxXXXX`), `MCHATROOM`.
 

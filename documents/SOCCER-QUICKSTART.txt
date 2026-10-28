@@ -14,10 +14,11 @@ WHAT YOU NEED (each player)
 
 INSTALL
   MSXPi: run the MSXPi update ("msxpiupd"); it copies MCHAT.COM, PLAYNET.COM,
-         PLAYNET.OVL and SOCCER.GPF to the disk. Put SOCCER.ROM there too.
+         PLAYNET.OVL, ETHUNAPI.COM and SOCCER.GPF to the disk. Put SOCCER.ROM there too.
   Others: copy those files, on a PC, into ONE folder or disk (MSX-DOS 1 has no
          folders). TCP/IP needs a memory mapper: MSX-DOS 2/Nextor, or MSR on
-         MSX-DOS 1. Run "MSR I" and "INL I" (or your card's driver) first.
+         MSX-DOS 1. Run "MSR I" and "INL I" (or your card's driver) first;
+         an MSXPi booted from its MSX-DOS 1 ROM needs "ETHUNAPI" between them.
 
 PART 1 - WITH THE CHAT                         (in the folder with SOCCER.ROM)
   1. MCHAT NICK             MSXPi link         (MCHAT /T NICK: TCP/IP, no MSXPi)

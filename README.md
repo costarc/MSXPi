@@ -12,7 +12,16 @@ MSXPi also exists as a virtual device for **openMSX**: the emulated MSX gets
 the same commands and the same server, with no hardware at all. See
 [Quick Start 2 - openMSX](#quick-start-2---openmsx-no-hardware-needed).
 
-Version 1.6 is the current release. What changed is in
+> [!CAUTION]
+> **Version 1.7.0 breaks compatibility with every earlier MSXPi ROM.**
+> **Every MSXPi EEPROM must be rewritten with the 1.7.0 ROM** (`software/target/msxpi32k.rom`, written with
+> `at28c256`, see [Step 2](#step-2---write-the-rom-to-the-eeprom-with-at28c256com)) before it is used with
+> this release. Upgrade the whole set together: the ROM, the msxpi-server and the client commands (`.COM`
+> files). Version 1.7.0 moves every transfer between the MSX and the Pi to LINK2, a new protocol with
+> CRC-16 checked blocks; the new `.COM` files do not work with an older server. The CPLD firmware is
+> unchanged (v1.6). To stay on an older ROM, use the server from the matching `release/vX.Y` branch.
+
+Version 1.7.0 is the current release. What changed is in
 [Release_Notes](Release_Notes); how to use everything is in the
 [documents](documents) folder.
 
@@ -25,19 +34,18 @@ Version 1.6 is the current release. What changed is in
 > hardware stack such as GR8NET) when there is not. `MCHAT /T` forces TCP/IP even with an MSXPi. TCP/IP play needs a memory
 > mapper (MSR or Nextor); see the users' guide section "Online games" for the requirements.
 
-**Version 1.6 breaks software compatibility with previous ROMs and servers.**
-Upgrade the whole set together: ROM, msxpi-server, the client commands (`.COM`
-files) and, on real hardware, the CPLD firmware. A v1.6 ROM on older CPLD
-firmware still works, using the slower polled transfers. To stay on an older
-ROM, use the server from the matching `release/vX.Y` branch.
+**CPLD firmware.** Version 1.7.0 uses the v1.6 CPLD firmware; a board already on
+v1.6 needs no CPLD change. On older CPLD firmware the 1.7.0 ROM still works, using
+the slower polled transfers.
 
 **About the DOS.** MSXPi's own ROM contains **MSX-DOS 1 (1.03) only**. It does not
 contain Nextor or MSX-DOS 2. MSXPi *coexists* with them: Nextor or MSX-DOS 2 come
 from another disk interface in the same MSX (for example a MegaFlashROM SCC+ SD),
 and MSXPi's commands, BASIC extension and UNAPI work alongside them. The
 EEPROM holds two ROMs, picked with the bank jumper: MSX-DOS 1 (**BANK2**) or
-the BIOS only - `CALL MSXPI` and UNAPI, no disk system (**BANK1**) - for use
-next to Nextor / MSX-DOS 2.
+the BIOS only - `CALL MSXPI` and the Ethernet UNAPI in ROM, no disk system
+(**BANK1**) - for use next to Nextor / MSX-DOS 2. With the MSX-DOS 1 ROM the
+Ethernet UNAPI driver is loaded from disk (`ETHUNAPI.COM`).
 
 Contents
 
@@ -65,12 +73,16 @@ How the pieces fit together
   programs that you copy to your MSX disk or SD card. The EEPROM image,
   `msxpi32k.rom`, holds two 16 KB ROMs:
   * `msxpibios.rom` - MSXPi BIOS, MSX-DOS 1 disk driver, `CALL MSXPI` for
-    BASIC, Ethernet UNAPI;
-  * `msxpibas.rom` - the same without the disk system: `CALL MSXPI` and
-    Ethernet UNAPI only.
+    BASIC (the Ethernet UNAPI driver no longer fits here: load
+    `ETHUNAPI.COM` for TCP/IP);
+  * `msxpibas.rom` - the BIOS without the disk system: `CALL MSXPI` and the
+    Ethernet UNAPI.
 * **Interface** - a CPLD decodes ports $56/$57/$5A and shifts bytes to and
   from the Pi; since v1.6 it also holds the Z80 /WAIT line while a byte is in
   flight, so the MSX can move data with INIR/OTIR.
+* **The link** - since 1.7.0 every transfer uses LINK2: framed blocks with a
+  CRC-16 (CCITT-FALSE), acknowledged one by one and resent when damaged
+  (`documents/LINK2-DESIGN.md`).
 * **Server side** - `msxpi-server.py`, which runs on the Pi (GPIO link) or on
   your PC next to openMSX (TCP socket link). Everything it needs lives in one
   folder, the *MSXPi home directory*: `/home/pi/msxpi`.
@@ -121,7 +133,7 @@ the interface plugged in. The Raspberry Pi does not need to be attached yet.
 
 | Bank jumper (as on the PCB) | EEPROM half | ROM | The MSX gets |
 |---|---|---|---|
-| **BANK2** (EEPROM A14 = CPU A15) | lower | `msxpibios.rom` | MSX-DOS 1 from the Pi, `CALL MSXPI`, Ethernet UNAPI |
+| **BANK2** (EEPROM A14 = CPU A15) | lower | `msxpibios.rom` | MSX-DOS 1 from the Pi, `CALL MSXPI` (Ethernet UNAPI from `ETHUNAPI.COM`) |
 | **BANK1** (EEPROM A14 = CPU A14) | upper | `msxpibas.rom` | `CALL MSXPI` and Ethernet UNAPI, no disk system and no extra drives |
 
 1. Copy `software/target/at28c256.com` and `software/target/msxpi32k.rom` to
@@ -154,9 +166,9 @@ the interface plugged in. The Raspberry Pi does not need to be attached yet.
      jumper on **BANK1**, and put MSXPi in a higher slot than the disk
      interface. The MSX boots Nextor / MSX-DOS 2 from the other interface;
      MSXPi adds no drives and uses almost no memory, and `CALL MSXPI` in
-     BASIC and the Ethernet UNAPI are available.
+     BASIC and the Ethernet UNAPI (in this ROM) are available.
    * **MSXPi ROM off:** remove `SLTSL`. MSXPi then works only through the
-     `.COM` commands - no `CALL MSXPI` and no ROM UNAPI.
+     `.COM` commands - no `CALL MSXPI`; for TCP/IP load `ETHUNAPI.COM`.
 
    The EEPROM answers in every page of its slot, so the bank that is not
    selected appears at 8000h. The two ROMs are built to tolerate each other
@@ -232,8 +244,9 @@ is running.
 ### Step 4 - Copy the MSX-side programs
 
 Copy the contents of `software/target` (at least `p.com`, `pcopy.com`,
-`msxarch.com`, `msxarch.ini`, `LOADROM.COM`, `INL.CFG` and the
-`.BAS` programs) to your MSX disk or SD card.
+`msxarch.com`, `msxarch.ini`, `LOADROM.COM`, `ETHUNAPI.COM`, `INL.CFG` and
+the `.BAS` programs) to your MSX disk or SD card. They must all come from the
+same release as the ROM and the server.
 
 **Check:** at the MSX-DOS prompt type
 
@@ -242,7 +255,8 @@ Copy the contents of `software/target` (at least `p.com`, `pcopy.com`,
 It prints the board (build ID, CPLD, `/WAIT` yes or no) and the server version.
 "Connection error" means the Pi is still booting (the first boot may take three
 minutes), the interface is not seated, or the ROM and server versions do not
-match. Press CTRL+ESC, wait five seconds, and try again.
+match. Press CTRL+ESC, wait five seconds, and try again. A "protocol error"
+means the server is older than 1.7.0 and cannot speak LINK2: update the server.
 
 ### Step 5 - Connect to WiFi and the network
 
@@ -252,13 +266,20 @@ match. Press CTRL+ESC, wait five seconds, and try again.
         p reboot
 
 `p wifi` alone lists the interfaces and addresses. For TCP/IP programs (UNAPI:
-InterNestor Lite, telnet, HGET) the Ethernet driver is in the ROM, and the Pi
-builds the network behind it with `msxpi-tcpip-setup.sh` when the server
-starts. If the Pi had no default route at boot, run `p netreset`. Then:
+InterNestor Lite, telnet, HGET) the MSX needs the MSXPi Ethernet UNAPI driver,
+and the Pi builds the network behind it with `msxpi-tcpip-setup.sh` when the
+server starts. If the Pi had no default route at boot, run `p netreset`. Then,
+depending on how the MSX was started:
 
-        MSR I           (MSX-DOS 1 only - do NOT run RAMHELPR)
-        INL I
-        HOST GOOGLE.COM
+| ROM bank / DOS | Type, in this order |
+|---|---|
+| **BANK2**, MSX-DOS 1 booted from MSXPi | `MSR I`, `ETHUNAPI`, `INL I` |
+| **BANK1**, MSX-DOS 1 from another interface | `MSR I`, `INL I` |
+| **BANK1**, Nextor or MSX-DOS 2 | `RAMHELPR I`, `INL I` |
+
+then `HOST GOOGLE.COM`. With BANK1 the driver is in the ROM and `ETHUNAPI`
+refuses to load. Under MSX-DOS 1 never run `RAMHELPR`: `MSR` installs the RAM
+helper itself and fails if one is already there.
 
 `HOST` printing an address means the whole path works. `p wlanreset` resets the
 Pi's WiFi. Details: `software/UNAPI/README.md`.
@@ -504,18 +525,21 @@ configured and reach nothing.
 Start openMSX with the MSXPi extension, then:
 
           MSR I              (MSX-DOS 1 only - see below)
+          ETHUNAPI
           INL I
           HOST GOOGLE.COM
 
-`HOST` printing an address means the whole path works. The Ethernet UNAPI
-driver is in msxpibios.rom, so nothing needs installing first: ETHUNAPI will
-refuse, because the ROM already registers an ETHERNET implementation.
+`HOST` printing an address means the whole path works. The extension maps the
+EEPROM the way the board shows it with the BANK2 jumper, so the MSX boots the
+MSX-DOS 1 ROM, which has no Ethernet driver since 1.7.0: `ETHUNAPI.COM` loads
+it into a mapped RAM segment. (With the BIOS-only ROM the driver is in the ROM
+and ETHUNAPI refuses to load.)
 
-**Do not run RAMHELPR I.** It installs the UNAPI RAM helper on its own, and
-MSR.COM installs the mapper support routines AND a helper - so MSR then finds a
-helper already present and aborts, leaving INL to fail with "No mapper support
-routines found". A cold boot clears it. Under Nextor or MSX-DOS 2, skip MSR
-entirely: the mapper routines are already there.
+**Under MSX-DOS 1, do not run RAMHELPR I.** It installs the UNAPI RAM helper on
+its own, and MSR.COM installs the mapper support routines AND a helper - so MSR
+then finds a helper already present and aborts, leaving INL to fail with "No
+mapper support routines found". A cold boot clears it. Under Nextor or MSX-DOS 2,
+skip MSR and run `RAMHELPR I` instead: the mapper routines are already there.
 
 If `HOST` answers "8: DNS not found" but the link is otherwise up, the resolver
 is the problem rather than the network - INL.CFG ships with 1.1.1.1, and some
@@ -561,13 +585,18 @@ The full reference, with examples, is in `documents/MSXPi Users and Developers G
 Bugs and known limitations
 ==========================
 
-* **Upgrade as a set.** A v1.6 ROM, server, `.COM` files and CPLD are meant to
-  be used together. Mixed versions usually show up as "Connection error", not as
-  a clear refusal.
+* **Upgrade as a set.** The 1.7.0 ROM, server and `.COM` files are meant to be
+  used together; every EEPROM must be rewritten with the 1.7.0 ROM. A 1.7.0
+  `.COM` file against an older server stops with a protocol error
+  (RC_PROTOERR, "server does not speak LINK2"); other mixes usually show up as
+  "Connection error".
 * **/WAIT bursts need a v1.6 CPLD image and a board that wires /WAIT.** Boards
   built for v0.8.2 and v1.0 (PCB v0.7 Rev.7) have no /WAIT connection and run
-  the polled transfers only. At the time of writing, disk writes from the MSX
-  also use the polled transfer while reads use bursts.
+  the polled transfers only. Disk reads and writes both burst where /WAIT is
+  available.
+* **LINK2 on real hardware.** The BIOS half was soak-tested on hardware; the
+  MSX-DOS 1 driver and the `.COM` tools on LINK2 were tested in openMSX, and
+  their hardware checklist (`documents/LINK2-TEST-PLAN.md`, T6.7) is still open.
 * **Older boards need settings**: `RPI_SHUTDOWN=none` without the push-button,
   and `GPIO_CS_SETUP_NS=1000` on the v0.8.2 board. On that board the EPROM
   /OE jumper must be on CS1, never CS12, or programs that call EXTBIO (`p`,
@@ -586,8 +615,12 @@ Bugs and known limitations
   and ASCII16. Other mappers, ROMs that need more RAM than the MSX has, and some
   titles that rewrite their own bank switching are rejected with a reason or may
   not run. Bank-switch writes are patched by the server, so what runs is not byte-for-byte the original ROM.
-* **UNAPI/TCP/IP.** Do not run `RAMHELPR` before `MSR` under MSX-DOS 1 (INL then
-  fails with "No mapper support routines found"; a cold boot clears it). If
+* **UNAPI/TCP/IP.** With the MSX-DOS 1 ROM (BANK2) load `ETHUNAPI` after `MSR I`
+  and before `INL I`; the driver is no longer in that ROM. Do not run `RAMHELPR`
+  before `MSR` under MSX-DOS 1 (INL then fails with "No mapper support routines
+  found"; a cold boot clears it). Run only one Ethernet driver: `ETHUNAPI` next
+  to the BIOS-only ROM's driver is refused, and if it were forced the two would
+  switch the server's Ethernet protocol back and forth. If
   `HOST` answers "8: DNS not found" the resolver, not the link, is the problem:
   use `INL IP P <address>`. Under openMSX on Windows the TAP setup script must be
   run again after every reboot, only one Windows NAT instance can exist (Docker
@@ -617,7 +650,7 @@ Branches:
     master          the most recent code; may change within minutes - expect bugs,
                     and fixes just as fast
     release/vX.Y    one branch per release (v0.8.2, v1.0, v1.1, v1.2.1b, v1.3,
-                    v1.4, v1.5, v1.6); use these for a known-good state
+                    v1.5); use these for a known-good state
     feature/*, fix/*, docs_*
                     short-lived working branches; they appear and disappear, and
                     I recommend you do not use them
@@ -628,7 +661,7 @@ Directories:
     |-- software
     |   |-- asm-common
     |   |   |-- include          BIOS routines for assembly (msxpi_bios.asm, include.asm, ...)
-    |   |   `-- transport        generator for the /WAIT burst transfer code
+    |   |   `-- transport        generators: the LINK2 code for C, the /WAIT burst code
     |   |-- C-common
     |   |   |-- header           msxpi.h - the C BIOS API
     |   |   `-- lib              msxpi-bios.c
