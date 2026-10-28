@@ -55,3 +55,26 @@ __pycache__/
 software/C-common/lib/msxpi-bios.lib
 software/C-common/lib/msxpi-bios46.lib
 software/C-common/lib/fusion46.lib
+# Local working notes (handovers, plans, test plans) - not documentation
+/documents/ETH-DRIVER-SPEED-HANDOVER.md
+/documents/ETH-DRIVER-SPEED-TEST-HANDOVER.md
+/documents/HANDOVER-1942.md
+/documents/HANDOVER-games-from-chat.md
+/documents/HANDOVER-link2-remaining-conversions.md
+/documents/HANDOVER-salamander.md
+/documents/HANDOVER-yiear.md
+/documents/PLAYNET-CHAT-T-HANG-HANDOVER.md
+/documents/SDCC46-PORT-HANDOVER.md
+/documents/8k-handler-refactor.patch
+/documents/ETH-DRIVER-SPEED-TESTPLAN.md
+/documents/LINK2-IMPLEMENTATION-PLAN.md
+/documents/LINK2-PHASE4-HARDWARE.md
+/documents/LINK2-TEST-PLAN.md
+/documents/MEGAROM_MAPPER_NOTES.md
+/documents/PLAYNET-TCPIP-IMPLEMENTATION-PLAN.md
+/documents/PLAYNET-TCPIP-PLAN-REVIEW.md
+/documents/YIEAR-IMPLEMENTATION-PLAN.md
+/documents/YIEAR-TEST-PLAN.md
+/documents/BLOCK-RETRIES-FAULT-INJECTION.md
+/HANDOVER*.md
+/documents/*HANDOVER*.md
