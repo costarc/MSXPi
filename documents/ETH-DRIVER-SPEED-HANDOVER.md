@@ -165,7 +165,7 @@ disks, so read it first (lines 236-345 build the ROMs).
 
 **Rig** (the two-emulator rig is on `feature/tcpip-games`, `software/Client/tests/soccernet/`, with `perf_node.tcl`, `cmp_perf.py`, `run_native.sh`):
 - The rig's openMSX loads `msxpibios.rom` from its install folder; rig runs use `BANK2` (the upper, BIOS-only half). Work on a **copy**:
-  `cp -rL /c/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1 /tmp/omx-b` (`-L`: the install has symlinks) and put `rom32.rom` at `/tmp/omx-b/share/systemroms/extensions/msxpibios.rom`.
+  `cp -rL /c/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0 /tmp/omx-b` (`-L`: the install has symlinks) and put `rom32.rom` at `/tmp/omx-b/share/systemroms/extensions/msxpibios.rom`.
 - Run from the `feature/tcpip-games` worktree, with `OPENMSX=C:/Users/roniv/AppData/Local/Temp/omx-b/openmsx.exe`:
   `SOCCER_ROM=C:/Users/roniv/Dev/MSX/gameroms/SOCCER.ROM SJASMPLUS=C:/Users/roniv/Dev/bin/sjasmplus.exe EXTRA_TCL=<abs path>/perf_node.tcl EXTRA_TCL_C=<same> PERF_PROF=1 SCENARIO=mixed BOTH=1 WORK=/tmp/x sh run_native.sh 0 0 1200`
   then `python cmp_perf.py /tmp/x/np/H.trace.perf /tmp/x/np/C.trace.perf` and `sort -rn /tmp/x/np/H.trace.prof | head`. Compare against the baseline in section 1: ms in `XCHG` per frame, link bytes per frame, and the `7C00`/`7E00` samples.

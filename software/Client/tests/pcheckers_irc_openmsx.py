@@ -36,7 +36,7 @@ from pchess_tcpip_openmsx import text_at  # noqa: E402
 
 SCENARIO = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in ('room', 'lobby') else 'room'
 args = [a for a in sys.argv[1:] if a not in ('room', 'lobby')]
-OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe'))
+OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe'))
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
 PROGRAM = Path(args[0] if args else SOFTWARE / 'target/pcheckers.com')
 IRC_PORT, MSXPI_PORT = 6668, 5044

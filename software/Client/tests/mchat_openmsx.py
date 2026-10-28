@@ -32,7 +32,7 @@ sys.path.insert(0, str(SOFTWARE / 'Client/tools'))
 from pchess_irc_fixture import Server  # noqa: E402
 import gen_mchat_font  # noqa: E402
 
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 MCHAT = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('MCHAT_COM', SOFTWARE / 'target/mchat.com'))
 MACHINE = os.environ.get('MCHAT_MACHINE', 'msx1')      # msx1 (Canon V-25) or msx2 (Panasonic FS-A1WSX)
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))

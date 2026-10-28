@@ -28,7 +28,7 @@ RW=$(cd "$ROOT" && pwd -W 2>/dev/null || echo "$ROOT")
 SRC="$ROOT/software/Client/src/playnet"
 ASM=${SJASMPLUS:-C:/Users/roniv/Dev/bin/sjasmplus.exe}
 SERVER="$ROOT/software/Server/Python/src"
-OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
+OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 case "$SCENARIO" in chat) [ -f "$ROOT/software/target/mchat.com" ] ;; *) true ;; esac || { echo "no software/target/mchat.com"; exit 1; }
 CHAT=; case "$SCENARIO" in chat|tcp) CHAT=1;; esac

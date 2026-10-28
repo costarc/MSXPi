@@ -28,7 +28,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SOFTWARE = HERE.parents[2]
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 PORT = int(os.environ.get('MSXPI_TEST_PORT', '5046'))
 SRCDIR = Path('C:/tmp/fi')  # MSXPiTest.xml loads C:/tmp/fi/msxpitest.rom
 

@@ -33,7 +33,7 @@ SRC="$ROOT/software/Client/src/playnet"
 PKG="$ROOT/software/ROM-Patcher/profiles/1942"
 ASM=${SJASMPLUS:-C:/Users/roniv/Dev/bin/sjasmplus.exe}
 SERVER="$ROOT/software/Server/Python/src"
-OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
+OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 [ -f "$P1942_ROM" ] || { echo "set P1942_ROM to your own 1942.ROM"; exit 1; }
 WORK=${WORK:-${TMP:-/tmp}/p1942-work}

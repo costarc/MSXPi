@@ -68,7 +68,7 @@ version mismatch, injected desync and a vanished opponent all behave as designed
 
 Build environment is Windows (Git Bash for `sh` scripts, PowerShell for the MSX C build). Python 3 (Windows), sjasmplus
 (`C:\Users\roniv\Dev\bin\sjasmplus.exe`), openMSX Windows build with the MSXPi device
-(`C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe`). Memory notes: run openMSX freely unless the user says it is
+(`C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe`). Memory notes: run openMSX freely unless the user says it is
 busy; the test machine is the Canon V-25 (an MSX2) with ram2mb + MSXPi.
 
 - Loader and stub: `SJASMPLUS=/c/Users/roniv/Dev/bin/sjasmplus.exe sh software/Client/src/soccernet/build.sh` ->

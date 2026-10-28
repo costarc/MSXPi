@@ -8,7 +8,7 @@
 | Design | `documents/1942-DESIGN.md` (analysis, patches, memory map) |
 | Package | `software/ROM-Patcher/profiles/1942/` (`src/glue.asm`, `rebuild.py`, generated `profile.json`, `assets/stub.bin`, README) |
 | ROM | `C:\Users\roniv\Dev\MSX\gameroms\1942.ROM`, CRC-32 `C99E5601`, 128 KB ASCII8. Never commit it or anything derived from it. |
-| Tools | sjasmplus `C:\Users\roniv\Dev\bin\sjasmplus.exe`; openMSX `C:\Users\roniv\Dev\MSX\MSXPi\openmsx-MSXPi_v1.6.1\openmsx.exe`; my analysis scratch (Z80 disassembler `z80dis.py`, probes, debug Tcl) is in `work-1942/`, git-excluded (`info/exclude`), game-derived output: keep it out of git. |
+| Tools | sjasmplus `C:\Users\roniv\Dev\bin\sjasmplus.exe`; openMSX `C:\Users\roniv\Dev\MSX\MSXPi\openmsx-MSXPi_v1.7.0\openmsx.exe`; my analysis scratch (Z80 disassembler `z80dis.py`, probes, debug Tcl) is in `work-1942/`, git-excluded (`info/exclude`), game-derived output: keep it out of git. |
 | Commits | `407c7178` package, `97cc2034` PLAYNET accepts ASCII8 + rig + design + tests, `7b5ccfe4` initGame return address. **Uncommitted:** `glue.asm`/`profile.json`/`stub.bin` with `rdLocal` restoring ED10h (stub now 1510 of 1512 bytes). Commit them. |
 
 ## 1. Idea

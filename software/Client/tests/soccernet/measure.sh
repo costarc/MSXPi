@@ -13,7 +13,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (A1)
 ROOT=$(cd "$HERE/../../../.." && pwd)
 RW=$(cd "$ROOT" && pwd -W 2>/dev/null || echo "$ROOT")
-OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
+OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe}
 WORK=${WORK:-${TMP:-/tmp}/playnet-measure}
 PORT=8117
 mkdir -p "$WORK"; WORKW=$(cd "$WORK" && pwd -W 2>/dev/null || echo "$WORK")

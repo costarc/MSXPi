@@ -51,7 +51,7 @@ script. Ping Pong and Yie Ar: MSXPi link only, never run on links 1 or 2. Real h
   a transport by name (task C1 makes this a checked rule).
 - Work in a worktree of `feature/tcpip-games` (other sessions use the main checkout); never switch branches in the main checkout.
 - Tools: sjasmplus `C:/Users/roniv/Dev/bin/sjasmplus.exe`; SDCC 4.6.0 `C:/Apps/SDCC`; openMSX Windows build
-  `C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe`; WSL openMSX for Nextor images `OPENMSX_WSL=/usr/local/bin/openmsx`
+  `C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe`; WSL openMSX for Nextor images `OPENMSX_WSL=/usr/local/bin/openmsx`
   (the scripts' default `/opt/openMSX/bin/openmsx` is not executable on this PC).
 - ROMs from `C:/Users/roniv/Dev/MSX/gameroms` (SOCCER.ROM, PINGPONG.ROM, SALAMAND.ROM, kung-fu.rom); never commit a ROM or a
   disassembly.

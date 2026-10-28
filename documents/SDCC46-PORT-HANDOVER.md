@@ -235,7 +235,7 @@ Notes for 4.8 to 4.10:
 - Build only through make.bat/make.sh with the program name; check `target\<name>.com`'s timestamp.
 - Other sessions use the main checkout: work in this worktree (`C:\Users\roniv\Dev\github\MSXPi-mchat-sdcc46`),
   never switch branches there. make.bat writes to the shared FloppyA.
-- openMSX: use the Windows build (`openmsx-MSXPi_v1.6.1`). Keep throttle on for MSXPi runs, and check ports
+- openMSX: use the Windows build (`openmsx-MSXPi_v1.7.0`). Keep throttle on for MSXPi runs, and check ports
   5044 and 6668 are free.
 - Check long runs every few minutes; they hang.
 - Never commit ROM dumps or disassemblies.

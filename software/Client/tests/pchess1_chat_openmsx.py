@@ -24,7 +24,7 @@ SOFTWARE = HERE.parents[1]
 sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
 
-OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe'))
+OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe'))
 PCHESS = Path(sys.argv[1] if len(sys.argv) > 1 else SOFTWARE / 'target/pchess1.com')
 PORTS = (5041, 5042, 5081)
 NICKS = ('alice', 'bob')

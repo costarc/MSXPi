@@ -41,7 +41,7 @@ SRC="$ROOT/software/Client/src/playnet"
 ASM=${SJASMPLUS:-C:/Users/roniv/Dev/bin/sjasmplus.exe}
 SRCW=$(cd "$SRC" && pwd -W 2>/dev/null || echo "$SRC")
 SERVER="$ROOT/software/Server/Python/src"
-OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
+OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 [ -f "$SOCCER_ROM" ] || { echo "set SOCCER_ROM to your own SOCCER.ROM"; exit 1; }
 [ "$SCENARIO" != chat ] || [ -f "$ROOT/software/target/mchat.com" ] || { echo "no software/target/mchat.com"; exit 1; }

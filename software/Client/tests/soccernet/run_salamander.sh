@@ -33,7 +33,7 @@ SRC="$ROOT/software/Client/src/playnet"
 PKG="$ROOT/software/ROM-Patcher/profiles/salamander"
 ASM=${SJASMPLUS:-C:/Users/roniv/Dev/bin/sjasmplus.exe}
 SERVER="$ROOT/software/Server/Python/src"
-OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe}
+OMX=${OPENMSX:-C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe}
 HARNESS="$RW/software/UNAPI/harness/lib/harness.tcl"
 [ -f "$SALAMANDER_ROM" ] || { echo "set SALAMANDER_ROM to your own SALAMAND.ROM"; exit 1; }
 WORK=${WORK:-${TMP:-/tmp}/salamander-work}

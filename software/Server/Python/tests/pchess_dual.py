@@ -16,7 +16,7 @@ from pchess_irc_fixture import Server
 
 software=Path(__file__).resolve().parents[3]
 work=Path(tempfile.mkdtemp(prefix='pchess-dual-',dir=software.parent/'work'))
-exe=Path('C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6/openmsx.exe')
+exe=Path('C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 floppy=Path('C:/Users/roniv/Dev/MSX/MSXPi/FloppyA')
 real_irc='--real-irc' in sys.argv
 config_paths=[os.environ.get('PCHESS_TEST_INI_1'),os.environ.get('PCHESS_TEST_INI_2')]
