@@ -126,6 +126,11 @@ def make_patches(symbols):
     # The waits for a jingle to end poll the driver's busy byte (F068h) with no input read: no TICK, no sound tick, no exit key
     for cpu, expected in ((0x45F3, 'cd707c'), (0x51F7, 'cd707c'), (0x5612, '3a68f0')):
         patch(0, cpu, expected, b'\xcd' + word('sndSt'), 'wait for the sound driver -> sndSt: PN_TICK, then F068h')
+    # The MSX-Music detection (7FB4h, from INIT) calls EXTBIO (FFCAh). Under Nextor with RAMHELPR/ETHUNAPI/INL the hook
+    # chain ends in a mapper segment that the game does not map: the call runs into the game's page 1. A is 0 there:
+    # 'device not found', which is what a plain MSX answers.
+    for cpu in (0x7FC3, 0x7FD4):
+        patch(1, cpu, 'cdcaff', bytes(3), 'EXTBIO (MSX-Music detection) -> nop: A = 0, no device (the Nextor UNAPI hook chain is not the games)')
     patch(1, 0x6D73, 'cd776d', bytes(3), 'The secret key combination (6D77h) is not read: it is local')
     patch(1, 0x7B75, '11747c', b'' + word('PN_IRQ'),
           'the H.TIMI hook: the music driver (7C74h) -> PN_IRQ, which counts; the engine ticks the driver (G_SOUND_TICK)')

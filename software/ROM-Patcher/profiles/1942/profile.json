@@ -242,6 +242,18 @@
       "reason": "7B75h (bank 1): the H.TIMI hook: the music driver (7C74h) -> PN_IRQ, which counts; the engine ticks the driver (G_SOUND_TICK)"
     },
     {
+      "offset": 16323,
+      "expected": "cdcaff",
+      "replace": "000000",
+      "reason": "7FC3h (bank 1): EXTBIO (MSX-Music detection) -> nop: A = 0, no device (the Nextor UNAPI hook chain is not the games)"
+    },
+    {
+      "offset": 16340,
+      "expected": "cdcaff",
+      "replace": "000000",
+      "reason": "7FD4h (bank 1): EXTBIO (MSX-Music detection) -> nop: A = 0, no device (the Nextor UNAPI hook chain is not the games)"
+    },
+    {
       "offset": 23446,
       "expected": "320078",
       "replace": "cdd9e3",
