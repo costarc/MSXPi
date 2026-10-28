@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -50,7 +50,7 @@ proc basic_call_dump {} {
 harness::wait_for "Ok" 40 {
     harness::type_line "CALL MSXPIVER"
     harness::wait_for "Server Version" 40 {
-        harness::assert_screen_contains "bios-banner" "MSXPi BIOS v1.6"
+        harness::assert_screen_contains "bios-banner" "MSXPi BIOS v1.7.0"
         harness::type_line {CALL MSXPI("2,C000,ver")}
         harness::wait 10 {
             harness::type_line {PRINT "RC=";PEEK(&HC000);"LEN=";PEEK(&HC001)+256*PEEK(&HC002)}

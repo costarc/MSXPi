@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -331,9 +331,9 @@ MY_GETWRK1:
         INCLUDE "msxpi_call.asm"
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6.1",13,10
+        DB      13,10,"MSXPi BIOS v1.7.0",13,10
 		DB		"Build "
-BuildId: DB "20261026.083"
+BuildId: DB "20261028.087"
         DB      13,10,"RCC (c) 2015-2026",13,10,0
 
 CALL_TABLE:

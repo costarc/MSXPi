@@ -7,8 +7,9 @@
 #
 # Every switch can be overridden from the environment, e.g.
 #   buildMSXdiskImage=no ./build
-#   updateServerVersion=yes ./build  bump only the msxpi-server BuildId
-#   updateRomVersion=yes ./build     bump only the ROM/extension BuildIds
+#   updateServerVersion=yes ./build  bump the msxpi-server BuildId
+#   updateRomVersion=yes ./build     bump the ROM/extension BuildIds
+#   (both together for a release: every BuildId then carries the same value)
 #
 # Stages, in order: client commands -> BIOS/MSX-DOS ROM -> LOADROM patch ->
 # openMSX extension -> disk images. Each is independent and skippable.
@@ -93,33 +94,47 @@ check_yes_no updateRomVersion "$updateRomVersion"
 # Helpers
 # =============================================================================
 
-# Bump "<anchor><date>.<nnn>" in a source file. The ASM sources write it as
-#   BuildId: DB ".20260912.048"
+# Every BuildId "<date>.<nnn>" the build bumps. The ASM sources write it as
+#   BuildId: DB "20260912.048"
 # and the Python server as
-#   BuildId = "20260912.048"
-# so the only difference is the anchor and whether the value carries a leading
-# dot - one function, two kinds of caller.
-#
-# The line is matched by its anchor alone and replaced whole: reconstructing the
-# old value as a search pattern was fragile and could silently fail to match,
-# leaving the id unchanged with no visible error.
+#   BUILD_ID = "20260912.048"
+BUILD_ID_FILES="./Server/Python/src/msxpi_const.py
+./ROM/src/MSX-DOS/msxpi-driver.mac
+./ROM/src/BIOS/msxpiext.asm
+./ROM/src/BIOS/msxpibios.asm"
+
+# One BuildId for the whole build: today's date and one more than the highest
+# counter in any of the files above. Each file used to be bumped from its own
+# last value, so the server and the ROMs drifted apart (.086 vs .083).
+next_build_id() {
+    local max=0 n f
+    for f in $BUILD_ID_FILES; do
+        n=$(grep -E '^(BuildId: DB |BUILD_ID = )"' "$f" | tail -n 1 |
+            sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
+        [ -n "$n" ] && [ $((10#$n)) -gt $max ] && max=$((10#$n))
+    done
+    echo "$(date +%Y%m%d).$(printf "%03d" $((max + 1)))"
+}
+BUILD_ID=""
+if [ "$updateServerVersion" = "yes" ] || [ "$updateRomVersion" = "yes" ]; then
+    BUILD_ID=$(next_build_id)
+fi
+
+# Write $BUILD_ID into one source file. The line is matched by its anchor alone
+# and replaced whole: reconstructing the old value as a search pattern was
+# fragile and could silently fail to match, leaving the id unchanged with no
+# visible error.
 update_build_id() {
     local fname="$1" anchor="$2" update="$3"
     [ "$update" = "yes" ] || return 0
     [ -f "$fname" ] || { warn "BuildId: $fname does not exist"; return 0; }
+    grep -q "^$anchor" "$fname" || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
 
     cp "$fname" "$fname.bak"
-    local today last next line
-    today=$(date +%Y%m%d)
-    last=$(grep "^$anchor" "$fname" | tail -n 1 |
-           sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
-    [ -n "$last" ] || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
-    next=$(printf "%03d" $((10#$last + 1)))
-    line="$anchor\"$today.$next\""
-
+    local line="$anchor\"$BUILD_ID\""
     sed "s|^$anchor.*|$line|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
     if grep -qF -- "$line" "$fname"; then
-        echo "  New BuildId for $fname: $dot$today.$next"
+        echo "  New BuildId for $fname: $BUILD_ID"
     else
         warn "BuildId update for $fname did NOT take effect"
     fi

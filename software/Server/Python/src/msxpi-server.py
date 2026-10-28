@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # MSXPi Interface
-# Version 1.6
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #

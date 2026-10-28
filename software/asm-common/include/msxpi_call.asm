@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 
 ; ------------------------------------------------------------------------------
 ; The BASIC "CALL MSXPI" handler: statement dispatch, parameter parsing, and the

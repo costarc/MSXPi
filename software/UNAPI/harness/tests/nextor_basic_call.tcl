@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -52,7 +52,7 @@ harness::at_nextor_prompt {
             harness::wait_for "FRE=" 20 {
                 harness::wait 2 {
                     nextor_basic_call_dump
-                    harness::assert_screen_contains "msxpiver" "MSXPi BIOS v1.6.1"
+                    harness::assert_screen_contains "msxpiver" "MSXPi BIOS v1.7.0"
                     harness::assert_screen_lacks "no-basic-error" "error"
                     harness::done
                 }
