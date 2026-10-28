@@ -50,6 +50,12 @@ Both players need these files together **on one disk or in one folder**. Copy th
 | Konami's Yie Ar Kung-Fu | `YIEAR.GPF` | `KUNGFU.ROM` | 16384 bytes |
 | Konami's Salamander | `SALAMAND.GPF` | `SALAMAND.ROM` | 131072 bytes (see "Salamander" at the end) |
 
+> **Important - which ROMs are supported.** Only the ROMs downloaded from the MSX Archive are supported:
+> <https://www.msxarchive.nl/pub/msx/games/roms/msx1/> and <https://www.msxarchive.nl/pub/msx/games/roms/msx2/>.
+> When the same game is in both places (for example `1942.LZH`), **use the one from the `msx2` folder**.
+> Unpack the download on a PC and copy the ROM file, with the name in the table above, to the MSX. A ROM from any other source
+> may be a different dump, and the game will refuse to start.
+
 Both players must use the **same `.GPF` file**. If the game says the other player has a different version, copy the same file to both.
 
 > **MSXPi owners:** run the updater `msxpiupd`. It already puts `MCHAT.COM`, `PLAYNET.COM`, `PLAYNET.OVL`, `INL.CFG` and the
