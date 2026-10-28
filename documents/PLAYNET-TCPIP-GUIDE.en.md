@@ -52,7 +52,7 @@ Both players need these files together **on one disk or in one folder**. Copy th
 | ASCII's 1942 (2 players, taking turns) | `1942.GPF` | `1942.ROM` | 131072 bytes (see "1942" at the end) |
 
 **Check your files (SHA-256).** To make sure you have the right ROM and the right game file, compare their SHA-256 (on a PC:
-`certutil -hashfile FILE SHA256` on Windows, `sha256sum FILE` on Linux). The ROM must also match the CRC-32 (the game checks it).
+`certutil -hashfile FILE SHA256` on Windows, `sha256sum FILE` on Linux). The ROM must also match the CRC-32 (the game checks it when it starts; the SHA-256 was checked by the code that built the game file).
 
 | Game | ROM file | ROM CRC-32 | ROM SHA-256 | Game file | Game file SHA-256 |
 |---|---|---|---|---|---|

@@ -52,7 +52,7 @@ Os dois jogadores precisam destes arquivos juntos **em um disco ou em uma pasta*
 | 1942 da ASCII (2 jogadores, alternando) | `1942.GPF` | `1942.ROM` | 131072 bytes (veja "1942" no final) |
 
 **Confira seus arquivos (SHA-256).** Para ter certeza de que a ROM e o arquivo do jogo estão corretos, compare o SHA-256 deles (em um
-PC: `certutil -hashfile ARQUIVO SHA256` no Windows, `sha256sum ARQUIVO` no Linux). A ROM também deve bater com o CRC-32 (o jogo confere).
+PC: `certutil -hashfile ARQUIVO SHA256` no Windows, `sha256sum ARQUIVO` no Linux). A ROM também deve bater com o CRC-32 (o jogo confere ao iniciar; o SHA-256 foi conferido pelo código que gerou o arquivo do jogo).
 
 | Jogo | Arquivo da ROM | CRC-32 da ROM | SHA-256 da ROM | Arquivo do jogo | SHA-256 do arquivo do jogo |
 |---|---|---|---|---|---|
