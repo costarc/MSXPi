@@ -28,7 +28,8 @@ GPF_MAX = 16384
 PLAYNET_VERSION = 3                     # the newest min_playnet this tool understands
 SEC_END, SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_ASSET, SEC_MAPPER = range(7)
 HOST_PLAIN, HOST_MAPPER = 0, 1          # netplay.image.host, GPF flags bits 1-2
-MAPPER_TYPES = {'konami-scc': 1}        # mapper-ram: the cartridge mappers a stub's bank engine emulates
+MAPPER_TYPES = {'konami-scc': 1, 'ascii8': 2}   # mapper-ram: the cartridge mappers a stub's bank engine emulates (informational:
+                                        # the patches decide which registers the game's bank writes become)
 MAPPER_BANK = 8192                      # 8 KB banks, two to a 16 KB mapper segment (PLAYNET-PROTOCOLS 7.3)
 MAPPER_MIN_PLAYNET = 3
 # What a package may need from the machine or from PLAYNET (never a link: one package serves every link). One bit each in

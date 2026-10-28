@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -42,7 +42,7 @@ from msxpi_const import (
     RC_SUCCESS,
 )
 import msxpi_transport as transport
-from msxpi_blocks import sendmultiblock
+from msxpi_blocks import link_send
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 
 try:
@@ -81,7 +81,7 @@ def play(data: str) -> CommandResult:
             "pmusic stop\n"
             "p music audio [card [device]|default]\n"
         )
-        sendmultiblock(help_text.encode())
+        link_send(help_text.encode())
         return RC_FAILED
 
     cmd, _, parms = data.partition(" ")
@@ -124,10 +124,10 @@ def play(data: str) -> CommandResult:
             )
         else:
             raise PlayerError(f"Unknown player command: {cmd}")
-        sendmultiblock(str(result or "\n").encode())
+        link_send(str(result or "\n").encode())
         return RC_SUCCESS
     except (PlayerError, OSError, ValueError) as exc:
-        sendmultiblock(f"Player error: {exc}".encode())
+        link_send(f"Player error: {exc}".encode())
         return RC_FAILED
 
 
@@ -142,8 +142,8 @@ def vol(data: Optional[str] = None) -> CommandResult:
     try:
         if _music_player is None:
             raise PlayerError("mpv player is not initialized")
-        sendmultiblock(_music_player.volume(data).encode())
+        link_send(_music_player.volume(data).encode())
         return RC_SUCCESS
     except (PlayerError, ValueError) as exc:
-        sendmultiblock(f"Player error: {exc}".encode())
+        link_send(f"Player error: {exc}".encode())
         return RC_FAILED

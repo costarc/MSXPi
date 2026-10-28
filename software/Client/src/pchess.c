@@ -15,6 +15,7 @@
 #include "../../C-common/header/fusion.h"
 #include "../../C-common/header/fusion.h"
 #include "../../C-common/header/msxpi.h"
+#include "arrowkeys.h"
 
 #define BOARD_X 8
 #define BOARD_Y 12
@@ -323,12 +324,12 @@ static void chat_clean(char *s) {
 static uint8_t link_tcp;
 
 /* The MSXPi CPLD drives port $56 as 0 or 1 (its ready bit). With no
- * interface the bus floats to $FF, and CHKPIRDY() would wait on it for ever
+ * interface the bus floats to $FF, and the link wait would never end
  * (only CTRL+ESC breaks out), so no exchange starts without this. */
 static uint8_t msxpi_present(void) { return InPort(CONTROL_PORT1)<=1; }
 
 static uint8_t exchange(const char *cmd) {
-    uint8_t rc,tries=0,i,j,was_over=game_over; uint16_t size=0;
+    uint8_t rc,i,j,was_over=game_over; uint16_t size=0;
     if(link_tcp) {
         local_exchange(cmd);
         size=256; rc=RC_SUCCESS;
@@ -339,12 +340,8 @@ static uint8_t exchange(const char *cmd) {
         return 0;
     }
     msxpi_link_claim();
-    rc=SendCommandToMSXPi(cmd,false);
-    if(rc==RC_SUCCESS) rc=PerformHandshake(256);
-    if(rc==RC_SUCCESS) {
-        do { size=0; rc=RECVDATA_ONEBLOCK(reply,&size,256); }
-        while(rc==RC_CHKSUM_ERR && ++tries<MAX_BLOCK_RETRIES);
-    }
+    rc=link_command(cmd,false);
+    if (rc == RC_SUCCESS) rc = link_recv(LINK_RECV_BUFFER, (uint8_t *)reply, 256, &size);
     msxpi_link_release();
 parse:
     if(rc!=RC_SUCCESS || size!=256 || memcmp(reply,"PCH1",4)) {
@@ -848,8 +845,8 @@ static void chat_window(void) {
 }
 
 int main(void) {
-    uint8_t key,joy,fire,lastjoy=0,lastfire=0,arrow_seen=0;
-    uint16_t lastpoll=0,lastarrow=0,now;
+    uint8_t key,joy,fire,lastjoy=0,lastfire=0;
+    uint16_t lastpoll=0,now;
     /* SCREEN 5 and the VDP commands need an MSX2 (V9938) or later. An
      * MSX1 has no SUB-ROM, so its slot in EXBRSA is 0. */
     if(!*(volatile uint8_t *)0xFAF8) {
@@ -886,13 +883,7 @@ int main(void) {
         if(fire && !lastfire) key=' ';
         lastjoy=joy; lastfire=fire;
         now=*(volatile uint16_t *)0xFC9E;
-        /* Consume rapid BIOS repeats without queuing delayed cursor moves.
-         * Eight jiffies is 133 ms at 60 Hz, 160 ms at 50 Hz. The first
-         * arrow is immediate; unsigned subtraction handles timer wrap. */
-        if(key>=0x1c && key<=0x1f) {
-            if(arrow_seen && (uint16_t)(now-lastarrow)<8) key=0;
-            else {lastarrow=now; arrow_seen=1;}
-        }
+        key=arrow_gate(key);   /* arrowkeys.h */
         if(!key) {
             /* Every 2 s on the MSXPi; every second on TCP/IP, where this
              * poll is also what reads the IRC connection. */
@@ -956,6 +947,7 @@ int main(void) {
             entry[entry_len++]=key; entry[entry_len]=0;
         }
         draw_board();
+        arrow_done();
     }
     tcp_link_stop();
     RestoreSC5Palette();

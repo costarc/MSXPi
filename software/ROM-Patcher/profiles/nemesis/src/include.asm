@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -39,6 +39,24 @@ CONTROL_PORT1:  EQU $56
 CONTROL_PORT2:  EQU $57
 DATA_PORT1:     EQU $5A
 
+; Checksum retries per block. Each end decides for itself when to give up, so
+; a limit is only safe when the other end gives up at the same point or never:
+; SENDRETRIES   - this side sends (SENDDATA). The server's receivers wait for
+;                 a resend with no limit, so any value works with any server.
+; GLOBALRETRIES - this side receives (RECVDATA_ONEBLOCK). Must equal the
+;                 server's MAX_BLOCK_RETRIES (msxpi_const.py): a server that
+;                 resends after the MSX has given up eats the MSX's next
+;                 command (seen in the fault-injection tests, see
+;                 documents/BLOCK-RETRIES-FAULT-INJECTION.md), and an MSX that
+;                 waits after the server has given up reads the idle link as
+;                 a block.
+;
+; Not more: the block checksum is an 8-bit folded sum, which two bit errors in
+; one block can cancel, and every extra attempt on a noisy link is one more
+; chance of that. All-20 limits let wrong bytes into files in those tests; 3
+; never did. 10 takes a link that fails half its blocks from 1 abort in 8 to 1
+; in 1000.
+SENDRETRIES:    EQU 10
 GLOBALRETRIES:  EQU 3
 MAXRETRIES:     EQU 10
 RESET:          EQU $FF

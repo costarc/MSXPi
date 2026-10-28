@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 # Standard library imports
 from typing import Callable, Iterable, Optional, Tuple
+import threading
 import time
 import subprocess
 import logging
@@ -140,15 +141,15 @@ _NATIVE_GPIO = None
 
 # ---------------------------------------------------------------------------
 # Profiler.  Enable with MSXPI_PROFILE=1.  Answers one question: how much of the
-# wall-clock time is actually spent inside SPI_ByteTransfer()?
+# wall-clock time is actually spent inside _spi_byte()?
 #
-# 8 KB in 9.6 s is ~1.17 ms/byte, but SPI_ByteTransfer() should be nowhere near
+# 8 KB in 9.6 s is ~1.17 ms/byte, but _spi_byte() should be nowhere near
 # that.  If "in transfer" comes back as a small fraction of elapsed, the cost is
 # in the protocol/Python layers above, or in waiting for the MSX - and no amount
 # of GPIO tuning will touch it.
 _PROFILE = bool(os.environ.get("MSXPI_PROFILE"))
 _prof_n = 0  # transfers completed
-_prof_busy = 0.0  # seconds inside SPI_ByteTransfer, total
+_prof_busy = 0.0  # seconds inside _spi_byte, total
 _prof_spin = 0.0  # of which: spinning on SPI_CS, i.e. waiting for the MSX
 _prof_t0 = None  # wall clock at the first transfer
 _PROF_EVERY = 1024
@@ -165,7 +166,7 @@ def _prof_report(force=False):
     print(
         f"[prof] {_prof_n} bytes | wall {elapsed:.2f}s "
         f"({elapsed / _prof_n * 1e6:.0f} us/byte) | "
-        f"in SPI_ByteTransfer {_prof_busy:.2f}s ({per:.0f} us/byte, "
+        f"in _spi_byte {_prof_busy:.2f}s ({per:.0f} us/byte, "
         f"{100.0 * _prof_busy / elapsed:.1f}% of wall) | "
         f"of which spinning on CS {spin:.0f} us/byte | "
         f"unaccounted {100.0 * (elapsed - _prof_busy) / elapsed:.1f}%"
@@ -428,7 +429,7 @@ def tcp_exchange(
 ) -> Tuple[int, Optional[bytearray]]:
     """Offer bytes the way the Pi does, one CPLD transfer per byte.  hold=True
     keeps READY up across the run (a burst); hold=False drops READY after every
-    byte, as SPI_ByteTransfer does, but still sends all offers in one write so
+    byte, as _spi_byte does, but still sends all offers in one write so
     a payload costs one round trip instead of one per byte.
     Returns (rc, the bytes the CPLD sent)."""
     count = len(misos)
@@ -457,7 +458,7 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
 
     This is what makes hardware /WAIT usable.  The CPLD asserts /WAIT only
     while SPI_RDY is high (MSXPi.vhd: wait_assert <= wait_mode and SPI_RDY and
-    spi_en and ...), and SPI_ByteTransfer() raises and drops RPI_READY around
+    spi_en and ...), and _spi_byte() raises and drops RPI_READY around
     every single byte.  In that inter-byte gap an INIR read on the MSX would
     NOT stall and would silently return a stale byte, desynchronising the
     stream.  Holding RDY up across the burst closes that window.
@@ -497,7 +498,7 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
     SET, CLR, LEV = _GPSET0, _GPCLR0, _GPLEV0
     m_sclk, m_miso, m_cs = _M_SCLK, _M_MISO, _M_CS
 
-    # Bounded, unlike SPI_ByteTransfer's spin.  That one waits forever on
+    # Bounded, unlike _spi_byte's spin.  That one waits forever on
     # purpose - it is the server idling for the next command - but a burst is
     # different: the MSX has committed to reading N bytes, and if it stops
     # early there is nobody left to assert CS.  The driver DOES stop early: on
@@ -534,12 +535,19 @@ def SPI_BurstOut(data: bytes | bytearray) -> int:
     return RC_SUCCESS
 
 
-def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
+def SPI_BurstIn(
+    length: int, go: Optional[int] = None
+) -> Tuple[int, Optional[bytearray]]:
     """Receive a run of bytes with RPI_READY held high for the whole run.
 
     The mirror image of SPI_BurstOut, for the MSX's OTIR side: the CPLD only
     asserts /WAIT while SPI_RDY is high, so the same inter-byte RDY gap that
     would let an INIR read stale data would let an OTIR write vanish.
+
+    go, when given, is a byte offered first, inside the same READY-held run: the
+    LINK2 GO byte, which the MSX reads polled and so can never start its OTIR
+    before the run is up (see LINK2-DESIGN.md 3.4).  It is not part of the
+    result.
 
     Returns (RC_SUCCESS, bytearray) or (error code, None).
     """
@@ -547,7 +555,10 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     if hostType != "RaspberryPi" and _tcp_framed:
         # passive offers, READY held across the run: exactly SPI_BurstIn's GPIO
         # contract, so an OTIR that starts before them loses bytes here too
-        return tcp_exchange(bytes(length), TCP_BURST_TIMEOUT)
+        if go is None:
+            return tcp_exchange(bytes(length), TCP_BURST_TIMEOUT)
+        rc, got = tcp_exchange(bytes((go,)) + bytes(length), TCP_BURST_TIMEOUT)
+        return (rc, got[1:]) if rc == RC_SUCCESS else (rc, None)
 
     if hostType != "RaspberryPi":
         # raw openMSX link: no RDY line to hold; the burst arrives as an
@@ -556,6 +567,8 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
         payload = bytearray()
         quickack = getattr(socket, "TCP_QUICKACK", None)
         try:
+            if go is not None:
+                conn.sendall(bytes((go,)))
             conn.settimeout(None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT)
             while len(payload) < length:
                 if quickack is not None:
@@ -576,11 +589,16 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     # READY is up, but /WAIT only holds the Z80 while READY is up - so bytes
     # sent in that window overwrite each other and are lost.  Sampled before
     # anything slow; reported only after the burst, so it adds no latency.
-    early = _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
+    # Not with a GO byte: the MSX's polled read of GO starts its transfer before
+    # READY rises by design, and that transfer is the GO byte itself, not payload.
+    early = go is None and _GPIO_REG is not None and not (_GPIO_REG[_GPLEV0] & _M_CS)
 
     if _NATIVE_GPIO is not None:
         try:
-            data = _NATIVE_GPIO.read_burst(length)
+            if go is None:
+                data = _NATIVE_GPIO.read_burst(length)
+            else:
+                data = _NATIVE_GPIO.exchange_burst(bytes((go,)) + bytes(length))[1:]
             if early:
                 print(
                     "SPI_BurstIn: CS was already low before READY - the MSX started early"
@@ -606,6 +624,23 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
 
     reg[SET] = _M_RDY  # up once, for the whole burst
     try:
+        if go is not None:
+            spins = 0
+            while reg[LEV] & m_cs:
+                spins += 1
+                if not (spins & 0x3FF) and time.perf_counter() > deadline:
+                    return RC_FAILED, None
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
+            for bit in (0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01):
+                if go & bit:
+                    reg[SET] = m_miso
+                else:
+                    reg[CLR] = m_miso
+                reg[SET] = m_sclk
+                reg[CLR] = m_sclk
+            reg[SET] = m_sclk
+            reg[CLR] = m_sclk
         reg[CLR] = m_miso  # passive receive drives MISO low
         for i in range(length):
             spins = 0
@@ -629,6 +664,16 @@ def SPI_BurstIn(length: int) -> Tuple[int, Optional[bytearray]]:
     return RC_SUCCESS, payload
 
 
+def spi_burst_send(data: bytes | bytearray, go: int) -> int:
+    """LINK2, Pi -> MSX: the GO byte and the payload in one READY-held run."""
+    return SPI_BurstOut(bytes((go,)) + bytes(data))
+
+
+def spi_burst_recv(length: int, go: int) -> Tuple[int, Optional[bytearray]]:
+    """LINK2, MSX -> Pi: the GO byte, then length bytes, in one READY-held run."""
+    return SPI_BurstIn(length, go)
+
+
 def tick_sclk():
 
     if _FAST_GPIO:
@@ -639,7 +684,7 @@ def tick_sclk():
     GPIO.output(SPI_SCLK, GPIO.LOW)
 
 
-def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
+def _spi_byte(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]]:
 
     byte_in = 0
     if hostType == "RaspberryPi":
@@ -677,7 +722,7 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
             None if DISABLETIMEOUT else SYNCTRANSFTIMEOUT,
         )
         if rc != RC_SUCCESS:
-            print(f"SPI_ByteTransfer(): virtual SPI transfer failed rc={rc:#04x}")
+            print(f"_spi_byte(): virtual SPI transfer failed rc={rc:#04x}")
             return rc, None
         byte_in = got[0]
     else:
@@ -695,17 +740,26 @@ def SPI_ByteTransfer(byte_out: Optional[int] = None) -> Tuple[int, Optional[int]
             try:
                 buf = conn.recv(1)
                 if buf == b"":  # connection closed
-                    print("SPI_ByteTransfer(): connection closed by peer")
+                    print("_spi_byte(): connection closed by peer")
                     return RC_CONNERR, None
                 byte_in = buf[0]
             except socket.timeout:
-                print("SPI_ByteTransfer(): recv timed out")
+                print("_spi_byte(): recv timed out")
                 return RC_FAILED, None
             except IndexError:
-                print("SPI_ByteTransfer(): e-connection closed by peer")
+                print("_spi_byte(): e-connection closed by peer")
                 return RC_CONNERR, None
 
     return RC_SUCCESS, byte_in
+
+
+# The per-byte pair (LINK2-DESIGN.md 5.3), named from this side: the MSX's
+# LINK_SEND_BYTE arrives here as link_recv_byte(), and link_send_byte(b) is read
+# by its LINK_RECV_BYTE.  One CPLD transfer either way, so both are the same
+# primitive bound to two names - no wrapper on the hottest path - and both
+# return (rc, the byte the MSX sent).
+link_recv_byte = _spi_byte
+link_send_byte = _spi_byte
 
 
 def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
@@ -734,7 +788,7 @@ def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
                 conn.setsockopt(socket.IPPROTO_TCP, quickack, 1)
             except OSError:
                 quickack = None
-        rc, byte = SPI_ByteTransfer()
+        rc, byte = _spi_byte()
         if rc != RC_SUCCESS:
             return rc, None
         payload[i] = byte
@@ -742,7 +796,7 @@ def SPI_ReadPayload(length: int) -> Tuple[int, Optional[bytearray]]:
 
 
 def SPI_WritePayload(payload: bytes | bytearray) -> int:
-    """Same per-byte READY/CS contract as SPI_ByteTransfer, in native chunks."""
+    """Same per-byte READY/CS contract as _spi_byte, in native chunks."""
     if hostType == "RaspberryPi" and _NATIVE_GPIO is not None:
         try:
             _NATIVE_GPIO.write(payload)
@@ -756,7 +810,7 @@ def SPI_WritePayload(payload: bytes | bytearray) -> int:
         rc, _ = tcp_exchange(bytes(payload), SYNCTRANSFTIMEOUT, hold=False)
         return rc
     for byte in payload:
-        rc, _ = SPI_ByteTransfer(byte if isinstance(byte, int) else ord(byte))
+        rc, _ = _spi_byte(byte if isinstance(byte, int) else ord(byte))
         if rc != RC_SUCCESS:
             return rc
     return RC_SUCCESS
@@ -806,7 +860,7 @@ def cpld_announce(online):
             if online:
                 return
             # Going offline with a byte pending: clock it out first (ten
-            # edges, as SPI_ByteTransfer does) - the flag only changes
+            # edges, as _spi_byte does) - the flag only changes
             # outside a transfer.  Nobody reads that byte any more.
             for _ in range(10):
                 GPIO.output(SPI_SCLK, GPIO.HIGH)
@@ -842,6 +896,65 @@ def release_gpio():
         GPIO.cleanup()
 
 
+_button_thread = None
+
+
+def _button_monitor(on_button: Callable) -> None:
+    """Watch the shutdown button by polling, and call on_button(gpio) once per
+    confirmed press.
+
+    This replaced GPIO.add_event_detect(FALLING).  An edge callback fires once
+    per press: when the contact bounced high for a few ms inside the 200 ms
+    the handler wanted to see held low, the handler gave up, RPi.GPIO's
+    bouncetime swallowed the bounce edges that followed, and the held button
+    did nothing until it was released and pressed again.  Also, the pin's
+    edge detection was lost whenever the library re-claimed the line.  Polling
+    counts consecutive low samples - a bounce just restarts the count - and
+    it does not care what the rest of the server does with the GPIO setup.
+
+    Noise from SCLK/CS (header pins 38/40, next to GPIO 26 on pin 37) is
+    continuous during a transfer; it never holds the line low for 200 ms
+    straight."""
+    low = 0
+    while True:
+        time.sleep(0.005)
+        pin = RPI_SHUTDOWN
+        if pin is None or _stopping:
+            low = 0
+            continue
+        try:
+            is_low = GPIO.input(pin) == GPIO.LOW
+        except Exception:
+            # pin not set up yet, or released by a cleanup in progress
+            low = 0
+            time.sleep(0.2)
+            continue
+        low = low + 1 if is_low else 0
+        if low < 40:
+            continue
+        try:
+            on_button(pin)
+        except Exception as e:
+            print(f"MSXPi Server: shutdown button handler failed ({e})")
+        # Re-arm only after the button is released.
+        try:
+            while GPIO.input(pin) == GPIO.LOW:
+                time.sleep(0.02)
+        except Exception:
+            pass
+        low = 0
+
+
+def _start_button_monitor(on_button: Callable) -> None:
+    global _button_thread
+    if _button_thread is not None and _button_thread.is_alive():
+        return
+    _button_thread = threading.Thread(
+        target=_button_monitor, args=(on_button,), name="msxpi-button", daemon=True
+    )
+    _button_thread.start()
+
+
 def initialize_connection(
     host: str, port: int, on_button: Callable
 ) -> Optional[socket.socket]:
@@ -855,31 +968,16 @@ def initialize_connection(
         time.sleep(0.2)
         GPIO.output(RPI_READY, GPIO.LOW)
 
-        # Idempotent on purpose: this function is the error-recovery path for
-        # the command loop below, so it runs again on every glitch.  A second
-        # add_event_detect on the same channel raises "Conflicting edge
-        # detection already enabled", which used to escape and kill the
-        # server - turning one bad byte into a crash loop that the monitor
-        # restarted for ever, with the MSX unable to boot at all.
+        # Idempotent: this function is also the error-recovery path for the
+        # command loop, so it runs again on every glitch.
         if RPI_SHUTDOWN is None:
             print("MSXPi Server: no shutdown button (RPI_SHUTDOWN=none in msxpi.ini)")
         else:
-            try:
-                GPIO.remove_event_detect(RPI_SHUTDOWN)
-            except Exception:
-                pass
-            try:
-                GPIO.add_event_detect(
-                    RPI_SHUTDOWN, GPIO.FALLING, callback=on_button, bouncetime=200
-                )
-                print(
-                    f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
-                    f"(press: reboot, hold 3 s: shutdown)"
-                )
-            except Exception as e:
-                # Losing the shutdown button is a far smaller problem than
-                # losing the server, so carry on rather than raise.
-                print(f"MSXPi Server: shutdown button unavailable ({e})")
+            _start_button_monitor(on_button)
+            print(
+                f"MSXPi Server: shutdown button on GPIO {RPI_SHUTDOWN} "
+                f"(press: reboot, hold 3 s: shutdown)"
+            )
         logger.info(f"[MSXPi Server on {hostType}] Listening on GPIOs:")
         logger.info(
             f" ** CS={SPI_CS}, CLK={SPI_SCLK}, MOSI={SPI_MOSI}, MISO={SPI_MISO}, PI_READY={RPI_READY} **"

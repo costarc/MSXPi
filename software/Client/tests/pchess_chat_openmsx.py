@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE))
 from pchess_irc_fixture import Server  # noqa: E402
 from pchess_tcpip_openmsx import FONT, text_at  # noqa: E402
 
-OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6/openmsx.exe'))
+OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe'))
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
 PCHESS = Path(sys.argv[1] if len(sys.argv) > 1 else os.environ.get('PCHESS_COM', SOFTWARE / 'target/pchess.com'))
 PORTS = (5041, 5042, 5081)

@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -45,7 +45,7 @@ from msxpi_const import (
     RC_SUCCESS,
     SECTORSIZE,
 )
-from msxpi_blocks import recvdata2, sendmultiblock
+from msxpi_blocks import link_recv, link_send
 from msxpi_settings import getMSXPiVar
 from msxpi_transport import _PROFILE
 
@@ -91,7 +91,7 @@ def unmount_drive(disk):
 def dosinit(parms: Optional[str] = None) -> CommandResult:
     global msxdos1boot
 
-    rc, data = recvdata2()
+    rc, data = link_recv()
     if rc == RC_SUCCESS:
         flag = data.decode().split("\x00")[0]
         if flag == "1":
@@ -132,11 +132,11 @@ def reload(parms: Optional[str] = None) -> CommandResult:
     elif driveLetter == "B":
         varname, varname_upper = "DriveB", "B"
     else:
-        return sendmultiblock(b"Pi:Error - usage: reload A: or reload B:")
+        return link_send(b"Pi:Error - usage: reload A: or reload B:")
 
     path = getMSXPiVar(varname)
     if not path:
-        return sendmultiblock(f"Pi:Error - {varname} is not set".encode())
+        return link_send(f"Pi:Error - {varname} is not set".encode())
 
     # Windows will not let the image be replaced while it is mapped, so a
     # remap in place would only pick up the same file again.
@@ -145,7 +145,7 @@ def reload(parms: Optional[str] = None) -> CommandResult:
 
     rc, data = msxdos_inihrd(path)
     if rc != RC_SUCCESS:
-        return sendmultiblock(f"Pi:Error - failed to reload {path}".encode())
+        return link_send(f"Pi:Error - failed to reload {path}".encode())
 
     # Release the previous mapping only once the new one is in place, so a
     # failed reload leaves the drive usable.
@@ -157,7 +157,7 @@ def reload(parms: Optional[str] = None) -> CommandResult:
         drive1Data = data
 
     print(f"reload(): {varname} reloaded from {path}")
-    return sendmultiblock(
+    return link_send(
         f"Pi:Ok - Drive {varname_upper}: reloaded from {path}".encode()
     )
 
@@ -179,7 +179,7 @@ def reload_delayed(drive, path):
 
     drivenum = 0 if drive == "A" else 1
     if drivenum in _remount_pending:
-        return sendmultiblock(
+        return link_send(
             f"Pi:Error - Drive {drive}: is already re-mounting".encode()
         )
 
@@ -219,7 +219,7 @@ def reload_delayed(drive, path):
     t.daemon = True
     t.start()
 
-    return sendmultiblock(
+    return link_send(
         f"Pi:Ok - Drive {drive}: released, re-mounting in {RELOAD_DELAY} seconds".encode()
     )
 
@@ -271,7 +271,7 @@ def dskior(parms: Optional[str] = None) -> CommandResult:
                 + (sectorcnt * SECTORSIZE)
             ]
 
-        rc = sendmultiblock(buf)
+        rc = link_send(buf)
         sectorcnt += 1
 
         if rc == RC_SUCCESS:
@@ -299,7 +299,7 @@ def dskiow(parms: Optional[str] = None) -> CommandResult:
     sectorcnt = 0
 
     while sectorcnt < numsectors:
-        rc, buf = recvdata2()
+        rc, buf = link_recv()
         if rc == RC_SUCCESS:
             if sectorInfo[0] == 0:
                 drive0Data[
@@ -332,7 +332,7 @@ def dskios(parms: Optional[str] = None) -> CommandResult:
     if not msxdos1boot:
         dskioini()
 
-    rc, buf = recvdata2(5)
+    rc, buf = link_recv(5)
     sectorInfo[0] = buf[0]
     sectorInfo[1] = buf[1]
     sectorInfo[2] = buf[2]

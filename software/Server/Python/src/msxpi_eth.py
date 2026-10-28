@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -62,8 +62,8 @@ import collections
 
 # --- Wire protocol ----------------------------------------------------------
 #
-# The MSX signals a fast op by sending an opcode byte where recvdata2() is
-# waiting for READY ($AA).  recvdata2() ignores every non-READY byte, so the
+# The MSX signals a fast op by sending an opcode byte where link_recv() is
+# waiting for READY ($AA).  link_recv() ignores every non-READY byte, so the
 # opcode range only has to avoid the values that loop already reacts to.
 # $A0-$AE (READY/ACK/BUSY...) and $E0-$EF (RC_*) are taken; $C0-$CF is free.
 
@@ -76,6 +76,7 @@ OP_IN_STATUS   = 0xC5   # the hot path - INL calls this 50/60 times a second
 OP_GET_FRAME   = 0xC6   # bulk
 OP_SEND_FRAME  = 0xC7   # bulk
 OP_RESET       = 0xC8
+OP_PROBE3      = 0xCA   # OP_PROBE of a protocol 3 driver (the BIOS-only half)
 # 0xC9 is taken by msxpi_netplay.py (served in msxpi_ethglue, not by the shuttle).
 
 # frozenset, not a tuple: this is tested against EVERY byte the server reads
@@ -83,7 +84,7 @@ OP_RESET       = 0xC8
 # not just on opcodes.
 OPCODES = frozenset((OP_PROBE, OP_GET_HWADD, OP_GET_NETSTAT, OP_NET_ONOFF,
                      OP_FILTERS, OP_IN_STATUS, OP_GET_FRAME, OP_SEND_FRAME,
-                     OP_RESET))
+                     OP_RESET, OP_PROBE3))
 
 # Fast ops answer with [RC] followed by a fixed number of data bytes.  The
 # length is a property of the opcode, known to both sides in advance, so there
@@ -91,6 +92,7 @@ OPCODES = frozenset((OP_PROBE, OP_GET_HWADD, OP_GET_NETSTAT, OP_NET_ONOFF,
 # resynchronise on the next opcode.
 FAST_REPLY_LEN = {
     OP_PROBE:       4,   # 'E','T','H', protocol version
+    OP_PROBE3:      4,
     OP_GET_HWADD:   6,   # MAC address
     OP_GET_NETSTAT: 1,   # 0 = closed, 1 = open
     OP_NET_ONOFF:   1,   # resulting state
@@ -104,6 +106,15 @@ FAST_REPLY_LEN = {
 # maxlen 0 discards without sending the frame, and ETH_SEND_FRAME's payload is
 # received as one RDY-held burst, so that the MSX can send it with OTIR.
 PROTO_VERSION = 2
+
+# Protocol 3 (documents/LINK2-DESIGN.md 4), chosen by OP_PROBE3: the same
+# operations, but every burst the Pi sends starts with the GO byte and every
+# block it takes (ETH_SEND_FRAME's payload) is announced by one, so the MSX can
+# read GO polled and never starts INIR/OTIR before the run is up; and a good
+# result code is RC_OK3, because an idle or out-of-step link reads 0.
+PROTO_VERSION3 = 3
+ETH_RC_OK3     = 0x5A
+ETH_GO         = 0x5A
 
 # ETH_IN_STATUS reply flag: no frame / a frame is waiting / the frame follows.
 IN_NONE   = 0
@@ -690,7 +701,7 @@ class EthShuttle(object):
     simply finds READY up for every byte.
 
     write_burst is what lets the MSX use INIR.  Hardware /WAIT is gated on
-    SPI_RDY, and the per-byte SPI_ByteTransfer() raises and drops RPI_READY
+    SPI_RDY, and the per-byte link_recv_byte() raises and drops RPI_READY
     around every single byte - during that gap an INIR read would NOT stall and
     would silently return a stale byte.  A burst-capable transport must hold
     RPI_READY high for the whole run.  Without one, everything here still works
@@ -698,13 +709,23 @@ class EthShuttle(object):
     """
 
     def __init__(self, link, read_byte, write_byte, write_burst=None,
-                 read_burst=None, log=None):
+                 read_burst=None, log=None, write_burst_go=None,
+                 read_burst_go=None, load_proto=None, save_proto=None):
         self.link = link
         self._read = read_byte
         self._write = write_byte
         self._burst = write_burst
         self._read_burst = read_burst
+        # Protocol 3: the same two, with the GO byte inside the READY-held run
+        # (msxpi_transport.spi_burst_send / spi_burst_recv).
+        self._burst_go = write_burst_go
+        self._read_burst_go = read_burst_go
         self._log = log or (lambda *a: None)
+        # The protocol the last probe chose, kept by the caller (ETHPROTO in
+        # msxpi.ini, see msxpi_ethglue): load_proto() -> 2, 3 or None, and
+        # save_proto(version).  None: not kept.
+        self._load_proto = load_proto
+        self._save_proto = save_proto
 
         # Dict dispatch, built once, instead of an if/elif chain walked on every
         # opcode. Bound methods are stored directly so a call costs one dict
@@ -715,6 +736,7 @@ class EthShuttle(object):
         # transaction InterNestor Lite issues sixty times a second.
         self._dispatch = {
             OP_PROBE:       self._op_probe,
+            OP_PROBE3:      self._op_probe3,
             OP_GET_HWADD:   self._op_get_hwadd,
             OP_GET_NETSTAT: self._op_get_netstat,
             OP_NET_ONOFF:   self._op_net_onoff,
@@ -727,15 +749,50 @@ class EthShuttle(object):
 
         # Replies that never change are built once here rather than being
         # reassembled per call.
-        self._probe_reply = bytes([ETH_RC_OK]) + b"ETH" + bytes([PROTO_VERSION])
-        self._netstat_up   = bytes([ETH_RC_OK, 1])
-        self._netstat_down = bytes([ETH_RC_OK, 0])
+        self._set_proto(self._saved_proto())
 
-    def _op_probe(self):
+    def _saved_proto(self):
+        """The protocol the last probe chose, kept across a server restart.
+
+        A driver probes only when it starts and on ETH_RESET, so a restarted
+        server that fell back to 2 would answer a protocol 3 driver with no GO
+        and RC_OK 0: every transaction fails until the MSX is reset.  The DOS
+        half's driver probes with OP_PROBE when it starts, so a value left at 3
+        cannot mislead it.
+        """
+        if self._load_proto is not None:
+            try:
+                return 3 if self._load_proto() == 3 else 2
+            except Exception as exc:
+                self._log("eth: cannot read the kept protocol: %s" % exc)
+        return 2
+
+    def _probe(self, version):
+        if version != self.proto and self._save_proto is not None:
+            try:
+                self._save_proto(version)
+            except Exception as exc:
+                self._log("eth: cannot keep the protocol: %s" % exc)
+        self._set_proto(version)
         self._write_many(self._probe_reply)
 
+    def _set_proto(self, version):
+        """Serve the driver in protocol 2 or 3 until its next probe."""
+        self.proto = version
+        self._ok = ETH_RC_OK3 if version == 3 else ETH_RC_OK
+        self._probe_reply = (bytes([self._ok]) + b"ETH"
+                             + bytes([PROTO_VERSION3 if version == 3 else PROTO_VERSION]))
+        self._netstat_up   = bytes([self._ok, 1])
+        self._netstat_down = bytes([self._ok, 0])
+
+    def _op_probe(self):
+        self._probe(2)
+
+    def _op_probe3(self):
+        self._probe(3)
+
     def _op_get_hwadd(self):
-        self._fast(ETH_RC_OK, self.link.mac)
+        self._fast(self._ok, self.link.mac)
 
     def _op_get_netstat(self):
         self._write_many(self._netstat_up if self.link.link_up()
@@ -744,6 +801,14 @@ class EthShuttle(object):
     # --- helpers ------------------------------------------------------------
 
     def _write_many(self, data):
+        if self.proto == 3:
+            # GO and the reply in one run
+            if self._burst_go is not None:
+                return self._burst_go(bytes(data))
+            return self._write_many_plain(bytes([ETH_GO]) + bytes(data))
+        return self._write_many_plain(data)
+
+    def _write_many_plain(self, data):
         if self._burst is not None:
             return self._burst(bytes(data))
         for b in bytearray(data):
@@ -754,6 +819,11 @@ class EthShuttle(object):
 
     def _read_block(self, n):
         """n bytes the MSX sends as one block (OTIR), READY held throughout."""
+        if self.proto == 3:
+            if self._read_burst_go is not None:
+                return self._read_burst_go(n)
+            if self._write(ETH_GO):
+                return None
         if self._read_burst is not None:
             return self._read_burst(n)
         return self._read_n(n)
@@ -796,7 +866,7 @@ class EthShuttle(object):
             self.link.enabled = True
         elif arg == 2:
             self.link.enabled = False
-        self._fast(ETH_RC_OK, bytes([1 if self.link.enabled else 2]))
+        self._fast(self._ok, bytes([1 if self.link.enabled else 2]))
 
     def _op_filters(self):
         """ETH_FILTERS.  Bit 7 of the argument means "report only, change
@@ -807,7 +877,7 @@ class EthShuttle(object):
             return
         if not (arg & 0x80):
             self.link.filters = arg & 0x7F
-        self._fast(ETH_RC_OK, bytes([self.link.filters]))
+        self._fast(self._ok, bytes([self.link.filters]))
 
     def _op_reset(self):
         """ETH_RESET: back to the state defined in specification section 3.2 -
@@ -817,7 +887,7 @@ class EthShuttle(object):
         self.link.dropped = 0
         self.link.enabled = True
         self.link.filters = 0x06
-        self._fast(ETH_RC_OK, bytes([0]))
+        self._fast(self._ok, bytes([0]))
 
     def _op_in_status(self):
         """ETH_IN_STATUS.  Reply: [FLAG][LEN_LO][LEN_HI][ET_HI][ET_LO], and
@@ -926,7 +996,7 @@ class EthShuttle(object):
 
         self.link.learn(body)
         ok = self.link.transmit(out)
-        self._write(ETH_RC_OK if ok else ETH_RC_ERR)
+        self._write(self._ok if ok else ETH_RC_ERR)
 
 
 # =============================================================================

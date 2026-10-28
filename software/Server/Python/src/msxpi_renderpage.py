@@ -84,7 +84,7 @@ MODES = {4: (256, 192, 64), 6: (512, 212, 128), 8: (256, 212, 256)}
 MAX_CSS_HEIGHT = 163840
 MAX_CSS_WIDTH = 4096
 # Rows per request. Responses larger than one 4KB block are streamed with
-# sendmultiblock(); every stride divides 4096, so blocks hold whole rows.
+# link_send(); every stride divides 4096, so blocks hold whole rows.
 MAX_ROWS = 256
 
 

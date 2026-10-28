@@ -1,6 +1,6 @@
 /*
  * MSXPi Interface
- * Version 1.6.1
+ * Version 1.7.0
  * ------------------------------------------------------------------------------
  * MIT License
  *
@@ -36,18 +36,18 @@ int main(void)
 {
 
     /*
-	SendCommandToMSXPi(<command>, <appendDosTail>) 
+	link_command(<command>, <appendDosTail>) 
         Send a command to MSXPi, and optionally append the DOS command line parameters
     
 	Supported command formats are:
 
-	- SendCommandToMSXPi("", true): Send only DOS parameters. This is how the p.com command works.
+	- link_command("", true): Send only DOS parameters. This is how the p.com command works.
         Exemple: p.com ver
         In this case, only the command "ver" is sent (which is the DOS parameter passed at command line) 
 
-	- SendCommandToMSXPi("template", false): Send only the "template" command without any DOS parameters.
+	- link_command("template", false): Send only the "template" command without any DOS parameters.
 
-	- SendCommandToMSXPi("template", true): Send command "template" along with any DOS parameters.
+	- link_command("template", true): Send command "template" along with any DOS parameters.
 		Example: template.com string or list of arguments
 		MSXPi will execute the function template() and receive parameter "string or list of arguments".
 
@@ -55,7 +55,7 @@ int main(void)
 		Buffer size should be set to a value that woni't exceed the computer capacity. BLKSIZE is
 		recommended for most computers.
     */
-    uint8_t rc = SendCommandToMSXPi("template", true);
+    uint8_t rc = link_command("template", true);
     if (rc == RC_SUCCESS || rc == RC_FAILED) {
         uint8_t* buffer = (uint8_t*)(get_buffer_ptr() + 100);
         printstdout(buffer, MAXBUFSIZE);

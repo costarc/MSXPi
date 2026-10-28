@@ -1,6 +1,6 @@
 <#
     MSXPi Interface
-    Version 1.6.1
+    Version 1.7.0
     ------------------------------------------------------------------------------
     MIT License
 
@@ -341,7 +341,7 @@ if ($Stage) {
 foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxpi_transport.py", "msxpi_blocks.py",
                  "msxpi_cmd_disk.py", "msxpi_cmd_files.py", "msxpi_cmd_media.py", "msxpi_cmd_rom.py",
                  "msxpi_cmd_stock.py", "msxpi_cmd_system.py", "msxpi_cmd_web.py",
-                 "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py",
+                 "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py", "msxpi_link2.py",
                  "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_game_irc.py",
                  "msxpi_pcheckers_irc.py", "msxpi_ssh.py",
                  "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py")) {
@@ -358,6 +358,15 @@ if (-not (Get-File "$Raw/Server/Setup/msxpi-apply-staged.ps1" "$MsxPiHome\msxpi-
 }
 foreach ($f in @("msxpi-JumperLeft.ini", "msxpi-JumperRight.ini", "msxpi-JumperRight_PCBV1.1Rev.0.ini")) {
     Get-File "$srv/$f" "$MsxPiHome\$f" -Optional | Out-Null
+}
+
+# Default NitrOS-9 runtime config and guest images, only when absent: they are the user's to
+# edit (nitros.json for their XRoar and ROMs) and writable (the disks).
+New-Item -ItemType Directory -Force "$MsxPiHome\nitros\files" | Out-Null
+foreach ($f in @("nitros.json", "boot.bin", "boot.dsk", "exchange.dsk", "msxexit")) {
+    if (-not (Test-Path "$MsxPiHome\nitros\$f")) {
+        Get-File "$srv/nitros/$f" "$MsxPiHome\nitros\$f" -Optional | Out-Null
+    }
 }
 
 # Never overwrite msxpi.ini: it holds the user's API keys and PSET values.

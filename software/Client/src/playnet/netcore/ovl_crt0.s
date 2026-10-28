@@ -11,6 +11,9 @@
 ;   +18 version of this vector (1)
 ;   +19 address of the I/O block
 ;   +21 KEEP  one service of the stack and the IRC connection (the hybrid transport, transport_hybrid.asm)
+;   +24 BRXCHG the bridged transport's XCHG (transport_unapi_br.asm): page 3 switched from here, in page 2
+;   +27 BRXEND its XEND
+;   +30 the bridge's variables, written by PLAYNET.COM (playnet_tcp.asm, BR_*)
         .module ovl_crt0
         .globl  _ovl_open, _ovl_poll, _ovl_xchg, _ovl_bye, _ovl_close, _ovl_io, _ovl_keep
         .globl  l__DATA, s__DATA, l__INITIALIZER, s__INITIALIZER, s__INITIALIZED
@@ -26,6 +29,66 @@
         .db     1
         .dw     _ovl_io
         jp      _ovl_keep
+        jp      brxchg
+        jp      brxend
+brdos:  .db     0                           ; +30 MSX-DOS's page-3 segment
+brgame3:.db     0                           ; +31 the game's
+brstack:.dw     0                           ; +32 the private stack's top in MSX-DOS's page 3
+brputp2:.db     0xC3                        ; +34 jp PUT_P2
+        .dw     0
+brpost: .dw     0                           ; +37 where XCHG goes on in the game's page 3
+brovl:  .db     0                           ; +39 this segment, for PUT_P2
+brblk:  .dw     0                           ; +40 the block in MSX-DOS's page 3
+brtick: .dw     0                           ; +42 the block's tick counter (netcore's clock)
+brtail: .dw     0                           ; +44 xtail in the block
+
+; The page-3 switch of a bridged game (transport_unapi_br.asm): interrupts off, this segment in page 2. HL = the
+; game's clock; back at brpost with HL = the interrupts MSX-DOS took during the call, the game's page 3 in place.
+brxchg: ld      a,(brdos)
+        out     (0xFF),a                    ; MSX-DOS's page 3
+        ld      sp,(brstack)
+        ex      de,hl
+        ld      hl,(brtick)
+        ld      (hl),e                      ; netcore's clock goes on from the game's
+        inc     hl
+        ld      (hl),d
+        ld      a,(brovl)
+        call    brputp2
+        ld      hl,(0xFC9E)                 ; MSX-DOS's interrupt count, to see the interrupts taken in the call
+        push    hl
+        ei                                  ; the TCP/IP stack's timer runs from MSX-DOS's hooks
+        call    _ovl_xchg
+        di
+        pop     de
+        ld      hl,(0xFC9E)
+        or      a
+        sbc     hl,de
+        ld      ix,(brpost)
+        ld      a,(brgame3)
+        out     (0xFF),a                    ; the game's page 3 again
+        jp      (ix)
+
+; A = the result code. BYE, CLOSE in MSX-DOS's page 3, then xtail (in the block) puts the TPA back: B = code, IX = block.
+brxend: ld      b,a
+        ld      a,(brdos)
+        out     (0xFF),a
+        ld      sp,(brstack)
+        push    bc
+        ld      a,(brovl)
+        call    brputp2
+        ld      ix,#_ovl_io
+        ld      (ix+39),b                   ; io.reason: ours
+        ld      hl,#0xFC9E                  ; netcore's clock: MSX-DOS's, which its interrupts run
+        ld      (ix+0),l
+        ld      (ix+1),h
+        ei                                  ; the BYEs go 100 ms apart
+        call    _ovl_bye
+        call    _ovl_close
+        di
+        pop     bc
+        ld      ix,(brblk)
+        ld      hl,(brtail)
+        jp      (hl)
 
 init:   ld      hl,#s__DATA                 ; the C globals start at zero
         ld      bc,#l__DATA

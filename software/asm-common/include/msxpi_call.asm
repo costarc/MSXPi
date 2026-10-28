@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 
 ; ------------------------------------------------------------------------------
 ; The BASIC "CALL MSXPI" handler: statement dispatch, parameter parsing, and the
@@ -21,8 +21,9 @@
 ;   MSXPIVERSION   the banner _MSXPIVER prints (and its BuildId, which the
 ;                  build script rewrites in the host file by name)
 ;   CALL_TABLE     the commands it exposes, ending with ENDOFCMDS/DB 0
-; and, through msxpi_bios.asm: PRINT, PRINTPISTDOUT, SendCommandToMSXPi,
-; PerformHandshake, RECVDATA_ONEBLOCK.
+; and, through msxpi_bios.asm: PRINT, STRTOHEX and the link: LINK_COMMAND and
+; LINK_RECV (LINK2), or the legacy routines behind LINK_COMMAND, LINK_PRINT and
+; LINK_DISCARD, PerformHandshake and RECVDATA_ONEBLOCK.
 ; ------------------------------------------------------------------------------
 
 CALLHAND:
@@ -124,6 +125,137 @@ SYNTAX_ERROR:
 ;================================================================
 ; call Commands start here
 ; ================================================================
+ ifdef MSXPI_LINK2
+;-----------------------
+; CALL MSXPIVER: the banner, then the server's "ver" answer printed (mode 1) from
+; the 128 bytes below HIMEM: a block of up to 127 bytes and its terminator.
+;-----------------------
+_MSXPIVER:
+        push    hl
+        ld      hl,MSXPIVERSION
+        call    PRINT
+        ld      de,vercommand
+        call    LINK_COMMAND
+        ld      bc,127
+        ld      hl,(HIMEM)
+        scf                     ; HL = HIMEM - 127 - 1
+        sbc     hl,bc
+        ex      de,hl
+        ld      a,1
+        jr      CALL_RECV
+vercommand:
+        db      'ver',0
+
+;--------------------------------------------------------------------
+; CALL MSXPI("m,aaaa,command")                                      |
+;--------------------------------------------------------------------
+; The command is copied to the buffer at aaaa and sent; the answer then goes:
+;   m = 0  into the buffer, dropped
+;   m = 1  into the buffer, printed
+;   m = 2  into the buffer from aaaa+3, with a header in front of it:
+;          [0] = the result code (RC_SUCCESS, the server's code, or the
+;          error), [1..2] = the size.  A failed command gives RC_CONNERR and
+;          size 0, so a caller that reads the header without the carry sees it.
+_MSXPI:
+        call    EVALTXTPARAM
+        push    hl                  ; BASIC pointer
+        call    GETSTRPNT           ; HL = string, B = length
+        call    PARSE_CALL_PARAMETERS
+        jr      c,CALL_SYNTAX_ERROR
+        push    af                  ; A = mode
+        push    de                  ; the buffer (LINK_SEND moves DE past the command)
+        call    LINK_COMMAND
+        pop     de
+        pop     bc                  ; B = mode
+        jr      c,CALL_LINK_ERROR
+        ld      a,b
+        ld      bc,MAXBUFSIZE
+        cp      2
+        jr      z,CALL_SAVE
+CALL_RECV:
+        call    LINK_RECV           ; mode 0 drops the answer, mode 1 prints it
+        pop     hl
+        ret
+CALL_SAVE:
+        push    de
+        inc     de
+        inc     de
+        inc     de
+        call    LINK_RECV           ; NC: A = result code, BC = size
+        pop     hl
+        jr      nc,CALL_HEADER
+        jr      CALL_FAIL
+CALL_LINK_ERROR:
+        ex      de,hl
+        ld      a,RC_CONNERR
+CALL_FAIL:
+        ld      bc,0
+CALL_HEADER:                        ; HL = buffer
+        ld      (hl),a
+        inc     hl
+        ld      (hl),c
+        inc     hl
+        ld      (hl),b
+        pop     hl
+        ret
+CALL_SYNTAX_ERROR:
+        ; The help text used to be printed here.  Dropped to reclaim ROM
+        ; space: BASIC's own "Syntax error" already says the call was wrong,
+        ; and the same information is available from P VER, the boot splash
+        ; and CALL MSXPI("1,C000,ver").
+        pop     hl
+        jr      SYNTAX_ERROR
+
+; In:  HL = the parameter string "m,aaaa,command", B = its length
+; Out: NC: A = mode (0, 1 or 2), DE = the buffer aaaa, with the command copied
+;      there up to the closing quote and a zero after it.  C: syntax error.
+; The character after aaaa is skipped, whatever it is.
+PARSE_CALL_PARAMETERS:
+        ld      a,b
+        cp      8                   ; "m,aaaa,c" at least
+        ret     c
+        ld      a,(hl)
+        sub     '0'
+        cp      3
+        ccf
+        ret     c                   ; mode 0, 1 or 2
+        push    af                  ; (with NC: the POP AF at the end returns it)
+        inc     hl
+        ld      a,(hl)
+        inc     hl
+        cp      ','
+        jr      nz,PCP_ERROR
+        ex      de,hl
+        push    bc
+        call    STRTOHEX            ; BC = buffer, DE past "aaaa?"; keeps HL
+        ex      de,hl               ; HL = the command
+        pop     de                  ; D = length
+        jr      c,PCP_ERROR
+        push    bc
+        ld      a,d
+        sub     7                   ; the command's length
+        ld      d,a
+PCP_COPY:
+        ld      a,(hl)
+        cp      '"'
+        jr      z,PCP_END
+        ld      (bc),a
+        inc     hl
+        inc     bc
+        dec     d
+        jr      nz,PCP_COPY
+PCP_END:
+        xor     a
+        ld      (bc),a
+        pop     de                  ; DE = buffer
+        pop     af                  ; A = mode, NC
+        ret
+PCP_ERROR:
+        pop     af
+        scf
+        ret
+
+ else
 ;-----------------------
 ; call HELP OR MSXPIHELP
 ;-----------------------
@@ -135,14 +267,14 @@ _MSXPIVER:
         ld      hl,MSXPIVERSION
         call    PRINT
         ld      de,vercommand
-        call    SendCommandToMSXPi
-        ld		bc,128
-		ld		HL,(HIMEM)
-        or      a
+        call    LINK_COMMAND
+        ld		bc,127          ; a block of up to 127 bytes and its terminator,
+		ld		HL,(HIMEM)      ; in the 128 bytes below HIMEM
+        scf                     ; HL = HIMEM - 127 - 1
         sbc     hl,bc
         ld      d,h
         ld      e,l
-		call    PRINTPISTDOUT
+		call    LINK_PRINT
         pop     hl
         ret
 vercommand:
@@ -183,7 +315,7 @@ _MSXPI:
         PUSH    AF
         PUSH    DE
         POP     HL
-        CALL    SendCommandToMSXPi
+        CALL    LINK_COMMAND
         JR      NC,CALL_SUCCESS
         POP     AF
         POP     HL
@@ -213,7 +345,7 @@ CALL_SUCCESS:
 ; ---------------------------------
         ld      bc,MAXBUFSIZE
         xor     a               ; block = 0
-        call	PRINTPISTDOUT
+        call	LINK_PRINT
         pop     hl              ; BASIC pointer
         and     a
         ret
@@ -223,7 +355,7 @@ CALL_SUCCESS:
 CALL_DiscardResponse:
         ld      bc,MAXBUFSIZE
         xor     a               ; block = 0
-        call	STDOUTTONULL
+        call	LINK_DISCARD
         pop     hl              ; BASIC pointer
         and     a
         ret
@@ -258,7 +390,7 @@ RECV_OK:
         ; BC = size of block just read
         POP     HL              ; HL = current total size
         ADD     HL,BC           ; add block size
-        ; check return code in A - matches PRINTPISTDOUT's own check
+        ; check return code in A - matches LINK_PRINT's own check
         ; (cp RC_READY / ret nz): RC_READY means another block follows,
         ; anything else means this was the last block. RECVDATA_ONEBLOCK
         ; already caught real transport failures via carry, so the RC
@@ -311,6 +443,7 @@ RECV_ERROR:
         POP     HL              ; restore BASIC pointer, matching RECV_DONE
         SCF                     ; set carry = error
         RET
+
 
 CALL_SYNTAX_ERROR:
         ; The help text used to be printed here.  Dropped to reclaim ROM
@@ -420,3 +553,4 @@ EC_ExitError:
         LD      E,L
         SCF                 ; Error
         RET
+ endif

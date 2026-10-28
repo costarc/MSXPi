@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -49,8 +49,13 @@ OP_IN_STATUS:   equ     0C5h
 OP_GET_FRAME:   equ     0C6h
 OP_SEND_FRAME:  equ     0C7h
 OP_RESET:       equ     0C8h
+OP_PROBE3:      equ     0CAh        ; OP_PROBE for protocol 3 (ETH_V3 builds)
 
+            ifdef ETH_V3
+ETH_RC_OK:      equ     05Ah        ; protocol 3: an idle link reads 0, so 0 is not "OK"
+            else
 ETH_RC_OK:      equ     000h
+            endif
 FLAG_MORE:      equ     001h
 
 ; The wire protocol version OP_PROBE must report - PROTO_VERSION in
@@ -58,7 +63,16 @@ FLAG_MORE:      equ     001h
 ; FN_IN_STATUS), and ETH_SEND_FRAME's payload is received as one RDY-held
 ; burst so that it can be sent with OTIR.  A mismatch is refused, not worked
 ; around: see MODE_REFUSED.
+            ifdef ETH_V3
+; 3: protocol 2, plus the Pi's GO byte at the start of every burst it sends and
+; before every burst it takes (LINK2-DESIGN.md 3.4, 4), and RC_OK = 5Ah.
+ETH_PROTO:      equ     3
+OP_PROBE_USED:  equ     OP_PROBE3
+ETH_GO_BYTE:    equ     05Ah        ; the Pi's GO (msxpi_eth.ETH_GO)
+            else
 ETH_PROTO:      equ     2
+OP_PROBE_USED:  equ     OP_PROBE
+            endif
 
 ; ETH_IN_STATUS reply flag (o_RXC): 0 no frame, 1 a frame is waiting at the Pi,
 ; RXF_INLINE the frame came with this reply and is held in the work area.
@@ -126,6 +140,10 @@ ETH_OPX:
             ld      b,0
             call    WRKPTR
             push    de
+            ifdef ETH_V3
+            call    ETH_GO                  ; the reply is a burst: GO first
+            jr      c,.failpop
+            endif
             call    ETH_RX_BLOCK            ; HL ends just past the reply
             pop     de
             jr      c,.fail
@@ -136,7 +154,11 @@ ETH_OPX:
             dec     a
             jr      nz,.inline
             ld      a,(ix+o_ETH_BUF)        ; result code must be ETH_RC_OK
-            or      a
+            ifdef ETH_V3
+            cp      ETH_RC_OK
+            else
+            or      a                       ; (ETH_RC_OK is 0)
+            endif
             jr      nz,.fail
 .done:
             call    ETH_OK                  ; break any run of failures
@@ -149,6 +171,10 @@ ETH_OPX:
             call    ETH_UNLOCK
             scf
             ret
+            ifdef ETH_V3
+.failpop:   pop     de
+            jr      .fail
+            endif
 .inline:
             ld      a,(ix+o_RXC)
             cp      RXF_INLINE
@@ -394,6 +420,10 @@ FN_GET_FRAME:
             ld      a,o_ETH_BUF             ; len lo, len hi, flags
             call    WRKPTR
             ld      bc,3
+            ifdef ETH_V3
+            call    ETH_GO                  ; the reply is a burst: GO first
+            jr      c,.fail
+            endif
             call    ETH_RX_BLOCK
             jr      c,.fail
 
@@ -522,6 +552,9 @@ FN_SEND_FRAME:
 
             call    ETH_RX                  ; the Pi's result code, with Z set
             jr      c,.fail                 ; from it - ETH_END and ETH_UNLOCK
+            ifdef ETH_V3
+            cp      ETH_RC_OK
+            endif
             call    ETH_END                 ; both preserve the flags
             call    ETH_UNLOCK
             jr      nz,.rejected
@@ -583,7 +616,7 @@ FN_SET_HWADD:
 ; ETH_DETECT only runs once, it stays refused until ETH_RESET probes again.
 ETH_VERIFY:
             call    ETH_REVIVE              ; clear any latched failure first
-            ld      a,OP_PROBE
+            ld      a,OP_PROBE_USED
             ld      c,0                     ; no argument
             ld      de,5*256+1              ; RC + 'E','T','H',version, RC ok
             call    ETH_OP

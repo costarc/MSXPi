@@ -1,6 +1,6 @@
 #!/bin/sh
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -49,7 +49,7 @@ BASE="${MSXPI_UPDATE_BASE:-https://raw.githubusercontent.com/costarc/MSXPi/maste
 SETUP_BASE="${MSXPI_UPDATE_SETUP_BASE:-${BASE%/Python/src}/Setup}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR" || exit 1
-mkdir -p native
+mkdir -p native nitros
 
 # get <base> <file>: BASE is a URL, or a directory (msxpi-setup.sh run from a
 # checkout). Either way the file is only replaced when the copy is complete.
@@ -107,7 +107,7 @@ rc=0
 for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_renderpage.py msxpi_nitros.py msxpi_ssh.py \
          msxpi_pchess.py msxpi_game_irc.py msxpi_pcheckers_irc.py requirements-pchess.txt \
          msxpi_netplay.py msxpi_chat.py msxpi_games.py \
-         msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
+         msxpi_player.py msxpi_link2.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
          native/gpio_transfer.c native/build.sh; do
     if get "$BASE" "$f"; then
         mv -f "$f.new" "$f"
@@ -116,6 +116,21 @@ for f in msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msx
         rm -f "$f.new"
         echo "FAIL $f (old kept)"
         rc=1
+    fi
+done
+# Default NitrOS-9 runtime config (msxpi_nitros.py reads nitros/nitros.json). Only when
+# absent: once the user has edited it for their XRoar and ROMs, an update leaves it alone.
+# The guest images (boot.dsk, exchange.dsk, boot.bin, msxexit) come the same way: they are
+# writable guest disks, so an existing one is never replaced.
+mkdir -p nitros/files
+for f in nitros.json boot.bin boot.dsk exchange.dsk msxexit; do
+    [ -s "nitros/$f" ] && continue
+    if get "$BASE" "nitros/$f"; then
+        mv -f "nitros/$f.new" "nitros/$f"
+        echo "ok   nitros/$f (default)"
+    else
+        rm -f "nitros/$f.new"
+        echo "FAIL nitros/$f"
     fi
 done
 # Run by msxpi-monitor at every start to give the MSX its network. Older setups
@@ -130,6 +145,18 @@ else
     rc=1
 fi
 chmod 755 msxpi-server.py msxpi-tcpip-setup.sh 2>/dev/null
+# L2TEST.BIN, the LINK2 test program: CALL MSXPI("2,C000,l2test bin") sends it from
+# here as l2test.bin. Not fatal: only the LINK2 tests use it.
+case "$BASE" in
+    */Server/Python/src) L2_BASE="${BASE%/Server/Python/src}/target" ;;
+    *)                   L2_BASE="$BASE/../../../target" ;;
+esac
+if get "$L2_BASE" L2TEST.BIN; then
+    mv -f L2TEST.BIN.new l2test.bin
+    echo "ok   l2test.bin"
+else
+    rm -f L2TEST.BIN.new
+fi
 update_games || rc=1
 
 # The server works without the native engine (it falls back to Python GPIO),
@@ -166,6 +193,21 @@ if python3 -c "import chess" 2>/dev/null ||
 else
     echo "warn python-chess: pchess off"
 fi
+# NitrOS-9 (NITROS) runs in XRoar, and NITROS list/put/get use ToolShed's os9. Raspberry Pi
+# OS 13 has no package for either, so msxpi-nitros-setup.sh (below) installs them, from apt
+# or built from source; it takes minutes, so it is run by hand, once. The CoCo ROMs
+# (bas13, extbas11, disk11.rom) cannot be shipped: they go in the -rompath of nitros.json.
+for cmd in xroar os9; do
+    command -v "$cmd" >/dev/null 2>&1 || echo "warn $cmd: NitrOS off - sh msxpi-nitros-setup.sh"
+done
+# The script that builds them when the OS has no such package (Raspberry Pi OS 13).
+f=msxpi-nitros-setup.sh
+if get "$SETUP_BASE" "$f"; then
+    mv -f "$f.new" "$f"
+    echo "ok   $f"
+else
+    rm -f "$f.new"
+fi
 # certifi: pchess ONLINE (IRC over TLS) imports it.
 if python3 -c "import certifi" 2>/dev/null ||
    apt_add python3-certifi ||
@@ -190,14 +232,14 @@ if [ "$(id -u)" = 0 ]; then
     chown "$owner" msxpi-server.py msxpi_const.py msxpi_settings.py msxpi_transport.py msxpi_ethglue.py msxpi_blocks.py msxpi_cmd_disk.py msxpi_cmd_files.py msxpi_cmd_media.py msxpi_cmd_rom.py msxpi_cmd_stock.py msxpi_cmd_system.py msxpi_cmd_web.py msxpi_renderpage.py msxpi_nitros.py msxpi_ssh.py \
         msxpi_pchess.py msxpi_game_irc.py msxpi_pcheckers_irc.py requirements-pchess.txt \
         msxpi_netplay.py msxpi_chat.py msxpi_games.py \
-        msxpi_player.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
+        msxpi_player.py msxpi_link2.py mapper_detect.py msxpi_eth.py msxpi_gpio_native.py \
         msxpi-tcpip-setup.sh 2>/dev/null
-    chown -R "$owner" native 2>/dev/null
+    chown -R "$owner" native nitros 2>/dev/null
     chown -R "$owner" "$GAMES_DIR" 2>/dev/null
 fi
 
 # "p update" (sent by msxpirfh.bat right after this script) skips its own
 # update when this is recent.
-touch .last-update
+: > .last-update
 
 exit $rc

@@ -1,6 +1,6 @@
 /*
  * MSXPi Interface
- * Version 1.6.1
+ * Version 1.7.0
  * ------------------------------------------------------------------------------
  * MIT License
  *
@@ -174,23 +174,44 @@ static void init_fcb(FCB *fcb_ptr, const char *path) {
     p[15] = 0;
 }
 
-// One block from the Pi, asked for again when it fails its checksum.
+// A copy that stops half way leaves a file that looks like the real one but is short.
+// Close it and delete it (BDOS 13h with the same FCB).
+static void fcb_delete(FCB *fcb_ptr) __sdcccall(0) __naked {
+    fcb_ptr;
+    __asm
+    push ix
+    ld ix,#4
+    add ix,sp
+    ld e,0(ix)
+    ld d,1(ix)
+    ld c,#0x13
+    call 5
+    pop ix
+    ret
+    __endasm;
+}
+
+static void abort_download(void) {
+    fcb_close(&file);
+    fcb_delete(&file);
+}
+
+// One block from the Pi.
 //
-// RECVDATA_ONEBLOCK makes a single attempt and returns RC_CHKSUM_ERR, while
-// the server's senddata_oneblock() goes straight on to resend the same block,
-// up to MAX_BLOCK_RETRIES times.  Calling it once therefore turned one bad
-// byte into an aborted copy, and left the server part way through a resend
-// that nobody was reading.  Each attempt refills the buffer from its start, so
-// nothing of a rejected block survives into the next one.
+// The server's readblock answers with a single block of its own transfer: RC_READY
+// when more is left in the file, RC_SUCCESS for the last, so it is taken with
+// link_recv_open / link_recv_next rather than link_recv, which would wait for blocks
+// after an RC_READY one.  LINK2 retries a damaged block itself (design 3.3), so a bad
+// byte no longer ends the copy and nothing of a rejected block reaches the buffer's
+// caller: a failed block comes back with block_size 0.
 static uint8_t recv_block(uint8_t *buffer, uint16_t *block_size,
                           uint16_t maxbufsize) {
-    uint8_t rc;
-    uint8_t attempts = 0;
-
-    do {
-        rc = RECVDATA_ONEBLOCK(buffer, block_size, maxbufsize);
-    } while (rc == RC_CHKSUM_ERR && ++attempts < MAX_BLOCK_RETRIES);
-    return rc;
+    uint8_t rc = link_recv_open(buffer, maxbufsize);
+    if (rc != RC_SUCCESS) {
+        *block_size = 0;
+        return rc;
+    }
+    return link_recv_next(buffer, block_size);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,11 +253,9 @@ static uint8_t pcopy_upload(void) {
 
     strcpy(full_cmd, "pcopy put ");
     strcat(full_cmd, dest);
-    rc = SendCommandToMSXPi(full_cmd, false);
+    rc = link_command(full_cmd, false);
     if (rc != RC_SUCCESS) { fcb_close(&file); return parseConnError(rc); }
 
-    rc = PerformHandshake(maxbufsize);
-    if (rc != RC_SUCCESS) { fcb_close(&file); return parseConnError(rc); }
 
     // The server explains itself in the payload - no such directory,
     // read-only, and so on - so print it rather than a generic code.
@@ -258,7 +277,7 @@ static uint8_t pcopy_upload(void) {
         n = fcb_read(&file, buffer, maxbufsize);
         if (n == 0) break;                  // end of file
 
-        rc = SendCommandToMSXPi("pcopy writeblock", false);
+        rc = link_command("pcopy writeblock", false);
         if (rc != RC_SUCCESS) {
     Print("\r\nConnection error during write.\r\n");
             fcb_close(&file);
@@ -266,7 +285,7 @@ static uint8_t pcopy_upload(void) {
         }
 
         Print(".");
-        rc = SENDDATA2(buffer, n, &maxbufsize);
+        rc = link_send(buffer, n);
         if (rc != RC_SUCCESS) {
     Print("\r\nTransfer aborted.\r\n");
             fcb_close(&file);
@@ -283,9 +302,7 @@ static uint8_t pcopy_upload(void) {
 
     // Close on the Pi even if nothing was sent, so no half-open file is left
     // for the next transfer to trip over.
-    rc = SendCommandToMSXPi("pcopy putclose", false);
-    if (rc != RC_SUCCESS) return parseConnError(rc);
-    rc = PerformHandshake(maxbufsize);
+    rc = link_command("pcopy putclose", false);
     if (rc != RC_SUCCESS) return parseConnError(rc);
     rc = recv_block(buffer, &block_size, maxbufsize);
     if (rc != RC_SUCCESS) {
@@ -356,11 +373,9 @@ static uint8_t pcopy_body(void) {
         strcat(full_cmd, tgt);
     }
 
-    rc = SendCommandToMSXPi(full_cmd, false);
+    rc = link_command(full_cmd, false);
     if (rc != RC_SUCCESS) return parseConnError(rc);
 
-    rc = PerformHandshake(maxbufsize);
-    if (rc != RC_SUCCESS) return parseConnError(rc);
 
     // Receive initialization result payload
     rc = recv_block(buffer, &block_size, maxbufsize);
@@ -391,17 +406,10 @@ static uint8_t pcopy_body(void) {
     // 5. PHASE 2: Fetch and write blocks iteratively
     while (1) {
         // Request next block from server
-        rc = SendCommandToMSXPi("pcopy readblock", false);
+        rc = link_command("pcopy readblock", false);
         if (rc != RC_SUCCESS) {
             Print("\r\nConnection error during read.\r\n");
-            fcb_close(&file);
-            return parseConnError(rc);
-        }
-
-        rc = PerformHandshake(maxbufsize);
-        if (rc != RC_SUCCESS) {
-            Print("\r\nHandshake error during read.\r\n");
-            fcb_close(&file);
+            abort_download();
             return parseConnError(rc);
         }
 
@@ -412,7 +420,7 @@ static uint8_t pcopy_body(void) {
         // Never commit that data to disk.
         if (rc != RC_SUCCESS && rc != RC_READY) {
             Print("\r\nTransfer aborted by server.\r\n");
-            fcb_close(&file);
+            abort_download();
             return rc;
         }
 
@@ -420,7 +428,7 @@ static uint8_t pcopy_body(void) {
         if (block_size > 0) {
             if (fcb_write(&file, buffer, block_size) != 0) {
                 Print("\r\nDisk write error.\r\n");
-                fcb_close(&file);
+                abort_download();
                 return RC_FAILED;
             }
         }

@@ -1,4 +1,4 @@
-"""msxpi_eth.EthShuttle, protocol 2: the probe version, ETH_IN_STATUS with a frame
+"""msxpi_eth.EthShuttle, protocols 2 and 3: the probe version, ETH_IN_STATUS with a frame
 inline, ETH_GET_FRAME's discard (maxlen 0) and ETH_SEND_FRAME's burst receive.
 
 The shuttle is driven through fake transport callables, so this runs anywhere
@@ -132,6 +132,116 @@ class Shuttle(unittest.TestCase):
         sh.handle(eth.OP_SEND_FRAME)
         self.assertEqual(bytes(wire.out), bytes([eth.ETH_RC_OK]))
 
+
+class Wire3(Wire):
+    """The same, with the GO-carrying burst callables of protocol 3."""
+
+    def __init__(self, to_pi=b''):
+        Wire.__init__(self, to_pi)
+        self.go_bursts_out = []      # replies sent as GO + data in one run
+        self.go_bursts_in = []       # sizes taken after a GO
+
+    def write_burst_go(self, data):
+        self.go_bursts_out.append(bytes(data))
+        self.out.extend(bytes([eth.ETH_GO]) + data)
+        return 0
+
+    def read_burst_go(self, n):
+        self.go_bursts_in.append(n)
+        return Wire.read_burst(self, n)
+
+
+class Protocol3(unittest.TestCase):
+    OK = eth.ETH_RC_OK3
+
+    def setUp(self):
+        self.link = eth.MockLink()
+        self.wire = Wire3()
+        self.sh = eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                                 write_burst=self.wire.write_burst,
+                                 read_burst=self.wire.read_burst,
+                                 write_burst_go=self.wire.write_burst_go,
+                                 read_burst_go=self.wire.read_burst_go)
+
+    def op(self, opcode, to_pi=b''):
+        self.wire.to_pi.extend(to_pi)
+        self.wire.out.clear()
+        self.assertTrue(self.sh.handle(opcode))
+        return bytes(self.wire.out)
+
+    def test_probe3_reports_protocol_3_with_go_and_rc_5a(self):
+        self.assertEqual(self.op(eth.OP_PROBE3), bytes([eth.ETH_GO, self.OK]) + b'ETH\x03')
+
+    def test_a_v2_probe_switches_back(self):
+        self.op(eth.OP_PROBE3)
+        self.assertEqual(self.op(eth.OP_PROBE), b'\x00ETH\x02')
+        self.assertEqual(self.op(eth.OP_GET_NETSTAT)[0], 0)
+
+    def test_replies_are_one_go_burst_with_rc_5a(self):
+        self.op(eth.OP_PROBE3)
+        out = self.op(eth.OP_GET_HWADD)
+        self.assertEqual(out, bytes([eth.ETH_GO, self.OK]) + self.link.mac)
+        self.assertEqual(self.op(eth.OP_FILTERS, bytes([0x80])),
+                         bytes([eth.ETH_GO, self.OK, self.link.filters]))
+        self.assertEqual(self.op(eth.OP_RESET)[:2], bytes([eth.ETH_GO, self.OK]))
+
+    def test_in_status_and_get_frame_start_with_go(self):
+        self.op(eth.OP_PROBE3)
+        self.assertEqual(self.op(eth.OP_IN_STATUS), bytes([eth.ETH_GO]) + bytes(5))
+        f = frame(600)
+        self.link.inject(f)
+        out = self.op(eth.OP_GET_FRAME, bytes([1514 & 0xFF, 1514 >> 8]))
+        self.assertEqual(out[0], eth.ETH_GO)
+        self.assertEqual(out[1:4], bytes([600 & 0xFF, 600 >> 8, 0]))
+        self.assertEqual(out[4:604], f)
+        self.assertEqual(len(self.wire.go_bursts_out), 3)    # probe, status, frame: one run each
+
+    def test_send_frame_payload_follows_a_go_and_the_result_is_rc_5a(self):
+        self.op(eth.OP_PROBE3)
+        for n in (16, 257, 1514):
+            f = frame(n, fill=n & 0xFF)
+            self.wire.go_bursts_in.clear()
+            out = self.op(eth.OP_SEND_FRAME, bytes([n & 0xFF, n >> 8]) + f + bytes([sum(f) & 0xFF]))
+            self.assertEqual(self.wire.go_bursts_in, [n + 1], n)
+            self.assertEqual(out, bytes([self.OK]), n)
+
+    def test_without_go_burst_callables_the_go_byte_is_written_plainly(self):
+        wire = Wire()
+        sh = eth.EthShuttle(self.link, wire.read_byte, wire.write_byte,
+                            write_burst=wire.write_burst, read_burst=wire.read_burst)
+        sh.handle(eth.OP_PROBE3)
+        self.assertEqual(bytes(wire.out), bytes([eth.ETH_GO, self.OK]) + b'ETH\x03')
+        f = frame(64)
+        wire.out.clear()
+        wire.to_pi.extend(bytes([64, 0]) + f + bytes([sum(f) & 0xFF]))
+        sh.handle(eth.OP_SEND_FRAME)
+        self.assertEqual(bytes(wire.out), bytes([eth.ETH_GO, self.OK]))
+
+    def test_the_protocol_is_kept_across_a_restart(self):
+        kept = {}     # stands in for ETHPROTO in msxpi.ini
+
+        def shuttle():
+            return eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                                  write_burst_go=self.wire.write_burst_go,
+                                  read_burst_go=self.wire.read_burst_go,
+                                  load_proto=lambda: kept.get('v'),
+                                  save_proto=lambda v: kept.__setitem__('v', v))
+        self.assertEqual(shuttle().proto, 2)           # nothing kept yet
+        shuttle().handle(eth.OP_PROBE3)
+        self.assertEqual((kept, shuttle().proto), ({'v': 3}, 3))
+        shuttle().handle(eth.OP_PROBE)
+        self.assertEqual((kept, shuttle().proto), ({'v': 2}, 2))
+
+    def test_a_store_that_fails_is_not_fatal(self):
+        def boom(*a):
+            raise OSError("read-only")
+        sh = eth.EthShuttle(self.link, self.wire.read_byte, self.wire.write_byte,
+                            write_burst_go=self.wire.write_burst_go,
+                            read_burst_go=self.wire.read_burst_go,
+                            load_proto=boom, save_proto=boom)
+        self.assertEqual(sh.proto, 2)
+        sh.handle(eth.OP_PROBE3)
+        self.assertEqual(sh.proto, 3)
 
 if __name__ == '__main__':
     unittest.main()

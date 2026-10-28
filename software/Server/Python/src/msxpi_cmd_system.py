@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -30,6 +30,7 @@ from typing import List, Optional, Tuple
 
 # Standard library imports
 import re
+import shlex
 import sys
 import time
 import subprocess
@@ -49,10 +50,11 @@ from msxpi_const import (
     VERSION,
 )
 import msxpi_ethglue as ethglue
+import msxpi_link2
 import msxpi_cmd_disk as disk
 import msxpi_settings as settings
 import msxpi_transport as transport
-from msxpi_blocks import sendmultiblock
+from msxpi_blocks import link_recv, link_send
 from msxpi_cmd_disk import msxdos_inihrd, unmount_drive
 from msxpi_cmd_files import run
 from msxpi_ethglue import _eth_release, _eth_relink
@@ -72,7 +74,7 @@ def pset(data: str) -> CommandResult:
         out = ""
         for name, value in settings._config.items():
             out += f"{name}={shown_value(name, value)}\n"
-        return sendmultiblock(out.encode())
+        return link_send(out.encode())
 
     # Split into tokens
     parts = data.split()
@@ -90,7 +92,7 @@ def pset(data: str) -> CommandResult:
             "set varname /d          Delete variable\n"
             "set /h                  Show this help"
         )
-        return sendmultiblock(helptext.encode())
+        return link_send(helptext.encode())
 
     # Now treat first token as variable name
     varname = parts[0]
@@ -102,8 +104,8 @@ def pset(data: str) -> CommandResult:
     if len(parts) == 1:
         for name, value in settings._config.items():
             if name.upper() == varname_upper:
-                return sendmultiblock(f"{name}={shown_value(name, value)}".encode())
-        return sendmultiblock(f"{varname} not found".encode())
+                return link_send(f"{name}={shown_value(name, value)}".encode())
+        return link_send(f"{varname} not found".encode())
 
     # ---------------------------------------------------------
     # 3. Per-variable help:  set wifi /h
@@ -115,7 +117,7 @@ def pset(data: str) -> CommandResult:
             "set varname value       Set variable\n"
             "set varname /d          Delete variable\n"
         )
-        return sendmultiblock(helptext.encode())
+        return link_send(helptext.encode())
 
     # ---------------------------------------------------------
     # 4. Delete variable:  set wifi /d
@@ -123,7 +125,7 @@ def pset(data: str) -> CommandResult:
     if parts[1].lower() in ("/d", "/delete"):
         print(f"Deleting variable {varname}")
         rc = setMSXPiVar(varname, "")  # empty value = delete
-        return sendmultiblock("Pi:Ok".encode())
+        return link_send("Pi:Ok".encode())
 
     # ---------------------------------------------------------
     # 5. Set or update variable:  set wifi MYSSID
@@ -145,9 +147,9 @@ def pset(data: str) -> CommandResult:
             rc, disk.drive1Data = msxdos_inihrd(varvalue)
             unmount_drive(old)
 
-        return sendmultiblock("Pi:Ok".encode())
+        return link_send("Pi:Ok".encode())
 
-    return sendmultiblock("Pi:Error".encode())
+    return link_send("Pi:Error".encode())
 
 
 def interfaces_report():
@@ -209,24 +211,27 @@ def wifi(cmd: str) -> CommandResult:
     wificountry = getMSXPiVar("WIFICOUNTRY")
 
     if cmd[:2] == "/h":
-        sendmultiblock("Pi:Usage:\npwifi display | set".encode())
+        link_send("Pi:Usage:\npwifi display | set".encode())
         return RC_SUCCESS
 
     if cmd[:1] == "s" or cmd[:1] == "S":
         if transport.hostType == "RaspberryPi":
+            # A saved profile for this SSID that lacks key-mgmt (left by an
+            # earlier attempt, or by the imager) makes "wifi connect" fail with
+            # "802-11-wireless-security.key-mgmt: property is missing".
+            # Dropping it first lets nmcli build a complete one; the delete
+            # failing because there is no such profile is fine.
+            q = shlex.quote
             wifisetcmd = (
-                'sudo nmcli device wifi connect "'
-                + wifissid
-                + '" password "'
-                + wifipass
-                + '"'
+                f"sudo nmcli connection delete id {q(wifissid)} >/dev/null 2>&1; "
+                f"sudo nmcli device wifi connect {q(wifissid)} password {q(wifipass)}"
             )
             run(wifisetcmd)
         else:
-            sendmultiblock(b"Parameter not supported in this platform")
+            link_send(b"Parameter not supported in this platform")
     else:
         if transport.hostType == "RaspberryPi":
-            sendmultiblock(interfaces_report().encode())
+            link_send(interfaces_report().encode())
         else:
             run("ipconfig")
 
@@ -237,16 +242,58 @@ def ver(parms: Optional[str] = None) -> CommandResult:
     """Send server version information to MSX."""
     version_string = f"MSXPi Server Version {VERSION} Build {BUILD_ID}\n"
     logger.info(f"Sending version info: {version_string.strip()}")
-    return sendmultiblock(version_string.encode())
+    return link_send(version_string.encode())
+
+
+def link2_pattern(n: int, seed: int = 0) -> bytes:
+    """The test pattern of l2test; L2TEST.BIN generates the same bytes on the MSX."""
+    return bytes((i * 13 + (i >> 8) * 7 + seed) & 0xFF for i in range(n))
+
+
+def l2test(parms: Optional[str] = None) -> CommandResult:
+    """LINK2 test command (documents/LINK2-TEST-PLAN.md, T4).
+
+    l2test pat N SEED   send N pattern bytes (CALL MSXPI("2,addr,l2test pat 8192 7"))
+    l2test sink N SEED  take N bytes from the MSX (L2TEST.BIN), check them against the
+                        pattern and answer "L2TEST OK/BAD ..." with their CRC-16
+    l2test bin          send L2TEST.BIN, the Z80 test program, from MSXPI_HOME
+    """
+    from msxpi_link2 import link_crc
+
+    a = (parms or "").split()
+    op = a[0] if a else ""
+    if op == "pat" and len(a) == 3:
+        return link_send(link2_pattern(int(a[1]), int(a[2])))
+    if op == "sink" and len(a) == 3:
+        n, seed = int(a[1]), int(a[2])
+        rc, data = link_recv(n + 4096)
+        if rc != RC_SUCCESS:
+            logger.info(f"l2test sink: receive failed rc={rc:#04x}")
+            # Answer anyway: the MSX waits for the summary line, and without one its
+            # next receive would be read by the command loop.
+            link_send(f"L2TEST BAD receive failed rc {rc:#04x}\n".encode())
+            return rc
+        want = link2_pattern(n, seed)
+        bad = next((i for i in range(min(len(data), n)) if data[i] != want[i]), None)
+        if len(data) == n and bad is None:
+            msg = f"L2TEST OK {n} crc {link_crc(data):04X}\n"
+        else:
+            msg = f"L2TEST BAD got {len(data)} want {n} first diff {bad}\n"
+        logger.info(msg.strip())
+        return link_send(msg.encode())
+    if op == "bin":
+        with open(os.path.join(settings.MSXPIHOME, "l2test.bin"), "rb") as f:
+            return link_send(f.read())
+    return link_send(b"usage: l2test pat|sink N SEED | bin\n")
 
 
 def q(parm: Optional[str] = None) -> CommandResult:
     """Client-side quit notification (see sendQuit() in msxarch.c/p.c). The
     client sends this and, on most paths, exits back to DOS immediately
     afterward without waiting for/completing a reply - so this must return
-    None (no sendmultiblock reply attempted). Previously there was no "q"
+    None (no link_send reply attempted). Previously there was no "q"
     handler at all, so this hit the KeyError/"Unknown command" path, which
-    tried to sendmultiblock() an error string to a client that had already
+    tried to link_send() an error string to a client that had already
     gone away - leaving the server mid-handshake with nobody listening,
     corrupting the next session's protocol state (surfaced as garbage
     checksums, a forced reconnect, and a "Disk error reading drive A" on
@@ -254,18 +301,81 @@ def q(parm: Optional[str] = None) -> CommandResult:
     print("q(): client quit")
 
 
+LINK2_PROBE = "https://raw.githubusercontent.com/costarc/MSXPi/{branch}/software/Server/Python/src/msxpi_link2.py"
+
+
+def _speaks_link2(folder: str) -> bool:
+    """Whether the server files in folder speak LINK2: their msxpi_blocks.py uses
+    msxpi_link2 (a server without LINK2 has neither). True when it cannot tell."""
+    try:
+        with open(os.path.join(folder, "msxpi_blocks.py"), encoding="utf-8", errors="replace") as f:
+            return "msxpi_link2" in f.read()
+    except OSError:
+        return True
+
+
+def _branch_speaks_link2(branch: str) -> Optional[bool]:
+    """Whether the branch's server has LINK2 (None: GitHub cannot be asked)."""
+    import requests
+
+    try:
+        return requests.head(LINK2_PROBE.format(branch=branch), timeout=15).status_code == 200
+    except Exception as e:
+        print(f"update: cannot check {branch} for LINK2: {e}", flush=True)
+        return None
+
+
+def _restart_keeps_link2() -> Optional[str]:
+    """Why "p restart" must not happen now, or None.
+
+    Once the MSX has used LINK2, its ROM (the DOS half's disk driver, CALL MSXPI)
+    needs a LINK2 server: a server without it cannot read the disk, and the MSX
+    cannot even load P.COM to put things right. That is what msxpiupd.bat from
+    master does, as it brings the server up to date from master before the
+    branch it was given: on Windows "p update" stages master's files and
+    "p restart" puts them in place; on a Pi update.sh writes them directly.
+    So the restart is refused while the files it would start lack LINK2 (a
+    staged set is dropped too, or the next start-openmsx.bat would apply it),
+    and this server keeps running; the "p update <branch>" that follows in
+    msxpiupd.bat brings LINK2 files again.
+    """
+    if not msxpi_link2.used:
+        return None
+    home = os.path.abspath(settings.MSXPIHOME)
+    staged = os.path.join(home, "staged")
+    if transport.hostType == "Windows" and os.path.isfile(os.path.join(staged, "READY")):
+        if _speaks_link2(staged):
+            return None
+        try:
+            os.replace(staged, f"{staged}.nolink2-{int(time.time())}")
+        except OSError:
+            try:
+                os.remove(os.path.join(staged, "READY"))
+            except OSError:
+                pass
+        return "Pi:Error - not restarted: the staged server has no LINK2, which this MSX's ROM needs (staged update dropped)"
+    if not _speaks_link2(home):
+        return "Pi:Error - not restarted: the server files have no LINK2, which this MSX's ROM needs. p update <a LINK2 branch> first"
+    return None
+
+
 def restart(parm: Optional[str] = None) -> CommandResult:
+    why = _restart_keeps_link2()
+    if why:
+        print(why)
+        link_send(why.encode())
+        return
     if transport.hostType == "RaspberryPi":
         print("Restarting MSXPi Server")
-        sendmultiblock(b"Pi:Ok")
+        link_send(b"Pi:Ok")
         exitDueToSyncError()
     elif transport.hostType == "Windows":
         print("Restarting MSXPi Server")
-        sendmultiblock(b"Pi:Ok")
+        link_send(b"Pi:Ok")
         _restart_windows()
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b"Command not supported by this platform")
+        link_send(b"Command not supported by this platform")
 
 
 def _restart_windows() -> None:
@@ -384,6 +494,16 @@ def _resolve_branch(branch: str) -> Tuple[Optional[str], str]:
     return None, why
 
 
+def _disk_build_id(home: str) -> str:
+    """BUILD_ID of the server files on disk (not the running server's)."""
+    try:
+        with open(os.path.join(home, "msxpi_const.py"), encoding="utf-8") as f:
+            m = re.search(r'^BUILD_ID\s*=\s*"([^"]+)"', f.read(), re.M)
+        return m.group(1) if m else "unknown"
+    except (OSError, TypeError):
+        return "unknown"
+
+
 def _current_branch() -> str:
     """The branch "p update" works on: the one "p update <branch>" chose.
 
@@ -440,6 +560,11 @@ def update(parm: Optional[str] = None) -> CommandResult:
         branch, why = _resolve_branch(branch)
         if branch is None:
             return f"Pi:Error - {why}\nUpdating from {current}"
+    # An MSX that uses LINK2 cannot work with a server without it (see
+    # _restart_keeps_link2): msxpiupd.bat from master asks for master first.
+    if msxpi_link2.used and _branch_speaks_link2(branch) is False:
+        return (f"Pi:Error - the {branch} server has no LINK2, which this MSX's ROM needs."
+                f"\nKept this server. Use: msxpiupd <a LINK2 branch>")
     if explicit:
         _update_branch = branch
         setMSXPiVar("DriveM", f"https://github.com/costarc/MSXPi/raw/{branch}/software/target")
@@ -448,11 +573,18 @@ def update(parm: Optional[str] = None) -> CommandResult:
     stamp = os.path.join(home, UPDATE_STAMP)
     # The stamp holds the branch of the last update (empty: master, as written
     # by update.sh itself when msxpiupd.bat runs it first).
+    # update.sh only touches the file, so a master update.sh run on top of a
+    # branch's files leaves the old branch name in it with a fresh time: the
+    # name counts only with the build it was written for, which must still be
+    # the one on disk.
     try:
         if time.time() - os.path.getmtime(stamp) < 600:
             with open(stamp) as f:
-                if (f.read().strip() or "master") == branch:
-                    return f"Pi:Ok - server already updated from {branch}"
+                words = f.read().split()
+            if not words and branch == "master":
+                return f"Pi:Ok - server already updated from {branch}"
+            if len(words) == 2 and words[0] == branch and words[1] == _disk_build_id(home):
+                return f"Pi:Ok - server already updated from {branch}"
     except OSError:
         pass
 
@@ -491,7 +623,7 @@ def update(parm: Optional[str] = None) -> CommandResult:
     if done.returncode == 0:
         try:
             with open(stamp, "w") as f:
-                f.write(branch)
+                f.write(f"{branch} {_disk_build_id(home)}")
         except OSError:
             pass
 
@@ -748,7 +880,7 @@ def reboot(parm: Optional[str] = None) -> CommandResult:
         os.system("sudo reboot")
     else:
         print("Command not supported by this platform")
-        sendmultiblock(b"Command not supported by this platform")
+        link_send(b"Command not supported by this platform")
 
 
 def shut(parm: Optional[str] = None) -> CommandResult:
@@ -765,7 +897,7 @@ def shut(parm: Optional[str] = None) -> CommandResult:
     no_reply = (parm or "").strip().lower() in ("nowait", "noack", "quiet")
     if transport.hostType == "RaspberryPi" and platform.system() == "Linux":
         if not no_reply:
-            sendmultiblock(b"Pi:Ok")
+            link_send(b"Pi:Ok")
         print("Shutting down Raspberry Pi in 2 seconds")
         subprocess.Popen(
             "sleep 2; sudo shutdown -h now",
@@ -778,30 +910,22 @@ def shut(parm: Optional[str] = None) -> CommandResult:
     else:
         print("Command not supported by this platform")
         if not no_reply:
-            sendmultiblock(b"Command not supported by this platform")
+            link_send(b"Command not supported by this platform")
 
 
 def button_handler(channel):
-    # A press must hold the line low WITHOUT A BREAK for 200 ms.  Noise coupled
-    # from SCLK/CS (header pins 38/40, next to transport.GPIO 26 on pin 37) is continuous
-    # during a transfer, so a single sample could land low and reboot the Pi;
-    # sampling every 5 ms cannot be fooled that way.
-    for _ in range(40):
-        time.sleep(0.005)
-        if transport.GPIO.input(transport.RPI_SHUTDOWN) != transport.GPIO.LOW:
-            return
+    # Called by the transport's button monitor once the line has been held low
+    # for 200 ms.  Released before 3 s: reboot.  Still held at 3 s: shut down
+    # then, without waiting for the release.
     start = time.time()
-    # Wait for release
     while transport.GPIO.input(transport.RPI_SHUTDOWN) == transport.GPIO.LOW:
+        if time.time() - start >= 3:
+            print("Shutdown triggered")
+            os.system("sudo shutdown -h now")
+            return
         time.sleep(0.01)
-    duration = time.time() - start
-
-    if duration >= 3:
-        print("Shutdown triggered")
-        os.system("sudo shutdown -h now")
-    else:
-        print("Reboot triggered")
-        os.system("sudo reboot")
+    print("Reboot triggered")
+    os.system("sudo reboot")
 
 
 def exitDueToSyncError():

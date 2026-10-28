@@ -30,7 +30,7 @@ import re
 import textwrap
 import time
 
-from msxpi_game_irc import CHAT_QUEUE, PLAYER_TTL, chat_rows, chat_text, fold
+from msxpi_game_irc import CHAT_QUEUE, OFFER_TTL, PLAYER_TTL, chat_rows, chat_text, fold
 
 PATH = re.compile(r'(?:[a-h][1-8]){2,13}')
 NICK = re.compile(r'[A-Za-z][A-Za-z0-9_-]{0,15}')
@@ -51,6 +51,7 @@ class CheckersPeer:
         self.side = 0               # 0 white, 1 black
         self.status = 'LOBBY'
         self.invite = None
+        self.offered_at = None      # when our own OFFER went out (phase 'offered')
         self.players = {}
         self.last_seek = -1000
         self.chat = collections.deque(maxlen=CHAT_QUEUE)
@@ -68,6 +69,11 @@ class CheckersPeer:
 
     def free(self):
         return self.phase in ('lobby', 'error') or (self.phase == 'playing' and self.result != 0)
+
+    def can_start(self):
+        # Free, or only waiting for an answer to our own OFFER: that invite can
+        # be replaced (SEEK, another OFFER) or given up for one we received.
+        return self.free() or self.phase == 'offered'
 
     def pair(self, nick, side):
         self.peer, self.phase, self.side = nick, 'playing', side
@@ -101,7 +107,7 @@ class CheckersPeer:
     def seek(self):
         if self.room:
             raise ValueError('In a room; no lobby')
-        if not self.free():
+        if not self.can_start():
             raise ValueError('Already in a match')
         if time.monotonic() - self.last_seek < 60:
             raise ValueError('Wait before announcing again')
@@ -112,17 +118,21 @@ class CheckersPeer:
     def offer(self, nick):
         if not NICK.fullmatch(nick):
             raise ValueError('Invalid nickname')
-        if not self.free() or fold(nick) == fold(self.nick):
+        if not self.can_start() or fold(nick) == fold(self.nick):
             raise ValueError('Cannot challenge now')
+        if self.invite and fold(self.invite) == fold(nick) and self.phase != 'offered':
+            return self.accept()    # they invited us first: answer that, do not cross it
         self.peer, self.phase = nick, 'offered'
+        self.offered_at = time.monotonic()
         self.new_game()
         self.send(nick, 'PCH1 CK OFFER')
         self.status = 'INVITE SENT'
 
     def accept(self):
-        if not self.free() or not self.invite:
+        if not self.can_start() or not self.invite:
             raise ValueError('No invitation')
         nick, self.invite = self.invite, None
+        self.offered_at = None
         self.pair(nick, 1)
         self.send(nick, 'PCH1 CK ACCEPT')
 
@@ -179,7 +189,10 @@ class CheckersPeer:
         return rows, len(self.chat)
 
     def tick(self):
-        pass
+        if (self.phase == 'offered' and self.offered_at is not None
+                and time.monotonic() - self.offered_at >= OFFER_TTL):
+            self.peer, self.phase, self.offered_at = None, 'lobby', None
+            self.status = 'INVITE TIMED OUT'
 
     def link_restored(self):
         """The IRC link is back: lines may have been lost in either direction."""
@@ -229,7 +242,14 @@ class CheckersPeer:
             return
         if op == 'OFFER' and len(fields) == 2 and not self.room:
             self.seen(sender)
-            if self.free() or same_peer:
+            if self.phase == 'offered' and same_peer:
+                # Both of us invited each other. The lower nick's OFFER stands
+                # (it plays white, as in a room); the other side answers it.
+                if fold(self.nick) < fold(sender):
+                    return
+                self.invite = sender
+                self.accept()
+            elif self.can_start() or same_peer:
                 self.invite = sender
                 self.status = 'INVITE ' + sender + ' PRESS 8'
         elif op == 'ACCEPT' and len(fields) == 2:

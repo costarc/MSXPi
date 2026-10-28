@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -35,7 +35,7 @@ rather than estimated.
   sudo ./msxpi-gpio-bench.py
 
 WHY A MICRO-BENCHMARK AND NOT A REAL TRANSFER
-SPI_ByteTransfer() blocks on `while GPIO.input(SPI_CS): pass` until the CPLD
+link_recv_byte() blocks on `while GPIO.input(SPI_CS): pass` until the CPLD
 asserts CS, which only happens when the MSX writes a port. So a full transfer
 cannot be timed standalone. What this does instead is time the primitives that
 actually changed and reconstruct the byte cost from them - the ~38 GPIO
@@ -68,7 +68,7 @@ if len(sys.argv) == 6:
 GPSET0, GPCLR0, GPLEV0 = 0x1C >> 2, 0x28 >> 2, 0x34 >> 2
 N = 20000          # iterations per measurement
 
-# Ops per byte in SPI_ByteTransfer(): 2 RDY + 4 tick writes
+# Ops per byte in link_recv_byte(): 2 RDY + 4 tick writes
 # + 8 bits x (1 MISO write + 2 SCLK writes + 1 MOSI read)
 OPS_PER_BYTE = 2 + 4 + 8 * 4
 

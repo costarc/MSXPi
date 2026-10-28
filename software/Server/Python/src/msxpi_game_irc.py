@@ -33,6 +33,10 @@ def digest(board):
 # A SEEK or OFFER keeps a nick in the player list for ten minutes.
 PLAYER_TTL=600
 
+# An OFFER nobody answers is dropped after this many seconds, so the player is
+# not stuck "in a match" that never started.
+OFFER_TTL=60
+
 # Chat is shown with PChess's own font, so only these characters survive;
 # keep in step with the glyphs in pchess.c. Rows are 42 characters at most
 # and the MSX asks for five at a time.
@@ -64,6 +68,7 @@ class Peer:
         self.phase='lobby'
         self.status='LOBBY'
         self.invite=None
+        self.offered_at=None   # when our own OFFER went out (phase 'offered')
         self.pending=None
         self.offline=False     # our IRC link is down and being re-established
         self.peer_gone=None    # when the server first said the opponent has no nick
@@ -91,6 +96,12 @@ class Peer:
         self.draw_offer=None
         self.result=None
 
+    def can_start(self):
+        # Free, or only waiting for an answer to our own OFFER: that invite can
+        # be replaced (SEEK, another OFFER) or given up for one we received
+        # (ACCEPT), instead of locking the player out until it times out.
+        return self.free() or self.phase=='offered'
+
     def channel(self):
         return self.room or '#msxpi'
 
@@ -106,7 +117,7 @@ class Peer:
 
     def seek(self):
         if self.room: raise ValueError('In a room; no lobby')
-        if not self.free(): raise ValueError('Already in a match')
+        if not self.can_start(): raise ValueError('Already in a match')
         if time.monotonic()-self.last_seek<60: raise ValueError('Wait before announcing again')
         self.send('#msxpi','PCH1 SEEK')
         self.last_seek=time.monotonic()
@@ -114,19 +125,23 @@ class Peer:
 
     def offer(self,nick):
         if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,15}',nick): raise ValueError('Invalid nickname')
-        if not self.free() or fold(nick)==fold(self.nick): raise ValueError('Cannot challenge now')
+        if not self.can_start() or fold(nick)==fold(self.nick): raise ValueError('Cannot challenge now')
+        if self.invite and fold(self.invite[0])==fold(nick) and self.phase!='offered':
+            return self.accept()   # they invited us first: answer that, do not cross it
         self.new_match()
         self.peer=nick
         self.match=secrets.token_hex(8)
         self.phase='offered'
+        self.offered_at=time.monotonic()
         self.send(nick,f'PCH1 OFFER {self.match}')
         self.status='INVITE SENT'
 
     def accept(self):
-        if not self.free() or not self.invite: raise ValueError('No invitation')
+        if not self.can_start() or not self.invite: raise ValueError('No invitation')
         self.new_match()
         self.peer,self.match=self.invite
         self.invite=None
+        self.offered_at=None
         self.side=False
         self.phase='accepted'
         self.send(self.peer,f'PCH1 ACCEPT {self.match}')
@@ -202,9 +217,15 @@ class Peer:
         if fold(target)!=fold(self.nick): return
         if op=='OFFER' and len(fields)==3 and re.fullmatch('[0-9a-f]{16}',fields[2]):
             self.seen(sender)
-            if self.free():
+            if self.phase=='offered' and self.peer and fold(sender)==fold(self.peer):
+                # Both of us invited each other. The lower nick's OFFER stands
+                # (it plays white, as in a room); the other side answers it.
+                if fold(self.nick)<fold(sender): return
                 self.invite=(sender,fields[2])
-                self.status='INVITE '+sender+' PRESS 7'
+                self.accept()
+            elif self.can_start():
+                self.invite=(sender,fields[2])
+                self.status='INVITE '+sender+' PRESS 8'
                 if self.room: self.accept()
             return
         if op=='ROOM' and fields==['PCH1','ROOM','BUSY'] and self.room:
@@ -287,6 +308,9 @@ class Peer:
         self.result=self.side
 
     def tick(self):
+        if self.phase=='offered' and self.offered_at is not None                 and time.monotonic()-self.offered_at>=OFFER_TTL:
+            self.peer=None; self.match=None; self.phase='lobby'; self.offered_at=None
+            self.status='INVITE TIMED OUT'
         if self.result is not None: self.pending=None
         if self.offline:
             # Our own link is down: the opponent's silence is not their fault,

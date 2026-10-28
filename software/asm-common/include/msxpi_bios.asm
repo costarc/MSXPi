@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -64,6 +64,7 @@ CHKPIRDY:
         ret c
         jp PAYLOAD_WAIT
 
+ ifndef MSXPI_LINK2   ; LINK2 has LINK_RECV_BYTE / LINK_SEND_BYTE (link2.asm)
 ;-----------------------
 ; PIREADBYTE           |
 ;-----------------------
@@ -102,7 +103,8 @@ PIWRITEBYTE_ERR:
             pop     af
             scf
             ret
-            
+ endif
+
 ; resetMSXPI
 ; Called on beginning of every command
 ; OUT ($56),$FF resets the CPLD transfer state (and clears /WAIT mode),
@@ -118,6 +120,9 @@ resetMSXPI:
 		ret
  endif
 		      
+ ifdef MSXPI_LINK2
+; LINK2 (link2.asm) replaces SENDDATA, PerformHandshake and RECVDATA_ONEBLOCK.
+ else
 ; ---------------------------------------------------------
 ; SENDDATA (single-block, size <= MAXBUFSIZE)
 ;   DE = src pointer
@@ -130,7 +135,7 @@ resetMSXPI:
 ; Uses:
 ;   AF, BC, DE, HL
 ;
-; Retries the block (up to GLOBALRETRIES times, see
+; Retries the block (up to SENDRETRIES times, see
 ; asm-common/include/include.asm) on a checksum mismatch, matching
 ; recvdata2()/recvdata2_oneblock()'s own resend expectation on the Python
 ; side - see SENDDATA's own comment at the mismatch branch below.
@@ -250,7 +255,7 @@ SD2_SEND_DONE:
 ; -------------------------
 ; Checksum mismatch: Python's receivers (recvdata2/recvdata2_oneblock)
 ; always loop back to await a fresh header on mismatch (see their own
-; comments) - resend the whole block from scratch, up to GLOBALRETRIES
+; comments) - resend the whole block from scratch, up to SENDRETRIES
 ; times (asm-common/include/include.asm), instead of erroring out on the
 ; first bad block like before.
 ; -------------------------
@@ -261,7 +266,7 @@ SD2_SEND_DONE:
     push    hl
     pop     ix              ; IX = retry_count + 1
     ld      a,l
-    cp      GLOBALRETRIES
+    cp      SENDRETRIES
     jr      nc,SD2_CHKSUM_ERR
  ifdef MSXPI_DRIVER
     pop     bc              ; a retry never bursts: clear length bit 15 in
@@ -463,6 +468,8 @@ r2_payload_loop:
     jp c,r2_conn_err_x
     jp r2_payload_done
 
+ endif
+
 ; ------------------------------------------------------------
 ; STORE_BYTE - write A to (DE), correctly even when DE is in page 1
 ; ------------------------------------------------------------
@@ -513,6 +520,7 @@ STORE_BYTE_1:
     ret
 
  ifdef MSXPI_DRIVER
+ ifndef MSXPI_LINK2             ; LINK2 has LINK_BURST_RECV / LINK_BURST_SEND
 ; ------------------------------------------------------------
 ; PAYLOAD_RX_BURST / PAYLOAD_TX_BURST - payload with hardware /WAIT
 ; ------------------------------------------------------------
@@ -583,7 +591,18 @@ PRB_SUM:                        ; checksum the block, now in memory
     jr      nz,PRB_SUM
     ret
  endif
+ endif
 
+ ifdef MSXPI_LINK2
+; LINK_RECV in mode 1 (print each block), for the BIOSENTRY table of msxpiext.bin.
+LINK_PRINT:
+    ld      a,1
+    jp      LINK_RECV
+ else
+; The LINK2 names (link2.asm) for the legacy routines, so msxpi_call.asm builds with either.
+LINK_COMMAND        EQU SendCommandToMSXPi
+LINK_PRINT          EQU PRINTPISTDOUT
+LINK_DISCARD        EQU STDOUTTONULL
 ; ------------------------------------------------------------
 ; ERROR PATHS - phase 1 (before the shadow-register section below): stack
 ; is untouched here, safe to return directly.
@@ -828,6 +847,8 @@ STDOUTTONULL0:
     inc		a					; next block number
 	JR      STDOUTTONULL0    
     
+ endif
+
 ;-----------------------
 ; PRINT
 ;-----------------------
@@ -995,6 +1016,9 @@ CLEARBUF:
 ; Contract, identical either way: returns HL = IX = base of a block whose
 ; offsets 5..7 are free for this routine. Clobbers AF/HL/IX only - callers
 ; push whatever else they need around it.
+;
+; Not assembled with LINK2, which keeps its state in a stack frame.
+ ifndef MSXPI_LINK2
  ifdef MSXPI_DRIVER
 MSXPI_GETSTASH equ GETWRK       ; a plain alias, not a trampoline - the
                                 ; driver build stays byte-identical to
@@ -1023,5 +1047,10 @@ MSXPI_STASH_BUF:
   endif
   endif
  endif
+ endif
 
         INCLUDE payload_generated.asm
+
+ ifdef MSXPI_LINK2
+        INCLUDE link2.asm
+ endif

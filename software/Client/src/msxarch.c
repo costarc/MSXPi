@@ -1,6 +1,6 @@
 /*
  * MSXPi Interface
- * Version 1.6.1
+ * Version 1.7.0
  * ------------------------------------------------------------------------------
  * MIT License
  *
@@ -85,8 +85,7 @@ typedef struct {
 uint8_t readRomHeader(RomHeader* hdr, char* reason, uint16_t reasonBufSize) {
     uint8_t  buf[ROM_MSG_MAX];
     uint16_t replySize = 0;
-    uint16_t maxbuf = ROM_MSG_MAX;
-    uint8_t  rc = RECVDATA(buf, &replySize, &maxbuf);
+    uint8_t  rc = link_recv(LINK_RECV_BUFFER, buf, ROM_MSG_MAX, &replySize);
 
     // RC_TERMINATE on the header block is a fatal rejection: the server has
     // ended the conversation and sends nothing more (see reject() in
@@ -191,7 +190,7 @@ const unsigned char* showMenu(const unsigned char* options[], int count) {
 }
 
 void sendQuit() {
-    uint8_t rc = SendCommandToMSXPi("Q", false);
+    uint8_t rc = link_command("Q", false);
 }
 
 static bool StartsWith(const char* text, const char* prefix) {
@@ -391,13 +390,14 @@ uint8_t loadrom(uint16_t totalSize) {
     // which believed it had sent the whole block and was waiting for the
     // MSX checksum. 8KB ROMs worked; 16KB and larger always hung.
     uint16_t block_size = MAXBUFSIZE;
-    rc = PerformHandshake(block_size);
+    uint16_t received;
+    uint8_t* romaddress = PAGE1ADDRESS;
+    rc = link_recv_open(romaddress, block_size);
     if (rc == RC_SUCCESS) {
-        uint8_t* romaddress = PAGE1ADDRESS;
         while (1) {
-            rc = RECVDATA_ONEBLOCK(romaddress, &block_size, block_size);
+            rc = link_recv_next(romaddress, &received);
             progressDot();
-            romaddress += block_size;
+            romaddress += received;
             if (rc != RC_READY)
                 break;
         }
@@ -648,10 +648,9 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB, uint
     // offset (c & 1) * 8KB.
     mapperBlockSize = MAXBUFSIZE;
 
-    // The server sends the whole ROM as one multi-block stream, and
-    // sendmultiblock() opens it with a handshake. Without this the server sat
-    // waiting for a READY the MSX never sent, and the transfer never started.
-    rc = PerformHandshake(mapperBlockSize);
+    // The server sends the whole ROM as one multi-block stream, which link_recv_open
+    // starts; each block then goes to the bank that is mapped for it.
+    rc = link_recv_open(PAGE2ADDRESS, mapperBlockSize);
     if (rc != RC_SUCCESS) return RC_FAILED;
 
     for (c = 0; c < chunks; c++) {
@@ -660,8 +659,8 @@ static uint8_t loadBanksIntoStorage(uint16_t bankCount, uint8_t bankSizeKB, uint
         mapperReceivedSize   = mapperBlockSize;
 
         PutPN_direct(2, mapperCurrentSegment);
-        mapperLoadRc = RECVDATA_ONEBLOCK(PAGE2ADDRESS + mapperCurrentOffset,
-                                         &mapperReceivedSize, mapperBlockSize);
+        mapperLoadRc = link_recv_next(PAGE2ADDRESS + mapperCurrentOffset,
+                                      &mapperReceivedSize);
         progressDot();
 
         if (mapperLoadRc != RC_READY && mapperLoadRc != RC_SUCCESS) return RC_FAILED;
@@ -677,12 +676,11 @@ static uint8_t drainMappedRomBody(uint16_t chunks) {
     uint8_t rc;
     uint16_t c;
 
-    rc = PerformHandshake(MAXBUFSIZE);
+    rc = link_recv_open((uint8_t*)BUFADDRESS, MAXBUFSIZE);
     if (rc != RC_SUCCESS) return RC_FAILED;
 
     for (c = 0; c < chunks; c++) {
-        received = MAXBUFSIZE;
-        rc = RECVDATA_ONEBLOCK((uint8_t*)BUFADDRESS, &received, MAXBUFSIZE);
+        rc = link_recv_next((uint8_t*)BUFADDRESS, &received);
         progressDot();
         if (rc != RC_READY && rc != RC_SUCCESS) return RC_FAILED;
         if (received == 0) return RC_FAILED;
@@ -1542,7 +1540,7 @@ int main(void) {
         int pageOffset = 0;
 
     openList:
-        rc = SendCommandToMSXPi("msxarchive", false);
+        rc = link_command("msxarchive", false);
         if (rc != RC_SUCCESS) {
             Print("Error sending command to MSXPi!\n");
             sendQuit();
@@ -1550,7 +1548,7 @@ int main(void) {
         }
 
         pprints("Sending parameters: ", parameters);
-        rc = SendCommandToMSXPi(parameters, false);
+        rc = link_command(parameters, false);
         if (rc != RC_SUCCESS) {
             sendQuit();
             return 1;
@@ -1566,7 +1564,7 @@ int main(void) {
         int replay = pageOffset;     // page presses still to repeat after reopening
 
         while (1) {
-            rc = RECVDATA(buffer, &replySize, &maxbuf);
+            rc = link_recv(LINK_RECV_BUFFER, buffer, maxbuf, &replySize);
 
             if (rc != RC_SUCCESS) {
                 buffer[(replySize < size) ? replySize : size - 1] = '\0';
@@ -1591,7 +1589,7 @@ int main(void) {
             // before showing anything. The server wraps pages the same way
             // both times, so repeating the net presses lands on that page.
             if (replay != 0) {
-                rc = SendCommandToMSXPi(replay > 0 ? "N" : "P", false);
+                rc = link_command(replay > 0 ? "N" : "P", false);
                 replay += (replay > 0) ? -1 : 1;
                 if (rc != RC_SUCCESS)
                     break;
@@ -1612,18 +1610,18 @@ int main(void) {
                 break;
             }
             else if (cmd == INPUT_N || cmd == INPUT_DOWN) {
-                rc = SendCommandToMSXPi("N", false);
+                rc = link_command("N", false);
                 pageOffset++;
             }
             else if (cmd == INPUT_P || cmd == INPUT_UP) {
-                rc = SendCommandToMSXPi("P", false);
+                rc = link_command("P", false);
                 pageOffset--;
             }
             else {
                 {
                     char selcmd[64];
                     buildSelection(selcmd, userNumber);
-                    rc = SendCommandToMSXPi(selcmd, false);
+                    rc = link_command(selcmd, false);
                 }
                 if (rc != RC_SUCCESS)
                     break;
@@ -1689,7 +1687,7 @@ int main(void) {
                     // the launch path does not perform another receive/print after
                     // the ROM image has already been staged.
                     if (shutdownAfterRomLoad) {
-                        SendCommandToMSXPi("shut nowait", false);
+                        link_command("shut nowait", false);
                     }
                     launchGame();
                 }

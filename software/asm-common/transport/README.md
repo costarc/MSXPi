@@ -3,10 +3,14 @@
 `payload.z80` is the source of truth for the C and ASM file/disk payload loops.
 Run `python3 software/asm-common/transport/generate.py` after editing it. Generated files
 are checked in; `--check` and both client build scripts reject stale output.
-The C build uses an __sdcccall(0) stack adapter (explicit, so it holds under SDCC 4.6's native convention), while ASM callers pass DE=buffer,
-BC=count and HL=running 16-bit checksum. IX/IY and alternate registers survive.
+ASM callers pass DE=buffer, BC=count and HL=running 16-bit checksum. IX/IY and alternate registers survive.
 Zero bytes perform no I/O. Carry on return reports cancellation; successful
 bytes alone update the pointer/count/checksum. Public BIOS APIs are unchanged.
+
+The C library no longer has payload loops of its own. Its LINK2 (`C-common/lib/link2_generated.h`) is
+`asm-common/include/link2.asm` run through `link2_c.py` into SDAS text, with PAYLOAD_WAIT and
+PAYLOAD_ESCAPE from here; `msxpi-bios.c` calls it through `__sdcccall(0)` stack adapters, which hold under
+SDCC 4.6's native convention. `generate.py --check` covers that header too.
 
 There is one receive loop: request a transfer, then wait for status zero. openMSX
 emulates the CPLD at port level, so the MSX side has no emulator path. Checksum

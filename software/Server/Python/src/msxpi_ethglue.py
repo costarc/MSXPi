@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -37,7 +37,8 @@ logger = logging.getLogger("msxpi")
 from msxpi_const import (
     RC_SUCCESS,
 )
-from msxpi_transport import SPI_BurstIn, SPI_BurstOut, SPI_ByteTransfer
+from msxpi_transport import (SPI_BurstIn, SPI_BurstOut, link_recv_byte, link_send_byte,
+                             spi_burst_recv, spi_burst_send)
 
 # IRC client integration (currently disabled - awaiting complete implementation)
 # TODO: Integrate IRC client when msxpi_irc module is ready
@@ -48,12 +49,12 @@ from msxpi_transport import SPI_BurstIn, SPI_BurstOut, SPI_ByteTransfer
 # Ethernet UNAPI shuttle (msxpi_eth.py).
 #
 # Guarded like the IRC import: the server must still run if the module is
-# missing.  eth_handle_opcode() is called from recvdata2()'s wait-for-READY
+# missing.  eth_handle_opcode() is called from link_recv()'s wait-for-READY
 # loop, i.e. from the byte that loop was about to discard, so it must be cheap
 # and must report False for anything that is not one of its opcodes.
 #
 # The shuttle is built lazily on the first opcode rather than at import: the
-# transport functions it closes over (SPI_ByteTransfer / SPI_BurstOut) are
+# transport functions it closes over (link_recv_byte / SPI_BurstOut) are
 # defined further down this file, and on a Pi the GPIO setup has not run yet at
 # import time.
 # ---------------------------------------------------------------------------
@@ -71,7 +72,7 @@ _eth_shuttle = None
 # RC_SUCCESS is 0xE0 - truthy - so it must be mapped, not passed through, or
 # every write would look like a failure.
 def _eth_write_byte(v):
-    return 0 if SPI_ByteTransfer(v)[0] == RC_SUCCESS else 1
+    return 0 if link_send_byte(v)[0] == RC_SUCCESS else 1
 
 
 def _eth_write_burst(data):
@@ -85,6 +86,17 @@ def _eth_read_burst(n):
     return bytes(data) if rc == RC_SUCCESS else None
 
 
+def _eth_write_burst_go(data):
+    # protocol 3: GO and the reply in one READY-held run
+    return 0 if spi_burst_send(data, _eth_mod.ETH_GO) == RC_SUCCESS else 1
+
+
+def _eth_read_burst_go(n):
+    # protocol 3: GO, then ETH_SEND_FRAME's payload, in one READY-held run
+    rc, data = spi_burst_recv(n, _eth_mod.ETH_GO)
+    return bytes(data) if rc == RC_SUCCESS else None
+
+
 def _eth_tap_ip():
     """TAPIP from msxpi.ini: the gateway address of the TAP-Windows adapter to use."""
     try:
@@ -92,6 +104,19 @@ def _eth_tap_ip():
         return (getMSXPiVar("TAPIP") or "").strip() or None
     except Exception:
         return None
+
+
+# ETHPROTO in msxpi.ini: the Ethernet protocol (2 or 3) the last probe chose,
+# kept across a server restart like DriveM (see EthShuttle._saved_proto).
+def _eth_load_proto():
+    from msxpi_settings import getMSXPiVar
+    v = (getMSXPiVar("ETHPROTO") or "").strip()
+    return int(v) if v.isdigit() else None
+
+
+def _eth_save_proto(version):
+    from msxpi_settings import setMSXPiVar
+    setMSXPiVar("ETHPROTO", str(version))
 
 
 def eth_get_shuttle():
@@ -103,7 +128,7 @@ def eth_get_shuttle():
         link = _eth_mod.make_link(log=print, tap_ip=_eth_tap_ip())
         _eth_shuttle = _eth_mod.EthShuttle(
             link,
-            read_byte=SPI_ByteTransfer,
+            read_byte=link_recv_byte,
             # The shuttle's contract is 0 = success (see msxpi_eth.EthShuttle).
             # It deliberately does not know about this file's RC_* values, and
             # RC_SUCCESS is 0xE0 - truthy - so it must be mapped, not passed
@@ -111,6 +136,10 @@ def eth_get_shuttle():
             write_byte=_eth_write_byte,
             write_burst=_eth_write_burst,
             read_burst=_eth_read_burst,
+            write_burst_go=_eth_write_burst_go,
+            read_burst_go=_eth_read_burst_go,
+            load_proto=_eth_load_proto,
+            save_proto=_eth_save_proto,
             log=print,
         )
         print("eth: Ethernet UNAPI shuttle ready (%s)" % type(link).__name__)
@@ -184,7 +213,7 @@ except Exception as _e:
     print(f"Warning: failed to import msxpi_netplay module: {_e}")
 
 def _netplay_read():
-    rc, v = SPI_ByteTransfer()
+    rc, v = link_recv_byte()
     return v if rc == RC_SUCCESS else None
 
 
@@ -202,7 +231,7 @@ def _netplay_handle(opcode):
 
 
 # Hoisted out of eth_handle_opcode: the membership test below runs on EVERY
-# byte recvdata2() reads while waiting for READY, so it is on the path for all
+# byte link_recv() reads while waiting for READY, so it is on the path for all
 # traffic and not just for opcodes. A module-global frozenset lookup avoids an
 # attribute lookup on _eth_mod each time.
 _eth_opcodes = _eth_mod.OPCODES if _eth_mod is not None else frozenset()

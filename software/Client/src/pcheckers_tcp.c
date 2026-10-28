@@ -222,7 +222,7 @@ static struct {
     uint16_t started;
     char nick[17],peer[17],match[1],room[26],invite[17];
     uint8_t phase,side,draw_offer,result,has_invite,seeked;
-    uint16_t last_seek;
+    uint16_t last_seek,offered_at;
     char players[7][17]; uint16_t seen_at[7]; uint8_t players_n;
     char status[48];
     /* Moves received and not yet handed to the client, as "c3e5g7". */
@@ -344,6 +344,15 @@ static void chat_in(const char *sender,const char *target,char *text) {
     chat_unread=(uint16_t)chat_unread+i>255?255:chat_unread+i;
 }
 
+static void peer_accept(void);
+
+/* Free, or only waiting for an answer to our own OFFER: that invite can be
+ * replaced (SEEK, another OFFER) or given up for one we received (ACCEPT),
+ * instead of locking the player out until it times out. */
+static uint8_t can_start(void) {
+    return is_free() || irc.phase==PH_OFFERED;
+}
+
 /* One game line from sender to target (our nick, #msxpi or the room), all
  * of the form "PCH1 CK <op> ..." (PChess ignores them); see
  * msxpi_pcheckers_irc.py for the list. */
@@ -374,7 +383,13 @@ static void peer_receive(const char *sender,const char *target,char *text) {
     if(!same(target,irc.nick)) return;
     if(!strcmp(op,"OFFER") && !arg && !irc.room[0]) {
         seen(sender);
-        if(is_free() || same_peer) {
+        if(irc.phase==PH_OFFERED && same_peer) {
+            /* Both of us invited each other: the lower nick's OFFER stands
+             * (it plays white, as in a room), the other side answers it. */
+            if(fold_cmp(irc.nick,sender)<0) return;
+            strncpy(irc.invite,sender,16); irc.invite[16]=0; irc.has_invite=1;
+            peer_accept();
+        } else if(can_start() || same_peer) {
             char *s=irc.status;
             strncpy(irc.invite,sender,16); irc.invite[16]=0; irc.has_invite=1;
             strcpy(s,"INVITE "); strncat(s,sender,16); strcat(s," PRESS 8");
@@ -483,7 +498,7 @@ static uint8_t announce_room(void) {
 
 static void peer_seek(void) {
     if(irc.room[0]) { fail="In a room; no lobby"; return; }
-    if(!is_free()) { fail="Already in a match"; return; }
+    if(!can_start()) { fail="Already in a match"; return; }
     if(irc.seeked && (uint16_t)(JIFFY-irc.last_seek)<SECONDS(60)) { fail="Wait before announcing again"; return; }
     if(!say("#msxpi","PCH1 CK SEEK")) return;
     irc.last_seek=JIFFY; irc.seeked=1;
@@ -492,8 +507,13 @@ static void peer_seek(void) {
 
 static void peer_offer(const char *nick) {
     if(!valid_nick(nick)) { fail="Invalid nickname"; return; }
-    if(!is_free() || same(nick,irc.nick)) { fail="Cannot challenge now"; return; }
+    if(!can_start() || same(nick,irc.nick)) { fail="Cannot challenge now"; return; }
+    if(irc.has_invite && same(irc.invite,nick) && irc.phase!=PH_OFFERED) {
+        peer_accept();   /* they invited us first: answer that, do not cross it */
+        return;
+    }
     strcpy(irc.peer,nick);
+    irc.offered_at=JIFFY;
     irc.phase=PH_OFFERED;
     new_game_state();
     if(!say(nick,"PCH1 CK OFFER")) return;
@@ -501,7 +521,7 @@ static void peer_offer(const char *nick) {
 }
 
 static void peer_accept(void) {
-    if(!is_free() || !irc.has_invite) { fail="No invitation"; return; }
+    if(!can_start() || !irc.has_invite) { fail="No invitation"; return; }
     irc.has_invite=0;
     pair(irc.invite,1);
     say(irc.peer,"PCH1 CK ACCEPT");
@@ -598,6 +618,10 @@ static void set_ip(void) {
 static void net_step(void) {
     uint8_t err,state;
     if(irc.net==NET_OFF) return;
+    if(irc.phase==PH_OFFERED && (uint16_t)(JIFFY-irc.offered_at)>=SECONDS(60)) {
+        irc.peer[0]=0; irc.phase=PH_LOBBY;
+        set_status("INVITE TIMED OUT");
+    }
     if(!irc.ready && (uint16_t)(JIFFY-irc.started)>SECONDS(60)) {
         net_error("Lobby connection timed out"); return;
     }

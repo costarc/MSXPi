@@ -32,7 +32,7 @@ def compile_all():
         name = gpf['game_id'].upper() + '.GPF'
         if gpf['transport'] == 'lockstep':
             for setup in patch_rom.tcpip_misfits(gpf):
-                NOTES.append(f'note: {name} cannot use the TCP/IP transports on {setup} (transport area above its TPA top; PLAYNET tells the player to hold CTRL at boot or use Nextor)')
+                NOTES.append(f'note: {name} cannot use the TCP/IP transports on {setup} (transport area above its TPA top: only the hybrid /H transport needs it there; PLAYNET /T runs the bridged UNAPI transport instead)')
         if name in out:
             raise SystemExit(f'two packages compile to {name}')
         out[name] = data

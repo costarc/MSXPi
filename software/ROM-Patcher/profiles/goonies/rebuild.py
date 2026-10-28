@@ -12,7 +12,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def rebuild(assembler):
-    subprocess.run([assembler, '-DMSXPI_RAM_STASH', '--raw=../assets/resident.bin',
+    subprocess.run([assembler, '--raw=../assets/resident.bin',
                     '--sym=resident.sym', '--lst=resident.lst', 'runtime.asm'], cwd=HERE/'src', check=True)
     symbols = {}
     for line in (HERE/'src/resident.sym').read_text().splitlines():

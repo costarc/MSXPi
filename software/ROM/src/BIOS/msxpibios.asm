@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -162,7 +162,7 @@ INIT:
         ld      (hl),e
         inc     hl
         ld      (hl),d          ; SLTWRK entry = work area
-        jp      UNAPI_ORG       ; the UNAPI driver's init, as INIENV does
+        jp      UNAPI_ORG3      ; the UNAPI driver's init, as INIENV does
 
 ; -----------------------------------------------------------------------------
 ; ALLOC - allocate HL bytes below HIMEM
@@ -331,9 +331,9 @@ MY_GETWRK1:
         INCLUDE "msxpi_call.asm"
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6.1",13,10
+        DB      13,10,"MSXPi BIOS v1.7.0",13,10
 		DB		"Build "
-BuildId: DB "20261028.079"
+BuildId: DB "20261028.087"
         DB      13,10,"RCC (c) 2015-2026",13,10,0
 
 CALL_TABLE:
@@ -368,7 +368,7 @@ GETWRK:
 ; Each is 3 bytes and must sit in free space: above the code, clear of the
 ; GETSLT/GETWRK jumps, below the UNAPI image, and clear of each other.
     MACRO CHECK_FREE addr
-        ASSERT  addr >= CODE_END && addr+3 <= UNAPI_ORG
+        ASSERT  addr >= CODE_END && addr+3 <= UNAPI_ORG3
         ASSERT  addr+3 <= KERNEL_GETSLT || addr >= KERNEL_GETWRK+3
     ENDM
         CHECK_FREE DOS_INIT
@@ -388,8 +388,8 @@ GETWRK:
 ; =============================================================================
 ; Ethernet UNAPI driver - the same image as in the MSX-DOS ROM
 ; =============================================================================
-        ORG     UNAPI_ORG
-        INCBIN  "ethrom.bin"
+        ORG     UNAPI_ORG3
+        INCBIN  "ethrom3.bin"
         ASSERT  $ <= $8000
 
         SAVEBIN OUTFILE,$4000,$4000

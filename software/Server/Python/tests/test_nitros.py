@@ -191,5 +191,45 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(response[:8], b'NTR1\x01\x03\0\0')
 
 
+class RomCheckTests(unittest.TestCase):
+    def config(self, folder):
+        return {'xroar': ['xroar', '-rompath', str(folder), '-run', 'boot.bin']}
+
+    def test_all_roms_present(self):
+        with tempfile.TemporaryDirectory() as folder:
+            for name in msxpi_nitros.REQUIRED_ROMS:
+                (Path(folder) / name.upper()).write_bytes(b'x')  # name case does not matter
+            msxpi_nitros.check_roms(self.config(folder))
+
+    def test_missing_roms_are_named_with_the_folder(self):
+        with tempfile.TemporaryDirectory() as folder:
+            (Path(folder) / 'bas13.rom').write_bytes(b'x')
+            with self.assertRaises(ValueError) as caught:
+                msxpi_nitros.check_roms(self.config(folder))
+        message = str(caught.exception)
+        self.assertTrue(message.startswith('CoCo ROMs missing: extbas11.rom disk11.rom.'))
+        self.assertIn(folder, message)
+        self.assertLess(len(message), 248)
+
+    def test_missing_folder_reports_every_rom(self):
+        with self.assertRaises(ValueError) as caught:
+            msxpi_nitros.check_roms(self.config('/no/such/roms'))
+        self.assertIn('bas13.rom extbas11.rom disk11.rom', str(caught.exception))
+
+    def test_no_rompath_means_nothing_to_check(self):
+        msxpi_nitros.check_roms({'xroar': ['xroar', '-run', 'boot.bin']})
+
+    def test_start_reports_missing_roms_to_the_msx(self):
+        with tempfile.TemporaryDirectory() as folder:
+            old = msxpi_nitros.load_config
+            msxpi_nitros.load_config = lambda: self.config(folder)
+            try:
+                response = msxpi_nitros.handle_command('start')
+            finally:
+                msxpi_nitros.load_config = old
+        self.assertEqual(response[4], 3)
+        self.assertIn(b'CoCo ROMs missing', response)
+
+
 if __name__ == '__main__':
     unittest.main()

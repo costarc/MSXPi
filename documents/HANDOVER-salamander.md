@@ -10,7 +10,7 @@ Open: the TCP/IP path (the rig's link), real hardware.
 | Worktree / branch | `C:\Users\roniv\Dev\github\MSXPi-salamander`, `feature/salamander-netplay` (from `master` at `64049cf8`), not pushed. Keep `salamander_debug/step_hung_example.txt` out of git (disassembled game code). The main checkout is shared with other sessions: do not switch branches there. |
 | Design | `documents/SALAMANDER-DESIGN.md` (analysis, decisions D1-D8, plan). Spec: `documents/PLAYNET-PROTOCOLS.md` 7.3 (new), 8.2 (`MAPPER` section). |
 | ROM | `C:\Users\roniv\Dev\MSX\gameroms\SALAMAND.ROM`, CRC-32 `C36F559D`. Never commit it or anything derived from it. |
-| Tools | sjasmplus `C:\Users\roniv\Dev\bin\sjasmplus.exe`; openMSX `C:\Users\roniv\Dev\MSX\MSXPi\openmsx-MSXPi_v1.6.1\openmsx.exe` |
+| Tools | sjasmplus `C:\Users\roniv\Dev\bin\sjasmplus.exe`; openMSX `C:\Users\roniv\Dev\MSX\MSXPi\openmsx-MSXPi_v1.7.0\openmsx.exe` |
 
 ## 1. What is done and works
 

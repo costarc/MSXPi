@@ -2,7 +2,7 @@
 ;|                                                                           |
 ;| MSXPi Interface                                                           |
 ;|                                                                           |
-;| Version : 1.6.1                                                           |
+;| Version : 1.7.0                                                           |
 ;|                                                                           |
 ;| Copyright (c) 2015-2025 Ronivon Costa (ronivon@outlook.com)       |
 ;|                                                                           |
@@ -29,7 +29,7 @@
 ;| along with MSX PI Interface.  If not, see <http://www.gnu.org/licenses/>. |
 ;|===========================================================================|
 ;
-; MSXPi Driver v1.6.1 (2017,2026);
+; MSXPi Driver v1.7.0 (2017,2026);
 ;
 ; DOS 1.x kernel
 ;
@@ -48,6 +48,9 @@
 	.Z80
 	ASEG
 MSXPI_PAYLOAD_ROM_SPLIT equ 1
+; The MSXPi driver speaks LINK2 (link2.asm).  Defined here, before the payload
+; pieces below, which leave out the legacy loops under MSXPI_LINK2.
+MSXPI_LINK2 equ 1
 	ORG	04000H
 
 ; Changes made:
@@ -4759,7 +4762,6 @@ A5AE7:	ld	a,(YF247)
 ;
 ; Shared transport in an existing alignment hole. DEFS enforces capacity.
 	INCLUDE payload_wait_generated.asm
-	INCLUDE dskio_txsize.asm		; burst-send test for DSKIO (msxpi-driver.mac)
 	defs	05B1AH-05A11H-($-A5A11),0
 ;
 ; END OF CHANGE
@@ -4858,7 +4860,7 @@ A5BA0:	ld	sp,0C200H
 	call	A5F86
 	defb	13,10
     defb    "Disk BASIC version 1.0",13,10
-    defb    "MSXPi Driver v1.6.1",13,10,0
+    defb    "MSXPi Driver v1.7.0",13,10,0
 	ld	hl,M.4173
 	push	hl			; after the RUN command completes
 	ld	hl,BUF+9

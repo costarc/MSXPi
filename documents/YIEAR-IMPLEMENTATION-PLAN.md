@@ -11,7 +11,7 @@ Conventions for every step:
   worktree. Other sessions use the main checkout.
 - The ROM is never committed. Tools and tests take it from `YIEAR_ROM` (the user's copy: `C:\Users\roniv\Dev\MSX\gameroms\kung-fu.rom`).
 - Assembler: `C:\Users\roniv\Dev\bin\sjasmplus.exe`. Emulator: the Windows openMSX build with the MSXPi device
-  (`C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe`). Keep throttle on for MSXPi runs.
+  (`C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe`). Keep throttle on for MSXPi runs.
 - Long emulator runs go in the background and are checked at least every 5 minutes: they can hang. Before trusting a result, check
   that only one rig loop is running (a stopped loop's `sh` can survive).
 - After any change to the loader, the engine or `patch_rom.py`: Soccer's and Salamander's `stub.bin` and GPFs stay byte-identical,

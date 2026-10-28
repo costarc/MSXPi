@@ -38,7 +38,7 @@ sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
 from msxpi_game_irc import IRC  # noqa: E402
 
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 PCHESS = Path(os.environ.get('PCHESS_COM', SOFTWARE / 'target/pchess.com'))
 IRC_PORT = 6667
 # The test's own MSXPi server port, so a server already running on 5000 (and the

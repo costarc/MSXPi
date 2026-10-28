@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -62,10 +62,10 @@ from msxpi_const import (
 )
 import msxpi_transport as transport
 from msxpi_blocks import (
-    pcopy_handshake,
-    recvdata2_oneblock,
-    senddata_oneblock,
-    sendmultiblock,
+    link_accept,
+    link_recv_block,
+    link_send_block,
+    link_send,
 )
 from msxpi_settings import getMSXPiVar, setMSXPiVar
 
@@ -163,7 +163,7 @@ def ini_fcb(fname, fsize):
     buf = bytearray()
     buf.extend(msxdrive.to_bytes(1, "little"))
     buf.extend(msxfcbfname.encode())
-    rc = sendmultiblock(buf)
+    rc = link_send(buf)
     return rc
 
 
@@ -200,7 +200,7 @@ def _wget(args: List[str]) -> str:
 def run(cmd: str = "") -> CommandResult:
 
     if cmd.strip() == "" or len(cmd.strip()) == 0:
-        rc = sendmultiblock(
+        rc = link_send(
             "Syntax: run <command> <::> command. To  pipe a command to other, use :: instead of |"
         )
         return RC_FAILED
@@ -225,10 +225,10 @@ def run(cmd: str = "") -> CommandResult:
                 reply = _wget(args[1:])
             except Exception as e:
                 reply = "Pi:Error - " + str(e)
-            sendmultiblock(reply.encode())
+            link_send(reply.encode())
             return RC_SUCCESS if reply == "Pi:Ok" else RC_FAILED
         if args and args[0] == "sh":
-            sendmultiblock(b"Pi:Skipped - sh scripts are for the Pi")
+            link_send(b"Pi:Skipped - sh scripts are for the Pi")
             return RC_SUCCESS
 
     try:
@@ -246,11 +246,11 @@ def run(cmd: str = "") -> CommandResult:
         elif len(buf) == 0:
             rc = RC_SUCCESS
             buf = "Pi:Ok"
-        sendmultiblock(buf.encode())
+        link_send(buf.encode())
         return rc
     except Exception as e:
         print("run: exception:" + str(e))
-        sendmultiblock(("Pi:Error - " + str(e)).encode())
+        link_send(("Pi:Error - " + str(e)).encode())
         return rc
 
 
@@ -304,9 +304,9 @@ def dir(data: str) -> CommandResult:
                     continue
                 lines.append(line)
             buf = "\r\n".join(lines) if lines else "Pi:No match"
-            rc = sendmultiblock(buf.encode())
+            rc = link_send(buf.encode())
     except Exception as e:
-        sendmultiblock(("Pi:Error - " + str(e)).encode())
+        link_send(("Pi:Error - " + str(e)).encode())
 
     return RC_SUCCESS
 
@@ -327,7 +327,7 @@ def cd(data: str) -> CommandResult:
     userPath = (data or "").strip().rstrip("\0").strip()
     try:
         if userPath in ("", "."):
-            rc = sendmultiblock(basepath.encode())
+            rc = link_send(basepath.encode())
         else:
             # pathExpander joins relative paths as they come; normalising the
             # result is what makes '..', '../dir' and './dir' land properly.
@@ -336,15 +336,15 @@ def cd(data: str) -> CommandResult:
             if pathType == 0:
                 if os.path.isdir(path):
                     setMSXPiVar("PATH", path)
-                    rc = sendmultiblock(path.encode())
+                    rc = link_send(path.encode())
                 else:
-                    sendmultiblock("Pi:Error - not a folder".encode())
+                    link_send("Pi:Error - not a folder".encode())
             else:
                 setMSXPiVar("PATH", path)
-                rc = sendmultiblock(path.encode())
+                rc = link_send(path.encode())
     except Exception as e:
         print("pcd:" + str(e))
-        sendmultiblock(("Pi:Error - " + str(e)).encode())
+        link_send(("Pi:Error - " + str(e)).encode())
 
     return RC_SUCCESS
 
@@ -378,10 +378,10 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
     # Helper to transmit error block payload to MSX
     def send_error_block(err_msg, err_code):
         print(f"Pi:Error - {err_msg}")
-        rc, msx_blocksize = pcopy_handshake()
+        rc, msx_blocksize = link_accept()
         if rc == RC_SUCCESS:
             payload = err_msg.encode("ascii", errors="replace")
-            senddata_oneblock(payload, msx_blocksize, err_code, 0)
+            link_send_block(payload, msx_blocksize, err_code, 0)
         return err_code
 
     # 1. Clean input payload and resolve global pcmd fallback
@@ -419,7 +419,7 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         except Exception as e:
             return send_error_block(f"State read error: {str(e)}", RC_FAILED)
 
-        rc, msx_blocksize = pcopy_handshake()
+        rc, msx_blocksize = link_accept()
         if rc != RC_SUCCESS:
             print("Pi:Error - Handshake failed during readblock")
             return rc
@@ -434,7 +434,7 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         # Signal RC_SUCCESS on final block, RC_READY if more blocks remain
         header_rc = RC_SUCCESS if new_offset >= filesize else RC_READY
 
-        senddata_oneblock(chunk, msx_blocksize, header_rc, block_index)
+        link_send_block(chunk, msx_blocksize, header_rc, block_index)
 
         if header_rc == RC_SUCCESS:
             # Transfer finished: Clean up session files
@@ -488,10 +488,10 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         globals()["_pcopy_put_paths"] = (tgt_path, tmp_path)
 
         print(f"pcopy: receiving into {tgt_path}")
-        rc, msx_blocksize = pcopy_handshake()
+        rc, msx_blocksize = link_accept()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
+        link_send_block(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     if subcmd == "writeblock":
@@ -507,9 +507,9 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
             globals()["_pcopy_put_paths"] = paths
         tmp_path = paths[1]
 
-        # recvdata2_oneblock does its own handshake, matching SENDDATA2 on the
+        # link_recv_block does its own handshake, matching SENDDATA2 on the
         # MSX side, so nothing is done here before calling it.
-        rc, payload = recvdata2_oneblock(MAXBUFSIZE)
+        rc, payload = link_recv_block(MAXBUFSIZE)
         if payload is None:
             print(
                 "pcopy: writeblock received nothing (rc=%s)"
@@ -550,10 +550,10 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
                     print(f"pcopy: received {size} bytes into {tgt_path}")
                 except OSError as e:
                     print(f"Pi:Error - cannot finalise {tgt_path}: {str(e)}")
-        rc, msx_blocksize = pcopy_handshake()
+        rc, msx_blocksize = link_accept()
         if rc != RC_SUCCESS:
             return rc
-        senddata_oneblock(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
+        link_send_block(b"Pi:Ok", msx_blocksize, RC_SUCCESS, 0)
         return RC_SUCCESS
 
     # =========================================================================
@@ -655,13 +655,13 @@ def pcopy(msxcmd: str = "pcopy") -> CommandResult:
         f.write("0,0")  # initial offset=0, block_index=0
 
     # 6. Perform handshake and confirm initialization to MSX client
-    rc, msx_blocksize = pcopy_handshake()
+    rc, msx_blocksize = link_accept()
     if rc != RC_SUCCESS:
         print("Pi:Error - Handshake failed during init")
         return rc
 
     # Send confirmation block back to MSX
-    senddata_oneblock(b"READY", msx_blocksize, RC_SUCCESS, 0)
+    link_send_block(b"READY", msx_blocksize, RC_SUCCESS, 0)
     return RC_SUCCESS
 
 
@@ -696,4 +696,4 @@ def date(parms: Optional[str] = None) -> CommandResult:
     year = pdate[2] | (pdate[3] << 8)
 
     # Now send to MSX
-    sendmultiblock(pdate)
+    link_send(pdate)

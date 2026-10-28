@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # MSXPi Interface
-# Version 1.6
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -100,7 +100,7 @@ import msxpi_cmd_disk as disk
 import msxpi_cmd_media as media
 import msxpi_settings as settings
 import msxpi_transport as transport
-from msxpi_blocks import recvdata2, sendmultiblock
+from msxpi_blocks import link_recv_command, link_send
 from msxpi_cmd_disk import (
     dosinit,
     dskioini,
@@ -119,6 +119,7 @@ from msxpi_cmd_rom import execrom, msxarchive, ploadr
 from msxpi_cmd_stock import stock
 from msxpi_cmd_system import (
     button_handler,
+    l2test,
     netreset,
     pset,
     q,
@@ -170,6 +171,7 @@ COMMANDS = {
         dskios,
         dskiow,
         irc,
+        l2test,
         mchat,
         pchess,
         nitros,
@@ -218,7 +220,7 @@ def resolve_command(cmd: str):
 
 def _reply(payload: bytes) -> None:
     try:
-        sendmultiblock(payload)
+        link_send(payload)
     except Exception:
         pass
 
@@ -398,7 +400,7 @@ def connect():
 
 def serve_gpio() -> None:
     """SPI mode: keep trying forever."""
-    # Set the GPIO link up first: without this the first recvdata2() ran on
+    # Set the GPIO link up first: without this the first link_recv_command() ran on
     # unconfigured pins, failed with "Please set pin numbering mode", and only
     # the error path below set the link up - a false error on every start.
     connect()
@@ -406,7 +408,7 @@ def serve_gpio() -> None:
     while True:
         try:
             transport.DISABLETIMEOUT = True
-            rc, buf = recvdata2()
+            rc, buf = link_recv_command()
             if rc == RC_SUCCESS:
                 transport.DISABLETIMEOUT = False
                 handle_command(buf)
@@ -449,7 +451,7 @@ def serve_tcp(server_socket: socket.socket) -> None:
         try:
             while True:
                 transport.DISABLETIMEOUT = True
-                rc, buf = recvdata2()
+                rc, buf = link_recv_command()
                 if rc == RC_SUCCESS and buf is not None:
                     transport.DISABLETIMEOUT = False
                     handle_command(buf)
@@ -501,7 +503,7 @@ def main() -> None:
                 server_socket.close()
             except Exception:
                 pass
-        for image in (disk.drive0Data, disk.drive1Data):
+        for image in (getattr(disk, "drive0Data", None), getattr(disk, "drive1Data", None)):
             unmount_drive(image)
         print("MSXPi Server: Terminating")
 

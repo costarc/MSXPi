@@ -22,7 +22,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SOFTWARE = HERE.parents[1]
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 PORT = int(os.environ.get('MSXPI_TEST_PORT', '5044'))
 MACHINE = os.environ.get('SMOKE_MACHINE', 'Canon_V-25')
 

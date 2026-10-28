@@ -39,20 +39,15 @@ static uint32_t sp_dword(uint8_t n)
 }
 
 /* One request, one block. The link is never held while drawing or waiting
- * for a key. A checksum failure retries the same block. */
+ * for a key. */
 static uint8_t sp_exchange(const char *cmd)
 {
-    uint8_t rc, attempts = 0;
+    uint8_t rc;
     sp_received = 0;
     msxpi_link_claim();
-    rc = SendCommandToMSXPi(cmd, false);
-    if (rc == RC_SUCCESS) rc = PerformHandshake(SP_BUFFER_SIZE);
-    if (rc == RC_SUCCESS) {
-        do {
-            sp_received = 0;
-            rc = RECVDATA_ONEBLOCK(sp_buffer, &sp_received, SP_BUFFER_SIZE);
-        } while (rc == RC_CHKSUM_ERR && ++attempts < MAX_BLOCK_RETRIES);
-    }
+    rc = link_command(cmd, false);
+    if (rc == RC_SUCCESS) rc = link_recv_open(sp_buffer, SP_BUFFER_SIZE);
+    if (rc == RC_SUCCESS) rc = link_recv_next(sp_buffer, &sp_received);
     msxpi_link_release();
     if (rc == RC_FAILED && sp_received && sp_received <= 240) {
         memcpy(sp_error, sp_buffer, sp_received);
@@ -103,17 +98,13 @@ static void sp_set_scroll(uint8_t value)
  * RC_SUCCNOSTD means there was nothing to send (top or bottom of the page). */
 static uint8_t sp_stream(const char *cmd, uint8_t dest, bool up, uint16_t *rows)
 {
-    uint8_t rc, attempts;
+    uint8_t rc;
     uint16_t n, count = 0;
     msxpi_link_claim();
-    rc = SendCommandToMSXPi(cmd, false);
-    if (rc == RC_SUCCESS) rc = PerformHandshake(SP_BUFFER_SIZE);
+    rc = link_command(cmd, false);
+    if (rc == RC_SUCCESS) rc = link_recv_open(sp_buffer, SP_BUFFER_SIZE);
     while (rc == RC_SUCCESS) {
-        attempts = 0;
-        do {
-            sp_received = 0;
-            rc = RECVDATA_ONEBLOCK(sp_buffer, &sp_received, SP_BUFFER_SIZE);
-        } while (rc == RC_CHKSUM_ERR && ++attempts < MAX_BLOCK_RETRIES);
+        rc = link_recv_next(sp_buffer, &sp_received);
         if (rc != RC_SUCCESS && rc != RC_READY) break;
         if (sp_received % sp_stride) { rc = RC_UNEXPECTEDDATA; break; }
         for (n = 0; n < sp_received; n += sp_stride, ++count)

@@ -9,8 +9,10 @@ p restart
 pcopy m:API.BAS
 pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
+pcopy m:ETHUNAPI.COM
 pcopy m:INL.CFG
 pcopy m:IRC.BAS
+pcopy m:L2TEST.BIN
 pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
 pcopy m:STELNET.COM
@@ -39,6 +41,7 @@ pcopy m:skmsx.com
 pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
+pcopy m:games/1942.GPF 1942.GPF
 pcopy m:games/PINGPONG.GPF PINGPONG.GPF
 pcopy m:games/SALAMAND.GPF SALAMAND.GPF
 pcopy m:games/SOCCER.GPF SOCCER.GPF

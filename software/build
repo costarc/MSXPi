@@ -7,8 +7,9 @@
 #
 # Every switch can be overridden from the environment, e.g.
 #   buildMSXdiskImage=no ./build
-#   updateServerVersion=yes ./build  bump only the msxpi-server BuildId
-#   updateRomVersion=yes ./build     bump only the ROM/extension BuildIds
+#   updateServerVersion=yes ./build  bump the msxpi-server BuildId
+#   updateRomVersion=yes ./build     bump the ROM/extension BuildIds
+#   (both together for a release: every BuildId then carries the same value)
 #
 # Stages, in order: client commands -> BIOS/MSX-DOS ROM -> LOADROM patch ->
 # openMSX extension -> disk images. Each is independent and skippable.
@@ -93,33 +94,47 @@ check_yes_no updateRomVersion "$updateRomVersion"
 # Helpers
 # =============================================================================
 
-# Bump "<anchor><date>.<nnn>" in a source file. The ASM sources write it as
-#   BuildId: DB ".20260912.048"
+# Every BuildId "<date>.<nnn>" the build bumps. The ASM sources write it as
+#   BuildId: DB "20260912.048"
 # and the Python server as
-#   BuildId = "20260912.048"
-# so the only difference is the anchor and whether the value carries a leading
-# dot - one function, two kinds of caller.
-#
-# The line is matched by its anchor alone and replaced whole: reconstructing the
-# old value as a search pattern was fragile and could silently fail to match,
-# leaving the id unchanged with no visible error.
+#   BUILD_ID = "20260912.048"
+BUILD_ID_FILES="./Server/Python/src/msxpi_const.py
+./ROM/src/MSX-DOS/msxpi-driver.mac
+./ROM/src/BIOS/msxpiext.asm
+./ROM/src/BIOS/msxpibios.asm"
+
+# One BuildId for the whole build: today's date and one more than the highest
+# counter in any of the files above. Each file used to be bumped from its own
+# last value, so the server and the ROMs drifted apart (.086 vs .083).
+next_build_id() {
+    local max=0 n f
+    for f in $BUILD_ID_FILES; do
+        n=$(grep -E '^(BuildId: DB |BUILD_ID = )"' "$f" | tail -n 1 |
+            sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
+        [ -n "$n" ] && [ $((10#$n)) -gt $max ] && max=$((10#$n))
+    done
+    echo "$(date +%Y%m%d).$(printf "%03d" $((max + 1)))"
+}
+BUILD_ID=""
+if [ "$updateServerVersion" = "yes" ] || [ "$updateRomVersion" = "yes" ]; then
+    BUILD_ID=$(next_build_id)
+fi
+
+# Write $BUILD_ID into one source file. The line is matched by its anchor alone
+# and replaced whole: reconstructing the old value as a search pattern was
+# fragile and could silently fail to match, leaving the id unchanged with no
+# visible error.
 update_build_id() {
     local fname="$1" anchor="$2" update="$3"
     [ "$update" = "yes" ] || return 0
     [ -f "$fname" ] || { warn "BuildId: $fname does not exist"; return 0; }
+    grep -q "^$anchor" "$fname" || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
 
     cp "$fname" "$fname.bak"
-    local today last next line
-    today=$(date +%Y%m%d)
-    last=$(grep "^$anchor" "$fname" | tail -n 1 |
-           sed -n 's/.*"\.\{0,1\}[0-9]\{8\}\.\([0-9]\{3\}\)".*/\1/p')
-    [ -n "$last" ] || { warn "BuildId: no '$anchor' line in $fname"; return 0; }
-    next=$(printf "%03d" $((10#$last + 1)))
-    line="$anchor\"$today.$next\""
-
+    local line="$anchor\"$BUILD_ID\""
     sed "s|^$anchor.*|$line|" "$fname" > "$fname.tmp" && mv "$fname.tmp" "$fname"
     if grep -qF -- "$line" "$fname"; then
-        echo "  New BuildId for $fname: $dot$today.$next"
+        echo "  New BuildId for $fname: $BUILD_ID"
     else
         warn "BuildId update for $fname did NOT take effect"
     fi
@@ -225,9 +240,6 @@ if [ "$buildClientCommands" = "yes" ]; then
     "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
         --raw=./target/template.com ./Client/src/template.com.asm ||
         die "template.com did not assemble"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
-        --raw=./target/msxarch.com ./Client/src/msxarch.asm ||
-        die "msxarch.com did not assemble"
     "$SJASM_DIR/sjasmplus" --inc=./asm-common/include \
         --raw=./target/ping.com ./Client/src/ping.asm ||
         die "ping.com did not assemble"
@@ -281,20 +293,29 @@ if [ "$buildBIOS" = "yes" ]; then
     update_build_id ./ROM/src/BIOS/msxpiext.asm          "BuildId: DB " "$updateRomVersion"
     update_build_id ./ROM/src/BIOS/msxpibios.asm         "BuildId: DB " "$updateRomVersion"
 
-    # The Ethernet UNAPI driver is INCBIN'd into msxpi-driver.mac, so it has to
-    # exist before zmac runs - and it is built with sjasm, not zmac, because the
+    # The Ethernet UNAPI ROM drivers, built with sjasm, not zmac, because the
     # same sources also build the RAM (mapped segment) variant that ETHUNAPI.COM
-    # installs, and those are sjasm syntax throughout. sjasm resolves its
-    # includes against the current directory, hence the subshell - so the tool
-    # path has to be made absolute BEFORE cd'ing away.
+    # installs, and those are sjasm syntax throughout. ethrom3.bin goes into the
+    # BIOS half; the DOS half no longer carries a driver (LINK2 took its room),
+    # so ethrom.bin (protocol 2) is built only to keep ethrom.asm assembling
+    # (test_eth3_z80 runs it). sjasm resolves its includes against the current
+    # directory, hence the subshell - so the tool path has to be made absolute
+    # BEFORE cd'ing away.
     echo "Compiling Ethernet UNAPI driver (ROM variant)"
     SJASM_BIN="$(cd "$SJASM_DIR" && pwd)/sjasm.exe"
     ( cd UNAPI/src && "$SJASM_BIN" ethrom.asm ../../ROM/src/MSX-DOS/ethrom.bin ethrom.lst ) ||
         die "the Ethernet UNAPI ROM driver did not assemble"
+    echo "Compiling Ethernet UNAPI driver (ROM variant, protocol 3)"
+    ( cd UNAPI/src && "$SJASM_BIN" ethrom3.asm ../../ROM/src/MSX-DOS/ethrom3.bin ethrom3.lst ) ||
+        die "the Ethernet UNAPI protocol 3 ROM driver did not assemble"
+    # The RAM driver goes out with the ROM: it is the Ethernet driver for MSX-DOS
+    # booted from the DOS half, which has none of its own any more. Assembled by
+    # UNAPI/build.sh; msxpirfh.bat copies everything in target/ to the MSX.
+    cp UNAPI/src/ETHUNAPI.COM target/ETHUNAPI.COM || die "could not copy ETHUNAPI.COM to target/"
 
-    # Where the image lands in the ROM, and whether it still fits, is asserted
-    # inside msxpi-driver.mac - so a driver that has outgrown the free tail
-    # fails this build rather than producing a corrupt ROM.
+    # Where ethrom3.bin lands in the BIOS half, and whether it still fits, is
+    # asserted inside msxpibios.asm - so a driver that has outgrown the free
+    # tail fails this build rather than producing a corrupt ROM.
     #
     # zmac's exit status is the only thing that says whether the ROM is good.
     # Without this check a failed assembly left the PREVIOUS zout/msx-dos.hex in
@@ -308,8 +329,12 @@ if [ "$buildBIOS" = "yes" ]; then
     # needs -DMSXPI_RAM_STASH: it runs from RAM, so msxpi_bios.asm uses its own
     # stash buffer rather than the driver's GETWRK workarea. sjasmplus, not
     # zmac, because IFDEF there tests -D defines.
+    echo "Compiling L2TEST.BIN (LINK2 test program)"
+    "$SJASM_DIR/sjasmplus" --inc=./asm-common/include --raw=./target/L2TEST.BIN ./ROM/src/BIOS/l2test.asm ||
+        die "l2test.asm did not assemble"
+
     echo "Compiling the BASIC extension (msxpiext.bin)"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include         --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
+    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH -DMSXPI_LINK2 --inc=./asm-common/include --raw=./target/msxpiext.bin ./ROM/src/BIOS/msxpiext.asm ||
         die "msxpiext.asm did not assemble"
 
     [ -f ./zout/msx-dos.hex ] || die "zmac produced no zout/msx-dos.hex"
@@ -337,11 +362,34 @@ if [ "$buildBIOS" = "yes" ]; then
     echo "Compiling the BIOS-only ROM ($BASICFILE)" \
          "- DOS INIT $DOS_INIT, STATEMENT $DOS_STMT, RET $DOS_RET"
     rm -f "$BASICFILE"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_ROM_STASH --inc=./asm-common/include \
+    "$SJASM_DIR/sjasmplus" -DMSXPI_ROM_STASH -DMSXPI_LINK2 --inc=./asm-common/include \
         --inc=./ROM/src/MSX-DOS -DDOS_INIT=0x$DOS_INIT -DDOS_STMT=0x$DOS_STMT \
-        -DDOS_RET=0x$DOS_RET -DOUTFILE="\"$BASICFILE\"" \
+        -DDOS_RET=0x$DOS_RET -DOUTFILE="\"$BASICFILE\"" --sym=./zout/msxpibas.sym \
         ./ROM/src/BIOS/msxpibios.asm && [ -f "$BASICFILE" ] ||
         die "msxpibios.asm did not assemble - $BASICFILE NOT updated"
+
+    # ROM size report: how far the code can still grow before it meets the first of
+    # the fixed entries above it (GETSLT/GETWRK for ethrom.bin, and the three at the
+    # DOS ROM's header addresses). The ASSERTs in msxpibios.asm fail the build when
+    # it does; this says how much room is left.
+    code_end=$(sed -n 's/^CODE_END: EQU 0x0*\([0-9A-Fa-f]*\).*/\1/p' ./zout/msxpibas.sym)
+    [ -n "$code_end" ] || die "no CODE_END in zout/msxpibas.sym"
+    limit=$((0x6018))
+    for entry in $DOS_INIT $DOS_STMT $DOS_RET; do
+        [ $((0x$entry)) -gt $((0x$code_end)) ] && [ $((0x$entry)) -lt $limit ] && limit=$((0x$entry))
+    done
+    echo "  $BASICNAME: code ends at 0x$code_end, $((limit - 0x$code_end)) bytes free below 0x$(printf %X $limit)"
+    echo "  msxpiext.bin: $(wc -c < ./target/msxpiext.bin) bytes"
+    echo "  ethrom3.bin (protocol 3, BIOS half): $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin) bytes, $((0x8000 - 0x7A80 - $(wc -c < ./ROM/src/MSX-DOS/ethrom3.bin))) free below 8000h"
+    # The DOS half: the padding at the end of the ROM, as zmac lists it, is the
+    # room the MSXPi code (LINK2 and its CRC table included) has left.
+    dos_pad=$(sed -n 's/.*\([0-9A-F]\{4\}\) \.\. \([0-9A-F]\{4\}\).*DEFS[[:space:]]*08000H-\$.*/\1 \2/p' ./zout/msx-dos.lst | head -1)
+    if [ -n "$dos_pad" ]; then
+        set -- $dos_pad
+        echo "  $BIOSNAME: MSXPi code ends at 0x$1, $((0x$2 - 0x$1 + 1)) bytes free below 0x8000"
+    else
+        echo "  $BIOSNAME: DOS-half room not reported (no padding line in zout/msx-dos.lst)"
+    fi
 
     # The 32KB EEPROM image: the DOS ROM in the lower half, where a 16KB write
     # has always landed, and the BIOS-only ROM in the upper half.  Written in

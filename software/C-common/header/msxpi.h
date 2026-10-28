@@ -1,6 +1,6 @@
 /*
  * MSXPi Interface
- * Version 1.6.1
+ * Version 1.7.0
  * ------------------------------------------------------------------------------
  * MIT License
  *
@@ -72,6 +72,7 @@
 #define RC_TERMINATE		0xED
 #define RC_UNEXPECTEDDATA	0xEE
 #define RC_UNDEFINED		0xEF
+#define RC_PROTOERR			0xF0   // LINK2: the transfer cannot go on (retries used up, or the Pi aborted)
 
 #define CHK_STATE_0       0
 
@@ -84,16 +85,26 @@ void pprintf(char* text, uint16_t value);
 void pprints(char* text, char* value);
 void FastPrint(char* text);
 char* GetCmdLineParameters(void);
-uint8_t CHKPIRDY(void);
-uint8_t PIREADBYTE(uint8_t* byte);
-uint8_t PIWRITEBYTE(uint8_t data);
-uint8_t RECVDATA(uint8_t* dest, uint16_t* size, uint16_t* maxbufsize);
-uint8_t RECVDATA_ONEBLOCK(uint8_t* dest, uint16_t* size, uint16_t maxbufsize);
-// The library defines SENDDATA2; this was declared as SENDDATA, which no
-// caller had exercised until pcopy started uploading.
-uint8_t SENDDATA2(uint8_t* src, uint16_t size, uint16_t* maxbufsize);
-uint8_t PerformHandshake(uint16_t msx_blocksize);
-uint8_t SendCommandToMSXPi(const char* cmd, bool appendDOSParameters);
+// LINK2 (documents/LINK2-DESIGN.md).  Each call is one whole transfer.
+// link_command: the command string (and the DOS command tail, if asked) to the Pi.
+uint8_t link_command(const char* cmd, bool appendDOSParameters);
+// link_send: size bytes at src to the Pi.
+uint8_t link_send(const uint8_t* src, uint16_t size);
+// link_recv: one transfer from the Pi.  mode 0 reads the blocks and drops them, 1 prints
+// each block as it arrives, 2 lays them one after another from buffer.  maxblock is the
+// largest block the Pi may send; in modes 0 and 1 the buffer needs one byte more.
+// *received (may be NULL) gets the number of bytes.  Returns RC_SUCCESS, the code the Pi
+// ended the transfer with (RC_FAILED...), or RC_PROTOERR / RC_ESCPRESSED.
+uint8_t link_recv(uint8_t mode, uint8_t* buffer, uint16_t maxblock, uint16_t* received);
+// The same transfer a block at a time, for a caller that puts each block somewhere of its own:
+// link_recv_open(first, maxblock) starts it (first = where the first block goes), then
+// link_recv_next(dest, &length) takes one block into dest. link_recv_next returns RC_READY
+// while more blocks follow; RC_SUCCESS (or the code the Pi ended with) for the last one.
+uint8_t link_recv_open(uint8_t* first, uint16_t maxblock);
+uint8_t link_recv_next(uint8_t* dest, uint16_t* length);
+#define LINK_RECV_DISCARD	0
+#define LINK_RECV_PRINT		1
+#define LINK_RECV_BUFFER	2
 uint8_t parseConnError(const uint8_t rc);
 uint16_t get_sp(void) __sdcccall(0) __naked;
 uint16_t get_max_buffer_size(void);

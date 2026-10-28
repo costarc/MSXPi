@@ -1,5 +1,5 @@
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -43,8 +43,8 @@ logger = logging.getLogger("msxpi")
 # sends for it (str or bytes), or None when the handler replied itself.
 CommandResult = Union[int, str, bytes, None]
 
-VERSION = "1.6.1"
-BUILD_ID = "20261028.079"
+VERSION = "1.7.0"
+BUILD_ID = "20261028.087"
 
 # =============================================================================
 # PROTOCOL CONSTANTS - SPI and Block Transfer
@@ -87,12 +87,31 @@ RC_FAILNOSTD = 0xEC  # Failed, no standard
 RC_TERMINATE = 0xED  # Terminate connection
 RC_UNEXPECTEDDATA = 0xEE  # Unexpected data
 RC_UNDEFINED = 0xEF  # Undefined error
+RC_PROTOERR = 0xF0  # LINK2 protocol error (peer does not speak it, or out of step)
+
+# =============================================================================
+# LINK2 (see documents/LINK2-DESIGN.md)
+# =============================================================================
+HELLO2 = 0xB2  # MSX -> Pi: opens a LINK2 transfer (READY opens a legacy one)
+HELLO2_ACK = 0xB3  # Pi -> MSX: this server speaks LINK2
+SIZE_MARK = 0xB4  # MSX -> Pi: starts the size frame (mark, lo, hi, crc16)
+LINK_ACK = 0x5A  # receiver -> sender: accepted; for a burst it is also the GO byte
+LINK_NAK = 0xA5  # receiver -> sender: resend
+LINK_ABORT = 0x0F  # either way: give up this transfer
+LINK2_FLAG_BURST = 0x01  # HELLO2 flags, bit 0: the Pi can burst in both directions
+LINK2_RETRIES = 10  # consecutive NAKs for one block before the receiver aborts
+LINK2_SENDER_CAP = 32  # attempts at one block before the sender gives up
 
 # =============================================================================
 # RETRY & TIMEOUT CONFIGURATION
 # =============================================================================
 GLOBALRETRIES = 10  # Global retry limit
-MAX_BLOCK_RETRIES = 3  # Block-level retry limit
+# Block-level retry limit when the Pi sends (link_send_block).  Must equal
+# what the MSX allows for the same block - GLOBALRETRIES in
+# asm-common/include/include.asm and MAX_BLOCK_RETRIES in C-common msxpi.h -
+# and every ROM and .COM in the field: resending after the MSX has given up
+# eats its next command (a run of "Disk error" in the fault-injection tests).
+MAX_BLOCK_RETRIES = 3
 SPI_INT_TIME = 3000  # SPI interrupt time (milliseconds)
 
 # Timeout values (in seconds)
@@ -121,7 +140,7 @@ MAPPER_REJECTED = 0xFF  # Mapper rejected (unsupported)
 PLAIN_ROM_MAX_SIZE = 32768  # Client's fixed load window (32KB)
 ROM_MAX_SIZE = 1048576  # Maximum ROM size cap (1MB)
 
-# Block-size / length bit that marks a /WAIT burst payload (see sendmultiblock).
+# Block-size / length bit that marks a /WAIT burst payload (see link_send).
 BURST_FLAG = 0x8000
 
 st_init = 0  # waiting loop, waiting for a command

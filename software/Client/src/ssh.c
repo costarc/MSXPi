@@ -287,15 +287,11 @@ static void put(uint8_t c) __sdcccall(0) __naked {
 }
 /* Match nitros.c: retry a rejected block within the existing exchange. */
 static uint8_t exchange(const char *cmd) {
-    uint8_t rc, tries=0;
+    uint8_t rc;
     uint16_t size=0;
     msxpi_link_claim();
-    rc=SendCommandToMSXPi(cmd,false);
-    if(rc==RC_SUCCESS) rc=PerformHandshake(256);
-    if(rc==RC_SUCCESS) {
-        do { size=0; rc=RECVDATA_ONEBLOCK(reply,&size,256); }
-        while(rc==RC_CHKSUM_ERR && ++tries<MAX_BLOCK_RETRIES);
-    }
+    rc=link_command(cmd,false);
+    if (rc == RC_SUCCESS) rc = link_recv(LINK_RECV_BUFFER, (uint8_t *)reply, 256, &size);
     msxpi_link_release();
     return rc==RC_SUCCESS && size==256 && !memcmp(reply,"SSH1",4) && reply[5]<=248;
 }

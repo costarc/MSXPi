@@ -35,7 +35,7 @@ sys.path.insert(0, str(SOFTWARE / 'Server/Python/tests'))
 from pchess_irc_fixture import Server  # noqa: E402
 from pchess_tcpip_openmsx import chat_lines, tcl_string, text_at  # noqa: E402
 
-OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe')
+OPENMSX = os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 PROGRAM = Path(sys.argv[1] if len(sys.argv) > 1 else SOFTWARE / 'target/pcheckers.com')
 IRC_PORT = 6667
 MSXPI_PORT = 5043

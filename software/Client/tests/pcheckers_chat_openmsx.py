@@ -6,7 +6,7 @@ TAB window. Screens are read back from VRAM with the shared PChess font.
 
     python pcheckers_chat_openmsx.py [path/to/pcheckers.com]
 
-Windows Python with python-chess, openMSX v1.6.1 with the MSXPi extension and
+Windows Python with python-chess, openMSX v1.7.0 with the MSXPi extension and
 the FloppyA disk (copied). Ports 5041, 5042 and 5080 must be free.
 """
 import os
@@ -24,7 +24,7 @@ sys.path.insert(0, str(HERE))
 from pchess_chat_openmsx import chat_lines  # noqa: E402
 from pchess_tcpip_openmsx import text_at  # noqa: E402
 
-OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.6.1/openmsx.exe'))
+OPENMSX = Path(os.environ.get('OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe'))
 FLOPPY = Path(os.environ.get('FLOPPYA', 'C:/Users/roniv/Dev/MSX/MSXPi/FloppyA'))
 PROGRAM = Path(sys.argv[1] if len(sys.argv) > 1 else SOFTWARE / 'target/pcheckers.com')
 PORTS = (5041, 5042, 5080)

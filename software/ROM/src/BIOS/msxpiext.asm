@@ -1,5 +1,5 @@
 ; MSXPi Interface
-; Version 1.6.1
+; Version 1.7.0
 ; ------------------------------------------------------------------------------
 ; MIT License
 ;
@@ -291,26 +291,36 @@ BIOSENTRYADDR:  EQU     $
 ; referenced this table, so the slots were not kept as stubs.
         DW      _MSXPIVER
         DW      _MSXPI
+    IFDEF MSXPI_LINK2
+        DW      LINK_SEND_SIZE      ; HL = largest block, DE = source, BC = length
+        DW      LINK_RECV           ; A = mode, DE = buffer, BC = largest block
+        DW      LINK_SEND
+        DW      LINK_COMMAND
+        DW      CHKPIRDY
+        DW      LINK_RECV_BYTE
+        DW      LINK_SEND_BYTE
+    ELSE
         DW      PerformHandshake
         DW      RECVDATA_ONEBLOCK
         DW      SENDDATA
-        DW      SendCommandToMSXPi
+        DW      LINK_COMMAND
         DW      CHKPIRDY
         DW      PIREADBYTE
         DW      PIWRITEBYTE
+    ENDIF
         DW      PRINT
         DW      PRINTNLINE
         DW      PRINTNUMBER
         DW      PRINTDIGIT
-        DW      PRINTPISTDOUT
+        DW      LINK_PRINT
 
 ; ================================================================
 ; Text messages used in the loader
 ; ================================================================
 
 MSXPIVERSION:
-        DB      13,10,"MSXPi BIOS v1.6.1"
-BuildId: DB "20261028.079"
+        DB      13,10,"MSXPi BIOS v1.7.0"
+BuildId: DB "20261028.087"
         DB      13,10
         DB      "    RCC (c) 2015-2026",13,10,0
 

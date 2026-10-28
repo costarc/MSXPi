@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # MSXPi Interface
-# Version 1.6.1
+# Version 1.7.0
 # ------------------------------------------------------------------------------
 # MIT License
 #
@@ -29,6 +29,9 @@
 import argparse
 from pathlib import Path
 import re
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import link2_c
 ROOT = Path(__file__).resolve().parents[2]    # software/
 
 def split_license(text):
@@ -36,6 +39,22 @@ def split_license(text):
     lines = text.split('\n')
     end = lines.index('; SOFTWARE.') + 2          # plus the closing dashed line
     return lines[:end], '\n'.join(lines[end:]).lstrip('\n')
+
+def crc_table_asm():
+    """LINK2's CRC-16/CCITT-FALSE table (design 8.2) as two 256-byte halves: the high
+    bytes, then the low bytes.  The including file aligns it to a page."""
+    t = []
+    for i in range(256):
+        c = i << 8
+        for _ in range(8):
+            c = ((c << 1) ^ 0x1021) if c & 0x8000 else (c << 1)
+        t.append(c & 0xFFFF)
+    out = ['; LINK2 CRC table: T[i] high bytes, then low bytes (CRC-16, poly 0x1021, MSB first).']
+    for name, sel in (('LINK_CRC_TABLE_HI', lambda v: v >> 8), ('LINK_CRC_TABLE_LO', lambda v: v & 0xFF)):
+        out.append(name + ':')
+        for r in range(0, 256, 16):
+            out.append('    db ' + ','.join('0x%02x' % sel(v) for v in t[r:r + 16]))
+    return '\n'.join(out) + '\n'
 
 def generate():
     license_lines, source = split_license((ROOT/'asm-common/transport/payload.z80').read_text())
@@ -48,6 +67,11 @@ def generate():
     rx, rest = asm.split('PAYLOAD_TX:\n', 1)
     tx, rest = ('PAYLOAD_TX:\n'+rest).split('; A is the completed byte.', 1)
     advance_wait, escape = ('; A is the completed byte.'+rest).split('PAYLOAD_ESCAPE:\n', 1)
+    # The polled loops with the legacy sum are not assembled in a LINK2 image, which
+    # uses PAYLOAD_WAIT and PAYLOAD_ESCAPE only (link2.asm has its own loops).
+    legacy = lambda body: ' ifndef MSXPI_LINK2\n' + body + ' endif\n'
+    advance, wait = advance_wait.split('; Fast ready path', 1)
+    rx, tx, advance_wait = legacy(rx), legacy(tx), legacy(advance) + '; Fast ready path' + wait
     # Keep ESC's comments with the preceding fragment; labels define the split.
     escape = 'PAYLOAD_ESCAPE:\n'+escape
     pieces = {'payload_tx_generated.asm': tx,
@@ -62,50 +86,15 @@ def generate():
             line = re.sub(r'(?<=[ ,])(0x[0-9a-f]+|[0-9]+)$', r'#\1', line)
         lines.append(line)
     c = '\n'.join(lines)
-    adapters = []
-    for direction in ('RX', 'TX'):
-        # __sdcccall(0): the asm reads its three arguments from the stack and returns the status in L,
-        # whatever calling convention the including program is compiled with.
-        adapters.append(f'''static uint8_t payload_{direction.lower()}(uint8_t *buffer, uint16_t count,
-                                  uint16_t *sum) __sdcccall(0) __naked
-{{
-    buffer; count; sum;
-    __asm
-    push ix
-    ld ix,#4
-    add ix,sp
-    ld e,0(ix)
-    ld d,1(ix)
-    ld c,2(ix)
-    ld b,3(ix)
-    ld hl,#0
-    call PAYLOAD_{direction}
-    ; Save status before arithmetic or pointer setup can change flags.
-    ld a,#0xe0
-    jr nc,payload_{direction.lower()}_ok
-    ld a,#0xe2
-payload_{direction.lower()}_ok:
-    ld c,4(ix)
-    ld b,5(ix)
-    push af
-    ld a,l
-    ld (bc),a
-    inc bc
-    ld a,h
-    ld (bc),a
-    pop af
-    ld l,a
-    pop ix
-    ret
-    __endasm;
-}}
-''')
-    header = (c_header +
-              'static void payload_kernel(void) __naked {\n    __asm\n' + c +
-              '\n    __endasm;\n}\n' + '\n'.join(adapters))
-    result = {ROOT/'asm-common/include/payload_generated.asm': asm_header+asm,
-            ROOT/'C-common/lib/payload_generated.h': header}
+    # LINK2 for the C library: PAYLOAD_WAIT and PAYLOAD_ESCAPE (the SDAS text above, from
+    # the wait routine on), then link2.asm run through link2_c.
+    link2_c_text = link2_c.link2_kernel(ROOT, '; Fast ready path' + c.split('; Fast ready path', 1)[1])
+    result = {ROOT/'asm-common/include/payload_generated.asm': asm_header+asm}
     result.update({ROOT/'asm-common/include'/name: asm_header+body for name, body in pieces.items()})
+    result[ROOT/'C-common/lib/link2_generated.h'] = (
+        c_header + 'static void link2_kernel(void) __naked {\n    __asm\n' + link2_c_text
+        + '\n    __endasm;\n}\n')
+    result[ROOT/'asm-common/include/link2_crc_table.asm'] = asm_header + crc_table_asm()
     return result
 
 def main():
