@@ -39,6 +39,7 @@ Os dois jogadores precisam destes arquivos juntos **em um disco ou em uma pasta*
 | `INL.COM` e `INL.CFG` | `software/UNAPI/bin/` e `software/target/` |
 | `MSR.COM` (só se usar MSX-DOS 1) | `software/UNAPI/bin/` |
 | `RAMHELPR.COM` (só se usar Nextor ou MSX-DOS 2) | `software/UNAPI/bin/` |
+| `ETHUNAPI.COM` (só um MSXPi iniciado pela sua própria ROM do MSX-DOS 1) | `software/target/` |
 | o driver da própria placa (ObsoNET e outras; não é necessário no MSXPi) | vem com a placa |
 
 **Os jogos e os arquivos de ROM**
@@ -71,7 +72,7 @@ PC: `certutil -hashfile ARQUIVO SHA256` no Windows, `sha256sum ARQUIVO` no Linux
 Os dois jogadores devem usar o **mesmo arquivo `.GPF`**. Se o jogo avisar que o outro jogador tem outra versão, copie o mesmo arquivo para os dois.
 
 > **Quem tem MSXPi:** execute o atualizador `msxpiupd`. Ele já grava no disco o `MCHAT.COM`, `PLAYNET.COM`, `PLAYNET.OVL`,
-> `INL.CFG` e os arquivos `.GPF`. Você só acrescenta suas ROMs, o `MSR.COM` e o `INL.COM`.
+> `INL.CFG`, `ETHUNAPI.COM` e os arquivos `.GPF`. Você só acrescenta suas ROMs, o `MSR.COM` e o `INL.COM`.
 
 ## Passo 2A - Placa Ethernet: ligue a rede (precisa do INL)
 
@@ -83,6 +84,9 @@ Faça isso **toda vez que ligar o MSX**. Digite as duas linhas do seu sistema:
 | `INL I` | `INL I` |
 
 Observações:
+- Com um **MSXPi** iniciado pela sua própria ROM do MSX-DOS 1 (jumper de banco em BANK2), digite `ETHUNAPI` entre `MSR I` e
+  `INL I`: desde o MSXPi 1.7.0 essa ROM não tem mais o driver Ethernet. Com a ROM só de BIOS (BANK1) o driver está na ROM e
+  não há mais nada a digitar.
 - Com **MSXPi**, nunca digite `RAMHELPR I` no MSX-DOS 1. Ele estraga o `MSR`.
 - O `INL.CFG` guarda os endereços da rede. O que acompanha é para o MSXPi. Em outra rede, edite-o (ou apague-o para usar endereços
   automáticos por DHCP).

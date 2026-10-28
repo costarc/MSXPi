@@ -1,3 +1,56 @@
+MSXPi v1.7.0 Release Notes
+==========================
+LINK2 release: a new transfer protocol between the MSX and the Pi, with CRC-16
+checked blocks. Build 20261028.087 in every component.
+
+*** This version breaks compatibility with every earlier MSXPi ROM. ***
+*** Every MSXPi EEPROM must be rewritten with the 1.7.0 ROM          ***
+*** (target/msxpi32k.rom, written with at28c256 - see README Step 2). ***
+Upgrade the ROM, the msxpi-server and the client commands (.COM files)
+together. The CPLD firmware does not change: v1.6 as it is.
+
+LINK2 - the transfer protocol (documents/LINK2-DESIGN.md)
+- Every transfer opens with HELLO2 and is answered with HELLO2_ACK; a size frame and then blocks follow. Each block carries a sequence number, its length, a CRC-16 of the header and a CRC-16 of the payload (CRC-16/CCITT-FALSE: polynomial 1021h, init FFFFh), and an end mark.
+- The receiver answers every block with ACK or NAK; a NAKed block is sent again, up to 10 times in a row, and either side can ABORT. A transfer that cannot go on ends with RC_PROTOERR (F0h) instead of hanging. The 8-bit checksum of the old protocol missed two cancelling bit errors; the CRC does not.
+- /WAIT bursts from and to any buffer outside page 1 (page 0 included), in both directions.
+- Measured on a Canon V-25 with real hardware: 8 KB downloads at 21.4 KB/s with LINK2 against 8.8 KB/s with the old protocol; a 1 h 40 min soak moved 128,433 verified blocks with no error.
+- On LINK2 in this release: the BIOS-only ROM (msxpibas.rom), the BASIC extension (msxpiext.bin), the MSX-DOS 1 driver (msxpibios.rom), every .COM tool (p, pcopy, mchat, msxarch, ssh, nitros, pchess, pchess1, pcheckers, templatc, template), PLAYNET.COM and the ROM-Patcher runtimes.
+- The server still answers the old protocol for a transfer that opens with READY, but this release is only supported with the 1.7.0 ROM and tools.
+
+MSX-DOS 1 ROM and the Ethernet UNAPI
+- The MSX-DOS 1 ROM (msxpibios.rom) no longer carries the Ethernet UNAPI driver: LINK2 needed the room. For TCP/IP under the MSX-DOS 1 ROM load the RAM driver: "MSR I", then "ETHUNAPI", then "INL I". ETHUNAPI.COM is in target/ and msxpiupd copies it.
+- The BIOS-only ROM (msxpibas.rom, BANK1) keeps the driver in ROM, now with Ethernet protocol 3 (GO bursts): under Nextor or MSX-DOS 2 "RAMHELPR I" and "INL I" as before. The protocol in use is kept in msxpi.ini (ETHPROTO), so it survives a server restart.
+- Run only one Ethernet driver at a time.
+- Disk writes from the MSX burst again where /WAIT is available, like the reads. The disk driver runs with interrupts off during a sector transfer (the caller's state is restored).
+
+C library and assembly routines (for developers)
+- msxpi-bios.lib now uses the ROM's own LINK2 code (asm-common/include/link2.asm, translated for SDCC by asm-common/transport/generate.py). New calls: link_command, link_send, link_recv (mode 0 discard, 1 print, 2 into a buffer), link_recv_open / link_recv_next, msxpi_exchange.
+- Gone: CHKPIRDY, PIREADBYTE, PIWRITEBYTE, RECVDATA, RECVDATA_ONEBLOCK, SENDDATA2, PerformHandshake, SendCommandToMSXPi and the retry loops in the clients. The assembly programs use LINK_COMMAND, LINK_SEND, LINK_RECV and LINK_PRINT. The MSXPi C BIOS Developers Guide describes the new calls.
+- The C clients are built with SDCC 4.6.0 in its own calling convention (sdcccall 1); make.bat and make.sh refuse any other SDCC.
+- pcopy deletes the partial file when a download is aborted.
+
+Updating
+- "msxpiupd <branch>" / "p update <branch>" update from a git branch ("p setbranch" is gone); the branch is kept across a server restart.
+- Once the MSX has used LINK2, "p update" refuses a branch whose server has no LINK2, and "p restart" refuses to start server files without it, so an update can no longer leave the MSX unable to read its disk.
+- A stale .last-update stamp is no longer trusted (the stamp carries the build).
+
+Games and other changes
+- ASCII's 1942 online (PLAYNET, two players taking turns, ASCII8 mapper): 1942.GPF. Games whose transport area is not in the TPA use a bridged UNAPI transport.
+- Guides for playing the PLAYNET games over TCP/IP, in English and Brazilian Portuguese (documents/PLAYNET-TCPIP-GUIDE.*), with the SHA-256 of every supported ROM and game file.
+- PChess / PCheckers: crossed invitations no longer deadlock, an unanswered invitation no longer locks the lobby, and one cursor-key debounce (no more two-square jumps).
+- NitrOS: the setup installs XRoar and ToolShed, ships the guest images and a default nitros.json, checks the CoCo ROMs before starting XRoar and reports its progress.
+- "p wifi" drops a saved profile before connecting and quotes the SSID and password.
+- The shutdown/reboot button is polled instead of using a one-shot edge callback.
+
+Housekeeping
+- The obsolete assembly msxarch is deleted; msxarch.c is the only one.
+- The build writes one BuildId to the server and the ROM sources (date and one more than the highest counter), so they can no longer drift apart.
+
+Testing
+- Server unit tests; LINK2 phases 1 to 7 in openMSX, with fault injection; the BIOS-only ROM on real hardware (the soak above).
+- Still open: the hardware checklist for the MSX-DOS 1 driver and the .COM tools on LINK2 (documents/LINK2-TEST-PLAN.md, T6.7).
+
+
 MSXPi v1.6 Release Notes
 ========================
 Hardware /WAIT flow control for data transfers, Ethernet UNAPI in the ROM,

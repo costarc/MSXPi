@@ -54,10 +54,18 @@ connection responsive. Raise it if bulk throughput matters more than latency.
    and the MSX has no network. `p netreset` from the MSX runs this whole
    sequence again - including reopening the TAP - so it can be recovered
    without logging into the Pi.
-3. on the MSX: `INL I`.  The Ethernet UNAPI driver is in `msxpibios.rom` now,
-   so there is nothing to install first - `RAMHELPR` is not needed, and
-   `ETHUNAPI` will refuse because the ROM already registers an ETHERNET
-   implementation.  `ETHTEST` should print `Seg: FF`.
+3. on the MSX, depending on the ROM bank:
+   - **BANK1, the BIOS-only ROM (`msxpibas.rom`)**: the Ethernet UNAPI driver
+     is in the ROM (protocol 3), so `INL I` (after `MSR I` under MSX-DOS 1 or
+     `RAMHELPR I` under Nextor / MSX-DOS 2) is all there is.  `ETHUNAPI`
+     refuses because the ROM already registers an ETHERNET implementation,
+     and `ETHTEST` prints `Seg: FF`.
+   - **BANK2, the MSX-DOS 1 ROM (`msxpibios.rom`)**: since 1.7.0 the driver
+     is not in this ROM (LINK2 needed the room).  Load the RAM driver:
+     `MSR I`, `ETHUNAPI`, `INL I`.  `ETHUNAPI.COM` is in `software/target`
+     and `msxpiupd` copies it.
+   Run one driver only: the RAM driver (protocol 2) and the BIOS-only ROM's
+   (protocol 3) would switch the server's protocol back and forth.
 
    Do NOT run `RAMHELPR I`.  It installs the UNAPI RAM helper on its own, and
    `MSR.COM` installs the mapper support routines AND a helper - so when MSR
@@ -69,7 +77,8 @@ connection responsive. Raise it if bulk throughput matters more than latency.
        A:INL I    *** No mapper support routines found.
 
    They do not: the first is why the second happens.  The helper lives in RAM,
-   so a cold boot clears it - then run `MSR I` and `INL I`, nothing else.
+   so a cold boot clears it - then run `MSR I` (and `ETHUNAPI` with the
+   MSX-DOS 1 ROM) and `INL I`, nothing else.
 
    `MSR I` only under **MSX-DOS 1**.  Under Nextor or MSX-DOS 2 the mapper
    support routines are already present and MSR is built to fail in that case
