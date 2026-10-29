@@ -112,6 +112,22 @@ HAYPARS:	;
 	ld	bc,15
 	ldir
 
+	;--- MSR lowers HIMSAV (F349h) for its page 3 block but not HIMEM (FC4Ah).  A ROM
+	;    implementation that allocates its work area on first use below HIMEM (the SM-X
+	;    WiFi) would land on MSR's mapper table: bring HIMEM down before the first call.
+
+	ld	hl,(#F349)
+	ld	a,h
+	cp	#C0
+	jr	c,HIMOK
+	ld	de,(#FC4A)
+	or	a
+	sbc	hl,de
+	jr	nc,HIMOK
+	add	hl,de
+	ld	(#FC4A),hl
+HIMOK:
+
 	xor	a
 	ld	b,0
 	ld	de,#2222

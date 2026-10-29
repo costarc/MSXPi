@@ -30,6 +30,11 @@
 ;        being then compliant with the UNAPI specification.
 ;      - Installs also the DOS 2 mapper support routines if compiled with INSTALL_MSR=1
 ;
+;    * Version 1.2-msxpi1 (MSXPi): allocates its page 3 block below min(HIMSAV, HIMEM) and lowers both,
+;      so a ROM UNAPI implementation that takes its work area below HIMEM on first use (SM-X WiFi)
+;      cannot land on the mapper table. The programs of this repository also guard against an MSR
+;      without this change (they lower HIMEM themselves before their first call into the driver).
+;
 ; NOTE: MSR = Standard mapper support routines,
 ;             as defined in MSX-DOS 2 Program Interface Specification
 
@@ -56,6 +61,7 @@ RAMSLOT0: equ   0F341h
 RAMSLOT1: equ   0F342h
 RAMSLOT3: equ   0F344h
 HIMSAV: equ     0F349h
+HIMEM:  equ     0FC4Ah
 EXPTBL: equ     0FCC1h
 EXTBIO: equ     0FFCAh
 
@@ -551,11 +557,23 @@ END_BUILDP3:
 
         ;--- Allocate space on system work area on page 3
 
+        ;    Allocate below the lower of HIMSAV and HIMEM, and lower both. HIMEM (FC4Ah) is what
+        ;    a ROM implementation that allocates its work area on first use goes by (the SM-X WiFi
+        ;    does): leaving it above the block would put that work area on top of MAPTAB.
+        ld      de,(HIMEM)
         ld      hl,(HIMSAV)
+        push    hl
+        or      a
+        sbc     hl,de           ;C if HIMSAV < HIMEM
+        pop     hl
+        jr      c,MSR_TOP_OK
+        ex      de,hl           ;HIMEM is the lower: allocate below it
+MSR_TOP_OK:
         ld      bc,(0B002h)
         or      a
         sbc     hl,bc
         ld      (HIMSAV),hl
+        ld      (HIMEM),hl
 
         ld      a,(RAMSLOT1)
         ld      h,40h
@@ -1970,11 +1988,11 @@ WELCOME_S:
 
         if INSTALL_MSR
 
-        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2",13,10
+        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2-msxpi1",13,10
 
         else
 
-        db      "Standalone UNAPI RAM helper installer 1.2",13,10
+        db      "Standalone UNAPI RAM helper installer 1.2-msxpi1",13,10
 
         endif
 

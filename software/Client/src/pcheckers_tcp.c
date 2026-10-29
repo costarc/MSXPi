@@ -725,8 +725,16 @@ static void tcp_init(void) {
     net=0; irc_on=0;
 }
 
+/* MSR lowers HIMSAV (F349h) for its page-3 block but not HIMEM (FC4Ah); a ROM implementation that allocates its work
+   area on first use below HIMEM (the SM-X WiFi) would land on MSR's mapper table. Bring HIMEM down first. */
+static void himem_guard(void) {
+    uint16_t sav = *(uint16_t *)0xF349;
+    if (sav >= 0xC000 && *(uint16_t *)0xFC4A > sav) *(uint16_t *)0xFC4A = sav;
+}
+
 /* Called when LINK changes to TCPIP; 0 with a status when it cannot. */
 static uint8_t tcp_link_start(char *status) {
+    himem_guard();
     if(!tcp_find()) { strcpy(status,"NO TCP/IP UNAPI - RUN INL I"); return 0; }
     if(!net_memory(status)) return 0;
     load_config();
