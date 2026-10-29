@@ -120,7 +120,25 @@ HAYPARS:	;
 	or	a
 	jr	nz,OKINST
 
-	print	NOTCPIP_S
+	;--- No TCP/IP stack.  Is there an ETHERNET interface (for example the
+	;    SM-X WiFi, or the MSXPi one) that just needs InterNestor Lite?
+
+	ld	hl,ETHER_S
+	ld	de,ARG
+	ld	bc,9
+	ldir
+	xor	a
+	ld	b,0
+	ld	de,#2222
+	call	EXTBIO
+	ld	a,b
+	or	a
+	jr	z,NOETH
+
+	print	ETHONLY_S
+	jp	TERMOK2
+
+NOETH:	print	NOTCPIP_S
 	jp	TERMOK2
 OKINST:	;
 
@@ -1180,6 +1198,9 @@ INFO_S:	db	"Use: PING <host name> [-n count | -t]",13,10
 
 NOCON_S:	db	"*** No network connection",13,10,"$"
 NOTCPIP_S:	db	"*** No TCP/IP UNAPI implementation found.",13,10,"$"
+ETHER_S:	db	"ETHERNET",0
+ETHONLY_S:	db	"An ETHERNET interface is available, but no TCP/IP stack is",13,10
+	db	"running on it. Run INL to install the TCP/IP stack, then PING again.",13,10,"$"
 NOPING_S:	db	"*** This TCP/IP UNAPI implementation does not support sending PINGs.",13,10,"$"
 
 TARGET_S:	db	"Pinging $"
