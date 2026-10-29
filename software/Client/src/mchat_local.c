@@ -839,6 +839,16 @@ static void load_config(void) {
     memset(reply, 0, 256);
 }
 
+/* MSR (the mapper routines under MSX-DOS 1) reserves its page-3 block by lowering HIMSAV (F349h) and leaves HIMEM
+   (FC4Ah) where it was. A ROM implementation that takes its work area on first use, below HIMEM (the SM-X WiFi
+   does), then lands on top of MSR's table: the table's slot and segment bytes become the driver's, and the next
+   mapper call (the free of the text segment, when MCHAT leaves) runs code in the wrong place. Bring HIMEM down to
+   HIMSAV before the first call into the implementation, so that whatever it allocates sits below MSR. */
+static void himem_guard(void) {
+    uint16_t sav = *(uint16_t *)0xF349;
+    if (sav >= 0xC000 && *(uint16_t *)0xFC4A > sav) *(uint16_t *)0xFC4A = sav;
+}
+
 /* Called for "mchat /t"; 0 with a message when TCP/IP is not usable. */
 static const char *tcp_link_start(void) {
     const char *why;
@@ -850,6 +860,7 @@ static const char *tcp_link_start(void) {
     lt_seg = 0; cfg_gport = 0; cfg_gaddr[0] = 0; cfg_glink = 0;
     gsec = 0; grem = 0; gjif = JIFFY;
     gl_init();
+    himem_guard();
     if (!tcp_find()) return "No TCP/IP UNAPI: run INL I first";
     if ((uint16_t)&net_area < 0x8000 || (uint16_t)seg_code < 0x8000) return "TCP/IP buffer is in page 1";
     if ((why = lt_open())) return why;

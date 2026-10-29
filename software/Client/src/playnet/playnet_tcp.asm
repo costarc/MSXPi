@@ -221,7 +221,17 @@ ipPort: ld      b,4
 
 ; ---- mapper, segments, the overlay -----------------------------------------------------------------
 tcpSetup:
-        xor     a                               ; the mapper support routines
+        ld      hl,($F349)                      ; HIMSAV: MSR lowers it for its page 3 block but not HIMEM (FC4Ah). A ROM
+        ld      a,h                             ; implementation that allocates on first use, below HIMEM (SM-X WiFi), would
+        cp      $C0                             ; land on MSR's table: bring HIMEM down to HIMSAV before the first call
+        jr      c,.himem
+        ld      de,($FC4A)
+        or      a
+        sbc     hl,de
+        jr      nc,.himem                       ; HIMSAV >= HIMEM: nothing to do
+        add     hl,de
+        ld      ($FC4A),hl
+.himem: xor     a                               ; the mapper support routines
         ld      de,$0402
         ld      hl,0
         call    EXTBIO

@@ -513,6 +513,16 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
         python3 dsktool.py copy "$file" "target/disks/msxpiboot.dsk:$fname"
     done
 
+    # The online-game profiles (PLAYNET), target/games/*.GPF. PLAYNET opens
+    # <ID>.GPF from the current directory, so a disk-booted MSX needs them on A:.
+    for file in $(cd target/games 2>/dev/null && LC_ALL=C ls *.GPF 2>/dev/null); do
+        if [ ! -s "target/games/$file" ]; then
+            warn "skipping empty $file (would corrupt the disk image)"
+            continue
+        fi
+        python3 dsktool.py copy "target/games/$file" "target/disks/msxpiboot.dsk:$file"
+    done
+
     # The UNAPI tools and INL.CFG go on last. They are NOT in target/, so the
     # loop above cannot pick them up, and regenerating the image here drops
     # every one of them - which is how a disk that had ETHTEST, INL and INL.CFG
