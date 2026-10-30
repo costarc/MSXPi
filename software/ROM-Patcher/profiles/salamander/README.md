@@ -22,6 +22,13 @@ No ROM data is included. The player supplies their own dump.
 - Speed: about 28 frames/s in steady play against the cartridge's 31 (1PLAYER, same scenes); lighter scenes at the cartridge's.
 - Over TCP/IP (`PLAYNET /T`, MCHAT /T): loads and connects in openMSX up to the connection, not played to the end yet.
 
+## Frame catch-up: not added
+
+The frame catch-up of Soccer, Yie Ar and Ping Pong (the busy flag's clear at 40BEh -> `isrEnd`, `G_CATCHUP`) does not fit
+here yet. It makes the GPF 2920 bytes, and PLAYNET overwrites a GPF's bytes from 3500h on (`BOUNCE`, 0B00h after `GPFBUF`)
+before it copies the stub: in openMSX the stub's last 13 bytes, the new code, came out as an MSXPi reply ("Pi:Er:No game
+in...") and the game stopped after frame 0. The GPF is 2868 bytes without it, already past that point. Not measured.
+
 ## Files
 
 | File | |

@@ -9,6 +9,12 @@
 ;   G_SOUND_TICK   the sound driver, called with interrupts off after the exchange, T times a frame (0 = none)
 ;   G_CHECK_ADDR, G_CHECK_LEN   region checksummed every 32 frames (even length, at most 512)
 ; Optional: SCRIPTED (test builds: the local input comes from a fixed table, not from G_READ_LOCAL).
+;   G_CATCHUP      the frame catch-up, PN_AGAIN (default 0: none). A game whose frames are paced by interrupts loses the
+;                  interrupts that come while a frame waits for the network in PN_TICK. The glue's end-of-frame patch calls
+;                  PN_AGAIN and, on NZ, runs the next frame at once (one at most). Only the pace changes, never what a frame
+;                  computes, so lockstep is unaffected. Which interrupts count:
+;                    1  every one counted during PN_TICK: the game's PN_IRQ (page 3) and the ones XCHG took
+;                    2  only the ones MSX-DOS took inside XCHG (TCP/IP; the MSXPi transport takes none: no change there)
 ;   G_SOUND_MIN    0: a frame that counted no interrupt ticks the driver 0 times (default 1: at least once), for a game
 ;                  whose TICKs are input polls rather than frames
 
@@ -31,6 +37,9 @@
 
         IF      !EXIST G_SOUND_MIN
 G_SOUND_MIN:    EQU     1
+        ENDIF
+        IF      !EXIST G_CATCHUP
+G_CATCHUP:      EQU     0
         ENDIF
 
 W:              EQU     G_INPUT_BYTES
@@ -90,8 +99,18 @@ PN_TICK:
         push    hl
         push    ix
         push    iy
+        IF      G_CATCHUP == 1
+        ld      a,(irqCnt)
+        ld      (late),a
+        ENDIF
         ei
         call    tick
+        IF      G_CATCHUP == 1
+        ld      a,(irqCnt)                      ; late := the interrupts counted during the exchange
+        ld      hl,late
+        sub     (hl)
+        ld      (hl),a
+        ENDIF
 tickDone:
         IF      G_SOUND_TICK
         ld      a,(sndN)                        ; the sound driver ticks here, as often as
@@ -121,6 +140,26 @@ tickDone:
         pop     de
         pop     bc
         ret
+
+        IF      G_CATCHUP
+; PN_AGAIN: Z (A = 0): no interrupt went by during PN_TICK (G_CATCHUP 1: the last one; 2: since the last PN_AGAIN).
+; NZ: one did, and it is taken, so the next frame runs at once only once. Changes AF.
+PN_AGAIN:
+        ld      a,(late)
+        or      a
+        ret     z
+        xor     a
+        ld      (late),a
+        inc     a
+        ret
+        IF      G_CATCHUP == 2
+lateAdd:ld      a,(late)                        ; preserves BC, DE, HL
+        add     a,e
+        ld      (late),a
+        ret
+        ENDIF
+late:           defb    0                       ; 1: irqCnt when PN_TICK began, then the interrupts during it; 2: XCHG's
+        ENDIF
 
 ; PN_END: A = result code. The transport tells the opponent and leaves the game.
 PN_END:         EQU     XEND
@@ -183,6 +222,9 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         add     a,e
         ld      (hl),a
         ei
+        IF      G_CATCHUP == 2
+        call    lateAdd                         ; the catch-up: E interrupts went by during the exchange
+        ENDIF
         ld      a,c
         call    onStatus
         ld      a,(nf)                          ; has the remote input for F arrived?

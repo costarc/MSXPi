@@ -25,11 +25,11 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "5bfcb4cb58e7e571f89f2383f0e15e537b7a404a1839aac990efde35517fe8f0"
+      "sha256": "c5b3d0ed11e701c1ba1ab4b8c348d618a4db4c23ef166804783491e47d2fadfa"
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "414d3611ed1b9a7dbfe18e5333cee31aab506437627ae099cb34a48cdba8fd14"
+      "sha256": "87d06c67ae53f25b0b9f9c15d607f2455029d16d53b6d036c544bc9134990617"
     }
   },
   "layout": [
@@ -56,19 +56,25 @@
     {
       "offset": 71,
       "expected": "cd5c7c",
-      "replace": "cd2fc1",
+      "replace": "cd43c1",
       "reason": "4047h: Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
     },
     {
       "offset": 83,
       "expected": "cd2245",
-      "replace": "cddac3",
+      "replace": "cdf1c3",
       "reason": "4053h: TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte"
+    },
+    {
+      "offset": 89,
+      "expected": "af3206e0",
+      "replace": "cd3dc400",
+      "reason": "4059h: The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
       "offset": 98,
       "expected": "fc5c7c",
-      "replace": "fc2fc1",
+      "replace": "fc43c1",
       "reason": "4062h: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
     },
     {
@@ -104,7 +110,7 @@
     {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
-      "replace": "cd22c40000000000",
+      "replace": "cd39c40000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
     },
     {
@@ -160,21 +166,22 @@
   },
   "symbols": {
     "PN_TICK": 49413,
-    "PN_IRQ": 49455,
-    "PN_P1": 50002,
-    "PN_P2": 50003,
-    "tickSite": 50138,
-    "key1": 50210,
-    "rdLocal": 50128,
-    "stubEnd": 50214,
+    "PN_IRQ": 49475,
+    "PN_P1": 50025,
+    "PN_P2": 50026,
+    "tickSite": 50161,
+    "key1": 50233,
+    "rdLocal": 50151,
+    "isrEnd": 50237,
+    "stubEnd": 50250,
     "dispatch": 41166,
     "menu": 41349,
-    "tMode": 50157,
-    "tCur": 50158,
-    "tOut": 50159,
-    "tWin": 50161,
-    "tLives2": 50163,
-    "tHold": 50162,
-    "tBlk": 50164
+    "tMode": 50180,
+    "tCur": 50181,
+    "tOut": 50182,
+    "tWin": 50184,
+    "tLives2": 50186,
+    "tHold": 50185,
+    "tBlk": 50187
   }
 }

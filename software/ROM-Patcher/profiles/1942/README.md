@@ -14,6 +14,13 @@ The analysis behind every patch is in `documents/1942-DESIGN.md`.
 
 No ROM data is included. The player supplies their own dump.
 
+## Frame catch-up: not added
+
+A frame ends with `ei / halt` at 4871h; skipping the halt when an interrupt went by during the frame's PN_TICK (the
+catch-up of Soccer, Yie Ar and Ping Pong) needs about 37 bytes of stub, and the stub has 5 left (1507 of 1512, between the
+game's variables and the pair map). The catch-up that the other games use counts only the interrupts MSX-DOS takes inside
+the TCP/IP transport, and 1942 plays over the MSXPi only, where that changes nothing.
+
 ## Files
 
 | File | |

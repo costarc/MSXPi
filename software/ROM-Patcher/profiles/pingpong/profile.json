@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "c76dfadf1fee88f3f386b848b242588f9ce4db202693e59f2e0ed7a9b8b3a199"
+      "sha256": "c381a49467ab57c7803db00c0b5a81746adcf2cd48a2aeee7d29a368dd7667de"
     }
   },
   "layout": [
@@ -46,19 +46,25 @@
     {
       "offset": 29,
       "expected": "cd9551",
-      "replace": "cd2fc1",
+      "replace": "cd43c1",
       "reason": "401Dh: Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
     },
     {
       "offset": 51,
       "expected": "cde347",
-      "replace": "cdd9c3",
+      "replace": "cdf0c3",
       "reason": "4033h: TICK site: the pad reader, once per frame -> PN_TICK (the exchange), then the reader"
+    },
+    {
+      "offset": 64,
+      "expected": "3e003205e0",
+      "replace": "cd04c40000",
+      "reason": "4040h: The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
       "offset": 74,
       "expected": "fc9551",
-      "replace": "fc2fc1",
+      "replace": "fc43c1",
       "reason": "404Ah: Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
     },
     {
@@ -76,31 +82,31 @@
     {
       "offset": 683,
       "expected": "cd004857cd1248b2",
-      "replace": "cddfc30000000000",
+      "replace": "cdf6c30000000000",
       "reason": "42ABh: Menu reader: player 1's byte of this frame"
     },
     {
       "offset": 935,
       "expected": "cd004857cd1248b2",
-      "replace": "cddfc30000000000",
+      "replace": "cdf6c30000000000",
       "reason": "43A7h: Title menu reader: player 1's byte of this frame"
     },
     {
       "offset": 973,
       "expected": "3202e0",
-      "replace": "cde7c3",
+      "replace": "cdfec3",
       "reason": "43CDh: Title menu start: both choices are the 2 player mode"
     },
     {
       "offset": 2022,
       "expected": "cd004857cd1248b2",
-      "replace": "cddfc30000000000",
+      "replace": "cdf6c30000000000",
       "reason": "47E6h: Player 1's pad: the byte of this frame"
     },
     {
       "offset": 2117,
       "expected": "cd024857cd5248b2",
-      "replace": "cde3c30000000000",
+      "replace": "cdfac30000000000",
       "reason": "4845h: Player 2's pad: the other player's byte of this frame"
     }
   ],
@@ -144,14 +150,15 @@
   },
   "symbols": {
     "PN_TICK": 49413,
-    "PN_IRQ": 49455,
-    "PN_P1": 50002,
-    "PN_P2": 50003,
-    "tickSite": 50137,
-    "key1": 50143,
-    "key2": 50147,
-    "forceTwo": 50151,
-    "rdLocal": 50128,
-    "stubEnd": 50157
+    "PN_IRQ": 49475,
+    "PN_P1": 50025,
+    "PN_P2": 50026,
+    "tickSite": 50160,
+    "key1": 50166,
+    "key2": 50170,
+    "forceTwo": 50174,
+    "rdLocal": 50151,
+    "isrEnd": 50180,
+    "stubEnd": 50193
   }
 }

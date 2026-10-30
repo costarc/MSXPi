@@ -16,6 +16,7 @@ G_READ_LOCAL:   EQU     rdLocal
 G_SOUND_TICK:   EQU     $7C5C                   ; the sound driver
 G_CHECK_ADDR:   EQU     $E100                   ; Oolong, the opponent and the projectiles
 G_CHECK_LEN:    EQU     $0200
+G_CATCHUP:      EQU     2                       ; the frame catch-up for the interrupts XCHG took (isrEnd)
 
 READ_JOY:       EQU     $4510                   ; the game's joystick 1 reader: A = bits 0-5
 READ_KEY:       EQU     $453F                   ; the game's keyboard reader: A = the same bits
@@ -60,6 +61,20 @@ tBlk:           defs    TURN_N * 2              ; Turn: each player's saved bloc
 ; the second reader (4583h: title, demo and game-over screens) in place of its two hardware reads
 key1:   ld      a,(PN_P1)
         ret
+; ---- the frame catch-up (the engine's PN_AGAIN) ---------------------------------------------------------------
+; Every frame is one run of the H.KEYI handler, and an interrupt that comes while it runs only counts (the busy flag
+; E006h): a frame that the exchange makes longer than an interrupt period costs a whole period. When an interrupt
+; went by inside the exchange, taken by MSX-DOS's handler in XCHG (TCP/IP; G_CATCHUP 2), the next frame runs as soon
+; as this one ends (one at most). Interrupts that the game's own work makes it miss stay dropped, as on the cartridge,
+; and so do those its handler saw during PN_TICK (G_CATCHUP 1 catches those too: see the README). Only the
+; pace changes, never what a frame computes.
+; 4059h, in place of "xor a / ld (E006h),a" (4 bytes): the busy flag cleared, or the next frame now
+isrEnd: call    PN_AGAIN
+        jr      nz,.again
+        ld      ($E006),a                        ; A = 0, as the game clears it
+        ret
+.again: pop     af                              ; the return address: the frame runs again from 4052h
+        jp      $4052                           ; (ei, then the frame, the busy flag still set)
 stubEnd:
         ASSERT  stubEnd <= PN_ORG + STUB_MAX
         ASSERT  PN_ORG + STUB_MAX <= PN_TRANSPORT
