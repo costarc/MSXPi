@@ -18,16 +18,31 @@ No ROM data is included. The player supplies their own dump.
 
 - Playable over the MSXPi with PLAYNET 3, from MCHAT (`/play NICK salamand`) to the game and back: verified in openMSX (two Canon
   V-25 with a memory mapper, MSX-DOS 1 from the MSXPi), the machines identical frame by frame (a 2 MB and a 512 KB mapper).
-  Published as `software/target/games/SALAMAND.GPF`. The stub is 1589 of 1792 bytes; 78 patches, all matching the dump.
+  Published as `software/target/games/SALAMAND.GPF`. The stub is 1731 of 1792 bytes; 79 patches, all matching the dump.
 - Speed: about 28 frames/s in steady play against the cartridge's 31 (1PLAYER, same scenes); lighter scenes at the cartridge's.
-- Over TCP/IP (`PLAYNET /T`, MCHAT /T): loads and connects in openMSX up to the connection, not played to the end yet.
+- Over TCP/IP (`PLAYNET /T`): 3001 identical frames in openMSX, P1 over the MSXPi and P2 over TCP/IP on Nextor (`run_salamander.sh`
+  with `TCP=1`). The chat route (MCHAT /T) is not played to the end yet.
 
-## Frame catch-up: not added
+## Frame catch-up
 
-The frame catch-up of Soccer, Yie Ar and Ping Pong (the busy flag's clear at 40BEh -> `isrEnd`, `G_CATCHUP`) is not in
-this package yet. It makes the GPF 2920 bytes, and before PLAYNET's fix (its bounce buffer at 3500h, inside the 3 KB GPF
-buffer; now at 3600h) the stub's last 13 bytes, the new code, came out as an MSXPi reply and the game stopped after
-frame 0. With the fixed PLAYNET it plays (1501 identical frames, the stub intact in RAM); its speed is not measured yet.
+Every frame is one run of the H.KEYI handler, and an interrupt that comes while it runs is dropped (the busy flag E205h).
+Over TCP/IP, MSX-DOS's own handler takes the interrupts that come inside the transport's XCHG (the engine adds them to
+`irqCnt`), so a frame that the network makes longer than an interrupt period costs the game a whole period. With the patch
+at 40BEh in bank 0 (`isrEnd`), when an interrupt went by inside XCHG the next frame runs as soon as this one ends (one at
+most: the engine's `PN_AGAIN`, `G_CATCHUP` 2). Interrupts that the game's own work makes it miss are still dropped, as on
+the cartridge. Only the pace changes, never what a frame computes, so the machines stay in lockstep. The MSXPi transport
+takes no interrupts (XCHG returns E = 0), so nothing changes on the MSXPi path.
+
+The GPF is 2917 bytes with it: it needs the PLAYNET that keeps its bounce buffer after the 3 KB GPF buffer (3600h). With
+the older one (bounce buffer at 3500h) the stub's last bytes, this code, are overwritten and the game stops after frame 0.
+
+Measured in openMSX (`run_salamander.sh` with `TCP=1`: P1 over the MSXPi, P2 over TCP/IP on Nextor; 50 ms lag, 8% loss,
+20 ms jitter, 3001 frames identical on both machines, frames 600-2400, two runs each):
+
+| Pair | Before | After |
+|---|---|---|
+| MSXPi + MSXPi | | unchanged (same code path) |
+| MSXPi + TCP/IP | 17.5, 17.6 | 18.3, 18.4 |
 
 ## Files
 

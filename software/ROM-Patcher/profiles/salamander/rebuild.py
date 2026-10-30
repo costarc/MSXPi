@@ -38,7 +38,7 @@ TRANSPORT, TRANSPORT_SIZE = 0xD000, 512        # first: on the TCP/IP path it is
 STUB_LOAD, STUB_MAX = 0xD200, 1792
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'MK_BLOCK', 'MK_SEG2', 'MK_W0', 'MK_W1', 'MK_W2', 'MK_W3',
-            'sndTick', 'tickSite', 'p1', 'dual', 'fkeys', 'f5key', 'keyY', 'keyN', 'probeOff', 'clrRam', 'rnd', 'stubEnd')
+            'sndTick', 'tickSite', 'p1', 'dual', 'fkeys', 'f5key', 'keyY', 'keyN', 'probeOff', 'clrRam', 'rnd', 'isrEnd', 'stubEnd')
 
 # The 8 KB window each bank runs in (from the bank-select routines at 416Eh-41FFh and the traces)
 WINDOW_OF_BANK = {0: 0x4000, 1: 0x6000, 4: 0x6000, 7: 0x6000, 13: 0x6000,
@@ -124,6 +124,7 @@ def make_patches(symbols):
     patch(0, 0x406D, '2af7f02322f7', b'\xcd' + word('PN_IRQ') + b'\xc3\xac\x40',
           'Interrupt: count it (PN_IRQ) and go to the frame at 40ACh; its counters, timer and sound move to sndTick')
     patch(0, 0x40B5, 'cda751', b'\xcd' + word('tickSite'), 'TICK site: the input reader, once per frame -> PN_TICK, then the reader')
+    patch(0, 0x40BE, 'af3205e2', b'\xcd' + word('isrEnd') + bytes(1), 'The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd')
     patch(0, 0x514F, 'fdcb214620', b'\xcd' + word('dual') + b'\x18\x64',
           "DUALPLAY: a player block's port -> player 1's or player 2's input by the block (IY), then the edge logic at 51B8h")
     patch(0, 0x51B2, 'cdbf51', b'\xcd' + word('p1'), 'One player (1PLAYER, EXCHANGE): player 1')
