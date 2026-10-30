@@ -45,9 +45,13 @@ python "$PKG/rebuild.py" --assembler "$ASM" --syms "$WORK/stub_syms.tcl" || exit
 rm -f "$WORK/1942.GPF"
 python "$ROOT/software/ROM-Patcher/patch_rom.py" --profile "$PKG/profile.json" --gpf "$WORK/1942.GPF" "$P1942_ROM" || exit 1
 
-sh "$HERE/kill_nodes.sh"
+# own ports (P1PORT/P2PORT = the servers, UDP1/UDP2 = the game packets): other rigs may run on the defaults
+P1PORT=${P1PORT:-8115}; P2PORT=${P2PORT:-8116}; UDP1=${UDP1:-5101}; UDP2=${UDP2:-5102}
+# stop only this rig's own leftovers: an openMSX whose command line sets one of its server ports (kill_nodes.sh would stop
+# every rig's emulators)
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'openmsx.exe' -and \$_.CommandLine -match 'msxpiserver_port ($P1PORT|$P2PORT)' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" > /dev/null 2>&1
 touch "$WORK/stop_servers"
-for port in 8115 8116 $IRC_PORT; do
+for port in $P1PORT $P2PORT $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
   if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done
@@ -108,8 +112,8 @@ start() {  # n port local_udp peer_udp
 : > "$WORK/server1.log"; : > "$WORK/server2.log"
 pings=""; [ -z "$TCP" ] || pings="${IRC_PING:-3} ${IRC_TIMEOUT:-60}"   # PING every 3 s, drop after 60 s of silence (wall clock)
 [ -z "$CHAT" ] || { ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) & }
-start 1 8115 5101 5102
-start 2 8116 5102 5101
+start 1 $P1PORT $UDP1 $UDP2
+start 2 $P2PORT $UDP2 $UDP1
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 node() {  # role port ext
@@ -119,8 +123,8 @@ node() {  # role port ext
     ext=$([ $1 = P2 ] && echo "${EXT2:-ram2mb}" || echo "${EXT1:-ram2mb}")
     hw="-ext MegaFlashROM_SCC+_SD -ext slotexpander -ext $ext"; hd="hdb {$WORKW/nextor_$1.dsk}"; boot=nextor
     if [ -n "$HYBRID" ]; then cmd="PLAYNET /T /H $PNOPTS 1942 $1"       # link 2: the game's packets through the node's MSXPi
-    elif [ $1 = P2 ]; then cmd="PLAYNET /T $PNOPTS 1942 P2 5102 10.0.2.2:5101"
-    else cmd="PLAYNET /T $PNOPTS 1942 P1 5101 10.0.2.2:5102"; fi
+    elif [ $1 = P2 ]; then cmd="PLAYNET /T $PNOPTS 1942 P2 $UDP2 10.0.2.2:$UDP1"
+    else cmd="PLAYNET /T $PNOPTS 1942 P1 $UDP1 10.0.2.2:$UDP2"; fi
   fi
   CMD="$cmd" EXITKEY=$EXITKEY CHAT=$CHAT PLAY_AT=${PLAY_AT:-60} ACCEPT_AT=${ACCEPT_AT:-75} BOOT=$boot PLAYNET_SYMS="$WORKW/stub_syms.tcl" STUB_BIN="$(cd "$PKG" && pwd -W 2>/dev/null || echo "$PKG")/assets/stub.bin" \
   ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF MENU=${MENU:-dual} SEED=${SEED:-0} MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
@@ -129,9 +133,9 @@ node() {  # role port ext
     -command "set msxpirom_sltsl ON" -command "reset" -command "set renderer ${RENDERER:-none}" -command "set mute on" \
     -script "$HARNESS" -script "$RW/software/Client/tests/soccernet/p1942_node.tcl" ${EXTRA_TCL:+-script "$EXTRA_TCL"} > "$WORK/np/$1.log" 2>&1
 }
-node P1 8115 ram2mb &
+node P1 $P1PORT ram2mb &
 NPIDS=$!
-if [ -z "$ONLY" ]; then sleep 5; node P2 8116 ${EXT2:-ram2mb} & NPIDS="$NPIDS $!"; fi
+if [ -z "$ONLY" ]; then sleep 5; node P2 $P2PORT ${EXT2:-ram2mb} & NPIDS="$NPIDS $!"; fi
 wait $NPIDS
 CMP_DROP_LAST=${TCP:+1} python "$HERE/cmp_pair.py" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
 grep -h "^#" "$WORK/np/P1.trace" "$WORK/np/P2.trace"
@@ -153,7 +157,7 @@ elif [ -n "$EXITKEY" ] && [ -n "$CHAT" ]; then  # both back in MCHAT: restore, t
   grep -h "playnet result" "$WORK/server1.log" "$WORK/server2.log"
 fi
 touch "$WORK/stop_servers"
-for port in 8115 8116 $IRC_PORT; do
+for port in $P1PORT $P2PORT $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
   if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done
