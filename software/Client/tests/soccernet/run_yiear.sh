@@ -81,6 +81,7 @@ INI
   if is_tcp $n; then                     # a TCP/IP node: INL on the server's user-mode UDP link (10.0.2.15), the chat over TCP/IP
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
     for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/ETHUNAPI.COM" ETHUNAPI.COM > /dev/null   # the Ethernet UNAPI
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/YIEAR.GPF" YIEAR.GPF > /dev/null
@@ -120,8 +121,8 @@ start 1 $P1PORT $UDP1 $UDP2
 start 2 $P2PORT $UDP2 $UDP1 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
-is_tcp 1 && export PRE_P1="MSR I;INL I"
-is_tcp 2 && export PRE_P2="MSR I;INL I"
+is_tcp 1 && export PRE_P1="MSR I;ETHUNAPI;INL I"
+is_tcp 2 && export PRE_P2="MSR I;ETHUNAPI;INL I"
 [ "$SCENARIO" != tcp ] || export CHAT_TCP=1
 if [ "$SCENARIO" = both ]; then          # no chat: each machine types the start line (PLAYNET /T game role port peer), its game over TCP/IP
   export CMD_P1="PLAYNET /T $PNOPTS yiear P1 $UDP1 10.0.2.2:$UDP2" CMD_P2="PLAYNET /T $PNOPTS yiear P2 $UDP2 10.0.2.2:$UDP1"

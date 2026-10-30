@@ -85,6 +85,7 @@ INI
   if [ -n "$TCPN" ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
     for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/ETHUNAPI.COM" ETHUNAPI.COM > /dev/null   # the Ethernet UNAPI
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/SOCCER.GPF" SOCCER.GPF > /dev/null
@@ -133,10 +134,10 @@ start 2 $P2PORT $UDP2 $UDP1 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
-[ "$SCENARIO" != tcp ] || export PRE_H="MSR I;INL I" PRE_C="MSR I;INL I" CHAT_TCP=1
+[ "$SCENARIO" != tcp ] || export PRE_H="MSR I;ETHUNAPI;INL I" PRE_C="MSR I;ETHUNAPI;INL I" CHAT_TCP=1
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
-  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C $UDP2 10.0.2.2:$UDP1"
-  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H $UDP1 10.0.2.2:$UDP2"
+  export PRE_C="MSR I;ETHUNAPI;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C $UDP2 10.0.2.2:$UDP1"
+  [ -z "$BOTH" ] || export PRE_H="MSR I;ETHUNAPI;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H $UDP1 10.0.2.2:$UDP2"
   if [ -n "$HYBRID" ]; then              # link 2: the game's packets through the node's MSXPi, the stack kept for the chat
     export CMD_C="PLAYNET /T /H soccer C"
     [ -z "$BOTH" ] || export CMD_H="PLAYNET /T /H soccer H"
