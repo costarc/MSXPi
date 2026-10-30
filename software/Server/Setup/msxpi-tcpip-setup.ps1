@@ -58,6 +58,10 @@ param(
     # TCP negotiate a smaller MSS and keeps the connection responsive.
     [int]   $Mtu         = 576,
     [string]$NatName     = "MSXPi",
+    # Windows allows ONE NAT, so two TAP adapters (two openMSX instances, each
+    # on its own subnet) share one NAT whose prefix covers both, e.g.
+    # 192.168.98.0/23 for 192.168.98.1 and 192.168.99.1. Default: this TAP's own subnet.
+    [string]$NatPrefix   = "",
     [switch]$Down
 )
 
@@ -160,6 +164,7 @@ Set-NetIPInterface -InterfaceIndex $tap.ifIndex -Forwarding Enabled
 Set-NetIPInterface -InterfaceIndex $uplink.InterfaceIndex -Forwarding Enabled
 
 $prefixCidr = ($TapIp -replace '\.\d+$', '.0') + "/$Prefix"
+if ($NatPrefix) { $prefixCidr = $NatPrefix }
 $existing = Get-NetNat -ErrorAction SilentlyContinue
 $mine = $existing | Where-Object { $_.Name -eq $NatName }
 if ($mine) {
