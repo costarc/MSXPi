@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "c294d2078edd7ff3af49ea8a3bacceb2f0fb6c15d11efb5bf58420b97895ba59"
+      "sha256": "5491fdb7e028dcb574a142d319b56569b5118b7d631a5f5dbe661e8614ba4370"
     }
   },
   "layout": [
@@ -40,50 +40,56 @@
     {
       "offset": 109,
       "expected": "2af7f02322f7",
-      "replace": "cd2fd2c3ac40",
+      "replace": "cd43d2c3ac40",
       "reason": "406Dh (bank 0): Interrupt: count it (PN_IRQ) and go to the frame at 40ACh; its counters, timer and sound move to sndTick"
     },
     {
       "offset": 135,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "4087h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 139,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "408Bh (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 143,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "408Fh (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 157,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "409Dh (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 163,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "40A3h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 169,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "40A9h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 181,
       "expected": "cda751",
-      "replace": "cde0d7",
+      "replace": "cdf7d7",
       "reason": "40B5h (bank 0): TICK site: the input reader, once per frame -> PN_TICK, then the reader"
+    },
+    {
+      "offset": 190,
+      "expected": "af3205e2",
+      "replace": "cdb6d800",
+      "reason": "40BEh (bank 0): The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
       "offset": 227,
@@ -94,283 +100,283 @@
     {
       "offset": 245,
       "expected": "320050",
-      "replace": "cdbfd5",
+      "replace": "cdd6d5",
       "reason": "40F5h (bank 0): ld (5000h),a -> MK_W0"
     },
     {
       "offset": 251,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "40FBh (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 257,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "4101h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 264,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "4108h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 267,
       "expected": "2100e0",
-      "replace": "cd27d8",
+      "replace": "cd3ed8",
       "reason": "410Bh (bank 0): INIT: clear C000h-CFFFh, F000h-F0DFh and F0F7h too, so both machines start from the same RAM"
     },
     {
       "offset": 389,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "4185h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 395,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "418Bh (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 401,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "4191h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 412,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "419Ch (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 420,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "41A4h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 435,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "41B3h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 475,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "41DBh (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 482,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "41E2h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 497,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "41F1h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 504,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "41F8h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 3447,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "4D77h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 3451,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "4D7Bh (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 3455,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "4D7Fh (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 3466,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "4D8Ah (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 3472,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "4D90h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 3478,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "4D96h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 3672,
       "expected": "ed5f47",
-      "replace": "cd6ed8",
+      "replace": "cd85d8",
       "reason": "4E58h (bank 0): ld a,r -> rLdB, deterministic"
     },
     {
       "offset": 4325,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "50E5h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 4329,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "50E9h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 4333,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "50EDh (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 4342,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "50F6h (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 4348,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "50FCh (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 4354,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "5102h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 4431,
       "expected": "fdcb214620",
-      "replace": "cdecd71864",
+      "replace": "cd03d81864",
       "reason": "514Fh (bank 0): DUALPLAY: a player block's port -> player 1's or player 2's input by the block (IY), then the edge logic at 51B8h"
     },
     {
       "offset": 4530,
       "expected": "cdbf51",
-      "replace": "cde6d7",
+      "replace": "cdfdd7",
       "reason": "51B2h (bank 0): One player (1PLAYER, EXCHANGE): player 1"
     },
     {
       "offset": 4639,
       "expected": "3e06cd4101",
-      "replace": "cdfad7181e",
+      "replace": "cd11d8181e",
       "reason": "521Fh (bank 0): Function keys (pause, continue) from either player, then on at 5242h"
     },
     {
       "offset": 5625,
       "expected": "3e07cd",
-      "replace": "c304d8",
+      "replace": "c31bd8",
       "reason": "55F9h (bank 0): F5 (CONTINUE F5) from either player"
     },
     {
       "offset": 6092,
       "expected": "3e05cd",
-      "replace": "c312d8",
+      "replace": "c329d8",
       "reason": "57CCh (bank 0): Y of the Y/N prompt, from either player"
     },
     {
       "offset": 6100,
       "expected": "3e04cd",
-      "replace": "c316d8",
+      "replace": "c32dd8",
       "reason": "57D4h (bank 0): N of the Y/N prompt, from either player"
     },
     {
       "offset": 6108,
       "expected": "cdff51",
-      "replace": "cde6d7",
+      "replace": "cdfdd7",
       "reason": "57DCh (bank 0): Menus (PLAY SELECT): player 1, the inviter"
     },
     {
       "offset": 7101,
       "expected": "320070",
-      "replace": "cdc5d5",
+      "replace": "cddcd5",
       "reason": "5BBDh (bank 0): ld (7000h),a -> MK_W1"
     },
     {
       "offset": 7105,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "5BC1h (bank 0): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 7109,
       "expected": "3200b0",
-      "replace": "cdfad5",
+      "replace": "cd11d6",
       "reason": "5BC5h (bank 0): ld (B000h),a -> MK_W3"
     },
     {
       "offset": 7120,
       "expected": "320050",
-      "replace": "cdbfd5",
+      "replace": "cdd6d5",
       "reason": "5BD0h (bank 0): ld (5000h),a -> MK_W0"
     },
     {
       "offset": 9643,
       "expected": "ed5f0f",
-      "replace": "cd73d8",
+      "replace": "cd8ad8",
       "reason": "65ABh (bank 1): ld a,r -> rRrca, deterministic"
     },
     {
       "offset": 10202,
       "expected": "ed5fe607",
-      "replace": "cd87d800",
+      "replace": "cd9ed800",
       "reason": "67DAh (bank 1): ld a,r -> rAnd07, deterministic"
     },
     {
       "offset": 11860,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "6E54h (bank 1): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 12683,
       "expected": "ed5fae",
-      "replace": "cd7dd8",
+      "replace": "cd94d8",
       "reason": "718Bh (bank 1): ld a,r -> rXorHL, deterministic"
     },
     {
       "offset": 12916,
       "expected": "ed5fe678",
-      "replace": "cd99d800",
+      "replace": "cdb0d800",
       "reason": "7274h (bank 1): ld a,r -> rAnd78, deterministic"
     },
     {
       "offset": 13269,
       "expected": "ed5fe63f",
-      "replace": "cd93d800",
+      "replace": "cdaad800",
       "reason": "73D5h (bank 1): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 13636,
       "expected": "ed5f47",
-      "replace": "cd6ed8",
+      "replace": "cd85d8",
       "reason": "7544h (bank 1): ld a,r -> rLdB, deterministic"
     },
     {
       "offset": 30109,
       "expected": "010004",
-      "replace": "c34cd8",
+      "replace": "c363d8",
       "reason": "B59Dh (bank 3): Cartridge probe (Nemesis 2 in another slot): none, on both machines"
     },
     {
@@ -388,7 +394,7 @@
     {
       "offset": 34253,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "65CDh (bank 4): ld (9000h),a -> MK_W2"
     },
     {
@@ -436,7 +442,7 @@
     {
       "offset": 34338,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "6622h (bank 4): ld (9000h),a -> MK_W2"
     },
     {
@@ -448,13 +454,13 @@
     {
       "offset": 37706,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "734Ah (bank 4): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 37713,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "7351h (bank 4): ld (9000h),a -> MK_W2"
     },
     {
@@ -466,43 +472,43 @@
     {
       "offset": 37803,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "73ABh (bank 4): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 37828,
       "expected": "320090",
-      "replace": "cdf4d5",
+      "replace": "cd0bd6",
       "reason": "73C4h (bank 4): ld (9000h),a -> MK_W2"
     },
     {
       "offset": 88561,
       "expected": "ed5f1f",
-      "replace": "cd78d8",
+      "replace": "cd8fd8",
       "reason": "99F1h (bank 10): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 89290,
       "expected": "ed5f87",
-      "replace": "cd82d8",
+      "replace": "cd99d8",
       "reason": "9CCAh (bank 10): ld a,r -> rAdd, deterministic"
     },
     {
       "offset": 89299,
       "expected": "ed5f87",
-      "replace": "cd82d8",
+      "replace": "cd99d8",
       "reason": "9CD3h (bank 10): ld a,r -> rAdd, deterministic"
     },
     {
       "offset": 102010,
       "expected": "ed5fe61f",
-      "replace": "cd8dd800",
+      "replace": "cda4d800",
       "reason": "AE7Ah (bank 12): ld a,r -> rAnd1F, deterministic"
     },
     {
       "offset": 102458,
       "expected": "ed5fe61f",
-      "replace": "cd8dd800",
+      "replace": "cda4d800",
       "reason": "B03Ah (bank 12): ld a,r -> rAnd1F, deterministic"
     }
   ],
@@ -521,7 +527,7 @@
       "mapper": "konami-scc",
       "bank_size": 8192,
       "banks": 16,
-      "block": 54527,
+      "block": 54550,
       "start_banks": [
         0,
         1,
@@ -707,26 +713,27 @@
   },
   "symbols": {
     "PN_TICK": 53765,
-    "PN_IRQ": 53807,
-    "PN_P1": 54351,
-    "PN_P2": 54353,
-    "MK_BLOCK": 54527,
-    "MK_SEG2": 54536,
-    "MK_W0": 54719,
-    "MK_W1": 54725,
-    "MK_W2": 54772,
-    "MK_W3": 54778,
-    "sndTick": 55138,
-    "tickSite": 55264,
-    "p1": 55270,
-    "dual": 55276,
-    "fkeys": 55290,
-    "f5key": 55300,
-    "keyY": 55314,
-    "keyN": 55318,
-    "probeOff": 55372,
-    "clrRam": 55335,
-    "rnd": 55379,
-    "stubEnd": 55455
+    "PN_IRQ": 53827,
+    "PN_P1": 54374,
+    "PN_P2": 54376,
+    "MK_BLOCK": 54550,
+    "MK_SEG2": 54559,
+    "MK_W0": 54742,
+    "MK_W1": 54748,
+    "MK_W2": 54795,
+    "MK_W3": 54801,
+    "sndTick": 55161,
+    "tickSite": 55287,
+    "p1": 55293,
+    "dual": 55299,
+    "fkeys": 55313,
+    "f5key": 55323,
+    "keyY": 55337,
+    "keyN": 55341,
+    "probeOff": 55395,
+    "clrRam": 55358,
+    "rnd": 55402,
+    "isrEnd": 55478,
+    "stubEnd": 55491
   }
 }

@@ -32,7 +32,7 @@ BASE = 0x4000
 STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
-EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'key2', 'forceTwo', 'rdLocal', 'stubEnd')
+EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'key2', 'forceTwo', 'rdLocal', 'isrEnd', 'stubEnd')
 
 
 def assemble(assembler, engine, test, out_dir):
@@ -67,6 +67,7 @@ def make_profile(stub, symbols):
     patch(0x401D, 'cd9551', b'\xcd' + word('PN_IRQ'), 'Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver')
     patch(0x4033, 'cde347', b'\xcd' + word('tickSite'),
           'TICK site: the pad reader, once per frame -> PN_TICK (the exchange), then the reader')
+    patch(0x4040, '3e003205e0', b'\xcd' + word('isrEnd') + bytes(2), 'The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd')
     patch(0x404A, 'fc9551', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
     patch(0x4075, '1940', word(XIRQ), "H.KEYI hook (ld hl,4019h at 4074h) -> the transport's XIRQ, which jumps to 4019h")
     patch(0x42AB, 'cd004857cd1248b2', b'\xcd' + word('key1') + nop * 5, "Menu reader: player 1's byte of this frame")

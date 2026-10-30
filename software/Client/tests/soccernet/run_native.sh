@@ -55,9 +55,13 @@ python "$SRC/build.py" --assembler "$ASM" || exit 1
 python "$ROOT/software/ROM-Patcher/profiles/soccer/rebuild.py" --assembler "$ASM" \
   --test-gpf "$WORK/SOCCER.GPF" --test-syms "$WORK/stub_syms.tcl" || exit 1
 
-sh "$HERE/kill_nodes.sh"
+# own ports (P1PORT/P2PORT = the servers, UDP1/UDP2 = the game packets): other rigs may run on the defaults
+P1PORT=${P1PORT:-8115}; P2PORT=${P2PORT:-8116}; UDP1=${UDP1:-5101}; UDP2=${UDP2:-5102}
+# stop only this rig's own leftovers: an openMSX whose command line sets one of its server ports (kill_nodes.sh would stop
+# every rig's emulators)
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -eq 'openmsx.exe' -and \$_.CommandLine -match 'msxpiserver_port ($P1PORT|$P2PORT)' } | ForEach-Object { Stop-Process -Id \$_.ProcessId -Force }" > /dev/null 2>&1
 touch "$WORK/stop_servers"
-for port in 8115 8116 ${IRC_PORT:-6671}; do
+for port in $P1PORT $P2PORT ${IRC_PORT:-6671}; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
   if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done
@@ -81,6 +85,7 @@ INI
   if [ -n "$TCPN" ] && { [ $n = 2 ] || [ -n "$BOTH" ]; }; then   # a TCP/IP node
     printf 'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\032' > "$WORK/INL.CFG"
     for f in MSR.COM INL.COM; do python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/$f" $f > /dev/null; done
+    python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/ETHUNAPI.COM" ETHUNAPI.COM > /dev/null   # the Ethernet UNAPI
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/INL.CFG" INL.CFG > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.OVL" PLAYNET.OVL > /dev/null
     python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$WORK/SOCCER.GPF" SOCCER.GPF > /dev/null
@@ -124,15 +129,15 @@ if [ -n "$CHAT" ]; then
   ( python -u "$HERE/irc_fixture_server.py" $IRC_PORT $pings > "$WORK/irc.log" 2>&1 ) &
   IRC_PID=$!
 fi
-start 1 8115 5101 5102
-start 2 8116 5102 5101 ${VER2:-2}
+start 1 $P1PORT $UDP1 $UDP2
+start 2 $P2PORT $UDP2 $UDP1 ${VER2:-2}
 sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 NODE_TCL=native_node.tcl; [ -z "$CHAT" ] || NODE_TCL=chat_node.tcl
-[ "$SCENARIO" != tcp ] || export PRE_H="MSR I;INL I" PRE_C="MSR I;INL I" CHAT_TCP=1
+[ "$SCENARIO" != tcp ] || export PRE_H="MSR I;ETHUNAPI;INL I" PRE_C="MSR I;ETHUNAPI;INL I" CHAT_TCP=1
 if [ "$SCENARIO" = mixed ]; then        # what the TCP/IP node(s) type
-  export PRE_C="MSR I;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C 5102 10.0.2.2:5101"
-  [ -z "$BOTH" ] || export PRE_H="MSR I;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H 5101 10.0.2.2:5102"
+  export PRE_C="MSR I;ETHUNAPI;INL I" CMD_C="PLAYNET /T $PNOPTS soccer C $UDP2 10.0.2.2:$UDP1"
+  [ -z "$BOTH" ] || export PRE_H="MSR I;ETHUNAPI;INL I" CMD_H="PLAYNET /T $PNOPTS soccer H $UDP1 10.0.2.2:$UDP2"
   if [ -n "$HYBRID" ]; then              # link 2: the game's packets through the node's MSXPi, the stack kept for the chat
     export CMD_C="PLAYNET /T /H soccer C"
     [ -z "$BOTH" ] || export CMD_H="PLAYNET /T /H soccer H"
@@ -155,9 +160,9 @@ node() {  # role port
 }
 PROG="PLAYNET soccer"
 export PROG
-node H 8115 &
+node H $P1PORT &
 NPIDS=$!
-if [ -z "$ONLY" ]; then sleep 5; node C 8116 & NPIDS="$NPIDS $!"; fi
+if [ -z "$ONLY" ]; then sleep 5; node C $P2PORT & NPIDS="$NPIDS $!"; fi
 wait $NPIDS
 python "$HERE/cmp_pair.py" "$WORK/np/H.trace" "$WORK/np/C.trace"
 grep -h "desync=" "$WORK/np/H.trace" "$WORK/np/C.trace"
@@ -181,7 +186,7 @@ if [ -n "$EXITKEY" ] && [ "$SCENARIO" = chat ]; then   # both must be back in MC
 fi
 [ -z "$EXITKEY" ] || grep -h -E "^# (xend|back)" "$WORK/np/H.trace" "$WORK/np/C.trace"
 touch "$WORK/stop_servers"
-for port in 8115 8116 $IRC_PORT; do
+for port in $P1PORT $P2PORT $IRC_PORT; do
   pid=$(netstat -ano | grep -E ":$port .*LISTENING" | awk '{print $5}' | head -1)
   if [ -n "$pid" ]; then taskkill //F //PID $pid > /dev/null 2>&1; fi
 done

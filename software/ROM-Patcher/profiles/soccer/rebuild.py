@@ -31,7 +31,7 @@ BASE = 0x4000
 STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512           # 512: the TCP/IP UNAPI transport (its buffers and stack)
 XIRQ = TRANSPORT + 6
-EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'pad1t', 'pad1c', 'pad2c', 'rng1', 'rng2', 'stubEnd')
+EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'pad1t', 'pad1c', 'pad2c', 'rng1', 'rng2', 'isrEnd', 'stubEnd')
 
 
 def assemble(assembler, engine, scripted, out_dir):
@@ -73,6 +73,7 @@ def make_profile(stub, symbols):
     patch(0x404E, 'fc254f', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
     patch(0xB006, 'ed5f1f', b'\xcd' + word('rng1'), 'ld a,r : rra -> derived from the frame counter')
     patch(0xB028, 'ed5fe606', b'\xcd' + word('rng2') + b'\0', 'ld a,r : and 6 -> derived from the frame counter')
+    patch(0x4044, '3e003205e0', b'\xcd' + word('isrEnd') + bytes(2), 'The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd')
     patch(0x4096, '2e40', word(XIRQ), "H.KEYI hook (ld hl,402Eh at 4095h) -> the transport's XIRQ, which jumps to 402Eh")
     return {
         'format': 'msxpi-rom-patch', 'version': 2, 'id': 'soccer-msxpi-netplay-v1',

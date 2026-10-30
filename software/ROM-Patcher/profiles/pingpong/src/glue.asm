@@ -16,6 +16,7 @@ G_READ_LOCAL:   EQU     rdLocal
 G_SOUND_TICK:   EQU     $5195                   ; the sound driver
 G_CHECK_ADDR:   EQU     $E000                   ; the game's state: scene, score, ball and paddles (E1C0h-E3FFh is idle)
 G_CHECK_LEN:    EQU     $0200
+G_CATCHUP:      EQU     2                       ; the frame catch-up for the interrupts XCHG took (isrEnd)
 
 READ_PSG:       EQU     $4800                   ; the game's joystick 1 reader (PSG): A = bits 0-5
 READ_KEY:       EQU     $4812                   ; its cursor-key + space reader: A = the same bits
@@ -86,6 +87,20 @@ forceTwo:
         or      $20
         ld      ($E002),a
         ret
+; ---- the frame catch-up (the engine's PN_AGAIN) ---------------------------------------------------------------
+; Every frame is one run of the H.KEYI handler, and an interrupt that comes while it runs only counts (the busy flag
+; E005h): a frame that the exchange makes longer than an interrupt period costs a whole period. When an interrupt
+; went by inside the exchange, taken by MSX-DOS's handler in XCHG (TCP/IP; G_CATCHUP 2), the next frame runs as soon
+; as this one ends (one at most). Interrupts that the game's own work makes it miss stay dropped, as on the cartridge,
+; and so do those its handler saw during PN_TICK (G_CATCHUP 1 catches those too: see the README). Only the
+; pace changes, never what a frame computes.
+; 4040h, in place of "ld a,0 / ld (E005h),a" (5 bytes): the busy flag cleared, or the next frame now
+isrEnd: call    PN_AGAIN
+        jr      nz,.again
+        ld      ($E005),a                       ; A = 0, as the game clears it
+        ret
+.again: pop     af                              ; the return address: the frame runs again from 4028h
+        jp      $4028                           ; (ei, then the frame, the busy flag still set)
 stubEnd:
         ASSERT  stubEnd <= PN_ORG + STUB_MAX
         ASSERT  PN_ORG + STUB_MAX <= PN_TRANSPORT

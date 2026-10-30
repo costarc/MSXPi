@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "abcf3d4ea1ed82ba1c4e0d0b07a41034d88c5b562825395881f2de580e1364bf"
+      "sha256": "968c7fdb95dc06fc896bfee6d6e10b63f83727e69bca98727daa6a723f983df0"
     }
   },
   "layout": [
@@ -58,50 +58,56 @@
     {
       "offset": 1381,
       "expected": "b948",
-      "replace": "d7c3",
+      "replace": "eec3",
       "reason": "Player 1 read: cached value of this frame"
     },
     {
       "offset": 1386,
       "expected": "f248",
-      "replace": "dbc3",
+      "replace": "f2c3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
       "offset": 2199,
       "expected": "b948",
-      "replace": "d0c3",
+      "replace": "e7c3",
       "reason": "TICK site: lee_los_mandos, once per frame - exchange, then player 1"
     },
     {
       "offset": 2221,
       "expected": "f248",
-      "replace": "dbc3",
+      "replace": "f2c3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
       "offset": 50,
       "expected": "cd254f",
-      "replace": "cd2fc1",
+      "replace": "cd43c1",
       "reason": "Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver"
     },
     {
       "offset": 78,
       "expected": "fc254f",
-      "replace": "fc2fc1",
+      "replace": "fc43c1",
       "reason": "Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ"
     },
     {
       "offset": 28678,
       "expected": "ed5f1f",
-      "replace": "cddfc3",
+      "replace": "cdf6c3",
       "reason": "ld a,r : rra -> derived from the frame counter"
     },
     {
       "offset": 28712,
       "expected": "ed5fe606",
-      "replace": "cde4c300",
+      "replace": "cdfbc300",
       "reason": "ld a,r : and 6 -> derived from the frame counter"
+    },
+    {
+      "offset": 68,
+      "expected": "3e003205e0",
+      "replace": "cd01c40000",
+      "reason": "The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
       "offset": 150,
@@ -150,14 +156,15 @@
   },
   "symbols": {
     "PN_TICK": 49413,
-    "PN_IRQ": 49455,
-    "PN_P1": 50002,
-    "PN_P2": 50003,
-    "pad1t": 50128,
-    "pad1c": 50135,
-    "pad2c": 50139,
-    "rng1": 50143,
-    "rng2": 50148,
-    "stubEnd": 50154
+    "PN_IRQ": 49475,
+    "PN_P1": 50025,
+    "PN_P2": 50026,
+    "pad1t": 50151,
+    "pad1c": 50158,
+    "pad2c": 50162,
+    "rng1": 50166,
+    "rng2": 50171,
+    "isrEnd": 50177,
+    "stubEnd": 50190
   }
 }

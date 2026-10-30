@@ -135,7 +135,7 @@ if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
     harness::at_nextor_prompt {
         # RAMHELPR I reloads COMMAND2, which comes back on A:
         harness::run_cmd "C:" 10 { harness::run_cmd "CD PLAYNET" 10 { harness::run_cmd "RAMHELPR I" 30 {
-            harness::run_cmd "C:" 10 { harness::run_cmd "INL I" 90 {
+            harness::run_cmd "C:" 10 { harness::run_cmd "ETHUNAPI" 30 { harness::run_cmd "INL I" 90 {
                 if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
                     # links 1 and 2 from the chat: MCHAT /T, alice invites bob, the chat types PLAYNET itself
                     if {$::roleArg eq "P1"} {
@@ -147,7 +147,7 @@ if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
                     }
                 } elseif {[info exists ::env(CMD)] && $::env(CMD) ne ""} { type "$::env(CMD)\r" } else { type "PLAYNET /T salamand $::roleArg 5102 10.0.2.2:5101\r" }
                 after time 3 waitStub
-            } } } } }
+            } } } } } }
     }
 } elseif {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
     # the full player flow: MCHAT, P1 (alice) invites P2 (bob), the chat types PLAYNET itself

@@ -15,10 +15,30 @@ No ROM data is included. The player supplies their own dump.
 
 ## Status
 
-Single, the play-mode screen (state 9), Turn and a first Versus are built: 12 patches, stub 804 bytes at C100h, extension 662
-bytes at A000h, GPF 1830 bytes (`software/target/games/YIEAR.GPF`). The two-emulator rig (`run_yiear.sh`) keeps both machines identical
+Single, the play-mode screen (state 9), Turn and a first Versus are built: 13 patches, stub 842 bytes at C100h, extension 662
+bytes at A000h, GPF 2106 bytes (`software/target/games/YIEAR.GPF`). The two-emulator rig (`run_yiear.sh`) keeps both machines identical
 in every mode. What is still open (the Versus move set, the chat and TCP/IP scenarios, sound and speed checks) is listed in
 `documents/HANDOVER-yiear.md`; where the code differs from the design, `documents/YIEAR-DESIGN.md` section 14 says how.
+
+## Frame catch-up
+
+Every frame is one run of the H.KEYI handler, and an interrupt that comes while it runs is dropped (the busy flag E006h).
+Over TCP/IP, MSX-DOS's own handler takes the interrupts that come inside the transport's XCHG (the engine adds them to
+`irqCnt`), so a frame that the network makes longer than an interrupt period costs the game a whole period. With the patch
+at 4059h (`isrEnd`), when an interrupt went by inside XCHG the next frame runs as soon as this one ends (one at most:
+the engine's `PN_AGAIN`, `G_CATCHUP` 2). Interrupts that the game's own work makes it miss are still dropped, as on the
+cartridge. Only the pace changes, never what a frame computes, so the machines stay in lockstep.
+
+The MSXPi transport takes no interrupts (XCHG returns E = 0), so nothing changes on the MSXPi path. Catching up the
+interrupts the handler saw during PN_TICK as well (`G_CATCHUP` 1, like Bubble Bobble's own catch-up) gained less over TCP/IP (35.1) and nothing on the MSXPi pair (58.1).
+
+Measured in openMSX (Canon V-25 pairs, 50 ms lag, 8% loss, 20 ms jitter, 3001 frames identical on both machines,
+frames 600-2400, frames a second):
+
+| Pair | Before | After |
+|---|---|---|
+| MSXPi + MSXPi | 58.3 | unchanged (same code path) |
+| MSXPi + TCP/IP (`SCENARIO=mixed`) | 30.8 | 36.5 |
 
 ## Rebuild (developers)
 

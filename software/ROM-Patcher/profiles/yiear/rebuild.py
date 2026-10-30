@@ -34,7 +34,7 @@ BASE = 0x4000
 STUB_LOAD, STUB_MAX = 0xC100, 1024
 TRANSPORT, TRANSPORT_SIZE = 0xC500, 512
 XIRQ = TRANSPORT + 6
-EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'stubEnd', 'dispatch', 'menu',
+EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'tickSite', 'key1', 'rdLocal', 'isrEnd', 'stubEnd', 'dispatch', 'menu',
             'tMode', 'tCur', 'tOut', 'tWin', 'tLives2', 'tHold', 'tBlk')
 
 
@@ -109,6 +109,7 @@ def make_profile(stub, symbols, ext):
     patch(0x4047, 'cd5c7c', b'\xcd' + word('PN_IRQ'), 'Sound tick per interrupt -> PN_IRQ counts it; the stub ticks the driver')
     patch(0x4053, 'cd2245', b'\xcd' + word('tickSite'),
           "TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte")
+    patch(0x4059, 'af3206e0', b'\xcd' + word('isrEnd') + bytes(1), 'The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd')
     patch(0x4062, 'fc5c7c', b'\xfc' + word('PN_IRQ'), 'Catch-up sound tick (an interrupt pending after the frame) -> PN_IRQ')
     patch(0x409C, 'cd7140', b'\xcd' + word('dispatch'), 'State dispatch -> the extension: state 9, the play-mode screen')
     patch(0x45AD, '03', b'\x09','The title start goes to state 9 (play-mode screen) instead of state 3 (PLAY START)')

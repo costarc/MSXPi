@@ -69,12 +69,17 @@ def irq_patches(symbols):
     return [(0x4032, b'\xcd' + irq), (0x404E, b'\xfc' + irq)]
 
 
+def catchup_patch(symbols):
+    """PLAYNET's frame catch-up: the busy flag's clear at 4044h calls the stub's isrEnd."""
+    return (0x4044, b'\xcd' + struct.pack('<H', symbols['isrEnd']) + bytes(2))
+
+
 def old_image(rom, symbols):
     """SOCCERNET.COM's RAM image (its own patch table, today's stub entry addresses) without the shortened
-    RAM clears, plus the XIRQ hook and the PN_IRQ calls."""
+    RAM clears, plus the XIRQ hook, the PN_IRQ calls and the frame catch-up."""
     image = bytearray(rom)
     for address, data in ([p for p in soccernet_patches(symbols) if p[0] not in CLEARS] + [XIRQ_PATCH]
-                          + irq_patches(symbols)):
+                          + irq_patches(symbols) + [catchup_patch(symbols)]):
         image[address - 0x4000:address - 0x4000 + len(data)] = data
     return bytes(image)
 
@@ -138,7 +143,7 @@ class SoccerPackageTests(unittest.TestCase):
         for patch in self.profile['patches']:
             patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
         changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
-        self.assertTrue(changed and changed <= patched)                    # nothing outside the 12 patches
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the 13 patches
         self.assertEqual(manifest['abi'], ['msxpi-netplay-v1'])
         gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
         self.assertEqual(patcher.gpf_image(gpf, rom), (image, self.assets['stub']))
@@ -574,7 +579,7 @@ PINGPONG = ROOT / 'profiles/pingpong/profile.json'
 
 
 class PingPongPackageTests(unittest.TestCase):
-    """Konami's Ping Pong: a 16 KB plain image with 11 patches. The real dump when PINGPONG_ROM is set."""
+    """Konami's Ping Pong: a 16 KB plain image with 12 patches (4040h: the frame catch-up). The real dump when PINGPONG_ROM is set."""
 
     def setUp(self):
         self.profile, self.assets = patcher.load_profile(PINGPONG)
@@ -583,7 +588,7 @@ class PingPongPackageTests(unittest.TestCase):
         self.assertEqual(patcher.abis(self.profile), ['msxpi-netplay-v1'])
         values = patcher.netplay_values(self.profile)
         self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('pingpong', ['P1', 'P2'], 0x4019))
-        self.assertEqual(len(self.profile['patches']), 11)
+        self.assertEqual(len(self.profile['patches']), 12)
 
     def test_the_gpf_compiles_and_the_stub_fits(self):
         gpf = patcher.read_gpf(patcher.gpf_bytes(self.profile, self.assets))
@@ -609,7 +614,7 @@ YIEAR = ROOT / 'profiles/yiear/profile.json'
 
 class YieArPackageTests(unittest.TestCase):
     """Konami's Yie Ar Kung-Fu: the 16 KB ROM at 4000h, the extension (play-mode screen, Turn, Versus) at A000h,
-    12 patches. The real dump when YIEAR_ROM is set."""
+    13 patches (4059h: the frame catch-up). The real dump when YIEAR_ROM is set."""
 
     def setUp(self):
         self.profile, self.assets = patcher.load_profile(YIEAR)
@@ -619,7 +624,7 @@ class YieArPackageTests(unittest.TestCase):
         self.assertEqual(patcher.abis(self.profile), ['msxpi-netplay-v1'])
         values = patcher.netplay_values(self.profile)
         self.assertEqual((values['game_id'], values['roles'], values['irq_handler']), ('yiear', ['P1', 'P2'], 0x4043))
-        self.assertEqual(len(self.profile['patches']), 12)
+        self.assertEqual(len(self.profile['patches']), 13)
         self.assertEqual(self.profile['source']['file'], 'KUNGFU.ROM')
 
     def test_the_gpf_compiles_and_fits_playnet(self):
@@ -652,7 +657,7 @@ class YieArPackageTests(unittest.TestCase):
         for patch in self.profile['patches']:
             patched.update(range(patch['offset'], patch['offset'] + len(patch['expected']) // 2))
         changed = {i for i, (a, b) in enumerate(zip(image, rom)) if a != b}
-        self.assertTrue(changed and changed <= patched)                    # nothing outside the 12 patches
+        self.assertTrue(changed and changed <= patched)                    # nothing outside the 13 patches
         ext = self.assets['ext']
         self.assertEqual(image[0x6000:0x6000 + len(ext)], ext)
         self.assertEqual(image[0x4000:0x6000], bytes(0x2000))              # 8000h-9FFFh: fill
