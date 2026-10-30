@@ -2,7 +2,7 @@
 # Two openMSX (Canon V-25 + MSXPi + a 2 MB memory mapper) play 1942's the turn-based two-player mode with PLAYNET.COM (image host
 # mapper-ram) through two stock msxpi-server.py that relay the stub's packets over UDP on localhost.
 #
-#   P1942_ROM=/path/to/1942.ROM sh run_1942.sh [frames] [lag_ms] [loss_pct]
+#   P1942_ROM=/path/to/1942.ROM sh run_1942.sh [frames] [lag_ms] [loss_pct] [jitter_ms]
 #
 # Needs sjasmplus (SJASMPLUS=path), the Windows openMSX build with the MSXPi device and your own 1942.ROM (never
 # committed). The release stub and its GPF come from software/ROM-Patcher/profiles/1942/rebuild.py. Environment:
@@ -24,7 +24,7 @@
 #            the players meet in MCHAT (software/target/mchat.com, against a local IRC server): alice (P1) invites bob
 #            with "/play bob 1942", bob accepts, and the chat starts PLAYNET itself. PLAY_AT / ACCEPT_AT: emulated s.
 # Results: $WORK/np/{P1,P2}.trace (+ .screen and screenshots); the script prints the comparison.
-STOPF=${1:-3000}; LAGMS=${2:-0}; LOSS=${3:-0}
+STOPF=${1:-3000}; LAGMS=${2:-0}; LOSS=${3:-0}; JIT=${4:-0}
 HERE=$(cd "$(dirname "$0")" && pwd)
 python "$HERE/rig_preflight.py" || exit 1   # the ROM openMSX loads must be this branch's (A1)
 ROOT=$(cd "$HERE/../../../.." && pwd)
@@ -103,7 +103,7 @@ start() {  # n port local_udp peer_udp
   fi
   ( cd "$SERVER"; while [ ! -f "$WORK/stop_servers" ]; do
       env MSXPI_PORT=$2 MSXPI_HOME="$WORKW/msxhome$1" MSXPI_INI="$WORKW/msxhome$1/msxpi.ini" MSXPI_TMP="$WORKW/msxhome$1/tmp" \
-        $net MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS \
+        $net MSXPI_NETPLAY_LAG_MS=$LAGMS MSXPI_NETPLAY_LOSS_PCT=$LOSS MSXPI_NETPLAY_JITTER_MS=$JIT \
         MSXPI_NETPLAY_DELAY=0 MSXPI_NETPLAY_VERSION=${VER:-2} python -u msxpi-server.py >> "$WORK/server$1.log" 2>&1
       echo "=== server $1 exited, restarting ===" >> "$WORK/server$1.log"
       sleep 1
