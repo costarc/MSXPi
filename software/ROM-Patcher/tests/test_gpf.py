@@ -6,6 +6,7 @@ package. They run on a synthetic ROM always, and on the real dump when SOCCER_RO
 """
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -469,6 +470,56 @@ class Game1942Tests(unittest.TestCase):
         for patch in self.profile['patches']:
             data = bytes.fromhex(patch['replace'])
             self.assertEqual(image[patch['offset']:patch['offset'] + len(data)], data)
+
+
+BUBBLE = ROOT / 'profiles/bubble/profile.json'
+
+
+def bubble_rebuild():
+    spec = importlib.util.spec_from_file_location('bubble_rebuild', ROOT / 'profiles/bubble/rebuild.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class BubbleTests(unittest.TestCase):
+    """Taito's Bubble Bobble: ASCII8 mapper-ram, two players at once; the stub patches the 163 bank switches itself.
+    The real dump when BUBBLE_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(BUBBLE)
+        self.data = patcher.gpf_bytes(self.profile, self.assets)
+
+    def test_round_trip(self):
+        gpf = patcher.read_gpf(self.data)
+        self.assertEqual(self.data[5], 3)                                # lockstep, image host 1
+        self.assertEqual(gpf['mapper']['type'], 2)
+        image = self.profile['netplay']['image']
+        self.assertEqual(gpf['mapper']['pairs'], [image['page1_pairs'], image['page2_pairs']])
+        self.assertEqual(gpf['mapper']['pinned'], [2, 12])
+        self.assertLessEqual(len(self.data), 3072, "PLAYNET.COM's GPF buffer is 3 KB")
+
+    def test_layout_is_apart_from_the_games_ram(self):
+        gpf = patcher.read_gpf(self.data)
+        stub = (gpf['stub_load'], gpf['stub_load'] + gpf['stub_max'] - 1)
+        area = (gpf['transport_area'], gpf['transport_area'] + gpf['transport_size'] - 1)
+        self.assertLessEqual(len(self.assets['stub']), gpf['stub_max'])
+        for low, high in gpf['game_ram']:
+            self.assertTrue(high < stub[0] or low > stub[1], (low, high))
+            self.assertTrue(high < area[0] or low > area[1], (low, high))
+
+    def test_the_stubs_site_table_matches_the_package(self):
+        rebuild = bubble_rebuild()
+        self.assertEqual(len(rebuild.BANK_SWITCHES), 163)
+        self.assertEqual((ROOT / 'profiles/bubble/src/sites.asm').read_text(), rebuild.sites_asm())
+
+    @unittest.skipUnless(os.environ.get('BUBBLE_ROM'), 'set BUBBLE_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['BUBBLE_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)        # also checks SHA-256, CRC-32 and every expected byte
+        self.assertEqual(len(image), 131072)
+        _, left = bubble_rebuild().check_rom(rom, self.profile)          # every site the stub patches holds ld (nn),a
+        self.assertEqual(left, [])
 
 
 PWARS2 = ROOT / 'profiles/pwars2/profile.json'

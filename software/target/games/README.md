@@ -10,6 +10,7 @@ data, only the patches that make the game networked. Every player needs their ow
 | `SALAMAND.GPF` | Konami's Salamander (co-op, both ships at once; a memory mapper with 22 free segments, 512 KB or more) | `SALAMAND.ROM`: Konami's Salamander (RC-758), 131072 bytes, CRC-32 `C36F559D` |
 | `PINGPONG.GPF` | Konami's Ping Pong (two players, one on each machine; the inviter plays the first pad) | `PINGPONG.ROM`: Konami's Ping Pong (1985), 16384 bytes, CRC-32 `3F200491` |
 | `YIEAR.GPF` | Konami's Yie Ar Kung-Fu (Single, Turn or Versus, chosen by the inviter on a play-mode screen; in Versus the second player controls the opponent) | `KUNGFU.ROM`: Konami's Yie Ar Kung-Fu (RC-725), 16384 bytes, CRC-32 `8A12EC4F` |
+| `BUBBLE.GPF` | Taito's Bubble Bobble (two players at once, Bub and Bob; an MSX2 with a memory mapper of 16 free segments, 512 KB recommended) | `BUBBLE.ROM`: Taito's Bubble Bobble for the MSX2 (1987), 131072 bytes, CRC-32 `6524D9FC` |
 | `PWARS2.GPF` | ASCII's Penguin-kun Wars 2 (versus: the second player controls the computer opponent; MSX2, a memory mapper of 512 KB; over an MSXPi or TCP/IP, not the hybrid /H link) | `P-WARS2.ROM`: ASCII's Penguin-kun Wars 2 (MSX2, 1988), 262144 bytes, CRC-32 `B1B24DA1` |
 
 ## Installing a game

@@ -1,0 +1,377 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "bubble-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 131072,
+    "sha256": "15962fd815c3fd8d28cbb664c8f99d10825979fb5b9bd975b7aac785d35532eb",
+    "crc32": 1696913916,
+    "file": "BUBBLE.ROM"
+  },
+  "output": {
+    "size": 131072,
+    "fill": 0,
+    "mapper": "ascii8",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own BUBBLE.ROM: Taito's Bubble Bobble for the MSX2, 128 KB, the dump identified above",
+    "An MSX2 (the game needs one), PLAYNET release 3",
+    "A memory mapper with at least 16 free 16 KB segments for the game (512 KB recommended: 22 segments play without pauses)"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "d59deee10c3d5db477bf592c62bf9ea617d1eeb8dde35c5852a705ca28f3e8e4"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 131072,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 90,
+      "expected": "cd8441",
+      "replace": "cd30ec",
+      "reason": "0005Ah (bank 0 + 005Ah): INIT: call 4184h -> stubInit: the bank switches -> MK_W1..MK_W3 in every segment, then 4184h"
+    },
+    {
+      "offset": 121,
+      "expected": "cd2568",
+      "replace": "cdddeb",
+      "reason": "00079h (bank 0 + 0079h): INIT: the RAM clear (6825h, C000h-F37Dh) -> clrGame: the same around the stub, the transport and the pair map"
+    },
+    {
+      "offset": 317,
+      "expected": "d542",
+      "replace": "56c9",
+      "reason": "0013Dh (bank 0 + 013Dh): H.KEYI -> the transport's XIRQ, which jumps to the handler 42D5h"
+    },
+    {
+      "offset": 733,
+      "expected": "3a32d0a7203b",
+      "replace": "cda1eb000000",
+      "reason": "002DDh (bank 0 + 02DDh): the handler is busy -> busyChk: drop the interrupt, or keep it for later if it came during PN_TICK"
+    },
+    {
+      "offset": 744,
+      "expected": "3e0e32f8773e0f32f87f",
+      "replace": "cd17ec00000000000000",
+      "reason": "002E8h (bank 0 + 02E8h): the handler maps banks 14/15 for the sound driver -> sndMap (MK_W23)"
+    },
+    {
+      "offset": 761,
+      "expected": "3a89e432f8773a8ae432f87f",
+      "replace": "cd22ec000000000000000000",
+      "reason": "002F9h (bank 0 + 02F9h): the handler puts back W2/W3 from E489h/E48Ah -> gameMap (MK_W23)"
+    },
+    {
+      "offset": 794,
+      "expected": "af3232d0",
+      "replace": "c3b1eb00",
+      "reason": "0031Ah (bank 0 + 031Ah): the end of the handler -> isrEnd: the next frame now if one is pending"
+    },
+    {
+      "offset": 815,
+      "expected": "1e8fcd53434fcd6443b1",
+      "replace": "cd7beb00000000000000",
+      "reason": "0032Fh (bank 0 + 032Fh): player 1 (joystick 1 + keys) -> inP1: PN_TICK, then player 1 (seat 0)"
+    },
+    {
+      "offset": 834,
+      "expected": "1ecfcd53434fcdb343b1",
+      "replace": "cdc6eb00000000000000",
+      "reason": "00342h (bank 0 + 0342h): player 2 (joystick 2 + keys) -> inP2: player 2 (seat 1)"
+    },
+    {
+      "offset": 37245,
+      "expected": "ed5fe601",
+      "replace": "cd2bee00",
+      "reason": "0917Dh (bank 4 + 117Dh): ld a,r -> rAnd01, deterministic"
+    },
+    {
+      "offset": 38244,
+      "expected": "ed5fe63f",
+      "replace": "cd49ee00",
+      "reason": "09564h (bank 4 + 1564h): ld a,r -> rAnd3F, deterministic"
+    },
+    {
+      "offset": 39797,
+      "expected": "ed5fe607",
+      "replace": "cd37ee00",
+      "reason": "09B75h (bank 4 + 1B75h): ld a,r -> rAnd07, deterministic"
+    },
+    {
+      "offset": 39853,
+      "expected": "ed5fe60f",
+      "replace": "cd3dee00",
+      "reason": "09BADh (bank 4 + 1BADh): ld a,r -> rAnd0F, deterministic"
+    },
+    {
+      "offset": 47476,
+      "expected": "ed5fac",
+      "replace": "cd4fee",
+      "reason": "0B974h (bank 5 + 1974h): ld a,r -> rXorH, deterministic"
+    },
+    {
+      "offset": 47480,
+      "expected": "ed5fad",
+      "replace": "cd54ee",
+      "reason": "0B978h (bank 5 + 1978h): ld a,r -> rXorL, deterministic"
+    },
+    {
+      "offset": 65117,
+      "expected": "ed5f80",
+      "replace": "cd59ee",
+      "reason": "0FE5Dh (bank 7 + 1E5Dh): ld a,r -> rAddB, deterministic"
+    },
+    {
+      "offset": 65458,
+      "expected": "ed5f81",
+      "replace": "cd5eee",
+      "reason": "0FFB2h (bank 7 + 1FB2h): ld a,r -> rAddC, deterministic"
+    },
+    {
+      "offset": 79415,
+      "expected": "ed5fe67f",
+      "replace": "cd16ee00",
+      "reason": "13637h (bank 9 + 1637h): ld a,r -> rnd, deterministic"
+    },
+    {
+      "offset": 80427,
+      "expected": "ed5fe610",
+      "replace": "cd43ee00",
+      "reason": "13A2Bh (bank 9 + 1A2Bh): ld a,r -> rAnd10, deterministic"
+    },
+    {
+      "offset": 80432,
+      "expected": "ed5fe603",
+      "replace": "cd31ee00",
+      "reason": "13A30h (bank 9 + 1A30h): ld a,r -> rAnd03, deterministic"
+    },
+    {
+      "offset": 110153,
+      "expected": "ed5fad",
+      "replace": "cd54ee",
+      "reason": "1AE49h (bank 13 + 0E49h): ld a,r -> rXorL, deterministic"
+    },
+    {
+      "offset": 110733,
+      "expected": "cd4101",
+      "replace": "cdcceb",
+      "reason": "1B08Dh (bank 13 + 108Dh): the pause: STOP (row 7) -> stopKey, either player's from the inputs"
+    },
+    {
+      "offset": 110745,
+      "expected": "cd4101",
+      "replace": "3eff00",
+      "reason": "1B099h (bank 13 + 1099h): HOME+INS / HOME+DEL (row 8) are local keys: never pressed"
+    },
+    {
+      "offset": 110781,
+      "expected": "cd4101",
+      "replace": "cdcceb",
+      "reason": "1B0BDh (bank 13 + 10BDh): the pause: STOP released -> stopKey"
+    },
+    {
+      "offset": 112645,
+      "expected": "ed5fe607",
+      "replace": "cd37ee00",
+      "reason": "1B805h (bank 13 + 1805h): ld a,r -> rAnd07, deterministic"
+    },
+    {
+      "offset": 112816,
+      "expected": "ed5fe607",
+      "replace": "cd37ee00",
+      "reason": "1B8B0h (bank 13 + 18B0h): ld a,r -> rAnd07, deterministic"
+    },
+    {
+      "offset": 126269,
+      "expected": "ed5f81",
+      "replace": "cd5eee",
+      "reason": "1ED3Dh (bank 15 + 0D3Dh): ld a,r -> rAddC, deterministic"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "bubble",
+    "title": "Bubble Bobble (2P co-op)",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "mapper-ram",
+      "mapper": "ascii8",
+      "bank_size": 8192,
+      "banks": 16,
+      "block": 59673,
+      "start_banks": [
+        0,
+        4,
+        9,
+        5
+      ],
+      "page1_pairs": [
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          11
+        ]
+      ],
+      "page2_pairs": [
+        [
+          9,
+          5
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          9,
+          3
+        ],
+        [
+          9,
+          13
+        ],
+        [
+          9,
+          15
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          6,
+          10
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          8,
+          5
+        ],
+        [
+          9,
+          7
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          14,
+          5
+        ],
+        [
+          6,
+          13
+        ],
+        [
+          9,
+          2
+        ],
+        [
+          9,
+          10
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          9,
+          1
+        ],
+        [
+          0,
+          13
+        ]
+      ],
+      "pinned": [
+        2,
+        12
+      ],
+      "min_segments": 16,
+      "recommended_segments": 22
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 58976,
+      "max": 2336
+    },
+    "transport_area": {
+      "address": 51536,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        49152,
+        51535
+      ],
+      [
+        52224,
+        58975
+      ],
+      [
+        61312,
+        62335
+      ]
+    ],
+    "irq_handler": 17109,
+    "start": "header-init",
+    "min_playnet": 3,
+    "requires": [
+      "mapper-ram"
+    ]
+  },
+  "symbols": {
+    "PN_TICK": 58981,
+    "PN_IRQ": 59000,
+    "PN_P1": 59547,
+    "PN_P2": 59548,
+    "MK_BLOCK": 59673,
+    "MK_SEG2": 59682,
+    "MK_W1": 59827,
+    "MK_W2": 59874,
+    "MK_W3": 59880,
+    "MK_W23": 59975,
+    "inP1": 60283,
+    "inP2": 60358,
+    "stopKey": 60364,
+    "stubInit": 60464,
+    "busyChk": 60321,
+    "isrEnd": 60337,
+    "clrGame": 60381,
+    "sndMap": 60439,
+    "gameMap": 60450,
+    "rnd": 60950,
+    "stubEnd": 61027
+  }
+}
