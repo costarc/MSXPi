@@ -271,10 +271,16 @@ parseGpf:
         call    cpHLDE
         ld      a,26
         jp      c,badPkg                        ; longer than stub.max
-        ; -- stub area and transport area in page 3 (C000h-F37Fh), apart from each other
+        ; -- stub area and transport area in page 3 (C000h-F37Fh), apart from each other; a mapper-ram game's
+        ; stub may also be in page 2 (8000h-): that page is a RAM segment of the game's own
         ld      hl,(npStubLoad)
         ld      de,(npStubMax)
-        call    page3
+        ld      bc,$C000
+        ld      a,(mHost)
+        or      a
+        jr      z,.st3
+        ld      b,$80
+.st3:   call    pgIn
         ld      a,27
         jp      c,badPkg
         ld      (stubHi),hl

@@ -387,7 +387,7 @@ class MapperRamTests(unittest.TestCase):
 
     def test_rules(self):
         cases = [
-            (lambda i: i.update(mapper='ascii16'), 'image.mapper'),
+            (lambda i: i.update(mapper='ascii32'), 'image.mapper'),
             (lambda i: i.update(bank_size=16384), 'bank_size'),
             (lambda i: i.update(banks=12), 'power of two'),
             (lambda i: i.update(pinned=[4, 5]), 'home'),
@@ -520,6 +520,54 @@ class BubbleTests(unittest.TestCase):
         self.assertEqual(len(image), 131072)
         _, left = bubble_rebuild().check_rom(rom, self.profile)          # every site the stub patches holds ld (nn),a
         self.assertEqual(left, [])
+
+
+PWARS2 = ROOT / 'profiles/pwars2/profile.json'
+
+
+class PenguinWars2Tests(unittest.TestCase):
+    """ASCII's Penguin-kun Wars 2: an ASCII16 mapper-ram package (16 KB banks as pairs of 8 KB halves, all pinned) with its stub
+    in page 2, the game's own RAM segment. The real dump when PWARS2_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(PWARS2)
+        self.data = patcher.gpf_bytes(self.profile, self.assets)
+
+    def test_round_trip(self):
+        gpf = patcher.read_gpf(self.data)
+        self.assertEqual(self.data[5], 3)                                # lockstep, image host 1
+        image = self.profile['netplay']['image']
+        self.assertEqual(image['mapper'], 'ascii16')
+        self.assertEqual(gpf['mapper']['type'], 3)
+        self.assertEqual(gpf['mapper']['pairs'][0], [[2 * n, 2 * n + 1] for n in range(16)])
+        self.assertEqual(gpf['mapper']['pinned'], [16, 1])
+        self.assertLessEqual(len(self.data), 3072, "PLAYNET.COM's GPF buffer is 3 KB")
+
+    def test_stub_in_page_2(self):
+        gpf = patcher.read_gpf(self.data)
+        self.assertTrue(0x8000 <= gpf['stub_load'] and gpf['stub_load'] + gpf['stub_max'] <= 0xC000)
+        stub = (gpf['stub_load'], gpf['stub_load'] + gpf['stub_max'] - 1)
+        area = (gpf['transport_area'], gpf['transport_area'] + gpf['transport_size'] - 1)
+        for low, high in gpf['game_ram']:
+            self.assertTrue(high < stub[0] or low > stub[1], (low, high))
+            self.assertTrue(high < area[0] or low > area[1], (low, high))
+
+    def test_page_2_stub_needs_mapper_ram(self):
+        profile = copy.deepcopy(self.profile)
+        values = patcher.netplay_values(profile)
+        values.pop('mapper')
+        values['output_size'] = 32768                                    # as a plain 32 KB image would be
+        with self.assertRaisesRegex(patcher.PatchError, 'stub.load'):
+            patcher.check_netplay(values, {0: len(self.assets['stub'])})
+
+    @unittest.skipUnless(os.environ.get('PWARS2_ROM'), 'set PWARS2_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['PWARS2_ROM']).read_bytes()
+        image, _ = patcher.build(rom, self.profile, self.assets)
+        self.assertEqual(len(image), 262144)
+        for patch in self.profile['patches']:
+            data = bytes.fromhex(patch['replace'])
+            self.assertEqual(image[patch['offset']:patch['offset'] + len(data)], data)
 
 
 PINGPONG = ROOT / 'profiles/pingpong/profile.json'

@@ -28,8 +28,9 @@ GPF_MAX = 16384
 PLAYNET_VERSION = 3                     # the newest min_playnet this tool understands
 SEC_END, SEC_SOURCE, SEC_NETPLAY, SEC_LAYOUT, SEC_PATCH, SEC_ASSET, SEC_MAPPER = range(7)
 HOST_PLAIN, HOST_MAPPER = 0, 1          # netplay.image.host, GPF flags bits 1-2
-MAPPER_TYPES = {'konami-scc': 1, 'ascii8': 2}   # mapper-ram: the cartridge mappers a stub's bank engine emulates (informational:
-                                        # the patches decide which registers the game's bank writes become)
+MAPPER_TYPES = {'konami-scc': 1, 'ascii8': 2, 'ascii16': 3}   # mapper-ram: the cartridge mappers a stub's bank engine emulates
+                                        # (informational: the patches decide which registers the game's bank writes become).
+                                        # ascii16 is described in 8 KB halves: its 16 KB bank N is the pair (2N, 2N+1).
 MAPPER_BANK = 8192                      # 8 KB banks, two to a 16 KB mapper segment (PLAYNET-PROTOCOLS 7.3)
 MAPPER_MIN_PLAYNET = 3
 # What a package may need from the machine or from PLAYNET (never a link: one package serves every link). One bit each in
@@ -37,6 +38,7 @@ MAPPER_MIN_PLAYNET = 3
 CAPABILITIES = {'mapper-ram': 0x01}
 MAPPER_FIXED = '<BBBH4BBBBBB'           # the MAPPER section before its pairs (14 bytes)
 PAGE3_LOW, PAGE3_HIGH = 0xC000, 0xF37F  # RAM below the BIOS work area
+PAGE2_LOW = 0x8000                      # a mapper-ram game's stub may live in page 2, the game's own RAM segment
 # The largest transport plus the UNAPI buffer: the hybrid (384 bytes) and UNAPI (346) transports keep a 128-byte buffer at +384, the
 # MSXPi one is 458 bytes (software/Client/src/playnet/build/, checked in tests/test_profiles.py).
 TRANSPORT_AREA_MIN = 512
@@ -363,9 +365,10 @@ def check_netplay(v, asset_sizes):
     require(isinstance(v['source_file'], str) and FILE83_RE.fullmatch(v['source_file']),
             'source.file must be an upper-case 8.3 file name')
     require(v['stub_asset'] in asset_sizes, 'netplay.stub.asset must name an asset')
-    stub_low = integer(v['stub_load'], PAGE3_LOW, PAGE3_HIGH, 'netplay.stub.load')
-    stub_high = stub_low + integer(v['stub_max'], 1, PAGE3_HIGH - PAGE3_LOW + 1, 'netplay.stub.max') - 1
-    require(stub_high <= PAGE3_HIGH, 'The stub area must lie in page 3 (C000h-F37Fh)')
+    stub_floor = PAGE2_LOW if v.get('mapper') else PAGE3_LOW
+    stub_low = integer(v['stub_load'], stub_floor, PAGE3_HIGH, 'netplay.stub.load')
+    stub_high = stub_low + integer(v['stub_max'], 1, PAGE3_HIGH - stub_floor + 1, 'netplay.stub.max') - 1
+    require(stub_high <= PAGE3_HIGH, 'The stub area must lie in page 3 (C000h-F37Fh), or for mapper-ram in pages 2-3')
     area_low = integer(v['transport_area'], PAGE3_LOW, PAGE3_HIGH, 'netplay.transport_area.address')
     area_high = area_low + integer(v['transport_size'], TRANSPORT_AREA_MIN, PAGE3_HIGH - PAGE3_LOW + 1,
                                    'netplay.transport_area.size') - 1

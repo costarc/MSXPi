@@ -186,17 +186,14 @@ sesFields:
         ldir
         ret
 
-; HL = start, DE = length: CF if not inside page 3 (C000h-F37Fh) or empty; else HL = last address
-page3:  ld      a,d
+; HL = start, DE = length: CF if not inside page 3 (C000h-F37Fh) or empty; else HL = last address.
+; pgIn: the same from BC (8000h: a mapper-ram game's stub may live in page 2, the game's own RAM segment).
+page3:  ld      bc,$C000
+pgIn:   ld      a,d
         or      e
         scf
         ret     z
-        push    hl
-        push    de
-        ld      de,$C000
-        call    cpHLDE
-        pop     de
-        pop     hl
+        call    cpHLDE.bc                       ; start < the low bound?
         ret     c
         dec     de
         add     hl,de
@@ -960,7 +957,14 @@ trEarly:
         call    .put
         ld      a,(vG3)
         out     ($FF),a
-.p3:    ld      hl,(vStubSrc)                   ; the stub: TCP/IP, in G3 only (MSX-DOS's page 3 keeps what
+.p3:    ld      a,(vMap)                        ; mapper-ram: the segments of the start pairs, before the stub
+        or      a                               ; (which may live in page 2, the game's own segment)
+        jr      z,.p3s
+        ld      a,(vSeg1)
+        out     ($FD),a
+        ld      a,(vSeg2)
+        out     ($FE),a
+.p3s:   ld      hl,(vStubSrc)                   ; the stub: TCP/IP, in G3 only (MSX-DOS's page 3 keeps what
         ld      de,(vStubDst)                   ; it has there, above its TPA top)
         ld      bc,(vStubLen)
         ldir
@@ -977,14 +981,7 @@ trEarly:
         and     $FC
         or      c
         out     ($A8),a
-        ld      a,(vMap)                        ; mapper-ram: the segments of the start pairs
-        or      a
-        jr      z,.ram
-        ld      a,(vSeg1)
-        out     ($FD),a
-        ld      a,(vSeg2)
-        out     ($FE),a
-.ram:   ld      a,(vRam1)                       ; RAM, holding the game, into page 1
+        ld      a,(vRam1)                       ; RAM, holding the game, into page 1
         ld      h,$40
         call    ENASLT
         di

@@ -1,0 +1,484 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "pwars2-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 262144,
+    "sha256": "7815e5ac436521faeec24719d6edaaa820f07b8fb55ddafab4a0a08364cc766e",
+    "crc32": 2981252513,
+    "file": "P-WARS2.ROM"
+  },
+  "output": {
+    "size": 262144,
+    "fill": 0,
+    "mapper": "ascii16",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own P-WARS2.ROM: ASCII's Penguin-kun Wars 2 for the MSX2, 256 KB, the dump identified above",
+    "An MSX2 (the game needs one), PLAYNET release 3, over an MSXPi or TCP/IP UNAPI (not the hybrid link 2)",
+    "A memory mapper with at least 19 free 16 KB segments for the game (512 KB)"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "f0433be43a2e7f2243f9e74416dc4580200e7629f6652ea390a381bcd8f73f60"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 262144,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 17,
+      "expected": "cd3801",
+      "replace": "cd35aa",
+      "reason": "4011h (bank 0): INIT: call RSLREG -> initGame: the RAM cleared as a cartridge finds it, then RSLREG"
+    },
+    {
+      "offset": 144,
+      "expected": "cd4101",
+      "replace": "3eff00",
+      "reason": "B460h (RAM): keys 1 and 2 at the start (a stage select) -> not pressed"
+    },
+    {
+      "offset": 316,
+      "expected": "21f2b134",
+      "replace": "cdfaa900",
+      "reason": "B50Ch (RAM): the frame counter, the match -> tickInc: the TICK"
+    },
+    {
+      "offset": 711,
+      "expected": "3a88ef",
+      "replace": "cd0aaa",
+      "reason": "B697h (RAM): the wait for a tune to end -> a TICK each time"
+    },
+    {
+      "offset": 1049,
+      "expected": "21f2b135",
+      "replace": "cd02aa00",
+      "reason": "B7E9h (RAM): the frame counter, the end of a round -> tickDec: the TICK"
+    },
+    {
+      "offset": 3035,
+      "expected": "f3",
+      "replace": "c9",
+      "reason": "BFABh (RAM): MSX-MUSIC / FM-PAC search -> none found (both machines play the PSG music)"
+    },
+    {
+      "offset": 3331,
+      "expected": "f32100",
+      "replace": "c39ba9",
+      "reason": "C0D3h (RAM): the page-1 bank select (writes 6000h-6006h) -> MK_A16: the segment holding that bank"
+    },
+    {
+      "offset": 3477,
+      "expected": "edb0",
+      "replace": "0000",
+      "reason": "C165h (RAM): the copy of bank 1's table to A700h (the stub's room): xTab reads the bank"
+    },
+    {
+      "offset": 3662,
+      "expected": "cd64c7",
+      "replace": "cde8a9",
+      "reason": "C21Eh (RAM): the penguin: direction -> cStk: this frame's value"
+    },
+    {
+      "offset": 3730,
+      "expected": "cd64c7",
+      "replace": "cde8a9",
+      "reason": "C262h (RAM): the penguin: direction -> cStk: this frame's value"
+    },
+    {
+      "offset": 3749,
+      "expected": "cd53c7",
+      "replace": "cdf1a9",
+      "reason": "C275h (RAM): the penguin: trigger -> cTrg: this frame's value"
+    },
+    {
+      "offset": 3831,
+      "expected": "cd64c7",
+      "replace": "cde8a9",
+      "reason": "C2C7h (RAM): the penguin: direction -> cStk: this frame's value"
+    },
+    {
+      "offset": 4610,
+      "expected": "cd64c7",
+      "replace": "cde8a9",
+      "reason": "C5D2h (RAM): the penguin: direction -> cStk: this frame's value"
+    },
+    {
+      "offset": 4913,
+      "expected": "cd53c7",
+      "replace": "cdf1a9",
+      "reason": "C701h (RAM): the penguin: trigger -> cTrg: this frame's value"
+    },
+    {
+      "offset": 4988,
+      "expected": "3e01cd",
+      "replace": "c3e5a9",
+      "reason": "C74Ch (RAM): reader C74Ch: direction (port 1) -> tStk: a TICK, then player 1"
+    },
+    {
+      "offset": 4995,
+      "expected": "3e01cd",
+      "replace": "c3eea9",
+      "reason": "C753h (RAM): reader C753h: trigger -> tTrg: a TICK, then player 1"
+    },
+    {
+      "offset": 5012,
+      "expected": "3e01cd",
+      "replace": "c3e5a9",
+      "reason": "C764h (RAM): reader C764h: direction -> tStk: a TICK, then player 1"
+    },
+    {
+      "offset": 5805,
+      "expected": "3af6b1",
+      "replace": "cd86aa",
+      "reason": "CA7Dh (RAM): versus: the opponent's frame: player 2 controls it -> vsSet"
+    },
+    {
+      "offset": 5936,
+      "expected": "cd55cc",
+      "replace": "cdb2aa",
+      "reason": "CB00h (RAM): versus: the step: not in the states player 2 moves in -> vsMvG"
+    },
+    {
+      "offset": 5943,
+      "expected": "cabfd0",
+      "replace": "ca24ab",
+      "reason": "CB07h (RAM): versus: state 0 (pick a ball) -> vsFree"
+    },
+    {
+      "offset": 5953,
+      "expected": "ca2ad1",
+      "replace": "ca24ab",
+      "reason": "CB11h (RAM): versus: state 20h (walk to it) -> vsFree"
+    },
+    {
+      "offset": 5958,
+      "expected": "cae1d1",
+      "replace": "ca83ab",
+      "reason": "CB16h (RAM): versus: state 30h (hold it, throw) -> vsHold"
+    },
+    {
+      "offset": 6021,
+      "expected": "cd7fcb",
+      "replace": "cda2aa",
+      "reason": "CB55h (RAM): versus: two opponents: the second keeps the AI -> aiOpp"
+    },
+    {
+      "offset": 6100,
+      "expected": "cd55cc",
+      "replace": "cdb2aa",
+      "reason": "CBA4h (RAM): versus: two opponents: the step -> vsMvG"
+    },
+    {
+      "offset": 6107,
+      "expected": "cabfd0",
+      "replace": "ca24ab",
+      "reason": "CBABh (RAM): versus: two opponents: state 0 -> vsFree"
+    },
+    {
+      "offset": 6112,
+      "expected": "ca2ad1",
+      "replace": "ca24ab",
+      "reason": "CBB0h (RAM): versus: two opponents: state 20h -> vsFree"
+    },
+    {
+      "offset": 6117,
+      "expected": "cae1d1",
+      "replace": "ca83ab",
+      "reason": "CBB5h (RAM): versus: two opponents: state 30h -> vsHold"
+    },
+    {
+      "offset": 11723,
+      "expected": "47ed5f",
+      "replace": "cd73aa",
+      "reason": "E19Bh (RAM): ld a,r -> rndB, deterministic"
+    },
+    {
+      "offset": 11742,
+      "expected": "3a21b1",
+      "replace": "c3afab",
+      "reason": "E1AEh (RAM): E1AEh: the table lookup at A700h -> xTab, from bank 1"
+    },
+    {
+      "offset": 13001,
+      "expected": "21ace6",
+      "replace": "215ea6",
+      "reason": "E699h (RAM): the H.TIMI hook -> PN_IRQ, which counts; the engine ticks the handler (G_SOUND_TICK)"
+    },
+    {
+      "offset": 15014,
+      "expected": "cd53c7",
+      "replace": "cdf1a9",
+      "reason": "EE76h (RAM): the throw power (H.TIMI handler) -> cTrg: this frame's value"
+    },
+    {
+      "offset": 15025,
+      "expected": "cd53c7",
+      "replace": "cdf1a9",
+      "reason": "EE81h (RAM): the throw power (H.TIMI handler) -> cTrg: this frame's value"
+    },
+    {
+      "offset": 15037,
+      "expected": "cdcdee",
+      "replace": "f60100",
+      "reason": "EE8Dh (RAM): the pause key (F1), read and waited on inside the interrupt handler -> never pressed"
+    },
+    {
+      "offset": 129929,
+      "expected": "47ed5f",
+      "replace": "cd73aa",
+      "reason": "7B89h (bank 7): ld a,r -> rndB, deterministic"
+    },
+    {
+      "offset": 162017,
+      "expected": "21f2b135",
+      "replace": "cd02aa00",
+      "reason": "78E1h (bank 9): the frame counter, the map -> tickDec: the TICK"
+    },
+    {
+      "offset": 162042,
+      "expected": "cd597c",
+      "replace": "cdf1a9",
+      "reason": "78FAh (bank 9): the map: trigger -> cTrg: this frame's value"
+    },
+    {
+      "offset": 162085,
+      "expected": "cd4101",
+      "replace": "3eff00",
+      "reason": "7925h (bank 9): the map: key M -> not pressed"
+    },
+    {
+      "offset": 162131,
+      "expected": "cd6a7c",
+      "replace": "cde8a9",
+      "reason": "7953h (bank 9): the map: direction -> cStk: this frame's value"
+    },
+    {
+      "offset": 162905,
+      "expected": "3e01cd",
+      "replace": "c3eea9",
+      "reason": "7C59h (bank 9): reader bank 9 7C59h: trigger (the map) -> tTrg: a TICK, then player 1"
+    },
+    {
+      "offset": 162922,
+      "expected": "3e01cd",
+      "replace": "c3e5a9",
+      "reason": "7C6Ah (bank 9): reader bank 9 7C6Ah: direction -> tStk: a TICK, then player 1"
+    },
+    {
+      "offset": 162943,
+      "expected": "ed5f84",
+      "replace": "cd77aa",
+      "reason": "7C7Fh (bank 9): ld a,r -> rAddH, deterministic"
+    },
+    {
+      "offset": 162949,
+      "expected": "ed5f85",
+      "replace": "cd7caa",
+      "reason": "7C85h (bank 9): ld a,r -> rAddL, deterministic"
+    },
+    {
+      "offset": 179915,
+      "expected": "ed5f81",
+      "replace": "cd81aa",
+      "reason": "7ECBh (bank 10): ld a,r -> rAddC, deterministic"
+    },
+    {
+      "offset": 212196,
+      "expected": "3a21b1",
+      "replace": "c3afab",
+      "reason": "7CE4h (bank 12): bank 12 7CE4h: the table lookup at A700h -> xTab, from bank 1"
+    },
+    {
+      "offset": 212782,
+      "expected": "47ed5f",
+      "replace": "cd73aa",
+      "reason": "7F2Eh (bank 12): ld a,r -> rndB, deterministic"
+    },
+    {
+      "offset": 227591,
+      "expected": "3a21b1",
+      "replace": "c3afab",
+      "reason": "7907h (bank 13): bank 13 7907h: the table lookup at A700h -> xTab, from bank 1"
+    },
+    {
+      "offset": 227788,
+      "expected": "3e01cd",
+      "replace": "c3eea9",
+      "reason": "79CCh (bank 13): reader bank 13 79CCh: trigger -> tTrg: a TICK, then player 1"
+    },
+    {
+      "offset": 227805,
+      "expected": "3e01cd",
+      "replace": "c3e5a9",
+      "reason": "79DDh (bank 13): reader bank 13 79DDh: direction -> tStk: a TICK, then player 1"
+    },
+    {
+      "offset": 261605,
+      "expected": "3e01cd",
+      "replace": "c3eea9",
+      "reason": "7DE5h (bank 15): reader bank 15 7DE5h: trigger -> tTrg: a TICK, then player 1"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "pwars2",
+    "title": "Penguin Wars 2 (versus)",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 1,
+    "image": {
+      "host": "mapper-ram",
+      "mapper": "ascii16",
+      "bank_size": 8192,
+      "banks": 32,
+      "block": 43263,
+      "start_banks": [
+        0,
+        1,
+        0,
+        1
+      ],
+      "page1_pairs": [
+        [
+          0,
+          1
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          10,
+          11
+        ],
+        [
+          12,
+          13
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          16,
+          17
+        ],
+        [
+          18,
+          19
+        ],
+        [
+          20,
+          21
+        ],
+        [
+          22,
+          23
+        ],
+        [
+          24,
+          25
+        ],
+        [
+          26,
+          27
+        ],
+        [
+          28,
+          29
+        ],
+        [
+          30,
+          31
+        ]
+      ],
+      "page2_pairs": [
+        [
+          0,
+          1
+        ]
+      ],
+      "pinned": [
+        16,
+        1
+      ],
+      "min_segments": 19,
+      "recommended_segments": 19
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 42544,
+      "max": 1616
+    },
+    "transport_area": {
+      "address": 61696,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        32768,
+        42543
+      ],
+      [
+        44160,
+        61695
+      ]
+    ],
+    "irq_handler": 48779,
+    "start": "header-init",
+    "min_playnet": 3,
+    "requires": [
+      "mapper-ram"
+    ]
+  },
+  "symbols": {
+    "PN_TICK": 42549,
+    "PN_IRQ": 42590,
+    "PN_P1": 43137,
+    "PN_P2": 43138,
+    "MK_BLOCK": 43263,
+    "MK_A16": 43419,
+    "tStk": 43493,
+    "tTrg": 43502,
+    "cStk": 43496,
+    "cTrg": 43505,
+    "tickInc": 43514,
+    "tickDec": 43522,
+    "sndTick": 43537,
+    "initGame": 43573,
+    "vsSet": 43654,
+    "vsFree": 43812,
+    "vsHold": 43907,
+    "vsCtl": 43695,
+    "rnd": 43614,
+    "stubEnd": 43976
+  }
+}
