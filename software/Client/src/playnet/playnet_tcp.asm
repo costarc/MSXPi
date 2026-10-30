@@ -492,6 +492,11 @@ tcpGpf:
 ; ---- footprint (5.4): the TCP/IP stack's own page 3 is MSX-DOS's, which the game never sees; the
 ; transport area is written into it too, so it must be TPA there ------------------------------------
 tcpFootprint:
+        ld      a,(npStubLoad+1)                ; a stub in page 2 (a mapper-ram game's own RAM there): the UNAPI
+        cp      $C0                             ; and hybrid transports map the network engine into page 2
+        ld      hl,msgPage2
+        ld      a,R_MACHINE
+        jp      c,exitResult
         ld      hl,(npTSize)
         ld      de,TU_AREA
         call    cpHLDE

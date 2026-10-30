@@ -31,13 +31,13 @@ mParse: ld      hl,(pMapper)
         ld      bc,mRecEnd-mRec
         ldir
         ld      (mPairs),hl
-        ld      hl,(mType)                      ; type 1 (Konami SCC) or 2 (ASCII8), 8 KB banks
-        ld      a,h
+        ld      hl,(mType)                      ; type 1 (Konami SCC), 2 (ASCII8) or 3 (ASCII16, described as
+        ld      a,h                             ; 8 KB halves: a 16 KB bank is the pair 2N, 2N+1), 8 KB banks
         cp      8
         jp      nz,.bad51
         ld      a,l
         dec     a
-        cp      2
+        cp      3
         jp      nc,.bad51
         ld      a,(mBanks)                      ; 2-64 banks, a power of two
         ld      b,a

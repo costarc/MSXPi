@@ -369,7 +369,7 @@ packages with the music ABI.
 | `image.host` | `"plain"`, or `"mapper-ram"` for a MegaROM (7.3, PLAYNET 3) |
 | `image.base` | CPU address of output offset 0: `16384` (4000h) or `32768` (8000h, for a 16 KB ROM that lives there). The output must end at or below BFFFh. |
 | `stub.asset` | Name of the asset holding the built stub (engine + glue, Part II, 9) |
-| `stub.load`, `stub.max` | Where it is copied, and the most bytes it may ever take. Must be in page 3 (`C000h-F37Fh`). |
+| `stub.load`, `stub.max` | Where it is copied, and the most bytes it may ever take. Must be in page 3 (`C000h-F37Fh`); with image host `mapper-ram` it may also be in page 2 (`8000h-`), for a game that never switches page 2 and uses it as its own RAM (that page is then a segment of the game's: the trampoline maps it before it copies the stub). Such a stub cannot run over TCP/IP: the UNAPI transport maps its network engine into page 2. |
 | `transport_area` | Where PLAYNET installs the transport (10). `size` must be at least `TRANSPORT_AREA_MIN` = 512 (the largest transport plus the UNAPI buffer; `patch_rom.py` refuses less). In page 3, outside `game_ram` and the stub, and below the lowest MSX-DOS TPA top PLAYNET supports with a TCP/IP stack loaded, because the UNAPI and hybrid transports are written into MSX-DOS's page 3 too (`tcpFootprint` checks it at run time; the limit is in 10.2). One area serves every link: no profile names a link or a transport. |
 | `game_ram` | Inclusive `[low, high]` ranges of every address the game writes, including its stack. Must not overlap the stub or the transport area. |
 | `irq_handler` | The game's interrupt handler; `XIRQ` ends by jumping there |
@@ -396,7 +396,7 @@ first. Design and measurements: `documents/SALAMANDER-DESIGN.md`, section 5. Fir
 
 | Field | Rule |
 |---|---|
-| `mapper` | `"konami-scc"` (1) or `"ascii8"` (2, 1942); the bank engine works for any 8 KB mapper, the patches decide which registers) |
+| `mapper` | `"konami-scc"` (1), `"ascii8"` (2, 1942) or `"ascii16"` (3, Penguin-kun Wars 2); the bank engine works for any 8 KB mapper, the patches decide which registers. An ASCII16 ROM is described in 8 KB halves: its 16 KB bank N is the pair (2N, 2N+1), and its package lists every such pair in page 1, all pinned; its stub uses `mapper_a16.asm`, where a bank switch is one OUT. |
 | `bank_size` | `8192` |
 | `banks` | 2-64, a power of two. The ROM (`source.size`, `output.size`) is `banks` x 8 KB, and the layout is the identity: one entry, the whole input at 0. |
 | `block` | Address of the bank engine's block (`MK_BLOCK`) inside the stub. The loader fills it. Its first 4 bytes are the engine's version (1), the bank mask, and the room of its two tables. |
@@ -461,7 +461,7 @@ types. Sections appear in the order below; each appears at most once, except `AS
 | 3 | `LAYOUT` | output size (4), fill byte (1), count (1), then count x (source (1): `FFh` = the ROM, else asset index; source offset (4); size (4); destination offset (4)) |
 | 4 | `PATCH` | count (2), then count x (output offset (4), length (1), expected bytes, replacement bytes) |
 | 5 | `ASSET` | the bytes of one asset. Assets are numbered 0, 1, ... in file order. |
-| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC, 2 = ASCII8), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
+| 6 | `MAPPER` | (image host 1 only) type (1, 1 = Konami SCC, 2 = ASCII8, 3 = ASCII16 in 8 KB halves), bank size in KB (1, = 8), banks (1), block address (2), the 4 start banks (4), pinned page-1 pairs (1), pinned page-2 pairs (1), min segments (1), page-1 pairs n1 (1), page-2 pairs n2 (1), then n1 + n2 pairs of 2 bytes (low bank, high bank). `NETPLAY`'s image base is 4000h. |
 
 The profile hash is what players compare: it appears in invitations (12), in the peer handshake (11.3) and in the session record (13).
 Because the stub is an asset inside the file, the hash covers the engine and the glue too.
