@@ -24,10 +24,10 @@ No ROM data is included. The player supplies their own dump.
 
 ## Frame catch-up: not added
 
-The frame catch-up of Soccer, Yie Ar and Ping Pong (the busy flag's clear at 40BEh -> `isrEnd`, `G_CATCHUP`) does not fit
-here yet. It makes the GPF 2920 bytes, and PLAYNET overwrites a GPF's bytes from 3500h on (`BOUNCE`, 0B00h after `GPFBUF`)
-before it copies the stub: in openMSX the stub's last 13 bytes, the new code, came out as an MSXPi reply ("Pi:Er:No game
-in...") and the game stopped after frame 0. The GPF is 2868 bytes without it, already past that point. Not measured.
+The frame catch-up of Soccer, Yie Ar and Ping Pong (the busy flag's clear at 40BEh -> `isrEnd`, `G_CATCHUP`) is not in
+this package yet. It makes the GPF 2920 bytes, and before PLAYNET's fix (its bounce buffer at 3500h, inside the 3 KB GPF
+buffer; now at 3600h) the stub's last 13 bytes, the new code, came out as an MSXPi reply and the game stopped after
+frame 0. With the fixed PLAYNET it plays (1501 identical frames, the stub intact in RAM); its speed is not measured yet.
 
 ## Files
 

@@ -12,10 +12,10 @@
 ; in page 3 and start the game the way the BIOS starts a cartridge.
 ;
 ; Memory (any MSX with 64 KB RAM and MSX-DOS):
-;   0100h-24FFh  this program          2500h-28FFh  CRC-32 tables (4 x 256)
-;   2900h-34FFh  the GPF (3 KB)        3500h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
-;                                                   then the relocated transport at 3D00h
-;   (PLAYNET /T: PLAYNET.OVL passes through 2500h-3FFFh on its way to its segment)
+;   0100h-25FFh  this program          2600h-29FFh  CRC-32 tables (4 x 256)
+;   2A00h-35FFh  the GPF (3 KB)        3600h-3FFFh  disk bounce buffer (DOS cannot read into page 1),
+;                                                   then the relocated transport at 3E00h
+;   (PLAYNET /T: PLAYNET.OVL passes through 2600h-3FFFh on its way to its segment)
 ;   4000h-       the mapper-ram loader and other start-up code (in the file after programEnd, copied there
 ;                at the start), until the image is in
 ;   4000h-BFFFh  the game image        C000h-       the start-up trampoline, copied there at the end
@@ -44,8 +44,9 @@ GETPNT:         EQU     $F3FA
 CRCT:           EQU     $2600
 GPFBUF:         EQU     $2A00
 GPFMAX:         EQU     $0C00
-BOUNCE:         EQU     $3500
-CHUNK:          EQU     $0B00
+BOUNCE:         EQU     GPFBUF+GPFMAX           ; after the GPF, which stays there until the trampoline copies the stub:
+CHUNK:          EQU     $4000-BOUNCE            ; the ROM's chunks and the Pi's replies must not land on it
+        ASSERT  CRCT+$400 <= GPFBUF              ; the CRC tables (4 x 256) under the GPF
 TRAMP:          EQU     $C000
 TRAMP_SP:       EQU     TRAMP+$100              ; the trampoline's stack (Soccer's stub starts at C100h)
         ASSERT  trLateEnd+128 <= TRAMP_SP        ; room under it: 86 bytes used with Soccer
