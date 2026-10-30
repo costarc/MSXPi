@@ -163,7 +163,7 @@ def make_profile(stub, symbols):
         'output': {'size': ROM_SIZE, 'fill': 0, 'mapper': 'ascii16', 'target': 'ram-image'},
         'requirements': ["The player's own P-WARS2.ROM: ASCII's Penguin-kun Wars 2 for the MSX2, 256 KB, the dump "
                          'identified above',
-                         'An MSX2 (the game needs one), PLAYNET release 3, over an MSXPi',
+                         'An MSX2 (the game needs one), PLAYNET release 3, over an MSXPi or TCP/IP UNAPI (not the hybrid link 2)',
                          f'A memory mapper with at least {MIN_SEGMENTS} free 16 KB segments for the game (512 KB)'],
         'assets': {'stub': {'file': 'assets/stub.bin', 'sha256': hashlib.sha256(stub).hexdigest()}},
         'layout': [{'source': 'input', 'offset': 0, 'size': ROM_SIZE, 'destination': 0}],

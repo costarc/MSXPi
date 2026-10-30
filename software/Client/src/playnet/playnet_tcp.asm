@@ -492,11 +492,6 @@ tcpGpf:
 ; ---- footprint (5.4): the TCP/IP stack's own page 3 is MSX-DOS's, which the game never sees; the
 ; transport area is written into it too, so it must be TPA there ------------------------------------
 tcpFootprint:
-        ld      a,(npStubLoad+1)                ; a stub in page 2 (a mapper-ram game's own RAM there): the UNAPI
-        cp      $C0                             ; and hybrid transports map the network engine into page 2
-        ld      hl,msgPage2
-        ld      a,R_MACHINE
-        jp      c,exitResult
         ld      hl,(npTSize)
         ld      de,TU_AREA
         call    cpHLDE
@@ -511,8 +506,11 @@ tcpFootprint:
         ex      de,hl
         ld      hl,($0006)
         call    cpHLDE
-        ret     nc
-        ld      a,(hyb)                         ; it is not: the bridged transport (transport_unapi_br.asm) keeps
+        jr      c,.br
+        ld      a,(npStubLoad+1)                ; TPA, and the stub in page 3: the plain transport. A stub in page 2 (a
+        cp      $C0                             ; mapper-ram game's own RAM) needs the bridged one, which bounces
+        ret     nc                              ; the packets through the game's page 3
+.br:    ld      a,(hyb)                         ; it is not: the bridged transport (transport_unapi_br.asm) keeps
         or      a                               ; only a 512-byte block in MSX-DOS's page 3, under the private stack
         jr      nz,.no                          ; (link 2's hybrid transport has none)
         inc     a

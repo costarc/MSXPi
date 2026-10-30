@@ -57,6 +57,9 @@ tCode:  defb    0
 tLost:  defb    0                       ; interrupts MSX-DOS took during the last XCHG (shim)
 tStack: defw    0
 tBuf:   EQU     tBase+384               ; 128 bytes for the UNAPI calls (the overlay's io.buf), in the block
+tBnc:   EQU     tBase+384               ; the same 128 bytes in the shim's area (the game's page 3): the packets'
+                                        ; bounce buffer (L <= 46 bytes), only used while the game's page 3 is in place
+tSegV:  EQU     tBnc+126                ; and, at its end, the segments tSegs pointed to at the start of the XCHG
 
 ; XCHG. In: HL = packet to send, or 0; DE = receive buffer (L bytes). Out: as transport_unapi.asm.
 xchg:   di
@@ -64,13 +67,26 @@ xchg:   di
         push    iy
         ld      (tSp),sp
         ld      (tRx),de
+        ld      bc,(tLen)               ; C = L, B = tImage's low byte: 0 (4000h or 8000h)
+        ld      a,h                     ; the packet into the bounce buffer while page 2 is still the game's
+        or      l                       ; (a mapper-ram game's stub, and so its buffers, may be in page 2)
+        jr      z,.nob
+        ld      de,tBnc
+        push    bc
+        ldir
+        pop     bc
+        ld      hl,tBnc
+.nob:   push    hl                      ; the game's segments of pages 1 and 2, read while page 2 is the game's
+        ld      hl,(tSegs)              ; (tSegs may point into a mapper-ram game's stub in page 2)
+        ld      e,(hl)
+        inc     hl
+        ld      d,(hl)
+        ld      (tSegV),de
+        pop     hl
         ld      a,(tOvlSeg)             ; the overlay into page 2 (a plain OUT)
         out     (MAPPER_P2),a
         ld      ix,(tIo)
-        ld      a,(tLen)
-        ld      (ix+IO_LEN),a
-        ld      c,a
-        ld      b,0
+        ld      (ix+IO_LEN),c
         ld      a,h
         or      l
         jr      z,.none
@@ -113,23 +129,30 @@ post:   ld      sp,(tSp)
         ld      a,c
         dec     a
         jr      nz,.out
-        push    bc                      ; a packet: from io.rxbuf to the stub's buffer
+        push    bc                      ; a packet: from io.rxbuf to the bounce buffer
         push    ix
         pop     hl
         ld      de,IO_RXBUF
         add     hl,de
-        ld      de,(tRx)
-        ld      a,(tLen)
-        ld      c,a
-        ld      b,0
+        ld      de,tBnc
+        ld      bc,(tLen)
         ldir
         pop     bc
-.out:   ld      hl,(tSegs)              ; the game's pages 1 and 2 (see transport_unapi.asm)
-        ld      a,(hl)
+.out:   ld      hl,(tSegV)              ; the game's pages 1 and 2 (see transport_unapi.asm)
+        ld      a,l
         out     (MAPPER_P1),a
-        inc     hl
-        ld      a,(hl)
+        ld      a,h
         out     (MAPPER_P2),a
+        ld      a,c
+        dec     a
+        jr      nz,.done
+        push    bc                      ; then into the stub's buffer, with the game's page 2 back
+        ld      hl,tBnc
+        ld      de,(tRx)
+        ld      bc,(tLen)
+        ldir
+        pop     bc
+.done:
         ld      a,(tLost)
         ld      e,a                     ; E = the interrupts counted above, for the engine's irqCnt
         ld      a,c

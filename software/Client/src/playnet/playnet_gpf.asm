@@ -275,13 +275,13 @@ parseGpf:
         ; stub may also be in page 2 (8000h-): that page is a RAM segment of the game's own
         ld      hl,(npStubLoad)
         ld      de,(npStubMax)
+        ld      bc,$C000
         ld      a,(mHost)
         or      a
         jr      z,.st3
-        call    page23
-        jr      .st4
-.st3:   call    page3
-.st4:   ld      a,27
+        ld      b,$80
+.st3:   call    pgIn
+        ld      a,27
         jp      c,badPkg
         ld      (stubHi),hl
         ld      hl,(npTArea)

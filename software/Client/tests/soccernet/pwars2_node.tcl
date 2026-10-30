@@ -1,6 +1,7 @@
 # One Penguin-kun Wars 2 lockstep node over the MSXPi transport (PLAYNET.COM on B:, started without the chat:
 # "PLAYNET pwars2 P1|P2", or from MCHAT with CHAT). Started by run_pwars2.sh with -ext MSXPi -ext ram2mb; the
-# harness boots MSX-DOS from the MSXPi server.
+# harness boots MSX-DOS from the MSXPi server. With BOOT=nextor (run_pwars2.sh TCP=1) the node boots Nextor and plays
+# over the TCP/IP UNAPI (PLAYNET /T, or MCHAT /T with CHAT).
 #   ROLEARG=P1|P2  TRACE=<file>  STOPF=<tick>  TMAX=<emulated s>  PLAYNET_SYMS=<stub symbols, Tcl>  STUB_BIN=<the stub>
 #   EXITKEY=<tick>: P2 presses Ctrl+Shift+F5 there (the exit key); both games end, and with CHAT both players are
 #   back in MCHAT (run_pwars2.sh checks the MSXPi logs). Set STOPF above it.
@@ -156,7 +157,26 @@ proc dumpscreen {} {
 }
 after time 20 dumpscreen
 harness::init "np_$roleArg"
-if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
+if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
+    # P2 over TCP/IP (run_1942.sh TCP=1): Nextor, the tools in C:\PLAYNET
+    harness::at_nextor_prompt {
+        # RAMHELPR I reloads COMMAND2, which comes back on A:
+        harness::run_cmd "C:" 10 { harness::run_cmd "CD PLAYNET" 10 { harness::run_cmd "RAMHELPR I" 30 {
+            harness::run_cmd "C:" 10 { harness::run_cmd "ETHUNAPI" 30 { harness::run_cmd "INL I" 90 {
+                if {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
+                    # links 1 and 2 from the chat: MCHAT /T, alice invites bob, the chat types PLAYNET itself
+                    if {$::roleArg eq "P1"} {
+                        type "MCHAT /1 /T alice\r"
+                        after time $::env(PLAY_AT) { type "/play bob pwars2\r" }
+                    } else {
+                        type "MCHAT /1 /T bob\r"
+                        after time $::env(ACCEPT_AT) { type "/accept\r" }
+                    }
+                } elseif {[info exists ::env(CMD)] && $::env(CMD) ne ""} { type "$::env(CMD)\r" } else { type "PLAYNET /T pwars2 $::roleArg 5142 10.0.2.2:5141\r" }
+                after time 3 waitStub
+            } } } } } }
+    }
+} elseif {[info exists ::env(CHAT)] && $::env(CHAT) ne ""} {
     # the full player flow: MCHAT, P1 (alice) invites P2 (bob), the chat types PLAYNET itself
     harness::at_dos_prompt {
         harness::run_cmd "B:" 30 {

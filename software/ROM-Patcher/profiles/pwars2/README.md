@@ -10,7 +10,7 @@ The analysis behind every patch is in `documents/PWARS2-DESIGN.md` (kept locally
 | Game id, roles | `pwars2`; `P1` (seat 0, the inviter), `P2` (seat 1) |
 | Play | The cartridge is a one-player game: a series of matches against computer opponents. In this package player 1 plays the penguin and **player 2 takes over the computer opponent** of every match: walk left and right, the trigger picks up a ball in reach and throws the ball held. The opponents' own throws (power, curves) are kept. Menus, the character select, the map and the continue screen are player 1's. The pause key (F1) is disabled; MSX-MUSIC is not used (both machines play the PSG music). |
 | Layout for PLAYNET | stub A630h-AC7Fh (page 2: the game's own RAM segment; engine, ASCII16 bank engine, glue), transport F100h-F2FFh; game RAM 8000h-A62Fh and AC80h-F0FFh |
-| Machine | an MSX2 with a memory mapper of 512 KB (19 free segments: one per 16 KB bank, and page 2). MSXPi link only: the TCP/IP transports need their area below the TPA top and map their network code into page 2, where this game's stub lives. |
+| Machine | an MSX2 with a memory mapper of 512 KB (19 free segments: one per 16 KB bank, and page 2). Over an MSXPi (link 0) or a TCP/IP UNAPI (link 1, `PLAYNET /T`: the bridged UNAPI transport, which bounces the packets through the game's page 3 because the stub's buffers are in page 2). Not link 2 (`/H`): its transport area would have to be below MSX-DOS's TPA top, which the game owns. |
 
 No ROM data is included. The player supplies their own dump.
 

@@ -39,6 +39,7 @@ MK_P2_MAX:      EQU     2                       ; page 2: the game's RAM, and a 
 GTSTCK:         EQU     $00D5
 GTTRIG:         EQU     $00D8
 RSLREG:         EQU     $0138
+H_KEYI:         EQU     $FD9A
 GAME_TIMI:      EQU     $E6AC                   ; the game's H.TIMI handler
 FRAME:          EQU     $B1F2                   ; the game's frame counter
 MUSIC:          EQU     $EF88                   ; the music playing (FFh: none)
@@ -159,7 +160,8 @@ sndTick:
 
 ; ---- INIT (4011h, in place of call RSLREG): the same RAM on both machines ---------------------------------------
 ; A cartridge starts after the BIOS cleared the RAM; under MSX-DOS it holds whatever it held. The code copy
-; (B400h-EFFEh) follows; the stub (A630h-AC7Fh) stays. Then RSLREG, as the game wanted.
+; (B400h-EFFEh) follows; the stub (A630h-AC7Fh) stays. The interrupt hook for the transport, then RSLREG, as the
+; game wanted.
 initGame:
         ld      hl,$8000
         ld      bc,PN_ORG-$8000
@@ -167,6 +169,12 @@ initGame:
         ld      hl,PN_ORG+STUB_MAX
         ld      bc,$B400-PN_ORG-STUB_MAX
         call    zero
+        IFNDEF  LOCAL
+        ld      a,$C3                           ; H.KEYI -> the transport's XIRQ: the TCP/IP transports count the
+        ld      (H_KEYI),a                      ; interrupts there (the game has no H.KEYI handler: XIRQ ends at a
+        ld      hl,PN_TRANSPORT+6               ; RET, netplay.irq_handler)
+        ld      (H_KEYI+1),hl
+        ENDIF
         jp      RSLREG                          ; (F000h-F0FFh is the game's stack: written before it is read;
                                                 ; a cartridge's INIT runs on the BIOS's stack there)
 zero:   ld      e,l

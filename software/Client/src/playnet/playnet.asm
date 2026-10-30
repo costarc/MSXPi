@@ -186,33 +186,22 @@ sesFields:
         ldir
         ret
 
-; HL = start, DE = length: CF if not inside page 3 (C000h-F37Fh) or empty; else HL = last address. Keeps BC.
-; page23: the same from 8000h (a mapper-ram game's stub may live in page 2, the game's own RAM segment).
-page23: push    bc
-        ld      bc,$8000
-        jr      pgIn
-page3:  push    bc
-        ld      bc,$C000
+; HL = start, DE = length: CF if not inside page 3 (C000h-F37Fh) or empty; else HL = last address.
+; pgIn: the same from BC (8000h: a mapper-ram game's stub may live in page 2, the game's own RAM segment).
+page3:  ld      bc,$C000
 pgIn:   ld      a,d
         or      e
         scf
-        jr      z,.out
-        push    hl
-        push    de
-        ld      d,b
-        ld      e,c
-        call    cpHLDE
-        pop     de
-        pop     hl
-        jr      c,.out
+        ret     z
+        call    cpHLDE.bc                       ; start < the low bound?
+        ret     c
         dec     de
         add     hl,de
-        jr      c,.out                          ; wraps past FFFFh
+        ret     c                               ; wraps past FFFFh
         ex      de,hl
         ld      hl,$F37F
         call    cpHLDE                          ; F37Fh < last?
         ex      de,hl
-.out:   pop     bc
         ret
 
 ; HL = low, DE = high: CF if [low, high] overlaps [ovLo, ovHi], that is low <= ovHi and ovLo <= high.
@@ -1500,7 +1489,6 @@ msgNoSeg:       defb    "No free memory mapper segment",0
 msgNoOvl:       defb    "Cannot load PLAYNET.OVL (it must be in the current directory)",0
 msgNoGpf:       defb    "Cannot read the game package (ID.GPF in the current directory)",0
 msgFootprint:   defb    "The TCP/IP driver uses memory this game overwrites. Restart the MSX holding CTRL (frees 1.5 KB), or use Nextor",0
-msgPage2:       defb    "This game needs an MSXPi",0
 msgNoTcpip:     defb    "No TCP/IP UNAPI found: run INL I first",0
 msgNoPort:      defb    "Cannot open the UDP port",0
 nameOvl:        defb    "PLAYNET OVL"
