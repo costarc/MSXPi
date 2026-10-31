@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 
-#define GL_MAX_GAMES 6
+#define GL_MAX_GAMES 12
 #define GL_SESSION 256
 
 typedef struct {

@@ -42,7 +42,10 @@ pcopy m:ssh.com
 pcopy m:templatc.com
 pcopy m:template.com
 pcopy m:games/1942.GPF 1942.GPF
+pcopy m:games/BUBBLE.GPF BUBBLE.GPF
+pcopy m:games/F1SPIRIT.GPF F1SPIRIT.GPF
 pcopy m:games/PINGPONG.GPF PINGPONG.GPF
+pcopy m:games/PWARS2.GPF PWARS2.GPF
 pcopy m:games/SALAMAND.GPF SALAMAND.GPF
 pcopy m:games/SOCCER.GPF SOCCER.GPF
 pcopy m:games/YIEAR.GPF YIEAR.GPF
