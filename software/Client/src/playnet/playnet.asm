@@ -891,12 +891,13 @@ relocate:
 
 ; Runs from C000h. Copies the stub and the transport into page 3 (MSX-DOS is gone from here on),
 ; then starts the game with page 0 = main BIOS and page 1 = the RAM holding it.
-; Its own stack ends at TRAMP_SP: MSX-DOS's can be in the stub's area (D53Fh under MSX-DOS 1 on the V-25), where
+; Its own stack ends at TRAMP_SP: MSX-DOS's can be in the stub's area (D55Fh under MSX-DOS 1 on the V-25), where
 ; ENASLT, INIT32 and their interrupts would push. That stack goes down to about C0AAh (Soccer), over the copy part
-; (.early, run first and placed last); what runs after INIT32 is at the start. The game starts on MSX-DOS's stack, as before.
+; (.early, run first and placed last); what runs after INIT32 is at the start. The game starts on this stack too, with
+; interrupts off: what its INIT pushes before its own "ld sp" (RSLREG, ENASLT: F1 Spirit, Soccer) and an interrupt
+; there would land on MSX-DOS's stack, in a stub's code or tables (Salamander, F1 Spirit). INIT32 ends with EI.
 trampSrc:
         PHASE   TRAMP
-        ld      (vDosSp),sp
         ld      sp,TRAMP_SP
         jp      trEarly
 trLate: ld      hl,$FD9A                        ; hooks left by DOS that point outside the BIOS become
@@ -934,12 +935,11 @@ trLate: ld      hl,$FD9A                        ; hooks left by DOS that point o
         ld      l,a
 .go:    push    hl
         call    INIT32                          ; SCREEN 1, as before a cartridge INIT
-        pop     hl
-        ld      sp,(vDosSp)
+        di
+        pop     hl                              ; SP = TRAMP_SP again: the game's INIT starts there
         jp      (hl)
 vStart:         defw    0
 vBase:          defw    0
-vDosSp:         defw    0
 trLateEnd:
 trEarly:
         ld      hl,tBuf
