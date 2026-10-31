@@ -172,7 +172,8 @@ isrEnd: call    PN_AGAIN
         res     0,(hl)
         ret
 .again: pop     af                              ; the return address: the frame runs again from 408Fh
-        jp      $408F                           ; (interrupts off, the flag still set)
+        call    $40BB                           ; after the deferred screen update the handler runs first (it changes the game's
+        jp      $408F                           ; counters): interrupts off, the flag still set
 stubEnd:
         ASSERT  stubEnd <= PN_ORG + STUB_MAX
         ASSERT  PN_TRANSPORT + 512 <= PN_ORG && PN_ORG + STUB_MAX <= MK_MAP && MK_MAP + 1024 <= $E000

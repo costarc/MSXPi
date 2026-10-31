@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "3fbfde231f7d7287b577390fef842a39ab937236da89e9bcbf0ca12f5c6c4358"
+      "sha256": "3f001522826cba92941d717264de733c93ab0457f44323f79d2621d9788fb1b8"
     }
   },
   "layout": [
@@ -458,6 +458,6 @@
     "fk": 55270,
     "rnd": 55280,
     "isrEnd": 55312,
-    "stubEnd": 55327
+    "stubEnd": 55330
   }
 }
