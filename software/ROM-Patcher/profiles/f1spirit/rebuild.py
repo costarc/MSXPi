@@ -38,7 +38,7 @@ TRANSPORT, TRANSPORT_SIZE = 0xD000, 512        # first: on the TCP/IP path it is
 STUB_LOAD, STUB_MAX = 0xD200, 1792
 XIRQ = TRANSPORT + 6
 EXPORTED = ('PN_TICK', 'PN_IRQ', 'PN_P1', 'PN_P2', 'MK_BLOCK', 'MK_SEG2', 'MK_W0', 'MK_W1', 'MK_W2', 'MK_W3',
-            'sndTick', 'isrA', 'tickSite', 'p1', 'p2', 'fk', 'rnd', 'isrEnd', 'stubEnd')
+            'sndTick', 'sndBegin', 'sndEnd', 'sel3', 'sel2', 'initSp', 'isrA', 'tickSite', 'p1', 'p2', 'fk', 'rnd', 'isrEnd', 'stubEnd')
 
 # The 8 KB window each bank runs in (the bank-select routines at 4418h-4459h: banks n, n+1, n+2 in W1-W3; the pairs of
 # 4447h/4457h for W2 and W3 only)
@@ -115,8 +115,13 @@ def make_patches(symbols):
           'the countdown move to sndTick')
     patch(0, 0x40A4, 'cd3543', b'\xcd' + word('tickSite'), 'TICK site: the input reader, once per frame -> PN_TICK, then the reader')
     patch(0, 0x40B0, '21c5e1cb86', b'\xcd' + word('isrEnd') + bytes(2),
-          'The frame catch-up: the frame flag cleared, or the next frame at once when an interrupt went by during '
-          'PN_TICK -> isrEnd')
+          'The frame catch-up: the frame flag cleared, or the next frame at once when a race frame ended past the '
+          '3-interrupt gate (F0FCh, with the interrupts XCHG took) -> isrEnd')
+    patch(0, 0x40E4, 'f3cd38', b'\xc3' + word('initSp'),
+          "INIT: the game's stack (F0F0h) before RSLREG/ENASLT push, not MSX-DOS's in the stub's area -> initSp")
+    patch(0, 0x43FF, 'e521f1', b'\xc3' + word(0x4434), 'Banks 1, 2, 3: through 4434h (ld a,1 / jr 441Bh), W2 and W3 in one switch')
+    patch(0, 0x441C, 'e521f1', b'\xc3' + word('sel3'), 'Banks A, A+1, A+2 in W1-W3: W2 and W3 in one switch -> sel3')
+    patch(0, 0x4448, '32f2f0', b'\xc3' + word('sel2'), 'Banks A, A+1 in W2, W3: in one switch -> sel2')
     patch(0, 0x4281, 'cd6743', b'\xcd' + word('p1'), "The title's menu: player 1 (the inviter)")
     patch(0, 0x4335, 'cdd143', b'\xcd' + word('fk'), 'Function keys (pause ...) from either player')
     patch(0, 0x4344, 'cd6743', b'\xcd' + word('p1'), "Player 1's pad: player 1's input")

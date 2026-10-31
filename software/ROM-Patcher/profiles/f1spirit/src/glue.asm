@@ -19,6 +19,9 @@ STUB_MAX:       EQU     1792                    ; netplay.stub.max
 G_INPUT_BYTES:  EQU     2                       ; byte 0: the pad (6 bits), byte 1: function keys F1-F5 (see rdLocal)
 G_READ_LOCAL:   EQU     rdLocal
 G_SOUND_TICK:   EQU     sndTick
+G_SOUND_BATCH:  EQU     1                       ; G_SOUND_BEGIN/G_SOUND_END: banks 13-15 once a frame
+G_SOUND_BEGIN:  EQU     sndBegin
+G_SOUND_END:    EQU     sndEnd
 G_CHECK_ADDR:   EQU     $E2C0                   ; the two players' blocks (E2C0h, E380h) and what follows
 G_CHECK_LEN:    EQU     $0200
 G_CATCHUP:      EQU     2                       ; the frame catch-up for the interrupts XCHG took (isrEnd)
@@ -53,41 +56,92 @@ isrA:   call    PN_IRQ
         call    nc,$40BB
         jp      $407D
 
+; The game's banks are saved before a frame's first tick and put back after its last (G_SOUND_BEGIN, G_SOUND_END), not
+; around each tick: the interrupt handler that can run between two ticks only uses bank 0 and page 3. Each tick maps banks
+; 13-15 again only when its calls changed them.
+sndBegin:
+        ld      hl,(BANKS)                      ; as 402Ah-4045h: the game's banks saved
+        ld      (sndSave),hl
+        ld      a,(BANKS+2)
+        ld      (sndSave+2),a
+        ret
+
 sndTick:
-        ld      hl,BANKS                        ; as 402Ah-4045h: the game's banks saved, banks 13-15 in
-        ld      d,(hl)
+        ld      hl,BANKS                        ; as 402Ah-4045h: banks 13-15 in
         ld      (hl),13
         inc     hl
-        ld      e,(hl)
         ld      (hl),14
         inc     hl
-        ld      a,(hl)
         ld      (hl),15
-        push    de
-        push    af
-        ld      a,13
-        call    MK_W1
-        ld      de,$0E0F
-        call    MK_W23
+        call    snd13
         call    SND_OUT
-        ld      a,13                            ; the banks again, as 4049h-4055h
-        call    MK_W1
-        ld      de,$0E0F
-        call    MK_W23
+        call    snd13                           ; the banks again, as 4049h-4055h
         call    SND_QUE
-        call    SND_SEQ
-        pop     af                              ; and the game's banks back, as 4068h-407Ch
-        pop     de
-        ld      (BANKS+2),a
-        ld      c,a
-        ld      a,d
-        ld      (BANKS),a
+        jp      SND_SEQ
+
+snd13:  ld      a,13                            ; W1 := 13 (MK_W1 returns at once when it is there)
         call    MK_W1
-        ld      a,e
-        ld      (BANKS+1),a
-        ld      d,e
-        ld      e,c
+        ld      hl,(mkCur+2)                    ; W2, W3 := 14, 15 in one switch, unless they are there
+        ld      de,$0F0E
+        or      a
+        sbc     hl,de
+        ret     z
+        ld      de,$0E0F
         jp      MK_W23
+
+sndEnd: ld      hl,(sndSave)                    ; and the game's banks back, as 4068h-407Ch
+        ld      (BANKS),hl
+        ld      a,(sndSave+2)
+        ld      (BANKS+2),a
+        ld      d,h
+        ld      e,a
+        ld      a,l
+        call    MK_W1
+        jp      MK_W23
+sndSave:defs    3
+
+; ---- the game's bank selects ------------------------------------------------------------------------
+; 441Bh (W1, W2, W3 := A, A+1, A+2) and 4447h (W2, W3 := A, A+1) write W2 and W3 one after the other: through the bank
+; engine that is a switch to a pair of one new and one old bank, then a second one. These set W2 and W3 in one switch
+; (MK_W23). Same results: the game's copy F0F1h-F0F3h, A and the flags of the last "inc a", interrupts on.
+sel3:   push    hl                              ; 441Ch, after the di
+        push    de
+        ld      hl,BANKS
+        ld      (hl),a
+        call    MK_W1
+        inc     l
+        inc     a
+        ld      (hl),a
+        ld      d,a
+        inc     l
+        inc     a
+        ld      (hl),a
+        ld      e,a
+        call    MK_W23
+        pop     de
+        pop     hl
+        ei
+        ret
+
+sel2:   ld      (BANKS+1),a                     ; 4448h, after the di
+        push    de
+        ld      d,a
+        inc     a
+        ld      (BANKS+2),a
+        ld      e,a
+        call    MK_W23
+        pop     de
+        ei
+        ret
+
+; ---- the start ----------------------------------------------------------------------------------------
+; PLAYNET starts the game (INIT, 40E4h) on MSX-DOS's stack, which is in the stub's area (about D560h under MSX-DOS 1 on the
+; V-25, elsewhere under Nextor): RSLREG and ENASLT (40E5h-4104h) would push into the stub before the game's own
+; "ld sp,F0F0h" at 4114h, and did (the bank engine's tables). The same stack, set first; the game clears it at 4117h.
+initSp: di                                      ; 40E4h: di / call 0138h
+        ld      sp,$F0F0
+        call    $0138
+        jp      $40E8
 
 ; ---- inputs ------------------------------------------------------------------------------------------
 ; Local input, 2 bytes at HL:
@@ -159,16 +213,38 @@ rRrca:  call    rnd                             ; 7327h (bank 1), 9021h (bank 2)
         rrca
         ret
 
-; ---- the frame catch-up (the engine's PN_AGAIN) ---------------------------------------------------------------
+; ---- the frame catch-up ----------------------------------------------------------------------------------------
 ; Every frame is one run of the frame logic in the H.KEYI handler, and an interrupt that comes while it runs only
-; counts (the flag E1C5h bit 0): a frame that the exchange makes longer than an interrupt period costs a whole
-; period. When an interrupt went by inside the exchange, taken by MSX-DOS's handler in XCHG (TCP/IP; G_CATCHUP 2), the
-; next frame runs as soon as this one ends (one at most). Interrupts that the game's own work makes it miss stay
-; dropped, as on the cartridge. Only the pace changes, never what a frame computes.
+; counts (the flag E1C5h bit 0). In the race (modes 2 and 5) a frame starts on every 3rd interrupt (F0FCh, 409Ah): the
+; cartridge's frame fits in 3 periods, ours (the exchange, the sound ticks of a frame, the bank engine) often not, and a
+; frame that ends past the gate would wait for the next interrupt, a whole period. So a race frame that ends with F0FCh
+; at 3 or more is followed by the next one at once (40A2h resets the counter: no credit builds up, the pace is never above
+; the cartridge's). The interrupts that MSX-DOS's handler took inside XCHG (TCP/IP; G_CATCHUP 2: the engine's late) go
+; into F0FCh, as the cartridge would have counted them. In the other modes (a frame every interrupt) such an interrupt
+; runs the next frame at once. F0FCh is read nowhere else (40A2h/409Ah only): only the pace changes, never what a frame
+; computes.
 ; 40B0h (bank 0), in place of "ld hl,E1C5h / res 0,(hl)" (5 bytes): the flag cleared, or the next frame now
-isrEnd: call    PN_AGAIN
+isrEnd: ld      hl,late
+        ld      b,(hl)                          ; B = the interrupts XCHG took since the last frame end (0 on the MSXPi link)
+        ld      (hl),0
+        ld      a,($E1C0)
+        cp      5
+        jr      z,.race
+        cp      2
+        jr      z,.race
+        ld      a,b
+        or      a
         jr      nz,.again
-        ld      hl,$E1C5
+        jr      .clr
+.race:  ld      hl,$F0FC
+        ld      a,(hl)
+        add     a,b
+        jr      nc,.sum
+        ld      a,$FF
+.sum:   ld      (hl),a
+        cp      3
+        jr      nc,.again                       ; past the gate: the next frame now
+.clr:   ld      hl,$E1C5
         res     0,(hl)
         ret
 .again: pop     af                              ; the return address: the frame runs again from 408Fh
