@@ -12,6 +12,7 @@ data, only the patches that make the game networked. Every player needs their ow
 | `YIEAR.GPF` | Konami's Yie Ar Kung-Fu (Single, Turn or Versus, chosen by the inviter on a play-mode screen; in Versus the second player controls the opponent) | `KUNGFU.ROM`: Konami's Yie Ar Kung-Fu (RC-725), 16384 bytes, CRC-32 `8A12EC4F` |
 | `BUBBLE.GPF` | Taito's Bubble Bobble (two players at once, Bub and Bob; an MSX2 with a memory mapper of 16 free segments, 512 KB recommended) | `BUBBLE.ROM`: Taito's Bubble Bobble for the MSX2 (1987), 131072 bytes, CRC-32 `6524D9FC` |
 | `PWARS2.GPF` | ASCII's Penguin-kun Wars 2 (versus: the second player controls the computer opponent; MSX2, a memory mapper of 512 KB; over an MSXPi or TCP/IP, not the hybrid /H link) | `P-WARS2.ROM`: ASCII's Penguin-kun Wars 2 (MSX2, 1988), 262144 bytes, CRC-32 `B1B24DA1` |
+| `F1SPIRIT.GPF` | Konami's F1 Spirit (two players, one on each machine: 2PLAYER and BATTLE MODE; the inviter plays the first pad and chooses the menus; the password entry is off; an MSX2 or MSX1 with a memory mapper of 16 free segments, 512 KB recommended) | `F1SPIRIT.ROM`: Konami's F1 Spirit (MSX), 131072 bytes, CRC-32 `12BFD3A9` |
 
 ## Installing a game
 

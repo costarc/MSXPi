@@ -1,0 +1,463 @@
+{
+  "format": "msxpi-rom-patch",
+  "version": 2,
+  "id": "f1spirit-msxpi-netplay-v1",
+  "abi": [
+    "msxpi-netplay-v1"
+  ],
+  "source": {
+    "size": 131072,
+    "sha256": "3b9afd12b29680abb655f05d24e0970954c38e48c5ccb24227d6c710474396a7",
+    "crc32": 314561449,
+    "file": "F1SPIRIT.ROM"
+  },
+  "output": {
+    "size": 131072,
+    "fill": 0,
+    "mapper": "konami-scc",
+    "target": "ram-image"
+  },
+  "requirements": [
+    "The player's own F1SPIRIT.ROM: Konami's F1 Spirit (MSX, 1987), 128 KB, the dump identified above",
+    "PLAYNET release 3, over an MSXPi or over TCP/IP UNAPI",
+    "A memory mapper with at least 16 free 16 KB segments for the game (512 KB recommended: 32 segments play without pauses)"
+  ],
+  "assets": {
+    "stub": {
+      "file": "assets/stub.bin",
+      "sha256": "3fbfde231f7d7287b577390fef842a39ab937236da89e9bcbf0ca12f5c6c4358"
+    }
+  },
+  "layout": [
+    {
+      "source": "input",
+      "offset": 0,
+      "size": 131072,
+      "destination": 0
+    }
+  ],
+  "patches": [
+    {
+      "offset": 42,
+      "expected": "21f1f0",
+      "replace": "c371d7",
+      "reason": "402Ah (bank 0): Interrupt, busy flag set: count it (PN_IRQ), the deferred screen update, on at 407Dh; the sound, its queue and the countdown move to sndTick"
+    },
+    {
+      "offset": 47,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "402Fh (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 55,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "4037h (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 63,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "403Fh (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 75,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "404Bh (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 79,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "404Fh (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 83,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "4053h (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 109,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "406Dh (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 115,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "4073h (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 121,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "4079h (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 164,
+      "expected": "cd3543",
+      "replace": "cdd4d7",
+      "reason": "40A4h (bank 0): TICK site: the input reader, once per frame -> PN_TICK, then the reader"
+    },
+    {
+      "offset": 176,
+      "expected": "21c5e1cb86",
+      "replace": "cd10d80000",
+      "reason": "40B0h (bank 0): The frame catch-up: the frame flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
+    },
+    {
+      "offset": 271,
+      "expected": "1840",
+      "replace": "06d0",
+      "reason": "410Fh (bank 0): H.KEYI hook (ld hl,4018h at 410Eh) -> the transport's XIRQ, which jumps to 4018h"
+    },
+    {
+      "offset": 641,
+      "expected": "cd6743",
+      "replace": "cddad7",
+      "reason": "4281h (bank 0): The title's menu: player 1 (the inviter)"
+    },
+    {
+      "offset": 711,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "42C7h (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 719,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "42CFh (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 727,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "42D7h (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 743,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "42E7h (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 749,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "42EDh (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 755,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "42F3h (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 821,
+      "expected": "cdd143",
+      "replace": "cde6d7",
+      "reason": "4335h (bank 0): Function keys (pause ...) from either player"
+    },
+    {
+      "offset": 836,
+      "expected": "cd6743",
+      "replace": "cddad7",
+      "reason": "4344h (bank 0): Player 1's pad: player 1's input"
+    },
+    {
+      "offset": 848,
+      "expected": "cd9443",
+      "replace": "cde0d7",
+      "reason": "4350h (bank 0): Player 2's pad: player 2's input"
+    },
+    {
+      "offset": 1029,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "4405h (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 1034,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "440Ah (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 1040,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "4410h (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 1056,
+      "expected": "320070",
+      "replace": "cdd4d5",
+      "reason": "4420h (bank 0): ld (7000h),a -> MK_W1"
+    },
+    {
+      "offset": 1062,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "4426h (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 1068,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "442Ch (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 1099,
+      "expected": "320090",
+      "replace": "cd03d6",
+      "reason": "444Bh (bank 0): ld (9000h),a -> MK_W2"
+    },
+    {
+      "offset": 1106,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "4452h (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 1115,
+      "expected": "3200b0",
+      "replace": "cd09d6",
+      "reason": "445Bh (bank 0): ld (B000h),a -> MK_W3"
+    },
+    {
+      "offset": 13095,
+      "expected": "ed5f0f",
+      "replace": "cd0bd8",
+      "reason": "7327h (bank 1): ld a,r -> rRrca, deterministic"
+    },
+    {
+      "offset": 20513,
+      "expected": "ed5f0f",
+      "replace": "cd0bd8",
+      "reason": "9021h (bank 2): ld a,r -> rRrca, deterministic"
+    },
+    {
+      "offset": 29609,
+      "expected": "af57",
+      "replace": "37c9",
+      "reason": "B3A9h (bank 3): The password keyboard scan: no key (scf, ret)"
+    },
+    {
+      "offset": 109985,
+      "expected": "7e",
+      "replace": "c9",
+      "reason": "6DA1h (bank 13): SCC: ret, one SCC register write (callers at 6CF9h-6D21h and 6D88h-6D9Dh)"
+    },
+    {
+      "offset": 110084,
+      "expected": "3e",
+      "replace": "c9",
+      "reason": "6E04h (bank 13): SCC: ret, SCC waveform upload (from 6DC3h-6DEFh)"
+    }
+  ],
+  "netplay": {
+    "abi": "msxpi-netplay-v1",
+    "game_id": "f1spirit",
+    "title": "F1 Spirit (2 players)",
+    "roles": [
+      "P1",
+      "P2"
+    ],
+    "transport": "lockstep",
+    "input_bytes": 2,
+    "image": {
+      "host": "mapper-ram",
+      "mapper": "konami-scc",
+      "bank_size": 8192,
+      "banks": 16,
+      "block": 54550,
+      "start_banks": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "page1_pairs": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          4
+        ],
+        [
+          0,
+          7
+        ],
+        [
+          0,
+          10
+        ],
+        [
+          0,
+          13
+        ]
+      ],
+      "page2_pairs": [
+        [
+          2,
+          3
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          11,
+          12
+        ],
+        [
+          14,
+          15
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          2,
+          12
+        ],
+        [
+          2,
+          15
+        ],
+        [
+          5,
+          3
+        ],
+        [
+          5,
+          9
+        ],
+        [
+          5,
+          12
+        ],
+        [
+          5,
+          15
+        ],
+        [
+          8,
+          3
+        ],
+        [
+          8,
+          6
+        ],
+        [
+          8,
+          12
+        ],
+        [
+          8,
+          15
+        ],
+        [
+          11,
+          3
+        ],
+        [
+          11,
+          6
+        ],
+        [
+          11,
+          9
+        ],
+        [
+          11,
+          15
+        ],
+        [
+          14,
+          3
+        ],
+        [
+          14,
+          6
+        ],
+        [
+          14,
+          9
+        ],
+        [
+          14,
+          12
+        ]
+      ],
+      "pinned": [
+        5,
+        5
+      ],
+      "min_segments": 16,
+      "recommended_segments": 32
+    },
+    "stub": {
+      "asset": "stub",
+      "load": 53760,
+      "max": 1792
+    },
+    "transport_area": {
+      "address": 53248,
+      "size": 512
+    },
+    "game_ram": [
+      [
+        55808,
+        56831
+      ],
+      [
+        57344,
+        61695
+      ]
+    ],
+    "irq_handler": 16408,
+    "start": "header-init",
+    "min_playnet": 3,
+    "requires": [
+      "mapper-ram"
+    ]
+  },
+  "symbols": {
+    "PN_TICK": 53765,
+    "PN_IRQ": 53827,
+    "PN_P1": 54374,
+    "PN_P2": 54376,
+    "MK_BLOCK": 54550,
+    "MK_SEG2": 54559,
+    "MK_W0": 54734,
+    "MK_W1": 54740,
+    "MK_W2": 54787,
+    "MK_W3": 54793,
+    "sndTick": 55169,
+    "isrA": 55153,
+    "tickSite": 55252,
+    "p1": 55258,
+    "p2": 55264,
+    "fk": 55270,
+    "rnd": 55280,
+    "isrEnd": 55312,
+    "stubEnd": 55327
+  }
+}

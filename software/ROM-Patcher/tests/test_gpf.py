@@ -700,5 +700,35 @@ class PublishedGamesTests(unittest.TestCase):
             self.assertEqual(patcher.read_gpf(data)['game_id'].upper() + '.GPF', name)
 
 
+F1SPIRIT = ROOT / 'profiles/f1spirit/profile.json'
+
+
+class F1SpiritTests(unittest.TestCase):
+    """F1 Spirit's package (image host mapper-ram, Konami SCC). The real dump when F1SPIRIT_ROM is set."""
+
+    def setUp(self):
+        self.profile, self.assets = patcher.load_profile(F1SPIRIT)
+        self.data = patcher.gpf_bytes(self.profile, self.assets)
+
+    def test_gpf_fits_the_buffer(self):
+        self.assertLessEqual(len(self.data), 3072, "PLAYNET.COM's GPF buffer is 3 KB")
+
+    def test_image_is_the_patched_rom(self):
+        rom = synthetic_rom(self.profile)
+        profile = copy.deepcopy(self.profile)
+        retarget(profile, rom)
+        gpf = patcher.read_gpf(patcher.gpf_bytes(profile, self.assets))
+        self.assertEqual(patcher.gpf_image(gpf, rom)[0], patcher.build(rom, profile, self.assets)[0])
+
+    @unittest.skipUnless(os.environ.get('F1SPIRIT_ROM'), 'set F1SPIRIT_ROM to check against the real dump')
+    def test_real_rom(self):
+        rom = Path(os.environ['F1SPIRIT_ROM']).read_bytes()
+        image, _ = patcher.gpf_image(patcher.read_gpf(self.data), rom)
+        self.assertEqual(len(image), 131072)
+        for patch in self.profile['patches']:
+            data = bytes.fromhex(patch['replace'])
+            self.assertEqual(image[patch['offset']:patch['offset'] + len(data)], data)
+
+
 if __name__ == '__main__':
     unittest.main()
