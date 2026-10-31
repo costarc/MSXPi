@@ -373,7 +373,7 @@ packages with the music ABI.
 | `transport_area` | Where PLAYNET installs the transport (10). `size` must be at least `TRANSPORT_AREA_MIN` = 512 (the largest transport plus the UNAPI buffer; `patch_rom.py` refuses less). In page 3, outside `game_ram` and the stub, and below the lowest MSX-DOS TPA top PLAYNET supports with a TCP/IP stack loaded, because the UNAPI and hybrid transports are written into MSX-DOS's page 3 too (`tcpFootprint` checks it at run time; the limit is in 10.2). One area serves every link: no profile names a link or a transport. |
 | `game_ram` | Inclusive `[low, high]` ranges of every address the game writes, including its stack. Must not overlap the stub or the transport area. |
 | `irq_handler` | The game's interrupt handler; `XIRQ` ends by jumping there |
-| `start` | `"header-init"` (jump to the INIT address in the image's `AB` header, as the BIOS would) or a CPU address |
+| `start` | `"header-init"` (jump to the INIT address in the image's `AB` header, as the BIOS would) or a CPU address. The game starts with interrupts off and SP = C100h, PLAYNET's own stack in C000h-C0FFh (at least 128 bytes free under it), so what its INIT pushes before its own `ld sp` never lands in a stub or transport. Older PLAYNET.COM started it on MSX-DOS's stack (about D55Fh under MSX-DOS 1 on the Canon V-25) with interrupts on: a package that must run with those sets SP first in INIT (F1 Spirit's `initSp`). |
 | `min_playnet` | The oldest PLAYNET release that may run this package (integer). Older releases refuse it with "update PLAYNET". |
 | `requires` | List of what the game needs from the machine or from PLAYNET; today only `"mapper-ram"` (required when `image.host` is `mapper-ram`). Never a link or a transport. Optional, default `[]`. |
 
