@@ -15,6 +15,10 @@
 ;                  computes, so lockstep is unaffected. Which interrupts count:
 ;                    1  every one counted during PN_TICK: the game's PN_IRQ (page 3) and the ones XCHG took
 ;                    2  only the ones MSX-DOS took inside XCHG (TCP/IP; the MSXPi transport takes none: no change there)
+;   G_SOUND_BATCH  1: the glue's G_SOUND_BEGIN and G_SOUND_END are called (interrupts off) before the first and after the
+;                  last of a frame's sound ticks, when there is at least one: a driver that needs its own banks maps
+;                  them once per frame instead of once per tick.
+;                  The game's interrupt handler can run between the ticks, so it must not depend on those banks.
 ;   G_SOUND_MIN    0: a frame that counted no interrupt ticks the driver 0 times (default 1: at least once), for a game
 ;                  whose TICKs are input polls rather than frames
 
@@ -37,6 +41,9 @@
 
         IF      !EXIST G_SOUND_MIN
 G_SOUND_MIN:    EQU     1
+        ENDIF
+        IF      !EXIST G_SOUND_BATCH
+G_SOUND_BATCH:  EQU     0
         ENDIF
         IF      !EXIST G_CATCHUP
 G_CATCHUP:      EQU     0
@@ -126,12 +133,24 @@ tickDone:
         jr      c,.n2
         ld      a,SND_MAX
 .n2:    ld      b,a
+        IF      G_SOUND_BATCH
+        push    bc
+        di
+        call    G_SOUND_BEGIN
+        ei
+        pop     bc
+        ENDIF
 .snd:   push    bc
         di
         call    G_SOUND_TICK
         ei
         pop     bc
         djnz    .snd
+        IF      G_SOUND_BATCH
+        di
+        call    G_SOUND_END
+        ei
+        ENDIF
 .none:
         ENDIF
         pop     iy

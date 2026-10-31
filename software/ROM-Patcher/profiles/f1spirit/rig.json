@@ -1,0 +1,47 @@
+{
+  "script": "run_f1spirit.sh",
+  "rom_env": "F1SPIRIT_ROM",
+  "rom": "F1SPIRIT.ROM",
+  "frames": 3000,
+  "argv": [
+    "frames",
+    "lag",
+    "loss"
+  ],
+  "env": {},
+  "links": {
+    "0": {},
+    "1": {
+      "TCP": "1",
+      "BOTH": "1"
+    },
+    "2": {
+      "TCP": "1",
+      "BOTH": "1",
+      "HYBRID": "1"
+    },
+    "mixed": {
+      "TCP": "1"
+    },
+    "mixed2": {
+      "TCP": "1",
+      "HYBRID": "1"
+    }
+  },
+  "chat": {
+    "0": {
+      "CHAT": "1"
+    },
+    "1": {
+      "CHAT": "1",
+      "TCP": "1",
+      "BOTH": "1"
+    },
+    "2": {
+      "CHAT": "1",
+      "TCP": "1",
+      "BOTH": "1",
+      "HYBRID": "1"
+    }
+  }
+}
