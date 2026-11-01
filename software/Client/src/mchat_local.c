@@ -843,10 +843,13 @@ static void load_config(void) {
    (FC4Ah) where it was. A ROM implementation that takes its work area on first use, below HIMEM (the SM-X WiFi
    does), then lands on top of MSR's table: the table's slot and segment bytes become the driver's, and the next
    mapper call (the free of the text segment, when MCHAT leaves) runs code in the wrong place. Bring HIMEM down to
-   HIMSAV before the first call into the implementation, so that whatever it allocates sits below MSR. */
+   HIMSAV before the first call into the implementation, so that whatever it allocates sits below MSR. MSR 1.2-msxpi2 already leaves a 64-byte
+   gap between HIMSAV (MSX-DOS 1 sits right below it) and HIMEM for that work area: a HIMEM up to 64 bytes above
+   HIMSAV is that gap and is left alone, since lowering HIMEM would put the work area on top of MSXDOS.SYS (the next
+   disk read then warm-boots). With the stock MSR there is no free spot: this trades its table for the DOS. */
 static void himem_guard(void) {
-    uint16_t sav = *(uint16_t *)0xF349;
-    if (sav >= 0xC000 && *(uint16_t *)0xFC4A > sav) *(uint16_t *)0xFC4A = sav;
+    uint16_t sav = *(uint16_t *)0xF349, him = *(uint16_t *)0xFC4A;
+    if (sav >= 0xC000 && him > sav && him - sav > 64) *(uint16_t *)0xFC4A = sav;
 }
 
 /* Called for "mchat /t"; 0 with a message when TCP/IP is not usable. */

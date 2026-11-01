@@ -35,6 +35,12 @@
 ;      cannot land on the mapper table. The programs of this repository also guard against an MSR
 ;      without this change (they lower HIMEM themselves before their first call into the driver).
 ;
+;    * Version 1.2-msxpi2 (MSXPi): leaves DRV_GAP bytes free between HIMSAV and the block, with HIMEM at
+;      the block. _SYSTEM reloads MSX-DOS 1 right below HIMSAV, and a ROM implementation that allocates
+;      below HIMEM on first use (SM-X WiFi: 1Eh bytes, kept for good, they chain H.TIMI) gets the gap.
+;      With HIMSAV = HIMEM (msxpi1) that area was the top of MSXDOS.SYS: the next disk read ran the
+;      overwritten code and warm-booted, so no program could be started any more.
+;
 ; NOTE: MSR = Standard mapper support routines,
 ;             as defined in MSX-DOS 2 Program Interface Specification
 
@@ -62,6 +68,7 @@ RAMSLOT1: equ   0F342h
 RAMSLOT3: equ   0F344h
 HIMSAV: equ     0F349h
 HIMEM:  equ     0FC4Ah
+DRV_GAP: equ    64      ;free bytes between MSX-DOS (below HIMSAV) and our block (at HIMEM)
 EXPTBL: equ     0FCC1h
 EXTBIO: equ     0FFCAh
 
@@ -560,6 +567,8 @@ END_BUILDP3:
         ;    Allocate below the lower of HIMSAV and HIMEM, and lower both. HIMEM (FC4Ah) is what
         ;    a ROM implementation that allocates its work area on first use goes by (the SM-X WiFi
         ;    does): leaving it above the block would put that work area on top of MAPTAB.
+        ;    HIMSAV goes DRV_GAP bytes lower still: MSX-DOS 1 is reloaded right below HIMSAV
+        ;    and does not maintain HIMEM, so that work area lands in the gap and not on DOS.
         ld      de,(HIMEM)
         ld      hl,(HIMSAV)
         push    hl
@@ -572,8 +581,12 @@ MSR_TOP_OK:
         ld      bc,(0B002h)
         or      a
         sbc     hl,bc
-        ld      (HIMSAV),hl
-        ld      (HIMEM),hl
+        ld      (HIMEM),hl      ;the block
+        ld      (0B000h),hl
+        ld      bc,DRV_GAP
+        or      a
+        sbc     hl,bc
+        ld      (HIMSAV),hl     ;MSX-DOS goes below the gap
 
         ld      a,(RAMSLOT1)
         ld      h,40h
@@ -585,13 +598,11 @@ MSR_TOP_OK:
 
         ld      hl,P3_CODE__1
         ld      de,P3_CODE__2
-        ld      ix,(HIMSAV)
+        ld      ix,(0B000h)
         ld      iy,0B004h
         ld      bc,(0B002h)
         call    REALLOC
 
-        ld      hl,(HIMSAV)
-        ld      (0B000h),hl
 
         ;--- Install code in segment
 
@@ -1988,11 +1999,11 @@ WELCOME_S:
 
         if INSTALL_MSR
 
-        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2-msxpi1",13,10
+        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2-msxpi2",13,10
 
         else
 
-        db      "Standalone UNAPI RAM helper installer 1.2-msxpi1",13,10
+        db      "Standalone UNAPI RAM helper installer 1.2-msxpi2",13,10
 
         endif
 

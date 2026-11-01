@@ -229,6 +229,13 @@ tcpSetup:
         or      a
         sbc     hl,de
         jr      nc,.himem                       ; HIMSAV >= HIMEM: nothing to do
+        ld      a,h                             ; HL = HIMSAV - HIMEM: -64..-1 is the gap MSR 1.2-msxpi2 leaves
+        inc     a                               ; for that work area (below HIMSAV is MSX-DOS 1): keep it
+        jr      nz,.himlow
+        ld      a,l
+        cp      $C0
+        jr      nc,.himem
+.himlow:
         add     hl,de
         ld      ($FC4A),hl
 .himem: xor     a                               ; the mapper support routines
