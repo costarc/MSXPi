@@ -1999,11 +1999,11 @@ WELCOME_S:
 
         if INSTALL_MSR
 
-        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2-msxpi2",13,10
+        db      "Standalone mapper support routines + UNAPI RAM helper installer 1.2-msxpi",13,10
 
         else
 
-        db      "Standalone UNAPI RAM helper installer 1.2-msxpi2",13,10
+        db      "Standalone UNAPI RAM helper installer 1.2-msxpi",13,10
 
         endif
 
