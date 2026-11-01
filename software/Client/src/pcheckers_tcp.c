@@ -726,10 +726,13 @@ static void tcp_init(void) {
 }
 
 /* MSR lowers HIMSAV (F349h) for its page-3 block but not HIMEM (FC4Ah); a ROM implementation that allocates its work
-   area on first use below HIMEM (the SM-X WiFi) would land on MSR's mapper table. Bring HIMEM down first. */
+   area on first use below HIMEM (the SM-X WiFi) would land on MSR's mapper table. Bring HIMEM down first. MSR 1.2-msxpi2 already leaves a 64-byte
+   gap between HIMSAV (MSX-DOS 1 sits right below it) and HIMEM for that work area: a HIMEM up to 64 bytes above
+   HIMSAV is that gap and is left alone, since lowering HIMEM would put the work area on top of MSXDOS.SYS (the next
+   disk read then warm-boots). With the stock MSR there is no free spot: this trades its table for the DOS. */
 static void himem_guard(void) {
-    uint16_t sav = *(uint16_t *)0xF349;
-    if (sav >= 0xC000 && *(uint16_t *)0xFC4A > sav) *(uint16_t *)0xFC4A = sav;
+    uint16_t sav = *(uint16_t *)0xF349, him = *(uint16_t *)0xFC4A;
+    if (sav >= 0xC000 && him > sav && him - sav > 64) *(uint16_t *)0xFC4A = sav;
 }
 
 /* Called when LINK changes to TCPIP; 0 with a status when it cannot. */

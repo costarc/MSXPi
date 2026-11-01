@@ -115,6 +115,8 @@ HAYPARS:	;
 	;--- MSR lowers HIMSAV (F349h) for its page 3 block but not HIMEM (FC4Ah).  A ROM
 	;    implementation that allocates its work area on first use below HIMEM (the SM-X
 	;    WiFi) would land on MSR's mapper table: bring HIMEM down before the first call.
+	;    Not when HIMEM is at most 64 bytes above HIMSAV: that is the gap MSR 1.2-msxpi2
+	;    leaves for such a work area, and below HIMSAV is MSX-DOS 1 itself.
 
 	ld	hl,(#F349)
 	ld	a,h
@@ -124,7 +126,13 @@ HAYPARS:	;
 	or	a
 	sbc	hl,de
 	jr	nc,HIMOK
-	add	hl,de
+	ld	a,h		;HL = HIMSAV - HIMEM, negative: skip -64..-1 (the gap)
+	inc	a
+	jr	nz,HIMLOW
+	ld	a,l
+	cp	#C0
+	jr	nc,HIMOK
+HIMLOW:	add	hl,de
 	ld	(#FC4A),hl
 HIMOK:
 
