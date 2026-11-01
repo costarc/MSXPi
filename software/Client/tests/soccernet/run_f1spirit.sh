@@ -7,6 +7,9 @@
 # Needs sjasmplus (SJASMPLUS=path), the Windows openMSX build with the MSXPi device and your own F1SPIRIT.ROM (never
 # committed). The release stub and its GPF come from software/ROM-Patcher/profiles/f1spirit/rebuild.py. Environment:
 #   OPENMSX  path to openmsx.exe.   WORK  scratch folder (default $TMP/f1spirit-work)
+#   MACH1=Panasonic_FS-A1WSX  P1 on an FS-A1WSX with its own drive (MSX-DOS 1.8; EXT1=ram4mb), PLAYNET.COM, F1SPIRIT.ROM and MSR.COM
+#            on its drive A: (a folder), MSR I before the game: the mapper-helper path. Default Canon_V-25, MSXPi boot disk.
+#   MSRI=1   MSR I (the mapper helper) before the game on the MSXPi-boot nodes: PLAYNET allocates through the helper.
 #   ONLY=P1  run one node.          MENU=single  P1 picks 1PLAYER instead of 2PLAYER
 #   EXT2=... the second node's memory instead of ram2mb (for example ram512k, to run with fewer segments)
 #   TMAX/NODETMO  emulated / wall seconds before a node is stopped.   RENDERER=SDLGL-PP to watch it
@@ -19,6 +22,8 @@
 #   HYBRID=1 (with TCP=1) the TCP/IP node(s) play through their MSXPi (PLAYNET /T /H, link 2). PNOPTS = more PLAYNET /T options.
 #   EXITKEY=n  P2 presses the exit key (Ctrl+Shift+F5) at frame n: both games end; with CHAT both must be back in
 #            MCHAT (each MSXPi saw "playnet restore", then "mchat start"). Set the frames above n.
+#   STALLEXIT=n  P2 vanishes at frame n (no BYE); P1, stalled, presses the exit key 3 s later and must end at once
+#            (P1.trace: "# XEND result 1" a few seconds after "# stalled", not result 3 after 15 s).
 #   CHAT=1   (with TCP=1 BOTH=1: links 1 and 2, MCHAT /T on Nextor against the IRC fixture at 10.0.2.2; HYBRID=1 plays through the
 #            MSXPi, else GAMELINK=1 over TCP/IP; EXITKEY then checks QUIT before the game and a new connection after it)
 #            the players meet in MCHAT (software/target/mchat.com, against a local IRC server): alice (P1) invites bob
@@ -70,8 +75,14 @@ var SPI_HW=False
 INI
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$SRC/build/PLAYNET.COM" PLAYNET.COM > /dev/null || exit 1
   python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$F1SPIRIT_ROM" F1SPIRIT.ROM > /dev/null || exit 1
+  [ -z "$MSRI" ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/UNAPI/bin/MSR.COM" MSR.COM > /dev/null || exit 1
   [ -z "$CHAT" ] || python "$HERE/fat12_add.py" "$H/disks/tools.dsk" "$ROOT/software/target/mchat.com" MCHAT.COM > /dev/null || exit 1
 done
+if [ "$MACH1" = Panasonic_FS-A1WSX ]; then      # P1's drive A:
+  FL="$WORK/floppy1"; rm -rf "$FL"; mkdir -p "$FL"
+  cp "$SRC/build/PLAYNET.COM" "$ROOT/software/UNAPI/bin/MSR.COM" "$F1SPIRIT_ROM" "$FL/"
+  FLW=$(cd "$FL" && pwd -W 2>/dev/null || echo "$FL")
+fi
 # the TCP/IP nodes' hard disks: C:\PLAYNET (P2; also P1 with BOTH=1)
 for n in 2 1; do
   [ -n "$TCP" ] || break
@@ -118,6 +129,8 @@ sleep 15
 mkdir -p "$WORK/np"; rm -f "$WORK"/np/*
 node() {  # role port ext
   hw="-ext $3"; hd="set mute on"; boot=
+  mach="-machine Canon_V-25"; diska=; fdd=
+  if [ $1 = P1 ] && [ "$MACH1" = Panasonic_FS-A1WSX ]; then mach="-machine $MACH1"; diska="-diska $FLW"; fdd=1; fi
   cmd=
   if [ -n "$TCP" ] && { [ $1 = P2 ] || [ -n "$BOTH" ]; }; then
     ext=$([ $1 = P2 ] && echo "${EXT2:-ram2mb}" || echo "${EXT1:-ram2mb}")
@@ -126,14 +139,14 @@ node() {  # role port ext
     elif [ $1 = P2 ]; then cmd="PLAYNET /T $PNOPTS f1spirit P2 $UDP2 10.0.2.2:$UDP1"
     else cmd="PLAYNET /T $PNOPTS f1spirit P1 $UDP1 10.0.2.2:$UDP2"; fi
   fi
-  CMD="$cmd" EXITKEY=$EXITKEY CHAT=$CHAT PLAY_AT=${PLAY_AT:-60} ACCEPT_AT=${ACCEPT_AT:-75} BOOT=$boot PLAYNET_SYMS="$WORKW/stub_syms.tcl" STUB_BIN="$(cd "$PKG" && pwd -W 2>/dev/null || echo "$PKG")/assets/stub.bin" \
+  MSRI=$MSRI FDD=$fdd CMD="$cmd" EXITKEY=$EXITKEY STALLEXIT=$STALLEXIT CHAT=$CHAT PLAY_AT=${PLAY_AT:-60} ACCEPT_AT=${ACCEPT_AT:-75} BOOT=$boot PLAYNET_SYMS="$WORKW/stub_syms.tcl" STUB_BIN="$(cd "$PKG" && pwd -W 2>/dev/null || echo "$PKG")/assets/stub.bin" \
   ROLEARG=$1 TRACE=$WORKW/np/$1.trace STOPF=$STOPF MENU=${MENU:-dual} SEED=${SEED:-0} MSXPI_HARNESS_OUT=$WORKW/np/$1.result \
-  timeout ${NODETMO:-1800} "$OMX" -machine Canon_V-25 $hw -ext MSXPi -command "$hd" \
+  timeout ${NODETMO:-1800} "$OMX" $mach $hw $diska -ext MSXPi -command "$hd" \
     -command "set msxpiserver_port $2" -command "set msxpirom_bank BANK2" \
     -command "set msxpirom_sltsl ON" -command "reset" -command "set renderer ${RENDERER:-none}" -command "set mute on" \
     -script "$HARNESS" -script "$RW/software/Client/tests/soccernet/f1spirit_node.tcl" ${EXTRA_TCL:+-script "$EXTRA_TCL"} > "$WORK/np/$1.log" 2>&1
 }
-node P1 $P1PORT ram2mb &
+node P1 $P1PORT ${EXT1:-ram2mb} &
 NPIDS=$!
 if [ -z "$ONLY" ]; then sleep 5; node P2 $P2PORT ${EXT2:-ram2mb} & NPIDS="$NPIDS $!"; fi
 wait $NPIDS
