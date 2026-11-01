@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "968c7fdb95dc06fc896bfee6d6e10b63f83727e69bca98727daa6a723f983df0"
+      "sha256": "ddb5a9fa4d0bbdfae03c1c427a2ee84ecf4a852a20c57a195e5e8fea36538956"
     }
   },
   "layout": [
@@ -58,25 +58,25 @@
     {
       "offset": 1381,
       "expected": "b948",
-      "replace": "eec3",
+      "replace": "f2c3",
       "reason": "Player 1 read: cached value of this frame"
     },
     {
       "offset": 1386,
       "expected": "f248",
-      "replace": "f2c3",
+      "replace": "f6c3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
       "offset": 2199,
       "expected": "b948",
-      "replace": "e7c3",
+      "replace": "ebc3",
       "reason": "TICK site: lee_los_mandos, once per frame - exchange, then player 1"
     },
     {
       "offset": 2221,
       "expected": "f248",
-      "replace": "f2c3",
+      "replace": "f6c3",
       "reason": "Player 2 read: cached value of this frame"
     },
     {
@@ -94,19 +94,19 @@
     {
       "offset": 28678,
       "expected": "ed5f1f",
-      "replace": "cdf6c3",
+      "replace": "cdfac3",
       "reason": "ld a,r : rra -> derived from the frame counter"
     },
     {
       "offset": 28712,
       "expected": "ed5fe606",
-      "replace": "cdfbc300",
+      "replace": "cdffc300",
       "reason": "ld a,r : and 6 -> derived from the frame counter"
     },
     {
       "offset": 68,
       "expected": "3e003205e0",
-      "replace": "cd01c40000",
+      "replace": "cd05c40000",
       "reason": "The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
@@ -157,14 +157,14 @@
   "symbols": {
     "PN_TICK": 49413,
     "PN_IRQ": 49475,
-    "PN_P1": 50025,
-    "PN_P2": 50026,
-    "pad1t": 50151,
-    "pad1c": 50158,
-    "pad2c": 50162,
-    "rng1": 50166,
-    "rng2": 50171,
-    "isrEnd": 50177,
-    "stubEnd": 50190
+    "PN_P1": 50029,
+    "PN_P2": 50030,
+    "pad1t": 50155,
+    "pad1c": 50162,
+    "pad2c": 50166,
+    "rng1": 50170,
+    "rng2": 50175,
+    "isrEnd": 50181,
+    "stubEnd": 50194
   }
 }

@@ -54,6 +54,13 @@ proc npTick {} {
         keymatrixdown 6 0x03; keymatrixdown 7 0x02           ;# SHIFT + CTRL, F5
         after time 1 { keymatrixup 6 0x03; keymatrixup 7 0x02 }
     }
+    # STALLEXIT=n: at frame n P2 vanishes (no BYE); 3 s later P1, stalled, presses the exit key. P1 must leave at once,
+    # well before its server's 15 s dead timer could end the game.
+    if {[info exists ::env(STALLEXIT)] && $::env(STALLEXIT) ne "" && $f >= $::env(STALLEXIT) && $::roleArg eq "P2"} {
+        puts $tf "# vanishing at frame $f"; close $tf; set ::ended 1
+        close [open [file dirname $::env(TRACE)]/P2.vanished w]
+        exit
+    }
     if {$f >= $::stopf} {
         puts $tf "# end desync=[peek $::s_desync] desyncF=[peek $::s_desyncF] delay=[peek $::s_pnDelay] t=[format %.1f [machine_info time]] builds=$::builds"
         close $tf
@@ -80,6 +87,7 @@ proc waitStub {} {
         flush $::tf
         debug set_bp $::s_tickDone {} { npTick }
         debug set_bp $::s_mkBuild {} { incr ::builds }
+        debug set_bp $::sym(XEND) {} { catch { puts $::tf [format "# XEND result %d t=%.1f" [reg A] [machine_info time]]; flush $::tf } }
         schedule
         return
     }
@@ -88,7 +96,18 @@ proc waitStub {} {
 # with EXITKEY: once the ticks stop (the game ended), 40 s (BACKWAIT) for the way back (MCHAT), a screenshot, the end
 set ::lastTick 0
 proc npWatch {} {
-    if {$::started && !$::ended && [machine_info time] - $::lastTick > 5} {
+    if {$::started && !$::ended && !$::pressed && $::roleArg eq "P1" && [info exists ::env(STALLEXIT)] &&
+            $::env(STALLEXIT) ne "" && [file exists [file dirname $::env(TRACE)]/P2.vanished]} {
+        set ::pressed 1                                 ;# P2 is gone: 3 s on (stalled), the exit key must end the game at once
+        after time 3 {
+            puts $::tf [format "# stalled at frame %d, exit key pressed t=%.1f" [expr {$::frames + [peek $::s_nf]}] [machine_info time]]
+            flush $::tf
+            keymatrixdown 6 0x03; keymatrixdown 7 0x02
+            after time 1 { keymatrixup 6 0x03; keymatrixup 7 0x02 }
+        }
+    }
+    if {$::started && !$::ended && [machine_info time] - $::lastTick > 5 &&
+            ($::pressed || ![info exists ::env(STALLEXIT)] || $::env(STALLEXIT) eq "")} {
         set ::ended 1
         puts $::tf [format "# ticks stopped at frame %d t=%.1f PC=%04X" [expr {$::frames + [peek $::s_nf]}] [machine_info time] [reg PC]]
         flush $::tf
@@ -97,7 +116,7 @@ proc npWatch {} {
     }
     after time 1 npWatch
 }
-if {[info exists ::env(EXITKEY)] && $::env(EXITKEY) ne ""} { after time 30 npWatch }
+if {[info exists ::env(EXITKEY)] && $::env(EXITKEY) ne "" || [info exists ::env(STALLEXIT)] && $::env(STALLEXIT) ne ""} { after time 30 npWatch }
 proc npKey {row bit secs} {
     keymatrixdown $row [expr {1 << $bit}]
     after time $secs [list keymatrixup $row [expr {1 << $bit}]]
@@ -170,11 +189,26 @@ if {[info exists ::env(BOOT)] && $::env(BOOT) eq "nextor"} {
             after time 3 waitStub
         }
     } 200
+} elseif {[info exists ::env(FDD)] && $::env(FDD) ne ""} {
+    # an FS-A1WSX with its own drive: PLAYNET.COM, MSR.COM and the ROM are on A:; MSR I (the mapper helper), then the game
+    harness::at_dos_prompt {
+        harness::run_cmd "MSR I" 30 {
+            type "PLAYNET f1spirit $::roleArg\r"
+            after time 3 waitStub
+        }
+    } 200
 } else {
     harness::at_dos_prompt {
         harness::run_cmd "B:" 30 {
-            type "PLAYNET f1spirit $::roleArg\r"
-            after time 3 waitStub
+            if {[info exists ::env(MSRI)] && $::env(MSRI) ne ""} {
+                harness::run_cmd "MSR I" 30 {
+                    type "PLAYNET f1spirit $::roleArg\r"
+                    after time 3 waitStub
+                }
+            } else {
+                type "PLAYNET f1spirit $::roleArg\r"
+                after time 3 waitStub
+            }
         }
     } 200
 }

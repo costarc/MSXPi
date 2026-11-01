@@ -25,11 +25,11 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "c5b3d0ed11e701c1ba1ab4b8c348d618a4db4c23ef166804783491e47d2fadfa"
+      "sha256": "dabd7157187991fb67642ac654763b46fd17497024968b7061805a3616c85151"
     },
     "ext": {
       "file": "assets/ext.bin",
-      "sha256": "87d06c67ae53f25b0b9f9c15d607f2455029d16d53b6d036c544bc9134990617"
+      "sha256": "dd8ced4ef933339d227c5af35cab4a114ec2d2f25db99c9247305545943691e3"
     }
   },
   "layout": [
@@ -62,13 +62,13 @@
     {
       "offset": 83,
       "expected": "cd2245",
-      "replace": "cdf1c3",
+      "replace": "cdf5c3",
       "reason": "4053h: TICK site: the main reader, once per frame -> PN_TICK, then the reader on player 1's byte"
     },
     {
       "offset": 89,
       "expected": "af3206e0",
-      "replace": "cd3dc400",
+      "replace": "cd41c400",
       "reason": "4059h: The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
@@ -110,7 +110,7 @@
     {
       "offset": 1411,
       "expected": "cd104557cd3f45b2",
-      "replace": "cd39c40000000000",
+      "replace": "cd3dc40000000000",
       "reason": "4583h: Second reader (title, demo, game over): player 1's byte of this frame"
     },
     {
@@ -167,21 +167,21 @@
   "symbols": {
     "PN_TICK": 49413,
     "PN_IRQ": 49475,
-    "PN_P1": 50025,
-    "PN_P2": 50026,
-    "tickSite": 50161,
-    "key1": 50233,
-    "rdLocal": 50151,
-    "isrEnd": 50237,
-    "stubEnd": 50250,
+    "PN_P1": 50029,
+    "PN_P2": 50030,
+    "tickSite": 50165,
+    "key1": 50237,
+    "rdLocal": 50155,
+    "isrEnd": 50241,
+    "stubEnd": 50254,
     "dispatch": 41166,
     "menu": 41349,
-    "tMode": 50180,
-    "tCur": 50181,
-    "tOut": 50182,
-    "tWin": 50184,
-    "tLives2": 50186,
-    "tHold": 50185,
-    "tBlk": 50187
+    "tMode": 50184,
+    "tCur": 50185,
+    "tOut": 50186,
+    "tWin": 50188,
+    "tLives2": 50190,
+    "tHold": 50189,
+    "tBlk": 50191
   }
 }
