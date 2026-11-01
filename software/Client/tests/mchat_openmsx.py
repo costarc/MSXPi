@@ -274,9 +274,11 @@ def main():
         shutil.copytree(FLOPPY, work / 'floppy')
         shutil.copy(MCHAT, work / 'floppy/mchat.com')
     if LINK == 'tcp':
-        shutil.copy(SOFTWARE / 'target/memtop.com', work / 'memtop.com')
-        subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'memtop.com',
-                        'home/disks/msxpiboot.dsk:MEMTOP.COM'], cwd=work, check=True, stdout=subprocess.DEVNULL)
+        memtop = SOFTWARE / 'target/memtop.com'      # no longer in the repo: use a local copy when there is one
+        if memtop.exists():
+            shutil.copy(memtop, work / 'memtop.com')
+            subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy', 'memtop.com',
+                            'home/disks/msxpiboot.dsk:MEMTOP.COM'], cwd=work, check=True, stdout=subprocess.DEVNULL)
         (work / 'MCHAT.INI').write_bytes(b'IRCADDR=%s\r\nIRCPORT=%d\r\n' % (IRC_HOST_IP.encode(), IRC_PORT))
         if NET == 'nat':     # INL I reads INL.CFG from the current drive: the user-mode link's addresses
             (work / 'INL.CFG').write_bytes(b'ip d 0\r\nip l 10.0.2.15\r\nip m 255.255.255.0\r\nip g 10.0.2.2\r\nip p 10.0.2.2\r\n\x1a')

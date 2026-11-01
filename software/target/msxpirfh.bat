@@ -7,7 +7,6 @@ echo
 echo Restarting msxpi-server.py
 p restart
 pcopy m:API.BAS
-pcopy m:CP437.COM
 pcopy m:DOLAR.BAS
 pcopy m:ETHUNAPI.COM
 pcopy m:INL.CFG
