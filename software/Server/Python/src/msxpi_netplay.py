@@ -550,7 +550,7 @@ class Netplay:
                     self.stats["tx"] += 1
                 else:
                     self.stats["malformed"] += 1
-            if flags & 2 and self.state in (S_DEAD, S_FAILED):
+            if flags & 2 and self.state in (S_DEAD, S_FAILED, S_ENDED):   # ENDED: an MSX still in the game must not wait forever
                 write(b"\xff\x00")
                 return True
             if flags & 2 and self.state == S_LEFT:

@@ -378,6 +378,11 @@ class Relay(unittest.TestCase):
         self.assertEqual(self.b.describe(), 'the opponent ended it')
         self.assertTrue(wait_for(lambda: self.a.bye_left == 0, 2))      # sent BYE_REPEAT times
 
+    def test_an_msx_still_playing_after_its_bye_hears_gone(self):
+        txn(self.a, 0x20, bytes([4]))                                   # this side ended it (a desync)
+        self.assertEqual(self.a.state, n.S_ENDED)
+        self.assertEqual(txn(self.a, 2), b'\xff\x00')                   # not "nothing" forever
+
     def test_restart_flushes_old_packets(self):
         txn(self.a, 1, packet(3))
         wait_for(lambda: bool(self.b.ready))
