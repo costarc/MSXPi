@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "d59deee10c3d5db477bf592c62bf9ea617d1eeb8dde35c5852a705ca28f3e8e4"
+      "sha256": "f84a212c3d204c560f5df443577bc91b3af52249ce96f4c625535df4548aefcb"
     }
   },
   "layout": [
@@ -40,13 +40,13 @@
     {
       "offset": 90,
       "expected": "cd8441",
-      "replace": "cd30ec",
+      "replace": "cd34ec",
       "reason": "0005Ah (bank 0 + 005Ah): INIT: call 4184h -> stubInit: the bank switches -> MK_W1..MK_W3 in every segment, then 4184h"
     },
     {
       "offset": 121,
       "expected": "cd2568",
-      "replace": "cdddeb",
+      "replace": "cde1eb",
       "reason": "00079h (bank 0 + 0079h): INIT: the RAM clear (6825h, C000h-F37Dh) -> clrGame: the same around the stub, the transport and the pair map"
     },
     {
@@ -58,115 +58,115 @@
     {
       "offset": 733,
       "expected": "3a32d0a7203b",
-      "replace": "cda1eb000000",
+      "replace": "cda5eb000000",
       "reason": "002DDh (bank 0 + 02DDh): the handler is busy -> busyChk: drop the interrupt, or keep it for later if it came during PN_TICK"
     },
     {
       "offset": 744,
       "expected": "3e0e32f8773e0f32f87f",
-      "replace": "cd17ec00000000000000",
+      "replace": "cd1bec00000000000000",
       "reason": "002E8h (bank 0 + 02E8h): the handler maps banks 14/15 for the sound driver -> sndMap (MK_W23)"
     },
     {
       "offset": 761,
       "expected": "3a89e432f8773a8ae432f87f",
-      "replace": "cd22ec000000000000000000",
+      "replace": "cd26ec000000000000000000",
       "reason": "002F9h (bank 0 + 02F9h): the handler puts back W2/W3 from E489h/E48Ah -> gameMap (MK_W23)"
     },
     {
       "offset": 794,
       "expected": "af3232d0",
-      "replace": "c3b1eb00",
+      "replace": "c3b5eb00",
       "reason": "0031Ah (bank 0 + 031Ah): the end of the handler -> isrEnd: the next frame now if one is pending"
     },
     {
       "offset": 815,
       "expected": "1e8fcd53434fcd6443b1",
-      "replace": "cd7beb00000000000000",
+      "replace": "cd7feb00000000000000",
       "reason": "0032Fh (bank 0 + 032Fh): player 1 (joystick 1 + keys) -> inP1: PN_TICK, then player 1 (seat 0)"
     },
     {
       "offset": 834,
       "expected": "1ecfcd53434fcdb343b1",
-      "replace": "cdc6eb00000000000000",
+      "replace": "cdcaeb00000000000000",
       "reason": "00342h (bank 0 + 0342h): player 2 (joystick 2 + keys) -> inP2: player 2 (seat 1)"
     },
     {
       "offset": 37245,
       "expected": "ed5fe601",
-      "replace": "cd2bee00",
+      "replace": "cd2fee00",
       "reason": "0917Dh (bank 4 + 117Dh): ld a,r -> rAnd01, deterministic"
     },
     {
       "offset": 38244,
       "expected": "ed5fe63f",
-      "replace": "cd49ee00",
+      "replace": "cd4dee00",
       "reason": "09564h (bank 4 + 1564h): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 39797,
       "expected": "ed5fe607",
-      "replace": "cd37ee00",
+      "replace": "cd3bee00",
       "reason": "09B75h (bank 4 + 1B75h): ld a,r -> rAnd07, deterministic"
     },
     {
       "offset": 39853,
       "expected": "ed5fe60f",
-      "replace": "cd3dee00",
+      "replace": "cd41ee00",
       "reason": "09BADh (bank 4 + 1BADh): ld a,r -> rAnd0F, deterministic"
     },
     {
       "offset": 47476,
       "expected": "ed5fac",
-      "replace": "cd4fee",
+      "replace": "cd53ee",
       "reason": "0B974h (bank 5 + 1974h): ld a,r -> rXorH, deterministic"
     },
     {
       "offset": 47480,
       "expected": "ed5fad",
-      "replace": "cd54ee",
+      "replace": "cd58ee",
       "reason": "0B978h (bank 5 + 1978h): ld a,r -> rXorL, deterministic"
     },
     {
       "offset": 65117,
       "expected": "ed5f80",
-      "replace": "cd59ee",
+      "replace": "cd5dee",
       "reason": "0FE5Dh (bank 7 + 1E5Dh): ld a,r -> rAddB, deterministic"
     },
     {
       "offset": 65458,
       "expected": "ed5f81",
-      "replace": "cd5eee",
+      "replace": "cd62ee",
       "reason": "0FFB2h (bank 7 + 1FB2h): ld a,r -> rAddC, deterministic"
     },
     {
       "offset": 79415,
       "expected": "ed5fe67f",
-      "replace": "cd16ee00",
+      "replace": "cd1aee00",
       "reason": "13637h (bank 9 + 1637h): ld a,r -> rnd, deterministic"
     },
     {
       "offset": 80427,
       "expected": "ed5fe610",
-      "replace": "cd43ee00",
+      "replace": "cd47ee00",
       "reason": "13A2Bh (bank 9 + 1A2Bh): ld a,r -> rAnd10, deterministic"
     },
     {
       "offset": 80432,
       "expected": "ed5fe603",
-      "replace": "cd31ee00",
+      "replace": "cd35ee00",
       "reason": "13A30h (bank 9 + 1A30h): ld a,r -> rAnd03, deterministic"
     },
     {
       "offset": 110153,
       "expected": "ed5fad",
-      "replace": "cd54ee",
+      "replace": "cd58ee",
       "reason": "1AE49h (bank 13 + 0E49h): ld a,r -> rXorL, deterministic"
     },
     {
       "offset": 110733,
       "expected": "cd4101",
-      "replace": "cdcceb",
+      "replace": "cdd0eb",
       "reason": "1B08Dh (bank 13 + 108Dh): the pause: STOP (row 7) -> stopKey, either player's from the inputs"
     },
     {
@@ -178,25 +178,25 @@
     {
       "offset": 110781,
       "expected": "cd4101",
-      "replace": "cdcceb",
+      "replace": "cdd0eb",
       "reason": "1B0BDh (bank 13 + 10BDh): the pause: STOP released -> stopKey"
     },
     {
       "offset": 112645,
       "expected": "ed5fe607",
-      "replace": "cd37ee00",
+      "replace": "cd3bee00",
       "reason": "1B805h (bank 13 + 1805h): ld a,r -> rAnd07, deterministic"
     },
     {
       "offset": 112816,
       "expected": "ed5fe607",
-      "replace": "cd37ee00",
+      "replace": "cd3bee00",
       "reason": "1B8B0h (bank 13 + 18B0h): ld a,r -> rAnd07, deterministic"
     },
     {
       "offset": 126269,
       "expected": "ed5f81",
-      "replace": "cd5eee",
+      "replace": "cd62ee",
       "reason": "1ED3Dh (bank 15 + 0D3Dh): ld a,r -> rAddC, deterministic"
     }
   ],
@@ -215,7 +215,7 @@
       "mapper": "ascii8",
       "bank_size": 8192,
       "banks": 16,
-      "block": 59673,
+      "block": 59677,
       "start_banks": [
         0,
         4,
@@ -354,24 +354,24 @@
   "symbols": {
     "PN_TICK": 58981,
     "PN_IRQ": 59000,
-    "PN_P1": 59547,
-    "PN_P2": 59548,
-    "MK_BLOCK": 59673,
-    "MK_SEG2": 59682,
-    "MK_W1": 59827,
-    "MK_W2": 59874,
-    "MK_W3": 59880,
-    "MK_W23": 59975,
-    "inP1": 60283,
-    "inP2": 60358,
-    "stopKey": 60364,
-    "stubInit": 60464,
-    "busyChk": 60321,
-    "isrEnd": 60337,
-    "clrGame": 60381,
-    "sndMap": 60439,
-    "gameMap": 60450,
-    "rnd": 60950,
-    "stubEnd": 61027
+    "PN_P1": 59551,
+    "PN_P2": 59552,
+    "MK_BLOCK": 59677,
+    "MK_SEG2": 59686,
+    "MK_W1": 59831,
+    "MK_W2": 59878,
+    "MK_W3": 59884,
+    "MK_W23": 59979,
+    "inP1": 60287,
+    "inP2": 60362,
+    "stopKey": 60368,
+    "stubInit": 60468,
+    "busyChk": 60325,
+    "isrEnd": 60341,
+    "clrGame": 60385,
+    "sndMap": 60443,
+    "gameMap": 60454,
+    "rnd": 60954,
+    "stubEnd": 61031
   }
 }

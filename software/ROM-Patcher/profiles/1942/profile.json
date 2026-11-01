@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "714d033e98042846fe57cb709dedf7d31edafe74006e5adde75353624791b6af"
+      "sha256": "bdd98f6b5b200da21d3bd92e0a1108f921118a84b3400a45c980c9c4c8cfe56e"
     }
   },
   "layout": [
@@ -40,103 +40,103 @@
     {
       "offset": 20,
       "expected": "3200603c3200683c3200703c320078",
-      "replace": "cd94e5000000000000000000000000",
+      "replace": "cd98e5000000000000000000000000",
       "reason": "4014h (bank 0): INIT: the four bank-register writes -> clear the game RAM, SP = F380h, H.KEYI -> XIRQ (initGame)"
     },
     {
       "offset": 353,
       "expected": "cd096d",
-      "replace": "cd80e5",
+      "replace": "cd84e5",
       "reason": "4161h (bank 0): input the frame -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 994,
       "expected": "cd096d",
-      "replace": "cd80e5",
+      "replace": "cd84e5",
       "reason": "43E2h (bank 0): input pause: until the key is released -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1004,
       "expected": "cd096d",
-      "replace": "cd80e5",
+      "replace": "cd84e5",
       "reason": "43ECh (bank 0): input pause: until a key is pressed -> inAct: PN_TICK, then the net input"
     },
     {
       "offset": 1128,
       "expected": "cd096d",
-      "replace": "cd6ce5",
+      "replace": "cd70e5",
       "reason": "4468h (bank 0): input the title menu: player 1, the inviter -> inP1: PN_TICK, then the net input"
     },
     {
       "offset": 1287,
       "expected": "cd096d",
-      "replace": "cd74e5",
+      "replace": "cd78e5",
       "reason": "4507h (bank 0): input the game over wait: anyone -> inAny: PN_TICK, then the net input"
     },
     {
       "offset": 1438,
       "expected": "cdaa6d",
-      "replace": "cd8be5",
+      "replace": "cd8fe5",
       "reason": "459Eh (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
       "offset": 1463,
       "expected": "cdaa6d",
-      "replace": "cd8be5",
+      "replace": "cd8fe5",
       "reason": "45B7h (bank 0): input hi-score name entry -> keyAct: PN_TICK, then the net input"
     },
     {
       "offset": 1523,
       "expected": "cd707c",
-      "replace": "cdf5e5",
+      "replace": "cdf9e5",
       "reason": "45F3h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
     },
     {
       "offset": 1729,
       "expected": "320070",
-      "replace": "cdd3e3",
+      "replace": "cdd7e3",
       "reason": "46C1h (bank 0): ld (7000h),a -> MK_W2"
     },
     {
       "offset": 1734,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "46C6h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 1778,
       "expected": "320070",
-      "replace": "cdd3e3",
+      "replace": "cdd7e3",
       "reason": "46F2h (bank 0): ld (7000h),a -> MK_W2"
     },
     {
       "offset": 1783,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "46F7h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 4392,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "5128h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 4599,
       "expected": "cd707c",
-      "replace": "cdf5e5",
+      "replace": "cdf9e5",
       "reason": "51F7h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
     },
     {
       "offset": 5197,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "544Dh (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 5650,
       "expected": "3a68f0",
-      "replace": "cdf5e5",
+      "replace": "cdf9e5",
       "reason": "5612h (bank 0): wait for the sound driver -> sndSt: PN_TICK, then F068h"
     },
     {
@@ -148,79 +148,79 @@
     {
       "offset": 7664,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "5DF0h (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 7820,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "5E8Ch (bank 0): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 8448,
       "expected": "ed5fe67f",
-      "replace": "cdc9e500",
+      "replace": "cdcde500",
       "reason": "6100h (bank 1): ld a,r -> rnd, deterministic"
     },
     {
       "offset": 8487,
       "expected": "ed5fe67f",
-      "replace": "cdc9e500",
+      "replace": "cdcde500",
       "reason": "6127h (bank 1): ld a,r -> rnd, deterministic"
     },
     {
       "offset": 9122,
       "expected": "ed5f1f",
-      "replace": "cddee5",
+      "replace": "cde2e5",
       "reason": "63A2h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9135,
       "expected": "ed5fe60c",
-      "replace": "cde3e500",
+      "replace": "cde7e500",
       "reason": "63AFh (bank 1): ld a,r -> rAnd0C, deterministic"
     },
     {
       "offset": 9169,
       "expected": "ed5fe63f",
-      "replace": "cde9e500",
+      "replace": "cdede500",
       "reason": "63D1h (bank 1): ld a,r -> rAnd3F, deterministic"
     },
     {
       "offset": 9176,
       "expected": "ed5f1f",
-      "replace": "cddee5",
+      "replace": "cde2e5",
       "reason": "63D8h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9456,
       "expected": "ed5fe60f",
-      "replace": "cdefe500",
+      "replace": "cdf3e500",
       "reason": "64F0h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
       "offset": 9685,
       "expected": "ed5f1f",
-      "replace": "cddee5",
+      "replace": "cde2e5",
       "reason": "65D5h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 9843,
       "expected": "ed5f1f",
-      "replace": "cddee5",
+      "replace": "cde2e5",
       "reason": "6673h (bank 1): ld a,r -> rRra, deterministic"
     },
     {
       "offset": 10345,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "6869h (bank 1): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 10514,
       "expected": "ed5fe60f",
-      "replace": "cdefe500",
+      "replace": "cdf3e500",
       "reason": "6912h (bank 1): ld a,r -> rAnd0F, deterministic"
     },
     {
@@ -232,7 +232,7 @@
     {
       "offset": 12682,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "718Ah (bank 1): ld (7800h),a -> MK_W3"
     },
     {
@@ -256,19 +256,19 @@
     {
       "offset": 23446,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "9B96h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23478,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "9BB6h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
       "offset": 23510,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "9BD6h (bank 2): ld (7800h),a -> MK_W3"
     },
     {
@@ -298,7 +298,7 @@
     {
       "offset": 23836,
       "expected": "320078",
-      "replace": "cdd9e3",
+      "replace": "cddde3",
       "reason": "9D1Ch (bank 2): ld (7800h),a -> MK_W3"
     },
     {
@@ -323,7 +323,7 @@
       "mapper": "ascii8",
       "bank_size": 8192,
       "banks": 16,
-      "block": 58134,
+      "block": 58138,
       "start_banks": [
         0,
         1,
@@ -458,20 +458,20 @@
   "symbols": {
     "PN_TICK": 57373,
     "PN_IRQ": 57414,
-    "PN_P1": 57958,
-    "PN_P2": 57960,
-    "MK_BLOCK": 58134,
-    "MK_SEG2": 58143,
-    "MK_W0": 58270,
-    "MK_W1": 58276,
-    "MK_W2": 58323,
-    "MK_W3": 58329,
-    "inP1": 58732,
-    "inAct": 58752,
-    "inAny": 58740,
-    "keyAct": 58763,
-    "initGame": 58772,
-    "rnd": 58825,
-    "stubEnd": 58875
+    "PN_P1": 57962,
+    "PN_P2": 57964,
+    "MK_BLOCK": 58138,
+    "MK_SEG2": 58147,
+    "MK_W0": 58274,
+    "MK_W1": 58280,
+    "MK_W2": 58327,
+    "MK_W3": 58333,
+    "inP1": 58736,
+    "inAct": 58756,
+    "inAny": 58744,
+    "keyAct": 58767,
+    "initGame": 58776,
+    "rnd": 58829,
+    "stubEnd": 58879
   }
 }

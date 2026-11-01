@@ -25,7 +25,7 @@
   "assets": {
     "stub": {
       "file": "assets/stub.bin",
-      "sha256": "c381a49467ab57c7803db00c0b5a81746adcf2cd48a2aeee7d29a368dd7667de"
+      "sha256": "db4f6e7a124f3f245487b8bb68ac30ad3964ae82237bf042f92dc29c8f9effce"
     }
   },
   "layout": [
@@ -52,13 +52,13 @@
     {
       "offset": 51,
       "expected": "cde347",
-      "replace": "cdf0c3",
+      "replace": "cdf4c3",
       "reason": "4033h: TICK site: the pad reader, once per frame -> PN_TICK (the exchange), then the reader"
     },
     {
       "offset": 64,
       "expected": "3e003205e0",
-      "replace": "cd04c40000",
+      "replace": "cd08c40000",
       "reason": "4040h: The frame catch-up: the busy flag cleared, or the next frame at once when an interrupt went by during PN_TICK -> isrEnd"
     },
     {
@@ -82,31 +82,31 @@
     {
       "offset": 683,
       "expected": "cd004857cd1248b2",
-      "replace": "cdf6c30000000000",
+      "replace": "cdfac30000000000",
       "reason": "42ABh: Menu reader: player 1's byte of this frame"
     },
     {
       "offset": 935,
       "expected": "cd004857cd1248b2",
-      "replace": "cdf6c30000000000",
+      "replace": "cdfac30000000000",
       "reason": "43A7h: Title menu reader: player 1's byte of this frame"
     },
     {
       "offset": 973,
       "expected": "3202e0",
-      "replace": "cdfec3",
+      "replace": "cd02c4",
       "reason": "43CDh: Title menu start: both choices are the 2 player mode"
     },
     {
       "offset": 2022,
       "expected": "cd004857cd1248b2",
-      "replace": "cdf6c30000000000",
+      "replace": "cdfac30000000000",
       "reason": "47E6h: Player 1's pad: the byte of this frame"
     },
     {
       "offset": 2117,
       "expected": "cd024857cd5248b2",
-      "replace": "cdfac30000000000",
+      "replace": "cdfec30000000000",
       "reason": "4845h: Player 2's pad: the other player's byte of this frame"
     }
   ],
@@ -151,14 +151,14 @@
   "symbols": {
     "PN_TICK": 49413,
     "PN_IRQ": 49475,
-    "PN_P1": 50025,
-    "PN_P2": 50026,
-    "tickSite": 50160,
-    "key1": 50166,
-    "key2": 50170,
-    "forceTwo": 50174,
-    "rdLocal": 50151,
-    "isrEnd": 50180,
-    "stubEnd": 50193
+    "PN_P1": 50029,
+    "PN_P2": 50030,
+    "tickSite": 50164,
+    "key1": 50170,
+    "key2": 50174,
+    "forceTwo": 50178,
+    "rdLocal": 50155,
+    "isrEnd": 50184,
+    "stubEnd": 50197
   }
 }

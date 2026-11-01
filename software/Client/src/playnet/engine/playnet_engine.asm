@@ -222,7 +222,7 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         call    remSlot
         ld      a,(nf)
         cp      (hl)
-        jr      z,.got
+        jp      z,.got
         ld      hl,0
         jr      .xchg
 .snd:   ld      a,(pnK)
@@ -259,9 +259,10 @@ tick:   ld      a,(started)                     ; frame numbers wrap: guard by s
         cp      3
         ld      hl,0
         jr      c,.xchg
+        call    exitKey                         ; a stall may never end: the exit key still works
         ld      a,(irqCnt)
         ld      (sentAt),a
-        ld      a,(rsAlt)                       ; resends alternate between the usual window (F+D-7 .. F+D) and an older
+        ld      a,(rsAlt)                      ; resends alternate between the usual window (F+D-7 .. F+D) and an older
         xor     1                               ; one that reaches back to F-D-1, the oldest frame the opponent can be at:
         ld      (rsAlt),a                       ; its record is in no later packet, and the usual window never has it
         jr      z,.rsNew                        ; again once we are D frames ahead (D > 3)
