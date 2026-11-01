@@ -12,22 +12,13 @@ pcopy m:DOLAR.BAS
 pcopy m:ETHUNAPI.COM
 pcopy m:INL.CFG
 pcopy m:IRC.BAS
-pcopy m:L2TEST.BIN
-pcopy m:LOADROM.COM
 pcopy m:RASTRO.BAS
-pcopy m:STELNET.COM
 pcopy m:STOCKS.BAS
-pcopy m:Telnet.com
-pcopy m:Telnetf.com
 pcopy m:WEATHER.BAS
 pcopy m:at28c256.com
 pcopy m:mchat.com
-pcopy m:memtop.com
 pcopy m:msxarch.com
 pcopy m:msxarch.ini
-pcopy m:msxpi32k.rom
-pcopy m:msxpibas.rom
-pcopy m:msxpibios.rom
 pcopy m:msxpiext.bin
 pcopy m:nitros.com
 pcopy m:p.com
@@ -38,9 +29,6 @@ pcopy m:ping.com
 pcopy m:playnet.com
 pcopy m:playnet.ovl
 pcopy m:skmsx.com
-pcopy m:ssh.com
-pcopy m:templatc.com
-pcopy m:template.com
 pcopy m:games/1942.GPF 1942.GPF
 pcopy m:games/BUBBLE.GPF BUBBLE.GPF
 pcopy m:games/F1SPIRIT.GPF F1SPIRIT.GPF

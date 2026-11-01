@@ -49,18 +49,22 @@ updateRomVersion="${updateRomVersion:-no}"
 releaseOpenMSXRom="${releaseOpenMSXRom:-no}"
 
 # --- what it is called -------------------------------------------------------
-# One ROM, one name, on every board: target/msxpibios.rom. The versioned copies
+# One ROM, one name, on every board: target/rom/msxpibios.rom. The versioned copies
 # (msxpibios_v1.6.rom and the ROMs of earlier releases) are gone - git keeps
 # the history. Tests read this name out of this file, so keep the
 # "export BIOSNAME=" shape (software/Tests/nextor_mfr_copy.py).
+# The ROMs live in target/rom/, not target/: msxpirfh.bat copies only the files
+# at the top of target/, and the three ROMs (64KB) do not fit on the MSX floppy
+# with everything else. The boot disks still carry them (see "Disk images").
+ROMDIR=target/rom
 export BIOSNAME=msxpibios
-BIOSFILE=target/$BIOSNAME.rom
+BIOSFILE=$ROMDIR/$BIOSNAME.rom
 # The EEPROM is 32KB, two 16KB banks picked with the A14/A15 jumper:
 # msxpibios.rom (MSX-DOS 1) below, msxpibas.rom (BIOS only, no DOS) above.
 # msxpi32k.rom is the two together - the file to write to the EEPROM.
 BASICNAME=msxpibas
-BASICFILE=target/$BASICNAME.rom
-ROM32FILE=target/msxpi32k.rom
+BASICFILE=$ROMDIR/$BASICNAME.rom
+ROM32FILE=$ROMDIR/msxpi32k.rom
 
 # --- where the tools and the outside directories are -------------------------
 # TOOLS, not HOME: this script used to override HOME for these paths, and every
@@ -173,6 +177,10 @@ to_crlf() { perl -pe 's/\r?\n/\r\n/' > "$1"; }
 #     restarts the server, then copies everything else with the new pcopy
 #     against the new server.
 gen_update_batch() {
+    # Names (lower case) of the UNAPI tools in UNAPI/bin: a copy of one in
+    # target/ is not sent by msxpirfh.bat either.
+    UNAPI_BIN_NAMES="$(cd UNAPI/bin 2>/dev/null && ls | tr 'A-Z' 'a-z' | tr '\n' ' ')"
+
     to_crlf target/msxpiupd.bat <<EOF
 echo Preparing to update...
 p set DriveM ${GITPATH}/target
@@ -204,14 +212,19 @@ EOF
         echo "echo"
         echo "echo Restarting msxpi-server.py"
         echo "p restart"
-        # Everything else in target/, ROM images included (msxpibios.rom,
-        # msxpibas.rom, msxpi32k.rom).  C collation, so the order does not
-        # depend on the locale the build runs under.
+        # Everything else at the top of target/ (not target/rom/), minus what
+        # would not leave room on the MSX floppy: the program templates, test
+        # programs, LOADROM.COM, and the UNAPI tools of UNAPI/bin (those go on
+        # the boot disk only). C collation, so the order does not depend on the
+        # locale the build runs under.
         for f in $(cd target && LC_ALL=C ls); do
             [ -f "target/$f" ] || continue
-            case "$(echo "$f" | tr 'A-Z' 'a-z')" in
+            lc="$(echo "$f" | tr 'A-Z' 'a-z')"
+            case "$lc" in
                 pcopy.com|msxpirfh.bat|msxpiupd.bat) continue ;;
+                template.com|templatc.com|memtop.com|loadrom.com|l2test.bin) continue ;;
             esac
+            case " $UNAPI_BIN_NAMES " in *" $lc "*) continue ;; esac
             echo "pcopy m:$f"
         done
         # The online games (PLAYNET): target/games/*.GPF, copied to the MSX disk
@@ -237,9 +250,9 @@ update_build_id ./Server/Python/src/msxpi_const.py "BUILD_ID = " "$updateServerV
 # =============================================================================
 if [ "$buildClientCommands" = "yes" ]; then
     step "Compiling MSXPi DOS commands"
-    "$SJASM_DIR/sjasmplus" -DMSXPI_RAM_STASH --inc=./asm-common/include \
-        --raw=./target/template.com ./Client/src/template.com.asm ||
-        die "template.com did not assemble"
+    # Not built: template.com.asm and templatc.c (starting points for new
+    # commands), memtop and LOADROM.COM (buildLoadrom) - none of them go to the
+    # MSX with msxpirfh.bat.
     "$SJASM_DIR/sjasmplus" --inc=./asm-common/include \
         --raw=./target/ping.com ./Client/src/ping.asm ||
         die "ping.com did not assemble"
@@ -484,9 +497,9 @@ if [ "$buildMSXdiskImage" = "yes" ]; then
         python3 dsktool.py copy "$ROM32FILE"               "target/disks/$dsk.dsk:MSXPI32K.ROM"
     done
 
-    # LOADROM.COM lives under Client/src/loadrom/, not target/ like every other
-    # client .com - stage it so the loop below picks it up like the rest.
-    cp Client/src/loadrom/LOADROM.COM target/LOADROM.COM
+    # LOADROM.COM lives under Client/src/loadrom/ and stays out of target/, so
+    # msxpirfh.bat does not send it; the boot disk still gets it.
+    python3 dsktool.py copy Client/src/loadrom/LOADROM.COM "target/disks/msxpiboot.dsk:LOADROM.COM"
 
     # `ls` rather than a bash glob: it sorts all four patterns together, and
     # that order is the order the files land in the image's directory. A glob

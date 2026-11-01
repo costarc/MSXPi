@@ -37,7 +37,7 @@
 ; MSXPi BIOS-only ROM (no MSX-DOS)
 ; =============================================================================
 ; The EEPROM is 32KB and the A14/A15 jumper selects one 16KB half.  The build
-; writes target/msxpi32k.rom as
+; writes target/rom/msxpi32k.rom as
 ;
 ;   0000-3FFF  msxpibios.rom - MSX-DOS 1 kernel + MSXPi driver + UNAPI
 ;   4000-7FFF  msxpibas.rom  - this file: CALL MSXPI + UNAPI, no disk system

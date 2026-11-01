@@ -4,7 +4,7 @@ Boots Canon_V-25 (MSX2, no floppy) with the BIOS-only half of an msxpi32k.rom
 (`set msxpirom_bank BANK1`) through the MSXPiTest extension, against fault_server.py,
 types CALL MSXPI statements at the BASIC prompt, and checks what lands in memory.
 
-    python link2_openmsx.py [--rom target/msxpi32k.rom] [--rate 0] [--seed 1] [--dir both|rx|tx]
+    python link2_openmsx.py [--rom target/rom/msxpi32k.rom] [--rate 0] [--seed 1] [--dir both|rx|tx]
                             [--server-src DIR] [--timeout 300] [--tests ver,pat,...]
 
 Tests (default: all):
@@ -240,7 +240,7 @@ def run(a):
 def main():
     global PORT
     ap = argparse.ArgumentParser()
-    ap.add_argument('--rom', default=str(SOFTWARE / 'target/msxpi32k.rom'))
+    ap.add_argument('--rom', default=str(SOFTWARE / 'target/rom/msxpi32k.rom'))
     ap.add_argument('--rate', type=float, default=0.0)
     ap.add_argument('--seed', type=int, nargs='+', default=[1])
     ap.add_argument('--dir', default='both', choices=['both', 'rx', 'tx'])

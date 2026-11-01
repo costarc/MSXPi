@@ -109,7 +109,7 @@ died mid-block would otherwise leave the next one reading someone else's bytes.
 
 ## After changing the ROM
 
-The Ethernet UNAPI driver now ships **inside `target/msxpibios.rom`**, so any
+The Ethernet UNAPI driver now ships **inside `target/rom/msxpibios.rom`**, so any
 change to it changes the ROM, and openMSX identifies that ROM **by sha1**.
 `../../build` regenerates `MSXPi.xml` with the new hash and copies both into
 `Documents/openMSX/share/`, which is what `run.sh` uses. `run-wsl.sh` does
@@ -118,7 +118,7 @@ so the WSL copies have to be updated by hand after a ROM change, or the tests
 silently run the previous driver:
 
 ```bash
-wsl.exe -d Ubuntu-24.04 -- bash -lc 'cp /mnt/c/Users/roniv/Dev/github/MSXPi/software/target/msxpibios.rom ~/.openMSX/share/systemroms/extensions/ && cp /mnt/c/Users/roniv/Documents/openMSX/share/extensions/MSXPi.xml ~/.openMSX/share/extensions/'
+wsl.exe -d Ubuntu-24.04 -- bash -lc 'cp /mnt/c/Users/roniv/Dev/github/MSXPi/software/target/rom/msxpibios.rom ~/.openMSX/share/systemroms/extensions/ && cp /mnt/c/Users/roniv/Documents/openMSX/share/extensions/MSXPi.xml ~/.openMSX/share/extensions/'
 ```
 
 `../../build` also regenerates the served `msxpiboot.dsk` from `target/`, which

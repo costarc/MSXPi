@@ -456,7 +456,7 @@ The `.COM` installer stays as the option for people who cannot reflash.
 
 ## Where it lives
 
-`target/msxpibios.rom` is built from `ROM/src/MSX-DOS/msxpi-driver.mac`, **not**
+`target/rom/msxpibios.rom` is built from `ROM/src/MSX-DOS/msxpi-driver.mac`, **not**
 from `ROM/src/BIOS/msxpibios.asm` - that trap has cost time before. The driver
 is assembled separately by sjasm and `INCBIN`'d into the free tail at a fixed
 `UNAPI_ORG`, with `ASSERT`s on both sides: MSXPi code must not reach

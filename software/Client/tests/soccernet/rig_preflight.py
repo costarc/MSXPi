@@ -12,7 +12,7 @@ import hashlib, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
-# openMSX loads the whole 32 KB EEPROM image, target/msxpi32k.rom, under the name msxpibios.rom (MSXPi.xml; build)
+# openMSX loads the whole 32 KB EEPROM image, target/rom/msxpi32k.rom, under the name msxpibios.rom (MSXPi.xml; build)
 BRANCH_ROM = os.path.join(ROOT, "software", "target", "msxpi32k.rom")
 INSTALLED = os.environ.get("MSXPI_INSTALLED_ROM") or os.path.join(
     os.path.expanduser("~"), "Documents", "openMSX", "share", "systemroms", "extensions", "msxpibios.rom")
@@ -51,7 +51,7 @@ def main():
     if pi != ps:
         problems.append("the installed ROM speaks Ethernet protocol %s, the server %s: INL gets no network" % (pi, ps))
     if i != b:
-        problems.append("the installed ROM is not this branch's software/target/msxpi32k.rom")
+        problems.append("the installed ROM is not this branch's software/target/rom/msxpi32k.rom")
     if not problems:
         return 0
     for p in problems:
