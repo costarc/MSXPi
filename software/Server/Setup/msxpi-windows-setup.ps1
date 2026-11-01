@@ -449,7 +449,7 @@ if (-not $SkipOpenMsx) {
     # Extension and BIOS always from the same branch, so the ROM's sha1 is one the XML knows.
     New-Item -ItemType Directory -Force "$OpenMsxDir\share\extensions", "$OpenMsxDir\share\systemroms" | Out-Null
     Get-File "$Raw/openMSX/share/extensions/MSXPi.xml" "$OpenMsxDir\share\extensions\MSXPi.xml" | Out-Null
-    Get-File "$Raw/target/msxpibios.rom" "$OpenMsxDir\share\systemroms\msxpibios.rom" | Out-Null
+    Get-File "$Raw/target/rom/msxpibios.rom" "$OpenMsxDir\share\systemroms\msxpibios.rom" | Out-Null
 }
 
 # --- 4. TAP driver and network check ---------------------------------------------

@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix='nitros-openmsx-') as tmp:
     xml = (software/'MSXPi.xml.template').read_text()
     xml = xml.replace('<sha1>msxpibiossha</sha1>', '')
     xml = xml.replace('<filename>msxpibios.rom</filename>',
-                      f'<filename>{software}/target/msxpibios.rom</filename>')
+                      f'<filename>{software}/target/rom/msxpibios.rom</filename>')
     (root/'share/extensions/NitrosTest.xml').write_text(xml)
     (root/'msxpi.ini').write_text(
         f'var PATH={root}\nvar DriveA={root}/msxpiboot.dsk\n'
