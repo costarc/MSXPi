@@ -26,8 +26,7 @@
           <io base="0x57" num="1"/>
           <io base="0x5A" num="1"/>
           <rom>
-            <sha1>ec20e17a6c838e97c714aa90dd0afacc0cc24f36</sha1>
-            <sha1>163cd9d809e3fc93d6e74de01853a62a5c680d60</sha1>
+            <sha1>ec20e17a6c838e97c714aa90dd0afacc0cc24f36</sha1> <!-- Version 1.7.0 - LINK2 release: transfer protocol overhaul, CRC-16/CCIT-->
             <sha1>9b1e0fb8578a732608b148d3892f563c70e8a028</sha1> <!-- Version 1.6.1 - BASIC BIOS; Jumper for MSX-DOS1; UNAPI; CPLD-exact device; Legacy compatibility layer-->
             <sha1>a0c2775e25b6214e9df3673092caf3534be7314a</sha1> <!-- Version 1.6 - BASIC BIOS; MSX-DOS1; UNAPI; CPLD-exact device; Legacy compatibility layer-->
             <sha1>45b204426039c909ddc142c12c2aa5738cbbbb50</sha1> <!-- Version 1.3 - BASIC BIOS; MSX-DOS1-->
