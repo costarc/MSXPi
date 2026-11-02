@@ -12,6 +12,32 @@ MSXPi also exists as a virtual device for **openMSX**: the emulated MSX gets
 the same commands and the same server, with no hardware at all. See
 [Quick Start 2 - openMSX](#quick-start-2---openmsx-no-hardware-needed).
 
+## 📖 The Book
+
+The complete design and implementation of MSXPi is documented in a book:
+
+**Anatomy of an Interface: MSXPi, a Case Study in Hardware/Software Co-Design**
+
+It follows one real system, from the cartridge bus and the programmable logic to the
+Python server on the Raspberry Pi and the applications on the MSX, and shows how each layer
+was designed, built and tested. No MSX knowledge is assumed, and you do not need the board:
+the whole system runs in the openMSX emulator on a PC.
+
+The book covers:
+
+* Design decisions and trade-offs
+* Hardware architecture
+* CPLD design (VHDL) and the Z80 bus interface
+* Software implementation: Z80 assembly on the MSX, Python on the Raspberry Pi
+* The LINK2 protocol and interface specifications
+* Testing on real hardware and in openMSX
+* Engineering lessons learned during development
+
+### 👉 [Get the book on Amazon](https://link.amazon/B0eOuqOcq)
+
+<sub>As an Amazon Associate, the author earns from qualifying purchases. Buying through this link
+supports the MSXPi project at no extra cost to you.</sub>
+
 > [!CAUTION]
 > **Version 1.7.0 breaks compatibility with every earlier MSXPi ROM.**
 > **Every MSXPi EEPROM must be rewritten with the 1.7.0 ROM** (`software/target/msxpi32k.rom`, written with
