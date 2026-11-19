@@ -206,6 +206,49 @@ def pchess(parms: Optional[str] = None) -> CommandResult:
     return link_send(bytes(payload))
 
 
+def poker(parms: Optional[str] = None) -> CommandResult:
+    """PPOKER's commands (documents/POKER-TOURNAMENT.md): the reply is a fixed
+    256-byte packet.  `poker host ROOM` also serves the table to the other
+    players' MSXPis on POKERLISTEN:POKERPORT."""
+    try:
+        from msxpi_poker import error_packet, handle_command, room_config, start_relay
+    except ImportError as exc:
+        payload = bytearray(256)
+        payload[:4] = b"POKR"
+        payload[4], payload[5] = 0, ord("E")
+        message = ("poker: %s" % exc).upper()[:39].encode("ascii", "replace")
+        payload[208 : 208 + len(message)] = message
+        return link_send(bytes(payload))
+
+    args = (parms or "").split()
+    config = {
+        key: getMSXPiVar(key)
+        for key in (
+            "POKERRELAY",
+            "POKERLISTEN",
+            "POKERPORT",
+            "POKERROOM",
+            "POKERNICK",
+            "POKERSTACK",
+            "POKERLEVELSECS",
+            "POKERLATE",
+            "POKERACTIONSECS",
+            "POKERDROP",
+            "POKERGRACE",
+            "POKERHANDDELAY",
+        )
+    }
+    if args and args[0] == "nick" and len(args) == 2:
+        # The nickname is the player's identity at the table, so keep it.
+        setMSXPiVar("POKERNICK", args[1].upper()[:12])
+        config["POKERNICK"] = args[1].upper()[:12]
+    if args and args[0] == "host":
+        start_relay(config)
+        if len(args) == 2:
+            config["POKERROOM"] = args[1]
+    return link_send(handle_command(parms or "", config))
+
+
 def mchat(parms: Optional[str] = None) -> CommandResult:
     from msxpi_chat import handle_command
 

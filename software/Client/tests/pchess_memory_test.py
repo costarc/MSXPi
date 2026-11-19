@@ -9,6 +9,8 @@ TOPS are measured with target/memtop.com (run MEMTOP after INL I: the
 TCP/IP driver lowers the top). Add a machine when you measure one.
 
     python pchess_memory_test.py [path\\to\\pchess.com]
+
+With no argument it checks both pchess.com and ppoker.com.
 """
 import sys
 from pathlib import Path
@@ -22,8 +24,7 @@ TOPS = {
 }
 
 
-def main():
-    com = Path(sys.argv[1]) if len(sys.argv) > 1 else SOFTWARE / 'target/pchess.com'
+def check(com):
     end = 0x100 + com.stat().st_size
     failed = False
     print(f'{com.name}: {com.stat().st_size} bytes, image ends at 0x{end - 1:04X}')
@@ -32,6 +33,20 @@ def main():
         ok = free >= STACK_ROOM
         failed |= not ok
         print(f'{"PASS" if ok else "FAIL"}: {name}: top 0x{top:04X}, {free} bytes free (need {STACK_ROOM})')
+    return failed
+
+
+def main():
+    if len(sys.argv) > 1:
+        targets = [Path(sys.argv[1])]
+    else:
+        targets = [SOFTWARE / 'target/pchess.com', SOFTWARE / 'target/ppoker.com']
+    failed = False
+    for com in targets:
+        if com.exists():
+            failed |= check(com)
+        else:
+            print(f'SKIP: {com} not built')
     return 1 if failed else 0
 
 
