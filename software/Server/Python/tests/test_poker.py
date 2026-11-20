@@ -369,6 +369,25 @@ class Joining(unittest.TestCase):
         self.assertIsNone(seat)
         self.assertEqual(message, 'TABLE FULL')
 
+    def test_host_waits_for_a_second_player(self):
+        clock = Clock()
+        t = p.Tournament('test', dict(CONFIG), clock=clock)
+        seat, error = t.join('ALICE', clock())
+        self.assertIsNotNone(seat, error)
+        clock.advance(5)
+        t.tick(clock())
+        # The host opening the table is not the winner of a one-player event:
+        # the table stays open, so the others can still join it.
+        self.assertFalse(t.over)
+        self.assertEqual(t.status, 'WAITING FOR PLAYERS')
+        self.assertTrue(t.registration_open())
+        seat, message = t.join('BOB', clock())
+        self.assertEqual(message, 'SEATED')
+        clock.advance(3)
+        t.tick(clock())
+        self.assertEqual(t.stage, p.STAGE_PREFLOP)
+        self.assertTrue(t.seat_of('BOB').in_hand)
+
     def test_nick_is_kept_upper(self):
         t = Table(nicks=('alice', 'bob'))
         self.assertIsNotNone(t.t.seat_of('ALICE'))

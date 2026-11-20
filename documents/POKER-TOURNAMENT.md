@@ -24,6 +24,7 @@ host Pi instead of in every MSX.
 | `software/Server/Python/src/msxpi_poker.py` | tournament rules, packet snapshot, HTTP relay |
 | `software/Server/Python/src/msxpi_cmd_web.py` | `poker` MSXPi command |
 | `software/Server/Python/tests/test_poker.py` | rules, packet, join/drop and relay tests |
+| `software/Client/tests/poker_table_openmsx.py` | two emulated MSXPis: host, relay bots, ninth-seat late join, drawn table |
 | `software/tools/make_poker_cards.py` | regenerates the card tiles from the vector deck |
 
 ## Running a table
@@ -59,6 +60,15 @@ be set in the environment as `POKER_RELAY_URL`, and `POKERNICK` as `POKER_NICK`.
 Without any `POKERRELAY`, a single Pi can host and play; the first `join` creates
 the tournament on that Pi. `poker new ROOM` restarts a room, `poker leave`
 gives up a seat, `poker rooms` lists what the host knows.
+
+A host that opens the table alone waits for the others: the status line says
+`WAITING FOR PLAYERS` and late registration stays open, so the table is never
+crowned with a single player. Once a hand has been dealt, being left alone does
+end the tournament.
+
+Joining a room also remembers it as `POKERROOM`. The `poll` and action commands
+that follow carry no room name, and over a relay the server needs one; this way
+they stay at the table that was joined instead of falling back to another room.
 
 ## Command set
 
@@ -163,5 +173,17 @@ cd software/Server/Python && python -m unittest tests.test_poker
 
 Covering the evaluator, blinds and the button, minimum raises and short
 all-ins, side pots and split pots, the action clock and auto check/fold,
-dropping and rejoining, late registration, the packet fields and checksum, every
-command, and two players meeting over a real relay on localhost.
+dropping and rejoining, late registration, a lone host waiting for players, the
+packet fields and checksum, every command, and two players meeting over a real
+relay on localhost.
+
+The two-emulator scene runs on Windows (openMSX with the MSXPi extension):
+
+```text
+cd software/Client/tests && python poker_table_openmsx.py
+```
+
+It boots two MSX Pis, has the first host room T1, fills seats 2-8 from the relay,
+joins the ninth seat from the second MSX mid-hand, and checks the drawn table
+(nine named seats, my hole cards, the board and hand name) as well as the C key
+on both clients. Frames are rendered to `work/ppoker-art/` for looking at.

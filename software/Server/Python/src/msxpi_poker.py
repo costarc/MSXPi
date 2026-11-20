@@ -333,6 +333,13 @@ class Tournament:
     def start_hand(self, now):
         players = self.in_tournament()
         if len(players) < 2:
+            if self.hand_no == 0:
+                # A host opens a table before the others arrive: wait for a
+                # second player instead of crowning the host.  Only a
+                # tournament that has dealt a hand ends down to one player.
+                self.status = 'WAITING FOR PLAYERS'
+                self.next_hand_at = now + 2 if players else 0.0
+                return
             self.end_tournament()
             return
         self.hand_no += 1

@@ -79,3 +79,8 @@ there too).
   V-25 with no MSXPi: the lobby must draw, the join must fail with
   `NO MSXPI - CHECK THE INTERFACE` instead of hanging, and `ESC`/`EXIT TO DOS`
   must return to the prompt. It writes a PNG of every VRAM dump it takes.
+* `Client/tests/poker_table_openmsx.py` - two emulated MSXPis on two servers:
+  one hosts a room, the relay fills seats 2-8, the second joins as the ninth
+  seat in the middle of a hand, and both act with `C`. It checks the drawn
+  table (names, stacks, hole cards, board, hand name) and keeps the frames in
+  `work/ppoker-art/`.

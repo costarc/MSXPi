@@ -242,6 +242,12 @@ def poker(parms: Optional[str] = None) -> CommandResult:
         # The nickname is the player's identity at the table, so keep it.
         setMSXPiVar("POKERNICK", args[1].upper()[:12])
         config["POKERNICK"] = args[1].upper()[:12]
+    if len(args) == 2 and args[0] in ("join", "host", "new"):
+        # Remember the table this MSX joined: its polls carry no room name,
+        # and over a relay they would land in the default room instead.
+        room = args[1].upper()[:16]
+        setMSXPiVar("POKERROOM", room)
+        config["POKERROOM"] = room
     if args and args[0] == "host":
         start_relay(config)
         if len(args) == 2:
