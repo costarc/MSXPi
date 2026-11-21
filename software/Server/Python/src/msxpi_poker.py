@@ -1089,17 +1089,36 @@ class RelayServer(ThreadingHTTPServer):
 
 class RelayHandler(BaseHTTPRequestHandler):
     config = {}
+    MAX_BODY = 4096                 # a real request is well under 200 bytes
+    MAX_DRAIN = 1 << 20             # read (and drop) up to this much of a bigger one
 
     def do_POST(self):
         try:
             if self.path != '/poker':
                 raise ValueError('Unknown endpoint')
-            size = int(self.headers.get('Content-Length', '0'))
-            if not 0 < size <= 4096:
+            try:
+                size = int(self.headers.get('Content-Length', '0'))
+            except ValueError:
+                raise ValueError('Invalid request size')
+            if not 0 < size <= self.MAX_BODY:
+                # Read what was sent so the client gets the reply instead of
+                # a reset connection, then refuse it.
+                self.close_connection = True
+                if size > 0:
+                    self.rfile.read(min(size, self.MAX_DRAIN))
                 raise ValueError('Invalid request size')
             request = json.loads(self.rfile.read(size))
+            if not isinstance(request, dict):
+                raise ValueError('Bad request')
             room = request.get('room') or 'main'
-            command = (request.get('cmd') or 'poll').strip()
+            # Check the room before it is created, so a bad name never makes
+            # a table.
+            if not isinstance(room, str) or not _rooms.valid(room):
+                raise ValueError('ROOM: 1-16 LETTERS OR DIGITS')
+            command = request.get('cmd')
+            if not isinstance(command, str) or not command.strip():
+                raise ValueError('No command')
+            command = command.strip()
             args = command.split()
             say_text = command.partition(' ')[2] if args and args[0] == 'say' else \
                 (request.get('text') or '')
@@ -1111,12 +1130,26 @@ class RelayHandler(BaseHTTPRequestHandler):
                                       say_text, self.config, now, room)
         except Exception as exc:
             reply = error_packet(str(exc))
-        body = json.dumps({'packet': reply.hex()}).encode()
-        self.send_response(200)
+        self.send_json(200, {'packet': reply.hex()})
+
+    def send_json(self, status, reply):
+        body = json.dumps(reply).encode()
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json')
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def refuse(self):
+        """Any method but POST: a JSON error, not the default HTML page."""
+        self.send_json(405, {'error': 'POST /poker only'})
+
+    do_GET = do_PUT = do_DELETE = do_PATCH = refuse
+
+    def do_HEAD(self):
+        self.send_response(405)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
 
     def log_message(self, *_args):
         pass
