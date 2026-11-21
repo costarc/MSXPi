@@ -413,6 +413,10 @@ class Tournament:
                 return
             live = self.live()
             complete = all(s.acted and s.bet == self.current_bet for s in live)
+            if len(live) == 1 and live[0].bet >= self.current_bet:
+                # Everyone else still in is all in: there is nobody left to
+                # bet against, so the last player is not asked to act.
+                complete = True
             if live and not complete:
                 # Move to the next player who still owes something.
                 if self.actor < 0 or not self.needs_to_act(self.seats[self.actor]):
@@ -424,12 +428,34 @@ class Tournament:
                     return
                 continue
             # The street is over.
+            self.return_uncalled()
             if self.stage == STAGE_RIVER:
                 self.showdown(now)
                 return
             self.begin_street(now)
             # Everyone all in: the loop deals the flop, turn and river before
             # the showdown, with nobody left to act.
+
+    def return_uncalled(self):
+        """At the end of a betting round, give back the part of the biggest
+        bet that nobody matched (by calling, or by being all in for as much).
+        Folded players' bets count: their chips are in the pot."""
+        betting = sorted((s for s in self.seats if s.in_hand and s.bet > 0),
+                         key=lambda s: s.bet, reverse=True)
+        if not betting:
+            return 0
+        top = betting[0]
+        matched = betting[1].bet if len(betting) > 1 else 0
+        excess = top.bet - matched
+        if excess <= 0:
+            return 0
+        top.bet -= excess
+        top.contrib -= excess
+        top.stack += excess
+        if top.stack > 0:
+            top.all_in = False
+        self.current_bet = top.bet
+        return excess
 
     def needs_to_act(self, seat):
         return (seat.in_hand and not seat.folded and not seat.all_in and
@@ -486,6 +512,9 @@ class Tournament:
             return
         # Side pots: every distinct contribution level is one pot, and only
         # players who put in at least that much can win it.
+        pot = self.pot()
+        paid = 0
+        top_contrib = max(s.contrib for s in contenders)
         levels = sorted({s.contrib for s in self.seats if s.contrib > 0})
         previous = 0
         for level in levels:
@@ -493,8 +522,13 @@ class Tournament:
                          for s in self.seats)
             eligible = [s for s in contenders if s.contrib >= level]
             previous = level
-            if amount <= 0 or not eligible:
+            if amount <= 0:
                 continue
+            if not eligible:
+                # Folded money above every contender (return_uncalled should
+                # have given it back): it still goes to a hand, never away.
+                eligible = [s for s in contenders if s.contrib == top_contrib]
+            paid += amount
             best = max(s.best for s in eligible)
             winners = [s for s in eligible if s.best == best]
             share, odd = divmod(amount, len(winners))
@@ -505,6 +539,13 @@ class Tournament:
                 winner.stack += won
                 self.results.append((winner.nick, won, hand_name(winner.best),
                                      [card_name(c) for c in winner.cards]))
+        if paid != pot:
+            # Cannot happen with the levels above; if it ever does, log it
+            # and give the difference to the best hand so no chip is lost.
+            print('poker: award paid %d of a %d pot in hand %d' % (paid, pot, self.hand_no))
+            best = self.from_button([s for s in contenders
+                                     if s.best == max(c.best for c in contenders)])[0]
+            best.stack += pot - paid
         parts = []
         for nick, amount, name, _cards in self.results:
             parts.append('%s WINS %d %s' % (nick, amount, name))

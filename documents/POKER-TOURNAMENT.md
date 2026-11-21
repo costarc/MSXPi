@@ -164,7 +164,9 @@ Blinds start at 10/20 with a 1500 stack and rise on the level clock; the button
 moves each hand (heads-up posts the small blind on the button). A betting round
 ends when everyone still in has matched the bet, the big blind gets their option
 preflop, and a short all-in raise does not reopen the betting (the caller sees
-`BET NOT REOPENED`). All-ins build side pots, split pots divide odd chips to the
+`BET NOT REOPENED`). The part of a bet nobody matched is returned to its owner when
+the round ends, and once nobody can bet any more (everyone else is all in) the
+board runs out with no further action. All-ins build side pots, split pots divide odd chips to the
 earliest seat left of the button, and a player with no chips after a hand is out.
 Late registration and rejoining between hands are allowed for `POKERLATE`
 levels; after that the table is closed to new seats. The last player standing
