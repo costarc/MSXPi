@@ -9,9 +9,10 @@ registration is open.  After every step the invariants below are checked.
 Run from software/Server/Python:
     python -m unittest tests.test_poker_soak -v
 
-Chip accounting: a player who leaves (or loses the seat) takes no chips with
-them - their stack is gone from the table - so the conserved total is the
-chips bought in minus the stacks of seats that were given up.
+Chip accounting: a player who leaves (or loses the seat after POKERGRACE)
+takes no chips with them - the engine drops the seat's stack - so the
+conserved total is the chips bought in (POKERSTACK for every seat taken)
+minus the stacks of the seats that were given up.
 """
 import random
 import sys
@@ -250,13 +251,11 @@ class Soak:
         return t.hand_no
 
 
-# Seeds that fail on a known server bug, skipped until it is fixed: a folded
-# player's chips above every remaining contender's contribution are dropped
-# by Tournament.award (the top side pot has nobody eligible, so it is lost).
-KNOWN_BUG = 'PP-SOAK dead money lost in award, seed %d'
-DEAD_MONEY_SEEDS = {0, 3, 16, 21, 27, 30, 34, 40, 41, 50, 52, 71, 81, 83, 93, 97, 103,
-                    112, 122, 124, 134, 150, 155, 157, 159, 188, 203, 219, 227, 239,
-                    248, 250, 254, 261, 268, 272, 276, 290, 291, 295}
+# Seeds that fail on a known server bug, skipped until it is fixed (add
+# @unittest.skip by listing the seed here, with the bug's card in KNOWN_BUG).
+# The dead-money loss in Tournament.award was fixed by PP-UNCALLED-BET.
+KNOWN_BUG = 'PP-SOAK known server bug, seed %d'
+DEAD_MONEY_SEEDS = set()
 
 
 class SoakTest(unittest.TestCase):
