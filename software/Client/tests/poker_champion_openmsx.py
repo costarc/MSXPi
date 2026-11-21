@@ -297,6 +297,11 @@ def main(argv=None):
         check("%s drew the loser's seat as OUT" % label, loser in lost and 'OUT' in lost, lost)
         won = seat_text(final, seats[winner]) if final else ''
         print('  %s seats: %s | %s' % (label, won, lost))
+        # "<seat> <NICK>" / "<stack> WIN"; the font draws 0 and O alike.
+        name, _, line2 = won.partition(' / ')
+        check("%s drew the champion's seat as WIN" % label,
+              name.startswith(str(seats[winner] + 1)) and name.endswith(winner) and
+              line2.replace('O', '0') == '%d WIN' % stacks[winner], won)
         log = (work / ('client-%d.log' % client)).read_text()
         check('%s pressed A on its turn' % label, 'pressing A on my turn' in log, log)
     print('  went all in for an MSX that did not answer: %s' % driver.acted_for)

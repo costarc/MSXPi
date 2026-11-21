@@ -373,6 +373,7 @@ static void draw_seats(void) {
             if(seats[i].flags&128) strcat(two," DISC");
             else if(seats[i].flags&8) strcat(two," ALL");
             else if(seats[i].flags&4) strcat(two," FOLD");
+            else if(g_over) strcat(two," WIN");
             else if(!(seats[i].flags&2)) strcat(two," WAIT");
             else if(seats[i].bet) {u2s(bet,seats[i].bet); strcat(two,"+"); strcat(two,bet);}
         }

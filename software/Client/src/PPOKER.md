@@ -41,7 +41,8 @@ y=174  the five actions, the selected one highlighted
 y=205  the status line
 ```
 
-Seats light their frame when they act, show `FOLD`, `ALLIN`, `-` for a
+Seats light their frame when they act, show `FOLD`, `ALLIN`, `WIN` for the
+champion once the tournament is over, `-` for a
 disconnected player and dim a stack of zero. Cards are drawn from 26x36 2bpp
 tiles kept off screen: `software/tools/make_poker_cards.py` regenerates
 `ppoker_cards.h` from David Bellot's vector deck (LGPL-2.1), building the suit
