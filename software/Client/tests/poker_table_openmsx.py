@@ -146,6 +146,59 @@ def tcl_string(text):
     return text.replace('\\', '\\\\').replace('"', '\\"').replace('\r', '\\r')
 
 
+def tcl_prelude(port, work, dumps, index, watchdog=300):
+    """The Tcl every scene starts with: settings, log/white/dump, the quit
+    marker, booting MSX-DOS into PPOKER (then `start`, which the scene
+    defines) and a watchdog."""
+    return '''set save_settings_on_exit off
+set msxpiserver_port %(port)d
+set throttle on
+set pause off
+set renderer none
+set power on
+proc log {msg} {
+    set f [open "%(work)s/client-%(index)d.log" a]
+    puts $f "$msg"
+    close $f
+}
+proc white {addr} {
+    set n 0
+    for {set i 0} {$i < 40} {incr i} {
+        set b [debug read VRAM [expr {$addr + $i}]]
+        if {($b >> 4) == 15} {incr n}
+        if {($b & 15) == 15} {incr n}
+    }
+    return $n
+}
+proc dump {name} {
+    set f [open "%(dumps)s/$name.vram" w]
+    fconfigure $f -translation binary
+    puts -nonewline $f [debug read_block VRAM 0 32768]
+    close $f
+    log "dumped $name"
+}
+proc afteraction {} {
+    dump after-action
+    waitquit
+}
+proc waitquit {} {
+    if {[file exists "%(work)s/quit.txt"]} { dump final; log "exit"; exit } else { after time 1 waitquit }
+}
+proc boot {} {
+    set s ""
+    catch {set s [get_screen]}
+    if {[regexp {A[:>]} $s]} {
+        log "DOS prompt, starting PPOKER"
+        type_via_keybuf "PPOKER\\r"
+        after time 8 start
+    } else { after time 1 boot }
+}
+after time %(watchdog)d {log "watchdog"; dump watchdog; exit}
+after time 3 boot
+''' % {'port': port, 'work': work.as_posix(), 'dumps': dumps.as_posix(),
+               'index': index, 'watchdog': watchdog}
+
+
 def write_script(path, port, work, dumps, index, follower):
     """A Tcl state machine: boot, PPOKER, lobby, host/join, dump, act, exit.
 
@@ -251,54 +304,7 @@ proc waitturn {} {
 }
 ''' % {'work': work.as_posix()}
 
-    script = '''set save_settings_on_exit off
-set msxpiserver_port %(port)d
-set throttle on
-set pause off
-set renderer none
-set power on
-proc log {msg} {
-    set f [open "%(work)s/client-%(index)d.log" a]
-    puts $f "$msg"
-    close $f
-}
-proc white {addr} {
-    set n 0
-    for {set i 0} {$i < 40} {incr i} {
-        set b [debug read VRAM [expr {$addr + $i}]]
-        if {($b >> 4) == 15} {incr n}
-        if {($b & 15) == 15} {incr n}
-    }
-    return $n
-}
-proc dump {name} {
-    set f [open "%(dumps)s/$name.vram" w]
-    fconfigure $f -translation binary
-    puts -nonewline $f [debug read_block VRAM 0 32768]
-    close $f
-    log "dumped $name"
-}
-proc afteraction {} {
-    dump after-action
-    waitquit
-}
-proc waitquit {} {
-    if {[file exists "%(work)s/quit.txt"]} { dump final; log "exit"; exit } else { after time 1 waitquit }
-}
-proc boot {} {
-    set s ""
-    catch {set s [get_screen]}
-    if {[regexp {A[:>]} $s]} {
-        log "DOS prompt, starting PPOKER"
-        type_via_keybuf "PPOKER\\r"
-        after time 8 start
-    } else { after time 1 boot }
-}
-after time 300 {log "watchdog"; dump watchdog; exit}
-after time 3 boot
-%(kids)s''' % {'port': port, 'work': work.as_posix(), 'dumps': dumps.as_posix(),
-               'index': index, 'kids': kids}
-    path.write_text(script)
+    path.write_text(tcl_prelude(port, work, dumps, index) + kids)
 
 
 # ---------------------------------------------------------------- the players
@@ -447,7 +453,7 @@ def free_port(port):
     return True
 
 
-def make_home(root, name, relay_port=None):
+def make_home(root, name, relay_port=None, settings=None):
     home = root / name
     (home / 'disks').mkdir(parents=True)
     shutil.copy(SOFTWARE / 'target/disks/msxpiboot.dsk', home / 'disks/msxpiboot.dsk')
@@ -468,7 +474,8 @@ def make_home(root, name, relay_port=None):
             'var SPI_HW=False',
             'var POKERLISTEN=127.0.0.1',
             'var POKERPORT=%(p)d',
-        )) % {'h': home.as_posix(), 'p': relay_port})
+        )) % {'h': home.as_posix(), 'p': relay_port} +
+            ''.join('var %s=%s\n' % item for item in (settings or {}).items()))
     return home
 
 
@@ -479,15 +486,84 @@ def wait_started(servers, settle=3.0):
     return all(proc.poll() is None for proc in servers)
 
 
-def parse_options(argv=None):
+def run_scene(work, homes, nicks, driver, timeout=420):
+    """Start one msxpi-server per home (the second pointed at the host's
+    relay), start `driver`, then one openMSX per client-N.tcl; wait until both
+    emulators exit, re-raising the driver's error.  Everything is stopped on
+    the way out."""
+    servers, emulators, logs = [], [], []
+    try:
+        for i in range(2):
+            env = dict(os.environ, MSXPI_HOME=str(homes[i]), MSXPI_PORT=str(PORTS[i]),
+                       POKER_NICK=nicks[i])
+            if i:
+                env['POKER_RELAY_URL'] = 'http://127.0.0.1:%d' % RELAY_PORT
+            log = (work / ('server-%d.log' % i)).open('w')
+            logs.append(log)
+            servers.append(subprocess.Popen(
+                [sys.executable, '-u', 'msxpi-server.py'], cwd=SOFTWARE / 'Server/Python/src',
+                env=env, stdout=log, stderr=subprocess.STDOUT))
+        time.sleep(3)
+        if not wait_started(servers):
+            raise RuntimeError('a server exited before the MSXes connected')
+        driver.start()
+        emu_log = (work / 'openmsx.log').open('w')
+        logs.append(emu_log)
+        for i in range(2):
+            emulators.append(subprocess.Popen(
+                [OPENMSX, '-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi',
+                 '-script', str(work / ('client-%d.tcl' % i))],
+                stdout=emu_log, stderr=subprocess.STDOUT))
+        deadline = time.monotonic() + timeout
+        while any(proc.poll() is None for proc in emulators):
+            if time.monotonic() > deadline:
+                raise RuntimeError('emulators timed out')
+            if driver.error:
+                raise driver.error
+            time.sleep(0.5)
+        if driver.error:
+            raise driver.error
+    finally:
+        driver.stop.set()
+        for proc in emulators:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=10)
+        for proc in servers:
+            if proc.poll() is None:
+                proc.terminate()
+                proc.wait(timeout=10)
+        for log in logs:
+            log.close()
+
+
+def keep_frames(dumps, art, keep):
+    """Render every dump to PNG next to it; copy the ones named in `keep` to
+    `art`.  Returns {stem: vram} per client."""
+    frames = [{} for _ in dumps]
+    art.mkdir(parents=True, exist_ok=True)
+    for client, folder in enumerate(dumps):
+        for path in sorted(folder.glob('*.vram')):
+            frames[client][path.stem] = path.read_bytes()
+            render(frames[client][path.stem], path.with_suffix('.png'))
+            if path.stem in keep:
+                shutil.copy(path.with_suffix('.png'),
+                            art / ('ppoker-c%d-%s.png' % (client, path.stem)))
+                shutil.copy(path, art / ('ppoker-c%d-%s.vram' % (client, path.stem)))
+    return frames
+
+
+def parse_options(argv=None, ports=PORTS, relay_port=RELAY_PORT,
+                  description='PPOKER on two emulated MSXPis.'):
     """--ports / --relay-port / --art, defaulting to the environment and then
-    to the fixed ports this scene has always used."""
-    parser = argparse.ArgumentParser(description='PPOKER on two emulated MSXPis.')
+    to the fixed ports the scene has always used (`ports`, `relay_port`)."""
+    default_ports, default_relay = ports, relay_port
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--ports', default=os.environ.get('POKER_TEST_PORTS'),
-                        help='the two MSXPi server ports, A,B (default 5071,5072)')
+                        help='the two MSXPi server ports, A,B (default %d,%d)' % default_ports)
     parser.add_argument('--relay-port', type=int,
                         default=os.environ.get('POKER_TEST_RELAY_PORT'),
-                        help="the host's relay port (default 5090)")
+                        help="the host's relay port (default %d)" % default_relay)
     parser.add_argument('--art', type=Path,
                         help='where the kept frames go (default: a new folder under %s)' % ART_ROOT)
     options = parser.parse_args(argv)
@@ -500,8 +576,8 @@ def parse_options(argv=None):
             parser.error('--ports takes two different port numbers, A,B')
         options.ports = ports
     else:
-        options.ports = PORTS
-    options.relay_port = int(options.relay_port or RELAY_PORT)
+        options.ports = default_ports
+    options.relay_port = int(options.relay_port or default_relay)
     if options.relay_port in options.ports:
         parser.error('the relay port must differ from the server ports')
     return options
@@ -525,67 +601,15 @@ def main(argv=None):
     for i in range(2):
         write_script(work / ('client-%d.tcl' % i), PORTS[i], work, dumps[i], i, follower=bool(i))
 
-    servers, emulators, logs = [], [], []
     driver = Driver(work, [])
-    try:
-        for i in range(2):
-            env = dict(os.environ, MSXPI_HOME=str(homes[i]), MSXPI_PORT=str(PORTS[i]),
-                       POKER_NICK=ANN if i == 0 else BOB)
-            if i:
-                env['POKER_RELAY_URL'] = 'http://127.0.0.1:%d' % RELAY_PORT
-            log = (work / ('server-%d.log' % i)).open('w')
-            logs.append(log)
-            servers.append(subprocess.Popen(
-                [sys.executable, '-u', 'msxpi-server.py'], cwd=SOFTWARE / 'Server/Python/src',
-                env=env, stdout=log, stderr=subprocess.STDOUT))
-        time.sleep(3)
-        if not wait_started(servers):
-            raise RuntimeError('a server exited before the MSXes connected')
-        driver.start()
-        emu_log = (work / 'openmsx.log').open('w')
-        logs.append(emu_log)
-        for i in range(2):
-            emulators.append(subprocess.Popen(
-                [OPENMSX, '-machine', 'Canon_V-25', '-ext', 'ram2mb', '-ext', 'MSXPi',
-                 '-script', str(work / ('client-%d.tcl' % i))],
-                stdout=emu_log, stderr=subprocess.STDOUT))
-        deadline = time.monotonic() + 420
-        while any(proc.poll() is None for proc in emulators):
-            if time.monotonic() > deadline:
-                raise RuntimeError('emulators timed out')
-            if driver.error:
-                raise driver.error
-            time.sleep(0.5)
-        if driver.error:
-            raise driver.error
-    finally:
-        driver.stop.set()
-        for proc in emulators:
-            if proc.poll() is None:
-                proc.terminate()
-                proc.wait(timeout=10)
-        for proc in servers:
-            if proc.poll() is None:
-                proc.terminate()
-                proc.wait(timeout=10)
-        for log in logs:
-            log.close()
+    run_scene(work, homes, (ANN, BOB), driver)
 
-    frames = [{}, {}]
     # One folder per run (named after the run's work folder), so two runs at
     # once never overwrite each other's frames.
     art = options.art or ART_ROOT / work.name
-    art.mkdir(parents=True, exist_ok=True)
-    for client, folder in enumerate(dumps):
-        for path in sorted(folder.glob('*.vram')):
-            frames[client][path.stem] = path.read_bytes()
-            render(frames[client][path.stem], path.with_suffix('.png'))
-            if path.stem in ('lobby', 'hostprompt', 'joinprompt', 'table-empty',
-                             'table-bots', 'table-full', 'table', 'table-hand',
-                             'after-action', 'final'):
-                shutil.copy(path.with_suffix('.png'),
-                            art / ('ppoker-c%d-%s.png' % (client, path.stem)))
-                shutil.copy(path, art / ('ppoker-c%d-%s.vram' % (client, path.stem)))
+    frames = keep_frames(dumps, art, ('lobby', 'hostprompt', 'joinprompt', 'table-empty',
+                                      'table-bots', 'table-full', 'table', 'table-hand',
+                                      'after-action', 'final'))
 
     for client in range(2):
         for name, vram in frames[client].items():
