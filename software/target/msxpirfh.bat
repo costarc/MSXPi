@@ -27,6 +27,7 @@ pcopy m:pchess1.com
 pcopy m:ping.com
 pcopy m:playnet.com
 pcopy m:playnet.ovl
+pcopy m:ppoker.com
 pcopy m:skmsx.com
 pcopy m:games/1942.GPF 1942.GPF
 pcopy m:games/BUBBLE.GPF BUBBLE.GPF
