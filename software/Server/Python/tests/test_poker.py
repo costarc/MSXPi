@@ -258,6 +258,74 @@ class AllIn(unittest.TestCase):
         self.assertIn(winner.nick, t.status)
         self.assertEqual(t.champion, winner.nick)
 
+    def table(self, stacks):
+        """Seats in order with these stacks, the first hand dealt."""
+        clock = Clock()
+        t = p.Tournament('test', dict(CONFIG, POKERSTACK='1000'), clock=clock)
+        for nick in stacks:
+            self.assertIsNotNone(t.join(nick, clock())[0])
+        for nick, stack in stacks.items():
+            t.seat_of(nick).stack = stack
+        clock.advance(3)
+        t.tick(clock())
+        self.assertEqual(t.stage, p.STAGE_PREFLOP)
+        return t, clock
+
+    def total(self, t):
+        return sum(s.stack for s in t.seats) + t.pot()
+
+    def test_uncalled_raise_comes_back(self):
+        # The PP-SOAK repro: B's raise to 400 is matched only up to C's 300.
+        t, clock = self.table({'A': 100, 'B': 1000, 'C': 300})
+        self.assertEqual(t.seats[t.actor].nick, 'A')
+        self.assertIsNone(t.act(t.seat_of('A'), 'allin', 0, clock()))
+        self.assertIsNone(t.act(t.seat_of('B'), 'raise', 400, clock()))
+        self.assertIsNone(t.act(t.seat_of('C'), 'allin', 0, clock()))
+        # Nobody can bet against B, so B gets no turn: the board runs out.
+        self.assertIn(t.stage, (p.STAGE_OVER, p.STAGE_DONE))
+        self.assertEqual(len(t.board), 5)
+        self.assertEqual(t.seat_of('B').last_action, p.ACTION_RAISE)
+        self.assertEqual(self.total(t), 1400)
+        # The pot was 100*3 + 200*2 = 700; B's other 100 went straight back.
+        self.assertEqual(sum(amount for _n, amount, _h, _c in t.results), 700)
+        self.assertGreaterEqual(t.seat_of('B').stack, 700)
+
+    def test_heads_up_short_shove_returns_the_excess(self):
+        t, clock = self.table({'A': 100, 'B': 1000})
+        self.assertEqual(t.seats[t.actor].nick, 'A')          # the button acts first
+        self.assertIsNone(t.act(t.seat_of('A'), 'call', 0, clock()))
+        self.assertIsNone(t.act(t.seat_of('B'), 'check', 0, clock()))
+        self.assertEqual(t.stage, p.STAGE_FLOP)
+        self.assertIsNone(t.act(t.seat_of('B'), 'bet', 300, clock()))
+        self.assertIsNone(t.act(t.seat_of('A'), 'allin', 0, clock()))   # 80, short
+        self.assertIn(t.stage, (p.STAGE_OVER, p.STAGE_DONE))
+        self.assertEqual(self.total(t), 1100)
+        self.assertEqual(sum(amount for _n, amount, _h, _c in t.results), 200)
+        self.assertGreaterEqual(t.seat_of('B').stack, 1000 - 100)
+
+    def test_lone_live_player_is_not_asked_to_act(self):
+        t, clock = self.table({'A': 1000, 'B': 100, 'C': 200})
+        seq = []
+        original = t.begin_street
+
+        def street(now):
+            original(now)
+            seq.append(t.stage)
+        t.begin_street = street
+        self.assertIsNone(t.act(t.seat_of('A'), 'call', 0, clock()))
+        self.assertIsNone(t.act(t.seat_of('B'), 'allin', 0, clock()))
+        self.assertIsNone(t.act(t.seat_of('C'), 'allin', 0, clock()))
+        self.assertEqual(t.seats[t.actor].nick, 'A')
+        self.assertEqual(t.snapshot('A')[7] & 1, 1)            # A still owes 180
+        self.assertIsNone(t.act(t.seat_of('A'), 'call', 0, clock()))
+        # Flop, turn and river are dealt with nobody to act, then a showdown.
+        self.assertEqual(seq, [p.STAGE_FLOP, p.STAGE_TURN, p.STAGE_RIVER])
+        self.assertIn(t.stage, (p.STAGE_OVER, p.STAGE_DONE))
+        self.assertEqual(len(t.board), 5)
+        self.assertEqual(t.snapshot('A')[7] & 1, 0)
+        self.assertEqual(t.seat_of('A').last_action, p.ACTION_CALL)
+        self.assertEqual(self.total(t), 1300)
+
     def test_split_pot_odd_chip(self):
         # Three players put in 5 each and chop; the odd chip goes to the first
         # winner left of the button.
