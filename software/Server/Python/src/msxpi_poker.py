@@ -766,7 +766,11 @@ class Tournament:
         if self.actor >= 0 and self.action_deadline:
             left = max(0, min(255, int(self.action_deadline - self.clock() + 0.999)))
         data[22] = left
-        data[23] = min(255, len(self.in_tournament()))
+        # Players left: a player all in this hand has no stack but is not
+        # out yet, so in_tournament() (stack > 0) would undercount.
+        players_left = sum(1 for s in self.seats if s.occupied and not s.leaving and
+                           (s.stack > 0 or (s.in_hand and not s.folded)))
+        data[23] = min(255, players_left)
         data[24] = self.level + 1
         data[25] = sum(1 for s in self.seats if s.occupied)
         self.put16(data, 26, self.sb)
@@ -786,7 +790,7 @@ class Tournament:
         if seat is not None and len(seat.cards) == 2 and len(self.board) >= 3:
             name = hand_name(best_hand(list(seat.cards) + list(self.board)))[:10]
             data[44:44 + len(name)] = name.encode('ascii', 'replace')
-        data[39] = min(255, len(self.in_tournament()))
+        data[39] = data[23]
         data[40] = 0
         data[41] = min(255, max(0, int(self.next_hand_at - self.clock()))) if self.next_hand_at else 0
         data[42] = min(255, self.grace_seconds)
