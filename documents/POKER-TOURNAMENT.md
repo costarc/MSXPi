@@ -105,52 +105,57 @@ checksum drops the frame (the next poll brings a fresh one).
 | 4 | 1 | 1 for a table packet, 0 for chat and error packets |
 | 5 | 1 | 1 for a table packet, `C` chat, `E` error |
 | 6 | 1 | stage 0 wait, 1 preflop, 2 flop, 3 turn, 4 river, 5 showdown, 6 hand over, 7 tournament over |
-| 7 | 1 | yours: 1 your turn, 2 in this hand, 4 folded, 8 all in, 16 out of chips, 32 button, 64 waiting, 128 disconnected |
+| 7 | 1 | yours: 1 your turn, 2 in this hand, 4 folded, 8 all in, 16 no chips (out, or all in this hand), 32 button, 64 waiting, 128 disconnected |
 | 8 | w | hand number |
 | 10 | w | pot |
 | 12 | 1 | your seat number, `0xFF` not seated |
-| 13 | 1 | action sequence (bumped for every action) |
+| 13 | 1 | action sequence (bumped for every action, 0-249) |
 | 14 | w | chips you must put in to call |
-| 16 | w | minimum raise, or the bet when there is none |
+| 16 | w | smallest raise, as the total to raise to (current bet + minimum raise), or the minimum bet when there is none; never more than your stack + bet |
 | 18 | w | your stack |
 | 20 | w | your bet this street |
 | 22 | 1 | seconds left on your action clock |
-| 23 | 1 | players left in the tournament |
+| 23 | 1 | players left in the tournament (a player all in this hand still counts) |
 | 24 | 1 | blind level, 1-based |
 | 25 | 1 | seats in use |
 | 26 | w | small blind |
 | 28 | w | big blind |
-| 30 | 1 | flags2: 1 registration open, 2 tournament over, 4 showdown |
+| 30 | 1 | flags2: 1 registration open, 2 hand over (stage 6), 4 showdown (stage 5) |
 | 32-36 | 5 | board, card or `0xFF` |
 | 37-38 | 2 | your hole cards |
 | 39 | 1 | players left (same as 23, kept for the client's layout) |
 | 41 | 1 | seconds until the next hand |
-| 42 | 1 | drop grace, in seconds |
+| 42 | 1 | drop grace, in seconds, capped at 255 |
 | 44-53 | 10 | your hand in capitals (`FULL HOUSE`), empty before the flop |
 | 64+16i | 16 | seat *i*, see below |
-| 208-247 | 40 | status line, ASCII, zero padded |
+| 208-247 | 40 | status line, ASCII, up to 39 characters, zero padded (247 is always 0) |
 | 248 | 1 | unread chat rows |
 | 249 | 1 | 1 when the tournament is over |
-| 251 | 1 | seconds left in this blind level |
+| 250 | 1 | blind level, 1-based (same as 24) |
+| 251 | 1 | seconds left in this blind level, capped at 255 |
 | 252 | 1 | seats at a table (9) |
 | 253 | 1 | packet layout version (1) |
 | 255 | 1 | checksum |
 
+Bytes not listed (31, 40, 43, 54-63, 254) are 0.
+
 A card is one byte, `(rank-2)*4 + suit`, rank 0-12 for 2-A and suit 0-3 for
 clubs, diamonds, hearts, spades; `0xFF` is no card. A card is only filled in
-for your own seat and for players whose cards are face up at showdown.
+for your own seat and for players whose cards are face up at showdown; those
+stay up through the hand-over screen until the next hand is dealt.
 
 A seat record is 16 bytes: byte 0 flags (1 occupied, 2 in the hand, 4 folded,
-8 all in, 16 out of chips, 32 button, 64 acting, 128 disconnected), byte 1 the
+8 all in, 16 no chips (out, or all in this hand), 32 button, 64 acting, 128 disconnected), byte 1 the
 last action (0 none, 1 fold, 2 check, 3 call, 4 bet, 5 raise, 6 all in),
-`+2` w stack, `+4` w bet, `+6` two cards, `+8` 6 bytes of nickname, `+14` w the
-amount of that action.
+`+2` w stack, `+4` w bet, `+6` two cards, `+8` 6 bytes of nickname (the first six
+letters, zero padded), `+14` w the amount of that action. An empty seat is all
+zero except its cards, which are `0xFF`.
 
 A chat packet (`4` = 0, `5` = `C`) carries up to five rows of 44 bytes from
 offset 8: 42 characters of text and, at `+43`, 1 for a private message. Byte 240
 is the row count and 241 the rows still queued; the client asks again while 241
-is set. An error packet (`5` = `E`) puts its text at offset 208 like a status
-line. The client reads a hand name from the packet rather than evaluating seven
+is set. An error packet (`4` = 0, `5` = `E`) puts its text, up to 39 characters, at
+offset 208 like a status line. The client reads a hand name from the packet rather than evaluating seven
 cards on a Z80.
 
 ## Tournament rules
