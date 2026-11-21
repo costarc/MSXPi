@@ -596,6 +596,7 @@ server), `r1:` and `r2:` (MSX1 and MSX2 ROMs on msxarchive.nl).
 | `p chatgpt <question>` | ask ChatGPT (needs OPENAIKEY) |
 | `p showpage [/4\|/6\|/8] <url>` | render a web page on the MSX screen |
 | `pchess` | chess on an MSX2 (128 KB VRAM), local or over IRC (see `software/Client/src/PCHESS.md`) |
+| `ppoker` | nine-seat no-limit Hold'em tournament on any MSX2 (64 KB VRAM is enough): one MSXPi hosts, up to eight join over its relay (see [`software/Client/src/PPOKER.md`](software/Client/src/PPOKER.md)) |
 | `nitros` | on-demand NitrOS-9 console on the Pi with the MSXPi interface, or in openMSX on Windows/Linux, with file exchange; see [setup](documents/NITROS-Users-Guide.md) |
 | `ssh user@host [port]` | interactive SSH terminal through the MSXPi Raspberry Pi; prompts and passwords appear on the MSX |
 | `pcopy` | copy Pi/network file to the MSX drive (`/z` unpacks archives) or an MSX file to the Pi |
@@ -694,7 +695,7 @@ Directories:
     |   |-- ROM/src
     |   |   |-- BIOS             BIOS-only ROM bank (msxpibios.asm); BASIC extension (msxpiext.asm)
     |   |   `-- MSX-DOS          disk driver and MSX-DOS 1 kernel sources
-    |   |-- Client/src           p, pcopy, msxarch, pchess, showpage, templates, at28c256
+    |   |-- Client/src           p, pcopy, msxarch, pchess, ppoker, showpage, templates, at28c256
     |   |   `-- loadrom          the LOADROM.COM network patch
     |   |-- ROM-Patcher          ROM patch profiles used by msxarch
     |   |-- Server

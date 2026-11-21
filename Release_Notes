@@ -1,3 +1,29 @@
+PPOKER (unreleased, feature/ppoker-tournament)
+==============================================
+A nine-seat no-limit Texas Hold'em tournament for MSXPi. One Pi hosts the table,
+the other Pis send their players' commands to it, and each MSX draws the table
+it is dealt. The host Pi deals every card and moves every chip.
+
+The game (documents/POKER-TOURNAMENT.md, software/Client/src/PPOKER.md)
+- PPOKER.COM: up to nine players, blinds rising on a level clock, side pots and split pots, an action clock with automatic check/fold, late registration, and a dropped player can return to the seat. The last player standing wins.
+- Any MSX2 runs it, in SCREEN 5. 64 KB of VRAM is enough (PChess needs 128 KB).
+- In the lobby, H hosts a table and J joins one. The host's Pi starts the relay; the other players point their Pi at it.
+
+Settings (msxpi.ini)
+- POKERNICK: your name at the table (1-12 characters). POKERROOM: the room you join (1-16 letters or digits).
+- POKERRELAY: set by the players who join, e.g. "var POKERRELAY=http://HOST:5090". Leave it out on the host, and on a single Pi that hosts and plays.
+- The relay listens on POKERLISTEN:POKERPORT, port 5090 by default. POKERSTACK, POKERLEVELSECS, POKERLATE, POKERACTIONSECS, POKERDROP, POKERGRACE and POKERHANDDELAY set up the tournament (documents/POKER-TOURNAMENT.md lists them).
+
+Server
+- The server command "poker" (msxpi_cmd_web.py), with the rules and the relay in msxpi_poker.py. PPOKER.COM sends it for every poll and action; it also takes "new ROOM" (restart a room), "leave" and "rooms".
+- Getting the files: msxpi-setup.sh, msxpi-windows-setup.ps1 and update.sh install msxpi_poker.py with the rest of the server. msxpiupd.bat (its second stage, msxpirfh.bat) copies ppoker.com to the MSX.
+
+Testing
+- Server unit tests (tests/test_poker.py): the rules, the 256-byte packet and two players over a real relay on localhost.
+- In openMSX: poker_smoke_openmsx.py (the client with no MSXPi), and poker_table_openmsx.py (two emulated MSXPis, nine seats).
+- Not yet played on real MSX hardware.
+
+
 MSXPi v1.7.0 Release Notes
 ==========================
 LINK2 release: a new transfer protocol between the MSX and the Pi, with CRC-16
