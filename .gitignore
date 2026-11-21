@@ -84,3 +84,7 @@ software/C-common/lib/fusion46.lib
 /documents/SALAMANDER-DESIGN.md
 /documents/YIEAR-DESIGN.md
 /documents/msxarch-design.html
+
+# MSX PPoker board rules (coordinator and agent briefings).
+# Installed by board/install-rules.sh; working documents, never tracked.
+coord/
