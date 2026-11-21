@@ -195,3 +195,15 @@ on both clients. Frames are rendered to a folder of their own under
 `work/ppoker-art/` (or `--art DIR`), printed at the end. `--ports A,B` and
 `--relay-port N` (or `POKER_TEST_PORTS` / `POKER_TEST_RELAY_PORT`) move it off
 the default ports 5071,5072 and 5090, so two runs can share one PC.
+
+```text
+cd software/Client/tests && python poker_champion_openmsx.py
+```
+
+plays a heads-up tournament to the end on two emulated MSX Pis: the first hosts
+room T2 with `POKERSTACK=60`, `POKERLEVELSECS=20` and `POKERHANDDELAY=1`, the
+second joins, and both press `A` on every turn until one has every chip. It
+checks the relay's champion (stage 7, one player left, byte 249), the loser's
+zero stack, and that both MSXes draw the winner on the status line, `OVER` in
+the panel and the loser's seat as `OUT`. Its default ports are 5075,5076 and
+5092, so it can run next to `poker_table_openmsx.py`; it takes the same options.

@@ -86,3 +86,9 @@ there too).
   their own folder under `work/ppoker-art/` (or `--art DIR`). `--ports A,B
   --relay-port N` (or `POKER_TEST_PORTS` / `POKER_TEST_RELAY_PORT`) replace
   the default ports 5071,5072 and 5090, so two runs can share one PC.
+* `Client/tests/poker_champion_openmsx.py` - the same two MSXPis play a
+  heads-up tournament to a champion (stack 60, fast blinds, both always all
+  in) and check the end on the relay and as both MSXes draw it: the winner
+  on the status line, `OVER` in the panel, the loser's seat `OUT`. Ports
+  5075,5076 and relay 5092 by default, so it runs next to the table scene;
+  the same `--ports`/`--relay-port`/`--art` options.
