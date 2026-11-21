@@ -344,7 +344,7 @@ foreach ($f in @("msxpi-server.py", "msxpi_const.py", "msxpi_settings.py", "msxp
                  "msxpi_eth.py", "msxpi_ethglue.py", "msxpi_gpio_native.py", "msxpi_player.py", "msxpi_link2.py",
                  "msxpi_renderpage.py", "msxpi_nitros.py", "mapper_detect.py", "msxpi_pchess.py", "msxpi_game_irc.py",
                  "msxpi_pcheckers_irc.py", "msxpi_ssh.py",
-                 "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py")) {
+                 "msxpi_netplay.py", "msxpi_chat.py", "msxpi_games.py", "msxpi_poker.py")) {
     Get-File "$srv/$f" "$ServerDir\$f" | Out-Null
 }
 if ($Stage) {
