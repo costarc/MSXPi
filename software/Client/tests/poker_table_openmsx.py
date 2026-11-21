@@ -18,8 +18,14 @@ The MSX screens are SCREEN 5, so the frames are read back from VRAM and
 rendered with PPOKER's palette to work/poker-table-*/vram/*.png; the text is
 decoded with PPOKER's own font for the checks.
 
-    python poker_table_openmsx.py
+    python poker_table_openmsx.py [--ports A,B] [--relay-port N] [--art DIR]
+
+The two MSXPi servers listen on 5071 and 5072 and the host's relay on 5090
+unless --ports / --relay-port (or POKER_TEST_PORTS=A,B / POKER_TEST_RELAY_PORT=N)
+say otherwise, so two runs can share one PC.  The kept frames go to a folder of
+their own under work/ppoker-art/ (or to --art DIR), printed at the end.
 """
+import argparse
 import json
 import os
 import re
@@ -39,6 +45,8 @@ OPENMSX = os.environ.get(
     'OPENMSX', 'C:/Users/roniv/Dev/MSX/MSXPi/openmsx-MSXPi_v1.7.0/openmsx.exe')
 PORTS = (5071, 5072)
 RELAY_PORT = 5090
+# Every run keeps its frames in a subfolder of this one (see --art).
+ART_ROOT = SOFTWARE.parents[2] / 'work/ppoker-art'
 ROOM = 'T1'
 BOTS = ['BOT%d' % i for i in range(1, 8)]
 ANN, BOB = 'ANN', 'BOB'
@@ -439,7 +447,7 @@ def free_port(port):
     return True
 
 
-def make_home(root, name):
+def make_home(root, name, relay_port=None):
     home = root / name
     (home / 'disks').mkdir(parents=True)
     shutil.copy(SOFTWARE / 'target/disks/msxpiboot.dsk', home / 'disks/msxpiboot.dsk')
@@ -447,6 +455,20 @@ def make_home(root, name):
     subprocess.run([sys.executable, str(SOFTWARE / 'dsktool.py'), 'copy',
                     '../ppoker.com', 'msxpiboot.dsk:PPOKER.COM'],
                    cwd=home / 'disks', check=True, stdout=subprocess.DEVNULL)
+    if relay_port is not None:
+        # The host's relay port is a msxpi.ini setting (POKERPORT), and with a
+        # msxpi.ini the server takes nothing else from its defaults: name the
+        # drives too.  Loopback only, like the rest of the scene.
+        (home / 'msxpi.ini').write_text(''.join(line + '\n' for line in (
+            'var PATH=%(h)s',
+            'var DriveA=%(h)s/disks/msxpiboot.dsk',
+            'var DriveB=%(h)s/disks/tools.dsk',
+            'var DriveM=https://github.com/costarc/MSXPi/raw/master/software/target',
+            'var WIDTH=80',
+            'var SPI_HW=False',
+            'var POKERLISTEN=127.0.0.1',
+            'var POKERPORT=%(p)d',
+        )) % {'h': home.as_posix(), 'p': relay_port})
     return home
 
 
@@ -457,7 +479,39 @@ def wait_started(servers, settle=3.0):
     return all(proc.poll() is None for proc in servers)
 
 
-def main():
+def parse_options(argv=None):
+    """--ports / --relay-port / --art, defaulting to the environment and then
+    to the fixed ports this scene has always used."""
+    parser = argparse.ArgumentParser(description='PPOKER on two emulated MSXPis.')
+    parser.add_argument('--ports', default=os.environ.get('POKER_TEST_PORTS'),
+                        help='the two MSXPi server ports, A,B (default 5071,5072)')
+    parser.add_argument('--relay-port', type=int,
+                        default=os.environ.get('POKER_TEST_RELAY_PORT'),
+                        help="the host's relay port (default 5090)")
+    parser.add_argument('--art', type=Path,
+                        help='where the kept frames go (default: a new folder under %s)' % ART_ROOT)
+    options = parser.parse_args(argv)
+    if options.ports:
+        try:
+            ports = tuple(int(p) for p in options.ports.split(','))
+        except ValueError:
+            ports = ()
+        if len(ports) != 2 or ports[0] == ports[1]:
+            parser.error('--ports takes two different port numbers, A,B')
+        options.ports = ports
+    else:
+        options.ports = PORTS
+    options.relay_port = int(options.relay_port or RELAY_PORT)
+    if options.relay_port in options.ports:
+        parser.error('the relay port must differ from the server ports')
+    return options
+
+
+def main(argv=None):
+    global PORTS, RELAY_PORT
+    options = parse_options(argv)
+    PORTS, RELAY_PORT = options.ports, options.relay_port
+    print('ports %d,%d relay %d' % (PORTS + (RELAY_PORT,)), flush=True)
     for port in PORTS + (RELAY_PORT,):
         if not free_port(port):
             print('FAIL: port %d is already in use' % port)
@@ -467,7 +521,7 @@ def main():
     dumps = [work / ('vram-%d' % i) for i in range(2)]
     for path in dumps:
         path.mkdir()
-    homes = [make_home(work, 'home%d' % i) for i in range(2)]
+    homes = [make_home(work, 'home0', RELAY_PORT), make_home(work, 'home1')]
     for i in range(2):
         write_script(work / ('client-%d.tcl' % i), PORTS[i], work, dumps[i], i, follower=bool(i))
 
@@ -518,7 +572,9 @@ def main():
             log.close()
 
     frames = [{}, {}]
-    art = SOFTWARE.parents[2] / 'work/ppoker-art'
+    # One folder per run (named after the run's work folder), so two runs at
+    # once never overwrite each other's frames.
+    art = options.art or ART_ROOT / work.name
     art.mkdir(parents=True, exist_ok=True)
     for client, folder in enumerate(dumps):
         for path in sorted(folder.glob('*.vram')):
@@ -593,7 +649,11 @@ def main():
     print('PNGs and VRAM in', art)
     if failures:
         print('FAILURES:', ', '.join(failures))
+        print('FAIL poker_table_openmsx: %d checks failed (ports %d,%d relay %d)'
+              % ((len(failures),) + PORTS + (RELAY_PORT,)))
         return 1
+    print('PASS poker_table_openmsx: all checks passed (ports %d,%d relay %d)'
+          % (PORTS + (RELAY_PORT,)))
     return 0
 
 

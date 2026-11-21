@@ -186,4 +186,7 @@ cd software/Client/tests && python poker_table_openmsx.py
 It boots two MSX Pis, has the first host room T1, fills seats 2-8 from the relay,
 joins the ninth seat from the second MSX mid-hand, and checks the drawn table
 (nine named seats, my hole cards, the board and hand name) as well as the C key
-on both clients. Frames are rendered to `work/ppoker-art/` for looking at.
+on both clients. Frames are rendered to a folder of their own under
+`work/ppoker-art/` (or `--art DIR`), printed at the end. `--ports A,B` and
+`--relay-port N` (or `POKER_TEST_PORTS` / `POKER_TEST_RELAY_PORT`) move it off
+the default ports 5071,5072 and 5090, so two runs can share one PC.

@@ -83,4 +83,6 @@ there too).
   one hosts a room, the relay fills seats 2-8, the second joins as the ninth
   seat in the middle of a hand, and both act with `C`. It checks the drawn
   table (names, stacks, hole cards, board, hand name) and keeps the frames in
-  `work/ppoker-art/`.
+  their own folder under `work/ppoker-art/` (or `--art DIR`). `--ports A,B
+  --relay-port N` (or `POKER_TEST_PORTS` / `POKER_TEST_RELAY_PORT`) replace
+  the default ports 5071,5072 and 5090, so two runs can share one PC.
