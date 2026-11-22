@@ -7,6 +7,11 @@ The unverified paths this covers:
   * J on the lobby, a room name and Return (join), including joining in the
     middle of a hand: the player is dealt in when the hand ends.
 
+The relay sees the ninth nick a moment before the host has drawn that seat, so
+the host retries its `table-full` dump once a second (up to 40 s) until a frame
+reads the nick in that seat, and dumps anyway if it never does - the nine-seat
+check then fails as it always did.
+
 Two `msxpi-server.py` instances run on loopback, each with its own scratch
 MSXPI_HOME and its own openMSX (Canon V-25 + 2 MB + MSXPi, MSX-DOS from the
 server's drive A).  The first MSX hosts room T1 (`HOST A TABLE`), which also
@@ -283,7 +288,27 @@ proc waitbots {} {
     if {[file exists "%(work)s/bots.txt"]} { dump table-bots; waitjoin } else { after time 1 waitbots }
 }
 proc waitjoin {} {
-    if {[file exists "%(work)s/joined.txt"]} { dump table-full; waithand } else { after time 1 waitjoin }
+    if {[file exists "%(work)s/joined.txt"]} { set ::tabletries 0; after time 1 retrytable } else { after time 1 waitjoin }
+}
+proc retrytable {} {
+    global tabletries
+    # The relay sees the ninth nick before the host has drawn that seat, so
+    # retry the dump once a second until the Python side has seen it drawn
+    # (table-ready.txt).  After 40 s dump anyway, which fails the nine-seat
+    # check exactly as the single dump used to.
+    incr tabletries
+    if {[file exists "%(work)s/table-ready.txt"]} {
+        log "table-full after $tabletries tries"
+        dump table-full
+        waithand
+    } elseif {$tabletries <= 40} {
+        dump table-full-$tabletries
+        after time 1 retrytable
+    } else {
+        log "table-full never showed the ninth seat (40 s)"
+        dump table-full
+        waithand
+    }
 }
 proc waithand {} {
     if {[file exists "%(work)s/midhand.txt"]} {
@@ -312,9 +337,10 @@ proc waitturn {} {
 class Driver(threading.Thread):
     """Seven relay players, plus turn signals for the two MSX players."""
 
-    def __init__(self, work, log):
+    def __init__(self, work, log, dumps=None):
         super().__init__(daemon=True)
         self.work, self.log = work, log
+        self.dumps = dumps
         self.stop = threading.Event()
         self.error = None
         self.bot_seats = {}
@@ -371,6 +397,10 @@ class Driver(threading.Thread):
                 if self.bob_seat is not None:
                     (self.work / 'joined.txt').write_text('ok\n')
                     self.say('BOB joined seat %d' % (self.bob_seat + 1))
+                    # In the background: the bots below keep acting while the
+                    # host retries its dump.
+                    threading.Thread(target=self.wait_for_table_full,
+                                     daemon=True).start()
                     break
                 time.sleep(1)
             else:
@@ -379,6 +409,48 @@ class Driver(threading.Thread):
         except Exception as exc:
             self.error = exc
             self.say('ERROR ' + repr(exc))
+
+    def wait_for_table_full(self, timeout=45):
+        """Wait until the hosting MSX has drawn the joining seat.
+
+        The host dumps table-full-<n> once a second after joined.txt and
+        stops on table-ready.txt, which this writes as soon as one of those
+        dumps reads the joining nick in the newcomer's seat.  A dump caught
+        while the frame was still being redrawn is skipped.  If nothing is
+        drawn within `timeout` the host dumps anyway and the nine-seat check
+        fails as it did before.
+        """
+        if self.dumps is None:
+            return False
+        deadline = time.monotonic() + timeout
+        seen = 0
+        while time.monotonic() < deadline and not self.stop.is_set():
+            paths = sorted(self.dumps.glob('table-full-*.vram'),
+                           key=lambda p: int(p.stem.rsplit('-', 1)[1]))
+            for path in paths:
+                try:
+                    number = int(path.stem.rsplit('-', 1)[1])
+                except (IndexError, ValueError):
+                    continue
+                if number <= seen:
+                    continue
+                seen = number
+                vram = path.read_bytes()
+                if len(vram) != 32768:
+                    continue  # still being written
+                try:
+                    seat = seat_text(vram, self.bob_seat)
+                except IndexError:
+                    continue
+                if BOB in seat:
+                    (self.work / 'table-ready.txt').write_text('ok\n')
+                    self.say('the host drew %s in seat %d (dump %d)'
+                             % (BOB, self.bob_seat + 1, number))
+                    return True
+            time.sleep(0.25)
+        self.say('no dump showed %s in seat %d within %d s'
+                 % (BOB, self.bob_seat + 1, timeout))
+        return False
 
     def play(self):
         while not self.stop.is_set():
@@ -601,7 +673,7 @@ def main(argv=None):
     for i in range(2):
         write_script(work / ('client-%d.tcl' % i), PORTS[i], work, dumps[i], i, follower=bool(i))
 
-    driver = Driver(work, [])
+    driver = Driver(work, [], dumps[0])
     run_scene(work, homes, (ANN, BOB), driver)
 
     # One folder per run (named after the run's work folder), so two runs at
