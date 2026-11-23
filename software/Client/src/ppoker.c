@@ -347,6 +347,7 @@ static void draw_header(void) {
     text_at(0,HEADER_Y,line);
 }
 
+#ifndef OVAL_TABLE
 /* Seat cells: three columns of three, the same order as the packet.  A gold
  * frame marks my seat, a yellow one the player on the clock. */
 static void draw_seats(void) {
@@ -405,6 +406,9 @@ static void draw_mine(void) {
         }
 }
 
+#endif /* !OVAL_TABLE */
+
+#ifndef OVAL_TABLE
 static void draw_panel(void) {
     char line[12],num[6];
     if(!seated) {
@@ -429,6 +433,8 @@ static void draw_panel(void) {
     else text_at(PANEL_X,57,"");
     if(g_over) text_at(PANEL_X,68,"OVER");
 }
+
+#endif /* !OVAL_TABLE */
 
 static const char *action_name(uint8_t row) {
     if(row==0) return "FOLD";
@@ -455,6 +461,7 @@ static void draw_actions(void) {
     text_at(0,(uint8_t)(ACTION_Y+18),line);
 }
 
+#ifndef OVAL_TABLE
 static void draw_mine_label(void) {
     char line[20],num[6];
     if(seated) {strcpy(line,"STK "); u2s(num,g_stack); strcat(line,num);}
@@ -463,8 +470,175 @@ static void draw_mine_label(void) {
     text_at(92,(uint8_t)(MY_Y+12),g_hand_name);
     text_at(92,(uint8_t)(MY_Y+22),g_over?"OVER":"");
 }
+#endif /* !OVAL_TABLE */
+
+#ifdef OVAL_TABLE
+/* ------------------------------------------------------------ oval table */
+/* PP-OVAL-TABLE: the X68000 Poker Tournament table, whose screen is 768x512,
+ * scaled by a third and fitted to 256x212.  Its geometry, for the record:
+ * table centre (384,236); rings 334x158, 326x150, 306x130 and 300x124; nine
+ * pods of 156x44 at
+ *    (384,376) (191,343) (89,260) (124,166) (281,104)
+ *    (487,104) (644,166) (679,260) (577,343),
+ * clockwise from the bottom one.  A third of those, clamped to the screen
+ * edges, are the pods below; the rings become 112x56, 110x54 and 106x50. */
+#define OVAL_CX 128
+#define OVAL_CY 88
+#define POD_W 52
+#define POD_H 16
+static const uint8_t pod_x[9]={128, 55, 26, 26, 89,167,227,230,201};
+static const uint8_t pod_y[9]={140,128, 97, 62, 39, 39, 62, 97,128};
+#define OVAL_PANEL_Y 9
+#define OVAL_POT_X 107
+#define OVAL_POT_Y 44
+#define OVAL_BOARD_X 63
+#define OVAL_BOARD_Y 54
+#define OVAL_MY_X 102
+#define OVAL_MY_Y 96
+#define OVAL_LABEL_X 36
+
+static uint8_t oval_drawn;
+/* The two lines each pod last drew, so an unchanged pod is left alone:
+ * clearing and redrawing all nine every poll costs about 6 ms each. */
+static char pod_line[SEAT_MAX][2][8];
+
+/* Integer square root: the half-width of the ellipse on each row needs it and
+ * the Z80 has no floating point.  The same walk as ui_x68k.c's isqrt(). */
+static uint16_t isqrt16(uint16_t v) {
+    uint16_t r=0,bit=0x4000;
+    while(bit>v) bit>>=2;
+    while(bit) {
+        if(v>=r+bit) {v=(uint16_t)(v-(r+bit)); r=(uint16_t)((r>>1)+bit);}
+        else r>>=1;
+        bit>>=2;
+    }
+    return r;
+}
+
+/* A filled ellipse as one LMMV per row, the way the X68000 fills its rings. */
+static void oval_fill(uint8_t cx,uint8_t cy,uint8_t rx,uint8_t ry,uint8_t colour) {
+    int8_t dy; uint16_t dx,t;
+    for(dy=(int8_t)(-ry);dy<=(int8_t)ry;dy++) {
+        t=(uint16_t)((uint16_t)ry*(uint16_t)ry-(uint16_t)((int16_t)dy*(int16_t)dy));
+        dx=(uint16_t)(((unsigned long)rx*(unsigned long)isqrt16(t))/(unsigned long)ry);
+        solid((int)((int16_t)cx-(int16_t)dx),(int)((int16_t)cy+(int16_t)dy),
+              (int)(2*dx+1),1,colour);
+    }
+}
+
+static void draw_oval(void) {
+    oval_fill(OVAL_CX,OVAL_CY,112,56,C_GREY);   /* the rail */
+    oval_fill(OVAL_CX,OVAL_CY,110,54,C_FELT2);  /* the rim round the felt */
+    oval_fill(OVAL_CX,OVAL_CY,106,50,C_FELT);   /* the felt */
+    oval_drawn=1;
+}
+
+/* The glyph tiles carry a black background, so a label on the felt is a dark
+ * patch.  Repainting that patch means the cached text has to be forgotten, or
+ * text_at() would think the line is still on screen and skip it. */
+static void text_forget(uint8_t x,uint8_t y) {
+    uint8_t f;
+    for(f=0;f<field_count;f++) if(field_x[f]==x && field_y[f]==y) {field_text[f][0]=0; return;}
+}
+
+/* Nine pods round the rim, mine always at the bottom: the pod a seat gets is
+ * its seat number turned so that my seat lands on position 0. */
+static void draw_pods(void) {
+    uint8_t i,pos,x,y,mark;
+    char one[12],two[14],num[6],bet[6];
+    for(i=0;i<SEAT_MAX;i++) {
+        pos=(uint8_t)((i+SEAT_MAX-g_seat)%SEAT_MAX);
+        x=(uint8_t)(pod_x[pos]-POD_W/2); y=(uint8_t)(pod_y[pos]-POD_H/2);
+        mark=(uint8_t)((i==g_seat?1:0)|((seats[i].flags&64)?2:0));
+        one[0]=0; two[0]=0;
+        if(seats[i].flags&1) {
+            one[0]=(char)('1'+i); one[1]=' '; one[2]=0;
+            if(i==g_seat) strcat(one,">");
+            strcat(one,seats[i].nick[0]?seats[i].nick:"?");
+            one[7]=0;                   /* the pod is 52 wide: seven characters */
+            if(!seats[i].stack) strcpy(two,"OUT");
+            else {
+                u2s(num,seats[i].stack);
+                strcpy(two,num);
+                if(seats[i].flags&128) strcat(two,"D");
+                else if(seats[i].flags&8) strcat(two,"A");
+                else if(seats[i].flags&4) strcat(two,"F");
+                else if(!(seats[i].flags&2)) strcat(two,"W");
+                else if(seats[i].bet) {u2s(bet,seats[i].bet); strcat(two,"+"); strcat(two,bet);}
+            }
+            two[7]=0;
+        }
+        if(mark==seat_mark[i] && !strcmp(one,pod_line[i][0]) && !strcmp(two,pod_line[i][1]))
+            continue;                   /* nothing about this pod changed */
+        solid(x,y,POD_W,POD_H,C_BLACK);
+        /* the fill erased the glyphs: forget the cached lines */
+        text_forget((uint8_t)(x+3),(uint8_t)(y+2));
+        text_forget((uint8_t)(x+3),(uint8_t)(y+9));
+        if(mark&1) frame(x,y,POD_W,POD_H,C_GOLD);
+        else if(mark&2) frame(x,y,POD_W,POD_H,C_YELLOW);
+        else frame(x,y,POD_W,POD_H,C_FELT2);
+        seat_mark[i]=mark;
+        text_at((uint8_t)(x+3),(uint8_t)(y+2),one);
+        text_at((uint8_t)(x+3),(uint8_t)(y+9),two);
+        strcpy(pod_line[i][0],one);
+        strcpy(pod_line[i][1],two);
+    }
+}
+
+/* The panel is a 62-pixel column today and the rim pods need that space, so
+ * under OVAL_TABLE it becomes one row of text under the header. */
+static void draw_panel_line(void) {
+    char line[44],num[6];
+    if(!seated) {text_at(0,OVAL_PANEL_Y,"NOT SEATED  J JOIN  H HOST  N NICK"); return;}
+    strcpy(line,"SEAT "); u2s(num,(uint16_t)(g_seat+1)); strcat(line,num);
+    strcat(line," STK "); u2s(num,g_stack); strcat(line,num);
+    strcat(line," CALL "); u2s(num,g_call); strcat(line,num);
+    strcat(line," MIN "); u2s(num,g_minraise); strcat(line,num);
+    text_at(0,OVAL_PANEL_Y,line);
+    strcpy(line,"POT "); u2s(num,g_pot); strcat(line,num);
+    if(g_flags&1) {strcat(line," T"); u2s(num,g_timer); strcat(line,num);}
+    if(g_over) strcat(line," OVER");
+    text_at(202,OVAL_PANEL_Y,line);
+}
+
+static void draw_all_oval(void) {
+    uint8_t i; char line[26],num[6];
+    if(!oval_drawn) draw_oval();
+    draw_pods();
+    for(i=0;i<5;i++)
+        if(painted_board[i]!=g_board[i]) {
+            draw_card(g_board[i],(uint8_t)(OVAL_BOARD_X+i*CARD_CELL),OVAL_BOARD_Y);
+            painted_board[i]=g_board[i];
+        }
+    for(i=0;i<2;i++)
+        if(painted_mine[i]!=g_cards[i]) {
+            draw_card(g_cards[i],(uint8_t)(OVAL_MY_X+i*CARD_CELL),OVAL_MY_Y);
+            painted_mine[i]=g_cards[i];
+        }
+    /* Clearing the pot each time keeps a shrink from leaving digits behind;
+     * the erase needs the cached text forgotten or text_at() skips it. */
+    solid(105,42,46,10,C_FELT);
+    text_forget(OVAL_POT_X,OVAL_POT_Y);
+    strcpy(line,"POT "); u2s(num,g_pot); strcat(line,num);
+    text_at(OVAL_POT_X,OVAL_POT_Y,line);
+    solid(34,94,62,20,C_FELT);
+    text_forget(OVAL_LABEL_X,96); text_forget(OVAL_LABEL_X,106);
+    if(seated) {strcpy(line,"STK "); u2s(num,g_stack); strcat(line,num);}
+    else line[0]=0;
+    text_at(OVAL_LABEL_X,96,line);
+    text_at(OVAL_LABEL_X,106,g_hand_name);
+    draw_header();
+    draw_panel_line();
+    draw_actions();
+    text_at(STATUS_X,STATUS_Y,g_status);
+}
+#endif /* OVAL_TABLE */
+
 
 static void draw_all(void) {
+#ifdef OVAL_TABLE
+    draw_all_oval();
+#else
     draw_header();
     draw_seats();
     draw_board();
@@ -473,7 +647,45 @@ static void draw_all(void) {
     draw_panel();
     draw_actions();
     text_at(STATUS_X,STATUS_Y,g_status);
+#endif
 }
+
+#ifdef OVAL_TIMING
+#define JIFFY (*(volatile uint16_t *)0xFC9E)
+/* Jiffy bench: a fake table, then ten draws of whatever screen this build
+ * has, so the 3x3 and the oval are timed by identical code. */
+static void bench(void) {
+    uint8_t i; uint16_t t0,t1,a,b;
+    char line[44],num[6];
+    joined=1; seated=1; g_seat=0; g_flags=2; g_call=20; g_pot=180; g_hand=2;
+    g_level=1; g_sb=10; g_bb=20; g_left=9; g_stack=1460; g_minraise=40; g_timer=12;
+    g_over=0;
+    strcpy(g_hand_name,"HIGH CARD");
+    g_board[0]=8; g_board[1]=12; g_board[2]=16; g_board[3]=CARD_NONE; g_board[4]=CARD_NONE;
+    g_cards[0]=4; g_cards[1]=22;
+    for(i=0;i<SEAT_MAX;i++) {
+        seats[i].flags=1|2; seats[i].stack=(uint16_t)(1480-i*10); seats[i].bet=0;
+        strcpy(seats[i].nick,"BOT4"); seats[i].nick[0]=(char)('0'+i+1);
+    }
+    seats[0].nick[0]='1'; seats[0].nick[1]=' '; seats[0].nick[2]='A';
+    seats[0].nick[3]='N'; seats[0].nick[4]='N'; seats[0].nick[5]=0;
+    field_count=0;
+    HMMV(0,0,256,212,PAIR(C_BLACK));
+    a=0;
+#ifdef OVAL_TABLE
+    t0=JIFFY;
+    for(i=0;i<10;i++) {oval_drawn=0; draw_oval();}
+    t1=JIFFY; a=(uint16_t)(t1-t0);
+#endif
+    t0=JIFFY;
+    for(i=0;i<10;i++) draw_all();
+    t1=JIFFY; b=(uint16_t)(t1-t0);
+    strcpy(line,"10X OVAL "); u2s(num,a); strcat(line,num); strcat(line,"J 10X REDRAW ");
+    u2s(num,b); strcat(line,num); strcat(line,"J");
+    text_at(0,STATUS_Y,line);
+    while(!Inkey());
+}
+#endif
 
 static void draw_lobby(void) {
     char line[26];
@@ -645,6 +857,10 @@ static void chat_window(void) {
 #define MENU_Y 52
 static void popup_close(void) {
     field_count=0;
+#ifdef OVAL_TABLE
+    oval_drawn=0;                       /* the table itself has to be redrawn */
+    memset(pod_line,0,sizeof(pod_line));
+#endif
     solid(0,0,256,212,C_BLACK);
     memset(seat_mark,255,sizeof(seat_mark));
     memset(painted_board,255,sizeof(painted_board));
@@ -810,6 +1026,9 @@ int main(void) {
     HMMV(0,0,256,212,PAIR(C_FELT));
     cache_font();
     cache_cards();
+#ifdef OVAL_TIMING
+    bench();
+#endif
     field_count=0;
     memset(seat_mark,255,sizeof(seat_mark));
     memset(painted_board,255,sizeof(painted_board));
