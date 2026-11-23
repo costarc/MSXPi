@@ -497,23 +497,35 @@ class WinTapLink(BaseLink):
         return [ip for ip in ips if ip]
 
     @classmethod
-    def pick_adapter(cls, adapters, ifname=None, tap_ip=None):
-        """Choose the (guid, name) to open.
+    def selection(cls, adapters, ifname=None, tap_ip=None):
+        """Choose the (guid, name) to open, with why: 'name', 'address' or
+        'fallback'.
 
         A PC can have several TAP adapters (a second one for a second openMSX).
         The one to open is the one msxpi-tcpip-setup.ps1 gave the gateway
         address, so that is matched first; the registry order, which has nothing
         to do with it, is only the last resort.  An explicit name still wins.
+
+        The reason travels with the choice because 'fallback' means the adapter
+        opened is not the one the MSX expects: nothing on this PC holds the
+        address the MSX points its gateway at.  That deserves a log line of its
+        own - the link still reports up, INL still installs, and the only
+        symptom is that nothing resolves.
         """
         if ifname:
             named = [a_ for a_ in adapters if a_[1] == ifname]
             if named:
-                return named[0]
+                return named[0], "name"
         if tap_ip:
             for a_ in adapters:
                 if tap_ip in cls.adapter_ips(a_[0]):
-                    return a_
-        return adapters[0]
+                    return a_, "address"
+        return adapters[0], "fallback"
+
+    @classmethod
+    def pick_adapter(cls, adapters, ifname=None, tap_ip=None):
+        """The (guid, name) to open - see selection()."""
+        return cls.selection(adapters, ifname, tap_ip)[0]
 
     def __init__(self, ifname=None, tap_ip=None, *a, **kw):
         BaseLink.__init__(self, *a, **kw)
@@ -527,7 +539,11 @@ class WinTapLink(BaseLink):
         if not adapters:
             raise OSError("no TAP-Windows adapter found - install the "
                           "OpenVPN TAP driver, then run msxpi-tcpip-setup.ps1")
-        self.guid, self.ifname = self.pick_adapter(adapters, ifname, tap_ip)
+        (self.guid, self.ifname), self.selected_by = self.selection(
+            adapters, ifname, tap_ip)
+        # Kept for make_link's log line: what the adapter really has says more
+        # than the TAPIP that was asked for.
+        self.addresses = self.adapter_ips(self.guid)
 
         self._k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         self._k32.CreateFileW.restype = wintypes.HANDLE
@@ -1034,10 +1050,21 @@ def make_link(prefer_tap=True, ifname="msxpi0", log=None, tap_ip=None):
         # administrator rights; assigning the address and the NAT does, and
         # that is msxpi-tcpip-setup.ps1's job, run once.
         try:
+            want = tap_ip or DEFAULT_TAP_IP
             link = WinTapLink(ifname=None if ifname == "msxpi0" else ifname,
-                              tap_ip=tap_ip or DEFAULT_TAP_IP)
-            log("eth: TAP device %s up (selected for %s)"
-                % (link.ifname, tap_ip or DEFAULT_TAP_IP))
+                              tap_ip=want)
+            addresses = ", ".join(link.addresses) or "no IPv4 address"
+            if want in link.addresses:
+                log("eth: TAP device %s up, addresses %s (TAPIP %s)"
+                    % (link.ifname, addresses, want))
+            elif link.selected_by == "name":
+                log("eth: TAP device %s was asked for by name and has %s, but "
+                    "TAPIP %s is not on it - the MSX's gateway will not answer"
+                    % (link.ifname, addresses, want))
+            else:
+                log("eth: no TAP-Windows adapter has %s (TAPIP) - opening %s, "
+                    "addresses %s; the MSX's gateway is on none of them"
+                    % (want, link.ifname, addresses))
             return link
         except Exception as e:
             log("eth: TAP unavailable (%s) - falling back to MockLink" % e)

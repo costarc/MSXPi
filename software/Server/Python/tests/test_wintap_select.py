@@ -33,6 +33,16 @@ class PickAdapter(unittest.TestCase):
     def test_default_is_the_setup_script_address(self):
         self.assertEqual(eth.DEFAULT_TAP_IP, '192.168.99.1')
 
+    def test_selection_says_why(self):
+        with mock.patch.object(eth.WinTapLink, 'adapter_ips', side_effect=lambda g: IPS[g]):
+            self.assertEqual(eth.WinTapLink.selection([A, B], tap_ip='192.168.99.1'),
+                             (B, 'address'))
+            self.assertEqual(eth.WinTapLink.selection([A, B], tap_ip='10.9.9.1'),
+                             (A, 'fallback'))
+            self.assertEqual(eth.WinTapLink.selection(
+                [A, B], ifname='Local Area Connection', tap_ip='192.168.99.1'),
+                (A, 'name'))
+
 
 @unittest.skipUnless(sys.platform == 'win32', 'registry')
 class Registry(unittest.TestCase):
