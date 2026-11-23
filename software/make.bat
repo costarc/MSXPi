@@ -22,6 +22,11 @@ SET HEX2BIN=%HEX2BINDIR%\hex2bin.exe
 SET INCLUDEDIR=..\..\..\MSX\MSX-C\WorkingFolder\fusion-c\include
 SET MSXPILIB=C-common\lib
 SET proga=Client\src\%1
+REM OVAL=1 builds the oval-table prototype (PP-OVAL-TABLE); TIMING=1 adds the
+REM jiffy bench it is measured with.  Neither is set for a normal build.
+SET EXTRAFLAGS=
+IF DEFINED OVAL SET EXTRAFLAGS=%EXTRAFLAGS% -DOVAL_TABLE
+IF DEFINED TIMING SET EXTRAFLAGS=%EXTRAFLAGS% -DOVAL_TIMING
 SET sourcename=%1
 REM The MSX-DOS startup code is still Fusion-C's (an assembler object, convention neutral).
 SET INC1=%INCLUDEDIR%\crt0_msxdos.rel
@@ -41,7 +46,7 @@ del msxpi-bios.asm
 echo -------- Compilation of : %1
 
 SET LINKLOG=%sourcename%.linklog
-SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size fusion46.lib msxpi-bios.lib -L %MSXPILIB% %INC1% %proga%.c > %LINKLOG% 2>&1
+SDCC --code-loc %ADDR_CODE% --data-loc %ADDR_DATA% --disable-warning 196 -mz80 --no-std-crt0 --opt-code-size%EXTRAFLAGS% fusion46.lib msxpi-bios.lib -L %MSXPILIB% %INC1% %proga%.c > %LINKLOG% 2>&1
 type %LINKLOG%
 REM Permanent link guards: a module built with another calling convention, or a missing symbol.
 findstr /C:"Conflicting sdcc options" %LINKLOG% >nul
