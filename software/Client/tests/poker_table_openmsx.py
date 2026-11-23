@@ -7,6 +7,11 @@ The unverified paths this covers:
   * J on the lobby, a room name and Return (join), including joining in the
     middle of a hand: the player is dealt in when the hand ends.
 
+The relay sees the ninth nick a moment before the host has drawn that seat, so
+the host keeps two frames a second apart and the run checks the first one that
+draws all nine nicks; if neither does, the last one is checked and the
+nine-seat check fails as it always did.
+
 Two `msxpi-server.py` instances run on loopback, each with its own scratch
 MSXPI_HOME and its own openMSX (Canon V-25 + 2 MB + MSXPi, MSX-DOS from the
 server's drive A).  The first MSX hosts room T1 (`HOST A TABLE`), which also
@@ -101,6 +106,26 @@ def seat_text(vram, index):
     # The glyph cells start two pixels inside the seat frame.
     return (text_at(vram, x - 1, y + 2, 10) + ' / ' +
             text_at(vram, x - 1, y + 11, 10)).strip()
+
+
+def drawn_seats(vram):
+    """How many of the nine seats draw a player's nick."""
+    return sum(1 for i in range(9) if any(nick in seat_text(vram, i)
+                                          for nick in BOTS + [ANN, BOB]))
+
+
+def full_table(frames):
+    """The first `table-full-<n>` dump that draws all nine nicks.
+
+    The host keeps a couple of frames because the relay sees the ninth nick a
+    moment before that seat is drawn.  If none is complete the last frame is
+    used, which fails the nine-seat check exactly as the old single dump did.
+    """
+    names = sorted((name for name in frames if re.fullmatch(r'table-full-\d+', name)),
+                   key=lambda name: int(name.rsplit('-', 1)[1]))
+    if not names:
+        return None
+    return next((name for name in names if drawn_seats(frames[name]) == 9), names[-1])
 
 
 def render(vram, path, scale=2):
@@ -283,7 +308,18 @@ proc waitbots {} {
     if {[file exists "%(work)s/bots.txt"]} { dump table-bots; waitjoin } else { after time 1 waitbots }
 }
 proc waitjoin {} {
-    if {[file exists "%(work)s/joined.txt"]} { dump table-full; waithand } else { after time 1 waitjoin }
+    if {[file exists "%(work)s/joined.txt"]} { dumptable1 } else { after time 1 waitjoin }
+}
+proc dumptable1 {} {
+    # The relay sees the ninth nick before the host has drawn that seat, so
+    # keep a second frame a second later; the run checks the first one that
+    # draws all nine nicks.
+    dump table-full-1
+    after time 1 dumptable2
+}
+proc dumptable2 {} {
+    dump table-full-2
+    after time 2 waithand
 }
 proc waithand {} {
     if {[file exists "%(work)s/midhand.txt"]} {
@@ -610,6 +646,17 @@ def main(argv=None):
     frames = keep_frames(dumps, art, ('lobby', 'hostprompt', 'joinprompt', 'table-empty',
                                       'table-bots', 'table-full', 'table', 'table-hand',
                                       'after-action', 'final'))
+
+    # The host kept two table-full frames a second apart; check the first one
+    # that draws all nine nicks, so one caught mid-draw is not what the checks
+    # see.  Its frames are kept under the usual name.
+    chosen = full_table(frames[0])
+    if chosen:
+        frames[0]['table-full'] = frames[0][chosen]
+        for suffix in ('.png', '.vram'):
+            if (dumps[0] / (chosen + suffix)).exists():
+                shutil.copy(dumps[0] / (chosen + suffix),
+                            art / ('ppoker-c0-table-full' + suffix))
 
     for client in range(2):
         for name, vram in frames[client].items():
