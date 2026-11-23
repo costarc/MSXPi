@@ -45,6 +45,30 @@
     not the associated station's. The MSX therefore sits on its own subnet
     behind NAT. It can reach the internet; nothing on the LAN can start a
     connection to it.
+
+    Sharing the TAP drivers with another project
+    --------------------------------------------
+    Windows allows one NAT, so msxpi-server finds its adapter by ADDRESS: the
+    TAPIP in msxpi.ini, 192.168.99.1 unless -TapIp said otherwise. If something
+    else has taken that address for a TAP of its own, the match fails quietly.
+    The server then opens whichever TAP the registry lists first, and the MSX
+    (192.168.99.2, gateway 192.168.99.1 from INL.CFG) cannot use it: INL
+    installs, the link reports up, and `host google.com` answers
+    "8: DNS not found" with nothing else looking wrong.
+
+    On this PC the X68000/XM6 setup moved "Local Area Connection 2" to
+    192.168.100.1 for its own guest. Give the MSXPi TAP the gateway address as a
+    SECOND address rather than re-addressing the other project's adapter - the
+    NAT prefix below already covers both subnets:
+
+        netsh interface ipv4 add address name="Local Area Connection" 192.168.99.1 255.255.255.0 store=persistent
+
+    Undo with
+
+        netsh interface ipv4 delete address name="Local Area Connection" addr=192.168.99.1
+
+    and pass -AdapterName when the machine has more than one TAP, so this script
+    never reconfigures the other project's adapter by accident.
 #>
 
 [CmdletBinding()]
